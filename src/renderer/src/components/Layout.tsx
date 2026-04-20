@@ -6,10 +6,11 @@ import type { Task } from '../../../shared/types'
 import './Layout.css'
 
 const ALL_BACKENDS = [
-  { id: 'openai' as const, label: 'OpenAI' },
-  { id: 'google' as const, label: 'Google' },
+  { id: 'openai' as const, label: 'GPT Image' },
+  { id: 'google' as const, label: 'Imagen' },
+  { id: 'nanobanana' as const, label: 'Nano Banana' },
   { id: 'flux' as const, label: 'FLUX' },
-  { id: 'local' as const, label: 'Local' }
+  { id: 'local' as const, label: 'Draw Things' }
 ]
 
 // On Windows, Draw Things CLI is not available — show only cloud backends

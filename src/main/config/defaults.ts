@@ -55,6 +55,10 @@ export function createDefaultConfig(): AppConfig {
           negativePrompt: ''
         },
         models_dir: '~/.imagequeue/models'
+      },
+      nanobanana: {
+        model: 'gemini-3.1-flash-image-preview',
+        concurrency: 3
       }
     },
     prompts: {

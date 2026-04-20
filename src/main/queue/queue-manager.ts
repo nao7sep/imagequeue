@@ -8,7 +8,8 @@ class QueueManager {
     openai: [],
     google: [],
     flux: [],
-    local: []
+    local: [],
+    nanobanana: []
   }
 
   private promptHistory: string[] = []

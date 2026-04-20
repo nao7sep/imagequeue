@@ -57,7 +57,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Backend</label>
           <select value={textAi.backend} onChange={(e) => updateTextAi('backend', e.target.value)}>
-            <option value="google">Google</option>
+            <option value="google">Imagen</option>
           </select>
         </div>
         <div className="settings-field">
@@ -71,7 +71,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
       </div>
 
       <div className="settings-section">
-        <h3>OpenAI</h3>
+        <h3>GPT Image</h3>
         <div className="settings-field">
           <label>API Key</label>
           <input type="password" value={backends.openai.api_key as string} onChange={(e) => updateBackend('openai', 'api_key', e.target.value)} />
@@ -95,7 +95,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
       </div>
 
       <div className="settings-section">
-        <h3>Google</h3>
+        <h3>Imagen</h3>
         <div className="settings-field">
           <label>API Key</label>
           <input type="password" value={backends.google.api_key as string} onChange={(e) => updateBackend('google', 'api_key', e.target.value)} />
@@ -107,6 +107,19 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.google.concurrency as number} onChange={(e) => updateBackend('google', 'concurrency', parseInt(e.target.value) || 1)} />
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Nano Banana</h3>
+        <p className="settings-hint">Uses the Imagen API key above.</p>
+        <div className="settings-field">
+          <label>Model</label>
+          <input value={backends.nanobanana.model as string} onChange={(e) => updateBackend('nanobanana', 'model', e.target.value)} />
+        </div>
+        <div className="settings-field">
+          <label>Concurrency</label>
+          <input type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
         </div>
       </div>
 
@@ -132,7 +145,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
       {window.electronAPI.platform !== 'win32' && (
       <div className="settings-section">
-        <h3>Local (Draw Things CLI)</h3>
+        <h3>Draw Things</h3>
         <div className="settings-field">
           <label>CLI Path</label>
           <input value={backends.local.cli_path as string} onChange={(e) => updateBackend('local', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />

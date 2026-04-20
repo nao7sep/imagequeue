@@ -10,6 +10,7 @@ import { generateOpenAI } from './openai'
 import { generateGoogle } from './google'
 import { generateFlux } from './flux'
 import { generateLocal } from './local'
+import { generateNanoBanana } from './nanobanana'
 import { generateSlug } from './slug'
 
 type GenerateFn = (task: Task) => Promise<Buffer>
@@ -18,7 +19,8 @@ const generators: Record<BackendId, GenerateFn> = {
   openai: generateOpenAI,
   google: generateGoogle,
   flux: generateFlux,
-  local: generateLocal
+  local: generateLocal,
+  nanobanana: generateNanoBanana
 }
 
 // Per-backend timestamp allocators
@@ -26,7 +28,8 @@ const allocators: Record<BackendId, TimestampAllocator> = {
   openai: new TimestampAllocator(),
   google: new TimestampAllocator(),
   flux: new TimestampAllocator(),
-  local: new TimestampAllocator()
+  local: new TimestampAllocator(),
+  nanobanana: new TimestampAllocator()
 }
 
 // Per-backend active task counts for concurrency limiting
@@ -34,7 +37,8 @@ const activeCounts: Record<BackendId, number> = {
   openai: 0,
   google: 0,
   flux: 0,
-  local: 0
+  local: 0,
+  nanobanana: 0
 }
 
 // Starts the queue processor loop. Call once at app startup.
@@ -46,7 +50,7 @@ export function startProcessor(): void {
 
 function processQueues(): void {
   const config = loadConfig()
-  const backends: BackendId[] = ['openai', 'google', 'flux', 'local']
+  const backends: BackendId[] = ['openai', 'google', 'flux', 'local', 'nanobanana']
 
   for (const backend of backends) {
     const maxConcurrency = backend === 'local' ? 1 :

@@ -105,6 +105,11 @@ export interface LocalModelDef extends ModelDef {
   filename: string
 }
 
+export interface NanoBananaModelDef extends ModelDef {
+  backend: 'nanobanana'
+  pricing: number  // per image at 1K resolution
+}
+
 // --- OpenAI models ---
 
 export const OPENAI_MODELS: OpenAIModelDef[] = [
@@ -296,18 +301,43 @@ export const LOCAL_MODELS: LocalModelDef[] = [
   }
 ]
 
+// --- Nano Banana (Gemini native image generation) models ---
+
+export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
+  {
+    id: 'gemini-2.5-flash-image',
+    label: 'Nano Banana',
+    backend: 'nanobanana',
+    pricing: 0.067  // $0.067/1K image (standard API, ai.google.dev/pricing)
+  },
+  {
+    id: 'gemini-3.1-flash-image-preview',
+    label: 'Nano Banana 2',
+    backend: 'nanobanana',
+    pricing: 0.067  // $0.067/1K image (standard API, ai.google.dev/pricing)
+  },
+  {
+    id: 'gemini-3-pro-image-preview',
+    label: 'Nano Banana Pro',
+    backend: 'nanobanana',
+    pricing: 0.134  // $0.134/1K–2K image (standard API, ai.google.dev/pricing)
+  }
+]
+
 // --- Lookup helpers ---
 
 export function getModelsForBackend(backend: 'openai'): OpenAIModelDef[]
 export function getModelsForBackend(backend: 'google'): GoogleModelDef[]
 export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
 export function getModelsForBackend(backend: 'local'): LocalModelDef[]
+export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
 export function getModelsForBackend(backend: BackendId): ModelDef[] {
   switch (backend) {
     case 'openai': return OPENAI_MODELS
     case 'google': return GOOGLE_MODELS
     case 'flux': return FLUX_MODELS
     case 'local': return LOCAL_MODELS
+    case 'nanobanana': return NANO_BANANA_MODELS
   }
 }
 
@@ -315,6 +345,7 @@ export function findModel(backend: 'openai', modelId: string): OpenAIModelDef | 
 export function findModel(backend: 'google', modelId: string): GoogleModelDef | undefined
 export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined
 export function findModel(backend: 'local', modelId: string): LocalModelDef | undefined
+export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
 export function findModel(backend: BackendId, modelId: string): ModelDef | undefined {
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
@@ -348,6 +379,11 @@ export function estimateCostFromRegistry(
       const mp = (width * height) / 1_000_000
       if (mp <= 1) return model.pricing.firstMp
       return model.pricing.firstMp + (mp - 1) * model.pricing.additionalMp
+    }
+    case 'nanobanana': {
+      const model = findModel('nanobanana', modelId)
+      if (!model) return null
+      return model.pricing
     }
     case 'local':
       return null

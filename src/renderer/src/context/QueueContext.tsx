@@ -15,7 +15,8 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
     openai: [],
     google: [],
     flux: [],
-    local: []
+    local: [],
+    nanobanana: []
   })
   const [promptHistory, setPromptHistory] = useState<string[]>([])
 

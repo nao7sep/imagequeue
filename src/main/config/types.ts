@@ -58,11 +58,18 @@ export interface LocalBackendConfig {
   models_dir: string
 }
 
+// Nano Banana uses the Google API key — no api_key field here.
+export interface NanoBananaBackendConfig {
+  model: string
+  concurrency: number
+}
+
 export interface ImageBackendsConfig {
   openai: OpenAIBackendConfig
   google: GoogleBackendConfig
   flux: FluxBackendConfig
   local: LocalBackendConfig
+  nanobanana: NanoBananaBackendConfig
 }
 
 export interface PromptsConfig {

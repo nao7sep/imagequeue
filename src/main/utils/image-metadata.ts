@@ -2,7 +2,7 @@
 
 export interface ImageMetadata {
   prompt: string
-  backend: 'openai' | 'google' | 'flux' | 'local'
+  backend: 'openai' | 'google' | 'flux' | 'local' | 'nanobanana'
   model: string
   params: Record<string, unknown>
   slug: string

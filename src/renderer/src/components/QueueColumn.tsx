@@ -136,9 +136,11 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       params = { width: size.width, height: size.height, steps: localSteps, cfg: localCfg }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
+    } else if (backendId === 'nanobanana') {
+      params = {}
     }
 
-    const count = backendId === 'google' ? 1 : (backendId === 'local' ? 1 : imageCount)
+    const count = (backendId === 'google' || backendId === 'local') ? 1 : imageCount
 
     enqueue({ prompt, backend: backendId, model, params, count })
   }, [backendId, model, imageCount, quality, outputFormat, background, openaiSizeIdx,
@@ -367,8 +369,8 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
           </>
         )}
 
-        {/* Image count (OpenAI and FLUX only) */}
-        {(backendId === 'openai' || backendId === 'flux') && (
+        {/* Image count (OpenAI, FLUX, and Nano Banana) */}
+        {(backendId === 'openai' || backendId === 'flux' || backendId === 'nanobanana') && (
           <div className="setting-row">
             <label>images</label>
             <input
