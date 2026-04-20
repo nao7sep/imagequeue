@@ -4,7 +4,7 @@ import path from 'path'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
-import { logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse } from '../logger'
 import { modelsDirArgs, ensureModelsDir } from '../local-cli'
 
 // Runs draw-things-cli generate and returns the generated image as a Buffer.
@@ -47,7 +47,8 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     width: task.params.width,
     height: task.params.height,
     seed: task.params.seed,
-    cfg: task.params.cfg
+    cfg: task.params.cfg,
+    negativePrompt: task.params.negativePrompt
   })
   const startTime = Date.now()
 
@@ -59,15 +60,27 @@ export async function generateLocal(task: Task): Promise<Buffer> {
 
     proc.on('close', (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
+      else {
+        log('error', 'draw-things-cli exited with error', {
+          code,
+          model: task.model,
+          steps: task.params.steps,
+          width: task.params.width,
+          height: task.params.height,
+          stderr
+        })
+        reject(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
+      }
     })
 
     proc.on('error', (err) => {
+      log('error', 'draw-things-cli spawn failed', { cliPath, message: err.message })
       reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
     })
   })
 
   if (!fs.existsSync(outputPath)) {
+    log('error', 'draw-things-cli produced no output file', { model: task.model, outputPath })
     throw new Error('draw-things-cli did not produce output file')
   }
 

@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse } from '../logger'
 
 // Calls Google Imagen API and returns the image as a Buffer.
 export async function generateGoogle(task: Task): Promise<Buffer> {
@@ -33,12 +33,21 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
       ...(imageSize === '2048x2048' && { outputOptions: { mimeType: 'image/png' } }),
       personGeneration
     } as Record<string, unknown>
+  }).catch((err: unknown) => {
+    log('error', 'Google API call failed', {
+      model: task.model,
+      requestParams,
+      status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,
+      message: err instanceof Error ? err.message : String(err)
+    })
+    throw err
   })
 
   logApiResponse('google', 'ok', Date.now() - startTime)
 
   const imageBytes = response.generatedImages?.[0]?.image?.imageBytes
   if (!imageBytes) {
+    log('error', 'Google response missing image data', { model: task.model })
     throw new Error('No image data in Google response')
   }
 

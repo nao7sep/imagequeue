@@ -6,6 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { loadConfig } from './config'
+import { log } from './logger'
 
 export interface CliStatus {
   installed: boolean
@@ -63,8 +64,9 @@ export async function checkCli(): Promise<CliStatus> {
   const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
 
   return new Promise((resolve) => {
-    execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout) => {
+    execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout, stderr) => {
       if (error) {
+        log('warn', 'draw-things-cli check failed', { cliPath, message: error.message, stderr })
         resolve({ installed: false, version: null, path: null, platform: 'darwin' })
       } else {
         const version = stdout.trim() || null
@@ -134,8 +136,9 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   const args = ['models', 'list', '--downloaded-only', ...modelsDirArgs()]
 
   return new Promise((resolve) => {
-    execFile(cliPath, args, { timeout: 15000 }, (error, stdout) => {
+    execFile(cliPath, args, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error) {
+        log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, message: error.message, stderr })
         resolve([])
       } else {
         resolve(parseModelList(stdout))
@@ -151,8 +154,9 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   const args = ['models', 'list', ...modelsDirArgs()]
 
   return new Promise((resolve) => {
-    execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout) => {
+    execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
       if (error) {
+        log('error', 'draw-things-cli models list (all) failed', { cliPath, args, message: error.message, stderr })
         resolve([])
       } else {
         resolve(parseModelList(stdout))
@@ -177,6 +181,7 @@ export async function ensureModel(modelFile: string): Promise<EnsureModelResult>
   const args = ['models', 'ensure', '--model', modelFile, ...modelsDirArgs()]
 
   return new Promise((resolve) => {
+    log('info', 'Model download started', { modelFile })
     const proc = spawn(cliPath, args, { stdio: 'pipe' })
     let stderr = ''
 
@@ -185,13 +190,16 @@ export async function ensureModel(modelFile: string): Promise<EnsureModelResult>
 
     proc.on('close', (code) => {
       if (code === 0) {
+        log('info', 'Model download complete', { modelFile })
         resolve({ success: true })
       } else {
+        log('error', 'Model download failed', { modelFile, code, stderr })
         resolve({ success: false, error: stderr || `exit code ${code}` })
       }
     })
 
     proc.on('error', (err) => {
+      log('error', 'Model download spawn failed', { modelFile, message: err.message })
       resolve({ success: false, error: err.message })
     })
   })

@@ -6,7 +6,7 @@ let logFilePath: string | null = null
 // Initializes the logger to write to session.log in the given session directory.
 export function initLogger(sessionDir: string): void {
   logFilePath = path.join(sessionDir, 'session.log')
-  log('info', 'Session started')
+  log('info', 'Session started', { sessionDir })
 }
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug'
@@ -29,20 +29,20 @@ export function log(level: LogLevel, message: string, data?: Record<string, unkn
   }
 }
 
-export function logEnqueue(taskId: string, backend: string, model: string, params: Record<string, unknown>): void {
-  log('info', `Enqueued task ${taskId}`, { backend, model, params })
+export function logEnqueue(taskId: string, backend: string, model: string, prompt: string, params: Record<string, unknown>, count: number): void {
+  log('info', `Enqueued task ${taskId}`, { backend, model, prompt, params, count })
 }
 
 export function logGenerationStart(taskId: string, backend: string, model: string): void {
   log('info', `Generation started: ${taskId}`, { backend, model })
 }
 
-export function logGenerationComplete(taskId: string, durationMs: number): void {
-  log('info', `Generation complete: ${taskId}`, { durationMs })
+export function logGenerationComplete(taskId: string, durationMs: number, baseName: string | null, estimatedCostUsd: number | null): void {
+  log('info', `Generation complete: ${taskId}`, { durationMs, baseName, estimatedCostUsd })
 }
 
-export function logGenerationFailed(taskId: string, error: string): void {
-  log('error', `Generation failed: ${taskId}`, { error })
+export function logGenerationFailed(taskId: string, error: string, context?: Record<string, unknown>): void {
+  log('error', `Generation failed: ${taskId}`, { error, ...context })
 }
 
 export function logApiRequest(backend: string, endpoint: string, params: Record<string, unknown>): void {

@@ -106,11 +106,17 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     task.status = 'completed'
     task.baseName = baseName
     task.imagePath = `${baseName}.png`
-    logGenerationComplete(task.id, task.durationMs)
+    logGenerationComplete(task.id, task.durationMs, task.baseName, task.estimatedCostUsd)
   } catch (err) {
     task.status = 'failed'
     task.error = err instanceof Error ? err.message : String(err)
-    logGenerationFailed(task.id, task.error)
+    logGenerationFailed(task.id, task.error, {
+      backend,
+      model: task.model,
+      prompt: task.prompt,
+      params: task.params,
+      durationMs: task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : null
+    })
   }
 
   broadcastUpdate()

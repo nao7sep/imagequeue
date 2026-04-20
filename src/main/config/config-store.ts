@@ -3,6 +3,7 @@ import path from 'path'
 import os from 'os'
 import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
+import { log } from '../logger'
 
 const DATA_DIR = path.join(os.homedir(), '.imagequeue')
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
@@ -66,4 +67,5 @@ export function saveConfig(config: AppConfig): void {
   ensureDataDir()
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
   cachedConfig = config
+  log('info', 'Config saved', { path: CONFIG_PATH })
 }

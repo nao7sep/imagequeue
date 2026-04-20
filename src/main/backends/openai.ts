@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse } from '../logger'
 
 // Calls OpenAI image generation API and returns the image as a Buffer.
 export async function generateOpenAI(task: Task): Promise<Buffer> {
@@ -41,12 +41,23 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
     ...requestParams,
     prompt: task.prompt,
     n: 1
-  } as Parameters<typeof client.images.generate>[0])
+  } as Parameters<typeof client.images.generate>[0]).catch((err: unknown) => {
+    log('error', 'OpenAI API call failed', {
+      model: task.model,
+      requestParams,
+      status: (err as Record<string, unknown>).status,
+      code: (err as Record<string, unknown>).code,
+      errorBody: (err as Record<string, unknown>).error,
+      message: err instanceof Error ? err.message : String(err)
+    })
+    throw err
+  })
 
   logApiResponse('openai', 'ok', Date.now() - startTime)
 
   const b64 = response.data?.[0]?.b64_json
   if (!b64) {
+    log('error', 'OpenAI response missing image data', { model: task.model })
     throw new Error('No image data in OpenAI response')
   }
 

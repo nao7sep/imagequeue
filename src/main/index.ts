@@ -7,7 +7,7 @@ import { queueManager } from './queue/queue-manager'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
-import { initLogger } from './logger'
+import { initLogger, log } from './logger'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -54,6 +54,10 @@ app.on('window-all-closed', () => {
   }
 })
 
+app.on('will-quit', () => {
+  log('info', 'Session ended')
+})
+
 // Confirm close if tasks are pending or generating
 app.on('before-quit', (event) => {
   const allTasks = queueManager.getAllTasks()
@@ -75,6 +79,13 @@ app.on('before-quit', (event) => {
 
     if (choice === 1) {
       event.preventDefault()
+    } else {
+      const activeTasks = Object.entries(allTasks).flatMap(([backend, tasks]) =>
+        tasks
+          .filter((t) => t.status === 'queued' || t.status === 'generating')
+          .map((t) => ({ id: t.id, backend, status: t.status }))
+      )
+      log('warn', 'Quitting with active tasks', { count: activeTasks.length, tasks: activeTasks })
     }
   }
 })

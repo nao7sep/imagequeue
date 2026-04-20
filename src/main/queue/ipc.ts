@@ -9,7 +9,7 @@ export function registerQueueIpc(): void {
   ipcMain.handle('queue:enqueue', (_event, request: EnqueueRequest) => {
     const tasks = queueManager.enqueue(request)
     for (const task of tasks) {
-      logEnqueue(task.id, request.backend, request.model, request.params)
+      logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
     return tasks
@@ -24,12 +24,14 @@ export function registerQueueIpc(): void {
   })
 
   ipcMain.handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
+    log('info', `Task removed from queue: ${taskId}`, { backend })
     queueManager.removeTask(backend, taskId)
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
 
   ipcMain.handle('queue:deleteWithFiles', (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
+    log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null })
     if (task?.baseName) {
       deleteImageOutput(task.baseName)
     }

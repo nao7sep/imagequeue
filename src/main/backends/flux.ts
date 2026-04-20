@@ -1,7 +1,7 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse } from '../logger'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
@@ -53,6 +53,7 @@ export async function generateFlux(task: Task): Promise<Buffer> {
 
   if (!submitResponse.ok) {
     const text = await submitResponse.text()
+    log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text })
     throw new Error(`FLUX submit failed (${submitResponse.status}): ${text}`)
   }
 
@@ -66,6 +67,7 @@ export async function generateFlux(task: Task): Promise<Buffer> {
     await sleep(POLL_INTERVAL_MS)
 
     if (Date.now() - pollStart > MAX_POLL_DURATION_MS) {
+      log('error', 'FLUX generation timed out', { model: task.model, elapsedMs: Date.now() - pollStart })
       throw new Error('FLUX generation timed out after 5 minutes')
     }
 
@@ -74,6 +76,7 @@ export async function generateFlux(task: Task): Promise<Buffer> {
     })
 
     if (!pollResponse.ok) {
+      log('error', 'FLUX poll request failed', { model: task.model, status: pollResponse.status, jobId: submitData.id })
       throw new Error(`FLUX poll failed (${pollResponse.status})`)
     }
 
@@ -85,6 +88,7 @@ export async function generateFlux(task: Task): Promise<Buffer> {
     if (pollData.status === 'Ready') {
       const imageUrl = pollData.result?.sample
       if (!imageUrl) {
+        log('error', 'FLUX completed but response missing image URL', { model: task.model, result: pollData.result })
         throw new Error('FLUX completed but no image URL in response')
       }
 
@@ -93,6 +97,7 @@ export async function generateFlux(task: Task): Promise<Buffer> {
       // Download image from signed URL
       const imageResponse = await fetch(imageUrl)
       if (!imageResponse.ok) {
+        log('error', 'FLUX image download failed', { model: task.model, status: imageResponse.status })
         throw new Error(`Failed to download FLUX image (${imageResponse.status})`)
       }
 
@@ -100,6 +105,7 @@ export async function generateFlux(task: Task): Promise<Buffer> {
     }
 
     if (pollData.status === 'Error' || pollData.status === 'Failed') {
+      log('error', 'FLUX generation returned error status', { model: task.model, status: pollData.status, pollData })
       throw new Error(`FLUX generation failed: ${JSON.stringify(pollData)}`)
     }
 
