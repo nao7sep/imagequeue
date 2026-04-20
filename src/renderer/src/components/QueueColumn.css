@@ -15,7 +15,7 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -25,7 +25,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .setting-row {
@@ -49,7 +49,7 @@
   border-radius: 3px;
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .enqueue-btn {
@@ -61,7 +61,7 @@
   background: transparent;
   color: var(--accent);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .enqueue-btn:hover:not(:disabled) {
@@ -82,7 +82,7 @@
 
 .task-list-empty {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
   padding: 20px 10px;
 }
@@ -102,7 +102,7 @@
 }
 
 .task-prompt {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -111,7 +111,7 @@
 }
 
 .task-status {
-  font-size: 10px;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -123,14 +123,13 @@
 }
 
 .task-error {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--error);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: help;
   opacity: 0.85;
-  margin-top: 2px;
 }
 
 .context-menu {
@@ -152,11 +151,31 @@
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
 .context-menu button:hover {
   background: var(--accent);
+}
+
+.model-warning {
+  color: var(--warning);
+  font-size: 11px;
+  gap: 4px;
+}
+
+.open-models-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.open-models-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
 }

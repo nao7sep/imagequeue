@@ -5,6 +5,7 @@ import os from 'os'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
+import { logApiRequest, logApiResponse } from '../logger'
 
 // Runs draw-things-cli generate and returns the generated image as a Buffer.
 export async function generateLocal(task: Task): Promise<Buffer> {
@@ -45,6 +46,16 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     args.push('--models-dir', modelsDir)
   }
 
+  logApiRequest('local', 'draw-things-cli generate', {
+    model: task.model,
+    steps: task.params.steps,
+    width: task.params.width,
+    height: task.params.height,
+    seed: task.params.seed,
+    guidance: task.params.guidance
+  })
+  const startTime = Date.now()
+
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(cliPath, args, { stdio: 'pipe' })
     let stderr = ''
@@ -64,6 +75,8 @@ export async function generateLocal(task: Task): Promise<Buffer> {
   if (!fs.existsSync(outputPath)) {
     throw new Error('draw-things-cli did not produce output file')
   }
+
+  logApiResponse('local', 'ok', Date.now() - startTime)
 
   const buffer = fs.readFileSync(outputPath)
   fs.unlinkSync(outputPath)

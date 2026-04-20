@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
+import { logApiRequest, logApiResponse } from '../logger'
 
 // Calls OpenAI image generation API and returns the image as a Buffer.
 export async function generateOpenAI(task: Task): Promise<Buffer> {
@@ -20,17 +21,29 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
   const quality = (task.params.quality as 'low' | 'medium' | 'high') || 'high'
   const outputFormat = (task.params.outputFormat as string) || 'png'
   const background = (task.params.background as string) || 'opaque'
+  const outputCompression = task.params.outputCompression as number | undefined
+  const moderation = (task.params.moderation as string) || 'auto'
 
-  const response = await client.images.generate({
+  const requestParams = {
     model: task.model,
-    prompt: task.prompt,
     quality,
     size,
-    n: 1,
-    response_format: 'b64_json',
-    ...(outputFormat !== 'png' && { output_format: outputFormat }),
-    ...(background === 'transparent' && { background: 'transparent' })
+    output_format: outputFormat,
+    ...(background !== 'opaque' && { background }),
+    ...(outputCompression != null && { output_compression: outputCompression }),
+    ...(moderation !== 'auto' && { moderation })
+  }
+
+  logApiRequest('openai', 'images.generate', requestParams)
+  const startTime = Date.now()
+
+  const response = await client.images.generate({
+    ...requestParams,
+    prompt: task.prompt,
+    n: 1
   } as Parameters<typeof client.images.generate>[0])
+
+  logApiResponse('openai', 'ok', Date.now() - startTime)
 
   const b64 = response.data?.[0]?.b64_json
   if (!b64) {

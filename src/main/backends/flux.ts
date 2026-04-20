@@ -1,6 +1,7 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
+import { logApiRequest, logApiResponse } from '../logger'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
@@ -38,6 +39,9 @@ export async function generateFlux(task: Task): Promise<Buffer> {
   if (task.params.seed != null) body.seed = task.params.seed
 
   // Submit request
+  logApiRequest('flux', task.model, { width, height, steps: body.steps, guidance: body.guidance, seed: body.seed })
+  const startTime = Date.now()
+
   const submitResponse = await fetch(`${BASE_URL}/${task.model}`, {
     method: 'POST',
     headers: {
@@ -83,6 +87,8 @@ export async function generateFlux(task: Task): Promise<Buffer> {
       if (!imageUrl) {
         throw new Error('FLUX completed but no image URL in response')
       }
+
+      logApiResponse('flux', 'Ready', Date.now() - startTime)
 
       // Download image from signed URL
       const imageResponse = await fetch(imageUrl)

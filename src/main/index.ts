@@ -1,12 +1,13 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
-import { initSession } from './session'
+import { initSession, getSessionDir } from './session'
 import { registerQueueIpc } from './queue'
 import { queueManager } from './queue/queue-manager'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
+import { initLogger } from './logger'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -32,6 +33,7 @@ app.whenReady().then(() => {
   ensureDataDir()
   loadConfig()
   initSession()
+  initLogger(getSessionDir())
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc()

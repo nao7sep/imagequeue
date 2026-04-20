@@ -5,6 +5,7 @@ import { loadConfig } from '../config'
 import { TimestampAllocator } from '../session'
 import { writeImageOutput } from '../utils/file-output'
 import { ImageMetadata } from '../utils/image-metadata'
+import { logGenerationStart, logGenerationComplete, logGenerationFailed } from '../logger'
 import { generateOpenAI } from './openai'
 import { generateGoogle } from './google'
 import { generateFlux } from './flux'
@@ -59,6 +60,7 @@ function processQueues(): void {
       activeCounts[backend]++
       task.status = 'generating'
       task.startedAt = new Date().toISOString()
+      logGenerationStart(task.id, backend, task.model)
       broadcastUpdate()
 
       processTask(backend, task).finally(() => {
@@ -104,9 +106,11 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     task.status = 'completed'
     task.baseName = baseName
     task.imagePath = `${baseName}.png`
+    logGenerationComplete(task.id, task.durationMs)
   } catch (err) {
     task.status = 'failed'
     task.error = err instanceof Error ? err.message : String(err)
+    logGenerationFailed(task.id, task.error)
   }
 
   broadcastUpdate()

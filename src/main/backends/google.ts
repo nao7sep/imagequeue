@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
+import { logApiRequest, logApiResponse } from '../logger'
 
 // Calls Google Imagen API and returns the image as a Buffer.
 export async function generateGoogle(task: Task): Promise<Buffer> {
@@ -19,6 +20,10 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
   const personGeneration = (task.params.personGeneration as string) || 'allow_adult'
   const numberOfImages = (task.params.numberOfImages as number) || 1
 
+  const requestParams = { aspectRatio, imageSize, personGeneration, numberOfImages }
+  logApiRequest('google', task.model, requestParams)
+  const startTime = Date.now()
+
   const response = await ai.models.generateImages({
     model: task.model,
     prompt: task.prompt,
@@ -29,6 +34,8 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
       personGeneration
     } as Record<string, unknown>
   })
+
+  logApiResponse('google', 'ok', Date.now() - startTime)
 
   const imageBytes = response.generatedImages?.[0]?.image?.imageBytes
   if (!imageBytes) {

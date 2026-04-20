@@ -2,11 +2,15 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueRequest } from '../../shared/types'
 import { deleteImageOutput } from '../utils/file-output'
+import { logEnqueue, log } from '../logger'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
   ipcMain.handle('queue:enqueue', (_event, request: EnqueueRequest) => {
     const tasks = queueManager.enqueue(request)
+    for (const task of tasks) {
+      logEnqueue(task.id, request.backend, request.model, request.params)
+    }
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
     return tasks
   })
@@ -41,6 +45,7 @@ export function registerQueueIpc(): void {
       task.startedAt = null
       task.completedAt = null
       task.durationMs = null
+      log('info', `Retrying task ${taskId}`, { backend })
       notifyAllWindows('queue:updated', queueManager.getAllTasks())
     }
   })

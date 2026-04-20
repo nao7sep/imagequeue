@@ -73,4 +73,9 @@ export interface AppConfig {
   text_ai: TextAIConfig
   image_backends: ImageBackendsConfig
   prompts: PromptsConfig
+  ui: UiConfig
+}
+
+export interface UiConfig {
+  leftPaneWidth: number
 }

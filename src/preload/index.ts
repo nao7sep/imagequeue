@@ -46,6 +46,15 @@ const api = {
   checkLocalModel: (filename: string): Promise<boolean> =>
     ipcRenderer.invoke('settings:checkLocalModel', filename),
 
+  saveUi: (ui: { leftPaneWidth: number }): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:saveUi', ui),
+
+  listLocalModels: (): Promise<string[]> =>
+    ipcRenderer.invoke('settings:listLocalModels'),
+
+  openModelsDir: (): Promise<void> =>
+    ipcRenderer.invoke('settings:openModelsDir'),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {

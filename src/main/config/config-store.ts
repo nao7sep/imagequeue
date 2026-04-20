@@ -33,7 +33,15 @@ export function loadConfig(): AppConfig {
   }
 
   const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
-  cachedConfig = JSON.parse(raw) as AppConfig
+  const loaded = JSON.parse(raw) as Partial<AppConfig>
+  const defaults = createDefaultConfig()
+
+  // Merge with defaults to handle missing fields from older configs
+  cachedConfig = {
+    ...defaults,
+    ...loaded,
+    ui: { ...defaults.ui, ...loaded.ui }
+  } as AppConfig
   return cachedConfig
 }
 

@@ -65,8 +65,20 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [modelExists, setModelExists] = useState<boolean | null>(null)
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
 
   const columnTasks = tasks[backendId]
+
+  // Load installed local models on mount
+  useEffect(() => {
+    if (backendId !== 'local') return
+    window.electronAPI.listLocalModels().then((list) => {
+      setDiscoveredModels(list)
+      if (list.length > 0 && !list.includes(model)) {
+        setModel(list[0])
+      }
+    })
+  }, [backendId])
 
   // Check local model existence when model changes
   useEffect(() => {
@@ -157,14 +169,16 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       <div className="column-header">{label}</div>
 
       <div className="column-settings">
-        <div className="setting-row">
-          <label>model</label>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
+        {backendId !== 'local' && (
+          <div className="setting-row">
+            <label>model</label>
+            <select value={model} onChange={(e) => setModel(e.target.value)}>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* OpenAI parameters */}
         {backendId === 'openai' && (
@@ -252,7 +266,24 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
         {/* Local parameters */}
         {backendId === 'local' && (
           <>
-            {modelExists === false && (
+            {discoveredModels.length > 0 ? (
+              <div className="setting-row">
+                <label>model</label>
+                <select value={model} onChange={(e) => setModel(e.target.value)}>
+                  {discoveredModels.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="setting-row model-warning">
+                No models found.
+                <button className="open-models-btn" onClick={() => window.electronAPI.openModelsDir()}>
+                  Open folder
+                </button>
+              </div>
+            )}
+            {modelExists === false && discoveredModels.length > 0 && (
               <div className="setting-row model-warning">
                 ⚠ Model not found. Open Draw Things to download.
               </div>
@@ -365,16 +396,18 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         {task.prompt.length > 30 ? task.prompt.slice(0, 30) + '…' : task.prompt}
       </div>
       <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
-        {task.status}
+        <span
+          className={task.status === 'failed' ? 'task-error' : undefined}
+          title={task.status === 'failed' && task.error ? task.error : undefined}
+        >
+          {task.status === 'failed'
+            ? `failed: ${task.error || 'unknown error'}`
+            : task.status}
+        </span>
         {task.estimatedCostUsd !== null && (
           <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
         )}
       </div>
-      {task.status === 'failed' && task.error && (
-        <div className="task-error" title={task.error}>
-          {task.error}
-        </div>
-      )}
     </div>
   )
 }

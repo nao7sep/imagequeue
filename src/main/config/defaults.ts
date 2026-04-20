@@ -59,6 +59,9 @@ export function createDefaultConfig(): AppConfig {
     },
     prompts: {
       slug: 'Generate a short filename slug (3-5 lowercase English words, hyphens only, no other characters) that captures the essence of this image prompt: {{prompt}}'
+    },
+    ui: {
+      leftPaneWidth: 360
     }
   }
 }
