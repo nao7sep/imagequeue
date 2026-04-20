@@ -17,6 +17,9 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web"
   },
   "dependencies": {
+    "@google/genai": "^1.50.1",
+    "nanoid": "^5.1.9",
+    "openai": "^4.104.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

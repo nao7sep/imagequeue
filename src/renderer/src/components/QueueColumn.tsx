@@ -6,6 +6,7 @@ import './QueueColumn.css'
 interface Props {
   backendId: BackendId
   label: string
+  onSelectTask: (task: Task) => void
 }
 
 const MODEL_OPTIONS: Record<BackendId, string[]> = {
@@ -22,7 +23,7 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'var(--error)'
 }
 
-export function QueueColumn({ backendId, label }: Props): React.JSX.Element {
+export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
   const [model, setModel] = useState(MODEL_OPTIONS[backendId][0])
   const [imageCount, setImageCount] = useState(1)
@@ -133,7 +134,7 @@ export function QueueColumn({ backendId, label }: Props): React.JSX.Element {
           </div>
         ) : (
           columnTasks.map((task) => (
-            <TaskItem key={task.id} task={task} />
+            <TaskItem key={task.id} task={task} onClick={() => onSelectTask(task)} />
           ))
         )}
       </div>
@@ -141,9 +142,9 @@ export function QueueColumn({ backendId, label }: Props): React.JSX.Element {
   )
 }
 
-function TaskItem({ task }: { task: Task }): React.JSX.Element {
+function TaskItem({ task, onClick }: { task: Task; onClick: () => void }): React.JSX.Element {
   return (
-    <div className="task-item">
+    <div className="task-item" onClick={onClick}>
       <div className="task-prompt" title={task.prompt}>
         {task.prompt.length > 30 ? task.prompt.slice(0, 30) + '…' : task.prompt}
       </div>

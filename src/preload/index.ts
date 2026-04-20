@@ -23,6 +23,13 @@ const api = {
   getPromptHistory: (): Promise<string[]> =>
     ipcRenderer.invoke('queue:getPromptHistory'),
 
+  // Preview operations
+  getImage: (baseName: string): Promise<string | null> =>
+    ipcRenderer.invoke('preview:getImage', baseName),
+
+  getMetadata: (baseName: string): Promise<Record<string, unknown> | null> =>
+    ipcRenderer.invoke('preview:getMetadata', baseName),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {

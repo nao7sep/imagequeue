@@ -3,6 +3,8 @@ import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
 import { initSession } from './session'
 import { registerQueueIpc } from './queue'
+import { startProcessor } from './backends'
+import { registerPreviewIpc } from './preview-ipc'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -29,6 +31,8 @@ app.whenReady().then(() => {
   loadConfig()
   initSession()
   registerQueueIpc()
+  registerPreviewIpc()
+  startProcessor()
 
   createWindow()
 

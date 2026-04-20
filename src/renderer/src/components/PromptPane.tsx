@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQueue } from '../context/QueueContext'
-import type { BackendId } from '../../../shared/types'
+import type { BackendId, Task } from '../../../shared/types'
 import './PromptPane.css'
 
 const BACKENDS: BackendId[] = ['openai', 'google', 'flux', 'local']
 
-export function PromptPane(): React.JSX.Element {
+interface Props {
+  selectedTask: Task | null
+  previewDataUrl: string | null
+}
+
+export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
   const { promptHistory } = useQueue()
 
   const handleSendToAll = useCallback(() => {
     if (!prompt.trim()) return
-    // Dispatched per-column via custom event; columns handle their own settings
     window.dispatchEvent(new CustomEvent('enqueue-all', { detail: { prompt: prompt.trim() } }))
   }, [prompt])
 
@@ -67,13 +71,30 @@ export function PromptPane(): React.JSX.Element {
       </div>
 
       <div className="preview-area">
-        <div className="preview-placeholder">
-          <p>No image selected</p>
-          <p style={{ marginTop: '8px', fontSize: '11px' }}>
-            Generate an image and click its thumbnail to preview
-          </p>
-        </div>
+        {previewDataUrl ? (
+          <img className="preview-image" src={previewDataUrl} alt="Generated" />
+        ) : (
+          <div className="preview-placeholder">
+            <p>No image selected</p>
+            <p style={{ marginTop: '8px', fontSize: '11px' }}>
+              Generate an image and click its thumbnail to preview
+            </p>
+          </div>
+        )}
       </div>
+
+      {selectedTask && selectedTask.status === 'completed' && (
+        <div className="preview-metadata">
+          <div><strong>model:</strong> {selectedTask.model}</div>
+          <div><strong>prompt:</strong> {selectedTask.prompt}</div>
+          {selectedTask.estimatedCostUsd !== null && (
+            <div><strong>cost:</strong> ${selectedTask.estimatedCostUsd.toFixed(2)}</div>
+          )}
+          {selectedTask.durationMs !== null && (
+            <div><strong>time:</strong> {(selectedTask.durationMs / 1000).toFixed(1)}s</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
