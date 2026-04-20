@@ -9,10 +9,7 @@ import {
   GOOGLE_IMAGE_SIZES,
   FLUX_SIZES,
   LOCAL_SIZES,
-  type OpenAIModelDef,
-  type GoogleModelDef,
   type FluxModelDef,
-  type LocalModelDef,
   type SizePreset,
   type OpenAIQuality,
   type OpenAIOutputFormat,
@@ -25,6 +22,21 @@ interface Props {
   backendId: BackendId
   label: string
   onSelectTask: (task: Task) => void
+}
+
+interface LocalModelInfo {
+  file: string
+  name: string
+  source: string
+  downloaded: boolean
+  huggingFace: string | null
+}
+
+interface CliStatus {
+  installed: boolean
+  version: string | null
+  path: string | null
+  platform: 'darwin' | 'unsupported'
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -61,33 +73,38 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   // Local params
   const [localSizeIdx, setLocalSizeIdx] = useState(2) // 1024x1024
   const [localSteps, setLocalSteps] = useState(4)
-  const [localGuidance, setLocalGuidance] = useState(1)
+  const [localCfg, setLocalCfg] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
-  const [modelExists, setModelExists] = useState<boolean | null>(null)
-  const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
+  const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
+  const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
+  const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
+  const [showAvailable, setShowAvailable] = useState(false)
+  const [downloading, setDownloading] = useState<string | null>(null)
 
   const columnTasks = tasks[backendId]
 
-  // Load installed local models on mount
+  // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
     if (backendId !== 'local') return
-    window.electronAPI.listLocalModels().then((list) => {
-      setDiscoveredModels(list)
-      if (list.length > 0 && !list.includes(model)) {
-        setModel(list[0])
+    window.electronAPI.localCheckCli().then((status) => {
+      setCliStatus(status)
+      if (status.installed) {
+        window.electronAPI.localListDownloadedModels().then((list) => {
+          setDownloadedModels(list)
+          if (list.length > 0 && !list.find((m) => m.file === model)) {
+            setModel(list[0].file)
+          }
+        })
       }
     })
   }, [backendId])
 
-  // Check local model existence when model changes
+  // Load available models list when expanded
   useEffect(() => {
-    if (backendId !== 'local') return
-    const localModel = findModel('local', model) as LocalModelDef | undefined
-    if (localModel) {
-      window.electronAPI.checkLocalModel(localModel.filename).then(setModelExists)
-    }
-  }, [backendId, model])
+    if (!showAvailable || availableModels.length > 0) return
+    window.electronAPI.localListAvailableModels().then(setAvailableModels)
+  }, [showAvailable])
 
   // Update defaults when model changes
   useEffect(() => {
@@ -96,12 +113,6 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       if (m) {
         setFluxSteps(m.stepsRange.default)
         setFluxGuidance(m.guidanceRange.default)
-      }
-    } else if (backendId === 'local') {
-      const m = findModel('local', model) as LocalModelDef | undefined
-      if (m) {
-        setLocalSteps(m.stepsRange.default)
-        setLocalGuidance(m.guidanceRange.default)
       }
     }
   }, [backendId, model])
@@ -122,7 +133,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       if (fluxSeed) params.seed = parseInt(fluxSeed)
     } else if (backendId === 'local') {
       const size = LOCAL_SIZES[localSizeIdx]
-      params = { width: size.width, height: size.height, steps: localSteps, guidance: localGuidance }
+      params = { width: size.width, height: size.height, steps: localSteps, cfg: localCfg }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
     }
@@ -133,7 +144,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   }, [backendId, model, imageCount, quality, outputFormat, background, openaiSizeIdx,
       aspectRatio, imageSize, personGeneration, numberOfImages,
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
-      localSizeIdx, localSteps, localGuidance, localSeed, negativePrompt, enqueue])
+      localSizeIdx, localSteps, localCfg, localSeed, negativePrompt, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
   useEffect(() => {
@@ -266,45 +277,93 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
         {/* Local parameters */}
         {backendId === 'local' && (
           <>
-            {discoveredModels.length > 0 ? (
-              <div className="setting-row">
-                <label>model</label>
-                <select value={model} onChange={(e) => setModel(e.target.value)}>
-                  {discoveredModels.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
+            {cliStatus === null && (
+              <div className="setting-row model-warning">Checking CLI…</div>
+            )}
+            {cliStatus && !cliStatus.installed && cliStatus.platform === 'darwin' && (
               <div className="setting-row model-warning">
-                No models found.
-                <button className="open-models-btn" onClick={() => window.electronAPI.openModelsDir()}>
-                  Open folder
-                </button>
+                Draw Things CLI not installed.<br />
+                <code className="install-hint">brew install drawthingsai/draw-things/draw-things-cli</code>
               </div>
             )}
-            {modelExists === false && discoveredModels.length > 0 && (
-              <div className="setting-row model-warning">
-                ⚠ Model not found. Open Draw Things to download.
-              </div>
+            {cliStatus && cliStatus.installed && (
+              <>
+                {downloadedModels.length > 0 ? (
+                  <div className="setting-row">
+                    <label>model</label>
+                    <select value={model} onChange={(e) => setModel(e.target.value)}>
+                      {downloadedModels.map((m) => (
+                        <option key={m.file} value={m.file}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="setting-row model-warning">
+                    No models downloaded yet.
+                  </div>
+                )}
+                <div className="setting-row">
+                  <button
+                    className="open-models-btn"
+                    onClick={() => setShowAvailable(!showAvailable)}
+                  >
+                    {showAvailable ? '▾ Hide available' : '▸ Download models…'}
+                  </button>
+                </div>
+                {showAvailable && (
+                  <div className="available-models-list">
+                    {availableModels.length === 0 ? (
+                      <div className="setting-row model-warning">Loading catalog…</div>
+                    ) : (
+                      availableModels
+                        .filter((m) => !m.downloaded)
+                        .slice(0, 30)
+                        .map((m) => (
+                          <div key={m.file} className="available-model-row">
+                            <span className="available-model-name" title={m.file}>{m.name}</span>
+                            <button
+                              className="download-btn"
+                              disabled={downloading !== null}
+                              onClick={async () => {
+                                setDownloading(m.file)
+                                const result = await window.electronAPI.localEnsureModel(m.file)
+                                setDownloading(null)
+                                if (result.success) {
+                                  const updated = await window.electronAPI.localListDownloadedModels()
+                                  setDownloadedModels(updated)
+                                  setAvailableModels((prev) =>
+                                    prev.map((p) => p.file === m.file ? { ...p, downloaded: true } : p)
+                                  )
+                                  if (updated.length === 1) setModel(updated[0].file)
+                                }
+                              }}
+                            >
+                              {downloading === m.file ? '⏳' : '↓'}
+                            </button>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                )}
+                {renderSizeSelect(LOCAL_SIZES, localSizeIdx, setLocalSizeIdx)}
+                <div className="setting-row">
+                  <label>steps</label>
+                  <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
+                </div>
+                <div className="setting-row">
+                  <label>cfg</label>
+                  <input type="number" value={localCfg} onChange={(e) => setLocalCfg(Math.max(0, parseFloat(e.target.value) || 0))} min={0} max={20} step={0.5} />
+                </div>
+                <div className="setting-row">
+                  <label>seed</label>
+                  <input type="text" value={localSeed} onChange={(e) => setLocalSeed(e.target.value)} placeholder="random" />
+                </div>
+                <div className="setting-row">
+                  <label>neg.</label>
+                  <input type="text" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="negative prompt" />
+                </div>
+              </>
             )}
-            {renderSizeSelect(LOCAL_SIZES, localSizeIdx, setLocalSizeIdx)}
-            <div className="setting-row">
-              <label>steps</label>
-              <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
-            </div>
-            <div className="setting-row">
-              <label>guidance</label>
-              <input type="number" value={localGuidance} onChange={(e) => setLocalGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
-            </div>
-            <div className="setting-row">
-              <label>seed</label>
-              <input type="text" value={localSeed} onChange={(e) => setLocalSeed(e.target.value)} placeholder="random" />
-            </div>
-            <div className="setting-row">
-              <label>neg.</label>
-              <input type="text" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="negative prompt" />
-            </div>
           </>
         )}
 

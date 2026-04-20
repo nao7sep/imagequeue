@@ -36,12 +36,29 @@ export function loadConfig(): AppConfig {
   const loaded = JSON.parse(raw) as Partial<AppConfig>
   const defaults = createDefaultConfig()
 
-  // Merge with defaults to handle missing fields from older configs
+  // Deep merge with defaults to handle missing/renamed fields from older configs
+  const loadedBackends = (loaded.image_backends || {}) as Record<string, Record<string, unknown>>
+  const defaultBackends = defaults.image_backends as unknown as Record<string, Record<string, unknown>>
+
+  const mergedBackends: Record<string, unknown> = {}
+  for (const key of Object.keys(defaultBackends)) {
+    const defB = defaultBackends[key]
+    const loadB = loadedBackends[key] || {}
+    const defParams = (defB.default_params || {}) as Record<string, unknown>
+    const loadParams = (loadB.default_params || {}) as Record<string, unknown>
+    mergedBackends[key] = {
+      ...defB,
+      ...loadB,
+      default_params: { ...defParams, ...loadParams }
+    }
+  }
+
   cachedConfig = {
     ...defaults,
     ...loaded,
-    ui: { ...defaults.ui, ...loaded.ui }
-  } as AppConfig
+    image_backends: mergedBackends as unknown as AppConfig['image_backends'],
+    ui: { ...defaults.ui, ...(loaded.ui || {}) }
+  }
   return cachedConfig
 }
 

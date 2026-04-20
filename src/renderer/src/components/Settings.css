@@ -82,6 +82,18 @@
   resize: vertical;
 }
 
+.settings-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  flex-basis: 100%;
+}
+
+.settings-field:has(.settings-hint) {
+  flex-wrap: wrap;
+}
+
 .settings-save {
   padding: 8px 20px;
   border: none;

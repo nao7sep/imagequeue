@@ -45,16 +45,16 @@ export function createDefaultConfig(): AppConfig {
       },
       local: {
         cli_path: '',
-        model: 'flux_1_schnell_q5p.ckpt',
+        model: 'flux_2_klein_4b_q6p.ckpt',
         default_params: {
           steps: 4,
-          guidance: 1,
+          cfg: 1,
           width: 1024,
           height: 1024,
           seed: null,
           negativePrompt: ''
         },
-        models_dir: ''
+        models_dir: '~/.imagequeue/models'
       }
     },
     prompts: {

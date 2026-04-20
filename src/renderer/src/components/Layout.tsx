@@ -5,12 +5,17 @@ import { Settings } from './Settings'
 import type { Task } from '../../../shared/types'
 import './Layout.css'
 
-const BACKENDS = [
+const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'OpenAI' },
   { id: 'google' as const, label: 'Google' },
   { id: 'flux' as const, label: 'FLUX' },
   { id: 'local' as const, label: 'Local' }
 ]
+
+// On Windows, Draw Things CLI is not available — show only cloud backends
+const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32'
+  ? ALL_BACKENDS.filter((b) => b.id !== 'local')
+  : ALL_BACKENDS
 
 const DEFAULT_LEFT_WIDTH = 360
 const MIN_LEFT_WIDTH = 280

@@ -49,7 +49,7 @@ export interface LocalBackendConfig {
   model: string
   default_params: {
     steps: number
-    guidance: number
+    cfg: number
     width: number
     height: number
     seed: number | null

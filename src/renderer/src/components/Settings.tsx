@@ -130,6 +130,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
+      {window.electronAPI.platform !== 'win32' && (
       <div className="settings-section">
         <h3>Local (Draw Things CLI)</h3>
         <div className="settings-field">
@@ -137,18 +138,20 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           <input value={backends.local.cli_path as string} onChange={(e) => updateBackend('local', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />
         </div>
         <div className="settings-field">
-          <label>Model</label>
-          <input value={backends.local.model as string} onChange={(e) => updateBackend('local', 'model', e.target.value)} />
+          <label>Models Directory</label>
+          <input value={backends.local.models_dir as string} onChange={(e) => updateBackend('local', 'models_dir', e.target.value)} placeholder="~/.imagequeue/models" />
+          <span className="settings-hint">Leave empty to use Draw Things&apos; default location (shared with GUI app)</span>
         </div>
         <div className="settings-field">
-          <label>Models Dir</label>
-          <input value={backends.local.models_dir as string} onChange={(e) => updateBackend('local', 'models_dir', e.target.value)} />
+          <label>Default Steps</label>
+          <input type="number" min={1} max={50} value={(backends.local.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('local', 'steps', parseInt(e.target.value) || 4)} />
         </div>
         <div className="settings-field">
-          <label>Steps</label>
-          <input type="number" min={1} max={50} value={(backends.local.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('local', 'steps', parseInt(e.target.value) || 20)} />
+          <label>Default CFG</label>
+          <input type="number" min={0} max={20} step={0.5} value={(backends.local.default_params as Record<string, unknown>).cfg as number} onChange={(e) => updateBackendParam('local', 'cfg', parseFloat(e.target.value) || 1)} />
         </div>
       </div>
+      )}
 
       <div className="settings-section">
         <h3>Prompts</h3>

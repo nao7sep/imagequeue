@@ -1,22 +1,20 @@
 import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
 import { logApiRequest, logApiResponse } from '../logger'
+import { modelsDirArgs, ensureModelsDir } from '../local-cli'
 
 // Runs draw-things-cli generate and returns the generated image as a Buffer.
 export async function generateLocal(task: Task): Promise<Buffer> {
   const config = loadConfig()
-  let cliPath = config.image_backends.local.cli_path
+  const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
 
-  if (!cliPath) {
-    cliPath = 'draw-things-cli'
-  }
+  // Ensure models directory exists
+  ensureModelsDir()
 
-  const modelsDir = config.image_backends.local.models_dir.replace('~', os.homedir())
   const outputPath = path.join(getSessionDir(), `_local_temp_${Date.now()}.png`)
 
   const args = [
@@ -24,26 +22,23 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     '--model', task.model,
     '--prompt', task.prompt,
     '--output', outputPath,
-    '--steps', String((task.params.steps as number) || 20),
+    '--steps', String((task.params.steps as number) || 4),
     '--width', String((task.params.width as number) || 1024),
     '--height', String((task.params.height as number) || 1024),
-    '--disable-preview'
+    '--disable-preview',
+    ...modelsDirArgs()
   ]
 
   if (task.params.seed != null && (task.params.seed as number) > 0) {
     args.push('--seed', String(task.params.seed))
   }
 
-  if (task.params.guidance != null) {
-    args.push('--guidance', String(task.params.guidance))
+  if (task.params.cfg != null && (task.params.cfg as number) > 0) {
+    args.push('--cfg', String(task.params.cfg))
   }
 
   if (task.params.negativePrompt) {
-    args.push('--negative_prompt', String(task.params.negativePrompt))
-  }
-
-  if (modelsDir) {
-    args.push('--models-dir', modelsDir)
+    args.push('--negative-prompt', String(task.params.negativePrompt))
   }
 
   logApiRequest('local', 'draw-things-cli generate', {
@@ -52,7 +47,7 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     width: task.params.width,
     height: task.params.height,
     seed: task.params.seed,
-    guidance: task.params.guidance
+    cfg: task.params.cfg
   })
   const startTime = Date.now()
 
@@ -86,7 +81,9 @@ export async function generateLocal(task: Task): Promise<Buffer> {
 // Check if a model file exists in the configured models directory.
 export function checkModelExists(modelFilename: string): boolean {
   const config = loadConfig()
-  const modelsDir = config.image_backends.local.models_dir.replace('~', os.homedir())
-  if (!modelsDir) return false
-  return fs.existsSync(path.join(modelsDir, modelFilename))
+  const dir = config.image_backends.local.models_dir
+  if (!dir) return false
+  const resolved = dir.replace(/^~/, require('os').homedir())
+  if (!fs.existsSync(resolved)) return false
+  return fs.existsSync(path.join(resolved, modelFilename))
 }

@@ -1,6 +1,26 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { BackendId, EnqueueRequest, Task } from '../shared/types'
 
+export interface CliStatus {
+  installed: boolean
+  version: string | null
+  path: string | null
+  platform: 'darwin' | 'unsupported'
+}
+
+export interface LocalModelInfo {
+  file: string
+  name: string
+  source: string
+  downloaded: boolean
+  huggingFace: string | null
+}
+
+export interface EnsureModelResult {
+  success: boolean
+  error?: string
+}
+
 const api = {
   platform: process.platform,
 
@@ -49,11 +69,27 @@ const api = {
   saveUi: (ui: { leftPaneWidth: number }): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveUi', ui),
 
-  listLocalModels: (): Promise<string[]> =>
-    ipcRenderer.invoke('settings:listLocalModels'),
+  // Draw Things CLI operations (macOS only)
+  localCheckCli: (): Promise<CliStatus> =>
+    ipcRenderer.invoke('local:checkCli'),
 
-  openModelsDir: (): Promise<void> =>
-    ipcRenderer.invoke('settings:openModelsDir'),
+  localListDownloadedModels: (): Promise<LocalModelInfo[]> =>
+    ipcRenderer.invoke('local:listDownloadedModels'),
+
+  localListAvailableModels: (): Promise<LocalModelInfo[]> =>
+    ipcRenderer.invoke('local:listAvailableModels'),
+
+  localEnsureModel: (modelFile: string): Promise<EnsureModelResult> =>
+    ipcRenderer.invoke('local:ensureModel', modelFile),
+
+  localGetModelsDir: (): Promise<string | null> =>
+    ipcRenderer.invoke('local:getModelsDir'),
+
+  localGetDefaultModelsDir: (): Promise<string> =>
+    ipcRenderer.invoke('local:getDefaultModelsDir'),
+
+  localOpenModelsDir: (): Promise<void> =>
+    ipcRenderer.invoke('local:openModelsDir'),
 
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {

@@ -1,10 +1,17 @@
 import { ipcMain, shell } from 'electron'
-import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { loadConfig, saveConfig, encodeApiKey } from './config'
 import { AppConfig } from './config/types'
 import { checkModelExists } from './backends'
+import {
+  checkCli,
+  listDownloadedModels,
+  listAvailableModels,
+  ensureModel,
+  resolveModelsDir,
+  getDefaultModelsDir
+} from './local-cli'
 
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
@@ -39,36 +46,43 @@ export function registerSettingsIpc(): void {
     return { success: true }
   })
 
-  ipcMain.handle('settings:listLocalModels', () => {
-    const config = loadConfig()
-    const modelsDir = resolveModelsDir(config.image_backends.local.models_dir)
-    if (!modelsDir || !fs.existsSync(modelsDir)) return []
+  // --- Draw Things CLI integration ---
 
-    const exts = ['.ckpt', '.safetensors']
-    try {
-      return fs.readdirSync(modelsDir)
-        .filter((f) => exts.some((ext) => f.endsWith(ext)))
-        .sort()
-    } catch {
-      return []
-    }
+  ipcMain.handle('local:checkCli', async () => {
+    return checkCli()
   })
 
-  ipcMain.handle('settings:openModelsDir', () => {
-    const config = loadConfig()
-    const modelsDir = resolveModelsDir(config.image_backends.local.models_dir)
-    if (modelsDir && fs.existsSync(modelsDir)) {
-      shell.openPath(modelsDir)
+  ipcMain.handle('local:listDownloadedModels', async () => {
+    return listDownloadedModels()
+  })
+
+  ipcMain.handle('local:listAvailableModels', async () => {
+    return listAvailableModels()
+  })
+
+  ipcMain.handle('local:ensureModel', async (_event, modelFile: string) => {
+    return ensureModel(modelFile)
+  })
+
+  ipcMain.handle('local:getModelsDir', () => {
+    const dir = resolveModelsDir()
+    return dir || null // null means CLI's own default
+  })
+
+  ipcMain.handle('local:getDefaultModelsDir', () => {
+    return getDefaultModelsDir()
+  })
+
+  ipcMain.handle('local:openModelsDir', () => {
+    const dir = resolveModelsDir()
+    if (dir) {
+      shell.openPath(dir)
+    } else {
+      // Open CLI's default location
+      const cliDefault = path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/Models')
+      shell.openPath(cliDefault)
     }
   })
-}
-
-function resolveModelsDir(dir: string): string {
-  if (!dir) {
-    // Default Draw Things models dir
-    return path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/Models')
-  }
-  return dir.replace('~', os.homedir())
 }
 
 // Heuristic: encoded keys are valid base64 and decode to something that,
