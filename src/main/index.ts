@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
 import { initSession } from './session'
+import { registerQueueIpc } from './queue'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -27,6 +28,7 @@ app.whenReady().then(() => {
   ensureDataDir()
   loadConfig()
   initSession()
+  registerQueueIpc()
 
   createWindow()
 

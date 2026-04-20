@@ -86,3 +86,32 @@
   text-align: center;
   padding: 20px 10px;
 }
+
+.task-item {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 6px;
+  background: var(--bg-secondary);
+}
+
+.task-prompt {
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.task-status {
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-cost {
+  color: var(--text-muted);
+  margin-left: 6px;
+}
