@@ -88,6 +88,7 @@
 }
 
 .task-item {
+  position: relative;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -119,4 +120,32 @@
 .task-cost {
   color: var(--text-muted);
   margin-left: 6px;
+}
+
+.context-menu {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  z-index: 50;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: var(--accent);
 }

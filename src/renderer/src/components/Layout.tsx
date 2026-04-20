@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
+import { Settings } from './Settings'
 import type { Task } from '../../../shared/types'
 import './Layout.css'
 
@@ -14,6 +15,7 @@ const BACKENDS = [
 export function Layout(): React.JSX.Element {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   const handleSelectTask = useCallback((task: Task) => {
     setSelectedTask(task)
@@ -37,7 +39,11 @@ export function Layout(): React.JSX.Element {
 
   return (
     <div className="layout">
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       <div className="left-pane">
+        <div className="pane-toolbar">
+          <button className="settings-btn" onClick={() => setShowSettings(true)}>⚙ Settings</button>
+        </div>
         <PromptPane selectedTask={selectedTask} previewDataUrl={previewDataUrl} />
       </div>
       <div className="right-pane">

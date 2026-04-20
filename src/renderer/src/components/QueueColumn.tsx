@@ -134,7 +134,12 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
           </div>
         ) : (
           columnTasks.map((task) => (
-            <TaskItem key={task.id} task={task} onClick={() => onSelectTask(task)} />
+            <TaskItem
+              key={task.id}
+              task={task}
+              backendId={backendId}
+              onClick={() => onSelectTask(task)}
+            />
           ))
         )}
       </div>
@@ -142,9 +147,42 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   )
 }
 
-function TaskItem({ task, onClick }: { task: Task; onClick: () => void }): React.JSX.Element {
+function TaskItem({ task, backendId, onClick }: { task: Task; backendId: BackendId; onClick: () => void }): React.JSX.Element {
+  const [showMenu, setShowMenu] = useState(false)
+
+  const handleContextMenu = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    setShowMenu(true)
+  }
+
+  const handleRemove = (): void => {
+    setShowMenu(false)
+    window.electronAPI.removeTask(backendId, task.id)
+  }
+
+  const handleDelete = (): void => {
+    setShowMenu(false)
+    window.electronAPI.deleteWithFiles(backendId, task.id)
+  }
+
+  const handleRetry = (): void => {
+    setShowMenu(false)
+    window.electronAPI.retryTask(backendId, task.id)
+  }
+
   return (
-    <div className="task-item" onClick={onClick}>
+    <div className="task-item" onClick={onClick} onContextMenu={handleContextMenu}>
+      {showMenu && (
+        <div className="context-menu" onMouseLeave={() => setShowMenu(false)}>
+          <button onClick={handleRemove}>Remove from queue</button>
+          {task.status === 'completed' && (
+            <button onClick={handleDelete}>Delete with files</button>
+          )}
+          {task.status === 'failed' && (
+            <button onClick={handleRetry}>Retry</button>
+          )}
+        </div>
+      )}
       <div className="task-prompt" title={task.prompt}>
         {task.prompt.length > 30 ? task.prompt.slice(0, 30) + '…' : task.prompt}
       </div>

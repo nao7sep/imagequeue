@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueRequest } from '../../shared/types'
+import { deleteImageOutput } from '../utils/file-output'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -21,6 +22,27 @@ export function registerQueueIpc(): void {
   ipcMain.handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
     queueManager.removeTask(backend, taskId)
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
+  })
+
+  ipcMain.handle('queue:deleteWithFiles', (_event, backend: BackendId, taskId: string) => {
+    const task = queueManager.getTask(backend, taskId)
+    if (task?.baseName) {
+      deleteImageOutput(task.baseName)
+    }
+    queueManager.removeTask(backend, taskId)
+    notifyAllWindows('queue:updated', queueManager.getAllTasks())
+  })
+
+  ipcMain.handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
+    const task = queueManager.getTask(backend, taskId)
+    if (task && task.status === 'failed') {
+      task.status = 'queued'
+      task.error = null
+      task.startedAt = null
+      task.completedAt = null
+      task.durationMs = null
+      notifyAllWindows('queue:updated', queueManager.getAllTasks())
+    }
   })
 
   ipcMain.handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {

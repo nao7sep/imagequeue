@@ -23,7 +23,6 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
     prompt: task.prompt,
     quality: (task.params.quality as 'low' | 'medium' | 'high') || 'high',
     size,
-    response_format: 'b64_json',
     n: 1
   })
 

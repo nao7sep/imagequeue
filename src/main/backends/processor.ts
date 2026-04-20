@@ -1,16 +1,23 @@
 import { BrowserWindow } from 'electron'
 import { BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
+import { loadConfig } from '../config'
 import { TimestampAllocator } from '../session'
 import { writeImageOutput } from '../utils/file-output'
 import { ImageMetadata } from '../utils/image-metadata'
 import { generateOpenAI } from './openai'
+import { generateGoogle } from './google'
+import { generateFlux } from './flux'
+import { generateLocal } from './local'
 import { generateSlug } from './slug'
 
 type GenerateFn = (task: Task) => Promise<Buffer>
 
-const generators: Partial<Record<BackendId, GenerateFn>> = {
-  openai: generateOpenAI
+const generators: Record<BackendId, GenerateFn> = {
+  openai: generateOpenAI,
+  google: generateGoogle,
+  flux: generateFlux,
+  local: generateLocal
 }
 
 // Per-backend timestamp allocators
@@ -37,12 +44,12 @@ export function startProcessor(): void {
 }
 
 function processQueues(): void {
+  const config = loadConfig()
   const backends: BackendId[] = ['openai', 'google', 'flux', 'local']
 
   for (const backend of backends) {
-    if (!generators[backend]) continue
-
-    const maxConcurrency = backend === 'local' ? 1 : 3
+    const maxConcurrency = backend === 'local' ? 1 :
+      (config.image_backends[backend] as { concurrency?: number }).concurrency || 3
     const tasks = queueManager.getTasks(backend)
 
     for (const task of tasks) {
@@ -62,7 +69,7 @@ function processQueues(): void {
 }
 
 async function processTask(backend: BackendId, task: Task): Promise<void> {
-  const generate = generators[backend]!
+  const generate = generators[backend]
 
   try {
     const imageBuffer = await generate(task)

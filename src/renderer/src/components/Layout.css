@@ -14,6 +14,26 @@
   gap: 12px;
 }
 
+.pane-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.settings-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
 .right-pane {
   flex: 1;
   display: flex;

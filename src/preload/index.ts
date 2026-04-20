@@ -17,6 +17,12 @@ const api = {
   removeTask: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:removeTask', backend, taskId),
 
+  deleteWithFiles: (backend: BackendId, taskId: string): Promise<void> =>
+    ipcRenderer.invoke('queue:deleteWithFiles', backend, taskId),
+
+  retryTask: (backend: BackendId, taskId: string): Promise<void> =>
+    ipcRenderer.invoke('queue:retryTask', backend, taskId),
+
   reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
 
@@ -29,6 +35,13 @@ const api = {
 
   getMetadata: (baseName: string): Promise<Record<string, unknown> | null> =>
     ipcRenderer.invoke('preview:getMetadata', baseName),
+
+  // Settings operations
+  getSettings: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke('settings:get'),
+
+  saveSettings: (config: Record<string, unknown>): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:save', config),
 
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {

@@ -1,10 +1,12 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
 import { initSession } from './session'
 import { registerQueueIpc } from './queue'
+import { queueManager } from './queue/queue-manager'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
+import { registerSettingsIpc } from './settings-ipc'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -32,6 +34,7 @@ app.whenReady().then(() => {
   initSession()
   registerQueueIpc()
   registerPreviewIpc()
+  registerSettingsIpc()
   startProcessor()
 
   createWindow()
@@ -46,5 +49,30 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+// Confirm close if tasks are pending or generating
+app.on('before-quit', (event) => {
+  const allTasks = queueManager.getAllTasks()
+  const hasPending = Object.values(allTasks).some((tasks) =>
+    tasks.some((t) => t.status === 'queued' || t.status === 'generating')
+  )
+
+  if (hasPending) {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return
+
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      buttons: ['Quit Anyway', 'Cancel'],
+      defaultId: 1,
+      title: 'Tasks in Progress',
+      message: 'Some tasks are still queued or generating. Quit anyway?'
+    })
+
+    if (choice === 1) {
+      event.preventDefault()
+    }
   }
 })
