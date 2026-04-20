@@ -1,6 +1,6 @@
 // Shared types between main and renderer processes.
 
-export type BackendId = 'openai' | 'google' | 'flux' | 'local' | 'nanobanana'
+export type BackendId = 'openai' | 'imagen' | 'flux' | 'drawthings' | 'nanobanana'
 
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed'
 

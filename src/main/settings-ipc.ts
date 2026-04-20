@@ -24,7 +24,7 @@ export function registerSettingsIpc(): void {
     if (config.text_ai.api_key && !isEncoded(config.text_ai.api_key)) {
       config.text_ai.api_key = encodeApiKey(config.text_ai.api_key)
     }
-    for (const backend of ['openai', 'google', 'flux'] as const) {
+    for (const backend of ['openai', 'imagen', 'flux'] as const) {
       const key = config.image_backends[backend].api_key
       if (key && !isEncoded(key)) {
         config.image_backends[backend].api_key = encodeApiKey(key)

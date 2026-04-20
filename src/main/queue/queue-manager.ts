@@ -6,9 +6,9 @@ import { estimateCostFromRegistry } from '../../shared/models'
 class QueueManager {
   private queues: Record<BackendId, Task[]> = {
     openai: [],
-    google: [],
+    imagen: [],
     flux: [],
-    local: [],
+    drawthings: [],
     nanobanana: []
   }
 

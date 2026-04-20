@@ -3,7 +3,7 @@ import { AppConfig } from './types'
 export function createDefaultConfig(): AppConfig {
   return {
     text_ai: {
-      backend: 'google',
+      backend: 'imagen',
       model: 'gemini-3.1-flash-lite-preview',
       api_key: ''
     },
@@ -20,7 +20,7 @@ export function createDefaultConfig(): AppConfig {
         },
         concurrency: 3
       },
-      google: {
+      imagen: {
         api_key: '',
         model: 'imagen-4.0-generate-001',
         default_params: {
@@ -43,7 +43,7 @@ export function createDefaultConfig(): AppConfig {
         },
         concurrency: 3
       },
-      local: {
+      drawthings: {
         cli_path: '',
         model: 'flux_2_klein_4b_q6p.ckpt',
         default_params: {

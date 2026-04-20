@@ -8,9 +8,9 @@ import { log, logApiRequest, logApiResponse } from '../logger'
 import { modelsDirArgs, ensureModelsDir } from '../local-cli'
 
 // Runs draw-things-cli generate and returns the generated image as a Buffer.
-export async function generateLocal(task: Task): Promise<Buffer> {
+export async function generateDrawThings(task: Task): Promise<Buffer> {
   const config = loadConfig()
-  const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
+  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
 
   // Ensure models directory exists
   ensureModelsDir()
@@ -41,7 +41,7 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     args.push('--negative-prompt', String(task.params.negativePrompt))
   }
 
-  logApiRequest('local', 'draw-things-cli generate', {
+  logApiRequest('drawthings', 'draw-things-cli generate', {
     model: task.model,
     steps: task.params.steps,
     width: task.params.width,
@@ -84,7 +84,7 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     throw new Error('draw-things-cli did not produce output file')
   }
 
-  logApiResponse('local', 'ok', Date.now() - startTime)
+  logApiResponse('drawthings', 'ok', Date.now() - startTime)
 
   const buffer = fs.readFileSync(outputPath)
   fs.unlinkSync(outputPath)
@@ -94,7 +94,7 @@ export async function generateLocal(task: Task): Promise<Buffer> {
 // Check if a model file exists in the configured models directory.
 export function checkModelExists(modelFilename: string): boolean {
   const config = loadConfig()
-  const dir = config.image_backends.local.models_dir
+  const dir = config.image_backends.drawthings.models_dir
   if (!dir) return false
   const resolved = dir.replace(/^~/, require('os').homedir())
   if (!fs.existsSync(resolved)) return false

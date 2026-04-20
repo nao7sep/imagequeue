@@ -5,9 +5,9 @@ import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
 
 // Calls Google Imagen API and returns the image as a Buffer.
-export async function generateGoogle(task: Task): Promise<Buffer> {
+export async function generateImagen(task: Task): Promise<Buffer> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.google.api_key)
+  const apiKey = decodeApiKey(config.image_backends.imagen.api_key)
 
   if (!apiKey) {
     throw new Error('Google API key not configured')
@@ -21,7 +21,7 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
   const numberOfImages = (task.params.numberOfImages as number) || 1
 
   const requestParams = { aspectRatio, imageSize, personGeneration, numberOfImages }
-  logApiRequest('google', task.model, requestParams)
+  logApiRequest('imagen', task.model, requestParams)
   const startTime = Date.now()
 
   const response = await ai.models.generateImages({
@@ -34,7 +34,7 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
       personGeneration
     } as Record<string, unknown>
   }).catch((err: unknown) => {
-    log('error', 'Google API call failed', {
+    log('error', 'Imagen API call failed', {
       model: task.model,
       requestParams,
       status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,
@@ -43,12 +43,12 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
     throw err
   })
 
-  logApiResponse('google', 'ok', Date.now() - startTime)
+  logApiResponse('imagen', 'ok', Date.now() - startTime)
 
   const imageBytes = response.generatedImages?.[0]?.image?.imageBytes
   if (!imageBytes) {
-    log('error', 'Google response missing image data', { model: task.model })
-    throw new Error('No image data in Google response')
+    log('error', 'Imagen response missing image data', { model: task.model })
+    throw new Error('No image data in Imagen response')
   }
 
   return Buffer.from(imageBytes, 'base64')

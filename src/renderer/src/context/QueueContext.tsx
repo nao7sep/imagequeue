@@ -13,9 +13,9 @@ const QueueContext = createContext<QueueContextValue | null>(null)
 export function QueueProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [tasks, setTasks] = useState<Record<BackendId, Task[]>>({
     openai: [],
-    google: [],
+    imagen: [],
     flux: [],
-    local: [],
+    drawthings: [],
     nanobanana: []
   })
   const [promptHistory, setPromptHistory] = useState<string[]>([])

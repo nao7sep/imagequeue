@@ -18,10 +18,10 @@ export const OPENAI_SIZES: SizePreset[] = [
 ]
 
 // Google uses aspect ratios; sizes are "1K" or "2K"
-export type GoogleAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
-export type GoogleImageSize = '1024x1024' | '2048x2048'
+export type ImagenAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
+export type ImagenImageSize = '1024x1024' | '2048x2048'
 
-export const GOOGLE_ASPECT_RATIOS: { label: string; value: GoogleAspectRatio }[] = [
+export const IMAGEN_ASPECT_RATIOS: { label: string; value: ImagenAspectRatio }[] = [
   { label: '1:1 (Square)', value: '1:1' },
   { label: '3:4 (Portrait)', value: '3:4' },
   { label: '4:3 (Landscape)', value: '4:3' },
@@ -29,7 +29,7 @@ export const GOOGLE_ASPECT_RATIOS: { label: string; value: GoogleAspectRatio }[]
   { label: '16:9 (Wide)', value: '16:9' }
 ]
 
-export const GOOGLE_IMAGE_SIZES: { label: string; value: GoogleImageSize }[] = [
+export const IMAGEN_IMAGE_SIZES: { label: string; value: ImagenImageSize }[] = [
   { label: '1K (1024×1024)', value: '1024x1024' },
   { label: '2K (2048×2048)', value: '2048x2048' }
 ]
@@ -48,7 +48,7 @@ export const FLUX_SIZES: SizePreset[] = [
 ]
 
 // Local: common sizes for Draw Things
-export const LOCAL_SIZES: SizePreset[] = [
+export const DRAWTHINGS_SIZES: SizePreset[] = [
   { label: '512×512', width: 512, height: 512 },
   { label: '768×768', width: 768, height: 768 },
   { label: '1024×1024', width: 1024, height: 1024 },
@@ -63,7 +63,7 @@ export const LOCAL_SIZES: SizePreset[] = [
 export type OpenAIQuality = 'low' | 'medium' | 'high'
 export type OpenAIOutputFormat = 'png' | 'jpeg' | 'webp'
 export type OpenAIBackground = 'opaque' | 'transparent'
-export type GooglePersonGeneration = 'dont_allow' | 'allow_adult' | 'allow_all'
+export type ImagenPersonGeneration = 'dont_allow' | 'allow_adult' | 'allow_all'
 
 export interface ModelDef {
   id: string
@@ -80,12 +80,12 @@ export interface OpenAIModelDef extends ModelDef {
   pricing: Record<OpenAIQuality, { square: number; rect: number }>
 }
 
-export interface GoogleModelDef extends ModelDef {
-  backend: 'google'
-  aspectRatios: typeof GOOGLE_ASPECT_RATIOS
-  imageSizes: typeof GOOGLE_IMAGE_SIZES
+export interface ImagenModelDef extends ModelDef {
+  backend: 'imagen'
+  aspectRatios: typeof IMAGEN_ASPECT_RATIOS
+  imageSizes: typeof IMAGEN_IMAGE_SIZES
   maxImages: number
-  personGeneration: GooglePersonGeneration[]
+  personGeneration: ImagenPersonGeneration[]
   pricing: number
 }
 
@@ -97,8 +97,8 @@ export interface FluxModelDef extends ModelDef {
   pricing: { firstMp: number; additionalMp: number }
 }
 
-export interface LocalModelDef extends ModelDef {
-  backend: 'local'
+export interface DrawThingsModelDef extends ModelDef {
+  backend: 'drawthings'
   sizes: SizePreset[]
   stepsRange: { min: number; max: number; default: number }
   guidanceRange: { min: number; max: number; default: number }
@@ -157,15 +157,15 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
   }
 ]
 
-// --- Google models ---
+// --- Imagen models ---
 
-export const GOOGLE_MODELS: GoogleModelDef[] = [
+export const IMAGEN_MODELS: ImagenModelDef[] = [
   {
     id: 'imagen-4.0-fast-generate-001',
     label: 'Imagen 4 Fast',
-    backend: 'google',
-    aspectRatios: GOOGLE_ASPECT_RATIOS,
-    imageSizes: GOOGLE_IMAGE_SIZES,
+    backend: 'imagen',
+    aspectRatios: IMAGEN_ASPECT_RATIOS,
+    imageSizes: IMAGEN_IMAGE_SIZES,
     maxImages: 4,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
     pricing: 0.02
@@ -173,9 +173,9 @@ export const GOOGLE_MODELS: GoogleModelDef[] = [
   {
     id: 'imagen-4.0-generate-001',
     label: 'Imagen 4',
-    backend: 'google',
-    aspectRatios: GOOGLE_ASPECT_RATIOS,
-    imageSizes: GOOGLE_IMAGE_SIZES,
+    backend: 'imagen',
+    aspectRatios: IMAGEN_ASPECT_RATIOS,
+    imageSizes: IMAGEN_IMAGE_SIZES,
     maxImages: 4,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
     pricing: 0.04
@@ -183,9 +183,9 @@ export const GOOGLE_MODELS: GoogleModelDef[] = [
   {
     id: 'imagen-4.0-ultra-generate-001',
     label: 'Imagen 4 Ultra',
-    backend: 'google',
-    aspectRatios: GOOGLE_ASPECT_RATIOS,
-    imageSizes: GOOGLE_IMAGE_SIZES,
+    backend: 'imagen',
+    aspectRatios: IMAGEN_ASPECT_RATIOS,
+    imageSizes: IMAGEN_IMAGE_SIZES,
     maxImages: 4,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
     pricing: 0.06
@@ -242,14 +242,14 @@ export const FLUX_MODELS: FluxModelDef[] = [
   }
 ]
 
-// --- Local (Draw Things) models ---
+// --- Draw Things models ---
 
-export const LOCAL_MODELS: LocalModelDef[] = [
+export const DRAWTHINGS_MODELS: DrawThingsModelDef[] = [
   {
     id: 'flux_1_schnell_q5p.ckpt',
     label: 'FLUX.1 Schnell (Q5P)',
-    backend: 'local',
-    sizes: LOCAL_SIZES,
+    backend: 'drawthings',
+    sizes: DRAWTHINGS_SIZES,
     stepsRange: { min: 1, max: 20, default: 4 },
     guidanceRange: { min: 1, max: 20, default: 1 },
     filename: 'flux_1_schnell_q5p.ckpt'
@@ -257,8 +257,8 @@ export const LOCAL_MODELS: LocalModelDef[] = [
   {
     id: 'flux_1_schnell_q8p.ckpt',
     label: 'FLUX.1 Schnell (Q8P)',
-    backend: 'local',
-    sizes: LOCAL_SIZES,
+    backend: 'drawthings',
+    sizes: DRAWTHINGS_SIZES,
     stepsRange: { min: 1, max: 20, default: 4 },
     guidanceRange: { min: 1, max: 20, default: 1 },
     filename: 'flux_1_schnell_q8p.ckpt'
@@ -266,8 +266,8 @@ export const LOCAL_MODELS: LocalModelDef[] = [
   {
     id: 'flux_1_dev_q8p.ckpt',
     label: 'FLUX.1 Dev (Q8P)',
-    backend: 'local',
-    sizes: LOCAL_SIZES,
+    backend: 'drawthings',
+    sizes: DRAWTHINGS_SIZES,
     stepsRange: { min: 1, max: 50, default: 20 },
     guidanceRange: { min: 1, max: 20, default: 3.5 },
     filename: 'flux_1_dev_q8p.ckpt'
@@ -275,8 +275,8 @@ export const LOCAL_MODELS: LocalModelDef[] = [
   {
     id: 'flux_2_klein_4b_q6p.ckpt',
     label: 'FLUX.2 Klein 4B (Q6P)',
-    backend: 'local',
-    sizes: LOCAL_SIZES,
+    backend: 'drawthings',
+    sizes: DRAWTHINGS_SIZES,
     stepsRange: { min: 1, max: 50, default: 4 },
     guidanceRange: { min: 1, max: 20, default: 1 },
     filename: 'flux_2_klein_4b_q6p.ckpt'
@@ -284,8 +284,8 @@ export const LOCAL_MODELS: LocalModelDef[] = [
   {
     id: 'sd3_medium_q6p.ckpt',
     label: 'SD3 Medium (Q6P)',
-    backend: 'local',
-    sizes: LOCAL_SIZES,
+    backend: 'drawthings',
+    sizes: DRAWTHINGS_SIZES,
     stepsRange: { min: 1, max: 50, default: 28 },
     guidanceRange: { min: 1, max: 20, default: 7 },
     filename: 'sd3_medium_q6p.ckpt'
@@ -293,8 +293,8 @@ export const LOCAL_MODELS: LocalModelDef[] = [
   {
     id: 'sdxl_base_v1.0_q6p.ckpt',
     label: 'SDXL Base 1.0 (Q6P)',
-    backend: 'local',
-    sizes: LOCAL_SIZES,
+    backend: 'drawthings',
+    sizes: DRAWTHINGS_SIZES,
     stepsRange: { min: 1, max: 50, default: 30 },
     guidanceRange: { min: 1, max: 20, default: 7 },
     filename: 'sdxl_base_v1.0_q6p.ckpt'
@@ -327,24 +327,24 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
 // --- Lookup helpers ---
 
 export function getModelsForBackend(backend: 'openai'): OpenAIModelDef[]
-export function getModelsForBackend(backend: 'google'): GoogleModelDef[]
+export function getModelsForBackend(backend: 'imagen'): ImagenModelDef[]
 export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
-export function getModelsForBackend(backend: 'local'): LocalModelDef[]
+export function getModelsForBackend(backend: 'drawthings'): DrawThingsModelDef[]
 export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
 export function getModelsForBackend(backend: BackendId): ModelDef[] {
   switch (backend) {
     case 'openai': return OPENAI_MODELS
-    case 'google': return GOOGLE_MODELS
+    case 'imagen': return IMAGEN_MODELS
     case 'flux': return FLUX_MODELS
-    case 'local': return LOCAL_MODELS
+    case 'drawthings': return DRAWTHINGS_MODELS
     case 'nanobanana': return NANO_BANANA_MODELS
   }
 }
 
 export function findModel(backend: 'openai', modelId: string): OpenAIModelDef | undefined
-export function findModel(backend: 'google', modelId: string): GoogleModelDef | undefined
+export function findModel(backend: 'imagen', modelId: string): ImagenModelDef | undefined
 export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined
-export function findModel(backend: 'local', modelId: string): LocalModelDef | undefined
+export function findModel(backend: 'drawthings', modelId: string): DrawThingsModelDef | undefined
 export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
 export function findModel(backend: BackendId, modelId: string): ModelDef | undefined {
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
@@ -366,8 +366,8 @@ export function estimateCostFromRegistry(
       const isSquare = width === height
       return isSquare ? model.pricing[quality].square : model.pricing[quality].rect
     }
-    case 'google': {
-      const model = findModel('google', modelId)
+    case 'imagen': {
+      const model = findModel('imagen', modelId)
       if (!model) return null
       return model.pricing
     }
@@ -385,7 +385,7 @@ export function estimateCostFromRegistry(
       if (!model) return null
       return model.pricing
     }
-    case 'local':
+    case 'drawthings':
       return null
   }
 }

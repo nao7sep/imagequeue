@@ -3,7 +3,7 @@ import path from 'path'
 import { getSessionDir } from '../session'
 import { ImageMetadata } from './image-metadata'
 
-export type BackendName = 'openai' | 'google' | 'flux' | 'local'
+export type BackendName = 'openai' | 'imagen' | 'flux' | 'drawthings' | 'nanobanana'
 
 // Writes the image file and its JSON sidecar to the session directory.
 // Returns the base filename (without extension).

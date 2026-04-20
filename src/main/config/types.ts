@@ -19,7 +19,7 @@ export interface OpenAIBackendConfig {
   concurrency: number
 }
 
-export interface GoogleBackendConfig {
+export interface ImagenBackendConfig {
   api_key: string
   model: string
   default_params: {
@@ -44,7 +44,7 @@ export interface FluxBackendConfig {
   concurrency: number
 }
 
-export interface LocalBackendConfig {
+export interface DrawThingsBackendConfig {
   cli_path: string
   model: string
   default_params: {
@@ -66,9 +66,9 @@ export interface NanoBananaBackendConfig {
 
 export interface ImageBackendsConfig {
   openai: OpenAIBackendConfig
-  google: GoogleBackendConfig
+  imagen: ImagenBackendConfig
   flux: FluxBackendConfig
-  local: LocalBackendConfig
+  drawthings: DrawThingsBackendConfig
   nanobanana: NanoBananaBackendConfig
 }
 

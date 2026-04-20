@@ -5,16 +5,16 @@ import {
   getModelsForBackend,
   findModel,
   OPENAI_SIZES,
-  GOOGLE_ASPECT_RATIOS,
-  GOOGLE_IMAGE_SIZES,
+  IMAGEN_ASPECT_RATIOS,
+  IMAGEN_IMAGE_SIZES,
   FLUX_SIZES,
-  LOCAL_SIZES,
+  DRAWTHINGS_SIZES,
   type FluxModelDef,
   type SizePreset,
   type OpenAIQuality,
   type OpenAIOutputFormat,
   type OpenAIBackground,
-  type GooglePersonGeneration
+  type ImagenPersonGeneration
 } from '../../../shared/models'
 import './QueueColumn.css'
 
@@ -61,7 +61,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   // Google params
   const [aspectRatio, setAspectRatio] = useState('1:1')
   const [imageSize, setImageSize] = useState('1024x1024')
-  const [personGeneration, setPersonGeneration] = useState<GooglePersonGeneration>('allow_adult')
+  const [personGeneration, setPersonGeneration] = useState<ImagenPersonGeneration>('allow_adult')
   const [numberOfImages, setNumberOfImages] = useState(1)
 
   // FLUX params
@@ -86,7 +86,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
 
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
-    if (backendId !== 'local') return
+    if (backendId !== 'drawthings') return
     window.electronAPI.localCheckCli().then((status) => {
       setCliStatus(status)
       if (status.installed) {
@@ -125,14 +125,14 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
     if (backendId === 'openai') {
       const size = OPENAI_SIZES[openaiSizeIdx]
       params = { width: size.width, height: size.height, quality, outputFormat, background }
-    } else if (backendId === 'google') {
+    } else if (backendId === 'imagen') {
       params = { aspectRatio, imageSize, personGeneration, numberOfImages }
     } else if (backendId === 'flux') {
       const size = FLUX_SIZES[fluxSizeIdx]
       params = { width: size.width, height: size.height, steps: fluxSteps, guidance: fluxGuidance }
       if (fluxSeed) params.seed = parseInt(fluxSeed)
-    } else if (backendId === 'local') {
-      const size = LOCAL_SIZES[localSizeIdx]
+    } else if (backendId === 'drawthings') {
+      const size = DRAWTHINGS_SIZES[localSizeIdx]
       params = { width: size.width, height: size.height, steps: localSteps, cfg: localCfg }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
@@ -140,7 +140,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       params = {}
     }
 
-    const count = (backendId === 'google' || backendId === 'local') ? 1 : imageCount
+    const count = (backendId === 'imagen' || backendId === 'drawthings') ? 1 : imageCount
 
     enqueue({ prompt, backend: backendId, model, params, count })
   }, [backendId, model, imageCount, quality, outputFormat, background, openaiSizeIdx,
@@ -182,7 +182,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       <div className="column-header">{label}</div>
 
       <div className="column-settings">
-        {backendId !== 'local' && (
+        {backendId !== 'drawthings' && (
           <div className="setting-row">
             <label>model</label>
             <select value={model} onChange={(e) => setModel(e.target.value)}>
@@ -224,12 +224,12 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
         )}
 
         {/* Google parameters */}
-        {backendId === 'google' && (
+        {backendId === 'imagen' && (
           <>
             <div className="setting-row">
               <label>aspect</label>
               <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
-                {GOOGLE_ASPECT_RATIOS.map((ar) => (
+                {IMAGEN_ASPECT_RATIOS.map((ar) => (
                   <option key={ar.value} value={ar.value}>{ar.label}</option>
                 ))}
               </select>
@@ -237,14 +237,14 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
             <div className="setting-row">
               <label>size</label>
               <select value={imageSize} onChange={(e) => setImageSize(e.target.value)}>
-                {GOOGLE_IMAGE_SIZES.map((s) => (
+                {IMAGEN_IMAGE_SIZES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>
             <div className="setting-row">
               <label>persons</label>
-              <select value={personGeneration} onChange={(e) => setPersonGeneration(e.target.value as GooglePersonGeneration)}>
+              <select value={personGeneration} onChange={(e) => setPersonGeneration(e.target.value as ImagenPersonGeneration)}>
                 <option value="dont_allow">Don't allow</option>
                 <option value="allow_adult">Allow adult</option>
                 <option value="allow_all">Allow all</option>
@@ -277,7 +277,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
         )}
 
         {/* Local parameters */}
-        {backendId === 'local' && (
+        {backendId === 'drawthings' && (
           <>
             {cliStatus === null && (
               <div className="setting-row model-warning">Checking CLI…</div>
@@ -347,7 +347,7 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
                     )}
                   </div>
                 )}
-                {renderSizeSelect(LOCAL_SIZES, localSizeIdx, setLocalSizeIdx)}
+                {renderSizeSelect(DRAWTHINGS_SIZES, localSizeIdx, setLocalSizeIdx)}
                 <div className="setting-row">
                   <label>steps</label>
                   <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
@@ -398,8 +398,8 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
       <div className="task-list">
         {columnTasks.length === 0 ? (
           <div className="task-list-empty">
-            {backendId === 'local'
-              ? 'Local CLI — sequential processing only'
+            {backendId === 'drawthings'
+              ? 'Draw Things — sequential processing only'
               : 'No tasks queued'}
           </div>
         ) : (

@@ -3,7 +3,7 @@ import { useQueue } from '../context/QueueContext'
 import type { BackendId, Task } from '../../../shared/types'
 import './PromptPane.css'
 
-const BACKENDS: BackendId[] = ['openai', 'google', 'flux', 'local']
+const BACKENDS: BackendId[] = ['openai', 'imagen', 'flux', 'drawthings']
 
 interface Props {
   selectedTask: Task | null

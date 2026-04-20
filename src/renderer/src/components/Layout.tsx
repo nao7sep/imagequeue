@@ -7,15 +7,15 @@ import './Layout.css'
 
 const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'GPT Image' },
-  { id: 'google' as const, label: 'Imagen' },
+  { id: 'imagen' as const, label: 'Imagen' },
   { id: 'nanobanana' as const, label: 'Nano Banana' },
   { id: 'flux' as const, label: 'FLUX' },
-  { id: 'local' as const, label: 'Draw Things' }
+  { id: 'drawthings' as const, label: 'Draw Things' }
 ]
 
 // On Windows, Draw Things CLI is not available — show only cloud backends
 const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32'
-  ? ALL_BACKENDS.filter((b) => b.id !== 'local')
+  ? ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
   : ALL_BACKENDS
 
 const DEFAULT_LEFT_WIDTH = 360

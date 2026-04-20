@@ -57,7 +57,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Backend</label>
           <select value={textAi.backend} onChange={(e) => updateTextAi('backend', e.target.value)}>
-            <option value="google">Imagen</option>
+            <option value="imagen">Imagen</option>
           </select>
         </div>
         <div className="settings-field">
@@ -98,15 +98,15 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <h3>Imagen</h3>
         <div className="settings-field">
           <label>API Key</label>
-          <input type="password" value={backends.google.api_key as string} onChange={(e) => updateBackend('google', 'api_key', e.target.value)} />
+          <input type="password" value={backends.imagen.api_key as string} onChange={(e) => updateBackend('imagen', 'api_key', e.target.value)} />
         </div>
         <div className="settings-field">
           <label>Model</label>
-          <input value={backends.google.model as string} onChange={(e) => updateBackend('google', 'model', e.target.value)} />
+          <input value={backends.imagen.model as string} onChange={(e) => updateBackend('imagen', 'model', e.target.value)} />
         </div>
         <div className="settings-field">
           <label>Concurrency</label>
-          <input type="number" min={1} max={10} value={backends.google.concurrency as number} onChange={(e) => updateBackend('google', 'concurrency', parseInt(e.target.value) || 1)} />
+          <input type="number" min={1} max={10} value={backends.imagen.concurrency as number} onChange={(e) => updateBackend('imagen', 'concurrency', parseInt(e.target.value) || 1)} />
         </div>
       </div>
 
@@ -148,20 +148,20 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <h3>Draw Things</h3>
         <div className="settings-field">
           <label>CLI Path</label>
-          <input value={backends.local.cli_path as string} onChange={(e) => updateBackend('local', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />
+          <input value={backends.drawthings.cli_path as string} onChange={(e) => updateBackend('drawthings', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />
         </div>
         <div className="settings-field">
           <label>Models Directory</label>
-          <input value={backends.local.models_dir as string} onChange={(e) => updateBackend('local', 'models_dir', e.target.value)} placeholder="~/.imagequeue/models" />
+          <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="~/.imagequeue/models" />
           <span className="settings-hint">Leave empty to use Draw Things&apos; default location (shared with GUI app)</span>
         </div>
         <div className="settings-field">
           <label>Default Steps</label>
-          <input type="number" min={1} max={50} value={(backends.local.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('local', 'steps', parseInt(e.target.value) || 4)} />
+          <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('drawthings', 'steps', parseInt(e.target.value) || 4)} />
         </div>
         <div className="settings-field">
           <label>Default CFG</label>
-          <input type="number" min={0} max={20} step={0.5} value={(backends.local.default_params as Record<string, unknown>).cfg as number} onChange={(e) => updateBackendParam('local', 'cfg', parseFloat(e.target.value) || 1)} />
+          <input type="number" min={0} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).cfg as number} onChange={(e) => updateBackendParam('drawthings', 'cfg', parseFloat(e.target.value) || 1)} />
         </div>
       </div>
       )}
