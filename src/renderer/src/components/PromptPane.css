@@ -1,0 +1,95 @@
+.prompt-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+
+.prompt-textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.prompt-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prompt-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.prompt-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.prompt-actions button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.prompt-actions .send-all {
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.prompt-actions .send-all:hover {
+  background: var(--accent-hover);
+}
+
+.shortcut-hints {
+  display: flex;
+  gap: 4px;
+}
+
+.shortcut-hint {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.preview-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.preview-placeholder {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.preview-metadata {
+  width: 100%;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}

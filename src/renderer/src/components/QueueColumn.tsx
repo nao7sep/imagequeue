@@ -1,0 +1,76 @@
+import './QueueColumn.css'
+
+type BackendId = 'openai' | 'google' | 'flux' | 'local'
+
+interface Props {
+  backendId: BackendId
+  label: string
+}
+
+const MODEL_OPTIONS: Record<BackendId, string[]> = {
+  openai: ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini'],
+  google: ['imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'imagen-4.0-ultra-generate-001'],
+  flux: ['flux-2-max', 'flux-2-pro-preview', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b-preview', 'flux-2-klein-4b'],
+  local: ['flux_1_schnell_q5p.ckpt', 'flux_2_klein_4b_q6p.ckpt']
+}
+
+export function QueueColumn({ backendId, label }: Props): React.JSX.Element {
+  return (
+    <div className="queue-column">
+      <div className="column-header">{label}</div>
+
+      <div className="column-settings">
+        <div className="setting-row">
+          <label>model</label>
+          <select defaultValue={MODEL_OPTIONS[backendId][0]}>
+            {MODEL_OPTIONS[backendId].map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="setting-row">
+          <label>size</label>
+          <input type="text" defaultValue="1024×1024" readOnly />
+        </div>
+
+        {backendId === 'openai' && (
+          <div className="setting-row">
+            <label>quality</label>
+            <select defaultValue="high">
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+        )}
+
+        {(backendId === 'flux' || backendId === 'local') && (
+          <div className="setting-row">
+            <label>steps</label>
+            <input type="number" defaultValue={backendId === 'flux' ? 28 : 20} min={1} max={50} />
+          </div>
+        )}
+
+        {backendId !== 'local' && (
+          <div className="setting-row">
+            <label>images</label>
+            <input type="number" defaultValue={1} min={1} max={10} />
+          </div>
+        )}
+
+        <button className="enqueue-btn" disabled>
+          + Queue
+        </button>
+      </div>
+
+      <div className="task-list">
+        <div className="task-list-empty">
+          {backendId === 'local'
+            ? 'Local CLI — sequential processing only'
+            : 'No tasks queued'}
+        </div>
+      </div>
+    </div>
+  )
+}

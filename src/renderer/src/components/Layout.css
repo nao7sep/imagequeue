@@ -1,0 +1,21 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.left-pane {
+  width: 360px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  gap: 12px;
+}
+
+.right-pane {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+}
