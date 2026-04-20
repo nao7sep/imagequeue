@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'path'
+import { loadConfig, ensureDataDir } from './config'
+import { initSession } from './session'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -22,6 +24,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  ensureDataDir()
+  loadConfig()
+  initSession()
+
   createWindow()
 
   app.on('activate', () => {
