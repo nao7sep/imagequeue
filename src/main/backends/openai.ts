@@ -19,10 +19,10 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
   const height = (task.params.height as number) || 1024
   const size = `${width}x${height}` as '1024x1024' | '1024x1536' | '1536x1024'
   const quality = (task.params.quality as 'low' | 'medium' | 'high') || 'high'
-  const outputFormat = (task.params.outputFormat as string) || 'png'
-  const background = (task.params.background as string) || 'opaque'
+  const outputFormat = (task.params.outputFormat as 'png' | 'jpeg' | 'webp') || 'png'
+  const background = (task.params.background as 'opaque' | 'auto' | 'transparent') || 'opaque'
   const outputCompression = task.params.outputCompression as number | undefined
-  const moderation = (task.params.moderation as string) || 'auto'
+  const moderation = (task.params.moderation as 'auto' | 'low') || 'auto'
 
   const requestParams = {
     model: task.model,
@@ -40,8 +40,9 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
   const response = await client.images.generate({
     ...requestParams,
     prompt: task.prompt,
-    n: 1
-  } as Parameters<typeof client.images.generate>[0]).catch((err: unknown) => {
+    n: 1,
+    stream: false
+  }).catch((err: unknown) => {
     log('error', 'OpenAI API call failed', {
       model: task.model,
       requestParams,

@@ -19,17 +19,17 @@
   "dependencies": {
     "@google/genai": "^1.50.1",
     "nanoid": "^5.1.9",
-    "openai": "^4.104.0",
+    "openai": "^6.34.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "@vitejs/plugin-react": "^4.4.1",
-    "electron": "^35.1.2",
-    "electron-vite": "^3.1.0",
-    "typescript": "^5.8.3",
-    "vite": "^6.3.2"
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^41.2.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.2"
   }
 }
