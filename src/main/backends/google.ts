@@ -14,24 +14,20 @@ export async function generateGoogle(task: Task): Promise<Buffer> {
 
   const ai = new GoogleGenAI({ apiKey })
 
-  const width = (task.params.width as number) || 1024
-  const height = (task.params.height as number) || 1024
-
-  // Determine aspect ratio from dimensions
-  let aspectRatio = '1:1'
-  if (width > height) aspectRatio = '16:9'
-  else if (height > width) aspectRatio = '9:16'
-
-  // Determine image size ("1K" or "2K")
-  const imageSize = Math.max(width, height) > 1024 ? '2048x2048' : '1024x1024'
+  const aspectRatio = (task.params.aspectRatio as string) || '1:1'
+  const imageSize = (task.params.imageSize as string) || '1024x1024'
+  const personGeneration = (task.params.personGeneration as string) || 'allow_adult'
+  const numberOfImages = (task.params.numberOfImages as number) || 1
 
   const response = await ai.models.generateImages({
     model: task.model,
     prompt: task.prompt,
     config: {
-      numberOfImages: 1,
-      aspectRatio
-    }
+      numberOfImages,
+      aspectRatio,
+      ...(imageSize === '2048x2048' && { outputOptions: { mimeType: 'image/png' } }),
+      personGeneration
+    } as Record<string, unknown>
   })
 
   const imageBytes = response.generatedImages?.[0]?.image?.imageBytes

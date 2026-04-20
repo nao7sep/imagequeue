@@ -13,6 +13,8 @@ export interface OpenAIBackendConfig {
     quality: 'low' | 'medium' | 'high'
     width: number
     height: number
+    outputFormat: 'png' | 'jpeg' | 'webp'
+    background: 'opaque' | 'transparent'
   }
   concurrency: number
 }
@@ -21,8 +23,10 @@ export interface GoogleBackendConfig {
   api_key: string
   model: string
   default_params: {
-    width: number
-    height: number
+    aspectRatio: string
+    imageSize: string
+    personGeneration: string
+    numberOfImages: number
   }
   concurrency: number
 }
@@ -32,8 +36,10 @@ export interface FluxBackendConfig {
   model: string
   default_params: {
     steps: number
+    guidance: number
     width: number
     height: number
+    seed: number | null
   }
   concurrency: number
 }
@@ -43,8 +49,11 @@ export interface LocalBackendConfig {
   model: string
   default_params: {
     steps: number
+    guidance: number
     width: number
     height: number
+    seed: number | null
+    negativePrompt: string
   }
   models_dir: string
 }

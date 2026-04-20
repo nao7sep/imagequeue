@@ -17,14 +17,20 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
   const size = `${width}x${height}` as '1024x1024' | '1024x1536' | '1536x1024'
+  const quality = (task.params.quality as 'low' | 'medium' | 'high') || 'high'
+  const outputFormat = (task.params.outputFormat as string) || 'png'
+  const background = (task.params.background as string) || 'opaque'
 
   const response = await client.images.generate({
     model: task.model,
     prompt: task.prompt,
-    quality: (task.params.quality as 'low' | 'medium' | 'high') || 'high',
+    quality,
     size,
-    n: 1
-  })
+    n: 1,
+    response_format: 'b64_json',
+    ...(outputFormat !== 'png' && { output_format: outputFormat }),
+    ...(background === 'transparent' && { background: 'transparent' })
+  } as Parameters<typeof client.images.generate>[0])
 
   const b64 = response.data?.[0]?.b64_json
   if (!b64) {

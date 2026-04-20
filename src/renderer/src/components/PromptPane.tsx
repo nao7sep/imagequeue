@@ -39,6 +39,20 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
     return () => window.removeEventListener('keydown', handler)
   }, [prompt, handleSendToAll])
 
+  // Handle "+ Queue" button requests from QueueColumn
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const { backend } = (e as CustomEvent).detail
+      if (prompt.trim()) {
+        window.dispatchEvent(
+          new CustomEvent('enqueue-single', { detail: { prompt: prompt.trim(), backend } })
+        )
+      }
+    }
+    window.addEventListener('request-enqueue', handler)
+    return () => window.removeEventListener('request-enqueue', handler)
+  }, [prompt])
+
   return (
     <div className="prompt-pane">
       <textarea

@@ -122,6 +122,17 @@
   margin-left: 6px;
 }
 
+.task-error {
+  font-size: 9px;
+  color: var(--error);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
 .context-menu {
   position: absolute;
   right: 4px;

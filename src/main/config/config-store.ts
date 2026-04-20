@@ -7,6 +7,8 @@ import { createDefaultConfig } from './defaults'
 const DATA_DIR = path.join(os.homedir(), '.imagequeue')
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
 
+let cachedConfig: AppConfig | null = null
+
 export function getDataDir(): string {
   return DATA_DIR
 }
@@ -20,6 +22,8 @@ export function ensureDataDir(): void {
 }
 
 export function loadConfig(): AppConfig {
+  if (cachedConfig) return cachedConfig
+
   ensureDataDir()
 
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -29,10 +33,12 @@ export function loadConfig(): AppConfig {
   }
 
   const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
-  return JSON.parse(raw) as AppConfig
+  cachedConfig = JSON.parse(raw) as AppConfig
+  return cachedConfig
 }
 
 export function saveConfig(config: AppConfig): void {
   ensureDataDir()
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
+  cachedConfig = config
 }

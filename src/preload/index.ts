@@ -43,6 +43,9 @@ const api = {
   saveSettings: (config: Record<string, unknown>): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:save', config),
 
+  checkLocalModel: (filename: string): Promise<boolean> =>
+    ipcRenderer.invoke('settings:checkLocalModel', filename),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {

@@ -14,7 +14,9 @@ export function createDefaultConfig(): AppConfig {
         default_params: {
           quality: 'high',
           width: 1024,
-          height: 1024
+          height: 1024,
+          outputFormat: 'png',
+          background: 'opaque'
         },
         concurrency: 3
       },
@@ -22,8 +24,10 @@ export function createDefaultConfig(): AppConfig {
         api_key: '',
         model: 'imagen-4.0-generate-001',
         default_params: {
-          width: 1024,
-          height: 1024
+          aspectRatio: '1:1',
+          imageSize: '1024x1024',
+          personGeneration: 'allow_adult',
+          numberOfImages: 1
         },
         concurrency: 3
       },
@@ -31,19 +35,24 @@ export function createDefaultConfig(): AppConfig {
         api_key: '',
         model: 'flux-2-max',
         default_params: {
-          steps: 28,
+          steps: 40,
+          guidance: 7,
           width: 1024,
-          height: 1024
+          height: 1024,
+          seed: null
         },
         concurrency: 3
       },
       local: {
         cli_path: '',
-        model: 'flux_2_klein_4b_q6p.ckpt',
+        model: 'flux_1_schnell_q5p.ckpt',
         default_params: {
           steps: 4,
+          guidance: 1,
           width: 1024,
-          height: 1024
+          height: 1024,
+          seed: null,
+          negativePrompt: ''
         },
         models_dir: ''
       }

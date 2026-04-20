@@ -4,6 +4,7 @@ import { decodeApiKey } from '../config/api-key'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
+const MAX_POLL_DURATION_MS = 5 * 60 * 1000
 
 // Calls FLUX API (async submit/poll/download flow) and returns the image as a Buffer.
 export async function generateFlux(task: Task): Promise<Buffer> {
@@ -17,6 +18,14 @@ export async function generateFlux(task: Task): Promise<Buffer> {
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
 
+  // Validate: dimensions must be multiples of 16 and ≤4MP
+  if (width % 16 !== 0 || height % 16 !== 0) {
+    throw new Error('FLUX dimensions must be multiples of 16')
+  }
+  if (width * height > 4_194_304) {
+    throw new Error('FLUX dimensions exceed 4MP limit')
+  }
+
   const body: Record<string, unknown> = {
     prompt: task.prompt,
     width,
@@ -24,10 +33,9 @@ export async function generateFlux(task: Task): Promise<Buffer> {
     output_format: 'png'
   }
 
-  // Add steps/guidance for models that support them
   if (task.params.steps) body.steps = task.params.steps
   if (task.params.guidance) body.guidance = task.params.guidance
-  if (task.params.seed) body.seed = task.params.seed
+  if (task.params.seed != null) body.seed = task.params.seed
 
   // Submit request
   const submitResponse = await fetch(`${BASE_URL}/${task.model}`, {
@@ -48,8 +56,14 @@ export async function generateFlux(task: Task): Promise<Buffer> {
   const pollingUrl = submitData.polling_url || `${BASE_URL}/get_result?id=${submitData.id}`
 
   // Poll for result
+  const pollStart = Date.now()
+
   while (true) {
     await sleep(POLL_INTERVAL_MS)
+
+    if (Date.now() - pollStart > MAX_POLL_DURATION_MS) {
+      throw new Error('FLUX generation timed out after 5 minutes')
+    }
 
     const pollResponse = await fetch(pollingUrl, {
       headers: { 'x-key': apiKey }

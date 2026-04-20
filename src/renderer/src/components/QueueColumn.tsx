@@ -1,19 +1,30 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQueue } from '../context/QueueContext'
 import type { BackendId, Task } from '../../../shared/types'
+import {
+  getModelsForBackend,
+  findModel,
+  OPENAI_SIZES,
+  GOOGLE_ASPECT_RATIOS,
+  GOOGLE_IMAGE_SIZES,
+  FLUX_SIZES,
+  LOCAL_SIZES,
+  type OpenAIModelDef,
+  type GoogleModelDef,
+  type FluxModelDef,
+  type LocalModelDef,
+  type SizePreset,
+  type OpenAIQuality,
+  type OpenAIOutputFormat,
+  type OpenAIBackground,
+  type GooglePersonGeneration
+} from '../../../shared/models'
 import './QueueColumn.css'
 
 interface Props {
   backendId: BackendId
   label: string
   onSelectTask: (task: Task) => void
-}
-
-const MODEL_OPTIONS: Record<BackendId, string[]> = {
-  openai: ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini'],
-  google: ['imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'imagen-4.0-ultra-generate-001'],
-  flux: ['flux-2-max', 'flux-2-pro-preview', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b-preview', 'flux-2-klein-4b'],
-  local: ['flux_1_schnell_q5p.ckpt', 'flux_2_klein_4b_q6p.ckpt']
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -25,25 +36,92 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
-  const [model, setModel] = useState(MODEL_OPTIONS[backendId][0])
+  const models = getModelsForBackend(backendId as 'openai')
+  const [model, setModel] = useState(models[0].id)
   const [imageCount, setImageCount] = useState(1)
+
+  // OpenAI params
+  const [quality, setQuality] = useState<OpenAIQuality>('high')
+  const [outputFormat, setOutputFormat] = useState<OpenAIOutputFormat>('png')
+  const [background, setBackground] = useState<OpenAIBackground>('opaque')
+  const [openaiSizeIdx, setOpenaiSizeIdx] = useState(0)
+
+  // Google params
+  const [aspectRatio, setAspectRatio] = useState('1:1')
+  const [imageSize, setImageSize] = useState('1024x1024')
+  const [personGeneration, setPersonGeneration] = useState<GooglePersonGeneration>('allow_adult')
+  const [numberOfImages, setNumberOfImages] = useState(1)
+
+  // FLUX params
+  const [fluxSizeIdx, setFluxSizeIdx] = useState(0)
+  const [fluxSteps, setFluxSteps] = useState(40)
+  const [fluxGuidance, setFluxGuidance] = useState(7)
+  const [fluxSeed, setFluxSeed] = useState('')
+
+  // Local params
+  const [localSizeIdx, setLocalSizeIdx] = useState(2) // 1024x1024
+  const [localSteps, setLocalSteps] = useState(4)
+  const [localGuidance, setLocalGuidance] = useState(1)
+  const [localSeed, setLocalSeed] = useState('')
+  const [negativePrompt, setNegativePrompt] = useState('')
+  const [modelExists, setModelExists] = useState<boolean | null>(null)
 
   const columnTasks = tasks[backendId]
 
+  // Check local model existence when model changes
+  useEffect(() => {
+    if (backendId !== 'local') return
+    const localModel = findModel('local', model) as LocalModelDef | undefined
+    if (localModel) {
+      window.electronAPI.checkLocalModel(localModel.filename).then(setModelExists)
+    }
+  }, [backendId, model])
+
+  // Update defaults when model changes
+  useEffect(() => {
+    if (backendId === 'flux') {
+      const m = findModel('flux', model) as FluxModelDef | undefined
+      if (m) {
+        setFluxSteps(m.stepsRange.default)
+        setFluxGuidance(m.guidanceRange.default)
+      }
+    } else if (backendId === 'local') {
+      const m = findModel('local', model) as LocalModelDef | undefined
+      if (m) {
+        setLocalSteps(m.stepsRange.default)
+        setLocalGuidance(m.guidanceRange.default)
+      }
+    }
+  }, [backendId, model])
+
   const doEnqueue = useCallback((prompt: string) => {
     if (!prompt) return
-    const params: Record<string, unknown> = { width: 1024, height: 1024 }
-    if (backendId === 'openai') params.quality = 'high'
-    if (backendId === 'flux' || backendId === 'local') params.steps = backendId === 'flux' ? 28 : 20
 
-    enqueue({
-      prompt,
-      backend: backendId,
-      model,
-      params,
-      count: backendId === 'local' ? 1 : imageCount
-    })
-  }, [backendId, model, imageCount, enqueue])
+    let params: Record<string, unknown> = {}
+
+    if (backendId === 'openai') {
+      const size = OPENAI_SIZES[openaiSizeIdx]
+      params = { width: size.width, height: size.height, quality, outputFormat, background }
+    } else if (backendId === 'google') {
+      params = { aspectRatio, imageSize, personGeneration, numberOfImages }
+    } else if (backendId === 'flux') {
+      const size = FLUX_SIZES[fluxSizeIdx]
+      params = { width: size.width, height: size.height, steps: fluxSteps, guidance: fluxGuidance }
+      if (fluxSeed) params.seed = parseInt(fluxSeed)
+    } else if (backendId === 'local') {
+      const size = LOCAL_SIZES[localSizeIdx]
+      params = { width: size.width, height: size.height, steps: localSteps, guidance: localGuidance }
+      if (localSeed) params.seed = parseInt(localSeed)
+      if (negativePrompt) params.negativePrompt = negativePrompt
+    }
+
+    const count = backendId === 'google' ? 1 : (backendId === 'local' ? 1 : imageCount)
+
+    enqueue({ prompt, backend: backendId, model, params, count })
+  }, [backendId, model, imageCount, quality, outputFormat, background, openaiSizeIdx,
+      aspectRatio, imageSize, personGeneration, numberOfImages,
+      fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
+      localSizeIdx, localSteps, localGuidance, localSeed, negativePrompt, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
   useEffect(() => {
@@ -63,6 +141,17 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
     }
   }, [backendId, doEnqueue])
 
+  const renderSizeSelect = (sizes: SizePreset[], idx: number, setIdx: (n: number) => void): React.JSX.Element => (
+    <div className="setting-row">
+      <label>size</label>
+      <select value={idx} onChange={(e) => setIdx(parseInt(e.target.value))}>
+        {sizes.map((s, i) => (
+          <option key={i} value={i}>{s.label}</option>
+        ))}
+      </select>
+    </div>
+  )
+
   return (
     <div className="queue-column">
       <div className="column-header">{label}</div>
@@ -71,36 +160,125 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
         <div className="setting-row">
           <label>model</label>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {MODEL_OPTIONS[backendId].map((m) => (
-              <option key={m} value={m}>{m}</option>
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
         </div>
 
-        <div className="setting-row">
-          <label>size</label>
-          <input type="text" defaultValue="1024×1024" readOnly />
-        </div>
-
+        {/* OpenAI parameters */}
         {backendId === 'openai' && (
-          <div className="setting-row">
-            <label>quality</label>
-            <select defaultValue="high">
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-            </select>
-          </div>
+          <>
+            {renderSizeSelect(OPENAI_SIZES, openaiSizeIdx, setOpenaiSizeIdx)}
+            <div className="setting-row">
+              <label>quality</label>
+              <select value={quality} onChange={(e) => setQuality(e.target.value as OpenAIQuality)}>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>format</label>
+              <select value={outputFormat} onChange={(e) => setOutputFormat(e.target.value as OpenAIOutputFormat)}>
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+                <option value="webp">WebP</option>
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>background</label>
+              <select value={background} onChange={(e) => setBackground(e.target.value as OpenAIBackground)}>
+                <option value="opaque">Opaque</option>
+                <option value="transparent">Transparent</option>
+              </select>
+            </div>
+          </>
         )}
 
-        {(backendId === 'flux' || backendId === 'local') && (
-          <div className="setting-row">
-            <label>steps</label>
-            <input type="number" defaultValue={backendId === 'flux' ? 28 : 20} min={1} max={50} />
-          </div>
+        {/* Google parameters */}
+        {backendId === 'google' && (
+          <>
+            <div className="setting-row">
+              <label>aspect</label>
+              <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+                {GOOGLE_ASPECT_RATIOS.map((ar) => (
+                  <option key={ar.value} value={ar.value}>{ar.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>size</label>
+              <select value={imageSize} onChange={(e) => setImageSize(e.target.value)}>
+                {GOOGLE_IMAGE_SIZES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>persons</label>
+              <select value={personGeneration} onChange={(e) => setPersonGeneration(e.target.value as GooglePersonGeneration)}>
+                <option value="dont_allow">Don't allow</option>
+                <option value="allow_adult">Allow adult</option>
+                <option value="allow_all">Allow all</option>
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>images</label>
+              <input type="number" value={numberOfImages} onChange={(e) => setNumberOfImages(Math.min(4, Math.max(1, parseInt(e.target.value) || 1)))} min={1} max={4} />
+            </div>
+          </>
         )}
 
-        {backendId !== 'local' && (
+        {/* FLUX parameters */}
+        {backendId === 'flux' && (
+          <>
+            {renderSizeSelect(FLUX_SIZES, fluxSizeIdx, setFluxSizeIdx)}
+            <div className="setting-row">
+              <label>steps</label>
+              <input type="number" value={fluxSteps} onChange={(e) => setFluxSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={60} />
+            </div>
+            <div className="setting-row">
+              <label>guidance</label>
+              <input type="number" value={fluxGuidance} onChange={(e) => setFluxGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
+            </div>
+            <div className="setting-row">
+              <label>seed</label>
+              <input type="text" value={fluxSeed} onChange={(e) => setFluxSeed(e.target.value)} placeholder="random" />
+            </div>
+          </>
+        )}
+
+        {/* Local parameters */}
+        {backendId === 'local' && (
+          <>
+            {modelExists === false && (
+              <div className="setting-row model-warning">
+                ⚠ Model not found. Open Draw Things to download.
+              </div>
+            )}
+            {renderSizeSelect(LOCAL_SIZES, localSizeIdx, setLocalSizeIdx)}
+            <div className="setting-row">
+              <label>steps</label>
+              <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
+            </div>
+            <div className="setting-row">
+              <label>guidance</label>
+              <input type="number" value={localGuidance} onChange={(e) => setLocalGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
+            </div>
+            <div className="setting-row">
+              <label>seed</label>
+              <input type="text" value={localSeed} onChange={(e) => setLocalSeed(e.target.value)} placeholder="random" />
+            </div>
+            <div className="setting-row">
+              <label>neg.</label>
+              <input type="text" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="negative prompt" />
+            </div>
+          </>
+        )}
+
+        {/* Image count (OpenAI and FLUX only) */}
+        {(backendId === 'openai' || backendId === 'flux') && (
           <div className="setting-row">
             <label>images</label>
             <input
@@ -116,9 +294,9 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
         <button
           className="enqueue-btn"
           onClick={() => {
-            // Grab prompt from textarea via DOM (simple cross-component read)
-            const textarea = document.querySelector('.prompt-textarea') as HTMLTextAreaElement
-            if (textarea?.value.trim()) doEnqueue(textarea.value.trim())
+            window.dispatchEvent(
+              new CustomEvent('request-enqueue', { detail: { backend: backendId } })
+            )
           }}
         >
           + Queue
@@ -192,6 +370,11 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
           <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
         )}
       </div>
+      {task.status === 'failed' && task.error && (
+        <div className="task-error" title={task.error}>
+          {task.error}
+        </div>
+      )}
     </div>
   )
 }

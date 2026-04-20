@@ -29,6 +29,18 @@ export async function generateLocal(task: Task): Promise<Buffer> {
     '--disable-preview'
   ]
 
+  if (task.params.seed != null && (task.params.seed as number) > 0) {
+    args.push('--seed', String(task.params.seed))
+  }
+
+  if (task.params.guidance != null) {
+    args.push('--guidance', String(task.params.guidance))
+  }
+
+  if (task.params.negativePrompt) {
+    args.push('--negative_prompt', String(task.params.negativePrompt))
+  }
+
   if (modelsDir) {
     args.push('--models-dir', modelsDir)
   }
@@ -56,4 +68,12 @@ export async function generateLocal(task: Task): Promise<Buffer> {
   const buffer = fs.readFileSync(outputPath)
   fs.unlinkSync(outputPath)
   return buffer
+}
+
+// Check if a model file exists in the configured models directory.
+export function checkModelExists(modelFilename: string): boolean {
+  const config = loadConfig()
+  const modelsDir = config.image_backends.local.models_dir.replace('~', os.homedir())
+  if (!modelsDir) return false
+  return fs.existsSync(path.join(modelsDir, modelFilename))
 }
