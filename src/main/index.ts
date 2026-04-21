@@ -8,7 +8,6 @@ import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
 import { initLogger, log } from './logger'
-import { stopGrpcServer } from './dt-grpc/server'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -56,6 +55,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  stopGrpcServer()
   log('info', 'Session ended')
 })

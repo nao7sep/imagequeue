@@ -18,18 +18,12 @@
   },
   "dependencies": {
     "@google/genai": "^1.50.1",
-    "@grpc/grpc-js": "^1.14.3",
-    "@grpc/proto-loader": "^0.8.0",
-    "@petamoriken/float16": "^3.9.3",
-    "flatbuffers": "^25.9.23",
     "nanoid": "^5.1.9",
     "openai": "^6.34.0",
-    "pngjs": "^7.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@types/pngjs": "^6.0.5",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^5.2.0",

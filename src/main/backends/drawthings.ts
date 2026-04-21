@@ -5,31 +5,9 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
 import { log, logApiRequest, logApiResponse } from '../logger'
-import { modelsDirArgs, ensureModelsDir, resolveModelsDir } from '../local-cli'
-import { ensureGrpcServer } from '../dt-grpc/server'
-import { generateImageGrpc, resetClient } from '../dt-grpc/client'
+import { modelsDirArgs, ensureModelsDir } from '../local-cli'
 
 export async function generateDrawThings(task: Task): Promise<Buffer> {
-  const config = loadConfig()
-  const grpcServerCliPath = config.image_backends.drawthings.grpc_server_cli_path
-
-  if (grpcServerCliPath) {
-    // gRPC mode — no CLI fallback; if this fails the error surfaces to the user
-    const modelsDir = resolveModelsDir()
-    const ready = await ensureGrpcServer(grpcServerCliPath, modelsDir || undefined)
-    if (!ready) {
-      resetClient()
-      throw new Error('gRPCServerCLI did not become ready in time')
-    }
-    try {
-      return await generateImageGrpc(task)
-    } catch (err) {
-      resetClient()
-      throw err
-    }
-  }
-
-  // CLI mode (no gRPC path configured)
   return generateDrawThingsCli(task)
 }
 
