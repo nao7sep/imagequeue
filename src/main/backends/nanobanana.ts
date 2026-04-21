@@ -5,7 +5,8 @@ import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
 
 // Calls the Gemini native image generation API (generateContent) and returns
-// the first image part as a Buffer. Uses the Google API key from config.
+// the first image part as a Buffer. Uses image_backends.nanobanana.api_key
+// (not the text_ai key).
 export async function generateNanoBanana(task: Task): Promise<Buffer> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.nanobanana.api_key)

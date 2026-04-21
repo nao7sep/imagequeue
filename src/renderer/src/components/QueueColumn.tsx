@@ -263,7 +263,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
           </>
         )}
 
-        {/* Google parameters */}
+        {/* Imagen parameters */}
         {backendId === 'imagen' && (
           <>
             <div className="setting-row">

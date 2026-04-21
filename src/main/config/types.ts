@@ -1,7 +1,9 @@
 // Matches the config.json schema from the product spec.
 
+import { TextAIBackendId } from '../../shared/types'
+
 export interface TextAIConfig {
-  backend: string
+  backend: TextAIBackendId
   model: string
   api_key: string
 }

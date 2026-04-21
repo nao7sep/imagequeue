@@ -3,7 +3,7 @@ import { AppConfig } from './types'
 export function createDefaultConfig(): AppConfig {
   return {
     text_ai: {
-      backend: 'imagen',
+      backend: 'gemini',
       model: 'gemini-3.1-flash-lite-preview',
       api_key: ''
     },

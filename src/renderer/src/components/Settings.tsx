@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TEXT_AI_MODELS, getModelsForBackend } from '../../../shared/models'
+import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
 import './Settings.css'
 
 interface Props {
@@ -57,13 +57,21 @@ export function Settings({ onClose }: Props): React.JSX.Element {
       <div className="settings-section">
         <h3>Text AI</h3>
         <div className="settings-field">
-          <label>Gemini API Key</label>
+          <label>Backend</label>
+          <select value={textAi.backend} onChange={(e) => updateTextAi('backend', e.target.value)}>
+            {TEXT_AI_BACKENDS.map((b) => (
+              <option key={b.id} value={b.id}>{b.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="settings-field">
+          <label>API Key</label>
           <input type="password" value={textAi.api_key} onChange={(e) => updateTextAi('api_key', e.target.value)} />
         </div>
         <div className="settings-field">
           <label>Model</label>
           <select value={textAi.model} onChange={(e) => updateTextAi('model', e.target.value)}>
-            {TEXT_AI_MODELS.map((m) => (
+            {getTextAIModels(textAi.backend).map((m) => (
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>

@@ -5,12 +5,13 @@ import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
 
 // Calls Google Imagen API and returns the image as a Buffer.
+// Uses image_backends.imagen.api_key (not the text_ai key).
 export async function generateImagen(task: Task): Promise<Buffer> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.imagen.api_key)
 
   if (!apiKey) {
-    throw new Error('Google API key not configured')
+    throw new Error('Imagen API key not configured')
   }
 
   const ai = new GoogleGenAI({ apiKey })

@@ -324,12 +324,34 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
   }
 ]
 
-// --- Text AI models (for slug generation) ---
-export const TEXT_AI_MODELS: { id: string; label: string }[] = [
-  { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
-  { id: 'gemini-3.1-flash-preview',      label: 'Gemini 3.1 Flash (Preview)' },
-  { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)' }
+// --- Text AI backends and models ---
+
+export interface TextAIModelDef {
+  id: string
+  label: string
+}
+
+export interface TextAIBackendDef {
+  id: string
+  label: string
+  models: TextAIModelDef[]
+}
+
+export const TEXT_AI_BACKENDS: TextAIBackendDef[] = [
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    models: [
+      { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
+      { id: 'gemini-3.1-flash-preview',      label: 'Gemini 3.1 Flash (Preview)' },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)' }
+    ]
+  }
 ]
+
+export function getTextAIModels(backendId: string): TextAIModelDef[] {
+  return TEXT_AI_BACKENDS.find((b) => b.id === backendId)?.models ?? []
+}
 
 // --- Lookup helpers ---
 

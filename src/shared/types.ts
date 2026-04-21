@@ -2,6 +2,7 @@
 
 export type BackendId = 'openai' | 'imagen' | 'flux' | 'drawthings' | 'nanobanana'
 
+export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed'
 
 export interface Task {
