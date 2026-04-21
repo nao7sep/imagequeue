@@ -24,6 +24,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
   const [loadingAvailable, setLoadingAvailable] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [openedTerminal, setOpenedTerminal] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
 
   // Close on Escape
@@ -80,6 +81,8 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
 
   const handleOpenInTerminal = async (modelFile: string): Promise<void> => {
     await window.electronAPI.localOpenTerminalForDownload(modelFile)
+    setOpenedTerminal(modelFile)
+    setTimeout(() => setOpenedTerminal(null), 1500)
   }
 
   const hfUrl = (hf: string): string =>
@@ -162,7 +165,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
                       className="dt-action-btn dt-download-btn"
                       onClick={() => handleOpenInTerminal(m.file)}
                     >
-                      ↓ Terminal
+                      {openedTerminal === m.file ? '✓ opened' : '↓ Terminal'}
                     </button>
                   </li>
                 ))}

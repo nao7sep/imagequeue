@@ -38,6 +38,11 @@ button {
   font-size: inherit;
 }
 
+button:active:not(:disabled) {
+  opacity: 0.6;
+  transform: scale(0.95);
+}
+
 textarea, select, input {
   font-family: inherit;
   font-size: inherit;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
 import { useSettings } from '../context/SettingsContext'
 import type { BackendId, Task } from '../../../shared/types'
@@ -401,12 +401,22 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 
 function TaskItem({ task, backendId, onClick }: { task: Task; backendId: BackendId; onClick: () => void }): React.JSX.Element {
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const itemRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (task.status !== 'completed' || !task.baseName) return
     window.electronAPI.getImage(task.baseName).then((b64) => {
       if (b64) setThumbUrl(`data:image/png;base64,${b64}`)
     })
+  }, [task.status, task.baseName])
+
+  // Scroll into view when generation completes
+  useEffect(() => {
+    if (task.status === 'completed' && !task.baseName) {
+      // No thumbnail — element size is already final, scroll now
+      itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
   }, [task.status, task.baseName])
 
   const handleRemove = (e: React.MouseEvent): void => {
@@ -424,12 +434,19 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
   const handleCopyPrompt = (e: React.MouseEvent): void => {
     e.stopPropagation()
     navigator.clipboard.writeText(task.prompt)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   return (
-    <div className="task-item" onClick={onClick}>
+    <div className="task-item" ref={itemRef} onClick={onClick}>
       {thumbUrl && (
-        <img className="task-thumbnail" src={thumbUrl} alt="" />
+        <img
+          className="task-thumbnail"
+          src={thumbUrl}
+          alt=""
+          onLoad={() => itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+        />
       )}
       <div className="task-prompt" title={task.prompt}>
         {task.prompt}
@@ -448,7 +465,9 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         )}
       </div>
       <div className="task-actions">
-        <button className="task-btn task-btn-copy" onClick={handleCopyPrompt} title="Copy prompt">copy</button>
+        <button className="task-btn task-btn-copy" onClick={handleCopyPrompt} title="Copy prompt">
+          {copied ? '✓' : 'copy'}
+        </button>
         {task.status !== 'generating' && (
           <button className="task-btn task-btn-warn" onClick={handleRemove} title="Remove from queue">rm</button>
         )}
