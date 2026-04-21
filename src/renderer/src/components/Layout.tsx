@@ -5,6 +5,7 @@ import { Settings } from './Settings'
 import type { Task } from '../../../shared/types'
 import './Layout.css'
 import { useQueue } from '../context/QueueContext'
+import { useSettings } from '../context/SettingsContext'
 
 const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'GPT Image' },
@@ -34,6 +35,7 @@ type Overlay = 'settings' | 'shortcuts' | 'about' | null
 
 export function Layout(): React.JSX.Element {
   const { tasks } = useQueue()
+  const { settings } = useSettings()
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
@@ -43,16 +45,17 @@ export function Layout(): React.JSX.Element {
   const isDragging = useRef(false)
   const latestWidth = useRef(DEFAULT_LEFT_WIDTH)
   const menuRef = useRef<HTMLDivElement>(null)
+  const widthInitialized = useRef(false)
 
-  // Load persisted width from config on mount
+  // Initialize pane width from settings once they load (runs only on first non-null value)
   useEffect(() => {
-    window.electronAPI.getSettings().then((config) => {
-      const ui = config.ui as { leftPaneWidth?: number } | undefined
-      const saved = ui?.leftPaneWidth ?? DEFAULT_LEFT_WIDTH
-      setLeftWidth(clampLeftWidth(saved, BACKENDS.length))
-      latestWidth.current = clampLeftWidth(saved, BACKENDS.length)
-    })
-  }, [])
+    if (!settings || widthInitialized.current) return
+    widthInitialized.current = true
+    const ui = settings.ui as { leftPaneWidth?: number } | undefined
+    const saved = ui?.leftPaneWidth ?? DEFAULT_LEFT_WIDTH
+    setLeftWidth(clampLeftWidth(saved, BACKENDS.length))
+    latestWidth.current = clampLeftWidth(saved, BACKENDS.length)
+  }, [settings])
 
   // Shrink left pane if window becomes too small to show all columns
   useEffect(() => {

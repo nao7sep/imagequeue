@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useSettings } from '../context/SettingsContext'
 import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
 import './Settings.css'
 
@@ -7,17 +8,14 @@ interface Props {
 }
 
 export function Settings({ onClose }: Props): React.JSX.Element {
-  const [config, setConfig] = useState<Record<string, unknown> | null>(null)
+  const { settings, updateSettings } = useSettings()
+  // Local copy — user edits freely; changes commit to context only on Save
+  const [config, setConfig] = useState<Record<string, unknown> | null>(() => settings)
   const [status, setStatus] = useState('')
-
-  useEffect(() => {
-    window.electronAPI.getSettings().then(setConfig)
-  }, [])
 
   const handleSave = async (): Promise<void> => {
     if (!config) return
-    await window.electronAPI.saveSettings(config)
-    window.dispatchEvent(new CustomEvent('settings-saved'))
+    await updateSettings(config)
     setStatus('Saved')
     setTimeout(() => setStatus(''), 2000)
   }
@@ -185,10 +183,6 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Default Steps</label>
           <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('drawthings', 'steps', parseInt(e.target.value) || 4)} />
-        </div>
-        <div className="settings-field">
-          <label>Default CFG</label>
-          <input type="number" min={0} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).cfg as number} onChange={(e) => updateBackendParam('drawthings', 'cfg', parseFloat(e.target.value) || 1)} />
         </div>
       </div>
       )}

@@ -18,8 +18,10 @@ import {
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:get', () => {
-    const config = loadConfig()
-    // Decode API keys so the renderer always sees plain text
+    // Clone before mutating so the in-memory cache keeps encoded keys.
+    // (loadConfig returns a reference to its internal cache; mutating it directly
+    //  causes the next call to decode an already-decoded key, producing garbage.)
+    const config = JSON.parse(JSON.stringify(loadConfig())) as AppConfig
     config.text_ai.api_key = decodeApiKey(config.text_ai.api_key)
     for (const backend of ['openai', 'imagen', 'nanobanana', 'flux'] as const) {
       config.image_backends[backend].api_key = decodeApiKey(config.image_backends[backend].api_key)

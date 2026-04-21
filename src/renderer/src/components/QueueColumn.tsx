@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQueue } from '../context/QueueContext'
+import { useSettings } from '../context/SettingsContext'
 import type { BackendId, Task } from '../../../shared/types'
 import {
   getModelsForBackend,
@@ -51,9 +52,15 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
+  const { settings } = useSettings()
   const models = getModelsForBackend(backendId as 'openai')
   const [model, setModel] = useState(models[0].id)
-  const [apiKeyMissing, setApiKeyMissing] = useState(false)
+
+  // Derived from context — updates automatically when settings change (no effect needed)
+  const apiKey = backendId !== 'drawthings'
+    ? ((settings?.image_backends as Record<string, Record<string, unknown>>)?.[backendId]?.api_key as string | undefined)
+    : undefined
+  const apiKeyMissing = backendId !== 'drawthings' && (!apiKey || apiKey.trim() === '')
 
   // OpenAI params
   const [quality, setQuality] = useState<OpenAIQuality>('medium')
@@ -84,24 +91,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 
   const columnTasks = tasks[backendId]
 
-  // Check if the API key is configured; re-check when window regains focus (e.g. after saving settings)
-  useEffect(() => {
-    if (backendId === 'drawthings') return
-    const check = async (): Promise<void> => {
-      const config = await window.electronAPI.getSettings()
-      const backends = config.image_backends as Record<string, Record<string, unknown>>
-      const key = backends[backendId]?.api_key as string | undefined
-      setApiKeyMissing(!key || key.trim() === '')
-    }
-    check()
-    window.addEventListener('focus', check)
-    window.addEventListener('settings-saved', check)
-    return () => {
-      window.removeEventListener('focus', check)
-      window.removeEventListener('settings-saved', check)
-    }
-  }, [backendId])
-
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
     if (backendId !== 'drawthings') return
@@ -126,7 +115,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
     }
 
     refresh(true)
-    const id = window.setInterval(() => refresh(false), 5000)
+    const id = window.setInterval(() => refresh(false), 30000)
     return () => window.clearInterval(id)
   }, [backendId])
 
