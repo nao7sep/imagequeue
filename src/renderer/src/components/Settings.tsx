@@ -147,6 +147,15 @@ export function Settings({ onClose }: Props): React.JSX.Element {
       <div className="settings-section">
         <h3>Draw Things</h3>
         <div className="settings-field">
+          <label>gRPC Server CLI Path</label>
+          <input
+            value={backends.drawthings.grpc_server_cli_path as string || ''}
+            onChange={(e) => updateBackend('drawthings', 'grpc_server_cli_path', e.target.value)}
+            placeholder="path to gRPCServerCLI binary"
+          />
+          <span className="settings-hint">Keeps model in memory for faster generation. When set, CLI path is ignored. Download from github.com/drawthingsai/draw-things-community/releases</span>
+        </div>
+        <div className="settings-field">
           <label>CLI Path</label>
           <input value={backends.drawthings.cli_path as string} onChange={(e) => updateBackend('drawthings', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />
         </div>

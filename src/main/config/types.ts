@@ -46,6 +46,7 @@ export interface FluxBackendConfig {
 
 export interface DrawThingsBackendConfig {
   cli_path: string
+  grpc_server_cli_path?: string
   model: string
   default_params: {
     steps: number

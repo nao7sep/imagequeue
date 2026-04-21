@@ -5,14 +5,38 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
 import { log, logApiRequest, logApiResponse } from '../logger'
-import { modelsDirArgs, ensureModelsDir } from '../local-cli'
+import { modelsDirArgs, ensureModelsDir, resolveModelsDir } from '../local-cli'
+import { ensureGrpcServer } from '../dt-grpc/server'
+import { generateImageGrpc, resetClient } from '../dt-grpc/client'
 
-// Runs draw-things-cli generate and returns the generated image as a Buffer.
 export async function generateDrawThings(task: Task): Promise<Buffer> {
+  const config = loadConfig()
+  const grpcServerCliPath = config.image_backends.drawthings.grpc_server_cli_path
+
+  if (grpcServerCliPath) {
+    // gRPC mode — no CLI fallback; if this fails the error surfaces to the user
+    const modelsDir = resolveModelsDir()
+    const ready = await ensureGrpcServer(grpcServerCliPath, modelsDir || undefined)
+    if (!ready) {
+      resetClient()
+      throw new Error('gRPCServerCLI did not become ready in time')
+    }
+    try {
+      return await generateImageGrpc(task)
+    } catch (err) {
+      resetClient()
+      throw err
+    }
+  }
+
+  // CLI mode (no gRPC path configured)
+  return generateDrawThingsCli(task)
+}
+
+async function generateDrawThingsCli(task: Task): Promise<Buffer> {
   const config = loadConfig()
   const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
 
-  // Ensure models directory exists
   ensureModelsDir()
 
   const outputPath = path.join(getSessionDir(), `_local_temp_${Date.now()}.png`)
@@ -32,11 +56,9 @@ export async function generateDrawThings(task: Task): Promise<Buffer> {
   if (task.params.seed != null && (task.params.seed as number) > 0) {
     args.push('--seed', String(task.params.seed))
   }
-
   if (task.params.cfg != null && (task.params.cfg as number) > 0) {
     args.push('--cfg', String(task.params.cfg))
   }
-
   if (task.params.negativePrompt) {
     args.push('--negative-prompt', String(task.params.negativePrompt))
   }
@@ -57,22 +79,13 @@ export async function generateDrawThings(task: Task): Promise<Buffer> {
     let stderr = ''
 
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
-
     proc.on('close', (code) => {
       if (code === 0) resolve()
       else {
-        log('error', 'draw-things-cli exited with error', {
-          code,
-          model: task.model,
-          steps: task.params.steps,
-          width: task.params.width,
-          height: task.params.height,
-          stderr
-        })
+        log('error', 'draw-things-cli exited with error', { code, model: task.model, stderr })
         reject(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
       }
     })
-
     proc.on('error', (err) => {
       log('error', 'draw-things-cli spawn failed', { cliPath, message: err.message })
       reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
@@ -100,3 +113,4 @@ export function checkModelExists(modelFilename: string): boolean {
   if (!fs.existsSync(resolved)) return false
   return fs.existsSync(path.join(resolved, modelFilename))
 }
+

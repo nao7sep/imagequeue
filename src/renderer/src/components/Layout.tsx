@@ -20,7 +20,14 @@ const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform =
 
 const DEFAULT_LEFT_WIDTH = 360
 const MIN_LEFT_WIDTH = 280
-const MAX_LEFT_WIDTH = 800
+const MIN_COLUMN_WIDTH = 200
+const RESIZE_HANDLE_WIDTH = 5
+
+function clampLeftWidth(w: number, numBackends: number): number {
+  const minRight = numBackends * MIN_COLUMN_WIDTH
+  const maxAllowed = Math.max(MIN_LEFT_WIDTH, window.innerWidth - minRight - RESIZE_HANDLE_WIDTH)
+  return Math.max(MIN_LEFT_WIDTH, Math.min(maxAllowed, w))
+}
 
 type Overlay = 'settings' | 'shortcuts' | 'about' | null
 
@@ -39,10 +46,19 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     window.electronAPI.getSettings().then((config) => {
       const ui = config.ui as { leftPaneWidth?: number } | undefined
-      if (ui?.leftPaneWidth) {
-        setLeftWidth(Math.max(MIN_LEFT_WIDTH, Math.min(MAX_LEFT_WIDTH, ui.leftPaneWidth)))
-      }
+      const saved = ui?.leftPaneWidth ?? DEFAULT_LEFT_WIDTH
+      setLeftWidth(clampLeftWidth(saved, BACKENDS.length))
+      latestWidth.current = clampLeftWidth(saved, BACKENDS.length)
     })
+  }, [])
+
+  // Shrink left pane if window becomes too small to show all columns
+  useEffect(() => {
+    const onResize = (): void => {
+      setLeftWidth((w) => clampLeftWidth(w, BACKENDS.length))
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   // Close menu when clicking outside
@@ -98,7 +114,7 @@ export function Layout(): React.JSX.Element {
 
     const onMouseMove = (ev: MouseEvent): void => {
       if (!isDragging.current) return
-      const newWidth = Math.max(MIN_LEFT_WIDTH, Math.min(MAX_LEFT_WIDTH, ev.clientX))
+      const newWidth = clampLeftWidth(ev.clientX, BACKENDS.length)
       setLeftWidth(newWidth)
       latestWidth.current = newWidth
     }

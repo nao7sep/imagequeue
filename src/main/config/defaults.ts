@@ -45,6 +45,7 @@ export function createDefaultConfig(): AppConfig {
       },
       drawthings: {
         cli_path: '',
+        grpc_server_cli_path: '',
         model: 'flux_2_klein_4b_q6p.ckpt',
         default_params: {
           steps: 4,
