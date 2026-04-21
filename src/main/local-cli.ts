@@ -28,7 +28,7 @@ const DEFAULT_MODELS_DIR = path.join(os.homedir(), '.imagequeue', 'models')
 /** Resolve the effective models directory. Empty string means use CLI's default (no --models-dir). */
 export function resolveModelsDir(): string {
   const config = loadConfig()
-  const dir = config.image_backends.local.models_dir
+  const dir = config.image_backends.drawthings.models_dir
   if (!dir) return '' // empty = let CLI use its own default
   return dir.replace(/^~/, os.homedir())
 }
@@ -61,7 +61,7 @@ export async function checkCli(): Promise<CliStatus> {
   }
 
   const config = loadConfig()
-  const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
+  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
 
   return new Promise((resolve) => {
     execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout, stderr) => {
@@ -132,7 +132,7 @@ function parseModelList(output: string): LocalModelInfo[] {
 /** List downloaded models via CLI. */
 export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   const config = loadConfig()
-  const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
+  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
   const args = ['models', 'list', '--downloaded-only', ...modelsDirArgs()]
 
   return new Promise((resolve) => {
@@ -150,7 +150,7 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
 /** List all available models via CLI. */
 export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   const config = loadConfig()
-  const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
+  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
   const args = ['models', 'list', ...modelsDirArgs()]
 
   return new Promise((resolve) => {
@@ -173,7 +173,7 @@ export interface EnsureModelResult {
 /** Download/ensure a model via CLI. Returns a promise that resolves when complete. */
 export async function ensureModel(modelFile: string): Promise<EnsureModelResult> {
   const config = loadConfig()
-  const cliPath = config.image_backends.local.cli_path || 'draw-things-cli'
+  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
 
   // Ensure models dir exists before downloading
   ensureModelsDir()

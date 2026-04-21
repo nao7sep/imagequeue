@@ -22,13 +22,17 @@ const DEFAULT_LEFT_WIDTH = 360
 const MIN_LEFT_WIDTH = 280
 const MAX_LEFT_WIDTH = 800
 
+type Overlay = 'settings' | 'shortcuts' | 'about' | null
+
 export function Layout(): React.JSX.Element {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
+  const [overlay, setOverlay] = useState<Overlay>(null)
+  const [showMenu, setShowMenu] = useState(false)
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH)
   const isDragging = useRef(false)
   const latestWidth = useRef(DEFAULT_LEFT_WIDTH)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   // Load persisted width from config on mount
   useEffect(() => {
@@ -39,6 +43,51 @@ export function Layout(): React.JSX.Element {
       }
     })
   }, [])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!showMenu) return
+    const handler = (e: MouseEvent): void => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showMenu])
+
+  // Close any open overlay (or menu) with Escape; open Settings with ⌘,
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setOverlay(null)
+        setShowMenu(false)
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault()
+        setOverlay((o) => (o === 'settings' ? null : 'settings'))
+        setShowMenu(false)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
+
+  // Delete key removes the selected task (when not typing)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (!selectedTask) return
+      if (selectedTask.status === 'generating') return
+      window.electronAPI.removeTask(selectedTask.backend, selectedTask.id)
+      setSelectedTask(null)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [selectedTask])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -87,12 +136,76 @@ export function Layout(): React.JSX.Element {
     })
   }, [selectedTask])
 
+  const openOverlay = (o: Overlay): void => {
+    setShowMenu(false)
+    setOverlay(o)
+  }
+
   return (
     <div className="layout">
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {overlay === 'settings' && (
+        <div className="modal-backdrop" onClick={() => setOverlay(null)}>
+          <div className="modal-box settings-modal-box" onClick={(e) => e.stopPropagation()}>
+            <Settings onClose={() => setOverlay(null)} />
+          </div>
+        </div>
+      )}
+      {overlay === 'shortcuts' && (
+        <div className="modal-backdrop" onClick={() => setOverlay(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span>Keyboard Shortcuts</span>
+              <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
+            </div>
+            <table className="shortcuts-table">
+              <tbody>
+                <tr className="shortcuts-group"><td colSpan={2}>Sending</td></tr>
+                <tr><td>⌘↵ / Ctrl+↵</td><td>Send prompt to all backends</td></tr>
+                <tr><td>⌘1 / Ctrl+1</td><td>Send to GPT Image</td></tr>
+                <tr><td>⌘2 / Ctrl+2</td><td>Send to Imagen</td></tr>
+                <tr><td>⌘3 / Ctrl+3</td><td>Send to FLUX</td></tr>
+                <tr><td>⌘4 / Ctrl+4</td><td>Send to Draw Things</td></tr>
+                <tr className="shortcuts-group"><td colSpan={2}>History</td></tr>
+                <tr><td>⌘↑ / Ctrl+↑</td><td>Older prompt</td></tr>
+                <tr><td>⌘↓ / Ctrl+↓</td><td>Newer prompt</td></tr>
+                <tr className="shortcuts-group"><td colSpan={2}>Queue</td></tr>
+                <tr><td>⌫</td><td>Remove selected task</td></tr>
+                <tr className="shortcuts-group"><td colSpan={2}>App</td></tr>
+                <tr><td>⌘, / Ctrl+,</td><td>Settings</td></tr>
+                <tr><td>Esc</td><td>Close any open panel</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {overlay === 'about' && (
+        <div className="modal-backdrop" onClick={() => setOverlay(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span>About</span>
+              <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
+            </div>
+            <div className="about-content">
+              <div className="about-name">ImageQueue</div>
+              <div className="about-version">Version 0.1.0</div>
+              <div className="about-desc">Multi-backend AI image generation queue</div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="left-pane" style={{ width: leftWidth }}>
         <div className="pane-toolbar">
-          <button className="settings-btn" onClick={() => setShowSettings(true)}>⚙ Settings</button>
+          <span className="app-name">ImageQueue</span>
+          <div className="menu-anchor" ref={menuRef}>
+            <button className="hamburger-btn" onClick={() => setShowMenu((v) => !v)}>☰</button>
+            {showMenu && (
+              <div className="dropdown-menu">
+                <button onClick={() => openOverlay('settings')}>Settings</button>
+                <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
+                <button onClick={() => openOverlay('about')}>About</button>
+              </div>
+            )}
+          </div>
         </div>
         <PromptPane selectedTask={selectedTask} previewDataUrl={previewDataUrl} />
       </div>

@@ -174,8 +174,10 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
-      <button className="settings-save" onClick={handleSave}>Save Settings</button>
-      {status && <span className="settings-status">{status}</span>}
+      <div className="settings-footer">
+        {status && <span className="settings-status">{status}</span>}
+        <button className="settings-save" onClick={handleSave}>Save Settings</button>
+      </div>
     </div>
   )
 }

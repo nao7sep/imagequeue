@@ -1,10 +1,6 @@
 .settings-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-primary);
-  z-index: 100;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: 20px 24px;
 }
 
 .settings-header {
@@ -106,6 +102,19 @@
 
 .settings-save:hover {
   background: var(--accent-hover);
+}
+
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 0 4px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
 }
 
 .settings-status {

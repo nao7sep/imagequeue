@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
 import type { BackendId, Task } from '../../../shared/types'
 import './PromptPane.css'
@@ -12,6 +12,8 @@ interface Props {
 
 export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const draftRef = useRef('')
   const { promptHistory } = useQueue()
 
   const handleSendToAll = useCallback(() => {
@@ -22,22 +24,44 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && e.key === 'Enter') {
         e.preventDefault()
         handleSendToAll()
         return
       }
-      if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '4') {
+      if (mod && e.key >= '1' && e.key <= '4') {
         e.preventDefault()
         const backend = BACKENDS[parseInt(e.key) - 1]
         window.dispatchEvent(
           new CustomEvent('enqueue-single', { detail: { prompt: prompt.trim(), backend } })
         )
+        return
+      }
+      if (mod && e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (promptHistory.length === 0) return
+        if (historyIndex === -1) draftRef.current = prompt
+        const next = Math.min(historyIndex + 1, promptHistory.length - 1)
+        if (next !== historyIndex) {
+          setHistoryIndex(next)
+          setPrompt(promptHistory[next])
+        }
+        return
+      }
+      if (mod && e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (historyIndex <= -1) return
+        const next = historyIndex - 1
+        setHistoryIndex(next)
+        setPrompt(next === -1 ? draftRef.current : promptHistory[next])
+        return
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [prompt, handleSendToAll])
+  }, [prompt, historyIndex, promptHistory, handleSendToAll])
 
   // Handle "+ Queue" button requests from QueueColumn
   useEffect(() => {
@@ -53,13 +77,19 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
     return () => window.removeEventListener('request-enqueue', handler)
   }, [prompt])
 
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    setPrompt(e.target.value)
+    // Typing resets history navigation
+    if (historyIndex !== -1) setHistoryIndex(-1)
+  }
+
   return (
     <div className="prompt-pane">
       <textarea
         className="prompt-textarea"
         placeholder="Enter your image prompt..."
         value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
+        onChange={handleChange}
       />
 
       <div className="prompt-actions">
@@ -76,12 +106,6 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
             <option key={i} value={p}>{p.length > 40 ? p.slice(0, 40) + '…' : p}</option>
           ))}
         </select>
-        <div className="shortcut-hints">
-          <span className="shortcut-hint">⌘1</span>
-          <span className="shortcut-hint">⌘2</span>
-          <span className="shortcut-hint">⌘3</span>
-          <span className="shortcut-hint">⌘4</span>
-        </div>
       </div>
 
       <div className="preview-area">
