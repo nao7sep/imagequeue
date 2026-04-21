@@ -21,6 +21,7 @@ import './QueueColumn.css'
 interface Props {
   backendId: BackendId
   label: string
+  hasPrompt: boolean
   onSelectTask: (task: Task) => void
 }
 
@@ -46,11 +47,12 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'var(--error)'
 }
 
-export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JSX.Element {
+export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
   const models = getModelsForBackend(backendId as 'openai')
   const [model, setModel] = useState(models[0].id)
   const [imageCount, setImageCount] = useState(1)
+  const [apiKeyMissing, setApiKeyMissing] = useState(false)
 
   // OpenAI params
   const [quality, setQuality] = useState<OpenAIQuality>('high')
@@ -83,6 +85,21 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   const [downloading, setDownloading] = useState<string | null>(null)
 
   const columnTasks = tasks[backendId]
+
+  // Check if the API key is configured; re-check when window regains focus (e.g. after saving settings)
+  useEffect(() => {
+    if (backendId === 'drawthings') return
+    const check = async (): Promise<void> => {
+      const config = await window.electronAPI.getSettings()
+      const backends = config.image_backends as Record<string, Record<string, unknown>>
+      const keyBackend = backendId === 'nanobanana' ? 'imagen' : backendId
+      const key = backends[keyBackend]?.api_key as string | undefined
+      setApiKeyMissing(!key || key.trim() === '')
+    }
+    check()
+    window.addEventListener('focus', check)
+    return () => window.removeEventListener('focus', check)
+  }, [backendId])
 
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
@@ -118,7 +135,9 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   }, [backendId, model])
 
   const doEnqueue = useCallback((prompt: string) => {
-    if (!prompt) return
+    if (!prompt.trim()) return
+    if (apiKeyMissing) return
+    if (backendId === 'drawthings' && (!cliStatus?.installed || downloadedModels.length === 0)) return
 
     let params: Record<string, unknown> = {}
 
@@ -146,7 +165,8 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
   }, [backendId, model, imageCount, quality, outputFormat, background, openaiSizeIdx,
       aspectRatio, imageSize, personGeneration, numberOfImages,
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
-      localSizeIdx, localSteps, localCfg, localSeed, negativePrompt, enqueue])
+      localSizeIdx, localSteps, localCfg, localSeed, negativePrompt,
+      apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
   useEffect(() => {
@@ -383,8 +403,13 @@ export function QueueColumn({ backendId, label, onSelectTask }: Props): React.JS
           </div>
         )}
 
+        {apiKeyMissing && (
+          <div className="setting-row model-warning">API key not set — open Settings (⌘,)</div>
+        )}
+
         <button
           className="enqueue-btn"
+          disabled={!hasPrompt || apiKeyMissing || (backendId === 'drawthings' && (!cliStatus?.installed || downloadedModels.length === 0))}
           onClick={() => {
             window.dispatchEvent(
               new CustomEvent('request-enqueue', { detail: { backend: backendId } })

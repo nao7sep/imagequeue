@@ -8,10 +8,11 @@ const BACKENDS: BackendId[] = ['openai', 'imagen', 'flux', 'drawthings']
 interface Props {
   selectedTask: Task | null
   previewDataUrl: string | null
+  prompt: string
+  onPromptChange: (p: string) => void
 }
 
-export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.Element {
-  const [prompt, setPrompt] = useState('')
+export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
   const [historyIndex, setHistoryIndex] = useState(-1)
   const draftRef = useRef('')
   const { promptHistory } = useQueue()
@@ -46,7 +47,7 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
         const next = Math.min(historyIndex + 1, promptHistory.length - 1)
         if (next !== historyIndex) {
           setHistoryIndex(next)
-          setPrompt(promptHistory[next])
+          onPromptChange(promptHistory[next])
         }
         return
       }
@@ -55,7 +56,7 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
         if (historyIndex <= -1) return
         const next = historyIndex - 1
         setHistoryIndex(next)
-        setPrompt(next === -1 ? draftRef.current : promptHistory[next])
+        onPromptChange(next === -1 ? draftRef.current : promptHistory[next])
         return
       }
     }
@@ -78,8 +79,7 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
   }, [prompt])
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
-    setPrompt(e.target.value)
-    // Typing resets history navigation
+    onPromptChange(e.target.value)
     if (historyIndex !== -1) setHistoryIndex(-1)
   }
 
@@ -99,7 +99,7 @@ export function PromptPane({ selectedTask, previewDataUrl }: Props): React.JSX.E
         <select
           className="history-select"
           value=""
-          onChange={(e) => { if (e.target.value) setPrompt(e.target.value) }}
+          onChange={(e) => { if (e.target.value) onPromptChange(e.target.value) }}
         >
           <option value="" disabled>History</option>
           {promptHistory.map((p, i) => (

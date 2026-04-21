@@ -34,10 +34,10 @@
 }
 
 .app-name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 19px;
+  font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.03em;
   user-select: none;
 }
 
@@ -47,12 +47,12 @@
 }
 
 .hamburger-btn {
-  padding: 5px 10px;
+  padding: 6px 11px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 19px;
   cursor: pointer;
   line-height: 1;
 }

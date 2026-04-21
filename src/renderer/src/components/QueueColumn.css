@@ -71,7 +71,6 @@
 
 .enqueue-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .task-list {
@@ -128,7 +127,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: help;
   opacity: 0.85;
 }
 
@@ -239,5 +237,4 @@
 
 .download-btn:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }

@@ -27,6 +27,7 @@ type Overlay = 'settings' | 'shortcuts' | 'about' | null
 export function Layout(): React.JSX.Element {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
+  const [prompt, setPrompt] = useState('')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [showMenu, setShowMenu] = useState(false)
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH)
@@ -207,7 +208,12 @@ export function Layout(): React.JSX.Element {
             )}
           </div>
         </div>
-        <PromptPane selectedTask={selectedTask} previewDataUrl={previewDataUrl} />
+        <PromptPane
+            selectedTask={selectedTask}
+            previewDataUrl={previewDataUrl}
+            prompt={prompt}
+            onPromptChange={setPrompt}
+          />
       </div>
       <div className="resize-handle" onMouseDown={handleMouseDown} />
       <div className="right-pane">
@@ -216,6 +222,7 @@ export function Layout(): React.JSX.Element {
             key={b.id}
             backendId={b.id}
             label={b.label}
+            hasPrompt={!!prompt.trim()}
             onSelectTask={handleSelectTask}
           />
         ))}
