@@ -16,6 +16,7 @@ import {
   type OpenAIBackground,
   type ImagenPersonGeneration
 } from '../../../shared/models'
+import { DrawThingsModelsModal } from './DrawThingsModelsModal'
 import './QueueColumn.css'
 
 interface Props {
@@ -80,9 +81,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
-  const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
-  const [showAvailable, setShowAvailable] = useState(false)
-  const [downloading, setDownloading] = useState<string | null>(null)
+  const [showModelsModal, setShowModelsModal] = useState(false)
 
   const columnTasks = tasks[backendId]
 
@@ -116,12 +115,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
       }
     })
   }, [backendId])
-
-  // Load available models list when expanded
-  useEffect(() => {
-    if (!showAvailable || availableModels.length > 0) return
-    window.electronAPI.localListAvailableModels().then(setAvailableModels)
-  }, [showAvailable])
 
   // Update defaults when model changes
   useEffect(() => {
@@ -198,6 +191,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   )
 
   return (
+    <>
     <div className="queue-column">
       <div className="column-header">{label}</div>
 
@@ -296,7 +290,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
           </>
         )}
 
-        {/* Local parameters */}
+        {/* Draw Things parameters */}
         {backendId === 'drawthings' && (
           <>
             {cliStatus === null && (
@@ -327,46 +321,11 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                 <div className="setting-row">
                   <button
                     className="open-models-btn"
-                    onClick={() => setShowAvailable(!showAvailable)}
+                    onClick={() => setShowModelsModal(true)}
                   >
-                    {showAvailable ? '▾ Hide available' : '▸ Download models…'}
+                    Manage Models…
                   </button>
                 </div>
-                {showAvailable && (
-                  <div className="available-models-list">
-                    {availableModels.length === 0 ? (
-                      <div className="setting-row model-warning">Loading catalog…</div>
-                    ) : (
-                      availableModels
-                        .filter((m) => !m.downloaded)
-                        .slice(0, 30)
-                        .map((m) => (
-                          <div key={m.file} className="available-model-row">
-                            <span className="available-model-name" title={m.file}>{m.name}</span>
-                            <button
-                              className="download-btn"
-                              disabled={downloading !== null}
-                              onClick={async () => {
-                                setDownloading(m.file)
-                                const result = await window.electronAPI.localEnsureModel(m.file)
-                                setDownloading(null)
-                                if (result.success) {
-                                  const updated = await window.electronAPI.localListDownloadedModels()
-                                  setDownloadedModels(updated)
-                                  setAvailableModels((prev) =>
-                                    prev.map((p) => p.file === m.file ? { ...p, downloaded: true } : p)
-                                  )
-                                  if (updated.length === 1) setModel(updated[0].file)
-                                }
-                              }}
-                            >
-                              {downloading === m.file ? '⏳' : '↓'}
-                            </button>
-                          </div>
-                        ))
-                    )}
-                  </div>
-                )}
                 {renderSizeSelect(DRAWTHINGS_SIZES, localSizeIdx, setLocalSizeIdx)}
                 <div className="setting-row">
                   <label>steps</label>
@@ -439,6 +398,19 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
         )}
       </div>
     </div>
+
+    {showModelsModal && (
+      <DrawThingsModelsModal
+        onClose={() => setShowModelsModal(false)}
+        onModelsChanged={(updated) => {
+          setDownloadedModels(updated)
+          if (updated.length > 0 && !updated.find((m) => m.file === model)) {
+            setModel(updated[0].file)
+          }
+        }}
+      />
+    )}
+    </>
   )
 }
 

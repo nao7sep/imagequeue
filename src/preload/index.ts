@@ -91,6 +91,15 @@ const api = {
   localOpenModelsDir: (): Promise<void> =>
     ipcRenderer.invoke('local:openModelsDir'),
 
+  localDeleteModel: (modelFile: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('local:deleteModel', modelFile),
+
+  localOpenTerminalForDownload: (modelFile: string): Promise<void> =>
+    ipcRenderer.invoke('local:openTerminalForDownload', modelFile),
+
+  openExternal: (url: string): Promise<void> =>
+    ipcRenderer.invoke('shell:openExternal', url),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {

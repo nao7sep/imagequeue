@@ -10,7 +10,9 @@ import {
   listAvailableModels,
   ensureModel,
   resolveModelsDir,
-  getDefaultModelsDir
+  getDefaultModelsDir,
+  deleteModel,
+  openTerminalForDownload
 } from './local-cli'
 
 // IPC handlers for reading/writing settings.
@@ -82,6 +84,18 @@ export function registerSettingsIpc(): void {
       const cliDefault = path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/Models')
       shell.openPath(cliDefault)
     }
+  })
+
+  ipcMain.handle('local:deleteModel', async (_event, modelFile: string) => {
+    return deleteModel(modelFile)
+  })
+
+  ipcMain.handle('local:openTerminalForDownload', async (_event, modelFile: string) => {
+    return openTerminalForDownload(modelFile)
+  })
+
+  ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    shell.openExternal(url)
   })
 }
 
