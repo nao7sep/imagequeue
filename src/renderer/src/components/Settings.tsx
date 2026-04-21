@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { TEXT_AI_MODELS, getModelsForBackend } from '../../../shared/models'
 import './Settings.css'
 
 interface Props {
@@ -49,24 +50,22 @@ export function Settings({ onClose }: Props): React.JSX.Element {
     <div className="settings-overlay">
       <div className="settings-header">
         <h2>Settings</h2>
-        <button className="settings-close" onClick={onClose}>✕ Close</button>
+        <button className="settings-close" onClick={onClose}>✕</button>
       </div>
 
       <div className="settings-section">
-        <h3>Text AI (slug generation)</h3>
+        <h3>Text AI</h3>
         <div className="settings-field">
-          <label>Backend</label>
-          <select value={textAi.backend} onChange={(e) => updateTextAi('backend', e.target.value)}>
-            <option value="imagen">Imagen</option>
-          </select>
+          <label>Gemini API Key</label>
+          <input type="password" value={textAi.api_key} onChange={(e) => updateTextAi('api_key', e.target.value)} />
         </div>
         <div className="settings-field">
           <label>Model</label>
-          <input value={textAi.model} onChange={(e) => updateTextAi('model', e.target.value)} />
-        </div>
-        <div className="settings-field">
-          <label>API Key</label>
-          <input type="password" value={textAi.api_key} onChange={(e) => updateTextAi('api_key', e.target.value)} />
+          <select value={textAi.model} onChange={(e) => updateTextAi('model', e.target.value)}>
+            {TEXT_AI_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -78,7 +77,11 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
         <div className="settings-field">
           <label>Model</label>
-          <input value={backends.openai.model as string} onChange={(e) => updateBackend('openai', 'model', e.target.value)} />
+          <select value={backends.openai.model as string} onChange={(e) => updateBackend('openai', 'model', e.target.value)}>
+            {getModelsForBackend('openai').map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
         </div>
         <div className="settings-field">
           <label>Quality</label>
@@ -102,7 +105,11 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
         <div className="settings-field">
           <label>Model</label>
-          <input value={backends.imagen.model as string} onChange={(e) => updateBackend('imagen', 'model', e.target.value)} />
+          <select value={backends.imagen.model as string} onChange={(e) => updateBackend('imagen', 'model', e.target.value)}>
+            {getModelsForBackend('imagen').map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
         </div>
         <div className="settings-field">
           <label>Concurrency</label>
@@ -112,10 +119,17 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
       <div className="settings-section">
         <h3>Nano Banana</h3>
-        <p className="settings-hint">Uses the Imagen API key above.</p>
+        <div className="settings-field">
+          <label>Gemini API Key</label>
+          <input type="password" value={backends.nanobanana.api_key as string} onChange={(e) => updateBackend('nanobanana', 'api_key', e.target.value)} />
+        </div>
         <div className="settings-field">
           <label>Model</label>
-          <input value={backends.nanobanana.model as string} onChange={(e) => updateBackend('nanobanana', 'model', e.target.value)} />
+          <select value={backends.nanobanana.model as string} onChange={(e) => updateBackend('nanobanana', 'model', e.target.value)}>
+            {getModelsForBackend('nanobanana').map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
         </div>
         <div className="settings-field">
           <label>Concurrency</label>
@@ -131,7 +145,11 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
         <div className="settings-field">
           <label>Model</label>
-          <input value={backends.flux.model as string} onChange={(e) => updateBackend('flux', 'model', e.target.value)} />
+          <select value={backends.flux.model as string} onChange={(e) => updateBackend('flux', 'model', e.target.value)}>
+            {getModelsForBackend('flux').map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
         </div>
         <div className="settings-field">
           <label>Steps</label>
@@ -176,7 +194,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
       <div className="settings-footer">
         {status && <span className="settings-status">{status}</span>}
-        <button className="settings-save" onClick={handleSave}>Save Settings</button>
+        <button className="settings-save" onClick={handleSave}>Save</button>
       </div>
     </div>
   )

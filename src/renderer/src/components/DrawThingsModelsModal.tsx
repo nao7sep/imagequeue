@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import './DrawThingsModelsModal.css'
+import { useQueue } from '../context/QueueContext'
 
 interface LocalModelInfo {
   file: string
@@ -16,12 +17,14 @@ interface Props {
 }
 
 export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): React.JSX.Element {
+  const { tasks } = useQueue()
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
 
   const loadDownloaded = async (): Promise<void> => {
     setLoadingDownloaded(true)
@@ -46,6 +49,13 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
   }, [])
 
   const handleDelete = async (modelFile: string): Promise<void> => {
+    const isInUse = Object.values(tasks).flat().some(
+      (t) => t.backend === 'drawthings' && t.status === 'generating' && t.model === modelFile
+    )
+    if (isInUse) {
+      setDeleteError('Model is in use — wait for the current task to finish.')
+      return
+    }
     setDeleting(modelFile)
     setDeleteError(null)
     const result = await window.electronAPI.localDeleteModel(modelFile)
@@ -67,6 +77,8 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
     hf.startsWith('http') ? hf : `https://huggingface.co/${hf}`
 
   const notDownloaded = availableModels.filter((m) => !m.downloaded && !downloadedModels.find((d) => d.file === m.file))
+  const filteredDownloaded = downloadedModels.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
+  const filteredNotDownloaded = notDownloaded.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
 
   const content = (
     <div className="dt-modal-backdrop" onClick={onClose}>
@@ -77,6 +89,14 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
         </div>
 
         <div className="dt-modal-body">
+          <div className="dt-search-row">
+            <input
+              className="dt-search-input"
+              placeholder="Search models…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
           <section className="dt-section">
             <h3 className="dt-section-title">Downloaded</h3>
             {loadingDownloaded ? (
@@ -85,7 +105,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
               <p className="dt-hint">No models downloaded yet.</p>
             ) : (
               <ul className="dt-model-list">
-                {downloadedModels.map((m) => (
+                {filteredDownloaded.map((m) => (
                   <li key={m.file} className="dt-model-row">
                     <span className="dt-model-name" title={m.file}>{m.name}</span>
                     <button
@@ -113,7 +133,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
               <p className="dt-hint">All available models are already downloaded.</p>
             ) : (
               <ul className="dt-model-list">
-                {notDownloaded.map((m) => (
+                {filteredNotDownloaded.map((m) => (
                   <li key={m.file} className="dt-model-row">
                     <div className="dt-model-info">
                       <span className="dt-model-name" title={m.file}>{m.name}</span>

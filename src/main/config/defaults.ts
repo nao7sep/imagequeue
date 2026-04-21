@@ -4,7 +4,7 @@ export function createDefaultConfig(): AppConfig {
   return {
     text_ai: {
       backend: 'imagen',
-      model: 'gemini-3.1-flash-lite-preview',
+      model: 'gemini-3.1-flash-preview',
       api_key: ''
     },
     image_backends: {
@@ -12,7 +12,7 @@ export function createDefaultConfig(): AppConfig {
         api_key: '',
         model: 'gpt-image-1.5',
         default_params: {
-          quality: 'high',
+          quality: 'medium',
           width: 1024,
           height: 1024,
           outputFormat: 'png',
@@ -57,6 +57,7 @@ export function createDefaultConfig(): AppConfig {
         models_dir: '~/.imagequeue/models'
       },
       nanobanana: {
+        api_key: '',
         model: 'gemini-3.1-flash-image-preview',
         concurrency: 3
       }

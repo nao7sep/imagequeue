@@ -4,6 +4,7 @@ import { QueueColumn } from './QueueColumn'
 import { Settings } from './Settings'
 import type { Task } from '../../../shared/types'
 import './Layout.css'
+import { useQueue } from '../context/QueueContext'
 
 const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'GPT Image' },
@@ -32,6 +33,7 @@ function clampLeftWidth(w: number, numBackends: number): number {
 type Overlay = 'settings' | 'shortcuts' | 'about' | null
 
 export function Layout(): React.JSX.Element {
+  const { tasks } = useQueue()
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
@@ -153,6 +155,15 @@ export function Layout(): React.JSX.Element {
     })
   }, [selectedTask])
 
+  useEffect(() => {
+    if (!selectedTask) return
+    const allTasks = Object.values(tasks).flat()
+    if (!allTasks.some((t) => t.id === selectedTask.id)) {
+      setSelectedTask(null)
+      setPreviewDataUrl(null)
+    }
+  }, [tasks, selectedTask])
+
   const openOverlay = (o: Overlay): void => {
     setShowMenu(false)
     setOverlay(o)
@@ -169,29 +180,32 @@ export function Layout(): React.JSX.Element {
       )}
       {overlay === 'shortcuts' && (
         <div className="modal-backdrop" onClick={() => setOverlay(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-box settings-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span>Keyboard Shortcuts</span>
               <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
             </div>
-            <table className="shortcuts-table">
-              <tbody>
-                <tr className="shortcuts-group"><td colSpan={2}>Sending</td></tr>
-                <tr><td>⌘↵ / Ctrl+↵</td><td>Send prompt to all backends</td></tr>
-                <tr><td>⌘1 / Ctrl+1</td><td>Send to GPT Image</td></tr>
-                <tr><td>⌘2 / Ctrl+2</td><td>Send to Imagen</td></tr>
-                <tr><td>⌘3 / Ctrl+3</td><td>Send to FLUX</td></tr>
-                <tr><td>⌘4 / Ctrl+4</td><td>Send to Draw Things</td></tr>
-                <tr className="shortcuts-group"><td colSpan={2}>History</td></tr>
-                <tr><td>⌘↑ / Ctrl+↑</td><td>Older prompt</td></tr>
-                <tr><td>⌘↓ / Ctrl+↓</td><td>Newer prompt</td></tr>
-                <tr className="shortcuts-group"><td colSpan={2}>Queue</td></tr>
-                <tr><td>⌫</td><td>Remove selected task</td></tr>
-                <tr className="shortcuts-group"><td colSpan={2}>App</td></tr>
-                <tr><td>⌘, / Ctrl+,</td><td>Settings</td></tr>
-                <tr><td>Esc</td><td>Close any open panel</td></tr>
-              </tbody>
-            </table>
+            <div className="shortcuts-body">
+              <table className="shortcuts-table">
+                <tbody>
+                  <tr className="shortcuts-group"><td colSpan={2}>Sending</td></tr>
+                  <tr><td>⌘↵ / Ctrl+↵</td><td>Send prompt to all backends</td></tr>
+                  <tr><td>⌘1 / Ctrl+1</td><td>Send to GPT Image</td></tr>
+                  <tr><td>⌘2 / Ctrl+2</td><td>Send to Imagen</td></tr>
+                  <tr><td>⌘3 / Ctrl+3</td><td>Send to Nano Banana</td></tr>
+                  <tr><td>⌘4 / Ctrl+4</td><td>Send to FLUX</td></tr>
+                  <tr><td>⌘5 / Ctrl+5</td><td>Send to Draw Things</td></tr>
+                  <tr className="shortcuts-group"><td colSpan={2}>History</td></tr>
+                  <tr><td>⌘↑ / Ctrl+↑</td><td>Older prompt</td></tr>
+                  <tr><td>⌘↓ / Ctrl+↓</td><td>Newer prompt</td></tr>
+                  <tr className="shortcuts-group"><td colSpan={2}>Queue</td></tr>
+                  <tr><td>⌫</td><td>Remove selected task</td></tr>
+                  <tr className="shortcuts-group"><td colSpan={2}>App</td></tr>
+                  <tr><td>⌘, / Ctrl+,</td><td>Settings</td></tr>
+                  <tr><td>Esc</td><td>Close any open panel</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -204,8 +218,32 @@ export function Layout(): React.JSX.Element {
             </div>
             <div className="about-content">
               <div className="about-name">ImageQueue</div>
-              <div className="about-version">Version 0.1.0</div>
-              <div className="about-desc">Multi-backend AI image generation queue</div>
+              <p style={{ marginTop: 4, marginBottom: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Version 0.1.0</p>
+              <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                Multi-backend AI image generation queue.<br />
+                Your data stays on your machine.
+              </p>
+              <div style={{ marginTop: 16, display: 'flex', gap: 16, justifyContent: 'center' }}>
+                <a
+                  href="https://github.com/nao7sep/imagequeue"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="about-link"
+                >
+                  GitHub ↗
+                </a>
+                <a
+                  href="https://github.com/nao7sep/imagequeue/issues"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="about-link"
+                >
+                  Report Issue ↗
+                </a>
+              </div>
+              <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                &copy; 2026 Yoshinao Inoguchi &mdash; MIT License
+              </p>
             </div>
           </div>
         </div>
@@ -218,6 +256,14 @@ export function Layout(): React.JSX.Element {
             {showMenu && (
               <div className="dropdown-menu">
                 <button onClick={() => openOverlay('settings')}>Settings</button>
+                {window.electronAPI.platform !== 'win32' && (
+                  <button onClick={() => {
+                    setShowMenu(false)
+                    window.dispatchEvent(new CustomEvent('open-models-modal'))
+                  }}>
+                    Manage Draw Things Models
+                  </button>
+                )}
                 <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
                 <button onClick={() => openOverlay('about')}>About</button>
               </div>

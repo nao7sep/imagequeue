@@ -74,7 +74,7 @@
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 12px;
-  min-height: 60px;
+  min-height: 120px;
   resize: vertical;
 }
 
@@ -110,10 +110,6 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 12px 0 4px;
-  position: sticky;
-  bottom: 0;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border);
   margin-top: 8px;
 }
 

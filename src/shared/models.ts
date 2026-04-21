@@ -227,7 +227,7 @@ export const FLUX_MODELS: FluxModelDef[] = [
     label: 'FLUX.2 Klein 9B',
     backend: 'flux',
     sizes: FLUX_SIZES,
-    stepsRange: { min: 1, max: 60, default: 28 },
+    stepsRange: { min: 1, max: 60, default: 4 },
     guidanceRange: { min: 1, max: 20, default: 7 },
     pricing: { firstMp: 0.015, additionalMp: 0.002 }
   },
@@ -236,7 +236,7 @@ export const FLUX_MODELS: FluxModelDef[] = [
     label: 'FLUX.2 Klein 4B',
     backend: 'flux',
     sizes: FLUX_SIZES,
-    stepsRange: { min: 1, max: 60, default: 28 },
+    stepsRange: { min: 1, max: 60, default: 4 },
     guidanceRange: { min: 1, max: 20, default: 7 },
     pricing: { firstMp: 0.014, additionalMp: 0.001 }
   }
@@ -322,6 +322,13 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     backend: 'nanobanana',
     pricing: 0.134  // $0.134/1K–2K image (standard API, ai.google.dev/pricing)
   }
+]
+
+// --- Text AI models (for slug generation) ---
+export const TEXT_AI_MODELS: { id: string; label: string }[] = [
+  { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
+  { id: 'gemini-3.1-flash-preview',      label: 'Gemini 3.1 Flash (Preview)' },
+  { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)' }
 ]
 
 // --- Lookup helpers ---

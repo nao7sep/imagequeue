@@ -176,3 +176,18 @@
 .dt-delete-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--error) 15%, transparent);
 }
+
+.dt-search-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.dt-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-sizing: border-box;
+}

@@ -9,6 +9,7 @@ import {
   IMAGEN_IMAGE_SIZES,
   FLUX_SIZES,
   DRAWTHINGS_SIZES,
+  DRAWTHINGS_MODELS,
   type FluxModelDef,
   type SizePreset,
   type OpenAIQuality,
@@ -52,11 +53,10 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   const { tasks, enqueue } = useQueue()
   const models = getModelsForBackend(backendId as 'openai')
   const [model, setModel] = useState(models[0].id)
-  const [imageCount, setImageCount] = useState(1)
   const [apiKeyMissing, setApiKeyMissing] = useState(false)
 
   // OpenAI params
-  const [quality, setQuality] = useState<OpenAIQuality>('high')
+  const [quality, setQuality] = useState<OpenAIQuality>('medium')
   const [outputFormat, setOutputFormat] = useState<OpenAIOutputFormat>('png')
   const [background, setBackground] = useState<OpenAIBackground>('opaque')
   const [openaiSizeIdx, setOpenaiSizeIdx] = useState(0)
@@ -91,8 +91,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
     const check = async (): Promise<void> => {
       const config = await window.electronAPI.getSettings()
       const backends = config.image_backends as Record<string, Record<string, unknown>>
-      const keyBackend = backendId === 'nanobanana' ? 'imagen' : backendId
-      const key = backends[keyBackend]?.api_key as string | undefined
+      const key = backends[backendId]?.api_key as string | undefined
       setApiKeyMissing(!key || key.trim() === '')
     }
     check()
@@ -116,6 +115,13 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
     })
   }, [backendId])
 
+  useEffect(() => {
+    if (backendId !== 'drawthings') return
+    const handler = (): void => setShowModelsModal(true)
+    window.addEventListener('open-models-modal', handler)
+    return () => window.removeEventListener('open-models-modal', handler)
+  }, [backendId])
+
   // Update defaults when model changes
   useEffect(() => {
     if (backendId === 'flux') {
@@ -123,6 +129,12 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
       if (m) {
         setFluxSteps(m.stepsRange.default)
         setFluxGuidance(m.guidanceRange.default)
+      }
+    } else if (backendId === 'drawthings') {
+      const m = DRAWTHINGS_MODELS.find((d) => d.filename === model)
+      if (m) {
+        setLocalSteps(m.stepsRange.default)
+        setLocalCfg(m.guidanceRange.default)
       }
     }
   }, [backendId, model])
@@ -152,10 +164,10 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
       params = {}
     }
 
-    const count = (backendId === 'imagen' || backendId === 'drawthings') ? 1 : imageCount
+    const count = 1
 
     enqueue({ prompt, backend: backendId, model, params, count })
-  }, [backendId, model, imageCount, quality, outputFormat, background, openaiSizeIdx,
+  }, [backendId, model, quality, outputFormat, background, openaiSizeIdx,
       aspectRatio, imageSize, personGeneration, numberOfImages,
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
       localSizeIdx, localSteps, localCfg, localSeed, negativePrompt,
@@ -315,17 +327,9 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                   </div>
                 ) : (
                   <div className="setting-row model-warning">
-                    No models downloaded yet.
+                    No models downloaded — open Manage Models from the menu.
                   </div>
                 )}
-                <div className="setting-row">
-                  <button
-                    className="open-models-btn"
-                    onClick={() => setShowModelsModal(true)}
-                  >
-                    Manage Models…
-                  </button>
-                </div>
                 {renderSizeSelect(DRAWTHINGS_SIZES, localSizeIdx, setLocalSizeIdx)}
                 <div className="setting-row">
                   <label>steps</label>
@@ -348,22 +352,8 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
           </>
         )}
 
-        {/* Image count (OpenAI, FLUX, and Nano Banana) */}
-        {(backendId === 'openai' || backendId === 'flux' || backendId === 'nanobanana') && (
-          <div className="setting-row">
-            <label>images</label>
-            <input
-              type="number"
-              value={imageCount}
-              onChange={(e) => setImageCount(Math.max(1, parseInt(e.target.value) || 1))}
-              min={1}
-              max={10}
-            />
-          </div>
-        )}
-
         {apiKeyMissing && (
-          <div className="setting-row model-warning">API key not set — open Settings (⌘,)</div>
+          <div className="setting-row model-warning">API key not set</div>
         )}
 
         <button
@@ -415,40 +405,32 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 }
 
 function TaskItem({ task, backendId, onClick }: { task: Task; backendId: BackendId; onClick: () => void }): React.JSX.Element {
-  const [showMenu, setShowMenu] = useState(false)
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
 
-  const handleContextMenu = (e: React.MouseEvent): void => {
-    e.preventDefault()
-    setShowMenu(true)
-  }
+  useEffect(() => {
+    if (task.status !== 'completed' || !task.baseName) return
+    window.electronAPI.getImage(task.baseName).then((b64) => {
+      if (b64) setThumbUrl(`data:image/png;base64,${b64}`)
+    })
+  }, [task.status, task.baseName])
 
-  const handleRemove = (): void => {
-    setShowMenu(false)
+  const handleRemove = (e: React.MouseEvent): void => {
+    e.stopPropagation()
     window.electronAPI.removeTask(backendId, task.id)
   }
-
-  const handleDelete = (): void => {
-    setShowMenu(false)
+  const handleDelete = (e: React.MouseEvent): void => {
+    e.stopPropagation()
     window.electronAPI.deleteWithFiles(backendId, task.id)
   }
-
-  const handleRetry = (): void => {
-    setShowMenu(false)
+  const handleRetry = (e: React.MouseEvent): void => {
+    e.stopPropagation()
     window.electronAPI.retryTask(backendId, task.id)
   }
 
   return (
-    <div className="task-item" onClick={onClick} onContextMenu={handleContextMenu}>
-      {showMenu && (
-        <div className="context-menu" onMouseLeave={() => setShowMenu(false)}>
-          <button onClick={handleRemove}>Remove from queue</button>
-          {task.status === 'completed' && (
-            <button onClick={handleDelete}>Delete with files</button>
-          )}
-          {task.status === 'failed' && (
-            <button onClick={handleRetry}>Retry</button>
-          )}
-        </div>
+    <div className="task-item" onClick={onClick}>
+      {thumbUrl && (
+        <img className="task-thumbnail" src={thumbUrl} alt="" />
       )}
       <div className="task-prompt" title={task.prompt}>
         {task.prompt.length > 30 ? task.prompt.slice(0, 30) + '…' : task.prompt}
@@ -464,6 +446,17 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         </span>
         {task.estimatedCostUsd !== null && (
           <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
+        )}
+      </div>
+      <div className="task-actions">
+        {task.status !== 'generating' && (
+          <button className="task-btn" onClick={handleRemove} title="Remove from queue">×</button>
+        )}
+        {task.status === 'completed' && (
+          <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">🗑</button>
+        )}
+        {task.status === 'failed' && (
+          <button className="task-btn" onClick={handleRetry} title="Retry">↺</button>
         )}
       </div>
     </div>

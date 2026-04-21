@@ -6,7 +6,7 @@
 
 .left-pane {
   min-width: 280px;
-  max-width: 800px;
+  max-width: 1200px;
   display: flex;
   flex-direction: column;
   border-right: none;
@@ -144,7 +144,12 @@
   border-collapse: collapse;
   font-size: 13px;
   color: var(--text-primary);
-  padding: 8px 0;
+  padding: 8px 0 20px;
+}
+
+.shortcuts-body {
+  padding: 0;
+  overflow-y: auto;
 }
 
 .shortcuts-table td {
@@ -215,4 +220,13 @@
   flex: 1;
   display: flex;
   overflow-x: auto;
+}
+
+.about-link {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-link:hover {
+  text-decoration: underline;
 }

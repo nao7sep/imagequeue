@@ -58,8 +58,8 @@ export interface DrawThingsBackendConfig {
   models_dir: string
 }
 
-// Nano Banana uses the Google API key — no api_key field here.
 export interface NanoBananaBackendConfig {
+  api_key: string
   model: string
   concurrency: number
 }

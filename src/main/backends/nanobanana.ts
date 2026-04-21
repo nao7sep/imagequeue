@@ -8,10 +8,10 @@ import { log, logApiRequest, logApiResponse } from '../logger'
 // the first image part as a Buffer. Uses the Google API key from config.
 export async function generateNanoBanana(task: Task): Promise<Buffer> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.imagen.api_key)
+  const apiKey = decodeApiKey(config.image_backends.nanobanana.api_key)
 
   if (!apiKey) {
-    throw new Error('Google API key not configured (required for Nano Banana)')
+    throw new Error('Nano Banana API key not configured')
   }
 
   const ai = new GoogleGenAI({ apiKey })

@@ -3,7 +3,7 @@ import { useQueue } from '../context/QueueContext'
 import type { BackendId, Task } from '../../../shared/types'
 import './PromptPane.css'
 
-const BACKENDS: BackendId[] = ['openai', 'imagen', 'flux', 'drawthings']
+const BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'flux', 'drawthings']
 
 interface Props {
   selectedTask: Task | null
@@ -32,7 +32,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         handleSendToAll()
         return
       }
-      if (mod && e.key >= '1' && e.key <= '4') {
+      if (mod && e.key >= '1' && e.key <= '5') {
         e.preventDefault()
         const backend = BACKENDS[parseInt(e.key) - 1]
         window.dispatchEvent(
@@ -101,7 +101,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           value=""
           onChange={(e) => { if (e.target.value) onPromptChange(e.target.value) }}
         >
-          <option value="" disabled>History</option>
+          <option value="" disabled>↑ Recall</option>
           {promptHistory.map((p, i) => (
             <option key={i} value={p}>{p.length > 40 ? p.slice(0, 40) + '…' : p}</option>
           ))}
