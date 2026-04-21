@@ -1,7 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import path from 'path'
 import os from 'os'
-import { loadConfig, saveConfig, encodeApiKey } from './config'
+import { loadConfig, saveConfig, encodeApiKey, decodeApiKey } from './config'
 import { AppConfig } from './config/types'
 import { checkModelExists } from './backends'
 import {
@@ -18,19 +18,20 @@ import {
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:get', () => {
-    return loadConfig()
+    const config = loadConfig()
+    // Decode API keys so the renderer always sees plain text
+    config.text_ai.api_key = decodeApiKey(config.text_ai.api_key)
+    for (const backend of ['openai', 'imagen', 'nanobanana', 'flux'] as const) {
+      config.image_backends[backend].api_key = decodeApiKey(config.image_backends[backend].api_key)
+    }
+    return config
   })
 
   ipcMain.handle('settings:save', (_event, config: AppConfig) => {
-    // Encode API keys before persisting
-    if (config.text_ai.api_key && !isEncoded(config.text_ai.api_key)) {
-      config.text_ai.api_key = encodeApiKey(config.text_ai.api_key)
-    }
-    for (const backend of ['openai', 'imagen', 'flux'] as const) {
-      const key = config.image_backends[backend].api_key
-      if (key && !isEncoded(key)) {
-        config.image_backends[backend].api_key = encodeApiKey(key)
-      }
+    // Always encode API keys before persisting (renderer sends plain text)
+    config.text_ai.api_key = encodeApiKey(config.text_ai.api_key)
+    for (const backend of ['openai', 'imagen', 'nanobanana', 'flux'] as const) {
+      config.image_backends[backend].api_key = encodeApiKey(config.image_backends[backend].api_key)
     }
 
     saveConfig(config)
@@ -97,11 +98,4 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
     shell.openExternal(url)
   })
-}
-
-// Heuristic: encoded keys are valid base64 and decode to something that,
-// when reversed, looks like a typical API key prefix (sk-, AI, etc.).
-// Since encodeApiKey produces pure base64, we check if the value is already base64.
-function isEncoded(value: string): boolean {
-  return /^[A-Za-z0-9+/]+=*$/.test(value) && value.length > 20
 }

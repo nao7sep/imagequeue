@@ -17,6 +17,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const handleSave = async (): Promise<void> => {
     if (!config) return
     await window.electronAPI.saveSettings(config)
+    window.dispatchEvent(new CustomEvent('settings-saved'))
     setStatus('Saved')
     setTimeout(() => setStatus(''), 2000)
   }

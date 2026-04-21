@@ -95,7 +95,11 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
     }
     check()
     window.addEventListener('focus', check)
-    return () => window.removeEventListener('focus', check)
+    window.addEventListener('settings-saved', check)
+    return () => {
+      window.removeEventListener('focus', check)
+      window.removeEventListener('settings-saved', check)
+    }
   }, [backendId])
 
   // Check CLI status and load models on mount (local backend only)
@@ -455,15 +459,15 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         )}
       </div>
       <div className="task-actions">
-        <button className="task-btn" onClick={handleCopyPrompt} title="Copy prompt">⎘</button>
+        <button className="task-btn task-btn-copy" onClick={handleCopyPrompt} title="Copy prompt">copy</button>
         {task.status !== 'generating' && (
-          <button className="task-btn task-btn-danger" onClick={handleRemove} title="Remove from queue">×</button>
+          <button className="task-btn task-btn-warn" onClick={handleRemove} title="Remove from queue">rm</button>
         )}
         {task.status === 'completed' && (
           <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
         )}
         {task.status === 'failed' && (
-          <button className="task-btn" onClick={handleRetry} title="Retry">↺</button>
+          <button className="task-btn" onClick={handleRetry} title="Retry">retry</button>
         )}
       </div>
     </div>

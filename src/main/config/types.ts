@@ -67,9 +67,9 @@ export interface NanoBananaBackendConfig {
 export interface ImageBackendsConfig {
   openai: OpenAIBackendConfig
   imagen: ImagenBackendConfig
+  nanobanana: NanoBananaBackendConfig
   flux: FluxBackendConfig
   drawthings: DrawThingsBackendConfig
-  nanobanana: NanoBananaBackendConfig
 }
 
 export interface PromptsConfig {

@@ -31,6 +31,11 @@ export function createDefaultConfig(): AppConfig {
         },
         concurrency: 3
       },
+      nanobanana: {
+        api_key: '',
+        model: 'gemini-3.1-flash-image-preview',
+        concurrency: 3
+      },
       flux: {
         api_key: '',
         model: 'flux-2-max',
@@ -55,11 +60,6 @@ export function createDefaultConfig(): AppConfig {
           negativePrompt: ''
         },
         models_dir: '~/.imagequeue/models'
-      },
-      nanobanana: {
-        api_key: '',
-        model: 'gemini-3.1-flash-image-preview',
-        concurrency: 3
       }
     },
     prompts: {
