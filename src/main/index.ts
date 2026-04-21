@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
 import { initSession, getSessionDir } from './session'
@@ -56,36 +56,4 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   log('info', 'Session ended')
-})
-
-// Confirm close if tasks are pending or generating
-app.on('before-quit', (event) => {
-  const allTasks = queueManager.getAllTasks()
-  const hasPending = Object.values(allTasks).some((tasks) =>
-    tasks.some((t) => t.status === 'queued' || t.status === 'generating')
-  )
-
-  if (hasPending) {
-    const win = BrowserWindow.getFocusedWindow()
-    if (!win) return
-
-    const choice = dialog.showMessageBoxSync(win, {
-      type: 'warning',
-      buttons: ['Quit Anyway', 'Cancel'],
-      defaultId: 1,
-      title: 'Tasks in Progress',
-      message: 'Some tasks are still queued or generating. Quit anyway?'
-    })
-
-    if (choice === 1) {
-      event.preventDefault()
-    } else {
-      const activeTasks = Object.entries(allTasks).flatMap(([backend, tasks]) =>
-        tasks
-          .filter((t) => t.status === 'queued' || t.status === 'generating')
-          .map((t) => ({ id: t.id, backend, status: t.status }))
-      )
-      log('warn', 'Quitting with active tasks', { count: activeTasks.length, tasks: activeTasks })
-    }
-  }
 })
