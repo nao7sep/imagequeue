@@ -123,10 +123,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
           </section>
 
           <section className="dt-section">
-            <h3 className="dt-section-title">
-              Available
-              <span className="dt-hint-inline"> — returns here when Terminal finishes</span>
-            </h3>
+            <h3 className="dt-section-title">Available</h3>
             {loadingAvailable ? (
               <p className="dt-hint">Fetching catalog…</p>
             ) : notDownloaded.length === 0 ? (

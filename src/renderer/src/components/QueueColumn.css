@@ -240,9 +240,11 @@
 }
 
 .task-actions {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
   display: flex;
   gap: 4px;
-  margin-top: 4px;
   opacity: 0;
   transition: opacity 0.15s;
 }

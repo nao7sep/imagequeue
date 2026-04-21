@@ -4,7 +4,7 @@ export function createDefaultConfig(): AppConfig {
   return {
     text_ai: {
       backend: 'imagen',
-      model: 'gemini-3.1-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       api_key: ''
     },
     image_backends: {

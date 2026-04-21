@@ -178,8 +178,7 @@
 }
 
 .dt-search-row {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 16px 8px;
 }
 .dt-search-input {
   width: 100%;

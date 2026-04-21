@@ -102,17 +102,29 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
     if (backendId !== 'drawthings') return
-    window.electronAPI.localCheckCli().then((status) => {
-      setCliStatus(status)
-      if (status.installed) {
-        window.electronAPI.localListDownloadedModels().then((list) => {
-          setDownloadedModels(list)
-          if (list.length > 0 && !list.find((m) => m.file === model)) {
-            setModel(list[0].file)
-          }
-        })
-      }
-    })
+
+    const refresh = (isInitial = false): void => {
+      window.electronAPI.localCheckCli().then((status) => {
+        setCliStatus(status)
+        if (status.installed) {
+          window.electronAPI.localListDownloadedModels().then((list) => {
+            setDownloadedModels((prev) => {
+              const prevFiles = prev.map((m) => m.file).join(',')
+              const nextFiles = list.map((m) => m.file).join(',')
+              if (prevFiles === nextFiles) return prev
+              if (isInitial || list.length > 0) {
+                setModel((cur) => (list.find((m) => m.file === cur) ? cur : list[0]?.file ?? ''))
+              }
+              return list
+            })
+          })
+        }
+      })
+    }
+
+    refresh(true)
+    const id = window.setInterval(() => refresh(false), 5000)
+    return () => window.clearInterval(id)
   }, [backendId])
 
   useEffect(() => {
@@ -327,7 +339,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                   </div>
                 ) : (
                   <div className="setting-row model-warning">
-                    No models downloaded — open Manage Models from the menu.
+                    No models downloaded yet.
                   </div>
                 )}
                 {renderSizeSelect(DRAWTHINGS_SIZES, localSizeIdx, setLocalSizeIdx)}
@@ -433,7 +445,7 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         <img className="task-thumbnail" src={thumbUrl} alt="" />
       )}
       <div className="task-prompt" title={task.prompt}>
-        {task.prompt.length > 30 ? task.prompt.slice(0, 30) + '…' : task.prompt}
+        {task.prompt.length > 60 ? task.prompt.slice(0, 60) + '…' : task.prompt}
       </div>
       <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
         <span

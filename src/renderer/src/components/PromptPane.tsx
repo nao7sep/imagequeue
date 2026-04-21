@@ -101,7 +101,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           value=""
           onChange={(e) => { if (e.target.value) onPromptChange(e.target.value) }}
         >
-          <option value="" disabled>↑ Recall</option>
+          <option value="" disabled>History</option>
           {promptHistory.map((p, i) => (
             <option key={i} value={p}>{p.length > 40 ? p.slice(0, 40) + '…' : p}</option>
           ))}

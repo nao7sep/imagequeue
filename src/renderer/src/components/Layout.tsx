@@ -180,7 +180,7 @@ export function Layout(): React.JSX.Element {
       )}
       {overlay === 'shortcuts' && (
         <div className="modal-backdrop" onClick={() => setOverlay(null)}>
-          <div className="modal-box settings-modal-box" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span>Keyboard Shortcuts</span>
               <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
@@ -218,12 +218,12 @@ export function Layout(): React.JSX.Element {
             </div>
             <div className="about-content">
               <div className="about-name">ImageQueue</div>
-              <p style={{ marginTop: 4, marginBottom: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Version 0.1.0</p>
-              <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <p className="about-version">Version 0.1.0</p>
+              <p className="about-desc">
                 Multi-backend AI image generation queue.<br />
-                Your data stays on your machine.
+                Queue prompts to GPT Image, Imagen, Nano Banana, FLUX, and Draw Things.
               </p>
-              <div style={{ marginTop: 16, display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <div className="about-links">
                 <a
                   href="https://github.com/nao7sep/imagequeue"
                   target="_blank"
@@ -241,7 +241,7 @@ export function Layout(): React.JSX.Element {
                   Report Issue ↗
                 </a>
               </div>
-              <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+              <p className="about-copyright">
                 &copy; 2026 Yoshinao Inoguchi &mdash; MIT License
               </p>
             </div>
