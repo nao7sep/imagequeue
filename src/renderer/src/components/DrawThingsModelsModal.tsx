@@ -26,6 +26,15 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
 
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
   const loadDownloaded = async (): Promise<void> => {
     setLoadingDownloaded(true)
     const list = await window.electronAPI.localListDownloadedModels()
@@ -102,7 +111,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
             {loadingDownloaded ? (
               <p className="dt-hint">Loading…</p>
             ) : downloadedModels.length === 0 ? (
-              <p className="dt-hint">No models downloaded yet.</p>
+              <p className="dt-hint">No models downloaded yet</p>
             ) : (
               <ul className="dt-model-list">
                 {filteredDownloaded.map((m) => (

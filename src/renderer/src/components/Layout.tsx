@@ -186,25 +186,30 @@ export function Layout(): React.JSX.Element {
               <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
             </div>
             <div className="shortcuts-body">
-              <table className="shortcuts-table">
-                <tbody>
-                  <tr className="shortcuts-group"><td colSpan={2}>Sending</td></tr>
-                  <tr><td>⌘↵ / Ctrl+↵</td><td>Send prompt to all backends</td></tr>
-                  <tr><td>⌘1 / Ctrl+1</td><td>Send to GPT Image</td></tr>
-                  <tr><td>⌘2 / Ctrl+2</td><td>Send to Imagen</td></tr>
-                  <tr><td>⌘3 / Ctrl+3</td><td>Send to Nano Banana</td></tr>
-                  <tr><td>⌘4 / Ctrl+4</td><td>Send to FLUX</td></tr>
-                  <tr><td>⌘5 / Ctrl+5</td><td>Send to Draw Things</td></tr>
-                  <tr className="shortcuts-group"><td colSpan={2}>History</td></tr>
-                  <tr><td>⌘↑ / Ctrl+↑</td><td>Older prompt</td></tr>
-                  <tr><td>⌘↓ / Ctrl+↓</td><td>Newer prompt</td></tr>
-                  <tr className="shortcuts-group"><td colSpan={2}>Queue</td></tr>
-                  <tr><td>⌫</td><td>Remove selected task</td></tr>
-                  <tr className="shortcuts-group"><td colSpan={2}>App</td></tr>
-                  <tr><td>⌘, / Ctrl+,</td><td>Settings</td></tr>
-                  <tr><td>Esc</td><td>Close any open panel</td></tr>
-                </tbody>
-              </table>
+              <div className="shortcut-group">
+                <p className="shortcut-group-name">Sending</p>
+                <div className="shortcut-list">
+                  <div className="shortcut-item"><span>Send to all backends</span><kbd>⌘↵</kbd></div>
+                  <div className="shortcut-item"><span>Send to GPT Image</span><kbd>⌘1</kbd></div>
+                  <div className="shortcut-item"><span>Send to Imagen</span><kbd>⌘2</kbd></div>
+                  <div className="shortcut-item"><span>Send to Nano Banana</span><kbd>⌘3</kbd></div>
+                  <div className="shortcut-item"><span>Send to FLUX</span><kbd>⌘4</kbd></div>
+                  <div className="shortcut-item"><span>Send to Draw Things</span><kbd>⌘5</kbd></div>
+                </div>
+              </div>
+              <div className="shortcut-group">
+                <p className="shortcut-group-name">Queue</p>
+                <div className="shortcut-list">
+                  <div className="shortcut-item"><span>Remove selected task</span><kbd>⌫</kbd></div>
+                </div>
+              </div>
+              <div className="shortcut-group">
+                <p className="shortcut-group-name">App</p>
+                <div className="shortcut-list">
+                  <div className="shortcut-item"><span>Settings</span><kbd>⌘,</kbd></div>
+                  <div className="shortcut-item"><span>Close open panel</span><kbd>Esc</kbd></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -219,10 +224,7 @@ export function Layout(): React.JSX.Element {
             <div className="about-content">
               <div className="about-name">ImageQueue</div>
               <p className="about-version">Version 0.1.0</p>
-              <p className="about-desc">
-                Multi-backend AI image generation queue.<br />
-                Queue prompts to GPT Image, Imagen, Nano Banana, FLUX, and Draw Things.
-              </p>
+              <p className="about-desc">Multi-backend AI image generation queue.</p>
               <div className="about-links">
                 <a
                   href="https://github.com/nao7sep/imagequeue"

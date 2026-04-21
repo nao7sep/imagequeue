@@ -56,10 +56,6 @@ export function registerQueueIpc(): void {
     queueManager.reorderTasks(backend, taskIds)
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
-
-  ipcMain.handle('queue:getPromptHistory', () => {
-    return queueManager.getPromptHistory()
-  })
 }
 
 function notifyAllWindows(channel: string, data: unknown): void {

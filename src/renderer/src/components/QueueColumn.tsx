@@ -76,7 +76,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   // Local params
   const [localSizeIdx, setLocalSizeIdx] = useState(2) // 1024x1024
   const [localSteps, setLocalSteps] = useState(4)
-  const [localCfg, setLocalCfg] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
@@ -146,7 +145,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
       const m = DRAWTHINGS_MODELS.find((d) => d.filename === model)
       if (m) {
         setLocalSteps(m.stepsRange.default)
-        setLocalCfg(m.guidanceRange.default)
       }
     }
   }, [backendId, model])
@@ -169,7 +167,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
       if (fluxSeed) params.seed = parseInt(fluxSeed)
     } else if (backendId === 'drawthings') {
       const size = DRAWTHINGS_SIZES[localSizeIdx]
-      params = { width: size.width, height: size.height, steps: localSteps, cfg: localCfg }
+      params = { width: size.width, height: size.height, steps: localSteps }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
     } else if (backendId === 'nanobanana') {
@@ -182,7 +180,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   }, [backendId, model, quality, outputFormat, background, openaiSizeIdx,
       aspectRatio, imageSize, personGeneration, numberOfImages,
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
-      localSizeIdx, localSteps, localCfg, localSeed, negativePrompt,
+      localSizeIdx, localSteps, localSeed, negativePrompt,
       apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
@@ -339,17 +337,13 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                   </div>
                 ) : (
                   <div className="setting-row model-warning">
-                    No models downloaded yet.
+                    No models downloaded yet
                   </div>
                 )}
                 {renderSizeSelect(DRAWTHINGS_SIZES, localSizeIdx, setLocalSizeIdx)}
                 <div className="setting-row">
                   <label>steps</label>
                   <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
-                </div>
-                <div className="setting-row">
-                  <label>cfg</label>
-                  <input type="number" value={localCfg} onChange={(e) => setLocalCfg(Math.max(0, parseFloat(e.target.value) || 0))} min={0} max={20} step={0.5} />
                 </div>
                 <div className="setting-row">
                   <label>seed</label>
@@ -383,11 +377,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 
       <div className="task-list">
         {columnTasks.length === 0 ? (
-          <div className="task-list-empty">
-            {backendId === 'drawthings'
-              ? 'Draw Things — sequential processing only'
-              : 'No tasks queued'}
-          </div>
+          <div className="task-list-empty">No tasks queued</div>
         ) : (
           columnTasks.map((task) => (
             <TaskItem
@@ -438,6 +428,10 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
     e.stopPropagation()
     window.electronAPI.retryTask(backendId, task.id)
   }
+  const handleCopyPrompt = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(task.prompt)
+  }
 
   return (
     <div className="task-item" onClick={onClick}>
@@ -445,7 +439,7 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         <img className="task-thumbnail" src={thumbUrl} alt="" />
       )}
       <div className="task-prompt" title={task.prompt}>
-        {task.prompt.length > 60 ? task.prompt.slice(0, 60) + '…' : task.prompt}
+        {task.prompt}
       </div>
       <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
         <span
@@ -461,11 +455,12 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
         )}
       </div>
       <div className="task-actions">
+        <button className="task-btn" onClick={handleCopyPrompt} title="Copy prompt">⎘</button>
         {task.status !== 'generating' && (
-          <button className="task-btn" onClick={handleRemove} title="Remove from queue">×</button>
+          <button className="task-btn task-btn-danger" onClick={handleRemove} title="Remove from queue">×</button>
         )}
         {task.status === 'completed' && (
-          <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">🗑</button>
+          <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
         )}
         {task.status === 'failed' && (
           <button className="task-btn" onClick={handleRetry} title="Retry">↺</button>

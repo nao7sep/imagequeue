@@ -46,9 +46,6 @@ const api = {
   reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
 
-  getPromptHistory: (): Promise<string[]> =>
-    ipcRenderer.invoke('queue:getPromptHistory'),
-
   // Preview operations
   getImage: (baseName: string): Promise<string | null> =>
     ipcRenderer.invoke('preview:getImage', baseName),

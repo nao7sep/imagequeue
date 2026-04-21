@@ -12,8 +12,6 @@ class QueueManager {
     nanobanana: []
   }
 
-  private promptHistory: string[] = []
-
   enqueue(request: EnqueueRequest): Task[] {
     const tasks: Task[] = []
 
@@ -39,11 +37,6 @@ class QueueManager {
       tasks.push(task)
     }
 
-    // Track unique prompts for history
-    if (!this.promptHistory.includes(request.prompt)) {
-      this.promptHistory.push(request.prompt)
-    }
-
     return tasks
   }
 
@@ -66,10 +59,6 @@ class QueueManager {
   reorderTasks(backend: BackendId, taskIds: string[]): void {
     const taskMap = new Map(this.queues[backend].map((t) => [t.id, t]))
     this.queues[backend] = taskIds.map((id) => taskMap.get(id)!).filter(Boolean)
-  }
-
-  getPromptHistory(): string[] {
-    return [...this.promptHistory]
   }
 }
 

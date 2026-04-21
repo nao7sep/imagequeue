@@ -43,15 +43,6 @@
   border-color: var(--accent);
 }
 
-.history-select {
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 12px;
-}
-
 .prompt-actions .send-all {
   background: var(--accent);
   border-color: var(--accent);

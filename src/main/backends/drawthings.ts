@@ -34,9 +34,6 @@ async function generateDrawThingsCli(task: Task): Promise<Buffer> {
   if (task.params.seed != null && (task.params.seed as number) > 0) {
     args.push('--seed', String(task.params.seed))
   }
-  if (task.params.cfg != null && (task.params.cfg as number) > 0) {
-    args.push('--cfg', String(task.params.cfg))
-  }
   if (task.params.negativePrompt) {
     args.push('--negative-prompt', String(task.params.negativePrompt))
   }
@@ -47,7 +44,6 @@ async function generateDrawThingsCli(task: Task): Promise<Buffer> {
     width: task.params.width,
     height: task.params.height,
     seed: task.params.seed,
-    cfg: task.params.cfg,
     negativePrompt: task.params.negativePrompt
   })
   const startTime = Date.now()

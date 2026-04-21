@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useQueue } from '../context/QueueContext'
+import { useCallback, useEffect } from 'react'
 import type { BackendId, Task } from '../../../shared/types'
 import './PromptPane.css'
 
@@ -13,10 +12,6 @@ interface Props {
 }
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
-  const [historyIndex, setHistoryIndex] = useState(-1)
-  const draftRef = useRef('')
-  const { promptHistory } = useQueue()
-
   const handleSendToAll = useCallback(() => {
     if (!prompt.trim()) return
     window.dispatchEvent(new CustomEvent('enqueue-all', { detail: { prompt: prompt.trim() } }))
@@ -40,29 +35,10 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         )
         return
       }
-      if (mod && e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (promptHistory.length === 0) return
-        if (historyIndex === -1) draftRef.current = prompt
-        const next = Math.min(historyIndex + 1, promptHistory.length - 1)
-        if (next !== historyIndex) {
-          setHistoryIndex(next)
-          onPromptChange(promptHistory[next])
-        }
-        return
-      }
-      if (mod && e.key === 'ArrowDown') {
-        e.preventDefault()
-        if (historyIndex <= -1) return
-        const next = historyIndex - 1
-        setHistoryIndex(next)
-        onPromptChange(next === -1 ? draftRef.current : promptHistory[next])
-        return
-      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [prompt, historyIndex, promptHistory, handleSendToAll])
+  }, [prompt, handleSendToAll])
 
   // Handle "+ Queue" button requests from QueueColumn
   useEffect(() => {
@@ -78,34 +54,19 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     return () => window.removeEventListener('request-enqueue', handler)
   }, [prompt])
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
-    onPromptChange(e.target.value)
-    if (historyIndex !== -1) setHistoryIndex(-1)
-  }
-
   return (
     <div className="prompt-pane">
       <textarea
         className="prompt-textarea"
         placeholder="Enter your image prompt..."
         value={prompt}
-        onChange={handleChange}
+        onChange={(e) => onPromptChange(e.target.value)}
       />
 
       <div className="prompt-actions">
         <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
           Send to All
         </button>
-        <select
-          className="history-select"
-          value=""
-          onChange={(e) => { if (e.target.value) onPromptChange(e.target.value) }}
-        >
-          <option value="" disabled>History</option>
-          {promptHistory.map((p, i) => (
-            <option key={i} value={p}>{p.length > 40 ? p.slice(0, 40) + '…' : p}</option>
-          ))}
-        </select>
       </div>
 
       <div className="preview-area">
