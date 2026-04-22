@@ -1,10 +1,18 @@
 .queue-column {
-  flex: 1;
-  min-width: 200px;
+  width: 220px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
 }
+
+/* Per-backend accent colors */
+[data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; }
+[data-backend="imagen"]     { --col-accent: #f97316; --col-accent-hover: #fb923c; }
+[data-backend="grok"]       { --col-accent: #a855f7; --col-accent-hover: #c084fc; }
+[data-backend="flux"]       { --col-accent: #06b6d4; --col-accent-hover: #22d3ee; }
+[data-backend="nanobanana"] { --col-accent: #eab308; --col-accent-hover: #facc15; }
+[data-backend="drawthings"] { --col-accent: #f59e0b; --col-accent-hover: #fbbf24; }
 
 .queue-column:last-child {
   border-right: none;
@@ -13,7 +21,12 @@
 .column-header {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  border-top: 3px solid var(--col-accent, var(--accent));
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--col-accent, var(--accent)) 18%, var(--bg-secondary)),
+    var(--bg-secondary)
+  );
   font-weight: 600;
   font-size: 14px;
   text-align: center;
@@ -56,16 +69,16 @@
   width: 100%;
   padding: 8px;
   margin-top: 4px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--col-accent, var(--accent));
   border-radius: 4px;
   background: transparent;
-  color: var(--accent);
+  color: var(--col-accent, var(--accent));
   font-weight: 600;
   font-size: 13px;
 }
 
 .enqueue-btn:hover:not(:disabled) {
-  background: var(--accent);
+  background: var(--col-accent, var(--accent));
   color: #fff;
 }
 
@@ -97,7 +110,7 @@
 }
 
 .task-item:hover {
-  border-color: var(--accent);
+  border-color: var(--col-accent, var(--accent));
 }
 
 .task-prompt {
@@ -155,7 +168,7 @@
 }
 
 .context-menu button:hover {
-  background: var(--accent);
+  background: var(--col-accent, var(--accent));
 }
 
 .model-warning {
@@ -187,7 +200,7 @@
 
 .open-models-btn:hover {
   color: var(--text-primary);
-  border-color: var(--accent);
+  border-color: var(--col-accent, var(--accent));
 }
 
 .available-models-list {
@@ -224,14 +237,14 @@
   border: 1px solid var(--border);
   border-radius: 3px;
   background: var(--bg-surface);
-  color: var(--accent);
+  color: var(--col-accent, var(--accent));
   font-size: 12px;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .download-btn:hover:not(:disabled) {
-  background: var(--accent);
+  background: var(--col-accent, var(--accent));
   color: white;
 }
 
@@ -266,8 +279,8 @@
   background: var(--bg-surface);
 }
 .task-btn-copy:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--col-accent, var(--accent));
+  border-color: var(--col-accent, var(--accent));
   background: var(--bg-surface);
 }
 .task-btn-warn:hover {

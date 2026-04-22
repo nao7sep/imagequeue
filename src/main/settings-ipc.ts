@@ -44,13 +44,6 @@ export function registerSettingsIpc(): void {
     return checkModelExists(filename)
   })
 
-  ipcMain.handle('settings:saveUi', (_event, ui: { leftPaneWidth: number }) => {
-    const config = loadConfig()
-    config.ui = { ...config.ui, ...ui }
-    saveConfig(config)
-    return { success: true }
-  })
-
   // --- Draw Things CLI integration ---
 
   ipcMain.handle('local:checkCli', async () => {

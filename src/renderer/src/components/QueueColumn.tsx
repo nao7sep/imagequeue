@@ -215,7 +215,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 
   return (
     <>
-    <div className="queue-column">
+    <div className="queue-column" data-backend={backendId}>
       <div className="column-header">{label}</div>
 
       <div className="column-settings">

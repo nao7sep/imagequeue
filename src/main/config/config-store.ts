@@ -57,8 +57,7 @@ export function loadConfig(): AppConfig {
   cachedConfig = {
     ...defaults,
     ...loaded,
-    image_backends: mergedBackends as unknown as AppConfig['image_backends'],
-    ui: { ...defaults.ui, ...(loaded.ui || {}) }
+    image_backends: mergedBackends as unknown as AppConfig['image_backends']
   }
   return cachedConfig
 }

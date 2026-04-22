@@ -5,7 +5,6 @@ import { Settings } from './Settings'
 import type { Task } from '../../../shared/types'
 import './Layout.css'
 import { useQueue } from '../context/QueueContext'
-import { useSettings } from '../context/SettingsContext'
 
 const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'GPT Image' },
@@ -21,51 +20,16 @@ const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform =
   ? ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
   : ALL_BACKENDS
 
-const DEFAULT_LEFT_WIDTH = 360
-const MIN_LEFT_WIDTH = 280
-const MIN_COLUMN_WIDTH = 200
-const RESIZE_HANDLE_WIDTH = 5
-
-function clampLeftWidth(w: number): number {
-  const minRight = MIN_COLUMN_WIDTH
-  const maxAllowed = Math.max(MIN_LEFT_WIDTH, window.innerWidth - minRight - RESIZE_HANDLE_WIDTH)
-  return Math.max(MIN_LEFT_WIDTH, Math.min(maxAllowed, w))
-}
-
 type Overlay = 'settings' | 'shortcuts' | 'about' | null
 
 export function Layout(): React.JSX.Element {
   const { tasks } = useQueue()
-  const { settings } = useSettings()
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [showMenu, setShowMenu] = useState(false)
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH)
-  const isDragging = useRef(false)
-  const latestWidth = useRef(DEFAULT_LEFT_WIDTH)
   const menuRef = useRef<HTMLDivElement>(null)
-  const widthInitialized = useRef(false)
-
-  // Initialize pane width from settings once they load (runs only on first non-null value)
-  useEffect(() => {
-    if (!settings || widthInitialized.current) return
-    widthInitialized.current = true
-    const ui = settings.ui as { leftPaneWidth?: number } | undefined
-    const saved = ui?.leftPaneWidth ?? DEFAULT_LEFT_WIDTH
-    setLeftWidth(clampLeftWidth(saved))
-    latestWidth.current = clampLeftWidth(saved)
-  }, [settings])
-
-  // Shrink left pane if window becomes too small to show all columns
-  useEffect(() => {
-    const onResize = (): void => {
-      setLeftWidth((w) => clampLeftWidth(w))
-    }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -111,33 +75,6 @@ export function Layout(): React.JSX.Element {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [selectedTask])
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isDragging.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    const onMouseMove = (ev: MouseEvent): void => {
-      if (!isDragging.current) return
-      const newWidth = clampLeftWidth(ev.clientX)
-      setLeftWidth(newWidth)
-      latestWidth.current = newWidth
-    }
-
-    const onMouseUp = (): void => {
-      isDragging.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      // Persist to config
-      window.electronAPI.saveUi({ leftPaneWidth: latestWidth.current })
-    }
-
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [])
 
   const handleSelectTask = useCallback((task: Task) => {
     setSelectedTask(task)
@@ -256,7 +193,7 @@ export function Layout(): React.JSX.Element {
           </div>
         </div>
       )}
-      <div className="left-pane" style={{ width: leftWidth }}>
+      <div className="left-pane">
         <div className="pane-toolbar">
           <span className="app-name">ImageQueue</span>
           <div className="menu-anchor" ref={menuRef}>
@@ -285,7 +222,6 @@ export function Layout(): React.JSX.Element {
             onPromptChange={setPrompt}
           />
       </div>
-      <div className="resize-handle" onMouseDown={handleMouseDown} />
       <div className="right-pane">
         {BACKENDS.map((b) => (
           <QueueColumn

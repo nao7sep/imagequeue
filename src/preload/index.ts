@@ -63,9 +63,6 @@ const api = {
   checkLocalModel: (filename: string): Promise<boolean> =>
     ipcRenderer.invoke('settings:checkLocalModel', filename),
 
-  saveUi: (ui: { leftPaneWidth: number }): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveUi', ui),
-
   // Draw Things CLI operations (macOS only)
   localCheckCli: (): Promise<CliStatus> =>
     ipcRenderer.invoke('local:checkCli'),
