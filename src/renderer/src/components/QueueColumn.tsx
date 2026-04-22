@@ -11,7 +11,6 @@ import {
   GROK_RESOLUTIONS,
   FLUX_SIZES,
   DRAWTHINGS_SIZES,
-  DRAWTHINGS_MODELS,
   type OpenAIModelDef,
   type ImagenModelDef,
   type NanoBananaModelDef,
@@ -61,7 +60,8 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDesel
   const { tasks, enqueue } = useQueue()
   const { settings } = useSettings()
   const models = getModelsForBackend(backendId as 'openai')
-  const [model, setModel] = useState(models[0].id)
+  const defaultModel = models.find((m) => m.isDefault) ?? models[0]
+  const [model, setModel] = useState(defaultModel?.id ?? '')
 
   // For openai: the full model definition, used to drive dynamic size/quality/background options
   const openaiModelDef = useMemo(
@@ -184,12 +184,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDesel
       if (m) {
         if (m.stepsRange) setFluxSteps(m.stepsRange.default)
         if (m.guidanceRange) setFluxGuidance(m.guidanceRange.default)
-      }
-    } else if (backendId === 'drawthings') {
-      const m = DRAWTHINGS_MODELS.find((d) => d.filename === model)
-      if (m) {
-        setLocalSteps(m.stepsRange.default)
-        setLocalGuidance(m.guidanceRange.default)
       }
     }
   }, [backendId, model])

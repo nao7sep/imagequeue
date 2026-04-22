@@ -93,6 +93,20 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           {selectedTask.durationMs !== null && (
             <div><strong>time:</strong> {(selectedTask.durationMs / 1000).toFixed(1)}s</div>
           )}
+          {(() => {
+            const p = selectedTask.params
+            const rows: React.ReactNode[] = []
+            if (p.width != null && p.height != null) {
+              rows.push(<div key="size"><strong>size:</strong> {String(p.width)}×{String(p.height)}</div>)
+            }
+            const skip = new Set(['width', 'height'])
+            const labelMap: Record<string, string> = { guidance: 'cfg', outputFormat: 'format', negativePrompt: 'negative', personGeneration: 'persons', aspectRatio: 'aspect', imageSize: 'imgSize' }
+            for (const [k, v] of Object.entries(p)) {
+              if (skip.has(k) || v == null || v === '') continue
+              rows.push(<div key={k}><strong>{labelMap[k] ?? k}:</strong> {String(v)}</div>)
+            }
+            return rows
+          })()}
         </div>
       )}
     </div>

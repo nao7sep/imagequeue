@@ -91,6 +91,7 @@ export interface ModelDef {
   id: string
   label: string
   backend: BackendId
+  isDefault?: boolean
 }
 
 export interface OpenAIModelDef extends ModelDef {
@@ -118,14 +119,6 @@ export interface FluxModelDef extends ModelDef {
   stepsRange?: { min: number; max: number; default: number }
   guidanceRange?: { min: number; max: number; default: number }
   pricing: { firstMp: number; additionalMp: number }
-}
-
-export interface DrawThingsModelDef extends ModelDef {
-  backend: 'drawthings'
-  sizes: SizePreset[]
-  stepsRange: { min: number; max: number; default: number }
-  guidanceRange: { min: number; max: number; default: number }
-  filename: string
 }
 
 // Nano Banana (Gemini native image generation) aspect ratios and sizes.
@@ -214,6 +207,7 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     id: 'gpt-image-2',
     label: 'GPT Image 2',
     backend: 'openai',
+    isDefault: true,
     qualities: ['low', 'medium', 'high', 'auto'],
     sizes: OPENAI_SIZES_GPT2,
     outputFormats: ['png', 'jpeg', 'webp'],
@@ -272,26 +266,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
 
 export const IMAGEN_MODELS: ImagenModelDef[] = [
   {
-    id: 'imagen-4.0-fast-generate-001',
-    label: 'Imagen 4 Fast',
-    backend: 'imagen',
-    aspectRatios: IMAGEN_ASPECT_RATIOS,
-    imageSizes: IMAGEN_IMAGE_SIZES,
-    supportsImageSize: false,
-    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-    pricing: 0.02
-  },
-  {
-    id: 'imagen-4.0-generate-001',
-    label: 'Imagen 4',
-    backend: 'imagen',
-    aspectRatios: IMAGEN_ASPECT_RATIOS,
-    imageSizes: IMAGEN_IMAGE_SIZES,
-    supportsImageSize: true,
-    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-    pricing: 0.04
-  },
-  {
     id: 'imagen-4.0-ultra-generate-001',
     label: 'Imagen 4 Ultra',
     backend: 'imagen',
@@ -300,6 +274,27 @@ export const IMAGEN_MODELS: ImagenModelDef[] = [
     supportsImageSize: true,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
     pricing: 0.06
+  },
+  {
+    id: 'imagen-4.0-generate-001',
+    label: 'Imagen 4',
+    backend: 'imagen',
+    isDefault: true,
+    aspectRatios: IMAGEN_ASPECT_RATIOS,
+    imageSizes: IMAGEN_IMAGE_SIZES,
+    supportsImageSize: true,
+    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
+    pricing: 0.04
+  },
+  {
+    id: 'imagen-4.0-fast-generate-001',
+    label: 'Imagen 4 Fast',
+    backend: 'imagen',
+    aspectRatios: IMAGEN_ASPECT_RATIOS,
+    imageSizes: IMAGEN_IMAGE_SIZES,
+    supportsImageSize: false,
+    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
+    pricing: 0.02
   }
 ]
 
@@ -317,6 +312,7 @@ export const FLUX_MODELS: FluxModelDef[] = [
     id: 'flux-2-pro',
     label: 'FLUX.2 Pro',
     backend: 'flux',
+    isDefault: true,
     sizes: FLUX_SIZES,
     pricing: { firstMp: 0.03, additionalMp: 0.015 }
   },
@@ -346,89 +342,11 @@ export const FLUX_MODELS: FluxModelDef[] = [
   }
 ]
 
-// --- Draw Things models ---
-
-export const DRAWTHINGS_MODELS: DrawThingsModelDef[] = [
-  {
-    id: 'flux_1_schnell_q5p.ckpt',
-    label: 'FLUX.1 Schnell (Q5P)',
-    backend: 'drawthings',
-    sizes: DRAWTHINGS_SIZES,
-    stepsRange: { min: 1, max: 20, default: 4 },
-    guidanceRange: { min: 1, max: 20, default: 1 },
-    filename: 'flux_1_schnell_q5p.ckpt'
-  },
-  {
-    id: 'flux_1_schnell_q8p.ckpt',
-    label: 'FLUX.1 Schnell (Q8P)',
-    backend: 'drawthings',
-    sizes: DRAWTHINGS_SIZES,
-    stepsRange: { min: 1, max: 20, default: 4 },
-    guidanceRange: { min: 1, max: 20, default: 1 },
-    filename: 'flux_1_schnell_q8p.ckpt'
-  },
-  {
-    id: 'flux_1_dev_q8p.ckpt',
-    label: 'FLUX.1 Dev (Q8P)',
-    backend: 'drawthings',
-    sizes: DRAWTHINGS_SIZES,
-    stepsRange: { min: 1, max: 50, default: 20 },
-    guidanceRange: { min: 1, max: 20, default: 3.5 },
-    filename: 'flux_1_dev_q8p.ckpt'
-  },
-  {
-    id: 'flux_2_klein_4b_q6p.ckpt',
-    label: 'FLUX.2 Klein 4B (Q6P)',
-    backend: 'drawthings',
-    sizes: DRAWTHINGS_SIZES,
-    stepsRange: { min: 1, max: 50, default: 4 },
-    guidanceRange: { min: 1, max: 20, default: 1 },
-    filename: 'flux_2_klein_4b_q6p.ckpt'
-  },
-  {
-    id: 'sd3_medium_q6p.ckpt',
-    label: 'SD3 Medium (Q6P)',
-    backend: 'drawthings',
-    sizes: DRAWTHINGS_SIZES,
-    stepsRange: { min: 1, max: 50, default: 28 },
-    guidanceRange: { min: 1, max: 20, default: 7 },
-    filename: 'sd3_medium_q6p.ckpt'
-  },
-  {
-    id: 'sdxl_base_v1.0_q6p.ckpt',
-    label: 'SDXL Base 1.0 (Q6P)',
-    backend: 'drawthings',
-    sizes: DRAWTHINGS_SIZES,
-    stepsRange: { min: 1, max: 50, default: 30 },
-    guidanceRange: { min: 1, max: 20, default: 7 },
-    filename: 'sdxl_base_v1.0_q6p.ckpt'
-  }
-]
+// --- Draw Things sizes ---
 
 // --- Nano Banana (Gemini native image generation) models ---
 
 export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
-  {
-    id: 'gemini-2.5-flash-image',
-    label: 'Nano Banana',
-    backend: 'nanobanana',
-    supportsImageConfig: false,
-    aspectRatios: [],
-    imageSizes: [],
-    pricing: { '1K': 0.067 }  // flat rate, imageConfig not supported by this model
-  },
-  {
-    id: 'gemini-3.1-flash-image-preview',
-    label: 'Nano Banana 2',
-    backend: 'nanobanana',
-    supportsImageConfig: true,
-    aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
-    imageSizes: NANO_BANANA_SIZES_FLASH2,
-    // Per-image pricing from documented token counts × $60/1M tokens
-    // 512→747 tokens, 1K→1120, 2K→1680, 4K→2520
-    // Source: https://ai.google.dev/gemini-api/docs/pricing
-    pricing: { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 }
-  },
   {
     id: 'gemini-3-pro-image-preview',
     label: 'Nano Banana Pro',
@@ -439,6 +357,28 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     // 1K and 2K both use 1120 tokens at $120/1M; 4K uses 2000 tokens
     // Source: https://ai.google.dev/gemini-api/docs/pricing
     pricing: { '1K': 0.134, '2K': 0.134, '4K': 0.24 }
+  },
+  {
+    id: 'gemini-3.1-flash-image-preview',
+    label: 'Nano Banana 2',
+    backend: 'nanobanana',
+    isDefault: true,
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
+    imageSizes: NANO_BANANA_SIZES_FLASH2,
+    // Per-image pricing from documented token counts × $60/1M tokens
+    // 512→747 tokens, 1K→1120, 2K→1680, 4K→2520
+    // Source: https://ai.google.dev/gemini-api/docs/pricing
+    pricing: { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 }
+  },
+  {
+    id: 'gemini-2.5-flash-image',
+    label: 'Nano Banana',
+    backend: 'nanobanana',
+    supportsImageConfig: false,
+    aspectRatios: [],
+    imageSizes: [],
+    pricing: { '1K': 0.067 }  // flat rate, imageConfig not supported by this model
   }
 ]
 
@@ -446,16 +386,17 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
 
 export const GROK_MODELS: GrokModelDef[] = [
   {
-    id: 'grok-imagine-image',
-    label: 'Grok Imagine',
-    backend: 'grok',
-    pricing: 0.02
-  },
-  {
     id: 'grok-imagine-image-pro',
     label: 'Grok Imagine Pro',
     backend: 'grok',
     pricing: 0.07
+  },
+  {
+    id: 'grok-imagine-image',
+    label: 'Grok Imagine',
+    backend: 'grok',
+    isDefault: true,
+    pricing: 0.02
   }
 ]
 
@@ -495,7 +436,6 @@ export function getModelsForBackend(backend: 'imagen'): ImagenModelDef[]
 export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
 export function getModelsForBackend(backend: 'grok'): GrokModelDef[]
 export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
-export function getModelsForBackend(backend: 'drawthings'): DrawThingsModelDef[]
 export function getModelsForBackend(backend: BackendId): ModelDef[] {
   switch (backend) {
     case 'openai': return OPENAI_MODELS
@@ -503,7 +443,7 @@ export function getModelsForBackend(backend: BackendId): ModelDef[] {
     case 'nanobanana': return NANO_BANANA_MODELS
     case 'grok': return GROK_MODELS
     case 'flux': return FLUX_MODELS
-    case 'drawthings': return DRAWTHINGS_MODELS
+    default: return []
   }
 }
 
@@ -512,7 +452,6 @@ export function findModel(backend: 'imagen', modelId: string): ImagenModelDef | 
 export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
 export function findModel(backend: 'grok', modelId: string): GrokModelDef | undefined
 export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined
-export function findModel(backend: 'drawthings', modelId: string): DrawThingsModelDef | undefined
 export function findModel(backend: BackendId, modelId: string): ModelDef | undefined {
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
