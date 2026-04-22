@@ -6,6 +6,7 @@ export interface TextAIConfig {
   backend: TextAIBackendId
   model: string
   api_key: string
+  timeout_ms: number
 }
 
 export interface OpenAIBackendConfig {
@@ -19,6 +20,7 @@ export interface OpenAIBackendConfig {
     background: 'opaque' | 'transparent'
   }
   concurrency: number
+  timeout_ms: number
 }
 
 export interface ImagenBackendConfig {
@@ -31,6 +33,7 @@ export interface ImagenBackendConfig {
     numberOfImages: number
   }
   concurrency: number
+  timeout_ms: number
 }
 
 export interface FluxBackendConfig {
@@ -44,6 +47,7 @@ export interface FluxBackendConfig {
     seed: number | null
   }
   concurrency: number
+  timeout_ms: number
 }
 
 export interface DrawThingsBackendConfig {
@@ -64,6 +68,7 @@ export interface NanoBananaBackendConfig {
   api_key: string
   model: string
   concurrency: number
+  timeout_ms: number
 }
 
 export interface GrokBackendConfig {
@@ -73,6 +78,7 @@ export interface GrokBackendConfig {
     aspectRatio: string
   }
   concurrency: number
+  timeout_ms: number
 }
 
 export interface ImageBackendsConfig {

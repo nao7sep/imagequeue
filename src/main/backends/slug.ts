@@ -19,7 +19,7 @@ export async function generateSlug(prompt: string): Promise<string> {
     case 'gemini': {
       try {
         const systemPrompt = config.prompts.slug.replace('{{prompt}}', prompt)
-        const ai = new GoogleGenAI({ apiKey })
+        const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.text_ai.timeout_ms } })
 
         const response = await ai.models.generateContent({
           model,
@@ -38,7 +38,8 @@ export async function generateSlug(prompt: string): Promise<string> {
         })
         return nanoid(10)
       } catch (err) {
-        log('warn', 'Slug AI call failed, falling back to nanoid', {
+        const isTimeout = err instanceof Error && err.name === 'AbortError'
+        log('warn', isTimeout ? 'Slug AI timed out, falling back to nanoid' : 'Slug AI call failed, falling back to nanoid', {
           backend, model,
           message: err instanceof Error ? err.message : String(err)
         })

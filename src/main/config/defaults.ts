@@ -5,7 +5,8 @@ export function createDefaultConfig(): AppConfig {
     text_ai: {
       backend: 'gemini',
       model: 'gemini-3.1-flash-lite-preview',
-      api_key: ''
+      api_key: '',
+      timeout_ms: 30000
     },
     image_backends: {
       openai: {
@@ -18,7 +19,8 @@ export function createDefaultConfig(): AppConfig {
           outputFormat: 'png',
           background: 'opaque'
         },
-        concurrency: 3
+        concurrency: 3,
+        timeout_ms: 180000
       },
       imagen: {
         api_key: '',
@@ -29,12 +31,14 @@ export function createDefaultConfig(): AppConfig {
           personGeneration: 'allow_adult',
           numberOfImages: 1
         },
-        concurrency: 3
+        concurrency: 3,
+        timeout_ms: 180000
       },
       nanobanana: {
         api_key: '',
         model: 'gemini-3.1-flash-image-preview',
-        concurrency: 3
+        concurrency: 3,
+        timeout_ms: 180000
       },
       grok: {
         api_key: '',
@@ -42,7 +46,8 @@ export function createDefaultConfig(): AppConfig {
         default_params: {
           aspectRatio: '1:1'
         },
-        concurrency: 3
+        concurrency: 3,
+        timeout_ms: 180000
       },
       flux: {
         api_key: '',
@@ -54,7 +59,8 @@ export function createDefaultConfig(): AppConfig {
           height: 1024,
           seed: null
         },
-        concurrency: 3
+        concurrency: 3,
+        timeout_ms: 180000
       },
       drawthings: {
         cli_path: '',

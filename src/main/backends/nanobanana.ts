@@ -15,7 +15,7 @@ export async function generateNanoBanana(task: Task): Promise<Buffer> {
     throw new Error('Nano Banana API key not configured')
   }
 
-  const ai = new GoogleGenAI({ apiKey })
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms } })
 
   logApiRequest('nanobanana', task.model, { model: task.model })
   const startTime = Date.now()
@@ -25,6 +25,10 @@ export async function generateNanoBanana(task: Task): Promise<Buffer> {
     contents: task.prompt,
     config: { responseModalities: ['TEXT', 'IMAGE'] }
   }).catch((err: unknown) => {
+    if (err instanceof Error && err.name === 'AbortError') {
+      log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
+      throw new Error(`Nano Banana API timed out after ${config.image_backends.nanobanana.timeout_ms / 1000}s`)
+    }
     log('error', 'Nano Banana API call failed', {
       model: task.model,
       status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,

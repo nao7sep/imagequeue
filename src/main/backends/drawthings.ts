@@ -5,7 +5,7 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
 import { log, logApiRequest, logApiResponse } from '../logger'
-import { modelsDirArgs, ensureModelsDir } from '../local-cli'
+import { modelsDirArgs, ensureModelsDir, resolveEffectiveModelsDir } from '../local-cli'
 
 export async function generateDrawThings(task: Task): Promise<Buffer> {
   return generateDrawThingsCli(task)
@@ -78,13 +78,10 @@ async function generateDrawThingsCli(task: Task): Promise<Buffer> {
   return buffer
 }
 
-// Check if a model file exists in the configured models directory.
+// Check if a model file exists in the effective models directory.
 export function checkModelExists(modelFilename: string): boolean {
-  const config = loadConfig()
-  const dir = config.image_backends.drawthings.models_dir
+  const dir = resolveEffectiveModelsDir()
   if (!dir) return false
-  const resolved = dir.replace(/^~/, require('os').homedir())
-  if (!fs.existsSync(resolved)) return false
-  return fs.existsSync(path.join(resolved, modelFilename))
+  return fs.existsSync(path.join(dir, modelFilename))
 }
 

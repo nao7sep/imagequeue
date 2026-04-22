@@ -14,7 +14,7 @@ export async function generateImagen(task: Task): Promise<Buffer> {
     throw new Error('Imagen API key not configured')
   }
 
-  const ai = new GoogleGenAI({ apiKey })
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.imagen.timeout_ms } })
 
   const aspectRatio = (task.params.aspectRatio as string) || '1:1'
   const imageSize = (task.params.imageSize as string) || '1024x1024'
@@ -35,6 +35,10 @@ export async function generateImagen(task: Task): Promise<Buffer> {
       personGeneration
     } as Record<string, unknown>
   }).catch((err: unknown) => {
+    if (err instanceof Error && err.name === 'AbortError') {
+      log('error', 'Imagen API timed out', { model: task.model, timeoutMs: config.image_backends.imagen.timeout_ms })
+      throw new Error(`Imagen API timed out after ${config.image_backends.imagen.timeout_ms / 1000}s`)
+    }
     log('error', 'Imagen API call failed', {
       model: task.model,
       requestParams,

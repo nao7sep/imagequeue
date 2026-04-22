@@ -22,11 +22,11 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
   if (!config) return <div className="settings-overlay">Loading...</div>
 
-  const textAi = config.text_ai as Record<string, string>
+  const textAi = config.text_ai as Record<string, unknown>
   const backends = config.image_backends as Record<string, Record<string, unknown>>
   const prompts = config.prompts as Record<string, string>
 
-  const updateTextAi = (key: string, value: string): void => {
+  const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
   }
 
@@ -56,7 +56,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <h3>Text AI</h3>
         <div className="settings-field">
           <label>Backend</label>
-          <select value={textAi.backend} onChange={(e) => updateTextAi('backend', e.target.value)}>
+          <select value={textAi.backend as string} onChange={(e) => updateTextAi('backend', e.target.value)}>
             {TEXT_AI_BACKENDS.map((b) => (
               <option key={b.id} value={b.id}>{b.label}</option>
             ))}
@@ -64,15 +64,19 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
         <div className="settings-field">
           <label>API Key</label>
-          <input type="password" value={textAi.api_key} onChange={(e) => updateTextAi('api_key', e.target.value)} />
+          <input type="password" value={textAi.api_key as string} onChange={(e) => updateTextAi('api_key', e.target.value)} />
         </div>
         <div className="settings-field">
           <label>Model</label>
-          <select value={textAi.model} onChange={(e) => updateTextAi('model', e.target.value)}>
-            {getTextAIModels(textAi.backend).map((m) => (
+          <select value={textAi.model as string} onChange={(e) => updateTextAi('model', e.target.value)}>
+            {getTextAIModels(textAi.backend as string).map((m) => (
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
+        </div>
+        <div className="settings-field">
+          <label>Timeout (s)</label>
+          <input type="number" min={1} step={1} value={(textAi.timeout_ms as number) / 1000} onChange={(e) => updateTextAi('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
         </div>
       </div>
 
@@ -102,6 +106,10 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.openai.concurrency as number} onChange={(e) => updateBackend('openai', 'concurrency', parseInt(e.target.value) || 1)} />
         </div>
+        <div className="settings-field">
+          <label>Timeout (s)</label>
+          <input type="number" min={1} step={1} value={(backends.openai.timeout_ms as number) / 1000} onChange={(e) => updateBackend('openai', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+        </div>
       </div>
 
       <div className="settings-section">
@@ -121,6 +129,10 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.imagen.concurrency as number} onChange={(e) => updateBackend('imagen', 'concurrency', parseInt(e.target.value) || 1)} />
+        </div>
+        <div className="settings-field">
+          <label>Timeout (s)</label>
+          <input type="number" min={1} step={1} value={(backends.imagen.timeout_ms as number) / 1000} onChange={(e) => updateBackend('imagen', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
         </div>
       </div>
 
@@ -142,6 +154,10 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
         </div>
+        <div className="settings-field">
+          <label>Timeout (s)</label>
+          <input type="number" min={1} step={1} value={(backends.nanobanana.timeout_ms as number) / 1000} onChange={(e) => updateBackend('nanobanana', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+        </div>
       </div>
 
       <div className="settings-section">
@@ -161,6 +177,10 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 3)} />
+        </div>
+        <div className="settings-field">
+          <label>Timeout (s)</label>
+          <input type="number" min={1} step={1} value={(backends.grok.timeout_ms as number) / 1000} onChange={(e) => updateBackend('grok', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
         </div>
       </div>
 
@@ -185,6 +205,10 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />
+        </div>
+        <div className="settings-field">
+          <label>Timeout (s)</label>
+          <input type="number" min={1} step={1} value={(backends.flux.timeout_ms as number) / 1000} onChange={(e) => updateBackend('flux', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
         </div>
       </div>
 

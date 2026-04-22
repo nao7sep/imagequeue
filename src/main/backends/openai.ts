@@ -13,7 +13,7 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
     throw new Error('OpenAI API key not configured')
   }
 
-  const client = new OpenAI({ apiKey })
+  const client = new OpenAI({ apiKey, timeout: config.image_backends.openai.timeout_ms })
 
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
