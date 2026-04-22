@@ -2,6 +2,21 @@
 
 export type BackendId = 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
 
+export interface CliStatus {
+  installed: boolean
+  version: string | null
+  path: string | null
+  platform: 'darwin' | 'unsupported'
+}
+
+export interface LocalModelInfo {
+  file: string
+  name: string
+  source: string
+  downloaded: boolean
+  huggingFace: string | null
+}
+
 export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed'
 

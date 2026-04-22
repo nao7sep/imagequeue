@@ -7,21 +7,9 @@ import path from 'path'
 import os from 'os'
 import { loadConfig } from './config'
 import { log } from './logger'
+import { CliStatus, LocalModelInfo } from '../shared/types'
 
-export interface CliStatus {
-  installed: boolean
-  version: string | null
-  path: string | null
-  platform: 'darwin' | 'unsupported'
-}
-
-export interface LocalModelInfo {
-  file: string
-  name: string
-  source: string
-  downloaded: boolean
-  huggingFace: string | null
-}
+export type { CliStatus, LocalModelInfo }
 
 const DEFAULT_MODELS_DIR = path.join(os.homedir(), '.imagequeue', 'models')
 
@@ -263,6 +251,7 @@ export async function openTerminalForImport(artifactPath: string): Promise<void>
         reject(err)
       } else {
         log('info', 'Opened Terminal for model import', { artifactPath, cmd })
+        setTimeout(() => { try { fs.unlinkSync(tmpFile) } catch { /* ignore */ } }, 10000)
         resolve()
       }
     })
@@ -297,6 +286,7 @@ export async function openTerminalForDownload(modelFile: string): Promise<void> 
         reject(err)
       } else {
         log('info', 'Opened Terminal for model download', { modelFile, cmd })
+        setTimeout(() => { try { fs.unlinkSync(tmpFile) } catch { /* ignore */ } }, 10000)
         resolve()
       }
     })

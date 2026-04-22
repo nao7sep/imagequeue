@@ -55,7 +55,7 @@ export interface DrawThingsBackendConfig {
   model: string
   default_params: {
     steps: number
-    cfg: number
+    guidance: number
     width: number
     height: number
     seed: number | null

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
 import { useSettings } from '../context/SettingsContext'
-import type { BackendId, Task } from '../../../shared/types'
+import type { BackendId, Task, CliStatus, LocalModelInfo } from '../../../shared/types'
 import {
   getModelsForBackend,
   findModel,
@@ -32,21 +32,6 @@ interface Props {
   hasPrompt: boolean
   onSelectTask: (task: Task) => void
   onDeselect?: () => void
-}
-
-interface LocalModelInfo {
-  file: string
-  name: string
-  source: string
-  downloaded: boolean
-  huggingFace: string | null
-}
-
-interface CliStatus {
-  installed: boolean
-  version: string | null
-  path: string | null
-  platform: 'darwin' | 'unsupported'
 }
 
 const STATUS_COLORS: Record<string, string> = {

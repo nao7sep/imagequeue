@@ -1,20 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { BackendId, EnqueueRequest, Task } from '../shared/types'
+import { BackendId, EnqueueRequest, Task, CliStatus, LocalModelInfo } from '../shared/types'
 
-export interface CliStatus {
-  installed: boolean
-  version: string | null
-  path: string | null
-  platform: 'darwin' | 'unsupported'
-}
-
-export interface LocalModelInfo {
-  file: string
-  name: string
-  source: string
-  downloaded: boolean
-  huggingFace: string | null
-}
+export type { CliStatus, LocalModelInfo }
 
 export interface EnsureModelResult {
   success: boolean

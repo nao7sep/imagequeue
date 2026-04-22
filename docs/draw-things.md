@@ -34,7 +34,7 @@ draw-things-cli --version
 | `models_dir` | *(empty — see below)* | Directory where model files are stored |
 | `model` | `flux_2_klein_4b_q6p.ckpt` | Default model selected when the column loads |
 | `steps` | `4` | Default inference steps |
-| `cfg` | `1` | Classifier-free guidance scale |
+| `guidance` | `1` | Classifier-free guidance scale |
 | `width` / `height` | `1024` | Default output dimensions |
 | `seed` | *(null — random)* | Set a fixed seed to reproduce results |
 | `negativePrompt` | *(empty)* | Default negative prompt |

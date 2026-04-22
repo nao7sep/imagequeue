@@ -67,7 +67,7 @@ export function createDefaultConfig(): AppConfig {
         model: 'flux_2_klein_4b_q6p.ckpt',
         default_params: {
           steps: 4,
-          cfg: 1,
+          guidance: 1,
           width: 1024,
           height: 1024,
           seed: null,

@@ -1,9 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import { getSessionDir } from '../session'
+import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 
-export type BackendName = 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
 export type ImageExt = 'png' | 'jpg' | 'webp'
 
 // Writes the image file and its JSON sidecar to the session directory.
@@ -11,7 +11,7 @@ export type ImageExt = 'png' | 'jpg' | 'webp'
 export function writeImageOutput(
   timestamp: string,
   slug: string,
-  backend: BackendName,
+  backend: BackendId,
   imageBuffer: Buffer,
   metadata: ImageMetadata,
   ext: ImageExt = 'png'

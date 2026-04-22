@@ -1,2 +1,2 @@
 export { type ImageMetadata } from './image-metadata'
-export { writeImageOutput, deleteImageOutput, type BackendName } from './file-output'
+export { writeImageOutput, deleteImageOutput } from './file-output'
