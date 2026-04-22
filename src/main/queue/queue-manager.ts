@@ -7,9 +7,10 @@ class QueueManager {
   private queues: Record<BackendId, Task[]> = {
     openai: [],
     imagen: [],
+    nanobanana: [],
+    grok: [],
     flux: [],
-    drawthings: [],
-    nanobanana: []
+    drawthings: []
   }
 
   enqueue(request: EnqueueRequest): Task[] {

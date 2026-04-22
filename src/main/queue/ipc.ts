@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueRequest } from '../../shared/types'
-import { deleteImageOutput } from '../utils/file-output'
+import { deleteImageOutput, ImageExt } from '../utils/file-output'
 import { logEnqueue, log } from '../logger'
 
 // Registers all IPC handlers for queue operations.
@@ -33,7 +33,8 @@ export function registerQueueIpc(): void {
     const task = queueManager.getTask(backend, taskId)
     log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null })
     if (task?.baseName) {
-      deleteImageOutput(task.baseName)
+      const ext: ImageExt = task.imagePath?.endsWith('.jpg') ? 'jpg' : 'png'
+      deleteImageOutput(task.baseName, ext)
     }
     queueManager.removeTask(backend, taskId)
     notifyAllWindows('queue:updated', queueManager.getAllTasks())

@@ -23,7 +23,7 @@ export function registerSettingsIpc(): void {
     //  causes the next call to decode an already-decoded key, producing garbage.)
     const config = JSON.parse(JSON.stringify(loadConfig())) as AppConfig
     config.text_ai.api_key = decodeApiKey(config.text_ai.api_key)
-    for (const backend of ['openai', 'imagen', 'nanobanana', 'flux'] as const) {
+    for (const backend of ['openai', 'imagen', 'nanobanana', 'grok', 'flux'] as const) {
       config.image_backends[backend].api_key = decodeApiKey(config.image_backends[backend].api_key)
     }
     return config
@@ -32,7 +32,7 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('settings:save', (_event, config: AppConfig) => {
     // Always encode API keys before persisting (renderer sends plain text)
     config.text_ai.api_key = encodeApiKey(config.text_ai.api_key)
-    for (const backend of ['openai', 'imagen', 'nanobanana', 'flux'] as const) {
+    for (const backend of ['openai', 'imagen', 'nanobanana', 'grok', 'flux'] as const) {
       config.image_backends[backend].api_key = encodeApiKey(config.image_backends[backend].api_key)
     }
 

@@ -8,6 +8,7 @@ import {
   OPENAI_SIZES,
   IMAGEN_ASPECT_RATIOS,
   IMAGEN_IMAGE_SIZES,
+  GROK_ASPECT_RATIOS,
   FLUX_SIZES,
   DRAWTHINGS_SIZES,
   DRAWTHINGS_MODELS,
@@ -16,7 +17,8 @@ import {
   type OpenAIQuality,
   type OpenAIOutputFormat,
   type OpenAIBackground,
-  type ImagenPersonGeneration
+  type ImagenPersonGeneration,
+  type GrokAspectRatio
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
 import './QueueColumn.css'
@@ -79,6 +81,9 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   const [fluxSteps, setFluxSteps] = useState(40)
   const [fluxGuidance, setFluxGuidance] = useState(7)
   const [fluxSeed, setFluxSeed] = useState('')
+
+  // Grok Imagine params
+  const [grokAspectRatio, setGrokAspectRatio] = useState<GrokAspectRatio>('1:1')
 
   // Local params
   const [localSizeIdx, setLocalSizeIdx] = useState(2) // 1024x1024
@@ -163,6 +168,8 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
       params = { width: size.width, height: size.height, steps: localSteps }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
+    } else if (backendId === 'grok') {
+      params = { aspectRatio: grokAspectRatio }
     } else if (backendId === 'nanobanana') {
       params = {}
     }
@@ -173,6 +180,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   }, [backendId, model, quality, outputFormat, background, openaiSizeIdx,
       aspectRatio, imageSize, personGeneration, numberOfImages,
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
+      grokAspectRatio,
       localSizeIdx, localSteps, localSeed, negativePrompt,
       apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
@@ -305,6 +313,18 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
           </>
         )}
 
+        {/* Grok Imagine parameters */}
+        {backendId === 'grok' && (
+          <div className="setting-row">
+            <label>aspect</label>
+            <select value={grokAspectRatio} onChange={(e) => setGrokAspectRatio(e.target.value as GrokAspectRatio)}>
+              {GROK_ASPECT_RATIOS.map((ar) => (
+                <option key={ar.value} value={ar.value}>{ar.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Draw Things parameters */}
         {backendId === 'drawthings' && (
           <>
@@ -407,7 +427,10 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
   useEffect(() => {
     if (task.status !== 'completed' || !task.baseName) return
     window.electronAPI.getImage(task.baseName).then((b64) => {
-      if (b64) setThumbUrl(`data:image/png;base64,${b64}`)
+      if (b64) {
+        const mime = b64.startsWith('/9j/') ? 'image/jpeg' : 'image/png'
+        setThumbUrl(`data:${mime};base64,${b64}`)
+      }
     })
   }, [task.status, task.baseName])
 

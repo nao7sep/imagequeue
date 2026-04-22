@@ -7,12 +7,15 @@ import { getSessionDir } from './session'
 export function registerPreviewIpc(): void {
   ipcMain.handle('preview:getImage', (_event, baseName: string) => {
     const dir = getSessionDir()
-    const imagePath = path.join(dir, `${baseName}.png`)
 
-    if (!fs.existsSync(imagePath)) return null
+    for (const ext of ['png', 'jpg'] as const) {
+      const imagePath = path.join(dir, `${baseName}.${ext}`)
+      if (fs.existsSync(imagePath)) {
+        return fs.readFileSync(imagePath).toString('base64')
+      }
+    }
 
-    const buffer = fs.readFileSync(imagePath)
-    return buffer.toString('base64')
+    return null
   })
 
   ipcMain.handle('preview:getMetadata', (_event, baseName: string) => {

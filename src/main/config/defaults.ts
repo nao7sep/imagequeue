@@ -36,6 +36,14 @@ export function createDefaultConfig(): AppConfig {
         model: 'gemini-3.1-flash-image-preview',
         concurrency: 3
       },
+      grok: {
+        api_key: '',
+        model: 'grok-imagine-image',
+        default_params: {
+          aspectRatio: '1:1'
+        },
+        concurrency: 3
+      },
       flux: {
         api_key: '',
         model: 'flux-2-max',

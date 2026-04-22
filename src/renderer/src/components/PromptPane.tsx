@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import type { BackendId, Task } from '../../../shared/types'
 import './PromptPane.css'
 
-const BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'flux', 'drawthings']
+const BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
 
 interface Props {
   selectedTask: Task | null
@@ -27,7 +27,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         handleSendToAll()
         return
       }
-      if (mod && e.key >= '1' && e.key <= '5') {
+      if (mod && e.key >= '1' && e.key <= '6') {
         e.preventDefault()
         const backend = BACKENDS[parseInt(e.key) - 1]
         window.dispatchEvent(

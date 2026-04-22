@@ -66,10 +66,20 @@ export interface NanoBananaBackendConfig {
   concurrency: number
 }
 
+export interface GrokBackendConfig {
+  api_key: string
+  model: string
+  default_params: {
+    aspectRatio: string
+  }
+  concurrency: number
+}
+
 export interface ImageBackendsConfig {
   openai: OpenAIBackendConfig
   imagen: ImagenBackendConfig
   nanobanana: NanoBananaBackendConfig
+  grok: GrokBackendConfig
   flux: FluxBackendConfig
   drawthings: DrawThingsBackendConfig
 }

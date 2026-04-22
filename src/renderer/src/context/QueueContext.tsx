@@ -13,9 +13,10 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
   const [tasks, setTasks] = useState<Record<BackendId, Task[]>>({
     openai: [],
     imagen: [],
+    nanobanana: [],
+    grok: [],
     flux: [],
-    drawthings: [],
-    nanobanana: []
+    drawthings: []
   })
 
   useEffect(() => {

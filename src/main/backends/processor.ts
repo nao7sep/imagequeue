@@ -3,14 +3,15 @@ import { BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
 import { TimestampAllocator } from '../session'
-import { writeImageOutput } from '../utils/file-output'
+import { writeImageOutput, ImageExt } from '../utils/file-output'
 import { ImageMetadata } from '../utils/image-metadata'
 import { logGenerationStart, logGenerationComplete, logGenerationFailed } from '../logger'
 import { generateOpenAI } from './openai'
 import { generateImagen } from './imagen'
+import { generateNanoBanana } from './nanobanana'
+import { generateGrok } from './grok'
 import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
-import { generateNanoBanana } from './nanobanana'
 import { generateSlug } from './slug'
 
 type GenerateFn = (task: Task) => Promise<Buffer>
@@ -18,27 +19,40 @@ type GenerateFn = (task: Task) => Promise<Buffer>
 const generators: Record<BackendId, GenerateFn> = {
   openai: generateOpenAI,
   imagen: generateImagen,
+  nanobanana: generateNanoBanana,
+  grok: generateGrok,
   flux: generateFlux,
-  drawthings: generateDrawThings,
-  nanobanana: generateNanoBanana
+  drawthings: generateDrawThings
 }
 
 // Per-backend timestamp allocators
 const allocators: Record<BackendId, TimestampAllocator> = {
   openai: new TimestampAllocator(),
   imagen: new TimestampAllocator(),
+  nanobanana: new TimestampAllocator(),
+  grok: new TimestampAllocator(),
   flux: new TimestampAllocator(),
-  drawthings: new TimestampAllocator(),
-  nanobanana: new TimestampAllocator()
+  drawthings: new TimestampAllocator()
 }
 
 // Per-backend active task counts for concurrency limiting
 const activeCounts: Record<BackendId, number> = {
   openai: 0,
   imagen: 0,
+  nanobanana: 0,
+  grok: 0,
   flux: 0,
-  drawthings: 0,
-  nanobanana: 0
+  drawthings: 0
+}
+
+// Output file extension per backend (Grok returns JPEG; all others produce PNG)
+const backendExt: Record<BackendId, ImageExt> = {
+  openai: 'png',
+  imagen: 'png',
+  nanobanana: 'png',
+  grok: 'jpg',
+  flux: 'png',
+  drawthings: 'png'
 }
 
 // Starts the queue processor loop. Call once at app startup.
@@ -50,7 +64,7 @@ export function startProcessor(): void {
 
 function processQueues(): void {
   const config = loadConfig()
-  const backends: BackendId[] = ['openai', 'imagen', 'flux', 'drawthings', 'nanobanana']
+  const backends: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
 
   for (const backend of backends) {
     const maxConcurrency = backend === 'drawthings' ? 1 :
@@ -105,11 +119,11 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       error: null
     }
 
-    const baseName = writeImageOutput(timestamp, slug, backend, imageBuffer, metadata)
+    const baseName = writeImageOutput(timestamp, slug, backend, imageBuffer, metadata, backendExt[backend])
 
     task.status = 'completed'
     task.baseName = baseName
-    task.imagePath = `${baseName}.png`
+    task.imagePath = `${baseName}.${backendExt[backend]}`
     logGenerationComplete(task.id, task.durationMs, task.baseName, task.estimatedCostUsd)
   } catch (err) {
     task.status = 'failed'

@@ -110,6 +110,31 @@ export interface NanoBananaModelDef extends ModelDef {
   pricing: number  // per image at 1K resolution
 }
 
+export type GrokAspectRatio =
+  '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
+  '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
+
+export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
+  { label: '1:1 (Square)',       value: '1:1' },
+  { label: '16:9 (Wide)',        value: '16:9' },
+  { label: '9:16 (Tall)',        value: '9:16' },
+  { label: '4:3 (Landscape)',    value: '4:3' },
+  { label: '3:4 (Portrait)',     value: '3:4' },
+  { label: '3:2 (Landscape)',    value: '3:2' },
+  { label: '2:3 (Portrait)',     value: '2:3' },
+  { label: '2:1 (Wide)',         value: '2:1' },
+  { label: '1:2 (Tall)',         value: '1:2' },
+  { label: '19.5:9 (Phone Wide)', value: '19.5:9' },
+  { label: '9:19.5 (Phone Tall)', value: '9:19.5' },
+  { label: '20:9 (Ultra Wide)',  value: '20:9' },
+  { label: '9:20 (Ultra Tall)',  value: '9:20' }
+]
+
+export interface GrokModelDef extends ModelDef {
+  backend: 'grok'
+  pricing: number  // per image, flat rate
+}
+
 // --- OpenAI models ---
 
 export const OPENAI_MODELS: OpenAIModelDef[] = [
@@ -324,6 +349,23 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
   }
 ]
 
+// --- Grok Imagine models ---
+
+export const GROK_MODELS: GrokModelDef[] = [
+  {
+    id: 'grok-imagine-image',
+    label: 'Grok Imagine',
+    backend: 'grok',
+    pricing: 0.02
+  },
+  {
+    id: 'grok-imagine-image-pro',
+    label: 'Grok Imagine Pro',
+    backend: 'grok',
+    pricing: 0.07
+  }
+]
+
 // --- Text AI backends and models ---
 
 export interface TextAIModelDef {
@@ -357,24 +399,27 @@ export function getTextAIModels(backendId: string): TextAIModelDef[] {
 
 export function getModelsForBackend(backend: 'openai'): OpenAIModelDef[]
 export function getModelsForBackend(backend: 'imagen'): ImagenModelDef[]
+export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
+export function getModelsForBackend(backend: 'grok'): GrokModelDef[]
 export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
 export function getModelsForBackend(backend: 'drawthings'): DrawThingsModelDef[]
-export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
 export function getModelsForBackend(backend: BackendId): ModelDef[] {
   switch (backend) {
     case 'openai': return OPENAI_MODELS
     case 'imagen': return IMAGEN_MODELS
+    case 'nanobanana': return NANO_BANANA_MODELS
+    case 'grok': return GROK_MODELS
     case 'flux': return FLUX_MODELS
     case 'drawthings': return DRAWTHINGS_MODELS
-    case 'nanobanana': return NANO_BANANA_MODELS
   }
 }
 
 export function findModel(backend: 'openai', modelId: string): OpenAIModelDef | undefined
 export function findModel(backend: 'imagen', modelId: string): ImagenModelDef | undefined
+export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
+export function findModel(backend: 'grok', modelId: string): GrokModelDef | undefined
 export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined
 export function findModel(backend: 'drawthings', modelId: string): DrawThingsModelDef | undefined
-export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
 export function findModel(backend: BackendId, modelId: string): ModelDef | undefined {
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
@@ -411,6 +456,11 @@ export function estimateCostFromRegistry(
     }
     case 'nanobanana': {
       const model = findModel('nanobanana', modelId)
+      if (!model) return null
+      return model.pricing
+    }
+    case 'grok': {
+      const model = findModel('grok', modelId)
       if (!model) return null
       return model.pricing
     }

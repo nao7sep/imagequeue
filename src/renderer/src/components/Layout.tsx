@@ -9,8 +9,9 @@ import { useSettings } from '../context/SettingsContext'
 
 const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'GPT Image' },
-  { id: 'imagen' as const, label: 'Imagen' },
+  { id: 'imagen' as const, label: 'Google Imagen' },
   { id: 'nanobanana' as const, label: 'Nano Banana' },
+  { id: 'grok' as const, label: 'Grok Imagine' },
   { id: 'flux' as const, label: 'FLUX' },
   { id: 'drawthings' as const, label: 'Draw Things' }
 ]
@@ -151,7 +152,8 @@ export function Layout(): React.JSX.Element {
 
     window.electronAPI.getImage(selectedTask.baseName).then((b64) => {
       if (b64) {
-        setPreviewDataUrl(`data:image/png;base64,${b64}`)
+        const mime = b64.startsWith('/9j/') ? 'image/jpeg' : 'image/png'
+        setPreviewDataUrl(`data:${mime};base64,${b64}`)
       } else {
         setPreviewDataUrl(null)
       }
@@ -194,10 +196,11 @@ export function Layout(): React.JSX.Element {
                 <div className="shortcut-list">
                   <div className="shortcut-item"><span>Send to all backends</span><kbd>⌘↵</kbd></div>
                   <div className="shortcut-item"><span>Send to GPT Image</span><kbd>⌘1</kbd></div>
-                  <div className="shortcut-item"><span>Send to Imagen</span><kbd>⌘2</kbd></div>
+                  <div className="shortcut-item"><span>Send to Google Imagen</span><kbd>⌘2</kbd></div>
                   <div className="shortcut-item"><span>Send to Nano Banana</span><kbd>⌘3</kbd></div>
-                  <div className="shortcut-item"><span>Send to FLUX</span><kbd>⌘4</kbd></div>
-                  <div className="shortcut-item"><span>Send to Draw Things</span><kbd>⌘5</kbd></div>
+                  <div className="shortcut-item"><span>Send to Grok Imagine</span><kbd>⌘4</kbd></div>
+                  <div className="shortcut-item"><span>Send to FLUX</span><kbd>⌘5</kbd></div>
+                  <div className="shortcut-item"><span>Send to Draw Things</span><kbd>⌘6</kbd></div>
                 </div>
               </div>
               <div className="shortcut-group">

@@ -105,7 +105,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
       </div>
 
       <div className="settings-section">
-        <h3>Imagen</h3>
+        <h3>Google Imagen</h3>
         <div className="settings-field">
           <label>API Key</label>
           <input type="password" value={backends.imagen.api_key as string} onChange={(e) => updateBackend('imagen', 'api_key', e.target.value)} />
@@ -141,6 +141,26 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Grok Imagine</h3>
+        <div className="settings-field">
+          <label>API Key</label>
+          <input type="password" value={backends.grok.api_key as string} onChange={(e) => updateBackend('grok', 'api_key', e.target.value)} />
+        </div>
+        <div className="settings-field">
+          <label>Model</label>
+          <select value={backends.grok.model as string} onChange={(e) => updateBackend('grok', 'model', e.target.value)}>
+            {getModelsForBackend('grok').map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="settings-field">
+          <label>Concurrency</label>
+          <input type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 3)} />
         </div>
       </div>
 
