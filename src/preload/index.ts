@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { BackendId, EnqueueRequest, Task } from '../shared/types'
 
 export interface CliStatus {
@@ -85,14 +85,20 @@ const api = {
   localOpenModelsDir: (): Promise<void> =>
     ipcRenderer.invoke('local:openModelsDir'),
 
-  localDeleteModel: (modelFile: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('local:deleteModel', modelFile),
-
   localOpenTerminalForDownload: (modelFile: string): Promise<void> =>
     ipcRenderer.invoke('local:openTerminalForDownload', modelFile),
 
+  localOpenTerminalForImport: (artifactPath: string): Promise<void> =>
+    ipcRenderer.invoke('local:openTerminalForImport', artifactPath),
+
+  openFileDialog: (filters: { name: string; extensions: string[] }[]): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openFile', filters),
+
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
+
+  getPathForFile: (file: File): string =>
+    webUtils.getPathForFile(file),
 
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {

@@ -230,31 +230,43 @@ export function resolveEffectiveModelsDir(): string {
   return ''
 }
 
-/** Delete a model file from the effective models directory. */
-export async function deleteModel(modelFile: string): Promise<{ success: boolean; error?: string }> {
-  const dir = resolveEffectiveModelsDir()
-  if (!dir) {
-    return { success: false, error: 'Could not determine models directory. Please configure one in Settings.' }
-  }
-  const filePath = path.join(dir, modelFile)
-  if (!fs.existsSync(filePath)) {
-    return { success: false, error: `File not found: ${filePath}` }
-  }
-  try {
-    fs.unlinkSync(filePath)
-    log('info', 'Model deleted', { modelFile, filePath })
-    return { success: true }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    log('error', 'Model deletion failed', { modelFile, filePath, message: msg })
-    return { success: false, error: msg }
-  }
-}
-
-/** Quote a string for safe use in a POSIX shell command. */
 function shellQuote(s: string): string {
   if (/^[a-zA-Z0-9/_.-]+$/.test(s)) return s
   return `'${s.replace(/'/g, "'\\''")}'`
+}
+
+/**
+ * Open a Terminal.app window to import a model artifact via `draw-things-cli models import`.
+ * artifactPath is the full absolute path to the file to import. macOS only.
+ */
+export async function openTerminalForImport(artifactPath: string): Promise<void> {
+  if (process.platform !== 'darwin') {
+    throw new Error('Terminal launch only supported on macOS')
+  }
+
+  const config = loadConfig()
+  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+  const dir = resolveEffectiveModelsDir()
+
+  const parts = [shellQuote(cliPath), 'models', 'import', shellQuote(artifactPath)]
+  if (dir) parts.push('--models-dir', shellQuote(dir))
+  const cmd = parts.join(' ')
+
+  const scriptContent = `#!/bin/sh\n${cmd}\n`
+  const tmpFile = path.join(os.tmpdir(), `imagequeue-import-${Date.now()}.command`)
+  fs.writeFileSync(tmpFile, scriptContent, { mode: 0o755 })
+
+  return new Promise((resolve, reject) => {
+    execFile('open', [tmpFile], (err) => {
+      if (err) {
+        log('error', 'Failed to open Terminal for model import', { artifactPath, message: err.message })
+        reject(err)
+      } else {
+        log('info', 'Opened Terminal for model import', { artifactPath, cmd })
+        resolve()
+      }
+    })
+  })
 }
 
 /**

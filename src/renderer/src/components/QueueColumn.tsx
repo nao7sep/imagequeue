@@ -493,12 +493,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDesel
     {showModelsModal && (
       <DrawThingsModelsModal
         onClose={() => setShowModelsModal(false)}
-        onModelsChanged={(updated) => {
-          setDownloadedModels(updated)
-          if (updated.length > 0 && !updated.find((m) => m.file === model)) {
-            setModel(updated[0].file)
-          }
-        }}
       />
     )}
     </>

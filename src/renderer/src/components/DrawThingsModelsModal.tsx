@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import './DrawThingsModelsModal.css'
-import { useQueue } from '../context/QueueContext'
 
 interface LocalModelInfo {
   file: string
@@ -13,18 +12,15 @@ interface LocalModelInfo {
 
 interface Props {
   onClose: () => void
-  onModelsChanged: (downloaded: LocalModelInfo[]) => void
 }
 
-export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): React.JSX.Element {
-  const { tasks } = useQueue()
+export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [openedTerminal, setOpenedTerminal] = useState<string | null>(null)
+  const [importPath, setImportPath] = useState('')
   const [filter, setFilter] = useState('')
 
   // Close on Escape
@@ -58,30 +54,25 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
     return () => window.removeEventListener('focus', handler)
   }, [])
 
-  const handleDelete = async (modelFile: string): Promise<void> => {
-    const isInUse = Object.values(tasks).flat().some(
-      (t) => t.backend === 'drawthings' && t.status === 'generating' && t.model === modelFile
-    )
-    if (isInUse) {
-      setDeleteError('Model is in use — wait for the current task to finish.')
-      return
-    }
-    setDeleting(modelFile)
-    setDeleteError(null)
-    const result = await window.electronAPI.localDeleteModel(modelFile)
-    if (result.success) {
-      const updated = downloadedModels.filter((m) => m.file !== modelFile)
-      setDownloadedModels(updated)
-      onModelsChanged(updated)
-    } else {
-      setDeleteError(result.error ?? 'Deletion failed.')
-    }
-    setDeleting(null)
-  }
-
   const handleOpenInTerminal = async (modelFile: string): Promise<void> => {
     await window.electronAPI.localOpenTerminalForDownload(modelFile)
     setOpenedTerminal(modelFile)
+    setTimeout(() => setOpenedTerminal(null), 1500)
+  }
+
+  const [dragging, setDragging] = useState(false)
+
+  const handleBrowse = async (): Promise<void> => {
+    const picked = await window.electronAPI.openFileDialog([
+      { name: 'Model files', extensions: ['safetensors', 'ckpt', 'pth', 'pt', 'bin', 'zip'] }
+    ])
+    if (picked) setImportPath(picked)
+  }
+
+  const handleImport = async (): Promise<void> => {
+    if (!importPath) return
+    await window.electronAPI.localOpenTerminalForImport(importPath)
+    setOpenedTerminal(importPath)
     setTimeout(() => setOpenedTerminal(null), 1500)
   }
 
@@ -109,6 +100,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
               onChange={(e) => setFilter(e.target.value)}
             />
           </div>
+
           <section className="dt-section">
             <h3 className="dt-section-title">Downloaded</h3>
             {loadingDownloaded ? (
@@ -119,19 +111,63 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
               <ul className="dt-model-list">
                 {filteredDownloaded.map((m) => (
                   <li key={m.file} className="dt-model-row">
-                    <span className="dt-model-name" title={m.file}>{m.name}</span>
-                    <button
-                      className="dt-action-btn dt-delete-btn"
-                      disabled={deleting !== null}
-                      onClick={() => handleDelete(m.file)}
-                    >
-                      {deleting === m.file ? '…' : 'Delete'}
-                    </button>
+                    <div className="dt-model-info">
+                      <span className="dt-model-name" title={m.file}>{m.name}</span>
+                      <div className="dt-model-meta">
+                        {m.huggingFace && (
+                          <button
+                            className="dt-hf-link"
+                            title={`Open on HuggingFace: ${m.huggingFace}`}
+                            onClick={() => window.electronAPI.openExternal(hfUrl(m.huggingFace!))}
+                          >
+                            HF ↗
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
-            {deleteError && <p className="dt-error">{deleteError}</p>}
+          </section>
+
+          <section className="dt-section">
+            <h3 className="dt-section-title">Import</h3>
+            <p className="dt-hint" style={{ marginBottom: 8 }}>
+              Select a local model file to import into Draw Things format.
+            </p>
+            <div
+              className={`dt-import-drop${dragging ? ' dt-import-drop--active' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+              onDragEnter={(e) => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setDragging(false)
+                const file = e.dataTransfer.files[0]
+                if (file) setImportPath(window.electronAPI.getPathForFile(file))
+              }}
+            >
+              <div className="dt-import-row">
+                <input
+                  className="dt-import-input"
+                  placeholder="Drop a file or browse…"
+                  value={importPath}
+                  onChange={(e) => setImportPath(e.target.value)}
+                />
+                <button className="dt-action-btn dt-browse-btn" onClick={handleBrowse}>Browse…</button>
+                <button
+                  className="dt-action-btn dt-import-btn"
+                  disabled={!importPath}
+                  onClick={handleImport}
+                >
+                  {openedTerminal === importPath ? '✓ opened' : '→ Import'}
+                </button>
+              </div>
+            </div>
           </section>
 
           <section className="dt-section">
@@ -165,7 +201,7 @@ export function DrawThingsModelsModal({ onClose, onModelsChanged }: Props): Reac
                       className="dt-action-btn dt-download-btn"
                       onClick={() => handleOpenInTerminal(m.file)}
                     >
-                      {openedTerminal === m.file ? '✓ opened' : '↓ Terminal'}
+                      {openedTerminal === m.file ? '✓ opened' : '↓ Download'}
                     </button>
                   </li>
                 ))}

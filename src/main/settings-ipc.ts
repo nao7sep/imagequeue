@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { ipcMain, shell, dialog } from 'electron'
 import path from 'path'
 import os from 'os'
 import { loadConfig, saveConfig, encodeApiKey, decodeApiKey } from './config'
@@ -11,8 +11,8 @@ import {
   ensureModel,
   resolveModelsDir,
   getDefaultModelsDir,
-  deleteModel,
-  openTerminalForDownload
+  openTerminalForDownload,
+  openTerminalForImport
 } from './local-cli'
 
 // IPC handlers for reading/writing settings.
@@ -82,12 +82,17 @@ export function registerSettingsIpc(): void {
     }
   })
 
-  ipcMain.handle('local:deleteModel', async (_event, modelFile: string) => {
-    return deleteModel(modelFile)
-  })
-
   ipcMain.handle('local:openTerminalForDownload', async (_event, modelFile: string) => {
     return openTerminalForDownload(modelFile)
+  })
+
+  ipcMain.handle('local:openTerminalForImport', async (_event, artifactPath: string) => {
+    return openTerminalForImport(artifactPath)
+  })
+
+  ipcMain.handle('dialog:openFile', async (_event, filters: Electron.FileFilter[]) => {
+    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters })
+    return result.canceled ? null : result.filePaths[0]
   })
 
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
