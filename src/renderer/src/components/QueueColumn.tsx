@@ -1,24 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
 import { useSettings } from '../context/SettingsContext'
 import type { BackendId, Task } from '../../../shared/types'
 import {
   getModelsForBackend,
   findModel,
-  OPENAI_SIZES,
   IMAGEN_ASPECT_RATIOS,
   IMAGEN_IMAGE_SIZES,
   GROK_ASPECT_RATIOS,
+  GROK_RESOLUTIONS,
   FLUX_SIZES,
   DRAWTHINGS_SIZES,
   DRAWTHINGS_MODELS,
+  type OpenAIModelDef,
+  type ImagenModelDef,
+  type NanoBananaModelDef,
   type FluxModelDef,
   type SizePreset,
   type OpenAIQuality,
   type OpenAIOutputFormat,
   type OpenAIBackground,
   type ImagenPersonGeneration,
-  type GrokAspectRatio
+  type GrokAspectRatio,
+  type GrokResolution
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
 import './QueueColumn.css'
@@ -58,6 +62,30 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   const models = getModelsForBackend(backendId as 'openai')
   const [model, setModel] = useState(models[0].id)
 
+  // For openai: the full model definition, used to drive dynamic size/quality/background options
+  const openaiModelDef = useMemo(
+    () => backendId === 'openai' ? (models.find((m) => m.id === model) ?? models[0]) as OpenAIModelDef : null,
+    [backendId, model]
+  )
+
+  // For imagen: model definition, used to know whether imageSize is supported
+  const imagenModelDef = useMemo(
+    () => backendId === 'imagen' ? (models.find((m) => m.id === model) ?? models[0]) as unknown as ImagenModelDef : null,
+    [backendId, model]
+  )
+
+  // For nanobanana: model definition, used to know whether imageConfig is supported
+  const nanoBananaModelDef = useMemo(
+    () => backendId === 'nanobanana' ? (models.find((m) => m.id === model) ?? models[0]) as unknown as NanoBananaModelDef : null,
+    [backendId, model]
+  )
+
+  // For flux: model definition, used to know whether steps/guidance are supported
+  const fluxModelDef = useMemo(
+    () => backendId === 'flux' ? (models.find((m) => m.id === model) ?? models[0]) as unknown as FluxModelDef : null,
+    [backendId, model]
+  )
+
   // Derived from context — updates automatically when settings change (no effect needed)
   const apiKey = backendId !== 'drawthings'
     ? ((settings?.image_backends as Record<string, Record<string, unknown>>)?.[backendId]?.api_key as string | undefined)
@@ -70,11 +98,14 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
   const [background, setBackground] = useState<OpenAIBackground>('opaque')
   const [openaiSizeIdx, setOpenaiSizeIdx] = useState(0)
 
-  // Google params
+  // Google Imagen params
   const [aspectRatio, setAspectRatio] = useState('1:1')
-  const [imageSize, setImageSize] = useState('1024x1024')
-  const [personGeneration, setPersonGeneration] = useState<ImagenPersonGeneration>('allow_adult')
-  const [numberOfImages, setNumberOfImages] = useState(1)
+  const [imageSize, setImageSize] = useState('1K')
+  const [personGeneration, setPersonGeneration] = useState<ImagenPersonGeneration>('allow_all')
+
+  // Nano Banana params
+  const [nanoBananaAspectRatio, setNanoBananaAspectRatio] = useState('1:1')
+  const [nanoBananaImageSize, setNanoBananaImageSize] = useState('1K')
 
   // FLUX params
   const [fluxSizeIdx, setFluxSizeIdx] = useState(0)
@@ -84,10 +115,12 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 
   // Grok Imagine params
   const [grokAspectRatio, setGrokAspectRatio] = useState<GrokAspectRatio>('1:1')
+  const [grokResolution, setGrokResolution] = useState<GrokResolution>('1k')
 
   // Local params
   const [localSizeIdx, setLocalSizeIdx] = useState(2) // 1024x1024
   const [localSteps, setLocalSteps] = useState(4)
+  const [localGuidance, setLocalGuidance] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
@@ -133,16 +166,29 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
 
   // Update defaults when model changes
   useEffect(() => {
-    if (backendId === 'flux') {
+    if (backendId === 'openai' && openaiModelDef) {
+      // Reset quality/background if the current value isn't valid for the new model
+      setQuality((prev) => openaiModelDef.qualities.includes(prev) ? prev : 'medium')
+      setBackground((prev) => openaiModelDef.backgrounds.includes(prev) ? prev : 'opaque')
+      setOpenaiSizeIdx((prev) => prev >= openaiModelDef.sizes.length ? 0 : prev)
+    } else if (backendId === 'nanobanana' && nanoBananaModelDef?.supportsImageConfig) {
+      setNanoBananaAspectRatio((prev) =>
+        nanoBananaModelDef.aspectRatios.some((ar) => ar.value === prev) ? prev : '1:1'
+      )
+      setNanoBananaImageSize((prev) =>
+        nanoBananaModelDef.imageSizes.some((s) => s.value === prev) ? prev : '1K'
+      )
+    } else if (backendId === 'flux') {
       const m = findModel('flux', model) as FluxModelDef | undefined
       if (m) {
-        setFluxSteps(m.stepsRange.default)
-        setFluxGuidance(m.guidanceRange.default)
+        if (m.stepsRange) setFluxSteps(m.stepsRange.default)
+        if (m.guidanceRange) setFluxGuidance(m.guidanceRange.default)
       }
     } else if (backendId === 'drawthings') {
       const m = DRAWTHINGS_MODELS.find((d) => d.filename === model)
       if (m) {
         setLocalSteps(m.stepsRange.default)
+        setLocalGuidance(m.guidanceRange.default)
       }
     }
   }, [backendId, model])
@@ -155,33 +201,39 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
     let params: Record<string, unknown> = {}
 
     if (backendId === 'openai') {
-      const size = OPENAI_SIZES[openaiSizeIdx]
+      const size = openaiModelDef!.sizes[openaiSizeIdx]
       params = { width: size.width, height: size.height, quality, outputFormat, background }
     } else if (backendId === 'imagen') {
-      params = { aspectRatio, imageSize, personGeneration, numberOfImages }
+      params = { aspectRatio, imageSize, personGeneration }
     } else if (backendId === 'flux') {
       const size = FLUX_SIZES[fluxSizeIdx]
-      params = { width: size.width, height: size.height, steps: fluxSteps, guidance: fluxGuidance }
+      params = { width: size.width, height: size.height }
+      if (fluxModelDef?.stepsRange) params.steps = fluxSteps
+      if (fluxModelDef?.guidanceRange) params.guidance = fluxGuidance
       if (fluxSeed) params.seed = parseInt(fluxSeed)
     } else if (backendId === 'drawthings') {
       const size = DRAWTHINGS_SIZES[localSizeIdx]
-      params = { width: size.width, height: size.height, steps: localSteps }
+      params = { width: size.width, height: size.height, steps: localSteps, guidance: localGuidance }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
     } else if (backendId === 'grok') {
-      params = { aspectRatio: grokAspectRatio }
+      params = { aspectRatio: grokAspectRatio, resolution: grokResolution }
     } else if (backendId === 'nanobanana') {
-      params = {}
+      if (nanoBananaModelDef?.supportsImageConfig) {
+        params = { aspectRatio: nanoBananaAspectRatio, imageSize: nanoBananaImageSize }
+      }
     }
 
     const count = 1
 
     enqueue({ prompt, backend: backendId, model, params, count })
   }, [backendId, model, quality, outputFormat, background, openaiSizeIdx,
-      aspectRatio, imageSize, personGeneration, numberOfImages,
+      aspectRatio, imageSize, personGeneration,
+      nanoBananaAspectRatio, nanoBananaImageSize, nanoBananaModelDef,
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
       grokAspectRatio,
-      localSizeIdx, localSteps, localSeed, negativePrompt,
+      grokResolution,
+      localSizeIdx, localSteps, localGuidance, localSeed, negativePrompt,
       apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
@@ -231,15 +283,15 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
         )}
 
         {/* OpenAI parameters */}
-        {backendId === 'openai' && (
+        {backendId === 'openai' && openaiModelDef && (
           <>
-            {renderSizeSelect(OPENAI_SIZES, openaiSizeIdx, setOpenaiSizeIdx)}
+            {renderSizeSelect(openaiModelDef.sizes, openaiSizeIdx, setOpenaiSizeIdx)}
             <div className="setting-row">
               <label>quality</label>
               <select value={quality} onChange={(e) => setQuality(e.target.value as OpenAIQuality)}>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
+                {openaiModelDef.qualities.map((q) => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
               </select>
             </div>
             <div className="setting-row">
@@ -253,8 +305,9 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
             <div className="setting-row">
               <label>background</label>
               <select value={background} onChange={(e) => setBackground(e.target.value as OpenAIBackground)}>
-                <option value="opaque">Opaque</option>
-                <option value="transparent">Transparent</option>
+                {openaiModelDef.backgrounds.map((bg) => (
+                  <option key={bg} value={bg}>{bg.charAt(0).toUpperCase() + bg.slice(1)}</option>
+                ))}
               </select>
             </div>
           </>
@@ -271,14 +324,16 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                 ))}
               </select>
             </div>
-            <div className="setting-row">
-              <label>size</label>
-              <select value={imageSize} onChange={(e) => setImageSize(e.target.value)}>
-                {IMAGEN_IMAGE_SIZES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
+            {imagenModelDef?.supportsImageSize && (
+              <div className="setting-row">
+                <label>size</label>
+                <select value={imageSize} onChange={(e) => setImageSize(e.target.value)}>
+                  {IMAGEN_IMAGE_SIZES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="setting-row">
               <label>persons</label>
               <select value={personGeneration} onChange={(e) => setPersonGeneration(e.target.value as ImagenPersonGeneration)}>
@@ -287,10 +342,6 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                 <option value="allow_all">Allow all</option>
               </select>
             </div>
-            <div className="setting-row">
-              <label>images</label>
-              <input type="number" value={numberOfImages} onChange={(e) => setNumberOfImages(Math.min(4, Math.max(1, parseInt(e.target.value) || 1)))} min={1} max={4} />
-            </div>
           </>
         )}
 
@@ -298,14 +349,18 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
         {backendId === 'flux' && (
           <>
             {renderSizeSelect(FLUX_SIZES, fluxSizeIdx, setFluxSizeIdx)}
-            <div className="setting-row">
-              <label>steps</label>
-              <input type="number" value={fluxSteps} onChange={(e) => setFluxSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={60} />
-            </div>
-            <div className="setting-row">
-              <label>guidance</label>
-              <input type="number" value={fluxGuidance} onChange={(e) => setFluxGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
-            </div>
+            {fluxModelDef?.stepsRange && (
+              <div className="setting-row">
+                <label>steps</label>
+                <input type="number" value={fluxSteps} onChange={(e) => setFluxSteps(Math.max(1, parseInt(e.target.value) || 1))} min={fluxModelDef.stepsRange.min} max={fluxModelDef.stepsRange.max} />
+              </div>
+            )}
+            {fluxModelDef?.guidanceRange && (
+              <div className="setting-row">
+                <label>guidance</label>
+                <input type="number" value={fluxGuidance} onChange={(e) => setFluxGuidance(Math.max(fluxModelDef!.guidanceRange!.min, parseFloat(e.target.value) || fluxModelDef!.guidanceRange!.min))} min={fluxModelDef.guidanceRange.min} max={fluxModelDef.guidanceRange.max} step={0.5} />
+              </div>
+            )}
             <div className="setting-row">
               <label>seed</label>
               <input type="text" value={fluxSeed} onChange={(e) => setFluxSeed(e.target.value)} placeholder="random" />
@@ -313,16 +368,48 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
           </>
         )}
 
+        {/* Nano Banana parameters */}
+        {backendId === 'nanobanana' && nanoBananaModelDef?.supportsImageConfig && (
+          <>
+            <div className="setting-row">
+              <label>aspect</label>
+              <select value={nanoBananaAspectRatio} onChange={(e) => setNanoBananaAspectRatio(e.target.value)}>
+                {nanoBananaModelDef.aspectRatios.map((ar) => (
+                  <option key={ar.value} value={ar.value}>{ar.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>size</label>
+              <select value={nanoBananaImageSize} onChange={(e) => setNanoBananaImageSize(e.target.value)}>
+                {nanoBananaModelDef.imageSizes.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
         {/* Grok Imagine parameters */}
         {backendId === 'grok' && (
-          <div className="setting-row">
-            <label>aspect</label>
-            <select value={grokAspectRatio} onChange={(e) => setGrokAspectRatio(e.target.value as GrokAspectRatio)}>
-              {GROK_ASPECT_RATIOS.map((ar) => (
-                <option key={ar.value} value={ar.value}>{ar.label}</option>
-              ))}
-            </select>
-          </div>
+          <>
+            <div className="setting-row">
+              <label>aspect</label>
+              <select value={grokAspectRatio} onChange={(e) => setGrokAspectRatio(e.target.value as GrokAspectRatio)}>
+                {GROK_ASPECT_RATIOS.map((ar) => (
+                  <option key={ar.value} value={ar.value}>{ar.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="setting-row">
+              <label>size</label>
+              <select value={grokResolution} onChange={(e) => setGrokResolution(e.target.value as GrokResolution)}>
+                {GROK_RESOLUTIONS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          </>
         )}
 
         {/* Draw Things parameters */}
@@ -357,6 +444,10 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
                 <div className="setting-row">
                   <label>steps</label>
                   <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
+                </div>
+                <div className="setting-row">
+                  <label>cfg</label>
+                  <input type="number" value={localGuidance} onChange={(e) => setLocalGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
                 </div>
                 <div className="setting-row">
                   <label>seed</label>

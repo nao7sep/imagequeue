@@ -17,8 +17,9 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
 
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
-  const size = `${width}x${height}` as '1024x1024' | '1024x1536' | '1536x1024'
-  const quality = (task.params.quality as 'low' | 'medium' | 'high') || 'high'
+  // gpt-image-2 supports many more sizes than the SDK type enumerates; cast via unknown
+  const size = `${width}x${height}` as unknown as '1024x1024' | '1024x1536' | '1536x1024' | 'auto'
+  const quality = (task.params.quality as 'low' | 'medium' | 'high' | 'auto') || 'high'
   const outputFormat = (task.params.outputFormat as 'png' | 'jpeg' | 'webp') || 'png'
   const background = (task.params.background as 'opaque' | 'auto' | 'transparent') || 'opaque'
   const outputCompression = task.params.outputCompression as number | undefined

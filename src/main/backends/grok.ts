@@ -17,7 +17,7 @@ export async function generateGrok(task: Task): Promise<Buffer> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout_ms)
 
-  const params = task.params as { aspectRatio?: string }
+  const params = task.params as { aspectRatio?: string; resolution?: string }
 
   const body: Record<string, unknown> = {
     model: task.model,
@@ -27,8 +27,9 @@ export async function generateGrok(task: Task): Promise<Buffer> {
   }
 
   if (params.aspectRatio) body.aspect_ratio = params.aspectRatio
+  if (params.resolution) body.resolution = params.resolution
 
-  logApiRequest('grok', task.model, { model: task.model, aspectRatio: params.aspectRatio })
+  logApiRequest('grok', task.model, { model: task.model, aspectRatio: params.aspectRatio, resolution: params.resolution })
   const startTime = Date.now()
 
   try {

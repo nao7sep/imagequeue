@@ -100,6 +100,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
             <option value="low">low</option>
             <option value="medium">medium</option>
             <option value="high">high</option>
+            <option value="auto">auto</option>
           </select>
         </div>
         <div className="settings-field">

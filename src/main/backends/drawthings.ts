@@ -25,6 +25,7 @@ async function generateDrawThingsCli(task: Task): Promise<Buffer> {
     '--prompt', task.prompt,
     '--output', outputPath,
     '--steps', String((task.params.steps as number) || 4),
+    '--cfg', String((task.params.guidance as number) || 1),
     '--width', String((task.params.width as number) || 1024),
     '--height', String((task.params.height as number) || 1024),
     '--disable-preview',
@@ -41,6 +42,7 @@ async function generateDrawThingsCli(task: Task): Promise<Buffer> {
   logApiRequest('drawthings', 'draw-things-cli generate', {
     model: task.model,
     steps: task.params.steps,
+    guidance: task.params.guidance,
     width: task.params.width,
     height: task.params.height,
     seed: task.params.seed,

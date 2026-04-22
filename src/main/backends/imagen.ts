@@ -3,6 +3,7 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
+import { findModel } from '../../shared/models'
 
 // Calls Google Imagen API and returns the image as a Buffer.
 // Uses image_backends.imagen.api_key (not the text_ai key).
@@ -17,11 +18,14 @@ export async function generateImagen(task: Task): Promise<Buffer> {
   const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.imagen.timeout_ms } })
 
   const aspectRatio = (task.params.aspectRatio as string) || '1:1'
-  const imageSize = (task.params.imageSize as string) || '1024x1024'
-  const personGeneration = (task.params.personGeneration as string) || 'allow_adult'
-  const numberOfImages = (task.params.numberOfImages as number) || 1
+  const imageSize = (task.params.imageSize as string) || '1K'
+  const personGeneration = (task.params.personGeneration as string) || 'allow_all'
 
-  const requestParams = { aspectRatio, imageSize, personGeneration, numberOfImages }
+  // imageSize is only supported by Standard and Ultra models, not Fast
+  const modelDef = findModel('imagen', task.model)
+  const supportsImageSize = modelDef?.supportsImageSize ?? false
+
+  const requestParams = { aspectRatio, ...(supportsImageSize && { imageSize }), personGeneration }
   logApiRequest('imagen', task.model, requestParams)
   const startTime = Date.now()
 
@@ -29,9 +33,10 @@ export async function generateImagen(task: Task): Promise<Buffer> {
     model: task.model,
     prompt: task.prompt,
     config: {
-      numberOfImages,
+      numberOfImages: 1,
       aspectRatio,
-      ...(imageSize === '2048x2048' && { outputOptions: { mimeType: 'image/png' } }),
+      ...(supportsImageSize && { imageSize }),
+      ...(supportsImageSize && imageSize === '2K' && { outputOptions: { mimeType: 'image/png' } }),
       personGeneration
     } as Record<string, unknown>
   }).catch((err: unknown) => {

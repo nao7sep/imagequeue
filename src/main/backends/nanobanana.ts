@@ -3,6 +3,7 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
+import { findModel } from '../../shared/models'
 
 // Calls the Gemini native image generation API (generateContent) and returns
 // the first image part as a Buffer. Uses image_backends.nanobanana.api_key
@@ -17,13 +18,25 @@ export async function generateNanoBanana(task: Task): Promise<Buffer> {
 
   const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms } })
 
-  logApiRequest('nanobanana', task.model, { model: task.model })
+  const modelDef = findModel('nanobanana', task.model)
+  const supportsImageConfig = modelDef?.supportsImageConfig ?? false
+
+  const aspectRatio = (task.params.aspectRatio as string) || '1:1'
+  const imageSize = (task.params.imageSize as string) || '1K'
+
+  const requestParams = supportsImageConfig
+    ? { aspectRatio, imageSize }
+    : {}
+  logApiRequest('nanobanana', task.model, requestParams)
   const startTime = Date.now()
 
   const response = await ai.models.generateContent({
     model: task.model,
     contents: task.prompt,
-    config: { responseModalities: ['TEXT', 'IMAGE'] }
+    config: {
+      responseModalities: ['TEXT', 'IMAGE'],
+      ...(supportsImageConfig && { imageConfig: { aspectRatio, imageSize } })
+    } as Record<string, unknown>
   }).catch((err: unknown) => {
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
@@ -31,6 +44,7 @@ export async function generateNanoBanana(task: Task): Promise<Buffer> {
     }
     log('error', 'Nano Banana API call failed', {
       model: task.model,
+      requestParams,
       status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,
       message: err instanceof Error ? err.message : String(err)
     })
