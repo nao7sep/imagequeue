@@ -120,43 +120,51 @@ export function Layout(): React.JSX.Element {
           </div>
         </div>
       )}
-      {overlay === 'shortcuts' && (
-        <div className="modal-backdrop" onClick={() => setOverlay(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span>Keyboard Shortcuts</span>
-              <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
-            </div>
-            <div className="shortcuts-body">
-              <div className="shortcut-group">
-                <p className="shortcut-group-name">Sending</p>
-                <div className="shortcut-list">
-                  <div className="shortcut-item"><span>Send to all backends</span><kbd>⌘↵</kbd></div>
-                  <div className="shortcut-item"><span>Send to GPT Image</span><kbd>⌘1</kbd></div>
-                  <div className="shortcut-item"><span>Send to Google Imagen</span><kbd>⌘2</kbd></div>
-                  <div className="shortcut-item"><span>Send to Nano Banana</span><kbd>⌘3</kbd></div>
-                  <div className="shortcut-item"><span>Send to Grok Imagine</span><kbd>⌘4</kbd></div>
-                  <div className="shortcut-item"><span>Send to FLUX</span><kbd>⌘5</kbd></div>
-                  <div className="shortcut-item"><span>Send to Draw Things</span><kbd>⌘6</kbd></div>
-                </div>
+      {overlay === 'shortcuts' && (() => {
+        const isWin = window.electronAPI.platform === 'win32'
+        const mod = isWin ? 'Ctrl+' : 'Cmd+'
+        const enter = 'Enter'
+        const del = 'Backspace'
+        return (
+          <div className="modal-backdrop" onClick={() => setOverlay(null)}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <span>Keyboard Shortcuts</span>
+                <button className="modal-close" onClick={() => setOverlay(null)}>✕</button>
               </div>
-              <div className="shortcut-group">
-                <p className="shortcut-group-name">Queue</p>
-                <div className="shortcut-list">
-                  <div className="shortcut-item"><span>Remove selected task</span><kbd>⌫</kbd></div>
+              <div className="shortcuts-body">
+                <div className="shortcut-group">
+                  <p className="shortcut-group-name">Sending</p>
+                  <div className="shortcut-list">
+                    <div className="shortcut-item"><span>Send to all backends</span><kbd>{mod}{enter}</kbd></div>
+                    <div className="shortcut-item"><span>Send to GPT Image</span><kbd>{mod}1</kbd></div>
+                    <div className="shortcut-item"><span>Send to Google Imagen</span><kbd>{mod}2</kbd></div>
+                    <div className="shortcut-item"><span>Send to Nano Banana</span><kbd>{mod}3</kbd></div>
+                    <div className="shortcut-item"><span>Send to Grok Imagine</span><kbd>{mod}4</kbd></div>
+                    <div className="shortcut-item"><span>Send to FLUX</span><kbd>{mod}5</kbd></div>
+                    {!isWin && (
+                      <div className="shortcut-item"><span>Send to Draw Things</span><kbd>{mod}6</kbd></div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="shortcut-group">
-                <p className="shortcut-group-name">App</p>
-                <div className="shortcut-list">
-                  <div className="shortcut-item"><span>Settings</span><kbd>⌘,</kbd></div>
-                  <div className="shortcut-item"><span>Close open panel</span><kbd>Esc</kbd></div>
+                <div className="shortcut-group">
+                  <p className="shortcut-group-name">Queue</p>
+                  <div className="shortcut-list">
+                    <div className="shortcut-item"><span>Remove selected task</span><kbd>{del}</kbd></div>
+                  </div>
+                </div>
+                <div className="shortcut-group">
+                  <p className="shortcut-group-name">App</p>
+                  <div className="shortcut-list">
+                    <div className="shortcut-item"><span>Settings</span><kbd>{mod},</kbd></div>
+                    <div className="shortcut-item"><span>Close open panel</span><kbd>Esc</kbd></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
       {overlay === 'about' && (
         <div className="modal-backdrop" onClick={() => setOverlay(null)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
