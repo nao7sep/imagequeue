@@ -18,7 +18,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #0a0a18 0%, #110820 100%);
+  background: transparent;
+  border-bottom: 1px solid var(--border);
   margin: -12px -12px 0 -12px;
   padding: 12px;
 }

@@ -62,7 +62,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  background: transparent;
   min-height: 200px;
   overflow: hidden;
 }

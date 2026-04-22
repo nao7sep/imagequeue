@@ -25,11 +25,37 @@ html, body, #root {
   overflow: hidden;
 }
 
+@property --bg-hue {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: false;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
-  background: var(--bg-primary);
+  background: transparent;
   color: var(--text-primary);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    135deg,
+    oklch(12% 0.10 calc(var(--bg-hue))) 0%,
+    oklch(12% 0.10 calc(var(--bg-hue) + 100)) 33%,
+    oklch(12% 0.10 calc(var(--bg-hue) + 200)) 67%,
+    oklch(12% 0.10 calc(var(--bg-hue))) 100%
+  );
+  animation: bgHueShift 10s linear infinite;
+}
+
+@keyframes bgHueShift {
+  from { --bg-hue: 0; }
+  to   { --bg-hue: 360; }
 }
 
 button {
