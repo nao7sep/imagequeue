@@ -2,7 +2,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .prompt-textarea {
@@ -59,7 +61,6 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-secondary);
   min-height: 200px;

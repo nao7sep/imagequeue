@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
 import { initSession, getSessionDir } from './session'
@@ -20,6 +20,47 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false
     }
+  })
+
+  win.webContents.on('context-menu', (_event, params) => {
+    const { isEditable, selectionText, editFlags, misspelledWord, dictionarySuggestions } = params
+    const hasSelection = selectionText.length > 0
+
+    if (!isEditable && !hasSelection) return
+
+    const template: Electron.MenuItemConstructorOptions[] = []
+
+    if (misspelledWord) {
+      if (dictionarySuggestions.length > 0) {
+        for (const word of dictionarySuggestions) {
+          template.push({ label: word, click: () => win.webContents.replaceMisspelling(word) })
+        }
+      } else {
+        template.push({ label: 'No suggestions', enabled: false })
+      }
+      template.push({ type: 'separator' })
+    }
+
+    if (isEditable) {
+      if (editFlags.canUndo || editFlags.canRedo) {
+        template.push(
+          { label: 'Undo', role: 'undo', enabled: editFlags.canUndo },
+          { label: 'Redo', role: 'redo', enabled: editFlags.canRedo },
+          { type: 'separator' }
+        )
+      }
+      template.push(
+        { label: 'Cut', role: 'cut', enabled: editFlags.canCut },
+        { label: 'Copy', role: 'copy', enabled: editFlags.canCopy },
+        { label: 'Paste', role: 'paste', enabled: editFlags.canPaste },
+        { type: 'separator' },
+        { label: 'Select All', role: 'selectAll', enabled: editFlags.canSelectAll }
+      )
+    } else if (hasSelection) {
+      template.push({ label: 'Copy', role: 'copy' })
+    }
+
+    Menu.buildFromTemplate(template).popup({ window: win })
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {

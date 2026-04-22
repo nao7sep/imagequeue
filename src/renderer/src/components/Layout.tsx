@@ -26,8 +26,8 @@ const MIN_LEFT_WIDTH = 280
 const MIN_COLUMN_WIDTH = 200
 const RESIZE_HANDLE_WIDTH = 5
 
-function clampLeftWidth(w: number, numBackends: number): number {
-  const minRight = numBackends * MIN_COLUMN_WIDTH
+function clampLeftWidth(w: number): number {
+  const minRight = MIN_COLUMN_WIDTH
   const maxAllowed = Math.max(MIN_LEFT_WIDTH, window.innerWidth - minRight - RESIZE_HANDLE_WIDTH)
   return Math.max(MIN_LEFT_WIDTH, Math.min(maxAllowed, w))
 }
@@ -54,14 +54,14 @@ export function Layout(): React.JSX.Element {
     widthInitialized.current = true
     const ui = settings.ui as { leftPaneWidth?: number } | undefined
     const saved = ui?.leftPaneWidth ?? DEFAULT_LEFT_WIDTH
-    setLeftWidth(clampLeftWidth(saved, BACKENDS.length))
-    latestWidth.current = clampLeftWidth(saved, BACKENDS.length)
+    setLeftWidth(clampLeftWidth(saved))
+    latestWidth.current = clampLeftWidth(saved)
   }, [settings])
 
   // Shrink left pane if window becomes too small to show all columns
   useEffect(() => {
     const onResize = (): void => {
-      setLeftWidth((w) => clampLeftWidth(w, BACKENDS.length))
+      setLeftWidth((w) => clampLeftWidth(w))
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
@@ -120,7 +120,7 @@ export function Layout(): React.JSX.Element {
 
     const onMouseMove = (ev: MouseEvent): void => {
       if (!isDragging.current) return
-      const newWidth = clampLeftWidth(ev.clientX, BACKENDS.length)
+      const newWidth = clampLeftWidth(ev.clientX)
       setLeftWidth(newWidth)
       latestWidth.current = newWidth
     }
