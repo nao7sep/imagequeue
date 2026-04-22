@@ -82,9 +82,10 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         )}
       </div>
 
-      {selectedTask && selectedTask.status === 'completed' && (
+      {selectedTask && (
         <div className="preview-metadata">
           <div><strong>model:</strong> {selectedTask.model}</div>
+          <div><strong>status:</strong> {selectedTask.status}</div>
           <div><strong>prompt:</strong> {selectedTask.prompt}</div>
           {selectedTask.estimatedCostUsd !== null && (
             <div><strong>cost:</strong> ${selectedTask.estimatedCostUsd.toFixed(2)}</div>

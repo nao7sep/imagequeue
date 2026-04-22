@@ -47,7 +47,11 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        setOverlay(null)
+        if (overlay) {
+          setOverlay(null)
+        } else {
+          setSelectedTask(null)
+        }
         setShowMenu(false)
         return
       }
@@ -238,6 +242,7 @@ export function Layout(): React.JSX.Element {
             label={b.label}
             hasPrompt={!!prompt.trim()}
             onSelectTask={handleSelectTask}
+            onDeselect={() => setSelectedTask(null)}
           />
         ))}
       </div>

@@ -32,6 +32,7 @@ interface Props {
   label: string
   hasPrompt: boolean
   onSelectTask: (task: Task) => void
+  onDeselect?: () => void
 }
 
 interface LocalModelInfo {
@@ -56,7 +57,7 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'var(--error)'
 }
 
-export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props): React.JSX.Element {
+export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDeselect }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
   const { settings } = useSettings()
   const models = getModelsForBackend(backendId as 'openai')
@@ -479,7 +480,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask }: Props
         </button>
       </div>
 
-      <div className="task-list">
+      <div className="task-list" onClick={(e) => { if (e.target === e.currentTarget) onDeselect?.() }}>
         {columnTasks.length === 0 ? (
           <div className="task-list-empty">No tasks queued</div>
         ) : (

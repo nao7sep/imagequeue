@@ -77,13 +77,7 @@ export const DRAWTHINGS_SIZES: SizePreset[] = [
   { label: '1536×2048 (2K Portrait 3:4)', width: 1536, height: 2048 },
   { label: '2048×1536 (2K Landscape 4:3)', width: 2048, height: 1536 },
   { label: '1152×2048 (2K Portrait 9:16)', width: 1152, height: 2048 },
-  { label: '2048×1152 (2K Landscape 16:9)', width: 2048, height: 1152 },
-  // 4K (high-end hardware only; very slow on CPU)
-  { label: '4096×4096 (4K Square)', width: 4096, height: 4096 },
-  { label: '3072×4096 (4K Portrait 3:4)', width: 3072, height: 4096 },
-  { label: '4096×3072 (4K Landscape 4:3)', width: 4096, height: 3072 },
-  { label: '2304×4096 (4K Portrait 9:16)', width: 2304, height: 4096 },
-  { label: '4096×2304 (4K Landscape 16:9)', width: 4096, height: 2304 }
+  { label: '2048×1152 (2K Landscape 16:9)', width: 2048, height: 1152 }
 ]
 
 // --- Model definitions ---
