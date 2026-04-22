@@ -33,7 +33,9 @@ export function registerQueueIpc(): void {
     const task = queueManager.getTask(backend, taskId)
     log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null })
     if (task?.baseName) {
-      const ext: ImageExt = task.imagePath?.endsWith('.jpg') ? 'jpg' : 'png'
+      const ext: ImageExt = task.imagePath?.endsWith('.jpg') ? 'jpg'
+        : task.imagePath?.endsWith('.webp') ? 'webp'
+        : 'png'
       deleteImageOutput(task.baseName, ext)
     }
     queueManager.removeTask(backend, taskId)

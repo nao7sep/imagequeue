@@ -45,14 +45,23 @@ const activeCounts: Record<BackendId, number> = {
   drawthings: 0
 }
 
-// Output file extension per backend (Grok returns JPEG; all others produce PNG)
-const backendExt: Record<BackendId, ImageExt> = {
-  openai: 'png',
-  imagen: 'png',
-  nanobanana: 'png',
-  grok: 'jpg',
-  flux: 'png',
-  drawthings: 'png'
+// Returns the correct file extension for the generated image.
+// OpenAI supports jpeg/webp/png via outputFormat param; all other backends have fixed formats.
+function getImageExt(backend: BackendId, params: Task['params']): ImageExt {
+  if (backend === 'openai') {
+    const fmt = params?.outputFormat as string | undefined
+    if (fmt === 'jpeg') return 'jpg'
+    if (fmt === 'webp') return 'webp'
+    return 'png'
+  }
+  const staticExts: Record<Exclude<BackendId, 'openai'>, ImageExt> = {
+    imagen: 'png',
+    nanobanana: 'png',
+    grok: 'jpg',
+    flux: 'png',
+    drawthings: 'png'
+  }
+  return staticExts[backend as Exclude<BackendId, 'openai'>]
 }
 
 // Starts the queue processor loop. Call once at app startup.
@@ -119,11 +128,12 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       error: null
     }
 
-    const baseName = writeImageOutput(timestamp, slug, backend, imageBuffer, metadata, backendExt[backend])
+    const ext = getImageExt(backend, task.params)
+    const baseName = writeImageOutput(timestamp, slug, backend, imageBuffer, metadata, ext)
 
     task.status = 'completed'
     task.baseName = baseName
-    task.imagePath = `${baseName}.${backendExt[backend]}`
+    task.imagePath = `${baseName}.${ext}`
     logGenerationComplete(task.id, task.durationMs, task.baseName, task.estimatedCostUsd)
   } catch (err) {
     task.status = 'failed'
