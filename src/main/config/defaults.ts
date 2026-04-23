@@ -8,6 +8,12 @@ export function createDefaultConfig(): AppConfig {
       api_key: '',
       timeout_ms: 30000
     },
+    general: {
+      auto_preview_idle_seconds: 30,
+      confirm_remove: false,
+      confirm_delete: false,
+      delete_to_trash: true
+    },
     image_backends: {
       openai: {
         api_key: '',

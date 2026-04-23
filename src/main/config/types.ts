@@ -94,8 +94,16 @@ export interface PromptsConfig {
   slug: string
 }
 
+export interface GeneralConfig {
+  auto_preview_idle_seconds: number
+  confirm_remove: boolean
+  confirm_delete: boolean
+  delete_to_trash: boolean
+}
+
 export interface AppConfig {
   text_ai: TextAIConfig
+  general: GeneralConfig
   image_backends: ImageBackendsConfig
   prompts: PromptsConfig
 }

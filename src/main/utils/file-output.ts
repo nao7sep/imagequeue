@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { shell } from 'electron'
 import { getSessionDir } from '../session'
 import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
@@ -36,4 +37,14 @@ export function deleteImageOutput(baseName: string, ext: ImageExt = 'png'): void
 
   if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath)
   if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath)
+}
+
+// Moves the image and metadata files for a given base filename to the OS trash.
+export async function trashImageOutput(baseName: string, ext: ImageExt = 'png'): Promise<void> {
+  const dir = getSessionDir()
+  const imagePath = path.join(dir, `${baseName}.${ext}`)
+  const metaPath = path.join(dir, `${baseName}.json`)
+
+  if (fs.existsSync(imagePath)) await shell.trashItem(imagePath)
+  if (fs.existsSync(metaPath)) await shell.trashItem(metaPath)
 }

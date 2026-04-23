@@ -39,7 +39,18 @@ npm run typecheck
 
 ## Configuration
 
-Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux). Each backend has its own section for the API key and default generation parameters.
+Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux).
+
+**General** — app-wide behavior settings:
+
+| Setting | Default | Description |
+|---|---|---|
+| Auto-preview after idle | 30 s | Auto-selects a newly completed image after this many seconds of inactivity. Set to 0 to disable. |
+| Confirm before removing | Off | Show a confirmation dialog before removing a task from the queue (Backspace / rm). |
+| Confirm before deleting | Off | Show a confirmation dialog before deleting a task and its files (Delete / del). |
+| Move deleted files to Trash | On | Send deleted files to the system Trash instead of permanently deleting them. |
+
+Each backend also has its own section for the API key and default generation parameters.
 
 ## Keyboard Shortcuts
 
@@ -48,6 +59,11 @@ Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux). Each backend 
 | Send to all backends | ⌘↩ | Ctrl+Enter |
 | Send to backend 1–6 | ⌘1–6 | Ctrl+1–6 |
 | Open Settings | ⌘, | Ctrl+, |
+| Move selection up / down within a column | ↑ / ↓ | ↑ / ↓ |
+| Move selection to nearest task in adjacent column | ← / → | ← / → |
+| Remove selected task from queue (keep files) | Backspace | Backspace |
+| Delete selected task and its files | Delete | Delete |
+| Clear selection / close panel | Esc | Esc |
 
 ## Draw Things (local)
 

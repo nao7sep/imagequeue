@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useSettings } from '../context/SettingsContext'
+import { useConfirm } from '../context/ConfirmContext'
+import { Modal } from './Modal'
 import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
 import './Settings.css'
 
@@ -9,25 +11,56 @@ interface Props {
 
 export function Settings({ onClose }: Props): React.JSX.Element {
   const { settings, updateSettings } = useSettings()
+  const confirm = useConfirm()
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => settings)
   const [status, setStatus] = useState('')
+  const originalRef = useRef<string>(JSON.stringify(settings))
+
+  const dirty = useMemo(
+    () => (config ? JSON.stringify(config) !== originalRef.current : false),
+    [config]
+  )
 
   const handleSave = async (): Promise<void> => {
     if (!config) return
     await updateSettings(config)
+    originalRef.current = JSON.stringify(config)
     setStatus('Saved')
     setTimeout(() => setStatus(''), 2000)
   }
 
-  if (!config) return <div className="settings-overlay">Loading...</div>
+  const handleClose = useCallback(async (): Promise<void> => {
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Unsaved changes',
+        message: 'Close Settings without saving?',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep Editing',
+        danger: true
+      })
+      if (!ok) return
+    }
+    onClose()
+  }, [dirty, confirm, onClose])
+
+  if (!config) return (
+    <Modal title="Settings" className="settings-modal-box" onClose={handleClose}>
+      <div className="settings-overlay">Loading…</div>
+    </Modal>
+  )
 
   const textAi = config.text_ai as Record<string, unknown>
   const backends = config.image_backends as Record<string, Record<string, unknown>>
   const prompts = config.prompts as Record<string, string>
+  const general = (config.general ?? {}) as Record<string, unknown>
 
   const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
+  }
+
+  const updateGeneral = (key: string, value: unknown): void => {
+    setConfig({ ...config, general: { ...general, [key]: value } })
   }
 
   const updateBackend = (backend: string, key: string, value: unknown): void => {
@@ -46,10 +79,54 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   }
 
   return (
-    <div className="settings-overlay">
-      <div className="settings-header">
-        <h2>Settings</h2>
-        <button className="settings-close" onClick={onClose}>✕</button>
+    <Modal title="Settings" className="settings-modal-box" onClose={handleClose}>
+      <div className="settings-overlay">
+      <div className="settings-section">
+        <h3>General</h3>
+        <div className="settings-field">
+          <label>Auto-preview (s)</label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={(general.auto_preview_idle_seconds as number) ?? 30}
+            onChange={(e) => updateGeneral('auto_preview_idle_seconds', Math.max(0, parseInt(e.target.value) || 0))}
+          />
+          <p className="settings-hint">Seconds of inactivity before the latest completed image is automatically selected and previewed. Set to 0 to disable.</p>
+        </div>
+        <div className="settings-field-check">
+          <label>
+            <input
+              type="checkbox"
+              checked={(general.confirm_remove as boolean) ?? false}
+              onChange={(e) => updateGeneral('confirm_remove', e.target.checked)}
+            />
+            Confirm remove
+          </label>
+          <p className="settings-hint">Show a confirmation prompt before removing a task from the queue (Backspace / rm).</p>
+        </div>
+        <div className="settings-field-check">
+          <label>
+            <input
+              type="checkbox"
+              checked={(general.confirm_delete as boolean) ?? false}
+              onChange={(e) => updateGeneral('confirm_delete', e.target.checked)}
+            />
+            Confirm delete
+          </label>
+          <p className="settings-hint">Show a confirmation prompt before deleting a task and its files (Delete / del).</p>
+        </div>
+        <div className="settings-field-check">
+          <label>
+            <input
+              type="checkbox"
+              checked={(general.delete_to_trash as boolean) ?? true}
+              onChange={(e) => updateGeneral('delete_to_trash', e.target.checked)}
+            />
+            Delete to Trash
+          </label>
+          <p className="settings-hint">Move deleted files to Trash instead of permanently deleting them.</p>
+        </div>
       </div>
 
       <div className="settings-section">
@@ -240,10 +317,13 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
+      </div>
+
       <div className="settings-footer">
+        {dirty && !status && <span className="settings-status settings-unsaved">Unsaved changes</span>}
         {status && <span className="settings-status">{status}</span>}
         <button className="settings-save" onClick={handleSave}>Save</button>
       </div>
-    </div>
+    </Modal>
   )
 }

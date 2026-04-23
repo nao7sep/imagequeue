@@ -80,7 +80,8 @@ function processQueues(): void {
       (config.image_backends[backend] as { concurrency?: number }).concurrency || 3
     const tasks = queueManager.getTasks(backend)
 
-    for (const task of tasks) {
+    for (let i = tasks.length - 1; i >= 0; i--) {
+      const task = tasks[i]
       if (activeCounts[backend] >= maxConcurrency) break
       if (task.status !== 'queued') continue
 

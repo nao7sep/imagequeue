@@ -34,7 +34,7 @@ class QueueManager {
         baseName: null,
         error: null
       }
-      this.queues[request.backend].push(task)
+      this.queues[request.backend].unshift(task)
       tasks.push(task)
     }
 

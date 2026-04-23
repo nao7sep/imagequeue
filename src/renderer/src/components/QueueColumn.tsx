@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
+import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
 import type { BackendId, Task, CliStatus, LocalModelInfo } from '../../../shared/types'
 import {
@@ -30,8 +31,6 @@ interface Props {
   backendId: BackendId
   label: string
   hasPrompt: boolean
-  onSelectTask: (task: Task) => void
-  onDeselect?: () => void
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -41,8 +40,9 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'var(--error)'
 }
 
-export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDeselect }: Props): React.JSX.Element {
+export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
+  const { selection, select, clear } = useSelection()
   const { settings } = useSettings()
   const models = getModelsForBackend(backendId as 'openai')
   const defaultModel = models.find((m) => m.isDefault) ?? models[0]
@@ -459,7 +459,7 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDesel
         </button>
       </div>
 
-      <div className="task-list" onClick={(e) => { if (e.target === e.currentTarget) onDeselect?.() }}>
+      <div className="task-list" onClick={(e) => { if (e.target === e.currentTarget) clear() }}>
         {columnTasks.length === 0 ? (
           <div className="task-list-empty">No tasks queued</div>
         ) : (
@@ -468,7 +468,8 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDesel
               key={task.id}
               task={task}
               backendId={backendId}
-              onClick={() => onSelectTask(task)}
+              isSelected={selection?.backend === backendId && selection.taskId === task.id}
+              onClick={() => select(backendId, task.id)}
             />
           ))
         )}
@@ -484,7 +485,8 @@ export function QueueColumn({ backendId, label, hasPrompt, onSelectTask, onDesel
   )
 }
 
-function TaskItem({ task, backendId, onClick }: { task: Task; backendId: BackendId; onClick: () => void }): React.JSX.Element {
+function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backendId: BackendId; isSelected: boolean; onClick: () => void }): React.JSX.Element {
+  const { removeTask, deleteTask } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const itemRef = useRef<HTMLDivElement>(null)
@@ -509,11 +511,11 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
 
   const handleRemove = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    window.electronAPI.removeTask(backendId, task.id)
+    void removeTask(backendId, task.id)
   }
   const handleDelete = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    window.electronAPI.deleteWithFiles(backendId, task.id)
+    void deleteTask(backendId, task.id)
   }
   const handleRetry = (e: React.MouseEvent): void => {
     e.stopPropagation()
@@ -527,7 +529,12 @@ function TaskItem({ task, backendId, onClick }: { task: Task; backendId: Backend
   }
 
   return (
-    <div className="task-item" ref={itemRef} onClick={onClick}>
+    <div
+      className={isSelected ? 'task-item task-item-selected' : 'task-item'}
+      ref={itemRef}
+      onClick={onClick}
+      data-task-id={task.id}
+    >
       {thumbUrl && (
         <img
           className="task-thumbnail"

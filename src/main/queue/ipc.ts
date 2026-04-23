@@ -1,7 +1,8 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueRequest } from '../../shared/types'
-import { deleteImageOutput, ImageExt } from '../utils/file-output'
+import { deleteImageOutput, trashImageOutput, ImageExt } from '../utils/file-output'
+import { loadConfig } from '../config'
 import { logEnqueue, log } from '../logger'
 
 // Registers all IPC handlers for queue operations.
@@ -29,14 +30,23 @@ export function registerQueueIpc(): void {
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
 
-  ipcMain.handle('queue:deleteWithFiles', (_event, backend: BackendId, taskId: string) => {
+  ipcMain.handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
-    log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null })
+    const toTrash = loadConfig().general.delete_to_trash
+    log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null, toTrash })
     if (task?.baseName) {
       const ext: ImageExt = task.imagePath?.endsWith('.jpg') ? 'jpg'
         : task.imagePath?.endsWith('.webp') ? 'webp'
         : 'png'
-      deleteImageOutput(task.baseName, ext)
+      try {
+        if (toTrash) {
+          await trashImageOutput(task.baseName, ext)
+        } else {
+          deleteImageOutput(task.baseName, ext)
+        }
+      } catch (err) {
+        log('error', `Failed to ${toTrash ? 'trash' : 'delete'} files for ${taskId}`, { error: String(err) })
+      }
     }
     queueManager.removeTask(backend, taskId)
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
