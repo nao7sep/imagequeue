@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { useConfirm } from '../context/ConfirmContext'
 import './DrawThingsModelsModal.css'
 
 interface LocalModelInfo {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
+  const confirm = useConfirm()
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
@@ -23,14 +25,29 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const [importPath, setImportPath] = useState('')
   const [filter, setFilter] = useState('')
 
+  const handleRequestClose = useCallback(async (): Promise<void> => {
+    if (importPath.trim() === '') {
+      onClose()
+      return
+    }
+    const ok = await confirm({
+      title: 'Unsaved changes',
+      message: 'You have an unimported model path. Discard and close?',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep Editing',
+      danger: true
+    })
+    if (ok) onClose()
+  }, [importPath, confirm, onClose])
+
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') void handleRequestClose()
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [handleRequestClose])
 
   const loadDownloaded = async (): Promise<void> => {
     setLoadingDownloaded(true)
@@ -84,11 +101,11 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const filteredNotDownloaded = notDownloaded.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
 
   const content = (
-    <div className="dt-modal-backdrop" onClick={onClose}>
+    <div className="dt-modal-backdrop" onClick={() => void handleRequestClose()}>
       <div className="dt-modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="dt-modal-header">
           <span>Draw Things Models</span>
-          <button className="dt-modal-close" onClick={onClose}>✕</button>
+          <button className="dt-modal-close" onClick={() => void handleRequestClose()}>✕</button>
         </div>
 
         <div className="dt-modal-body">
