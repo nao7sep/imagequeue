@@ -348,17 +348,6 @@ export const FLUX_MODELS: FluxModelDef[] = [
 
 export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
   {
-    id: 'gemini-3-pro-image-preview',
-    label: 'Nano Banana Pro',
-    backend: 'nanobanana',
-    supportsImageConfig: true,
-    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
-    imageSizes: NANO_BANANA_SIZES_PRO,
-    // 1K and 2K both use 1120 tokens at $120/1M; 4K uses 2000 tokens
-    // Source: https://ai.google.dev/gemini-api/docs/pricing
-    pricing: { '1K': 0.134, '2K': 0.134, '4K': 0.24 }
-  },
-  {
     id: 'gemini-3.1-flash-image-preview',
     label: 'Nano Banana 2',
     backend: 'nanobanana',
@@ -370,6 +359,17 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     // 512→747 tokens, 1K→1120, 2K→1680, 4K→2520
     // Source: https://ai.google.dev/gemini-api/docs/pricing
     pricing: { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 }
+  },
+  {
+    id: 'gemini-3-pro-image-preview',
+    label: 'Nano Banana Pro',
+    backend: 'nanobanana',
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
+    imageSizes: NANO_BANANA_SIZES_PRO,
+    // 1K and 2K both use 1120 tokens at $120/1M; 4K uses 2000 tokens
+    // Source: https://ai.google.dev/gemini-api/docs/pricing
+    pricing: { '1K': 0.134, '2K': 0.134, '4K': 0.24 }
   },
   {
     id: 'gemini-2.5-flash-image',
