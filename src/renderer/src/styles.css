@@ -3,14 +3,20 @@
   --bg-secondary: #16213e;
   --bg-surface: #0f3460;
   --bg-input: #1a1a2e;
+  --bg-hover: #24436f;
+  --hover: var(--bg-hover);
+  --pane-bg: rgba(10, 16, 34, 0.72);
+  --pane-bg-strong: rgba(10, 16, 34, 0.86);
+  --preview-bg: rgba(10, 16, 34, 0.42);
   --text-primary: #e0e0e0;
   --text-secondary: #a0a0b0;
-  --text-muted: #6c6c7c;
+  --text-muted: #92a0b7;
+  --text-on-accent: #06121f;
   --border: #2a2a4a;
   --accent: #38bdf8;
   --accent-hover: #7dd3fc;
   --success: #22c55e;
-  --error: #ef4444;
+  --error: #f87171;
   --warning: #f59e0b;
 }
 
@@ -45,10 +51,10 @@ body::before {
   z-index: -1;
   background: linear-gradient(
     135deg,
-    oklch(12% 0.10 calc(var(--bg-hue))) 0%,
-    oklch(12% 0.10 calc(var(--bg-hue) + 100)) 33%,
-    oklch(12% 0.10 calc(var(--bg-hue) + 200)) 67%,
-    oklch(12% 0.10 calc(var(--bg-hue))) 100%
+    oklch(14% 0.13 calc(var(--bg-hue) + 15)) 0%,
+    oklch(16% 0.15 calc(var(--bg-hue) + 105)) 34%,
+    oklch(13% 0.13 calc(var(--bg-hue) + 215)) 68%,
+    oklch(14% 0.13 calc(var(--bg-hue) + 375)) 100%
   );
   animation: bgHueShift 10s linear infinite;
 }

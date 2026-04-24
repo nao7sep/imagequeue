@@ -174,7 +174,7 @@
 .dt-import-btn {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .dt-import-btn:hover:not(:disabled) {

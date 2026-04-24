@@ -4,15 +4,16 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
+  background: var(--pane-bg);
 }
 
 /* Per-backend accent colors */
-[data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; }
-[data-backend="imagen"]     { --col-accent: #f97316; --col-accent-hover: #fb923c; }
-[data-backend="grok"]       { --col-accent: #a855f7; --col-accent-hover: #c084fc; }
-[data-backend="flux"]       { --col-accent: #06b6d4; --col-accent-hover: #22d3ee; }
-[data-backend="nanobanana"] { --col-accent: #eab308; --col-accent-hover: #facc15; }
-[data-backend="drawthings"] { --col-accent: #f59e0b; --col-accent-hover: #fbbf24; }
+[data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; --col-text: #34d399; }
+[data-backend="imagen"]     { --col-accent: #f97316; --col-accent-hover: #fb923c; --col-text: #fb923c; }
+[data-backend="grok"]       { --col-accent: #a855f7; --col-accent-hover: #c084fc; --col-text: #d8b4fe; }
+[data-backend="flux"]       { --col-accent: #06b6d4; --col-accent-hover: #22d3ee; --col-text: #22d3ee; }
+[data-backend="nanobanana"] { --col-accent: #eab308; --col-accent-hover: #facc15; --col-text: #facc15; }
+[data-backend="drawthings"] { --col-accent: #f59e0b; --col-accent-hover: #fbbf24; --col-text: #fbbf24; }
 
 .queue-column:last-child {
   border-right: none;
@@ -72,14 +73,14 @@
   border: 1px solid var(--col-accent, var(--accent));
   border-radius: 4px;
   background: transparent;
-  color: var(--col-accent, var(--accent));
+  color: var(--col-text, var(--col-accent, var(--accent)));
   font-weight: 600;
   font-size: 13px;
 }
 
 .enqueue-btn:hover:not(:disabled) {
   background: var(--col-accent, var(--accent));
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .enqueue-btn:disabled {
@@ -93,10 +94,11 @@
 }
 
 .task-list-empty {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
   padding: 20px 10px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
 .task-item {
@@ -174,6 +176,7 @@
 
 .context-menu button:hover {
   background: var(--col-accent, var(--accent));
+  color: var(--text-on-accent);
 }
 
 .model-warning {
@@ -242,7 +245,7 @@
   border: 1px solid var(--border);
   border-radius: 3px;
   background: var(--bg-surface);
-  color: var(--col-accent, var(--accent));
+  color: var(--col-text, var(--col-accent, var(--accent)));
   font-size: 12px;
   cursor: pointer;
   flex-shrink: 0;
@@ -250,7 +253,7 @@
 
 .download-btn:hover:not(:disabled) {
   background: var(--col-accent, var(--accent));
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .download-btn:disabled {
@@ -286,7 +289,7 @@
 }
 .task-btn-retry:active {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 .task-btn-exp:hover {
@@ -296,7 +299,7 @@
 }
 .task-btn-exp:active {
   background: var(--success);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--success);
 }
 .task-btn-warn:hover {
@@ -306,7 +309,7 @@
 }
 .task-btn-warn:active {
   background: var(--warning);
-  color: #000;
+  color: var(--text-on-accent);
   border-color: var(--warning);
 }
 .task-btn-danger:hover {
@@ -316,7 +319,7 @@
 }
 .task-btn-danger:active {
   background: var(--error);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--error);
 }
 .task-thumbnail {
