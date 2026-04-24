@@ -488,7 +488,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backendId: BackendId; isSelected: boolean; onClick: () => void }): React.JSX.Element {
   const { removeTask, deleteTask } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const itemRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -521,11 +520,11 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
     e.stopPropagation()
     window.electronAPI.retryTask(backendId, task.id)
   }
-  const handleCopyPrompt = (e: React.MouseEvent): void => {
+  const getExt = (): string => task.imagePath?.split('.').pop() ?? 'png'
+  const handleExport = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    navigator.clipboard.writeText(task.prompt)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    if (!task.baseName) return
+    void window.electronAPI.exportImage(task.baseName, getExt())
   }
 
   return (
@@ -560,17 +559,17 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
         )}
       </div>
       <div className="task-actions">
-        <button className="task-btn task-btn-copy" onClick={handleCopyPrompt} title="Copy prompt">
-          {copied ? '✓' : 'copy'}
-        </button>
+        {task.status === 'failed' && (
+          <button className="task-btn task-btn-retry" onClick={handleRetry} title="Retry">retry</button>
+        )}
+        {task.status === 'completed' && task.baseName && (
+          <button className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder">exp</button>
+        )}
         {task.status !== 'generating' && (
           <button className="task-btn task-btn-warn" onClick={handleRemove} title="Remove from queue">rm</button>
         )}
         {task.status === 'completed' && (
           <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
-        )}
-        {task.status === 'failed' && (
-          <button className="task-btn" onClick={handleRetry} title="Retry">retry</button>
         )}
       </div>
     </div>

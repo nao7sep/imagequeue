@@ -71,6 +71,38 @@
   flex-wrap: wrap;
 }
 
+.settings-browse {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+}
+
+.settings-browse input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.settings-browse-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.settings-browse-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .settings-save {
   padding: 8px 20px;
   border: none;

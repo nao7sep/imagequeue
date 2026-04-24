@@ -96,6 +96,7 @@ export interface PromptsConfig {
 
 export interface GeneralConfig {
   auto_preview_idle_seconds: number
+  export_dir: string
   confirm_remove: boolean
   confirm_delete: boolean
   delete_to_trash: boolean

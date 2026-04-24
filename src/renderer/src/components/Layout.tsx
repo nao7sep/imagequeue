@@ -168,6 +168,7 @@ export function Layout(): React.JSX.Element {
             <button className="hamburger-btn" onClick={() => setShowMenu((v) => !v)}>☰</button>
             {showMenu && (
               <div className="dropdown-menu">
+                <button onClick={() => { setShowMenu(false); void window.electronAPI.openOutputFolder() }}>Open Output Folder</button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>
                 {window.electronAPI.platform !== 'win32' && (
                   <button onClick={() => {

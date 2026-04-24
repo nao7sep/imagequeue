@@ -84,6 +84,24 @@ const api = {
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
 
+  openOutputFolder: (): Promise<void> =>
+    ipcRenderer.invoke('shell:openOutputFolder'),
+
+  revealFile: (baseName: string, ext: string): Promise<void> =>
+    ipcRenderer.invoke('shell:revealFile', baseName, ext),
+
+  exportImage: (baseName: string, ext: string): Promise<string> =>
+    ipcRenderer.invoke('shell:exportImage', baseName, ext),
+
+  exportImageAs: (baseName: string, ext: string): Promise<string | null> =>
+    ipcRenderer.invoke('shell:exportImageAs', baseName, ext),
+
+  copyImageToClipboard: (baseName: string, ext: string): Promise<void> =>
+    ipcRenderer.invoke('clipboard:copyImage', baseName, ext),
+
+  openDirectoryDialog: (): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openDirectory'),
+
   getPathForFile: (file: File): string =>
     webUtils.getPathForFile(file),
 

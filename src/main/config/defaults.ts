@@ -10,6 +10,7 @@ export function createDefaultConfig(): AppConfig {
     },
     general: {
       auto_preview_idle_seconds: 30,
+      export_dir: '',
       confirm_remove: false,
       confirm_delete: false,
       delete_to_trash: true

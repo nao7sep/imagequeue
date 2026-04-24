@@ -1,7 +1,9 @@
-import { ipcMain, shell, dialog } from 'electron'
+import { ipcMain, shell, dialog, app, clipboard, nativeImage } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import os from 'os'
-import { loadConfig, saveConfig, encodeApiKey, decodeApiKey } from './config'
+import { loadConfig, saveConfig, encodeApiKey, decodeApiKey, getDataDir } from './config'
+import { getSessionDir } from './session'
 import { AppConfig } from './config/types'
 import { checkModelExists } from './backends'
 import {
@@ -97,5 +99,56 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
     shell.openExternal(url)
+  })
+
+  ipcMain.handle('shell:openOutputFolder', () => {
+    const outputDir = path.join(getDataDir(), 'output')
+    fs.mkdirSync(outputDir, { recursive: true })
+    shell.openPath(outputDir)
+  })
+
+  ipcMain.handle('shell:revealFile', (_event, baseName: string, ext: string) => {
+    const filePath = path.join(getSessionDir(), `${baseName}.${ext}`)
+    shell.showItemInFolder(filePath)
+  })
+
+  ipcMain.handle('shell:exportImage', async (_event, baseName: string, ext: string) => {
+    const config = loadConfig()
+    const exportDir = config.general.export_dir || app.getPath('desktop')
+    const src = path.join(getSessionDir(), `${baseName}.${ext}`)
+    let destName = `${baseName}.${ext}`
+    let destPath = path.join(exportDir, destName)
+    let n = 2
+    while (fs.existsSync(destPath)) {
+      destName = `${baseName}-${n}.${ext}`
+      destPath = path.join(exportDir, destName)
+      n++
+    }
+    fs.copyFileSync(src, destPath)
+    return destPath
+  })
+
+  ipcMain.handle('shell:exportImageAs', async (_event, baseName: string, ext: string) => {
+    const config = loadConfig()
+    const exportDir = config.general.export_dir || app.getPath('desktop')
+    const src = path.join(getSessionDir(), `${baseName}.${ext}`)
+    const result = await dialog.showSaveDialog({
+      defaultPath: path.join(exportDir, `${baseName}.${ext}`),
+      filters: [{ name: 'Images', extensions: [ext, 'png', 'jpg', 'webp'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    fs.copyFileSync(src, result.filePath)
+    return result.filePath
+  })
+
+  ipcMain.handle('clipboard:copyImage', (_event, baseName: string, ext: string) => {
+    const filePath = path.join(getSessionDir(), `${baseName}.${ext}`)
+    const buffer = fs.readFileSync(filePath)
+    clipboard.writeImage(nativeImage.createFromBuffer(buffer))
+  })
+
+  ipcMain.handle('dialog:openDirectory', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    return result.canceled ? null : result.filePaths[0]
   })
 }

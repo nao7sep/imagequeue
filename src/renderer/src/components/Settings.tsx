@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
@@ -15,17 +15,17 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => settings)
   const [status, setStatus] = useState('')
-  const originalRef = useRef<string>(JSON.stringify(settings))
+  const [originalSnapshot, setOriginalSnapshot] = useState<string>(() => JSON.stringify(settings))
 
   const dirty = useMemo(
-    () => (config ? JSON.stringify(config) !== originalRef.current : false),
-    [config]
+    () => (config ? JSON.stringify(config) !== originalSnapshot : false),
+    [config, originalSnapshot]
   )
 
   const handleSave = async (): Promise<void> => {
     if (!config) return
     await updateSettings(config)
-    originalRef.current = JSON.stringify(config)
+    setOriginalSnapshot(JSON.stringify(config))
     setStatus('Saved')
     setTimeout(() => setStatus(''), 2000)
   }
@@ -93,6 +93,29 @@ export function Settings({ onClose }: Props): React.JSX.Element {
             onChange={(e) => updateGeneral('auto_preview_idle_seconds', Math.max(0, parseInt(e.target.value) || 0))}
           />
           <p className="settings-hint">Seconds of inactivity before the latest completed image is automatically selected and previewed. Set to 0 to disable.</p>
+        </div>
+        <div className="settings-field">
+          <label>Export folder</label>
+          <div className="settings-browse">
+            <input
+              type="text"
+              placeholder="Leave empty to use Desktop"
+              value={(general.export_dir as string) ?? ''}
+              onChange={(e) => updateGeneral('export_dir', e.target.value)}
+            />
+            <button
+              type="button"
+              className="settings-browse-btn"
+              onClick={() => {
+                void window.electronAPI.openDirectoryDialog().then((dir) => {
+                  if (dir) updateGeneral('export_dir', dir)
+                })
+              }}
+            >
+              Browse
+            </button>
+          </div>
+          <p className="settings-hint">Where exported images are saved. Leave empty to use the Desktop.</p>
         </div>
         <div className="settings-field-check">
           <label>
