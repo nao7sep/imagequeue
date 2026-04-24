@@ -77,6 +77,10 @@
   margin: 0;
 }
 
+.dt-import-hint {
+  margin-bottom: 8px;
+}
+
 .dt-model-list {
   list-style: none;
   margin: 0;

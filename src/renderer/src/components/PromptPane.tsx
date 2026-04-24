@@ -137,7 +137,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           ) : (
             <div className="preview-placeholder">
               <p>No image selected</p>
-              <p style={{ marginTop: '8px', fontSize: '11px' }}>
+              <p className="preview-placeholder-hint">
                 Generate an image and click its thumbnail to preview
               </p>
             </div>

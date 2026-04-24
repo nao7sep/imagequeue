@@ -150,7 +150,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
           <section className="dt-section">
             <h3 className="dt-section-title">Import</h3>
-            <p className="dt-hint" style={{ marginBottom: 8 }}>
+            <p className="dt-hint dt-import-hint">
               Select a local model file to import into Draw Things format.
             </p>
             <div

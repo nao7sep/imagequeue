@@ -5,12 +5,12 @@
   --bg-input: #1a1a2e;
   --bg-hover: #24436f;
   --hover: var(--bg-hover);
-  --pane-bg: rgba(10, 16, 34, 0.72);
-  --pane-bg-strong: rgba(10, 16, 34, 0.86);
-  --preview-bg: rgba(10, 16, 34, 0.42);
+  --pane-bg: rgba(7, 11, 24, 0.66);
+  --pane-bg-strong: rgba(7, 11, 24, 0.86);
+  --preview-bg: rgba(7, 11, 24, 0.38);
   --text-primary: #e0e0e0;
-  --text-secondary: #a0a0b0;
-  --text-muted: #92a0b7;
+  --text-secondary: #b2bacb;
+  --text-muted: #a1adc3;
   --text-on-accent: #06121f;
   --border: #2a2a4a;
   --accent: #38bdf8;
@@ -18,6 +18,7 @@
   --success: #22c55e;
   --error: #f87171;
   --warning: #f59e0b;
+  --bg-hue: 330;
 }
 
 * {
@@ -29,12 +30,6 @@
 html, body, #root {
   height: 100%;
   overflow: hidden;
-}
-
-@property --bg-hue {
-  syntax: '<number>';
-  initial-value: 0;
-  inherits: false;
 }
 
 body {
@@ -49,19 +44,25 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(
-    135deg,
-    oklch(14% 0.13 calc(var(--bg-hue) + 15)) 0%,
-    oklch(16% 0.15 calc(var(--bg-hue) + 105)) 34%,
-    oklch(13% 0.13 calc(var(--bg-hue) + 215)) 68%,
-    oklch(14% 0.13 calc(var(--bg-hue) + 375)) 100%
-  );
-  animation: bgHueShift 10s linear infinite;
-}
-
-@keyframes bgHueShift {
-  from { --bg-hue: 0; }
-  to   { --bg-hue: 360; }
+  background:
+    radial-gradient(
+      clamp(560px, 54vw, 1380px) clamp(420px, 46vh, 980px) at 18% 12%,
+      hsl(var(--bg-hue) 82% 40% / 0.42),
+      transparent 66%
+    ),
+    radial-gradient(
+      clamp(620px, 58vw, 1480px) clamp(480px, 56vh, 1120px) at 82% 88%,
+      hsl(calc(var(--bg-hue) + 115) 78% 34% / 0.38),
+      transparent 72%
+    ),
+    linear-gradient(
+      135deg,
+      hsl(var(--bg-hue) 72% 24%) 0%,
+      hsl(calc(var(--bg-hue) + 55) 76% 21%) 48%,
+      hsl(calc(var(--bg-hue) + 165) 68% 18%) 100%
+    );
+  background-size: 118% 118%, 124% 124%, 100% 100%;
+  background-position: 6% 4%, 94% 96%, center;
 }
 
 button {
