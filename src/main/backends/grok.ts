@@ -3,9 +3,10 @@ import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
 
-// Calls the xAI Grok Imagine image generation API and returns the image as a
-// Buffer. The API always returns JPEG — no format selection is available.
-export async function generateGrok(task: Task): Promise<Buffer> {
+// Calls the xAI Grok Imagine image generation API and returns the image bytes
+// with an `image/jpeg` MIME hint. The API always returns JPEG — no format
+// selection is available.
+export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.grok.api_key)
 
@@ -59,7 +60,7 @@ export async function generateGrok(task: Task): Promise<Buffer> {
       throw new Error('No image data in Grok Imagine response')
     }
 
-    return Buffer.from(b64, 'base64')
+    return { buffer: Buffer.from(b64, 'base64'), mimeType: 'image/jpeg' }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Grok Imagine timed out', { model: task.model, timeoutMs: timeout_ms })

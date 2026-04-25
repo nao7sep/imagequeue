@@ -34,7 +34,7 @@ const api = {
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
 
   // Preview operations
-  getImage: (baseName: string): Promise<string | null> =>
+  getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
     ipcRenderer.invoke('preview:getImage', baseName),
 
   getMetadata: (baseName: string): Promise<Record<string, unknown> | null> =>

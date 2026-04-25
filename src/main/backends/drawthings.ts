@@ -7,11 +7,11 @@ import { getSessionDir } from '../session'
 import { log, logApiRequest, logApiResponse } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveEffectiveModelsDir } from '../local-cli'
 
-export async function generateDrawThings(task: Task): Promise<Buffer> {
+export async function generateDrawThings(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   return generateDrawThingsCli(task)
 }
 
-async function generateDrawThingsCli(task: Task): Promise<Buffer> {
+async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
 
@@ -77,7 +77,7 @@ async function generateDrawThingsCli(task: Task): Promise<Buffer> {
 
   const buffer = fs.readFileSync(outputPath)
   fs.unlinkSync(outputPath)
-  return buffer
+  return { buffer }
 }
 
 // Check if a model file exists in the effective models directory.

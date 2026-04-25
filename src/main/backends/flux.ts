@@ -6,8 +6,9 @@ import { log, logApiRequest, logApiResponse } from '../logger'
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
 
-// Calls FLUX API (async submit/poll/download flow) and returns the image as a Buffer.
-export async function generateFlux(task: Task): Promise<Buffer> {
+// Calls FLUX API (async submit/poll/download flow) and returns the image bytes
+// plus the Content-Type reported by the signed-URL download.
+export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.flux.api_key)
 
@@ -100,7 +101,10 @@ export async function generateFlux(task: Task): Promise<Buffer> {
           throw new Error(`Failed to download FLUX image (${imageResponse.status})`)
         }
 
-        return Buffer.from(await imageResponse.arrayBuffer())
+        return {
+          buffer: Buffer.from(await imageResponse.arrayBuffer()),
+          mimeType: imageResponse.headers.get('content-type') ?? undefined
+        }
       }
 
       if (pollData.status === 'Error' || pollData.status === 'Failed') {

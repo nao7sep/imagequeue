@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueRequest } from '../../shared/types'
-import { deleteImageOutput, trashImageOutput, ImageExt } from '../utils/file-output'
+import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log } from '../logger'
 
@@ -35,17 +35,19 @@ export function registerQueueIpc(): void {
     const toTrash = loadConfig().general.delete_to_trash
     log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null, toTrash })
     if (task?.baseName) {
-      const ext: ImageExt = task.imagePath?.endsWith('.jpg') ? 'jpg'
-        : task.imagePath?.endsWith('.webp') ? 'webp'
-        : 'png'
-      try {
-        if (toTrash) {
-          await trashImageOutput(task.baseName, ext)
-        } else {
-          deleteImageOutput(task.baseName, ext)
+      const ext = imageExtFromPath(task.imagePath)
+      if (!ext) {
+        log('warn', `Cannot determine image extension for ${taskId}; skipping file removal`, { imagePath: task.imagePath ?? null })
+      } else {
+        try {
+          if (toTrash) {
+            await trashImageOutput(task.baseName, ext)
+          } else {
+            deleteImageOutput(task.baseName, ext)
+          }
+        } catch (err) {
+          log('error', `Failed to ${toTrash ? 'trash' : 'delete'} files for ${taskId}`, { error: String(err) })
         }
-      } catch (err) {
-        log('error', `Failed to ${toTrash ? 'trash' : 'delete'} files for ${taskId}`, { error: String(err) })
       }
     }
     queueManager.removeTask(backend, taskId)

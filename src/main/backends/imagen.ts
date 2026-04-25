@@ -5,9 +5,10 @@ import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
 import { findModel } from '../../shared/models'
 
-// Calls Google Imagen API and returns the image as a Buffer.
+// Calls Google Imagen API and returns the image bytes plus the MIME-type
+// hint reported by the SDK.
 // Uses image_backends.imagen.api_key (not the text_ai key).
-export async function generateImagen(task: Task): Promise<Buffer> {
+export async function generateImagen(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.imagen.api_key)
 
@@ -55,11 +56,12 @@ export async function generateImagen(task: Task): Promise<Buffer> {
 
   logApiResponse('imagen', 'ok', Date.now() - startTime)
 
-  const imageBytes = response.generatedImages?.[0]?.image?.imageBytes
+  const generatedImage = response.generatedImages?.[0]?.image
+  const imageBytes = generatedImage?.imageBytes
   if (!imageBytes) {
     log('error', 'Imagen response missing image data', { model: task.model })
     throw new Error('No image data in Imagen response')
   }
 
-  return Buffer.from(imageBytes, 'base64')
+  return { buffer: Buffer.from(imageBytes, 'base64'), mimeType: generatedImage?.mimeType }
 }

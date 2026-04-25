@@ -72,10 +72,10 @@ export function Layout(): React.JSX.Element {
       return
     }
 
-    window.electronAPI.getImage(selectedTask.baseName).then((b64) => {
-      if (b64) {
-        const mime = b64.startsWith('/9j/') ? 'image/jpeg' : 'image/png'
-        setPreviewDataUrl(`data:${mime};base64,${b64}`)
+    window.electronAPI.getImage(selectedTask.baseName).then((result) => {
+      if (result) {
+        const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
+        setPreviewDataUrl(`data:${mime};base64,${result.data}`)
       } else {
         setPreviewDataUrl(null)
       }

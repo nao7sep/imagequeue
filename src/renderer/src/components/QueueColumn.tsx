@@ -513,10 +513,10 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
 
   useEffect(() => {
     if (task.status !== 'completed' || !task.baseName) return
-    window.electronAPI.getImage(task.baseName).then((b64) => {
-      if (b64) {
-        const mime = b64.startsWith('/9j/') ? 'image/jpeg' : 'image/png'
-        setThumbUrl(`data:${mime};base64,${b64}`)
+    window.electronAPI.getImage(task.baseName).then((result) => {
+      if (result) {
+        const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
+        setThumbUrl(`data:${mime};base64,${result.data}`)
       }
     })
   }, [task.status, task.baseName])

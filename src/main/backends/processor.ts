@@ -4,6 +4,7 @@ import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
 import { TimestampAllocator } from '../session'
 import { writeImageOutput, ImageExt } from '../utils/file-output'
+import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
 import { logGenerationStart, logGenerationComplete, logGenerationFailed } from '../logger'
 import { generateOpenAI } from './openai'
@@ -14,7 +15,7 @@ import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
 
-type GenerateFn = (task: Task) => Promise<Buffer>
+type GenerateFn = (task: Task) => Promise<{ buffer: Buffer; mimeType?: string }>
 
 const generators: Record<BackendId, GenerateFn> = {
   openai: generateOpenAI,
@@ -45,9 +46,10 @@ const activeCounts: Record<BackendId, number> = {
   drawthings: 0
 }
 
-// Returns the correct file extension for the generated image.
-// OpenAI supports jpeg/webp/png via outputFormat param; all other backends have fixed formats.
-function getImageExt(backend: BackendId, params: Task['params']): ImageExt {
+// Returns the per-backend default extension, used when both the MIME hint
+// and magic-byte detection fail to identify the image type.
+// OpenAI supports jpeg/webp/png via outputFormat param; others are fixed.
+function getFallbackExt(backend: BackendId, params: Task['params']): ImageExt {
   if (backend === 'openai') {
     const fmt = params?.outputFormat as string | undefined
     if (fmt === 'jpeg') return 'jpg'
@@ -102,7 +104,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   const generate = generators[backend]
 
   try {
-    const imageBuffer = await generate(task)
+    const { buffer: imageBuffer, mimeType } = await generate(task)
     const completedAt = new Date()
 
     task.completedAt = completedAt.toISOString()
@@ -129,7 +131,8 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       error: null
     }
 
-    const ext = getImageExt(backend, task.params)
+    const fallback = getFallbackExt(backend, task.params)
+    const ext = detectImageExt(imageBuffer, mimeType, fallback, { backend, model: task.model })
     const baseName = writeImageOutput(timestamp, slug, backend, imageBuffer, metadata, ext)
 
     task.status = 'completed'

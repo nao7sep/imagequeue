@@ -6,9 +6,11 @@ import { log, logApiRequest, logApiResponse } from '../logger'
 import { findModel } from '../../shared/models'
 
 // Calls the Gemini native image generation API (generateContent) and returns
-// the first image part as a Buffer. Uses image_backends.nanobanana.api_key
-// (not the text_ai key).
-export async function generateNanoBanana(task: Task): Promise<Buffer> {
+// the first image part as a Buffer along with its MIME-type hint. The Gemini
+// API may return either PNG or JPEG bytes; callers should rely on the hint
+// (and magic-byte detection) rather than assuming a fixed format.
+// Uses image_backends.nanobanana.api_key (not the text_ai key).
+export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.nanobanana.api_key)
 
@@ -65,5 +67,8 @@ export async function generateNanoBanana(task: Task): Promise<Buffer> {
     throw new Error('No image data in Nano Banana response')
   }
 
-  return Buffer.from(imagePart.inlineData.data, 'base64')
+  return {
+    buffer: Buffer.from(imagePart.inlineData.data, 'base64'),
+    mimeType: imagePart.inlineData.mimeType
+  }
 }

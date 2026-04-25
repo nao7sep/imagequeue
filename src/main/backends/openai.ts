@@ -4,8 +4,9 @@ import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
 
-// Calls OpenAI image generation API and returns the image as a Buffer.
-export async function generateOpenAI(task: Task): Promise<Buffer> {
+// Calls OpenAI image generation API and returns the image bytes plus a
+// MIME-type hint derived from the user-selected output_format.
+export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = decodeApiKey(config.image_backends.openai.api_key)
 
@@ -63,5 +64,10 @@ export async function generateOpenAI(task: Task): Promise<Buffer> {
     throw new Error('No image data in OpenAI response')
   }
 
-  return Buffer.from(b64, 'base64')
+  const mimeType =
+    outputFormat === 'jpeg' ? 'image/jpeg' :
+    outputFormat === 'webp' ? 'image/webp' :
+    'image/png'
+
+  return { buffer: Buffer.from(b64, 'base64'), mimeType }
 }
