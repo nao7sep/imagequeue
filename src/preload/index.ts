@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { BackendId, EnqueueRequest, Task, CliStatus, LocalModelInfo } from '../shared/types'
 
 export type { CliStatus, LocalModelInfo }
@@ -102,9 +102,6 @@ const api = {
   openDirectoryDialog: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory'),
 
-  getPathForFile: (file: File): string =>
-    webUtils.getPathForFile(file),
-
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {
@@ -118,4 +115,3 @@ const api = {
 contextBridge.exposeInMainWorld('electronAPI', api)
 
 export type ElectronAPI = typeof api
-

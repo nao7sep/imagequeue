@@ -59,21 +59,21 @@ Open the **Manage Draw Things Models** dialog from the hamburger menu (☰ → M
 
 ### Browsing
 
-The dialog lists all models known to the CLI, grouped into downloaded and available-to-download sections.
+The dialog separates **Official Models** and **Community Models** into two columns. Each column has its own search field and sorts models alphabetically. Installed catalog models show an **Installed** badge; models that are not installed show a **Download** button. Local imports appear in the Community column under **Local Imports** when their names look like imported file names.
 
 ### Downloading
 
-Click **↓ Download** next to any model in the Available section. A Terminal window opens running the download command so you can watch progress. Once the download completes and you return to the app, the model appears in the Downloaded section.
+Click **Download** next to any catalog model that is not installed. A Terminal window opens running the download command so you can watch progress. Once the download completes and you return to the app, the model is marked as installed.
 
 ### Importing community models
 
 To use a model not in the official catalog (e.g. from Civitai):
 
-1. Download the `.safetensors`, `.ckpt`, `.pth`, `.bin`, or `.zip` file.
+1. Download the model artifact you want Draw Things CLI to import.
 2. Open the Models modal and go to the **Import** section.
-3. Drag the file onto the drop zone, or click **Browse…** to pick it.
-4. Click **→ Import**. A Terminal window opens running `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders).
-5. When the Terminal finishes, return to the app — the model now appears in the Downloaded section.
+3. Click **Browse…** to pick it, or paste the file path into the import field.
+4. Click **Import**. A Terminal window opens running `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). If the CLI rejects the file, it prints the error in Terminal.
+5. When the Terminal finishes, return to the app — the model now appears under **Local Imports** when its name looks like an imported file name.
 
 ---
 

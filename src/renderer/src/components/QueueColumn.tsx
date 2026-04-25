@@ -140,7 +140,12 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
     refresh(true)
     const id = window.setInterval(() => refresh(false), 30000)
-    return () => window.clearInterval(id)
+    const handleFocus = (): void => refresh(false)
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [backendId])
 
   useEffect(() => {
