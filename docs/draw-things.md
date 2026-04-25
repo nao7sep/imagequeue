@@ -59,7 +59,7 @@ Open the **Manage Draw Things Models** dialog from the hamburger menu (☰ → M
 
 ### Browsing
 
-The dialog separates **Official Models** and **Community Models** into two columns. Each column has its own search field and sorts models alphabetically. Installed catalog models show an **Installed** badge; models that are not installed show a **Download** button. Local imports appear in the Community column under **Local Imports** when their names look like imported file names.
+The dialog separates **Official Models** and **Community Models** into two columns. Each column has its own search field and sorts models alphabetically. Installed catalog models show an **Installed** badge; models that are not installed show a **Download** button. Locally imported models appear in the Community column under **Local Imports** — they are identified by reading `custom.json` from the models directory (Draw Things' own record of imports), with a name-based heuristic as a fallback when `custom.json` is unavailable.
 
 ### Downloading
 
@@ -73,7 +73,7 @@ To use a model not in the official catalog (e.g. from Civitai):
 2. Open the Models modal and go to the **Import** section.
 3. Click **Browse…** to pick it, or paste the file path into the import field.
 4. Click **Import**. A Terminal window opens running `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). If the CLI rejects the file, it prints the error in Terminal.
-5. When the Terminal finishes, return to the app — the model now appears under **Local Imports** when its name looks like an imported file name.
+5. When the Terminal finishes, return to the app — the model now appears under **Local Imports** (sourced from Draw Things' `custom.json`).
 
 ---
 

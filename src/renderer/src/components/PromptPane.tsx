@@ -30,12 +30,11 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     }
   }, [detailsOpen])
 
-  // Reset feedback states and details panel when selection changes
+  // Reset feedback states when selection changes
   useEffect(() => {
     setPromptCopied(false)
     setImageCopied(false)
     setExported(false)
-    setDetailsOpen(false)
   }, [selectedTask?.id])
 
   const getExt = useCallback(

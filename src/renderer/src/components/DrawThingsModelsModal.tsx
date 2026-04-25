@@ -67,12 +67,15 @@ function looksLikeLocalImport(model: LocalModelInfo): boolean {
 
   const nameLower = name.toLowerCase()
   const fileStemLower = withoutExtension(file).toLowerCase()
-  const sameAsFileStem = nameLower === fileStemLower
+  if (nameLower === fileStemLower) return true
+
   const hasUnderscore = name.includes('_') || file.includes('_')
   const hasNoSpaces = !/\s/.test(name)
-  const looksTitleLike = /\s/.test(name) && /[A-Z]/.test(name)
+  // CamelCase names like "OpenJourney" come from the official catalog,
+  // not local imports.
+  const looksCamelCase = hasNoSpaces && /[A-Z]/.test(name) && /[a-z]/.test(name)
 
-  return sameAsFileStem || (hasUnderscore && hasNoSpaces && !looksTitleLike)
+  return hasUnderscore && hasNoSpaces && !looksCamelCase
 }
 
 function mergeModelInfo(primary: LocalModelInfo, secondary: LocalModelInfo): LocalModelInfo {
@@ -103,6 +106,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
+  const [customJsonFiles, setCustomJsonFiles] = useState<Set<string> | null>(null)
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
   const [openedTerminal, setOpenedTerminal] = useState<string | null>(null)
@@ -155,6 +159,9 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       setAvailableModels(list)
       setLoadingAvailable(false)
     })
+    window.electronAPI.localReadCustomJsonImportedFiles().then((files) => {
+      setCustomJsonFiles(files === null ? null : new Set(files))
+    })
   }, [loadDownloaded])
 
   // Auto-refresh downloaded list while Terminal-side imports/downloads may finish.
@@ -196,9 +203,16 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
   const loadingModels = loadingDownloaded || loadingAvailable
   const allModels = mergeModels(availableModels, downloadedModels)
+
+  // A model is a local import if custom.json says so (ground truth), or if the
+  // heuristic fires for downloaded models when custom.json isn't available yet.
   const localImportFiles = new Set(
     allModels
-      .filter((model) => model.downloaded && looksLikeLocalImport(model))
+      .filter((model) => {
+        if (!model.downloaded) return false
+        if (customJsonFiles !== null) return customJsonFiles.has(model.file)
+        return looksLikeLocalImport(model)
+      })
       .map((model) => model.file)
   )
   const catalogModels = allModels.filter((model) => !localImportFiles.has(model.file))

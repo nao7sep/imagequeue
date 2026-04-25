@@ -13,6 +13,7 @@ import {
   ensureModel,
   resolveModelsDir,
   getDefaultModelsDir,
+  readCustomJsonImportedFiles,
   openTerminalForDownload,
   openTerminalForImport
 } from './local-cli'
@@ -58,6 +59,10 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('local:listAvailableModels', async () => {
     return listAvailableModels()
+  })
+
+  ipcMain.handle('local:readCustomJsonImportedFiles', () => {
+    return readCustomJsonImportedFiles()
   })
 
   ipcMain.handle('local:ensureModel', async (_event, modelFile: string) => {

@@ -60,6 +60,9 @@ const api = {
   localListAvailableModels: (): Promise<LocalModelInfo[]> =>
     ipcRenderer.invoke('local:listAvailableModels'),
 
+  localReadCustomJsonImportedFiles: (): Promise<string[] | null> =>
+    ipcRenderer.invoke('local:readCustomJsonImportedFiles'),
+
   localEnsureModel: (modelFile: string): Promise<EnsureModelResult> =>
     ipcRenderer.invoke('local:ensureModel', modelFile),
 

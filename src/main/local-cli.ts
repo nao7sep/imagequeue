@@ -198,6 +198,48 @@ export function getDefaultModelsDir(): string {
   return DEFAULT_MODELS_DIR
 }
 
+/**
+ * Read the `file` values from `custom.json` in the effective models directory.
+ * Returns `null` when the file is absent or unreadable — callers should fall
+ * back to heuristic detection in that case.
+ * Returns a (possibly empty) array when the file exists and was parsed — an
+ * empty array means Draw Things has no imported models recorded.
+ * `custom.json` is the ground truth for locally-imported (external) models.
+ */
+/**
+ * Read the `file` values from `custom.json` in the effective models directory.
+ * Returns `null` when the file is absent or unreadable — callers should fall
+ * back to heuristic detection in that case.
+ * Returns a (possibly empty) array when the file exists and was parsed.
+ * `custom.json` is the ground truth for locally-imported (external) models.
+ */
+export function readCustomJsonImportedFiles(): string[] | null {
+  const dir = resolveEffectiveModelsDir()
+  if (!dir) return null
+
+  const customJsonPath = path.join(dir, 'custom.json')
+  if (!fs.existsSync(customJsonPath)) return null
+
+  try {
+    const raw = fs.readFileSync(customJsonPath, 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      log('warn', 'custom.json: top-level value is not an array', { customJsonPath })
+      return null
+    }
+    return parsed
+      .filter((entry): entry is { file: string } =>
+        entry !== null &&
+        typeof entry === 'object' &&
+        typeof (entry as Record<string, unknown>).file === 'string'
+      )
+      .map((entry) => entry.file)
+  } catch (err) {
+    log('warn', 'custom.json: failed to read or parse', { customJsonPath, message: (err as Error).message })
+    return null
+  }
+}
+
 /** Known Draw Things system model locations (probed in order when models_dir is not configured). */
 const DRAW_THINGS_SYSTEM_DIRS = [
   path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/Models'),
