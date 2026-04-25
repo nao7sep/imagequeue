@@ -39,7 +39,7 @@ function sortCatalogModels(models: LocalModelInfo[]): LocalModelInfo[] {
 function matchesFilter(model: LocalModelInfo, filter: string): boolean {
   const q = filter.trim().toLowerCase()
   if (!q) return true
-  return `${model.name} ${model.file} ${model.source} ${model.huggingFace ?? ''}`.toLowerCase().includes(q)
+  return `${modelName(model)} ${model.file}`.toLowerCase().includes(q)
 }
 
 function normalizedSource(model: LocalModelInfo): string {

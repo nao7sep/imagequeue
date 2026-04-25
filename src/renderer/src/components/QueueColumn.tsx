@@ -40,6 +40,21 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'var(--error)'
 }
 
+const modelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+function localModelName(model: LocalModelInfo): string {
+  return model.name || model.file
+}
+
+function sortLocalModels(models: LocalModelInfo[]): LocalModelInfo[] {
+  return [...models].sort((a, b) =>
+    modelCollator.compare(
+      `${localModelName(a)} ${a.file}`.toLowerCase(),
+      `${localModelName(b)} ${b.file}`.toLowerCase()
+    )
+  )
+}
+
 export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
   const { selection, select, clear } = useSelection()
@@ -124,14 +139,15 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
         setCliStatus(status)
         if (status.installed) {
           window.electronAPI.localListDownloadedModels().then((list) => {
+            const sortedList = sortLocalModels(list)
             setDownloadedModels((prev) => {
               const prevFiles = prev.map((m) => m.file).join(',')
-              const nextFiles = list.map((m) => m.file).join(',')
+              const nextFiles = sortedList.map((m) => m.file).join(',')
               if (prevFiles === nextFiles) return prev
-              if (isInitial || list.length > 0) {
-                setModel((cur) => (list.find((m) => m.file === cur) ? cur : list[0]?.file ?? ''))
+              if (isInitial || sortedList.length > 0) {
+                setModel((cur) => (sortedList.find((m) => m.file === cur) ? cur : sortedList[0]?.file ?? ''))
               }
-              return list
+              return sortedList
             })
           })
         }
@@ -416,7 +432,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                     <label>model</label>
                     <select value={model} onChange={(e) => setModel(e.target.value)}>
                       {downloadedModels.map((m) => (
-                        <option key={m.file} value={m.file}>{m.name}</option>
+                        <option key={m.file} value={m.file}>{localModelName(m)}</option>
                       ))}
                     </select>
                   </div>
