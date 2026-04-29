@@ -84,7 +84,7 @@ Below the toolbar, a collapsible details strip shows the model and prompt at a g
 
 ## Draw Things (local)
 
-See [docs/draw-things.md](docs/draw-things.md) for setup and usage.
+See [docs/draw-things-cli.md](docs/draw-things-cli.md) for setup and usage.
 
 ## License
 

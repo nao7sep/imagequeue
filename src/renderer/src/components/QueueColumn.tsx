@@ -421,7 +421,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
             )}
             {cliStatus && !cliStatus.installed && cliStatus.platform === 'darwin' && (
               <div className="setting-row model-warning">
-                Draw Things CLI not installed.<br />
+                Draw Things CLI not installed.
                 <code className="install-hint">brew install drawthingsai/draw-things/draw-things-cli</code>
               </div>
             )}

@@ -1,4 +1,4 @@
-# Draw Things Integration
+# Draw Things CLI Integration
 
 ImageQueue can generate images locally using the Draw Things CLI. This requires no API key and incurs no per-image cost — everything runs on your Mac.
 
@@ -36,7 +36,7 @@ draw-things-cli --version
 | `steps` | `4` | Default inference steps |
 | `guidance` | `1` | Classifier-free guidance scale |
 | `width` / `height` | `1024` | Default output dimensions |
-| `seed` | *(null — random)* | Set a fixed seed to reproduce results |
+| `seed` | *(null — random)* | Set a fixed seed to reproduce results. Values of `null` or `0` both produce a random seed |
 | `negativePrompt` | *(empty)* | Default negative prompt |
 
 ---
@@ -46,7 +46,7 @@ draw-things-cli --version
 The models directory is where model `.ckpt` files are stored. ImageQueue resolves it with the following priority:
 
 1. **Configured path** — if `models_dir` is set in Settings, it is used for all operations.
-2. **Draw Things app container** — if the GUI app is also installed, ImageQueue finds its container at `~/Library/Containers/com.liuliu.draw-things/Data/Documents/Models`.
+2. **Draw Things app container** — if the GUI app is also installed, ImageQueue probes `~/Library/Containers/com.liuliu.draw-things/Data/Documents/Models` and its lowercase variant in that order.
 3. **CLI default** — all CLI operations run without `--models-dir` and the CLI uses its own internal default.
 
 **Recommendation:** leave `models_dir` empty unless you need models stored in a custom location.
@@ -79,7 +79,9 @@ To use a model not in the official catalog (e.g. from Civitai):
 
 ## Generation
 
-Each generation spawns `draw-things-cli generate` with the following flags derived from the task:
+Each generation spawns `draw-things-cli generate` with the following flags derived from the task. Output is always PNG — the file is written to a temporary path in the session directory, read into memory, and then deleted.
+
+The **model dropdown in the column shows only downloaded models**. If no models are downloaded the dropdown is empty; use the Models modal to download one first.
 
 | CLI flag | Source |
 |---|---|
