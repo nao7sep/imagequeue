@@ -11,9 +11,9 @@ import { initLogger, log } from './logger'
 
 function createWindow(): void {
   const win = new BrowserWindow({
-    width: 1600,
-    height: 900,
-    minWidth: 1600,
+    width: 1280,
+    height: 720,
+    minWidth: 1200,
     minHeight: 600,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),

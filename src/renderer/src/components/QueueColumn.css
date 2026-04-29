@@ -7,6 +7,13 @@
   background: var(--pane-bg);
 }
 
+/* Small screen mode: reduce column width for displays < 1600px */
+@media (max-width: 1599px) {
+  .queue-column {
+    width: 160px;
+  }
+}
+
 /* Per-backend accent colors */
 [data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; --col-text: #34d399; }
 [data-backend="imagen"]     { --col-accent: #f97316; --col-accent-hover: #fb923c; --col-text: #fb923c; }
