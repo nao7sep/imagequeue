@@ -18,8 +18,8 @@ import { useConfirm } from './ConfirmContext'
 const ALL_BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
 
 function getVisibleBackends(): BackendId[] {
-  const isWin = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32'
-  return isWin ? ALL_BACKENDS.filter((b) => b !== 'drawthings') : ALL_BACKENDS
+  const isMac = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
+  return isMac ? ALL_BACKENDS : ALL_BACKENDS.filter((b) => b !== 'drawthings')
 }
 
 export interface Selection {

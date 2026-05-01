@@ -49,7 +49,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   }, [dirty, confirm, onClose])
 
   const refreshRecommendationStatus = useCallback(async (): Promise<void> => {
-    if (window.electronAPI.platform === 'win32') return
+    if (window.electronAPI.platform !== 'darwin') return
     const next = await window.electronAPI.getRecommendationsStatus()
     setRecommendationStatus(next)
   }, [])
@@ -371,7 +371,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
-      {window.electronAPI.platform !== 'win32' && (
+      {window.electronAPI.platform === 'darwin' && (
       <div className="settings-section">
         <h3>Draw Things</h3>
         <div className="settings-field">

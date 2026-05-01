@@ -15,10 +15,10 @@ const ALL_BACKENDS = [
   { id: 'drawthings' as const, label: 'Draw Things' }
 ]
 
-// On Windows, Draw Things CLI is not available — show only cloud backends
-const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32'
-  ? ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
-  : ALL_BACKENDS
+// Draw Things CLI is macOS-only — show it only on macOS
+const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
+  ? ALL_BACKENDS
+  : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
 
 type Overlay = 'settings' | 'shortcuts' | 'about' | null
 
@@ -96,8 +96,8 @@ export function Layout(): React.JSX.Element {
     setOverlay(o)
   }
 
-  const isWin = window.electronAPI.platform === 'win32'
-  const mod = isWin ? 'Ctrl+' : 'Cmd+'
+  const isMac = window.electronAPI.platform === 'darwin'
+  const mod = isMac ? 'Cmd+' : 'Ctrl+'
 
   return (
     <div className="layout">
@@ -116,7 +116,7 @@ export function Layout(): React.JSX.Element {
                 <div className="shortcut-item"><span>Send to Nano Banana</span><kbd>{mod}3</kbd></div>
                 <div className="shortcut-item"><span>Send to Grok Imagine</span><kbd>{mod}4</kbd></div>
                 <div className="shortcut-item"><span>Send to FLUX</span><kbd>{mod}5</kbd></div>
-                {!isWin && (
+                {isMac && (
                   <div className="shortcut-item"><span>Send to Draw Things</span><kbd>{mod}6</kbd></div>
                 )}
               </div>
@@ -180,7 +180,7 @@ export function Layout(): React.JSX.Element {
               <div className="dropdown-menu">
                 <button onClick={() => { setShowMenu(false); void window.electronAPI.openOutputFolder() }}>Open Output Folder</button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>
-                {window.electronAPI.platform !== 'win32' && (
+                {window.electronAPI.platform === 'darwin' && (
                   <button onClick={() => {
                     setShowMenu(false)
                     window.dispatchEvent(new CustomEvent('open-models-modal'))
