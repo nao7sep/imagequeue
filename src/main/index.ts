@@ -7,6 +7,7 @@ import { queueManager } from './queue/queue-manager'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
+import { registerViewerIpc } from './viewer'
 import { initLogger, log } from './logger'
 
 function createWindow(): void {
@@ -78,6 +79,7 @@ app.whenReady().then(() => {
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc()
+  registerViewerIpc()
   startProcessor()
 
   createWindow()

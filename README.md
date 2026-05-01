@@ -80,6 +80,8 @@ Below the toolbar, a collapsible details strip shows the model and prompt at a g
 | Move selection to nearest task in adjacent column | ← / → | ← / → |
 | Remove selected task from queue (keep files) | Backspace | Backspace |
 | Delete selected task and its files | Delete | Delete |
+| Open fullscreen image viewer | Space | Space |
+| Close fullscreen image viewer | Space or Esc | Space or Esc |
 | Clear selection / close panel | Esc | Esc |
 
 ## Draw Things (local)

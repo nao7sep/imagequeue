@@ -82,6 +82,15 @@ export function Layout(): React.JSX.Element {
     })
   }, [selectedTask])
 
+  // Open the fullscreen viewer window when Space is pressed on a completed task.
+  useEffect(() => {
+    const handler = (): void => {
+      if (previewDataUrl) void window.electronAPI.openViewer(previewDataUrl)
+    }
+    window.addEventListener('viewer:toggle', handler)
+    return () => window.removeEventListener('viewer:toggle', handler)
+  }, [previewDataUrl])
+
   const openOverlay = (o: Overlay): void => {
     setShowMenu(false)
     setOverlay(o)
@@ -119,6 +128,7 @@ export function Layout(): React.JSX.Element {
                 <div className="shortcut-item"><span>Move to nearest task in adjacent column</span><kbd>← / →</kbd></div>
                 <div className="shortcut-item"><span>Remove task from queue (keep files)</span><kbd>Backspace</kbd></div>
                 <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete</kbd></div>
+                <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
               </div>
             </div>
             <div className="shortcut-group">

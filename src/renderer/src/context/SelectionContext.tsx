@@ -352,6 +352,15 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
         void deleteSelected()
         return
       }
+
+      if (e.key === ' ') {
+        if (!sel) return
+        const task = map[sel.backend]?.find((t) => t.id === sel.taskId)
+        if (task?.status !== 'completed') return
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('viewer:toggle'))
+        return
+      }
     }
 
     document.addEventListener('keydown', handler)

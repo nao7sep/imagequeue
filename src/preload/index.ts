@@ -105,6 +105,9 @@ const api = {
   openDirectoryDialog: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory'),
 
+  openViewer: (dataUrl: string): Promise<void> =>
+    ipcRenderer.invoke('viewer:open', dataUrl),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {
