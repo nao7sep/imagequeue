@@ -5,6 +5,9 @@
 }
 
 .settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 24px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -18,27 +21,26 @@
 
 .settings-section h3 {
   font-size: 14px;
-  margin-bottom: 12px;
+  margin: 0;
   color: var(--accent);
 }
 
 .settings-field {
-  display: flex;
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  column-gap: 12px;
+  row-gap: 4px;
 }
 
-.settings-field label {
-  width: 120px;
+.settings-field > label {
   font-size: 12px;
   color: var(--text-secondary);
-  flex-shrink: 0;
 }
 
-.settings-field input,
-.settings-field select {
-  flex: 1;
+.settings-field > input,
+.settings-field > select {
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -47,8 +49,8 @@
   font-size: 12px;
 }
 
-.settings-field textarea {
-  flex: 1;
+.settings-field > textarea {
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -60,19 +62,23 @@
 }
 
 .settings-hint {
-  display: block;
+  grid-column: 1 / -1;
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 2px;
-  flex-basis: 100%;
+  margin-top: 0;
 }
 
-.settings-field:has(.settings-hint) {
-  flex-wrap: wrap;
+.settings-field-full {
+  display: block;
+  width: 100%;
+}
+
+.settings-panel-after-hint {
+  margin-top: 4px;
 }
 
 .settings-browse {
-  flex: 1;
+  min-width: 0;
   display: flex;
   gap: 6px;
 }
@@ -137,26 +143,139 @@
   color: var(--text-muted);
 }
 
-.settings-field-check {
-  display: block;
-  margin-bottom: 10px;
+.settings-option-panel {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
 }
 
-.settings-field-check label {
+.settings-option-panel label,
+.recommendation-panel label {
+  width: auto;
+  flex-shrink: 1;
+}
+
+.settings-option-panel input[type='checkbox'],
+.recommendation-panel input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+}
+
+.settings-option-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.settings-panel-check {
+  width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  cursor: pointer;
   font-size: 12px;
   color: var(--text-primary);
 }
 
-.settings-field-check input[type='checkbox'] {
+.settings-panel-check input[type='checkbox'] {
   margin: 0;
+  margin-top: 1px;
   flex-shrink: 0;
 }
 
-.settings-field-check .settings-hint {
-  margin-top: 3px;
-  padding-left: 22px;
+.settings-panel-check-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-panel-check-desc {
+  display: block;
+  width: 100%;
+  color: var(--text-muted);
+}
+
+.recommendation-panel {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.recommendation-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.recommendation-panel-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.recommendation-panel-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.recommendation-message {
+  color: var(--success);
+}
+
+.recommendation-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.recommendation-actions button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.recommendation-actions button:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.recommendation-actions button:disabled {
+  opacity: 0.5;
+}
+
+.recommendation-auto-update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.recommendation-auto-update input[type='checkbox'] {
+  margin: 0;
 }

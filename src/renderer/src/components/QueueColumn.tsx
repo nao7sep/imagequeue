@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
-import type { BackendId, Task, CliStatus, LocalModelInfo } from '../../../shared/types'
+import type { BackendId, Task, CliStatus, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import {
   getModelsForBackend,
   findModel,
@@ -138,12 +138,14 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [localWidth, setLocalWidth] = useState(1024)
   const [localHeight, setLocalHeight] = useState(1024)
   const [localSteps, setLocalSteps] = useState(4)
-  const [localCfg, setLocalCfg] = useState(1)
+  const [localGuidance, setLocalGuidance] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [showModelsModal, setShowModelsModal] = useState(false)
+  const [recommendationRevision, setRecommendationRevision] = useState(0)
+  const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
 
   const columnTasks = tasks[backendId]
   const localSizeValue = useMemo(() => {
@@ -168,10 +170,36 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     setLocalWidth((params.fallback_width as number | undefined) ?? 1024)
     setLocalHeight((params.fallback_height as number | undefined) ?? 1024)
     setLocalSteps((params.fallback_steps as number | undefined) ?? 4)
-    setLocalCfg((params.fallback_cfg as number | undefined) ?? 1)
+    setLocalGuidance((params.fallback_guidance as number | undefined) ?? 1)
     setLocalSeed(params.seed == null ? '' : String(params.seed))
-    setNegativePrompt((params.negativePrompt as string | undefined) ?? '')
+    setNegativePrompt((params.fallback_negative_prompt as string | undefined) ?? '')
   }, [backendId, settings])
+
+  useEffect(() => {
+    if (backendId !== 'drawthings' || !model) return
+    let cancelled = false
+    const params = (
+      (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
+        ?.default_params as Record<string, unknown> | undefined
+    ) ?? {}
+    const fallbackWidth = (params.fallback_width as number | undefined) ?? 1024
+    const fallbackHeight = (params.fallback_height as number | undefined) ?? 1024
+    const fallbackSteps = (params.fallback_steps as number | undefined) ?? 4
+    const fallbackGuidance = (params.fallback_guidance as number | undefined) ?? 1
+    const fallbackNegativePrompt = (params.fallback_negative_prompt as string | undefined) ?? ''
+
+    window.electronAPI.resolveRecommendation(model).then((recommendation) => {
+      if (cancelled) return
+      setSelectedRecommendation(recommendation)
+      setLocalWidth(recommendation?.width ?? fallbackWidth)
+      setLocalHeight(recommendation?.height ?? fallbackHeight)
+      setLocalSteps(recommendation?.steps ?? fallbackSteps)
+      setLocalGuidance(recommendation?.guidance ?? fallbackGuidance)
+      setNegativePrompt(recommendation?.negativePrompt ?? fallbackNegativePrompt)
+    })
+
+    return () => { cancelled = true }
+  }, [backendId, model, settings, recommendationRevision])
 
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
@@ -210,8 +238,13 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   useEffect(() => {
     if (backendId !== 'drawthings') return
     const handler = (): void => setShowModelsModal(true)
+    const recommendationHandler = (): void => setRecommendationRevision((value) => value + 1)
     window.addEventListener('open-models-modal', handler)
-    return () => window.removeEventListener('open-models-modal', handler)
+    window.addEventListener('recommendations-updated', recommendationHandler)
+    return () => {
+      window.removeEventListener('open-models-modal', handler)
+      window.removeEventListener('recommendations-updated', recommendationHandler)
+    }
   }, [backendId])
 
   // Update defaults when model changes
@@ -256,9 +289,17 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       if (fluxModelDef?.guidanceRange) params.guidance = fluxGuidance
       if (fluxSeed) params.seed = parseInt(fluxSeed)
     } else if (backendId === 'drawthings') {
-      params = { width: localWidth, height: localHeight, steps: localSteps, cfg: localCfg }
+      params = {}
+      if (selectedRecommendation?.width == null || localWidth !== selectedRecommendation.width) params.width = localWidth
+      if (selectedRecommendation?.height == null || localHeight !== selectedRecommendation.height) params.height = localHeight
+      if (selectedRecommendation?.steps == null || localSteps !== selectedRecommendation.steps) params.steps = localSteps
+      if (selectedRecommendation?.guidance == null || localGuidance !== selectedRecommendation.guidance) params.guidance = localGuidance
       if (localSeed) params.seed = parseInt(localSeed)
-      if (negativePrompt) params.negativePrompt = negativePrompt
+      if (selectedRecommendation?.negativePrompt != null) {
+        if (negativePrompt !== selectedRecommendation.negativePrompt) params.negativePrompt = negativePrompt
+      } else if (negativePrompt) {
+        params.negativePrompt = negativePrompt
+      }
     } else if (backendId === 'grok') {
       params = { aspectRatio: grokAspectRatio, resolution: grokResolution }
     } else if (backendId === 'nanobanana') {
@@ -276,7 +317,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
       grokAspectRatio,
       grokResolution,
-      localWidth, localHeight, localSteps, localCfg, localSeed, negativePrompt,
+      localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt, selectedRecommendation,
       apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
@@ -505,8 +546,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                   <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
                 </div>
                 <div className="setting-row">
-                  <label>cfg</label>
-                  <input type="number" value={localCfg} onChange={(e) => setLocalCfg(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
+                  <label>guidance</label>
+                  <input type="number" value={localGuidance} onChange={(e) => setLocalGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
                 </div>
                 <div className="setting-row">
                   <label>seed</label>

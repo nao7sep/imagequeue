@@ -17,6 +17,33 @@ export interface LocalModelInfo {
   huggingFace: string | null
 }
 
+export interface RecommendationStatus {
+  path: string
+  directory: string
+  exists: boolean
+  valid: boolean
+  entryCount: number
+  fileSize: number | null
+  updatedAt: string | null
+  error: string | null
+}
+
+export interface RecommendationOperationResult extends RecommendationStatus {
+  changed: boolean
+  message: string
+}
+
+export interface RecommendedParams {
+  width: number | null
+  height: number | null
+  steps: number | null
+  guidance: number | null
+  negativePrompt: string | null
+  matchName: string
+  matchModel: string | null
+  matchType: 'exact' | 'prefix' | 'prefix-parent' | 'version'
+}
+
 export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed'
 

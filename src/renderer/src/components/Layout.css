@@ -113,9 +113,9 @@
 }
 
 .shortcut-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 7px 10px;
   border: 1px solid var(--border);
@@ -124,6 +124,7 @@
 }
 
 .shortcut-item span {
+  min-width: 0;
   font-size: 13px;
   color: var(--text-primary);
 }
@@ -169,6 +170,7 @@
 .about-links {
   margin-top: 16px;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   justify-content: center;
 }

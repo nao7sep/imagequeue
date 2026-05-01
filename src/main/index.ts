@@ -9,6 +9,7 @@ import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { initLogger, log } from './logger'
+import { updateRecommendationsAtLaunch } from './recommendations'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -84,6 +85,11 @@ app.whenReady().then(() => {
   registerPreviewIpc()
   registerSettingsIpc()
   registerViewerIpc()
+  void updateRecommendationsAtLaunch().catch((err) => {
+    log('warn', 'Recommendations launch update rejected unexpectedly', {
+      message: (err as Error).message
+    })
+  })
   startProcessor()
 
   createWindow()

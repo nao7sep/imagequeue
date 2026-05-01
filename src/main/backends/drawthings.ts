@@ -21,31 +21,32 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
   const outputPath = path.join(getSessionDir(), `_local_temp_${Date.now()}.png`)
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
 
-  const width = (task.params.width as number | undefined) ?? defaults.fallback_width
-  const height = (task.params.height as number | undefined) ?? defaults.fallback_height
-  const steps = (task.params.steps as number | undefined) ?? defaults.fallback_steps
-  const cfg = (task.params.cfg as number | undefined) ?? defaults.fallback_cfg
+  const width = task.params.width as number | undefined
+  const height = task.params.height as number | undefined
+  const steps = task.params.steps as number | undefined
+  const guidance = task.params.guidance as number | undefined
   const seed = (task.params.seed as number | undefined | null) ?? defaults.seed
-  const negativePrompt = (task.params.negativePrompt as string | undefined) ?? defaults.negativePrompt
+  const hasNegativePrompt = Object.prototype.hasOwnProperty.call(task.params, 'negativePrompt')
+  const negativePrompt = task.params.negativePrompt as string | undefined
 
   const args = [
     'generate',
     '--model', task.model,
     '--prompt', task.prompt,
     '--output', outputPath,
-    '--width', String(width),
-    '--height', String(height),
-    '--steps', String(steps),
-    '--cfg', String(cfg),
     '--disable-preview',
     ...modelsDirArgs()
   ]
 
+  if (width != null) args.push('--width', String(width))
+  if (height != null) args.push('--height', String(height))
+  if (steps != null) args.push('--steps', String(steps))
+  if (guidance != null) args.push('--cfg', String(guidance))
   if (seed != null && seed > 0) {
     args.push('--seed', String(seed))
   }
-  if (negativePrompt) {
-    args.push('--negative-prompt', negativePrompt)
+  if (hasNegativePrompt) {
+    args.push('--negative-prompt', negativePrompt ?? '')
   }
 
   logApiRequest('drawthings', 'draw-things-cli generate', {
@@ -53,7 +54,7 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
     width,
     height,
     steps,
-    cfg,
+    guidance,
     seed,
     negativePrompt
   })

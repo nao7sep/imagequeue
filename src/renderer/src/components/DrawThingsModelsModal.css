@@ -137,7 +137,8 @@
 }
 
 .dt-model-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
@@ -157,6 +158,7 @@
 
 .dt-model-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   min-height: 18px;
   gap: 6px;
@@ -193,7 +195,7 @@
 }
 
 .dt-model-name {
-  flex: 1;
+  min-width: 0;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -252,15 +254,13 @@
 }
 
 .dt-import-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
 .dt-import-input {
-  flex: 1 1 240px;
   min-width: 0;
   padding: 5px 8px;
   border: 1px solid var(--border);
@@ -280,4 +280,18 @@
   color: var(--text-primary);
   font-size: 12px;
   box-sizing: border-box;
+}
+
+@media (max-width: 760px) {
+  .dt-model-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .dt-import-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dt-import-row .dt-action-btn {
+    width: 100%;
+  }
 }

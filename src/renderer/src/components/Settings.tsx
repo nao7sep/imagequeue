@@ -1,8 +1,9 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
+import type { RecommendationStatus } from '../../../shared/types'
 import './Settings.css'
 
 interface Props {
@@ -15,6 +16,9 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => settings)
   const [status, setStatus] = useState('')
+  const [recommendationStatus, setRecommendationStatus] = useState<RecommendationStatus | null>(null)
+  const [recommendationMessage, setRecommendationMessage] = useState('')
+  const [recommendationBusy, setRecommendationBusy] = useState(false)
   const [originalSnapshot, setOriginalSnapshot] = useState<string>(() => JSON.stringify(settings))
 
   const dirty = useMemo(
@@ -43,6 +47,16 @@ export function Settings({ onClose }: Props): React.JSX.Element {
     }
     onClose()
   }, [dirty, confirm, onClose])
+
+  const refreshRecommendationStatus = useCallback(async (): Promise<void> => {
+    if (window.electronAPI.platform === 'win32') return
+    const next = await window.electronAPI.getRecommendationsStatus()
+    setRecommendationStatus(next)
+  }, [])
+
+  useEffect(() => {
+    void refreshRecommendationStatus()
+  }, [refreshRecommendationStatus])
 
   if (!config) return (
     <Modal title="Settings" className="settings-modal-box" onClose={handleClose}>
@@ -76,6 +90,45 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const updateBackendParam = (backend: string, key: string, value: unknown): void => {
     const params = backends[backend].default_params as Record<string, unknown>
     updateBackend(backend, 'default_params', { ...params, [key]: value })
+  }
+
+  const handleDownloadRecommendations = async (): Promise<void> => {
+    setRecommendationBusy(true)
+    setRecommendationMessage('')
+    try {
+      const result = await window.electronAPI.downloadRecommendations()
+      setRecommendationStatus(result)
+      setRecommendationMessage(result.message)
+      window.dispatchEvent(new CustomEvent('recommendations-updated'))
+    } catch (err) {
+      setRecommendationMessage((err as Error).message)
+      await refreshRecommendationStatus()
+    } finally {
+      setRecommendationBusy(false)
+    }
+  }
+
+  const handleImportRecommendations = async (): Promise<void> => {
+    const filePath = await window.electronAPI.openFileDialog([{ name: 'JSON', extensions: ['json'] }])
+    if (!filePath) return
+    setRecommendationBusy(true)
+    setRecommendationMessage('')
+    try {
+      const result = await window.electronAPI.importRecommendations(filePath)
+      setRecommendationStatus(result)
+      setRecommendationMessage(result.message)
+      window.dispatchEvent(new CustomEvent('recommendations-updated'))
+    } catch (err) {
+      setRecommendationMessage((err as Error).message)
+      await refreshRecommendationStatus()
+    } finally {
+      setRecommendationBusy(false)
+    }
+  }
+
+  const formatRecommendationTimestamp = (value: string | null): string => {
+    if (!value) return 'n/a'
+    return new Date(value).toLocaleString()
   }
 
   return (
@@ -115,40 +168,45 @@ export function Settings({ onClose }: Props): React.JSX.Element {
               Browse
             </button>
           </div>
-          <p className="settings-hint">Where exported images are saved. Leave empty to use the Desktop.</p>
+          <p className="settings-hint">Where exported images are saved.</p>
         </div>
-        <div className="settings-field-check">
-          <label>
-            <input
-              type="checkbox"
-              checked={(general.confirm_remove as boolean) ?? false}
-              onChange={(e) => updateGeneral('confirm_remove', e.target.checked)}
-            />
-            Confirm remove
-          </label>
-          <p className="settings-hint">Show a confirmation prompt before removing a task from the queue (Backspace / rm).</p>
-        </div>
-        <div className="settings-field-check">
-          <label>
-            <input
-              type="checkbox"
-              checked={(general.confirm_delete as boolean) ?? false}
-              onChange={(e) => updateGeneral('confirm_delete', e.target.checked)}
-            />
-            Confirm delete
-          </label>
-          <p className="settings-hint">Show a confirmation prompt before deleting a task and its files (Delete / del).</p>
-        </div>
-        <div className="settings-field-check">
-          <label>
-            <input
-              type="checkbox"
-              checked={(general.delete_to_trash as boolean) ?? true}
-              onChange={(e) => updateGeneral('delete_to_trash', e.target.checked)}
-            />
-            Delete to Trash
-          </label>
-          <p className="settings-hint">Move deleted files to Trash instead of permanently deleting them.</p>
+        <div className="settings-field settings-field-full settings-panel-after-hint">
+          <div className="settings-option-panel">
+            <div className="settings-option-title">Deletion</div>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(general.confirm_remove as boolean) ?? false}
+                onChange={(e) => updateGeneral('confirm_remove', e.target.checked)}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Confirm remove</span>
+                <span className="settings-panel-check-desc">Before removing a task from the queue.</span>
+              </span>
+            </label>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(general.confirm_delete as boolean) ?? false}
+                onChange={(e) => updateGeneral('confirm_delete', e.target.checked)}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Confirm delete</span>
+                <span className="settings-panel-check-desc">Before deleting a task and its files.</span>
+              </span>
+            </label>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(general.delete_to_trash as boolean) ?? true}
+                onChange={(e) => updateGeneral('delete_to_trash', e.target.checked)}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Delete to Trash</span>
+                <span className="settings-panel-check-desc">Move deleted files to Trash instead of permanently deleting them.</span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -323,7 +381,41 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Models Directory</label>
           <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use ~/.imagequeue/models" />
-          <span className="settings-hint">Leave empty to use ImageQueue&apos;s private models directory: ~/.imagequeue/models.</span>
+        </div>
+        <div className="settings-field settings-field-full">
+          <div className="recommendation-panel">
+            <div className="recommendation-title">Recommendations</div>
+            <div className="recommendation-panel-top">
+              <div className="recommendation-panel-main">
+                {recommendationStatus?.exists ? (
+                  recommendationStatus.valid ? (
+                    <span>{recommendationStatus.entryCount} entries, updated {formatRecommendationTimestamp(recommendationStatus.updatedAt)}</span>
+                  ) : (
+                    <span>Found but not readable: {recommendationStatus.error}</span>
+                  )
+                ) : (
+                  <span>No recommendation file found.</span>
+                )}
+                {recommendationMessage && <span className="recommendation-message">{recommendationMessage}</span>}
+              </div>
+            </div>
+            <div className="recommendation-actions">
+              <button type="button" onClick={() => void handleDownloadRecommendations()} disabled={recommendationBusy}>
+                Download Latest
+              </button>
+              <button type="button" onClick={() => void handleImportRecommendations()} disabled={recommendationBusy}>
+                Import
+              </button>
+            </div>
+            <label className="recommendation-auto-update">
+              <input
+                type="checkbox"
+                checked={(backends.drawthings.auto_update_recommendations as boolean) ?? false}
+                onChange={(e) => updateBackend('drawthings', 'auto_update_recommendations', e.target.checked)}
+              />
+              Update recommendations at app launch
+            </label>
+          </div>
         </div>
         <div className="settings-field">
           <label>Fallback Width</label>
@@ -338,8 +430,12 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_steps', parseInt(e.target.value) || 4)} />
         </div>
         <div className="settings-field">
-          <label>Fallback CFG</label>
-          <input type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_cfg as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_cfg', parseFloat(e.target.value) || 1)} />
+          <label>Fallback Guidance</label>
+          <input type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_guidance as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_guidance', parseFloat(e.target.value) || 1)} />
+        </div>
+        <div className="settings-field">
+          <label>Fallback Negative</label>
+          <input type="text" value={(backends.drawthings.default_params as Record<string, unknown>).fallback_negative_prompt as string} onChange={(e) => updateBackendParam('drawthings', 'fallback_negative_prompt', e.target.value)} />
         </div>
       </div>
       )}

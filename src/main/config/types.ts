@@ -56,11 +56,12 @@ export interface DrawThingsBackendConfig {
     fallback_width: number
     fallback_height: number
     fallback_steps: number
-    fallback_cfg: number
+    fallback_guidance: number
+    fallback_negative_prompt: string
     seed: number | null
-    negativePrompt: string
   }
   models_dir: string
+  auto_update_recommendations: boolean
 }
 
 export interface NanoBananaBackendConfig {

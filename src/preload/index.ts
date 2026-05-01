@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { BackendId, EnqueueRequest, Task, CliStatus, LocalModelInfo } from '../shared/types'
+import {
+  BackendId,
+  EnqueueRequest,
+  Task,
+  CliStatus,
+  LocalModelInfo,
+  RecommendedParams,
+  RecommendationOperationResult,
+  RecommendationStatus
+} from '../shared/types'
 
 export type { CliStatus, LocalModelInfo }
 
@@ -80,6 +89,18 @@ const api = {
 
   localOpenTerminalForImport: (artifactPath: string): Promise<void> =>
     ipcRenderer.invoke('local:openTerminalForImport', artifactPath),
+
+  getRecommendationsStatus: (): Promise<RecommendationStatus> =>
+    ipcRenderer.invoke('recommendations:getStatus'),
+
+  downloadRecommendations: (): Promise<RecommendationOperationResult> =>
+    ipcRenderer.invoke('recommendations:downloadLatest'),
+
+  importRecommendations: (filePath: string): Promise<RecommendationOperationResult> =>
+    ipcRenderer.invoke('recommendations:import', filePath),
+
+  resolveRecommendation: (modelFile: string): Promise<RecommendedParams | null> =>
+    ipcRenderer.invoke('recommendations:resolve', modelFile),
 
   openFileDialog: (filters: { name: string; extensions: string[] }[]): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openFile', filters),

@@ -32,12 +32,13 @@ draw-things-cli --version
 |---|---|---|
 | `cli_path` | *(empty — uses `draw-things-cli` on `$PATH`)* | Full path to the CLI binary if not on `$PATH` |
 | `models_dir` | *(empty — uses `~/.imagequeue/models`)* | Directory where model files are stored |
-| `fallback_width` | `1024` | Fallback output width when a task does not specify width |
-| `fallback_height` | `1024` | Fallback output height when a task does not specify height |
-| `fallback_steps` | `4` | Fallback inference steps when a task does not specify steps |
-| `fallback_cfg` | `1` | Fallback classifier-free guidance scale when a task does not specify CFG |
+| `auto_update_recommendations` | `true` | Download the latest Draw Things recommendation file at app launch |
+| `fallback_width` | `1024` | Output width when no recommendation provides one |
+| `fallback_height` | `1024` | Output height when no recommendation provides one |
+| `fallback_steps` | `4` | Inference steps when no recommendation provides one |
+| `fallback_guidance` | `1` | Guidance scale when no recommendation provides one |
+| `fallback_negative_prompt` | *(empty)* | Negative prompt when no recommendation provides one |
 | `seed` | *(null — random)* | Fallback seed when a task does not specify one. Values of `null` or `0` both produce a random seed |
-| `negativePrompt` | *(empty)* | Fallback negative prompt when a task does not specify one |
 
 ---
 
@@ -51,6 +52,18 @@ The models directory is where model `.ckpt` files are stored. ImageQueue resolve
 ImageQueue always passes `--models-dir` to Draw Things CLI. It never probes or uses the Draw Things GUI app's container directory unless that exact path is explicitly entered as `models_dir`.
 
 **Recommendation:** leave `models_dir` empty unless you need models stored in a custom location.
+
+---
+
+## Recommended Parameters
+
+ImageQueue does not bundle Draw Things' community recommendation data. By default it tries to download the latest recommendation JSON at app launch, and you can also use **Settings → Draw Things → Recommendations** to download or import it manually. The file is stored at `~/.imagequeue/data/configs.json`.
+
+When a Draw Things model is selected, ImageQueue reads the current recommendation file and applies the best matching `width`, `height`, `steps`, `guidanceScale` (shown as guidance), and negative prompt to the main window controls. If the file is replaced by download or import, the current Draw Things controls refresh from the latest values.
+
+Download and import compare bytes against the current file. If the new file is identical, ImageQueue leaves the existing file untouched so its timestamp does not change and reports that it is already up to date.
+
+Launch-time recommendation updates are non-blocking. If the download fails, ImageQueue logs a warning in the session log and continues launching with the existing local file or fallback values.
 
 ---
 
@@ -86,6 +99,8 @@ The **model dropdown in the column shows only downloaded models**. If no models 
 
 The column's size dropdown sets width and height together for common resolutions. If width or height is edited to a combination that does not match a preset, the dropdown shows **Custom width/height**.
 
+For Draw Things recommendation values, ImageQueue omits width, height, steps, guidance, and negative prompt flags when the current control value still matches the recommended value. If a recommendation does not provide a value, ImageQueue uses the matching fallback setting. If a control differs from the recommendation, ImageQueue passes that value so the user's change takes priority over the CLI default.
+
 | CLI flag | Source |
 |---|---|
 | `--model` | Selected model in the column |
@@ -93,7 +108,7 @@ The column's size dropdown sets width and height together for common resolutions
 | `--output` | Temporary file in the session directory (deleted after reading) |
 | `--width` / `--height` | Width and height settings |
 | `--steps` | Steps setting |
-| `--cfg` | CFG setting |
+| `--cfg` | Guidance setting |
 | `--seed` | Seed setting (omitted when 0 or null) |
 | `--negative-prompt` | Negative prompt (omitted when empty) |
 | `--disable-preview` | Always set (suppresses the live preview window) |

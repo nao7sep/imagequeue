@@ -75,11 +75,12 @@ export function createDefaultConfig(): AppConfig {
           fallback_width: 1024,
           fallback_height: 1024,
           fallback_steps: 4,
-          fallback_cfg: 1,
+          fallback_guidance: 1,
+          fallback_negative_prompt: '',
           seed: null,
-          negativePrompt: ''
         },
-        models_dir: ''
+        models_dir: '',
+        auto_update_recommendations: true
       }
     },
     prompts: {

@@ -90,4 +90,4 @@ See [docs/draw-things-cli.md](docs/draw-things-cli.md) for setup and usage.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

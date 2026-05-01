@@ -16,6 +16,12 @@ import {
   openTerminalForDownload,
   openTerminalForImport
 } from './local-cli'
+import {
+  downloadLatestRecommendations,
+  getRecommendationsStatus,
+  importRecommendations,
+  resolveRecommendedParams
+} from './recommendations'
 
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
@@ -88,6 +94,22 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('local:openTerminalForImport', async (_event, artifactPath: string) => {
     return openTerminalForImport(artifactPath)
+  })
+
+  ipcMain.handle('recommendations:getStatus', () => {
+    return getRecommendationsStatus()
+  })
+
+  ipcMain.handle('recommendations:downloadLatest', async () => {
+    return downloadLatestRecommendations()
+  })
+
+  ipcMain.handle('recommendations:import', (_event, filePath: string) => {
+    return importRecommendations(filePath)
+  })
+
+  ipcMain.handle('recommendations:resolve', (_event, modelFile: string) => {
+    return resolveRecommendedParams(modelFile)
   })
 
   ipcMain.handle('dialog:openFile', async (_event, filters: Electron.FileFilter[]) => {
