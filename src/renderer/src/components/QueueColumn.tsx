@@ -289,17 +289,9 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       if (fluxModelDef?.guidanceRange) params.guidance = fluxGuidance
       if (fluxSeed) params.seed = parseInt(fluxSeed)
     } else if (backendId === 'drawthings') {
-      params = {}
-      if (selectedRecommendation?.width == null || localWidth !== selectedRecommendation.width) params.width = localWidth
-      if (selectedRecommendation?.height == null || localHeight !== selectedRecommendation.height) params.height = localHeight
-      if (selectedRecommendation?.steps == null || localSteps !== selectedRecommendation.steps) params.steps = localSteps
-      if (selectedRecommendation?.guidance == null || localGuidance !== selectedRecommendation.guidance) params.guidance = localGuidance
+      params = { width: localWidth, height: localHeight, steps: localSteps, guidance: localGuidance }
       if (localSeed) params.seed = parseInt(localSeed)
-      if (selectedRecommendation?.negativePrompt != null) {
-        if (negativePrompt !== selectedRecommendation.negativePrompt) params.negativePrompt = negativePrompt
-      } else if (negativePrompt) {
-        params.negativePrompt = negativePrompt
-      }
+      if (negativePrompt) params.negativePrompt = negativePrompt
     } else if (backendId === 'grok') {
       params = { aspectRatio: grokAspectRatio, resolution: grokResolution }
     } else if (backendId === 'nanobanana') {
@@ -317,7 +309,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
       grokAspectRatio,
       grokResolution,
-      localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt, selectedRecommendation,
+      localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt,
       apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane

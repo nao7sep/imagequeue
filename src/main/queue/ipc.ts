@@ -25,6 +25,11 @@ export function registerQueueIpc(): void {
   })
 
   ipcMain.handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
+    const task = queueManager.getTask(backend, taskId)
+    if (task?.status === 'generating') {
+      log('warn', `Refusing to remove generating task ${taskId}`, { backend })
+      return
+    }
     log('info', `Task removed from queue: ${taskId}`, { backend })
     queueManager.removeTask(backend, taskId)
     notifyAllWindows('queue:updated', queueManager.getAllTasks())

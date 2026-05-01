@@ -118,6 +118,9 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    let parsed: URL
+    try { parsed = new URL(url) } catch { return }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return
     shell.openExternal(url)
   })
 

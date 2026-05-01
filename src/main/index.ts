@@ -116,8 +116,15 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('will-quit', () => {
+// Destroy auxiliary windows in before-quit, before Electron sends close events
+// to any window. The viewer's close handler calls event.preventDefault() to
+// convert OS-close into a hide; if that fired during quit, will-quit would
+// never be reached and the app would get stuck.
+app.on('before-quit', () => {
   closeViewerWindow()
   closeNotificationWindow()
+})
+
+app.on('will-quit', () => {
   log('info', 'Session ended')
 })

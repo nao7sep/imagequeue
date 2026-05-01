@@ -85,9 +85,12 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
 
   logApiResponse('drawthings', 'ok', Date.now() - startTime)
 
-  const buffer = fs.readFileSync(outputPath)
-  fs.unlinkSync(outputPath)
-  return { buffer }
+  try {
+    const buffer = fs.readFileSync(outputPath)
+    return { buffer }
+  } finally {
+    try { fs.unlinkSync(outputPath) } catch { /* ignore */ }
+  }
 }
 
 // Check if a model file exists in the effective models directory.

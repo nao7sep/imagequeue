@@ -99,7 +99,7 @@ The **model dropdown in the column shows only downloaded models**. If no models 
 
 The column's size dropdown sets width and height together for common resolutions. If width or height is edited to a combination that does not match a preset, the dropdown shows **Custom width/height**.
 
-For Draw Things recommendation values, ImageQueue omits width, height, steps, guidance, and negative prompt flags when the current control value still matches the recommended value. If a recommendation does not provide a value, ImageQueue uses the matching fallback setting. If a control differs from the recommendation, ImageQueue passes that value so the user's change takes priority over the CLI default.
+Width, height, steps, guidance, and negative prompt are always passed explicitly to the CLI. When a recommendation is available, the controls are pre-filled with the recommended values; the user can adjust any of them before queuing. The actual control values are what get sent — the recommendation only determines the starting point shown in the UI.
 
 | CLI flag | Source |
 |---|---|
