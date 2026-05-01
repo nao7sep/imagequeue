@@ -59,27 +59,6 @@ export const FLUX_SIZES: SizePreset[] = [
   { label: '2048×1536 (Landscape 3MP)', width: 2048, height: 1536 }
 ]
 
-// Local: common sizes for Draw Things — multiples of 64, covers legacy/1K/2K resolutions
-export const DRAWTHINGS_SIZES: SizePreset[] = [
-  // Legacy SD 1.x sizes
-  { label: '512×512', width: 512, height: 512 },
-  { label: '768×768', width: 768, height: 768 },
-  // 1K (SDXL / FLUX native resolution)
-  { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '768×1024 (Portrait 3:4)', width: 768, height: 1024 },
-  { label: '1024×768 (Landscape 4:3)', width: 1024, height: 768 },
-  { label: '576×1024 (Portrait 9:16)', width: 576, height: 1024 },
-  { label: '1024×576 (Landscape 16:9)', width: 1024, height: 576 },
-  { label: '1024×1536 (Portrait 2:3)', width: 1024, height: 1536 },
-  { label: '1536×1024 (Landscape 3:2)', width: 1536, height: 1024 },
-  // 2K (FLUX recommended; may exceed memory on lower-end hardware)
-  { label: '2048×2048 (2K Square)', width: 2048, height: 2048 },
-  { label: '1536×2048 (2K Portrait 3:4)', width: 1536, height: 2048 },
-  { label: '2048×1536 (2K Landscape 4:3)', width: 2048, height: 1536 },
-  { label: '1152×2048 (2K Portrait 9:16)', width: 1152, height: 2048 },
-  { label: '2048×1152 (2K Landscape 16:9)', width: 2048, height: 1152 }
-]
-
 // --- Model definitions ---
 
 export type OpenAIQuality = 'low' | 'medium' | 'high' | 'auto'
@@ -341,8 +320,6 @@ export const FLUX_MODELS: FluxModelDef[] = [
     pricing: { firstMp: 0.014, additionalMp: 0.001 }
   }
 ]
-
-// --- Draw Things sizes ---
 
 // --- Nano Banana (Gemini native image generation) models ---
 

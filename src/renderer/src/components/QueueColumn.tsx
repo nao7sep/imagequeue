@@ -11,7 +11,6 @@ import {
   GROK_ASPECT_RATIOS,
   GROK_RESOLUTIONS,
   FLUX_SIZES,
-  DRAWTHINGS_SIZES,
   type OpenAIModelDef,
   type ImagenModelDef,
   type NanoBananaModelDef,
@@ -41,6 +40,23 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const modelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+const CUSTOM_DRAWTHINGS_SIZE = 'custom'
+const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = [
+  { label: '512x512', width: 512, height: 512 },
+  { label: '768x768', width: 768, height: 768 },
+  { label: '1024x1024 (Square)', width: 1024, height: 1024 },
+  { label: '768x1024 (Portrait 3:4)', width: 768, height: 1024 },
+  { label: '1024x768 (Landscape 4:3)', width: 1024, height: 768 },
+  { label: '576x1024 (Portrait 9:16)', width: 576, height: 1024 },
+  { label: '1024x576 (Landscape 16:9)', width: 1024, height: 576 },
+  { label: '1024x1536 (Portrait 2:3)', width: 1024, height: 1536 },
+  { label: '1536x1024 (Landscape 3:2)', width: 1536, height: 1024 },
+  { label: '2048x2048 (2K Square)', width: 2048, height: 2048 },
+  { label: '1536x2048 (2K Portrait 3:4)', width: 1536, height: 2048 },
+  { label: '2048x1536 (2K Landscape 4:3)', width: 2048, height: 1536 },
+  { label: '1152x2048 (2K Portrait 9:16)', width: 1152, height: 2048 },
+  { label: '2048x1152 (2K Landscape 16:9)', width: 2048, height: 1152 }
+]
 
 function localModelName(model: LocalModelInfo): string {
   return model.name || model.file
@@ -119,9 +135,10 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [grokResolution, setGrokResolution] = useState<GrokResolution>('1k')
 
   // Local params
-  const [localSizeIdx, setLocalSizeIdx] = useState(2) // 1024x1024
+  const [localWidth, setLocalWidth] = useState(1024)
+  const [localHeight, setLocalHeight] = useState(1024)
   const [localSteps, setLocalSteps] = useState(4)
-  const [localGuidance, setLocalGuidance] = useState(1)
+  const [localCfg, setLocalCfg] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
@@ -129,6 +146,32 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [showModelsModal, setShowModelsModal] = useState(false)
 
   const columnTasks = tasks[backendId]
+  const localSizeValue = useMemo(() => {
+    const preset = DRAWTHINGS_SIZE_PRESETS.find((s) => s.width === localWidth && s.height === localHeight)
+    return preset ? `${preset.width}x${preset.height}` : CUSTOM_DRAWTHINGS_SIZE
+  }, [localWidth, localHeight])
+
+  const handleLocalSizeChange = (value: string): void => {
+    if (value === CUSTOM_DRAWTHINGS_SIZE) return
+    const preset = DRAWTHINGS_SIZE_PRESETS.find((s) => `${s.width}x${s.height}` === value)
+    if (!preset) return
+    setLocalWidth(preset.width)
+    setLocalHeight(preset.height)
+  }
+
+  useEffect(() => {
+    if (backendId !== 'drawthings') return
+    const params = (
+      (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
+        ?.default_params as Record<string, unknown> | undefined
+    ) ?? {}
+    setLocalWidth((params.fallback_width as number | undefined) ?? 1024)
+    setLocalHeight((params.fallback_height as number | undefined) ?? 1024)
+    setLocalSteps((params.fallback_steps as number | undefined) ?? 4)
+    setLocalCfg((params.fallback_cfg as number | undefined) ?? 1)
+    setLocalSeed(params.seed == null ? '' : String(params.seed))
+    setNegativePrompt((params.negativePrompt as string | undefined) ?? '')
+  }, [backendId, settings])
 
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
@@ -213,8 +256,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       if (fluxModelDef?.guidanceRange) params.guidance = fluxGuidance
       if (fluxSeed) params.seed = parseInt(fluxSeed)
     } else if (backendId === 'drawthings') {
-      const size = DRAWTHINGS_SIZES[localSizeIdx]
-      params = { width: size.width, height: size.height, steps: localSteps, guidance: localGuidance }
+      params = { width: localWidth, height: localHeight, steps: localSteps, cfg: localCfg }
       if (localSeed) params.seed = parseInt(localSeed)
       if (negativePrompt) params.negativePrompt = negativePrompt
     } else if (backendId === 'grok') {
@@ -234,7 +276,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       fluxSizeIdx, fluxSteps, fluxGuidance, fluxSeed,
       grokAspectRatio,
       grokResolution,
-      localSizeIdx, localSteps, localGuidance, localSeed, negativePrompt,
+      localWidth, localHeight, localSteps, localCfg, localSeed, negativePrompt,
       apiKeyMissing, cliStatus, downloadedModels, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
@@ -441,14 +483,30 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                     No models downloaded yet
                   </div>
                 )}
-                {renderSizeSelect(DRAWTHINGS_SIZES, localSizeIdx, setLocalSizeIdx)}
+                <div className="setting-row">
+                  <label>size</label>
+                  <select value={localSizeValue} onChange={(e) => handleLocalSizeChange(e.target.value)}>
+                    {DRAWTHINGS_SIZE_PRESETS.map((s) => (
+                      <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>{s.label}</option>
+                    ))}
+                    <option value={CUSTOM_DRAWTHINGS_SIZE}>Custom width/height</option>
+                  </select>
+                </div>
+                <div className="setting-row">
+                  <label>width</label>
+                  <input type="number" value={localWidth} onChange={(e) => setLocalWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+                </div>
+                <div className="setting-row">
+                  <label>height</label>
+                  <input type="number" value={localHeight} onChange={(e) => setLocalHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+                </div>
                 <div className="setting-row">
                   <label>steps</label>
                   <input type="number" value={localSteps} onChange={(e) => setLocalSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
                 </div>
                 <div className="setting-row">
                   <label>cfg</label>
-                  <input type="number" value={localGuidance} onChange={(e) => setLocalGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
+                  <input type="number" value={localCfg} onChange={(e) => setLocalCfg(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
                 </div>
                 <div className="setting-row">
                   <label>seed</label>

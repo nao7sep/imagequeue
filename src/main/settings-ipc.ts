@@ -1,7 +1,6 @@
 import { ipcMain, shell, dialog, app, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import os from 'os'
 import { loadConfig, saveConfig, encodeApiKey, decodeApiKey, getDataDir } from './config'
 import { getSessionDir } from './session'
 import { AppConfig } from './config/types'
@@ -70,8 +69,7 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('local:getModelsDir', () => {
-    const dir = resolveModelsDir()
-    return dir || null // null means CLI's own default
+    return resolveModelsDir()
   })
 
   ipcMain.handle('local:getDefaultModelsDir', () => {
@@ -80,13 +78,8 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('local:openModelsDir', () => {
     const dir = resolveModelsDir()
-    if (dir) {
-      shell.openPath(dir)
-    } else {
-      // Open CLI's default location
-      const cliDefault = path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/Models')
-      shell.openPath(cliDefault)
-    }
+    fs.mkdirSync(dir, { recursive: true })
+    shell.openPath(dir)
   })
 
   ipcMain.handle('local:openTerminalForDownload', async (_event, modelFile: string) => {
@@ -120,6 +113,7 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('shell:exportImage', async (_event, baseName: string, ext: string) => {
     const config = loadConfig()
     const exportDir = config.general.export_dir || app.getPath('desktop')
+    fs.mkdirSync(exportDir, { recursive: true })
     const src = path.join(getSessionDir(), `${baseName}.${ext}`)
     let destName = `${baseName}.${ext}`
     let destPath = path.join(exportDir, destName)
@@ -142,6 +136,7 @@ export function registerSettingsIpc(): void {
       filters: [{ name: 'Images', extensions: [ext, 'png', 'jpg', 'webp'] }]
     })
     if (result.canceled || !result.filePath) return null
+    fs.mkdirSync(path.dirname(result.filePath), { recursive: true })
     fs.copyFileSync(src, result.filePath)
     return result.filePath
   })

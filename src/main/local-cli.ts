@@ -13,32 +13,26 @@ export type { CliStatus, LocalModelInfo }
 
 const DEFAULT_MODELS_DIR = path.join(os.homedir(), '.imagequeue', 'models')
 
-/** Resolve the effective models directory. Empty string means use CLI's default (no --models-dir). */
+/** Resolve the effective models directory. Empty config uses ImageQueue's private models dir. */
 export function resolveModelsDir(): string {
   const config = loadConfig()
   const dir = config.image_backends.drawthings.models_dir
-  if (!dir) return '' // empty = let CLI use its own default
+  if (!dir) return DEFAULT_MODELS_DIR
   return dir.replace(/^~/, os.homedir())
 }
 
-/** Ensure the models directory exists (creates if needed). Returns the resolved path, or empty for CLI default. */
+/** Ensure the models directory exists (creates if needed). */
 export function ensureModelsDir(): string {
   const dir = resolveModelsDir()
-  if (!dir) return '' // CLI default — don't create anything
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
   return dir
 }
 
-/** Build the --models-dir arg pair if applicable. */
+/** Build the --models-dir arg pair used by every Draw Things model/generation command. */
 export function modelsDirArgs(): string[] {
-  const dir = resolveModelsDir()
-  if (!dir) return []
-  // Ensure directory exists
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
+  const dir = ensureModelsDir()
   return ['--models-dir', dir]
 }
 
@@ -202,21 +196,11 @@ export function getDefaultModelsDir(): string {
  * Read the `file` values from `custom.json` in the effective models directory.
  * Returns `null` when the file is absent or unreadable — callers should fall
  * back to heuristic detection in that case.
- * Returns a (possibly empty) array when the file exists and was parsed — an
- * empty array means Draw Things has no imported models recorded.
- * `custom.json` is the ground truth for locally-imported (external) models.
- */
-/**
- * Read the `file` values from `custom.json` in the effective models directory.
- * Returns `null` when the file is absent or unreadable — callers should fall
- * back to heuristic detection in that case.
  * Returns a (possibly empty) array when the file exists and was parsed.
  * `custom.json` is the ground truth for locally-imported (external) models.
  */
 export function readCustomJsonImportedFiles(): string[] | null {
   const dir = resolveEffectiveModelsDir()
-  if (!dir) return null
-
   const customJsonPath = path.join(dir, 'custom.json')
   if (!fs.existsSync(customJsonPath)) return null
 
@@ -240,24 +224,12 @@ export function readCustomJsonImportedFiles(): string[] | null {
   }
 }
 
-/** Known Draw Things system model locations (probed in order when models_dir is not configured). */
-const DRAW_THINGS_SYSTEM_DIRS = [
-  path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/Models'),
-  path.join(os.homedir(), 'Library/Containers/com.liuliu.draw-things/Data/Documents/models'),
-]
-
 /**
  * Resolve where Draw Things models actually live.
- * Priority: configured models_dir → known system paths → empty string.
- * Returns empty string only when no directory can be determined.
+ * Empty config resolves to ImageQueue's private default models directory.
  */
 export function resolveEffectiveModelsDir(): string {
-  const configured = resolveModelsDir()
-  if (configured) return configured // user set it explicitly — honour it
-  for (const p of DRAW_THINGS_SYSTEM_DIRS) {
-    if (fs.existsSync(p)) return p
-  }
-  return ''
+  return resolveModelsDir()
 }
 
 function shellQuote(s: string): string {
@@ -276,10 +248,9 @@ export async function openTerminalForImport(artifactPath: string): Promise<void>
 
   const config = loadConfig()
   const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
-  const dir = resolveEffectiveModelsDir()
+  const dir = ensureModelsDir()
 
-  const parts = [shellQuote(cliPath), 'models', 'import', shellQuote(artifactPath)]
-  if (dir) parts.push('--models-dir', shellQuote(dir))
+  const parts = [shellQuote(cliPath), 'models', 'import', shellQuote(artifactPath), '--models-dir', shellQuote(dir)]
   const cmd = parts.join(' ')
 
   const scriptContent = `#!/bin/sh\n${cmd}\n`
@@ -311,10 +282,9 @@ export async function openTerminalForDownload(modelFile: string): Promise<void> 
 
   const config = loadConfig()
   const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
-  const dir = resolveModelsDir()
+  const dir = ensureModelsDir()
 
-  const parts = [shellQuote(cliPath), 'models', 'ensure', '--model', shellQuote(modelFile)]
-  if (dir) parts.push('--models-dir', shellQuote(dir))
+  const parts = [shellQuote(cliPath), 'models', 'ensure', '--model', shellQuote(modelFile), '--models-dir', shellQuote(dir)]
   const cmd = parts.join(' ')
 
   const scriptContent = `#!/bin/sh\n${cmd}\n`

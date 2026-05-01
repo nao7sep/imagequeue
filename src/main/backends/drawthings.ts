@@ -13,40 +13,49 @@ export async function generateDrawThings(task: Task): Promise<{ buffer: Buffer; 
 
 async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
+  const defaults = config.image_backends.drawthings.default_params
   const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
 
   ensureModelsDir()
 
   const outputPath = path.join(getSessionDir(), `_local_temp_${Date.now()}.png`)
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+
+  const width = (task.params.width as number | undefined) ?? defaults.fallback_width
+  const height = (task.params.height as number | undefined) ?? defaults.fallback_height
+  const steps = (task.params.steps as number | undefined) ?? defaults.fallback_steps
+  const cfg = (task.params.cfg as number | undefined) ?? defaults.fallback_cfg
+  const seed = (task.params.seed as number | undefined | null) ?? defaults.seed
+  const negativePrompt = (task.params.negativePrompt as string | undefined) ?? defaults.negativePrompt
 
   const args = [
     'generate',
     '--model', task.model,
     '--prompt', task.prompt,
     '--output', outputPath,
-    '--steps', String((task.params.steps as number) || 4),
-    '--cfg', String((task.params.guidance as number) || 1),
-    '--width', String((task.params.width as number) || 1024),
-    '--height', String((task.params.height as number) || 1024),
+    '--width', String(width),
+    '--height', String(height),
+    '--steps', String(steps),
+    '--cfg', String(cfg),
     '--disable-preview',
     ...modelsDirArgs()
   ]
 
-  if (task.params.seed != null && (task.params.seed as number) > 0) {
-    args.push('--seed', String(task.params.seed))
+  if (seed != null && seed > 0) {
+    args.push('--seed', String(seed))
   }
-  if (task.params.negativePrompt) {
-    args.push('--negative-prompt', String(task.params.negativePrompt))
+  if (negativePrompt) {
+    args.push('--negative-prompt', negativePrompt)
   }
 
   logApiRequest('drawthings', 'draw-things-cli generate', {
     model: task.model,
-    steps: task.params.steps,
-    guidance: task.params.guidance,
-    width: task.params.width,
-    height: task.params.height,
-    seed: task.params.seed,
-    negativePrompt: task.params.negativePrompt
+    width,
+    height,
+    steps,
+    cfg,
+    seed,
+    negativePrompt
   })
   const startTime = Date.now()
 
@@ -86,4 +95,3 @@ export function checkModelExists(modelFilename: string): boolean {
   if (!dir) return false
   return fs.existsSync(path.join(dir, modelFilename))
 }
-

@@ -322,12 +322,24 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         </div>
         <div className="settings-field">
           <label>Models Directory</label>
-          <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="~/.imagequeue/models" />
-          <span className="settings-hint">Leave empty to use Draw Things&apos; default location (shared with GUI app)</span>
+          <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use ~/.imagequeue/models" />
+          <span className="settings-hint">Leave empty to use ImageQueue&apos;s private models directory: ~/.imagequeue/models.</span>
         </div>
         <div className="settings-field">
-          <label>Default Steps</label>
-          <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('drawthings', 'steps', parseInt(e.target.value) || 4)} />
+          <label>Fallback Width</label>
+          <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />
+        </div>
+        <div className="settings-field">
+          <label>Fallback Height</label>
+          <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_height as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_height', parseInt(e.target.value) || 1024)} />
+        </div>
+        <div className="settings-field">
+          <label>Fallback Steps</label>
+          <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_steps', parseInt(e.target.value) || 4)} />
+        </div>
+        <div className="settings-field">
+          <label>Fallback CFG</label>
+          <input type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_cfg as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_cfg', parseFloat(e.target.value) || 1)} />
         </div>
       </div>
       )}

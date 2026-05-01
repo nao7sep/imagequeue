@@ -185,7 +185,7 @@ export function Layout(): React.JSX.Element {
                     setShowMenu(false)
                     window.dispatchEvent(new CustomEvent('open-models-modal'))
                   }}>
-                    Manage Draw Things Models
+                    Draw Things Models
                   </button>
                 )}
                 <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>

@@ -47,19 +47,19 @@ body::before {
   background:
     radial-gradient(
       clamp(560px, 54vw, 1380px) clamp(420px, 46vh, 980px) at 18% 12%,
-      hsl(var(--bg-hue) 82% 40% / 0.42),
-      transparent 66%
+      hsl(var(--bg-hue) 96% 50% / 0.78),
+      transparent 62%
     ),
     radial-gradient(
       clamp(620px, 58vw, 1480px) clamp(480px, 56vh, 1120px) at 82% 88%,
-      hsl(calc(var(--bg-hue) + 115) 78% 34% / 0.38),
-      transparent 72%
+      hsl(calc(var(--bg-hue) + 130) 94% 46% / 0.68),
+      transparent 68%
     ),
     linear-gradient(
       135deg,
-      hsl(var(--bg-hue) 72% 24%) 0%,
-      hsl(calc(var(--bg-hue) + 55) 76% 21%) 48%,
-      hsl(calc(var(--bg-hue) + 165) 68% 18%) 100%
+      hsl(var(--bg-hue) 88% 31%) 0%,
+      hsl(calc(var(--bg-hue) + 70) 92% 27%) 48%,
+      hsl(calc(var(--bg-hue) + 190) 80% 25%) 100%
     );
   background-size: 118% 118%, 124% 124%, 100% 100%;
   background-position: 6% 4%, 94% 96%, center;

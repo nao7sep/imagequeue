@@ -18,7 +18,7 @@ export function createDefaultConfig(): AppConfig {
     image_backends: {
       openai: {
         api_key: '',
-        model: 'gpt-image-1.5',
+        model: 'gpt-image-2',
         default_params: {
           quality: 'medium',
           width: 1024,
@@ -58,12 +58,12 @@ export function createDefaultConfig(): AppConfig {
       },
       flux: {
         api_key: '',
-        model: 'flux-2-max',
+        model: 'flux-2-pro',
         default_params: {
-          steps: 40,
-          guidance: 7,
           width: 1024,
           height: 1024,
+          steps: 40,
+          guidance: 7,
           seed: null
         },
         concurrency: 3,
@@ -71,16 +71,15 @@ export function createDefaultConfig(): AppConfig {
       },
       drawthings: {
         cli_path: '',
-        model: 'flux_2_klein_4b_q6p.ckpt',
         default_params: {
-          steps: 4,
-          guidance: 1,
-          width: 1024,
-          height: 1024,
+          fallback_width: 1024,
+          fallback_height: 1024,
+          fallback_steps: 4,
+          fallback_cfg: 1,
           seed: null,
           negativePrompt: ''
         },
-        models_dir: '~/.imagequeue/models'
+        models_dir: ''
       }
     },
     prompts: {

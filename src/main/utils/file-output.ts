@@ -30,6 +30,7 @@ export function writeImageOutput(
 ): string {
   const baseName = `${timestamp}-utc-${slug}-${backend}`
   const dir = getSessionDir()
+  fs.mkdirSync(dir, { recursive: true })
 
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)

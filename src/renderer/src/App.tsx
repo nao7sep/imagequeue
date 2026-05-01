@@ -6,7 +6,7 @@ import { SelectionProvider } from './context/SelectionContext'
 import { SettingsProvider } from './context/SettingsContext'
 import './styles.css'
 
-const BG_HUE_CYCLE_MS = 30000
+const BG_HUE_CYCLE_MS = 12000
 
 export function App(): React.JSX.Element {
   useEffect(() => {

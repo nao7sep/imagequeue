@@ -66,7 +66,7 @@ const api = {
   localEnsureModel: (modelFile: string): Promise<EnsureModelResult> =>
     ipcRenderer.invoke('local:ensureModel', modelFile),
 
-  localGetModelsDir: (): Promise<string | null> =>
+  localGetModelsDir: (): Promise<string> =>
     ipcRenderer.invoke('local:getModelsDir'),
 
   localGetDefaultModelsDir: (): Promise<string> =>

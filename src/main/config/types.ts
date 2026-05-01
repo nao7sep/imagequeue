@@ -40,10 +40,10 @@ export interface FluxBackendConfig {
   api_key: string
   model: string
   default_params: {
-    steps: number
-    guidance: number
     width: number
     height: number
+    steps: number
+    guidance: number
     seed: number | null
   }
   concurrency: number
@@ -52,12 +52,11 @@ export interface FluxBackendConfig {
 
 export interface DrawThingsBackendConfig {
   cli_path: string
-  model: string
   default_params: {
-    steps: number
-    guidance: number
-    width: number
-    height: number
+    fallback_width: number
+    fallback_height: number
+    fallback_steps: number
+    fallback_cfg: number
     seed: number | null
     negativePrompt: string
   }

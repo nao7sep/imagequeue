@@ -31,13 +31,13 @@ draw-things-cli --version
 | Setting | Default | Description |
 |---|---|---|
 | `cli_path` | *(empty — uses `draw-things-cli` on `$PATH`)* | Full path to the CLI binary if not on `$PATH` |
-| `models_dir` | *(empty — see below)* | Directory where model files are stored |
-| `model` | `flux_2_klein_4b_q6p.ckpt` | Default model selected when the column loads |
-| `steps` | `4` | Default inference steps |
-| `guidance` | `1` | Classifier-free guidance scale |
-| `width` / `height` | `1024` | Default output dimensions |
-| `seed` | *(null — random)* | Set a fixed seed to reproduce results. Values of `null` or `0` both produce a random seed |
-| `negativePrompt` | *(empty)* | Default negative prompt |
+| `models_dir` | *(empty — uses `~/.imagequeue/models`)* | Directory where model files are stored |
+| `fallback_width` | `1024` | Fallback output width when a task does not specify width |
+| `fallback_height` | `1024` | Fallback output height when a task does not specify height |
+| `fallback_steps` | `4` | Fallback inference steps when a task does not specify steps |
+| `fallback_cfg` | `1` | Fallback classifier-free guidance scale when a task does not specify CFG |
+| `seed` | *(null — random)* | Fallback seed when a task does not specify one. Values of `null` or `0` both produce a random seed |
+| `negativePrompt` | *(empty)* | Fallback negative prompt when a task does not specify one |
 
 ---
 
@@ -46,8 +46,9 @@ draw-things-cli --version
 The models directory is where model `.ckpt` files are stored. ImageQueue resolves it with the following priority:
 
 1. **Configured path** — if `models_dir` is set in Settings, it is used for all operations.
-2. **Draw Things app container** — if the GUI app is also installed, ImageQueue probes `~/Library/Containers/com.liuliu.draw-things/Data/Documents/Models` and its lowercase variant in that order.
-3. **CLI default** — all CLI operations run without `--models-dir` and the CLI uses its own internal default.
+2. **ImageQueue private default** — if `models_dir` is empty, ImageQueue uses `~/.imagequeue/models`.
+
+ImageQueue always passes `--models-dir` to Draw Things CLI. It never probes or uses the Draw Things GUI app's container directory unless that exact path is explicitly entered as `models_dir`.
 
 **Recommendation:** leave `models_dir` empty unless you need models stored in a custom location.
 
@@ -55,7 +56,7 @@ The models directory is where model `.ckpt` files are stored. ImageQueue resolve
 
 ## Managing Models
 
-Open the **Manage Draw Things Models** dialog from the hamburger menu (☰ → Manage Draw Things Models).
+Open the **Draw Things Models** dialog from the hamburger menu (☰ → Draw Things Models).
 
 ### Browsing
 
@@ -83,18 +84,20 @@ Each generation spawns `draw-things-cli generate` with the following flags deriv
 
 The **model dropdown in the column shows only downloaded models**. If no models are downloaded the dropdown is empty; use the Models modal to download one first.
 
+The column's size dropdown sets width and height together for common resolutions. If width or height is edited to a combination that does not match a preset, the dropdown shows **Custom width/height**.
+
 | CLI flag | Source |
 |---|---|
 | `--model` | Selected model in the column |
 | `--prompt` | Prompt text |
 | `--output` | Temporary file in the session directory (deleted after reading) |
+| `--width` / `--height` | Width and height settings |
 | `--steps` | Steps setting |
-| `--cfg` | Guidance scale setting |
-| `--width` / `--height` | Size setting |
+| `--cfg` | CFG setting |
 | `--seed` | Seed setting (omitted when 0 or null) |
 | `--negative-prompt` | Negative prompt (omitted when empty) |
 | `--disable-preview` | Always set (suppresses the live preview window) |
-| `--models-dir` | Only included when `models_dir` is configured |
+| `--models-dir` | Always set; empty `models_dir` resolves to `~/.imagequeue/models` |
 
 ---
 
@@ -105,7 +108,7 @@ The **model dropdown in the column shows only downloaded models**. If no models 
 - Test with `draw-things-cli --version` in Terminal.
 
 **No models appear in the column or modal**
-- The CLI may not be detecting the models directory. Try configuring `models_dir` explicitly in Settings to the folder containing your `.ckpt` files.
+- The CLI may not be detecting the expected models directory. Empty `models_dir` means `~/.imagequeue/models`; configure `models_dir` explicitly if your `.ckpt` files live elsewhere.
 
 **Generation fails with "model not found"**
 - The model file referenced by the task is not present in the models directory the CLI is using. Download it via the Models modal or ensure `models_dir` points to the correct location.
