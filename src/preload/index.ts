@@ -108,6 +108,9 @@ const api = {
   openViewer: (dataUrl: string): Promise<void> =>
     ipcRenderer.invoke('viewer:open', dataUrl),
 
+  closeViewer: (): Promise<void> =>
+    ipcRenderer.invoke('viewer:close'),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {

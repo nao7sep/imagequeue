@@ -7,7 +7,7 @@ import { queueManager } from './queue/queue-manager'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
-import { registerViewerIpc } from './viewer'
+import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { initLogger, log } from './logger'
 
 function createWindow(): void {
@@ -21,6 +21,10 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false
     }
+  })
+
+  win.on('closed', () => {
+    closeViewerWindow()
   })
 
   win.webContents.on('context-menu', (_event, params) => {
@@ -98,5 +102,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  closeViewerWindow()
   log('info', 'Session ended')
 })
