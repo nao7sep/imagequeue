@@ -59,6 +59,7 @@ export function loadConfig(): AppConfig {
     ...loaded,
     text_ai: { ...defaults.text_ai, ...(loaded.text_ai || {}) },
     general: { ...defaults.general, ...(loaded.general || {}) },
+    notifications: { ...defaults.notifications, ...(loaded.notifications || {}) },
     image_backends: mergedBackends as unknown as AppConfig['image_backends']
   }
   return cachedConfig

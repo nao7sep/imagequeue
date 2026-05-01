@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BackendId, Task } from '../../../shared/types'
+import { useSettings } from '../context/SettingsContext'
 import './PromptPane.css'
 
 const BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
@@ -12,6 +13,26 @@ interface Props {
 }
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
+  const { settings, updateSettings } = useSettings()
+
+  const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
+  const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
+  const soundsEnabled = (notificationCfg.sounds_enabled as boolean) ?? true
+  const volume = (notificationCfg.volume as number) ?? 0.7
+
+  // Local volume state for smooth slider dragging; syncs on pointer up.
+  const [localVolume, setLocalVolume] = useState<number>(volume)
+  useEffect(() => { setLocalVolume(volume) }, [volume])
+
+  const saveNotificationField = useCallback((field: string, value: unknown): void => {
+    if (!settings) return
+    const next = {
+      ...settings,
+      notifications: { ...(settings.notifications as Record<string, unknown> ?? {}), [field]: value }
+    }
+    void updateSettings(next)
+  }, [settings, updateSettings])
+
   const handleSendToAll = useCallback(() => {
     if (!prompt.trim()) return
     window.dispatchEvent(new CustomEvent('enqueue-all', { detail: { prompt: prompt.trim() } }))
@@ -125,6 +146,33 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         />
 
         <div className="prompt-actions">
+          <label className="notification-check">
+            <input
+              type="checkbox"
+              checked={notificationsEnabled}
+              onChange={(e) => saveNotificationField('notifications_enabled', e.target.checked)}
+            />
+            Notify
+          </label>
+          <label className="notification-check">
+            <input
+              type="checkbox"
+              checked={soundsEnabled}
+              onChange={(e) => saveNotificationField('sounds_enabled', e.target.checked)}
+            />
+            Sound
+          </label>
+          <input
+            type="range"
+            className="notification-volume"
+            min={0}
+            max={1}
+            step={0.05}
+            value={localVolume}
+            title={`Volume: ${Math.round(localVolume * 100)}%`}
+            onChange={(e) => setLocalVolume(parseFloat(e.target.value))}
+            onPointerUp={(e) => saveNotificationField('volume', parseFloat((e.target as HTMLInputElement).value))}
+          />
           <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
             Send to All
           </button>

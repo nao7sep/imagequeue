@@ -35,10 +35,10 @@
 
 .prompt-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
 }
 
 .prompt-actions button {
@@ -48,6 +48,7 @@
   background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 12px;
+  cursor: pointer;
 }
 
 .prompt-actions button:hover {
@@ -65,6 +66,35 @@
 
 .prompt-actions .send-all:hover {
   background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.prompt-actions .send-all:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.notification-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.notification-check input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.notification-volume {
+  width: 80px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .preview-area {

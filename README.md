@@ -61,6 +61,8 @@ Each cloud backend also has its own section with:
 
 Some backends expose additional parameters: quality and output format (GPT Image); aspect ratio and image size (Imagen and Grok); inference steps (FLUX). Draw Things settings are documented separately in [docs/draw-things-cli.md](docs/draw-things-cli.md).
 
+See [Notifications](#notifications) for notification and sound settings.
+
 ## Text AI
 
 ImageQueue uses a text AI model to generate a short filename slug from each prompt. The slug appears in the output filename (e.g., `20260501-123456-red-fox-on-snow-openai.png`) and makes images easy to identify at a glance. If the AI call fails or times out, ImageQueue falls back to a random ID automatically.
@@ -75,6 +77,40 @@ Configure this in **Settings → Text AI**:
 | Timeout | 30 s | Maximum wait time before falling back to a random ID. |
 
 The **Prompts → Slug template** setting (also in Settings) holds the instruction sent to the AI. The default works well for most prompts; edit it only if you want to customise the slug format.
+
+## Notifications
+
+When a generation completes or fails **while the app is not focused**, ImageQueue can alert you in two ways:
+
+- **Visual notification** — a small popup appears at the top-center of your display and dismisses itself after 3 seconds.
+- **Sound** — a short audio cue plays on completion or failure.
+
+These only fire when the app window does not have focus, so they never interrupt your work while you are looking at the app.
+
+### Quick controls
+
+Three controls sit in the prompt pane next to **Send to All**:
+
+| Control | Description |
+|---|---|
+| **Notify** checkbox | Enable or disable the visual popup. |
+| **Sound** checkbox | Enable or disable audio cues. |
+| **Volume slider** | Adjust playback volume. |
+
+Changes take effect immediately and persist across sessions.
+
+### Settings → Notifications
+
+The full settings panel (**⌘,** / **Ctrl+,** → Notifications) provides the same toggles plus:
+
+| Setting | Description |
+|---|---|
+| Success sound | Path to a custom audio file played on completion (mp3, wav, ogg, m4a). Leave empty to use the built-in chime. |
+| Failure sound | Path to a custom audio file played on failure. Leave empty to use the built-in tone. |
+
+### Platform notes
+
+Notifications and sounds work reliably on **macOS** and **Windows**. On **Linux**, behavior depends on the desktop environment: Wayland sessions do not support the `showInactive` API that keeps the app from coming to the foreground, and transparency requires a compositor. Sounds work on Linux regardless.
 
 ## Working with Images
 

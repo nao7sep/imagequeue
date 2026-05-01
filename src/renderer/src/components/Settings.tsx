@@ -16,6 +16,11 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => settings)
   const [status, setStatus] = useState('')
+  const [settingsVolume, setSettingsVolume] = useState<number>((((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7)
+  useEffect(() => {
+    const v = (((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7
+    setSettingsVolume(v)
+  }, [settings])
   const [recommendationStatus, setRecommendationStatus] = useState<RecommendationStatus | null>(null)
   const [recommendationMessage, setRecommendationMessage] = useState('')
   const [recommendationBusy, setRecommendationBusy] = useState(false)
@@ -68,6 +73,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const backends = config.image_backends as Record<string, Record<string, unknown>>
   const prompts = config.prompts as Record<string, string>
   const general = (config.general ?? {}) as Record<string, unknown>
+  const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
 
   const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
@@ -76,6 +82,26 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const updateGeneral = (key: string, value: unknown): void => {
     setConfig({ ...config, general: { ...general, [key]: value } })
   }
+
+  // Notification file paths are staged with the rest of Settings.
+  const updateNotificationFile = (key: string, value: string): void => {
+    setConfig({ ...config, notifications: { ...notificationCfg, [key]: value } })
+  }
+
+  // Notification toggles and volume save immediately (bypass staged config).
+  const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
+    const current = await window.electronAPI.getSettings() as Record<string, unknown>
+    const merged = {
+      ...current,
+      notifications: { ...(current.notifications as Record<string, unknown> ?? {}), [key]: value }
+    }
+    await updateSettings(merged)
+    // Mirror into local staged config so the UI stays consistent if user then saves.
+    setConfig((prev) => prev ? {
+      ...prev,
+      notifications: { ...(prev.notifications as Record<string, unknown> ?? {}), [key]: value }
+    } : prev)
+  }, [updateSettings])
 
   const updateBackend = (backend: string, key: string, value: unknown): void => {
     setConfig({
@@ -206,6 +232,90 @@ export function Settings({ onClose }: Props): React.JSX.Element {
                 <span className="settings-panel-check-desc">Move deleted files to Trash instead of permanently deleting them.</span>
               </span>
             </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Notifications</h3>
+        <p className="settings-hint">Alerts and sounds only fire when the app is not focused.</p>
+        <div className="settings-field settings-field-full settings-panel-after-hint">
+          <div className="settings-option-panel">
+            <div className="settings-option-title">Alerts</div>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(notificationCfg.notifications_enabled as boolean) ?? true}
+                onChange={(e) => { void saveNotificationImmediate('notifications_enabled', e.target.checked) }}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Show notifications</span>
+                <span className="settings-panel-check-desc">Display a small popup when generation completes or fails.</span>
+              </span>
+            </label>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(notificationCfg.sounds_enabled as boolean) ?? true}
+                onChange={(e) => { void saveNotificationImmediate('sounds_enabled', e.target.checked) }}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Play sounds</span>
+                <span className="settings-panel-check-desc">Play a sound when generation completes or fails.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div className="settings-field">
+          <label>Volume</label>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={settingsVolume}
+            onChange={(e) => setSettingsVolume(parseFloat(e.target.value))}
+            onPointerUp={(e) => { void saveNotificationImmediate('volume', parseFloat((e.target as HTMLInputElement).value)) }}
+          />
+        </div>
+        <div className="settings-field">
+          <label>Success sound</label>
+          <div className="settings-browse">
+            <input
+              type="text"
+              placeholder="Leave empty to use built-in chime"
+              value={(notificationCfg.success_file as string) ?? ''}
+              onChange={(e) => updateNotificationFile('success_file', e.target.value)}
+            />
+            <button
+              type="button"
+              className="settings-browse-btn"
+              onClick={() => {
+                void window.electronAPI.openFileDialog([
+                  { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
+                ]).then((f) => { if (f) updateNotificationFile('success_file', f) })
+              }}
+            >Browse</button>
+          </div>
+        </div>
+        <div className="settings-field">
+          <label>Failure sound</label>
+          <div className="settings-browse">
+            <input
+              type="text"
+              placeholder="Leave empty to use built-in tone"
+              value={(notificationCfg.failure_file as string) ?? ''}
+              onChange={(e) => updateNotificationFile('failure_file', e.target.value)}
+            />
+            <button
+              type="button"
+              className="settings-browse-btn"
+              onClick={() => {
+                void window.electronAPI.openFileDialog([
+                  { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
+                ]).then((f) => { if (f) updateNotificationFile('failure_file', f) })
+              }}
+            >Browse</button>
           </div>
         </div>
       </div>

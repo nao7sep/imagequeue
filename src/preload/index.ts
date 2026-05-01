@@ -132,6 +132,12 @@ const api = {
   closeViewer: (): Promise<void> =>
     ipcRenderer.invoke('viewer:close'),
 
+  showNotification: (type: 'success' | 'failure'): Promise<void> =>
+    ipcRenderer.invoke('notification:show', type),
+
+  loadAudioFile: (filePath: string): Promise<string | null> =>
+    ipcRenderer.invoke('notification:loadAudioFile', filePath),
+
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {

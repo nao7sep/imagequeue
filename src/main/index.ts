@@ -8,8 +8,11 @@ import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
+import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { initLogger, log } from './logger'
 import { updateRecommendationsAtLaunch } from './recommendations'
+
+let mainWin: BrowserWindow | null = null
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -24,8 +27,12 @@ function createWindow(): void {
     }
   })
 
+  mainWin = win
+
   win.on('closed', () => {
+    if (mainWin === win) mainWin = null
     closeViewerWindow()
+    if (process.platform !== 'darwin') app.quit()
   })
 
   win.webContents.on('context-menu', (_event, params) => {
@@ -85,6 +92,8 @@ app.whenReady().then(() => {
   registerPreviewIpc()
   registerSettingsIpc()
   registerViewerIpc()
+  registerNotificationIpc(() => mainWin)
+  initNotificationWindow()
   void updateRecommendationsAtLaunch().catch((err) => {
     log('warn', 'Recommendations launch update rejected unexpectedly', {
       message: (err as Error).message
@@ -95,7 +104,7 @@ app.whenReady().then(() => {
   createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!mainWin || mainWin.isDestroyed()) {
       createWindow()
     }
   })
@@ -109,5 +118,6 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   closeViewerWindow()
+  closeNotificationWindow()
   log('info', 'Session ended')
 })

@@ -83,6 +83,13 @@ export function createDefaultConfig(): AppConfig {
         auto_update_recommendations: true
       }
     },
+    notifications: {
+      notifications_enabled: true,
+      sounds_enabled: true,
+      volume: 0.7,
+      success_file: '',
+      failure_file: ''
+    },
     prompts: {
       slug: 'Generate a short filename slug (3-5 lowercase English words, hyphens only, no other characters) that captures the essence of this image prompt: {{prompt}}'
     }

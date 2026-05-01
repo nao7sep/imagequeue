@@ -102,9 +102,18 @@ export interface GeneralConfig {
   delete_to_trash: boolean
 }
 
+export interface NotificationsConfig {
+  notifications_enabled: boolean
+  sounds_enabled: boolean
+  volume: number
+  success_file: string
+  failure_file: string
+}
+
 export interface AppConfig {
   text_ai: TextAIConfig
   general: GeneralConfig
+  notifications: NotificationsConfig
   image_backends: ImageBackendsConfig
   prompts: PromptsConfig
 }

@@ -5,6 +5,7 @@ import { Settings } from './Settings'
 import { Modal } from './Modal'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
+import { useNotifications } from '../hooks/useNotifications'
 
 const ALL_BACKENDS = [
   { id: 'openai' as const, label: 'GPT Image' },
@@ -23,6 +24,7 @@ const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform =
 type Overlay = 'settings' | 'shortcuts' | 'about' | null
 
 export function Layout(): React.JSX.Element {
+  useNotifications()
   const { selectedTask, clear } = useSelection()
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
