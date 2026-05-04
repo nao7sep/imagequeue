@@ -3,6 +3,7 @@ import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
 import { Settings } from './Settings'
 import { Modal } from './Modal'
+import { SessionsModal } from './SessionsModal'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
@@ -15,7 +16,7 @@ const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform =
   ? ALL_BACKENDS
   : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
 
-type Overlay = 'settings' | 'shortcuts' | 'about' | null
+type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | null
 
 export function Layout(): React.JSX.Element {
   useNotifications()
@@ -135,6 +136,9 @@ export function Layout(): React.JSX.Element {
           </div>
         </Modal>
       )}
+      {overlay === 'sessions' && (
+        <SessionsModal onClose={() => setOverlay(null)} />
+      )}
       {overlay === 'about' && (
         <Modal title="About" onClose={() => setOverlay(null)}>
           <div className="about-content">
@@ -173,6 +177,7 @@ export function Layout(): React.JSX.Element {
             {showMenu && (
               <div className="dropdown-menu">
                 <button onClick={() => { setShowMenu(false); void window.electronAPI.openOutputFolder() }}>Open Output Folder</button>
+                <button onClick={() => openOverlay('sessions')}>Sessions</button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>
                 {window.electronAPI.platform === 'darwin' && (
                   <button onClick={() => {

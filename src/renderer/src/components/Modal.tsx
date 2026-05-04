@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { useEffect, useId, type ReactNode } from 'react'
 import './Modal.css'
 
 interface ModalProps {
@@ -8,21 +9,43 @@ interface ModalProps {
   children: ReactNode
 }
 
+const modalStack: string[] = []
+
 export function Modal({ title, onClose, className, children }: ModalProps): React.JSX.Element {
-  // Close on Escape; stop propagation so other listeners don't react to it.
+  const modalId = useId()
+
+  useEffect(() => {
+    modalStack.push(modalId)
+    return () => {
+      const index = modalStack.lastIndexOf(modalId)
+      if (index >= 0) modalStack.splice(index, 1)
+    }
+  }, [modalId])
+
+  const isTopmost = (): boolean => modalStack[modalStack.length - 1] === modalId
+
+  // Close on Escape only for the topmost modal, so nested confirms do not
+  // also close the modal underneath them.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
+      if (e.key !== 'Escape' || !isTopmost()) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
     }
     document.addEventListener('keydown', handler, true)
     return () => document.removeEventListener('keydown', handler, true)
-  }, [onClose])
+  }, [modalId, onClose])
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
+  const content = (
+    <div
+      className="modal-backdrop"
+      data-modal-id={modalId}
+      onClick={() => {
+        if (!isTopmost()) return
+        onClose()
+      }}
+    >
       <div
         className={className ? `modal-box ${className}` : 'modal-box'}
         onClick={(e) => e.stopPropagation()}
@@ -37,4 +60,6 @@ export function Modal({ title, onClose, className, children }: ModalProps): Reac
       </div>
     </div>
   )
+
+  return createPortal(content, document.body)
 }

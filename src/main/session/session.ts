@@ -15,13 +15,16 @@ export function formatTimestamp(date: Date): string {
 
 let sessionDir: string | null = null
 
-// Creates the session output directory on app launch. Called once.
-export function initSession(): string {
+export function getOutputDir(): string {
   const outputDir = path.join(getDataDir(), 'output')
   fs.mkdirSync(outputDir, { recursive: true })
+  return outputDir
+}
 
+// Creates the session output directory on app launch. Called once.
+export function initSession(): string {
   const timestamp = formatTimestamp(new Date())
-  sessionDir = path.join(outputDir, `${timestamp}-utc`)
+  sessionDir = path.join(getOutputDir(), `${timestamp}-utc`)
   fs.mkdirSync(sessionDir, { recursive: true })
 
   return sessionDir
@@ -32,4 +35,14 @@ export function getSessionDir(): string {
     throw new Error('Session not initialized. Call initSession() first.')
   }
   return sessionDir
+}
+
+export function setSessionDir(nextSessionDir: string): string {
+  fs.mkdirSync(nextSessionDir, { recursive: true })
+  sessionDir = nextSessionDir
+  return sessionDir
+}
+
+export function getSessionId(): string {
+  return path.basename(getSessionDir())
 }

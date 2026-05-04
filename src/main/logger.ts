@@ -3,10 +3,19 @@ import path from 'path'
 
 let logFilePath: string | null = null
 
+function setLogSessionDir(sessionDir: string): void {
+  logFilePath = path.join(sessionDir, 'session.log')
+}
+
 // Initializes the logger to write to session.log in the given session directory.
 export function initLogger(sessionDir: string): void {
-  logFilePath = path.join(sessionDir, 'session.log')
+  setLogSessionDir(sessionDir)
   log('info', 'Session started', { sessionDir })
+}
+
+export function retargetLogger(sessionDir: string): void {
+  setLogSessionDir(sessionDir)
+  log('info', 'Session resumed', { sessionDir })
 }
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug'

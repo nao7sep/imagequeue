@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import { useConfirm } from '../context/ConfirmContext'
 import { useCliJobs } from '../context/CliJobsContext'
+import { Modal } from './Modal'
 import './DrawThingsModelsModal.css'
 
 interface LocalModelInfo {
@@ -129,20 +129,6 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     })
     if (ok) onClose()
   }, [importPath, confirm, onClose])
-
-  // Close on Escape; stop propagation so app-level selection handlers
-  // don't clear the preview underneath this portal modal.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      if (document.querySelector('.modal-backdrop')) return
-      e.preventDefault()
-      e.stopPropagation()
-      void handleRequestClose()
-    }
-    document.addEventListener('keydown', handler, true)
-    return () => document.removeEventListener('keydown', handler, true)
-  }, [handleRequestClose])
 
   const loadDownloaded = useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) setLoadingDownloaded(true)
@@ -285,89 +271,78 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     )
   }
 
-  const content = (
-    <div
-      className="dt-modal-backdrop"
-      onClick={() => void handleRequestClose()}
+  return (
+    <Modal
+      title="Draw Things Models"
+      className="dt-modal-box"
+      onClose={() => { void handleRequestClose() }}
     >
-      <div
-        className="dt-modal-box"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="dt-modal-header">
-          <span>Draw Things Models</span>
-          <button className="dt-modal-close" onClick={() => void handleRequestClose()}>✕</button>
-        </div>
+      <div className="dt-modal-body">
+        <div className="dt-model-columns">
+          <section className="dt-model-column">
+            <div className="dt-column-header">
+              <h3 className="dt-column-title">Official Models</h3>
+              <p className="dt-column-desc">Install models from the Draw Things official catalog.</p>
+              <input
+                className="dt-search-input"
+                placeholder="Search official models..."
+                value={officialFilter}
+                onChange={(e) => setOfficialFilter(e.target.value)}
+              />
+            </div>
+            <div className="dt-column-scroll">
+              {renderModelList(filteredOfficialModels, 'catalog', 'No official models found.')}
+            </div>
+          </section>
 
-        <div className="dt-modal-body">
-          <div className="dt-model-columns">
-            <section className="dt-model-column">
-              <div className="dt-column-header">
-                <h3 className="dt-column-title">Official Models</h3>
-                <p className="dt-column-desc">Install models from the Draw Things official catalog.</p>
-                <input
-                  className="dt-search-input"
-                  placeholder="Search official models..."
-                  value={officialFilter}
-                  onChange={(e) => setOfficialFilter(e.target.value)}
-                />
-              </div>
-              <div className="dt-column-scroll">
-                {renderModelList(filteredOfficialModels, 'catalog', 'No official models found.')}
-              </div>
-            </section>
+          <section className="dt-model-column">
+            <div className="dt-column-header">
+              <h3 className="dt-column-title">Community Models</h3>
+              <p className="dt-column-desc">Download community catalog models or import local files.</p>
+              <input
+                className="dt-search-input"
+                placeholder="Search community models..."
+                value={communityFilter}
+                onChange={(e) => setCommunityFilter(e.target.value)}
+              />
+            </div>
+            <div className="dt-column-scroll">
+              <section className="dt-section dt-import-section">
+                <h4 className="dt-section-title">Import Local Model</h4>
+                <p className="dt-hint dt-import-hint">
+                  Import a model artifact from this computer into the Draw Things models directory.
+                </p>
+                <div className="dt-import-row">
+                  <input
+                    className="dt-import-input"
+                    placeholder="Model file path"
+                    value={importPath}
+                    onChange={(e) => setImportPath(e.target.value)}
+                  />
+                  <button className="dt-action-btn dt-browse-btn" onClick={handleBrowse}>Browse...</button>
+                  <button
+                    className="dt-action-btn dt-import-btn"
+                    disabled={!importPath}
+                    onClick={() => { void handleImport() }}
+                  >
+                    Import
+                  </button>
+                </div>
+              </section>
 
-            <section className="dt-model-column">
-              <div className="dt-column-header">
-                <h3 className="dt-column-title">Community Models</h3>
-                <p className="dt-column-desc">Download community catalog models or import local files.</p>
-                <input
-                  className="dt-search-input"
-                  placeholder="Search community models..."
-                  value={communityFilter}
-                  onChange={(e) => setCommunityFilter(e.target.value)}
-                />
-              </div>
-              <div className="dt-column-scroll">
-                <section className="dt-section dt-import-section">
-                  <h4 className="dt-section-title">Import Local Model</h4>
-                  <p className="dt-hint dt-import-hint">
-                    Import a model artifact from this computer into the Draw Things models directory.
-                  </p>
-                  <div className="dt-import-row">
-                    <input
-                      className="dt-import-input"
-                      placeholder="Model file path"
-                      value={importPath}
-                      onChange={(e) => setImportPath(e.target.value)}
-                    />
-                    <button className="dt-action-btn dt-browse-btn" onClick={handleBrowse}>Browse...</button>
-                    <button
-                      className="dt-action-btn dt-import-btn"
-                      disabled={!importPath}
-                      onClick={() => { void handleImport() }}
-                    >
-                      Import
-                    </button>
-                  </div>
-                </section>
+              <section className="dt-section">
+                <h4 className="dt-section-title">Local Imports</h4>
+                {renderModelList(filteredLocalImportModels, 'local', 'No local imports detected.')}
+              </section>
 
-                <section className="dt-section">
-                  <h4 className="dt-section-title">Local Imports</h4>
-                  {renderModelList(filteredLocalImportModels, 'local', 'No local imports detected.')}
-                </section>
-
-                <section className="dt-section">
-                  <h4 className="dt-section-title">Community Catalog</h4>
-                  {renderModelList(filteredCommunityCatalogModels, 'catalog', 'No community models found.')}
-                </section>
-              </div>
-            </section>
-          </div>
+              <section className="dt-section">
+                <h4 className="dt-section-title">Community Catalog</h4>
+                {renderModelList(filteredCommunityCatalogModels, 'catalog', 'No community models found.')}
+              </section>
+            </div>
+          </section>
         </div>
       </div>
-    </div>
+    </Modal>
   )
-
-  return createPortal(content, document.body)
 }

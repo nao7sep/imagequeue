@@ -76,7 +76,7 @@ export interface DrawThingsModelParams {
 }
 
 export type TextAIBackendId = 'gemini'
-export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed'
+export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed' | 'interrupted'
 
 export interface Task {
   id: string
@@ -108,4 +108,34 @@ export interface ColumnSettings {
   model: string
   params: Record<string, unknown>
   imageCount: number
+}
+
+export const SESSION_MANIFEST_VERSION = 1
+
+export interface SessionTaskCounts {
+  total: number
+  queued: number
+  generating: number
+  completed: number
+  failed: number
+  interrupted: number
+}
+
+export interface SessionManifest {
+  version: typeof SESSION_MANIFEST_VERSION
+  sessionId: string
+  createdAt: string
+  updatedAt: string
+  lastResumedAt: string | null
+  taskCounts: SessionTaskCounts
+  tasks: Record<BackendId, Task[]>
+}
+
+export interface SessionSummary {
+  sessionId: string
+  createdAt: string
+  updatedAt: string
+  lastResumedAt: string | null
+  taskCounts: SessionTaskCounts
+  isCurrent: boolean
 }

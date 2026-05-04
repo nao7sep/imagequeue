@@ -9,6 +9,7 @@ import {
   RecommendationOperationResult,
   RecommendationStatus,
   DrawThingsModelParams,
+  SessionSummary,
 } from '../shared/types'
 import type {
   CliJobSnapshot,
@@ -16,7 +17,7 @@ import type {
   CliStatusEvent,
 } from '../shared/cli-jobs'
 
-export type { CliStatus, LocalModelInfo }
+export type { CliStatus, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
 
 export interface EnsureModelResult {
@@ -48,6 +49,18 @@ const api = {
 
   reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
+
+  listSessions: (): Promise<SessionSummary[]> =>
+    ipcRenderer.invoke('session:list'),
+
+  resumeSession: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke('session:resume', sessionId),
+
+  deleteSession: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke('session:delete', sessionId),
+
+  openSessionFolder: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke('session:openFolder', sessionId),
 
   // Preview operations
   getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>

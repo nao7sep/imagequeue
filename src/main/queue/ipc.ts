@@ -4,6 +4,7 @@ import { BackendId, EnqueueRequest } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log } from '../logger'
+import { persistActiveSession } from '../session'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -12,6 +13,7 @@ export function registerQueueIpc(): void {
     for (const task of tasks) {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
+    persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
     return tasks
   })
@@ -32,6 +34,7 @@ export function registerQueueIpc(): void {
     }
     log('info', `Task removed from queue: ${taskId}`, { backend })
     queueManager.removeTask(backend, taskId)
+    persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
 
@@ -56,24 +59,22 @@ export function registerQueueIpc(): void {
       }
     }
     queueManager.removeTask(backend, taskId)
+    persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
 
   ipcMain.handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
-    const task = queueManager.getTask(backend, taskId)
-    if (task && task.status === 'failed') {
-      task.status = 'queued'
-      task.error = null
-      task.startedAt = null
-      task.completedAt = null
-      task.durationMs = null
+    const task = queueManager.retryTask(backend, taskId)
+    if (task) {
       log('info', `Retrying task ${taskId}`, { backend })
+      persistActiveSession()
       notifyAllWindows('queue:updated', queueManager.getAllTasks())
     }
   })
 
   ipcMain.handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
     queueManager.reorderTasks(backend, taskIds)
+    persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
 }

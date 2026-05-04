@@ -1,9 +1,8 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
-import { initSession, getSessionDir } from './session'
+import { initSession, getSessionDir, persistActiveSession, registerSessionIpc } from './session'
 import { registerQueueIpc } from './queue'
-import { queueManager } from './queue/queue-manager'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
@@ -89,6 +88,8 @@ app.whenReady().then(() => {
   loadConfig()
   initSession()
   initLogger(getSessionDir())
+  persistActiveSession()
+  registerSessionIpc()
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc()

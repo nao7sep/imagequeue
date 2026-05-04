@@ -38,8 +38,17 @@ npm run typecheck
 
 1. Enter a prompt.
 2. Choose a backend column, or use **Send to All**.
-3. Review queued, running, completed, and failed tasks in each column.
+3. Review queued, running, completed, failed, and interrupted tasks in each column.
 4. Select a completed task to preview, inspect metadata, export, reveal, or copy it.
+
+## Sessions
+
+Each app launch creates a session folder under the output directory. ImageQueue writes a `session.json` snapshot there as queue state changes, so you can later reopen that session from the menu.
+
+- **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks with **retry** available.
+- **Delete** moves that session folder to the system Trash/Recycle Bin.
+- Current-session resume is intentionally minimal: it restores task history and outputs, not transient UI state such as the current prompt or selection.
+- Sessions created before this feature was added do not appear unless they already have a `session.json` snapshot.
 
 ## Settings overview
 
@@ -139,6 +148,7 @@ The hamburger menu (☰) gives access to:
 | Item | Description |
 |---|---|
 | Open Output Folder | Open the directory that stores session outputs |
+| Sessions | Browse saved sessions, resume one, or delete one |
 | Settings | Open Settings |
 | Draw Things Models | Open the Draw Things model browser and importer |
 | Keyboard Shortcuts | Open the shortcut reference |

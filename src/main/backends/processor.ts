@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
-import { TimestampAllocator } from '../session'
+import { persistActiveSession, TimestampAllocator } from '../session'
 import { writeImageOutput, ImageExt } from '../utils/file-output'
 import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
@@ -91,6 +91,7 @@ function processQueues(): void {
       task.status = 'generating'
       task.startedAt = new Date().toISOString()
       logGenerationStart(task.id, backend, task.model)
+      persistActiveSession()
       broadcastUpdate()
 
       processTask(backend, task).finally(() => {
@@ -151,6 +152,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     })
   }
 
+  persistActiveSession()
   broadcastUpdate()
 }
 

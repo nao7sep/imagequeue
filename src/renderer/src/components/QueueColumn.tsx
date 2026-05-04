@@ -36,7 +36,8 @@ const STATUS_COLORS: Record<string, string> = {
   queued: 'var(--text-muted)',
   generating: 'var(--warning)',
   completed: 'var(--success)',
-  failed: 'var(--error)'
+  failed: 'var(--error)',
+  interrupted: 'var(--text-secondary)',
 }
 
 const modelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
@@ -790,14 +791,16 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
         >
           {task.status === 'failed'
             ? `failed: ${task.error || 'unknown error'}`
-            : task.status}
+            : task.status === 'interrupted'
+              ? 'interrupted'
+              : task.status}
         </span>
         {task.estimatedCostUsd !== null && (
           <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
         )}
       </div>
       <div className="task-actions">
-        {task.status === 'failed' && (
+        {(task.status === 'failed' || task.status === 'interrupted') && (
           <button className="task-btn task-btn-retry" onClick={handleRetry} title="Retry">retry</button>
         )}
         {task.status === 'completed' && task.baseName && (

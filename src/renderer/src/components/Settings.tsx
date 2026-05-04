@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
+import { formatUiDateTime } from '../utils/formatDateTime'
 import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
 import type { RecommendationStatus } from '../../../shared/types'
 import './Settings.css'
@@ -153,8 +154,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   }
 
   const formatRecommendationTimestamp = (value: string | null): string => {
-    if (!value) return 'n/a'
-    return new Date(value).toLocaleString()
+    return formatUiDateTime(value)
   }
 
   return (
