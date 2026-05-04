@@ -11,6 +11,7 @@ import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { initLogger, log } from './logger'
 import { updateRecommendationsAtLaunch } from './recommendations'
+import { killAllCliJobs } from './cli-jobs'
 
 let mainWin: BrowserWindow | null = null
 
@@ -123,6 +124,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   closeViewerWindow()
   closeNotificationWindow()
+  killAllCliJobs()
 })
 
 app.on('will-quit', () => {

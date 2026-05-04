@@ -77,7 +77,7 @@ The dialog separates **Official Models** and **Community Models** into two colum
 
 ### Downloading
 
-Click **Download** next to any catalog model that is not installed. A Terminal window opens running the download command so you can watch progress. Once the download completes and you return to the app, the model is marked as installed.
+Click **Download** next to any catalog model that is not installed. A progress dialog opens inside ImageQueue and streams the CLI output live. You can click **Hide** to dismiss the dialog while the download continues in the background, or **Stop** to cancel it. Cancelling a download preserves any chunks already downloaded — clicking Download again on the same model resumes from where it left off.
 
 ### Importing community models
 
@@ -86,8 +86,8 @@ To use a model not in the official catalog (e.g. from Civitai):
 1. Download the model artifact you want Draw Things CLI to import.
 2. Open the Models modal and go to the **Import** section.
 3. Click **Browse…** to pick it, or paste the file path into the import field.
-4. Click **Import**. A Terminal window opens running `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). If the CLI rejects the file, it prints the error in Terminal.
-5. When the Terminal finishes, return to the app — the model now appears under **Local Imports** (sourced from Draw Things' `custom.json`).
+4. Click **Import**. A progress dialog opens inside ImageQueue running `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). If the CLI rejects the file, the error is shown in the dialog.
+5. When the dialog shows the Close button, the import is complete. The model now appears under **Local Imports** (sourced from Draw Things' `custom.json`).
 
 ---
 

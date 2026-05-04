@@ -13,9 +13,15 @@ import {
   resolveModelsDir,
   getDefaultModelsDir,
   readCustomJsonImportedFiles,
-  openTerminalForDownload,
-  openTerminalForImport
+  ensureModelsDir,
 } from './local-cli'
+import {
+  startCliJob,
+  subscribeCliJob,
+  unsubscribeCliJob,
+  killCliJob,
+  getCliJobSnapshot,
+} from './cli-jobs'
 import {
   downloadLatestRecommendations,
   getRecommendationsStatus,
@@ -88,12 +94,50 @@ export function registerSettingsIpc(): void {
     shell.openPath(dir)
   })
 
-  ipcMain.handle('local:openTerminalForDownload', async (_event, modelFile: string) => {
-    return openTerminalForDownload(modelFile)
+  ipcMain.handle('cli-job:startImport', (event, artifactPath: string) => {
+    const config = loadConfig()
+    const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+    const dir = ensureModelsDir()
+    const jobId = startCliJob({
+      kind: 'import',
+      cliPath,
+      args: ['models', 'import', artifactPath, '--models-dir', dir],
+      target: path.basename(artifactPath),
+      logContext: { artifactPath },
+    })
+    subscribeCliJob(jobId, event.sender)
+    return jobId
   })
 
-  ipcMain.handle('local:openTerminalForImport', async (_event, artifactPath: string) => {
-    return openTerminalForImport(artifactPath)
+  ipcMain.handle('cli-job:startDownload', (event, modelFile: string) => {
+    const config = loadConfig()
+    const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+    const dir = ensureModelsDir()
+    const jobId = startCliJob({
+      kind: 'download',
+      cliPath,
+      args: ['models', 'ensure', '--model', modelFile, '--models-dir', dir],
+      target: modelFile,
+      logContext: { modelFile },
+    })
+    subscribeCliJob(jobId, event.sender)
+    return jobId
+  })
+
+  ipcMain.handle('cli-job:subscribe', (event, jobId: string) => {
+    return subscribeCliJob(jobId, event.sender)
+  })
+
+  ipcMain.handle('cli-job:unsubscribe', (event, jobId: string) => {
+    unsubscribeCliJob(jobId, event.sender)
+  })
+
+  ipcMain.handle('cli-job:kill', (_event, jobId: string) => {
+    killCliJob(jobId)
+  })
+
+  ipcMain.handle('cli-job:getSnapshot', (_event, jobId: string) => {
+    return getCliJobSnapshot(jobId)
   })
 
   ipcMain.handle('recommendations:getStatus', () => {

@@ -9,8 +9,14 @@ import {
   RecommendationOperationResult,
   RecommendationStatus
 } from '../shared/types'
+import type {
+  CliJobSnapshot,
+  CliChunkEvent,
+  CliStatusEvent,
+} from '../shared/cli-jobs'
 
 export type { CliStatus, LocalModelInfo }
+export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
 
 export interface EnsureModelResult {
   success: boolean
@@ -84,11 +90,35 @@ const api = {
   localOpenModelsDir: (): Promise<void> =>
     ipcRenderer.invoke('local:openModelsDir'),
 
-  localOpenTerminalForDownload: (modelFile: string): Promise<void> =>
-    ipcRenderer.invoke('local:openTerminalForDownload', modelFile),
+  cliStartImport: (artifactPath: string): Promise<string> =>
+    ipcRenderer.invoke('cli-job:startImport', artifactPath),
 
-  localOpenTerminalForImport: (artifactPath: string): Promise<void> =>
-    ipcRenderer.invoke('local:openTerminalForImport', artifactPath),
+  cliStartDownload: (modelFile: string): Promise<string> =>
+    ipcRenderer.invoke('cli-job:startDownload', modelFile),
+
+  cliSubscribeJob: (jobId: string): Promise<CliJobSnapshot | null> =>
+    ipcRenderer.invoke('cli-job:subscribe', jobId),
+
+  cliUnsubscribeJob: (jobId: string): Promise<void> =>
+    ipcRenderer.invoke('cli-job:unsubscribe', jobId),
+
+  cliKillJob: (jobId: string): Promise<void> =>
+    ipcRenderer.invoke('cli-job:kill', jobId),
+
+  cliGetJobSnapshot: (jobId: string): Promise<CliJobSnapshot | null> =>
+    ipcRenderer.invoke('cli-job:getSnapshot', jobId),
+
+  onCliJobChunk: (callback: (e: CliChunkEvent) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, e: CliChunkEvent): void => callback(e)
+    ipcRenderer.on('cli-job:chunk', handler)
+    return () => { ipcRenderer.removeListener('cli-job:chunk', handler) }
+  },
+
+  onCliJobStatus: (callback: (e: CliStatusEvent) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, e: CliStatusEvent): void => callback(e)
+    ipcRenderer.on('cli-job:status', handler)
+    return () => { ipcRenderer.removeListener('cli-job:status', handler) }
+  },
 
   getRecommendationsStatus: (): Promise<RecommendationStatus> =>
     ipcRenderer.invoke('recommendations:getStatus'),
