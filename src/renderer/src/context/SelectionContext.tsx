@@ -157,10 +157,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
     const general = (settings?.general as { confirm_remove?: boolean } | undefined)
     if (general?.confirm_remove) {
+      const keepingCompleted = task.status === 'completed'
       const ok = await confirm({
-        title: 'Remove Task',
-        message: 'Remove this task from the queue? Generated files will be kept.',
-        confirmLabel: 'Remove'
+        title: keepingCompleted ? 'Keep Just in Case' : 'Remove Task',
+        message: keepingCompleted
+          ? 'Keep this completed image just in case and take it out of the active list?'
+          : 'Remove this task from the queue?',
+        confirmLabel: keepingCompleted ? 'Keep' : 'Remove'
       })
       if (!ok) return
     }

@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { BackendId, Task, EnqueueRequest, TaskHiddenReason } from '../../shared/types'
+import { BackendId, Task, EnqueueRequest } from '../../shared/types'
 import { estimateCostFromRegistry } from '../../shared/models'
 
 export function createEmptyQueues(): Record<BackendId, Task[]> {
@@ -13,19 +13,14 @@ export function createEmptyQueues(): Record<BackendId, Task[]> {
   }
 }
 
-function isVisible(task: Task): boolean {
-  return task.visibility !== 'hidden'
+function isActiveTask(task: Task): boolean {
+  return task.status !== 'kept'
 }
 
 export function normalizeTaskRecord(task: Task): Task {
   return {
     ...task,
-    params: { ...task.params },
-    visibility: task.visibility ?? 'visible',
-    hiddenAt: task.hiddenAt ?? null,
-    hiddenReason: task.hiddenReason ?? null,
-    assetState: task.assetState ?? 'present',
-    deletedAt: task.deletedAt ?? null
+    params: { ...task.params }
   }
 }
 
@@ -51,11 +46,6 @@ class QueueManager {
         model: request.model,
         params: { ...request.params },
         status: 'queued',
-        visibility: 'visible',
-        hiddenAt: null,
-        hiddenReason: null,
-        assetState: 'present',
-        deletedAt: null,
         estimatedCostUsd: estimateCostFromRegistry(request.backend, request.model, request.params),
         enqueuedAt: new Date().toISOString(),
         startedAt: null,
@@ -74,7 +64,7 @@ class QueueManager {
   }
 
   getTasks(backend: BackendId): Task[] {
-    return this.queues[backend].filter(isVisible)
+    return this.queues[backend].filter(isActiveTask)
   }
 
   getAllTasks(): Record<BackendId, Task[]> {
@@ -85,46 +75,44 @@ class QueueManager {
     return visible
   }
 
-  getAllTasksIncludingHidden(): Record<BackendId, Task[]> {
-    return { ...this.queues }
+  getStoredTasks(): Record<BackendId, Task[]> {
+    const stored = createEmptyQueues()
+    for (const backend of Object.keys(stored) as BackendId[]) {
+      stored[backend] = this.queues[backend].map(cloneTask)
+    }
+    return stored
   }
 
   getTask(backend: BackendId, taskId: string): Task | undefined {
     return this.queues[backend].find((t) => t.id === taskId)
   }
 
-  hideTask(
-    backend: BackendId,
-    taskId: string,
-    hiddenReason: Exclude<TaskHiddenReason, null>,
-    options?: { assetDeleted?: boolean }
-  ): Task | undefined {
+  keepTask(backend: BackendId, taskId: string): Task | undefined {
     const task = this.getTask(backend, taskId)
-    if (!task) return undefined
+    if (!task || task.status !== 'completed') return undefined
+    task.status = 'kept'
+    return task
+  }
 
-    const hiddenAt = new Date().toISOString()
-    task.visibility = 'hidden'
-    task.hiddenAt = hiddenAt
-    task.hiddenReason = hiddenReason
-    if (options?.assetDeleted) {
-      task.assetState = 'deleted'
-      task.deletedAt = hiddenAt
-    }
+  removeTask(backend: BackendId, taskId: string): Task | undefined {
+    const index = this.queues[backend].findIndex((task) => task.id === taskId)
+    if (index < 0) return undefined
+    const [task] = this.queues[backend].splice(index, 1)
     return task
   }
 
   reorderTasks(backend: BackendId, taskIds: string[]): void {
-    const visibleTasks = this.queues[backend].filter(isVisible)
-    const hiddenTasks = this.queues[backend].filter((task) => !isVisible(task))
-    const visibleTaskMap = new Map(visibleTasks.map((task) => [task.id, task]))
-    const reorderedVisible = taskIds.map((id) => visibleTaskMap.get(id)).filter(Boolean) as Task[]
-    const remainingVisible = visibleTasks.filter((task) => !taskIds.includes(task.id))
-    this.queues[backend] = [...reorderedVisible, ...remainingVisible, ...hiddenTasks]
+    const activeTasks = this.queues[backend].filter(isActiveTask)
+    const keptTasks = this.queues[backend].filter((task) => !isActiveTask(task))
+    const activeTaskMap = new Map(activeTasks.map((task) => [task.id, task]))
+    const reorderedActive = taskIds.map((id) => activeTaskMap.get(id)).filter(Boolean) as Task[]
+    const remainingActive = activeTasks.filter((task) => !taskIds.includes(task.id))
+    this.queues[backend] = [...reorderedActive, ...remainingActive, ...keptTasks]
   }
 
   retryTask(backend: BackendId, taskId: string): Task | undefined {
     const task = this.getTask(backend, taskId)
-    if (!task || !isVisible(task) || (task.status !== 'failed' && task.status !== 'interrupted')) {
+    if (!task || !isActiveTask(task) || (task.status !== 'failed' && task.status !== 'interrupted')) {
       return undefined
     }
 

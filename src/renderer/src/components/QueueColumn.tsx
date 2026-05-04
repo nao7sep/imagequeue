@@ -36,6 +36,7 @@ const STATUS_COLORS: Record<string, string> = {
   queued: 'var(--text-muted)',
   generating: 'var(--warning)',
   completed: 'var(--success)',
+  kept: 'var(--text-secondary)',
   failed: 'var(--error)',
   interrupted: 'var(--text-secondary)',
 }
@@ -765,6 +766,8 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
     if (!task.baseName) return
     void window.electronAPI.exportImage(task.baseName, getExt())
   }
+  const removeLabel = task.status === 'completed' ? 'jic' : 'rm'
+  const removeTitle = task.status === 'completed' ? 'Keep just in case' : 'Remove from queue'
 
   return (
     <div
@@ -807,7 +810,7 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
           <button className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder">exp</button>
         )}
         {task.status !== 'generating' && (
-          <button className="task-btn task-btn-warn" onClick={handleRemove} title="Remove from queue">rm</button>
+          <button className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle}>{removeLabel}</button>
         )}
         {task.status === 'completed' && (
           <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>

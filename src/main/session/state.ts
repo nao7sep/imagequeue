@@ -32,6 +32,7 @@ function createTaskCounts(tasksByBackend: Record<BackendId, Task[]>): SessionTas
     queued: 0,
     generating: 0,
     completed: 0,
+    kept: 0,
     failed: 0,
     interrupted: 0,
   }
@@ -50,26 +51,17 @@ function collectTasks(tasksByBackend: Record<BackendId, Task[]>): Task[] {
   return BACKEND_IDS_IN_UI_ORDER.flatMap((backend) => tasksByBackend[backend] ?? [])
 }
 
-function isVisibleTask(task: Task): boolean {
-  return task.visibility !== 'hidden'
-}
-
 function createSessionDisplayCounts(tasksByBackend: Record<BackendId, Task[]>): {
-  visibleCompletedCount: number
-  visibleRetryCount: number
-  removedCompletedCount: number
+  completedCount: number
+  retryCount: number
+  keptCount: number
 } {
   const allTasks = collectTasks(tasksByBackend)
-  const visibleTasks = allTasks.filter(isVisibleTask)
 
   return {
-    visibleCompletedCount: visibleTasks.filter((task) => task.status === 'completed' && task.assetState === 'present').length,
-    visibleRetryCount: visibleTasks.filter((task) => task.status !== 'completed').length,
-    removedCompletedCount: allTasks.filter((task) =>
-      task.status === 'completed' &&
-      task.hiddenReason === 'remove' &&
-      task.assetState === 'present'
-    ).length,
+    completedCount: allTasks.filter((task) => task.status === 'completed').length,
+    retryCount: allTasks.filter((task) => task.status !== 'completed' && task.status !== 'kept').length,
+    keptCount: allTasks.filter((task) => task.status === 'kept').length,
   }
 }
 
@@ -77,9 +69,7 @@ function collectSessionThumbnails(tasksByBackend: Record<BackendId, Task[]>, lim
   const completedTasks = collectTasks(tasksByBackend)
     .filter((task) =>
       task.status === 'completed' &&
-      task.baseName &&
-      task.assetState === 'present' &&
-      isVisibleTask(task)
+      task.baseName
     )
     .sort((a, b) => {
       const aTime = new Date(a.completedAt ?? a.enqueuedAt).getTime()
@@ -119,6 +109,14 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      'version' in parsed &&
+      parsed.version !== SESSION_MANIFEST_VERSION
+    ) {
+      return null
+    }
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
@@ -164,7 +162,7 @@ function ensureSessionId(sessionId: string): string {
 }
 
 function toInterruptedTask(task: Task): Task {
-  if (task.visibility === 'hidden' || task.status === 'completed') return cloneTask(task)
+  if (task.status === 'completed' || task.status === 'kept') return cloneTask(task)
   return {
     ...cloneTask(task),
     status: 'interrupted',
@@ -201,7 +199,7 @@ export function persistActiveSession(options?: { lastResumedAt?: string | null }
   const sessionDir = getSessionDir()
   fs.mkdirSync(sessionDir, { recursive: true })
   const previous = readManifestFromDir(sessionDir)
-  const manifest = buildManifest(getSessionId(), queueManager.getAllTasksIncludingHidden(), previous, options)
+  const manifest = buildManifest(getSessionId(), queueManager.getStoredTasks(), previous, options)
   writeManifestFile(getManifestPath(sessionDir), manifest)
   return manifest
 }
@@ -237,9 +235,9 @@ export function listSessions(): SessionSummary[] {
       updatedAt: manifest.updatedAt,
       lastResumedAt: manifest.lastResumedAt,
       taskCounts: manifest.taskCounts,
-      visibleCompletedCount: displayCounts.visibleCompletedCount,
-      visibleRetryCount: displayCounts.visibleRetryCount,
-      removedCompletedCount: displayCounts.removedCompletedCount,
+      completedCount: displayCounts.completedCount,
+      retryCount: displayCounts.retryCount,
+      keptCount: displayCounts.keptCount,
       thumbnails: collectSessionThumbnails(manifest.tasks),
       isCurrent: manifest.sessionId === currentSessionId,
     })
@@ -261,7 +259,7 @@ export function resumeSession(sessionId: string): void {
   const sessionDir = resolveSessionDir(sessionId)
   const manifest = readManifestFromDir(sessionDir)
   if (!manifest) {
-    throw new Error('That session is missing its session.json file.')
+    throw new Error('That session does not have a readable current-format session.json file.')
   }
 
   const resumedQueues = normalizeResumedQueues(manifest.tasks)

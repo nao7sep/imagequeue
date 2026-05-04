@@ -49,7 +49,7 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 - **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks with **retry** available.
 - **Delete** moves that session folder to the system Trash/Recycle Bin.
 - Current-session resume is intentionally minimal: it restores task history and outputs, not transient UI state such as the current prompt or selection.
-- Sessions created before this feature was added do not appear unless they already have a `session.json` snapshot.
+- Only sessions with a readable current-format `session.json` snapshot appear.
 
 ## Settings overview
 
@@ -61,7 +61,7 @@ Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux).
 |---|---|---|
 | Auto-preview after idle | 30 s | Auto-selects a newly completed image after this many seconds of inactivity. Set to 0 to disable. |
 | Export folder | Desktop | Directory where **Export** saves images. Leave empty to use the Desktop. |
-| Confirm before removing | Off | Confirm before removing a task from the queue while keeping files. |
+| Confirm before removing | Off | Confirm before removing a task from the queue, or keeping a completed image just in case. |
 | Confirm before deleting | Off | Confirm before deleting a task and its files. |
 | Move deleted files to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
 
@@ -138,9 +138,9 @@ When a completed task is selected, a toolbar appears below the preview:
 | **Export** | Save a copy to the export folder |
 | **Save As…** | Pick the destination and filename manually |
 
-Each completed task row also has an **exp** button for quick export to the export folder.
+Each completed task row also has **exp** for quick export, **jic** to keep the image just in case while removing it from the active list, and **del** to delete the task and its files.
 
-Removing a task hides it from the live queue but keeps its files and session history. Deleting a task removes its files and hides it from the queue.
+Removing a queued, failed, or interrupted task drops it from the queue. Using **jic** on a completed task keeps that output in session history but removes it from the active list.
 
 Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
 
@@ -168,7 +168,7 @@ The hamburger menu (☰) gives access to:
 | Move selection across columns | ← / → | ← / → |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
-| Hide selected task (keep files and history) | Backspace | Backspace |
+| Remove selected task, or keep the selected completed image just in case | Backspace | Backspace |
 | Delete selected task and files | Delete | Delete |
 | Clear selection / close panel | Esc | Esc |
 

@@ -32,8 +32,15 @@ export function registerQueueIpc(): void {
       log('warn', `Refusing to remove generating task ${taskId}`, { backend })
       return
     }
-    log('info', `Task removed from queue: ${taskId}`, { backend })
-    queueManager.hideTask(backend, taskId, 'remove')
+    if (!task) return
+
+    if (task.status === 'completed') {
+      log('info', `Task kept just in case: ${taskId}`, { backend, baseName: task.baseName ?? null })
+      queueManager.keepTask(backend, taskId)
+    } else {
+      log('info', `Task removed from queue: ${taskId}`, { backend })
+      queueManager.removeTask(backend, taskId)
+    }
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
@@ -64,7 +71,7 @@ export function registerQueueIpc(): void {
       log('warn', `Cannot delete files for ${taskId}; task has no baseName`, { backend })
       return
     }
-    queueManager.hideTask(backend, taskId, 'delete', { assetDeleted: filesDeleted })
+    queueManager.removeTask(backend, taskId)
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
