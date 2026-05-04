@@ -1,0 +1,67 @@
+.cs-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  gap: 4px;
+}
+
+.cs-trigger:hover {
+  border-color: var(--accent);
+}
+
+.cs-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-caret {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+/* Portal list */
+.cs-list {
+  list-style: none;
+  margin: 0;
+  padding: 3px 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+}
+
+.cs-item {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cs-item:hover {
+  background: var(--bg-hover);
+}
+
+.cs-item-selected {
+  color: var(--accent);
+}

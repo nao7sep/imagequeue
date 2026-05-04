@@ -24,6 +24,8 @@ import {
   type GrokResolution
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
+import { CustomSelect } from './CustomSelect'
+import type { CSOption } from './CustomSelect'
 import './QueueColumn.css'
 
 interface Props {
@@ -505,11 +507,11 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                 {downloadedModels.length > 0 ? (
                   <div className="setting-row">
                     <label>model</label>
-                    <select value={model} onChange={(e) => setModel(e.target.value)}>
-                      {downloadedModels.map((m) => (
-                        <option key={m.file} value={m.file}>{localModelName(m)}</option>
-                      ))}
-                    </select>
+                    <CustomSelect
+                      value={model}
+                      onChange={setModel}
+                      options={downloadedModels.map((m): CSOption => ({ value: m.file, label: localModelName(m) }))}
+                    />
                   </div>
                 ) : (
                   <div className="setting-row model-warning">
