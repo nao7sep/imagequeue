@@ -166,7 +166,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     })
   }, [loadDownloaded])
 
-  // Auto-refresh downloaded list while Terminal-side imports/downloads may finish.
+  // Keep the downloaded list fresh while jobs finish in the background.
   useEffect(() => {
     const handler = (): void => { void loadDownloaded(false) }
     window.addEventListener('focus', handler)
@@ -175,6 +175,14 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       window.removeEventListener('focus', handler)
       window.clearInterval(id)
     }
+  }, [loadDownloaded])
+
+  useEffect(() => {
+    return window.electronAPI.onCliJobStatus((event) => {
+      if (event.status === 'exited' || event.status === 'killed') {
+        void loadDownloaded(false)
+      }
+    })
   }, [loadDownloaded])
 
   const handleStartDownload = async (modelFile: string): Promise<void> => {

@@ -220,6 +220,15 @@
   border-color: var(--col-accent, var(--accent));
 }
 
+.drawthings-recommendation-row {
+  align-items: center;
+}
+
+.drawthings-recommendation-btn {
+  flex: 1;
+  text-align: center;
+}
+
 .available-models-list {
   max-height: 200px;
   overflow-y: auto;

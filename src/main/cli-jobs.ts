@@ -1,6 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
 import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
+import { spawn as spawnPty } from 'node-pty'
 import { log } from './logger'
 import {
   CliChunk,
@@ -15,12 +16,20 @@ import {
   CLI_JOB_STALL_THRESHOLD_MS,
 } from '../shared/cli-jobs'
 
+interface StartCliJobOpts {
+  kind: CliJobKind
+  cliPath: string
+  args: string[]
+  target: string
+  logContext: Record<string, unknown>
+}
+
 interface JobState {
   jobId: string
   kind: CliJobKind
   target: string
   startedAtMs: number
-  child: ChildProcessWithoutNullStreams
+  child: { kill(signal?: string): void } | null
   buffer: CliChunk[]
   nextSeq: number
   subscribers: Set<WebContents>
@@ -33,56 +42,29 @@ interface JobState {
   retentionTimer: NodeJS.Timeout | null
   stdoutFragment: string
   stderrFragment: string
-  // True when the last pushed entry for that stream was CR-terminated.
-  // Used to coalesce consecutive progress-bar overwrite lines.
   stdoutLastCR: boolean
   stderrLastCR: boolean
+  cliPath: string
+  args: string[]
+  logContext: Record<string, unknown>
 }
 
 const jobs = new Map<string, JobState>()
+const queuedImportJobIds: string[] = []
+let activeImportJobId: string | null = null
 
-// Public API ---------------------------------------------------------------
-
-export function startCliJob(opts: {
-  kind: CliJobKind
-  cliPath: string
-  args: string[]
-  target: string
-  logContext: Record<string, unknown>
-  onExit?: (exitCode: number | null) => void
-}): string {
+export function startCliJob(opts: StartCliJobOpts): string {
   const jobId = nanoid()
-
-  // draw-things-cli download explicitly flushes stdout after each \r progress
-  // update, so it works fine over a plain pipe.  draw-things-cli import uses
-  // regular println()-style output; without a real TTY, the Swift/C runtime
-  // uses fully-buffered stdio and all output arrives only when the process
-  // exits.  Wrapping with /usr/bin/script creates a PTY that forces
-  // line-buffered output so progress lines stream in real time.
-  const [spawnCmd, spawnArgs] = opts.kind === 'import'
-    ? ['/usr/bin/script', ['-q', '/dev/null', opts.cliPath, ...opts.args]]
-    : [opts.cliPath, opts.args]
-
-  const child = spawn(spawnCmd, spawnArgs, {
-    // For imports, we wrap with /usr/bin/script which reads from its stdin and
-    // forwards to the PTY slave.  If stdin is 'ignore' (fd 0 closed), script
-    // gets EBADF/EOF immediately, interprets it as Ctrl+D, and sends \x04 to
-    // the PTY slave; canonical echo mode then outputs the two-character string
-    // "^D" at the start of the log.  Using 'pipe' and never writing to it
-    // keeps script's stdin open and blocking, preventing that spurious ^D.
-    stdio: [opts.kind === 'import' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-  }) as unknown as ChildProcessWithoutNullStreams
-
   const state: JobState = {
     jobId,
     kind: opts.kind,
     target: opts.target,
     startedAtMs: Date.now(),
-    child,
+    child: null,
     buffer: [],
     nextSeq: 0,
     subscribers: new Set(),
-    status: 'running',
+    status: opts.kind === 'import' ? 'queued' : 'running',
     exitCode: null,
     stalled: false,
     lastStdoutMs: Date.now(),
@@ -93,38 +75,20 @@ export function startCliJob(opts: {
     stderrFragment: '',
     stdoutLastCR: false,
     stderrLastCR: false,
+    cliPath: opts.cliPath,
+    args: opts.args,
+    logContext: opts.logContext,
   }
   jobs.set(jobId, state)
 
-  child.stdout.setEncoding('utf8')
-  child.stderr.setEncoding('utf8')
-  child.stdout.on('data', (chunk: string) => onData(state, 'stdout', chunk))
-  child.stderr.on('data', (chunk: string) => onData(state, 'stderr', chunk))
-
-  child.on('error', (err) => {
-    log('error', 'CLI job spawn error', { jobId, ...opts.logContext, message: err.message })
-    pushChunk(state, 'stderr', `[spawn error] ${err.message}`)
-    finalize(state, 'exited', null)
-  })
-
-  child.on('close', (code) => {
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', code)
-    opts.onExit?.(code)
-  })
-
-  // Stall watchdog — only for downloads; imports legitimately wait for the
-  // CLI lock while a generation is in progress, so silence is not an error.
-  if (opts.kind === 'download') {
-    state.stallTimer = setInterval(() => {
-      if (state.status !== 'running') return
-      const idle = Date.now() - state.lastStdoutMs
-      const wasStalled = state.stalled
-      state.stalled = idle >= CLI_JOB_STALL_THRESHOLD_MS
-      if (state.stalled !== wasStalled) emitStatus(state)
-    }, 5_000)
+  if (opts.kind === 'import') {
+    queuedImportJobIds.push(jobId)
+    log('info', 'CLI import job queued', { jobId, target: opts.target, ...opts.logContext })
+    launchNextImport()
+  } else {
+    launchJob(state)
   }
 
-  log('info', 'CLI job started', { jobId, kind: opts.kind, target: opts.target, ...opts.logContext })
   return jobId
 }
 
@@ -132,7 +96,6 @@ export function subscribeCliJob(jobId: string, wc: WebContents): CliJobSnapshot 
   const state = jobs.get(jobId)
   if (!state) return null
   state.subscribers.add(wc)
-  // Auto-unsubscribe when the renderer goes away.
   wc.once('destroyed', () => { state.subscribers.delete(wc) })
   return snapshot(state)
 }
@@ -143,12 +106,24 @@ export function unsubscribeCliJob(jobId: string, wc: WebContents): void {
 
 export function killCliJob(jobId: string): void {
   const state = jobs.get(jobId)
-  if (!state || state.status !== 'running') return
+  if (!state) return
+
+  if (state.status === 'queued') {
+    removeQueuedImport(jobId)
+    state.status = 'killed'
+    emitStatus(state)
+    finalize(state, 'killed', null)
+    log('info', 'Queued CLI job removed', { jobId })
+    return
+  }
+
+  if (state.status !== 'running' && state.status !== 'stalled') return
   state.status = 'killed'
+  state.stalled = false
   emitStatus(state)
-  try { state.child.kill('SIGTERM') } catch { /* ignore */ }
+  try { state.child?.kill('SIGTERM') } catch { /* ignore */ }
   state.killGraceTimer = setTimeout(() => {
-    try { state.child.kill('SIGKILL') } catch { /* ignore */ }
+    try { state.child?.kill('SIGKILL') } catch { /* ignore */ }
   }, CLI_JOB_KILL_GRACE_MS)
   log('info', 'CLI job kill requested', { jobId })
 }
@@ -162,22 +137,149 @@ export function getCliJobSnapshot(jobId: string): CliJobSnapshot | null {
   return state ? snapshot(state) : null
 }
 
-// Internal -----------------------------------------------------------------
+function launchNextImport(): void {
+  if (activeImportJobId !== null) return
+
+  while (queuedImportJobIds.length > 0) {
+    const nextJobId = queuedImportJobIds.shift()!
+    const state = jobs.get(nextJobId)
+    if (!state || state.status !== 'queued') continue
+    activeImportJobId = nextJobId
+    launchJob(state)
+    return
+  }
+}
+
+function launchJob(state: JobState): void {
+  if (state.kind === 'import') {
+    launchImportJob(state)
+    return
+  }
+
+  launchPipeJob(state)
+}
+
+function launchPipeJob(state: JobState): void {
+  const child = spawn(state.cliPath, state.args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }) as unknown as ChildProcessWithoutNullStreams
+
+  state.child = {
+    kill: (signal?: string) => {
+      child.kill(signal as NodeJS.Signals | undefined)
+    },
+  }
+  state.lastStdoutMs = Date.now()
+  state.status = 'running'
+  state.stalled = false
+
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', (chunk: string) => onData(state, 'stdout', chunk))
+  child.stderr.on('data', (chunk: string) => onData(state, 'stderr', chunk))
+
+  child.on('error', (err) => {
+    log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, message: err.message })
+    pushChunk(state, 'stderr', `[spawn error] ${err.message}`)
+    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
+  })
+
+  child.on('close', (code) => {
+    finalize(state, state.status === 'killed' ? 'killed' : 'exited', code)
+  })
+
+  if (state.kind === 'download') {
+    state.stallTimer = setInterval(() => {
+      if (state.status !== 'running' && state.status !== 'stalled') return
+      const idle = Date.now() - state.lastStdoutMs
+      const nextStatus: CliJobStatus = idle >= CLI_JOB_STALL_THRESHOLD_MS ? 'stalled' : 'running'
+      const nextStalled = nextStatus === 'stalled'
+      if (state.status !== nextStatus || state.stalled !== nextStalled) {
+        state.status = nextStatus
+        state.stalled = nextStalled
+        emitStatus(state)
+      }
+    }, 5_000)
+  }
+
+  emitStatus(state)
+  log('info', 'CLI job started', {
+    jobId: state.jobId,
+    kind: state.kind,
+    target: state.target,
+    ...state.logContext,
+  })
+}
+
+function launchImportJob(state: JobState): void {
+  try {
+    const ptyProcess = spawnPty(state.cliPath, state.args, {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      env: process.env,
+      encoding: 'utf8',
+    })
+
+    let dataSubscription: { dispose(): void } | null = null
+    let exitSubscription: { dispose(): void } | null = null
+
+    state.child = {
+      kill: (signal?: string) => {
+        ptyProcess.kill(signal)
+      },
+    }
+    state.lastStdoutMs = Date.now()
+    state.status = 'running'
+    state.stalled = false
+
+    dataSubscription = ptyProcess.onData((chunk) => {
+      onData(state, 'stdout', chunk)
+    })
+    exitSubscription = ptyProcess.onExit(({ exitCode }) => {
+      dataSubscription?.dispose()
+      exitSubscription?.dispose()
+      finalize(state, state.status === 'killed' ? 'killed' : 'exited', exitCode)
+    })
+
+    emitStatus(state)
+    log('info', 'CLI job started', {
+      jobId: state.jobId,
+      kind: state.kind,
+      target: state.target,
+      ptyPid: ptyProcess.pid,
+      ...state.logContext,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', 'CLI PTY spawn error', { jobId: state.jobId, ...state.logContext, message })
+    pushChunk(state, 'stderr', `[spawn error] ${message}`)
+    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
+  }
+}
 
 function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string): void {
-  if (kind === 'stdout') state.lastStdoutMs = Date.now()
+  if (kind === 'stdout') {
+    state.lastStdoutMs = Date.now()
+    if (state.status === 'stalled') {
+      state.status = 'running'
+      state.stalled = false
+      emitStatus(state)
+    }
+  }
+
   const fragmentField = kind === 'stdout' ? 'stdoutFragment' : 'stderrFragment'
   const data = state[fragmentField] + chunk
-
-  // Match complete lines and capture their terminator so we can distinguish
-  // bare \r (progress-bar overwrite) from \n / \r\n (new line).
   const re = /([^\r\n]*)(\r\n|\r|\n)/g
   let lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(data)) !== null) {
-    pushChunk(state, kind, stripAnsi(m[1]), m[2] === '\r')
+  let match: RegExpExecArray | null
+
+  while ((match = re.exec(data)) !== null) {
+    pushChunk(state, kind, stripAnsi(match[1]), match[2] === '\r')
     lastIndex = re.lastIndex
   }
+
   state[fragmentField] = data.slice(lastIndex)
 }
 
@@ -185,8 +287,6 @@ function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isC
   if (text.length === 0 && kind === 'stdout') return
   const lastCRKey = kind === 'stdout' ? 'stdoutLastCR' : 'stderrLastCR'
 
-  // Coalesce: bare \r after a prior \r replaces the last buffer entry for that
-  // stream instead of appending a new one (keeps progress bars as one live line).
   if (isCR && state[lastCRKey] && state.buffer.length > 0) {
     const last = state.buffer[state.buffer.length - 1]
     if (last.kind === kind) {
@@ -200,9 +300,6 @@ function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isC
     }
   }
 
-  // Deduplicate the "confirmation newline": download tools typically finish a
-  // progress bar with "line\r…line\r\n" — the \r\n version has isCR=false but
-  // is identical to the already-coalesced \r entry.  Skip it.
   if (!isCR && state[lastCRKey] && state.buffer.length > 0) {
     const last = state.buffer[state.buffer.length - 1]
     if (last.kind === kind && last.text === text) {
@@ -236,13 +333,22 @@ function emitStatus(state: JobState): void {
 }
 
 function finalize(state: JobState, status: 'exited' | 'killed', code: number | null): void {
-  if (state.status === 'exited' || state.status === 'killed') return
+  if (state.retentionTimer) return
+
   state.status = status
   state.exitCode = code
   state.stalled = false
-  if (state.stallTimer) { clearInterval(state.stallTimer); state.stallTimer = null }
-  if (state.killGraceTimer) { clearTimeout(state.killGraceTimer); state.killGraceTimer = null }
-  // Flush any remaining fragments as final chunks.
+  state.child = null
+
+  if (state.stallTimer) {
+    clearInterval(state.stallTimer)
+    state.stallTimer = null
+  }
+  if (state.killGraceTimer) {
+    clearTimeout(state.killGraceTimer)
+    state.killGraceTimer = null
+  }
+
   if (state.stdoutFragment) {
     pushChunk(state, 'stdout', stripAnsi(state.stdoutFragment))
     state.stdoutFragment = ''
@@ -251,19 +357,23 @@ function finalize(state: JobState, status: 'exited' | 'killed', code: number | n
     pushChunk(state, 'stderr', stripAnsi(state.stderrFragment))
     state.stderrFragment = ''
   }
+
   emitStatus(state)
   log('info', `CLI job ${status}`, { jobId: state.jobId, exitCode: code })
 
-  // Keep around for a while so a hidden dialog can replay history if re-opened.
   state.retentionTimer = setTimeout(() => {
     jobs.delete(state.jobId)
   }, CLI_JOB_RETENTION_AFTER_EXIT_MS)
 
-  // If no subscribers at exit, we can drop sooner.
   if (state.subscribers.size === 0) {
     clearTimeout(state.retentionTimer)
     state.retentionTimer = null
     setTimeout(() => jobs.delete(state.jobId), 30_000)
+  }
+
+  if (state.kind === 'import' && activeImportJobId === state.jobId) {
+    activeImportJobId = null
+    launchNextImport()
   }
 }
 
@@ -280,8 +390,12 @@ function snapshot(state: JobState): CliJobSnapshot {
   }
 }
 
-// Strip CSI / ANSI color codes from CLI output.
-function stripAnsi(s: string): string {
+function removeQueuedImport(jobId: string): void {
+  const index = queuedImportJobIds.indexOf(jobId)
+  if (index >= 0) queuedImportJobIds.splice(index, 1)
+}
+
+function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+  return value.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
 }

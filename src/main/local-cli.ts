@@ -200,7 +200,7 @@ export function getDefaultModelsDir(): string {
  * `custom.json` is the ground truth for locally-imported (external) models.
  */
 export function readCustomJsonImportedFiles(): string[] | null {
-  const dir = resolveEffectiveModelsDir()
+  const dir = resolveModelsDir()
   const customJsonPath = path.join(dir, 'custom.json')
   if (!fs.existsSync(customJsonPath)) return null
 
@@ -222,12 +222,4 @@ export function readCustomJsonImportedFiles(): string[] | null {
     log('warn', 'custom.json: failed to read or parse', { customJsonPath, message: (err as Error).message })
     return null
   }
-}
-
-/**
- * Resolve where Draw Things models actually live.
- * Empty config resolves to ImageQueue's private default models directory.
- */
-export function resolveEffectiveModelsDir(): string {
-  return resolveModelsDir()
 }

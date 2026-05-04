@@ -77,7 +77,7 @@ The dialog separates **Official Models** and **Community Models** into two colum
 
 ### Downloading
 
-Click **Download** next to any catalog model that is not installed. A progress dialog opens inside ImageQueue and streams the CLI output live. You can click **Hide** to dismiss the dialog while the download continues in the background, or **Stop** to cancel it. Cancelling a download preserves any chunks already downloaded — clicking Download again on the same model resumes from where it left off.
+Click **Download** next to any catalog model that is not installed. A floating jobs panel opens inside ImageQueue and streams the CLI output live. You can click **Stop** to cancel the job; finished jobs stay visible until dismissed so the final log remains readable. Cancelling a download preserves any chunks already downloaded — clicking Download again on the same model resumes from where it left off.
 
 ### Importing community models
 
@@ -86,8 +86,8 @@ To use a model not in the official catalog (e.g. from Civitai):
 1. Download the model artifact you want Draw Things CLI to import.
 2. Open the Models modal and go to the **Import** section.
 3. Click **Browse…** to pick it, or paste the file path into the import field.
-4. Click **Import**. A progress dialog opens inside ImageQueue running `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). If the CLI rejects the file, the error is shown in the dialog.
-5. When the dialog shows the Close button, the import is complete. The model now appears under **Local Imports** (sourced from Draw Things' `custom.json`).
+4. Click **Import**. The floating jobs panel runs `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). Imports are serialized, so later imports show as queued until the earlier one finishes. If the CLI rejects the file, the failure summary and raw log stay visible in the jobs panel.
+5. When the job completes successfully, the model appears under **Local Imports** (sourced from Draw Things' `custom.json`).
 
 ---
 
@@ -99,7 +99,7 @@ The **model dropdown in the column shows only downloaded models**. If no models 
 
 The column's size dropdown sets width and height together for common resolutions. If width or height is edited to a combination that does not match a preset, the dropdown shows **Custom width/height**.
 
-Width, height, steps, guidance, and negative prompt are always passed explicitly to the CLI. When a recommendation is available, the controls are pre-filled with the recommended values; the user can adjust any of them before queuing. The actual control values are what get sent — the recommendation only determines the starting point shown in the UI.
+Width, height, steps, guidance, and negative prompt are always passed explicitly to the CLI. When a recommendation is available, the controls are pre-filled with the recommended values; the user can adjust them, and ImageQueue remembers the last-used values per model in `models/params.json`. If the current values differ from Draw Things' recommendation, the column shows a **Restore recommended** button. The actual control values are what get sent — recommendations affect the starting point and restore action, not a hidden override.
 
 | CLI flag | Source |
 |---|---|

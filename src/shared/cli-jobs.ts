@@ -1,7 +1,7 @@
 // Types shared between main and renderer for the in-app CLI job dialog.
 
 export type CliJobKind = 'import' | 'download'
-export type CliJobStatus = 'running' | 'stalled' | 'exited' | 'killed'
+export type CliJobStatus = 'queued' | 'running' | 'stalled' | 'exited' | 'killed'
 export type CliChunkKind = 'stdout' | 'stderr'
 
 // One line of output. Stored in the ring buffer in main, replayed to subscribers,
@@ -35,7 +35,8 @@ export interface CliChunkEvent {
   replace?: boolean
 }
 
-// Sent on 'cli-job:status'. Covers stalled/unstalled transitions and final exit.
+// Sent on 'cli-job:status'. Covers queueing, stalled/unstalled transitions,
+// and final exit.
 export interface CliStatusEvent {
   jobId: string
   status: CliJobStatus

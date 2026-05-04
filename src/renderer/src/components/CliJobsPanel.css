@@ -67,6 +67,20 @@
   background: color-mix(in srgb, var(--error) 12%, transparent);
 }
 
+.cli-job-summary {
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cli-job-summary-warning {
+  color: var(--warning);
+}
+
+.cli-job-summary-error {
+  color: var(--text-secondary);
+}
+
 /* ─── Log tail (scrollable, fixed ~3-line height) ────────────────────────── */
 
 .cli-job-log-tail {
@@ -104,13 +118,8 @@
   line-height: 1.5;
 }
 
-.cli-job-tail-line.stderr {
-  color: var(--error);
-}
-
 .cli-job-tail-placeholder {
   color: var(--text-muted);
   font-style: italic;
   white-space: normal;
 }
-

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
-import type { BackendId, Task, CliStatus, LocalModelInfo, RecommendedParams } from '../../../shared/types'
+import type { BackendId, Task, CliStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
 import {
   getModelsForBackend,
   findModel,
@@ -69,6 +69,17 @@ function sortLocalModels(models: LocalModelInfo[]): LocalModelInfo[] {
       `${localModelName(b)} ${b.file}`.toLowerCase()
     )
   )
+}
+
+function buildDrawThingsParams(
+  width: number,
+  height: number,
+  steps: number,
+  guidance: number,
+  seed: string,
+  negativePrompt: string
+): DrawThingsModelParams {
+  return { width, height, steps, guidance, seed, negativePrompt }
 }
 
 export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.Element {
@@ -146,12 +157,52 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
+  const saveParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestDrawThingsSaveRef = useRef<{ model: string; params: DrawThingsModelParams }>({
+    model: '',
+    params: buildDrawThingsParams(1024, 1024, 4, 1, '', ''),
+  })
 
   const columnTasks = tasks[backendId]
+  const drawThingsFallbacks = useMemo(() => {
+    const params = (
+      (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
+        ?.default_params as Record<string, unknown> | undefined
+    ) ?? {}
+    return {
+      width: (params.fallback_width as number | undefined) ?? 1024,
+      height: (params.fallback_height as number | undefined) ?? 1024,
+      steps: (params.fallback_steps as number | undefined) ?? 4,
+      guidance: (params.fallback_guidance as number | undefined) ?? 1,
+      seed: params.seed == null ? '' : String(params.seed),
+      negativePrompt: (params.fallback_negative_prompt as string | undefined) ?? '',
+    }
+  }, [settings])
+  const currentDrawThingsParams = useMemo(
+    () => buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt),
+    [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt]
+  )
+  const effectiveRecommendation = useMemo(() => {
+    if (!selectedRecommendation) return null
+    return {
+      width: selectedRecommendation.width ?? drawThingsFallbacks.width,
+      height: selectedRecommendation.height ?? drawThingsFallbacks.height,
+      steps: selectedRecommendation.steps ?? drawThingsFallbacks.steps,
+      guidance: selectedRecommendation.guidance ?? drawThingsFallbacks.guidance,
+      negativePrompt: selectedRecommendation.negativePrompt ?? drawThingsFallbacks.negativePrompt,
+    }
+  }, [selectedRecommendation, drawThingsFallbacks])
   const localSizeValue = useMemo(() => {
     const preset = DRAWTHINGS_SIZE_PRESETS.find((s) => s.width === localWidth && s.height === localHeight)
     return preset ? `${preset.width}x${preset.height}` : CUSTOM_DRAWTHINGS_SIZE
   }, [localWidth, localHeight])
+  const canRestoreRecommended = effectiveRecommendation !== null && (
+    localWidth !== effectiveRecommendation.width ||
+    localHeight !== effectiveRecommendation.height ||
+    localSteps !== effectiveRecommendation.steps ||
+    localGuidance !== effectiveRecommendation.guidance ||
+    negativePrompt !== effectiveRecommendation.negativePrompt
+  )
 
   const handleLocalSizeChange = (value: string): void => {
     if (value === CUSTOM_DRAWTHINGS_SIZE) return
@@ -161,32 +212,68 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     setLocalHeight(preset.height)
   }
 
+  const flushPendingDrawThingsParams = useCallback((
+    modelFile = latestDrawThingsSaveRef.current.model,
+    params = latestDrawThingsSaveRef.current.params
+  ): void => {
+    if (saveParamsTimerRef.current) {
+      clearTimeout(saveParamsTimerRef.current)
+      saveParamsTimerRef.current = null
+    }
+    if (backendId !== 'drawthings' || !modelFile) return
+    void window.electronAPI.dtSaveModelParams(modelFile, params)
+  }, [backendId])
+
+  const refreshDrawThingsModels = useCallback((isInitial = false): void => {
+    if (backendId !== 'drawthings') return
+    window.electronAPI.localCheckCli().then((status) => {
+      setCliStatus(status)
+      if (!status.installed) {
+        setDownloadedModels([])
+        return
+      }
+      window.electronAPI.localListDownloadedModels().then((list) => {
+        const sortedList = sortLocalModels(list)
+        setDownloadedModels((prev) => {
+          const prevFiles = prev.map((m) => m.file).join(',')
+          const nextFiles = sortedList.map((m) => m.file).join(',')
+          if (prevFiles === nextFiles) return prev
+          if (isInitial || sortedList.length > 0) {
+            setModel((cur) => (sortedList.find((m) => m.file === cur) ? cur : sortedList[0]?.file ?? ''))
+          }
+          return sortedList
+        })
+      })
+    })
+  }, [backendId])
+
+  const handleRestoreRecommended = useCallback((): void => {
+    if (!effectiveRecommendation) return
+    setLocalWidth(effectiveRecommendation.width)
+    setLocalHeight(effectiveRecommendation.height)
+    setLocalSteps(effectiveRecommendation.steps)
+    setLocalGuidance(effectiveRecommendation.guidance)
+    setNegativePrompt(effectiveRecommendation.negativePrompt)
+  }, [effectiveRecommendation])
+
+  const handleDrawThingsModelChange = useCallback((nextModel: string): void => {
+    flushPendingDrawThingsParams()
+    setModel(nextModel)
+  }, [flushPendingDrawThingsParams])
+
   useEffect(() => {
     if (backendId !== 'drawthings') return
-    const params = (
-      (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
-        ?.default_params as Record<string, unknown> | undefined
-    ) ?? {}
-    setLocalWidth((params.fallback_width as number | undefined) ?? 1024)
-    setLocalHeight((params.fallback_height as number | undefined) ?? 1024)
-    setLocalSteps((params.fallback_steps as number | undefined) ?? 4)
-    setLocalGuidance((params.fallback_guidance as number | undefined) ?? 1)
-    setLocalSeed(params.seed == null ? '' : String(params.seed))
-    setNegativePrompt((params.fallback_negative_prompt as string | undefined) ?? '')
-  }, [backendId, settings])
+    setLocalWidth(drawThingsFallbacks.width)
+    setLocalHeight(drawThingsFallbacks.height)
+    setLocalSteps(drawThingsFallbacks.steps)
+    setLocalGuidance(drawThingsFallbacks.guidance)
+    setLocalSeed(drawThingsFallbacks.seed)
+    setNegativePrompt(drawThingsFallbacks.negativePrompt)
+  }, [backendId, drawThingsFallbacks])
 
   useEffect(() => {
     if (backendId !== 'drawthings' || !model) return
     let cancelled = false
-    const params = (
-      (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
-        ?.default_params as Record<string, unknown> | undefined
-    ) ?? {}
-    const fallbackWidth = (params.fallback_width as number | undefined) ?? 1024
-    const fallbackHeight = (params.fallback_height as number | undefined) ?? 1024
-    const fallbackSteps = (params.fallback_steps as number | undefined) ?? 4
-    const fallbackGuidance = (params.fallback_guidance as number | undefined) ?? 1
-    const fallbackNegativePrompt = (params.fallback_negative_prompt as string | undefined) ?? ''
 
     Promise.all([
       window.electronAPI.dtGetModelParams(model),
@@ -202,50 +289,39 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
         setLocalSeed(saved.seed)
         setNegativePrompt(saved.negativePrompt)
       } else {
-        setLocalWidth(recommendation?.width ?? fallbackWidth)
-        setLocalHeight(recommendation?.height ?? fallbackHeight)
-        setLocalSteps(recommendation?.steps ?? fallbackSteps)
-        setLocalGuidance(recommendation?.guidance ?? fallbackGuidance)
-        setNegativePrompt(recommendation?.negativePrompt ?? fallbackNegativePrompt)
+        setLocalWidth(recommendation?.width ?? drawThingsFallbacks.width)
+        setLocalHeight(recommendation?.height ?? drawThingsFallbacks.height)
+        setLocalSteps(recommendation?.steps ?? drawThingsFallbacks.steps)
+        setLocalGuidance(recommendation?.guidance ?? drawThingsFallbacks.guidance)
+        setLocalSeed(drawThingsFallbacks.seed)
+        setNegativePrompt(recommendation?.negativePrompt ?? drawThingsFallbacks.negativePrompt)
       }
     })
 
     return () => { cancelled = true }
-  }, [backendId, model, settings, recommendationRevision])
+  }, [backendId, model, drawThingsFallbacks, recommendationRevision])
 
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
     if (backendId !== 'drawthings') return
-
-    const refresh = (isInitial = false): void => {
-      window.electronAPI.localCheckCli().then((status) => {
-        setCliStatus(status)
-        if (status.installed) {
-          window.electronAPI.localListDownloadedModels().then((list) => {
-            const sortedList = sortLocalModels(list)
-            setDownloadedModels((prev) => {
-              const prevFiles = prev.map((m) => m.file).join(',')
-              const nextFiles = sortedList.map((m) => m.file).join(',')
-              if (prevFiles === nextFiles) return prev
-              if (isInitial || sortedList.length > 0) {
-                setModel((cur) => (sortedList.find((m) => m.file === cur) ? cur : sortedList[0]?.file ?? ''))
-              }
-              return sortedList
-            })
-          })
-        }
-      })
-    }
-
-    refresh(true)
-    const id = window.setInterval(() => refresh(false), 30000)
-    const handleFocus = (): void => refresh(false)
+    refreshDrawThingsModels(true)
+    const id = window.setInterval(() => refreshDrawThingsModels(false), 30000)
+    const handleFocus = (): void => refreshDrawThingsModels(false)
     window.addEventListener('focus', handleFocus)
     return () => {
       window.clearInterval(id)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [backendId])
+  }, [backendId, refreshDrawThingsModels])
+
+  useEffect(() => {
+    if (backendId !== 'drawthings') return
+    return window.electronAPI.onCliJobStatus((event) => {
+      if (event.status === 'exited' || event.status === 'killed') {
+        refreshDrawThingsModels(false)
+      }
+    })
+  }, [backendId, refreshDrawThingsModels])
 
   useEffect(() => {
     if (backendId !== 'drawthings') return
@@ -259,21 +335,28 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     }
   }, [backendId])
 
+  useEffect(() => {
+    latestDrawThingsSaveRef.current = { model, params: currentDrawThingsParams }
+  }, [model, currentDrawThingsParams])
+
+  useEffect(() => {
+    return () => {
+      flushPendingDrawThingsParams()
+    }
+  }, [flushPendingDrawThingsParams])
+
   // Autosave Draw Things params ~800ms after any change so they persist across model switches.
-  const saveParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (backendId !== 'drawthings' || !model) return
     if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
     saveParamsTimerRef.current = setTimeout(() => {
-      void window.electronAPI.dtSaveModelParams(model, {
-        width: localWidth, height: localHeight, steps: localSteps,
-        guidance: localGuidance, seed: localSeed, negativePrompt,
-      })
+      saveParamsTimerRef.current = null
+      void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
     }, 800)
     return () => {
       if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
     }
-  }, [backendId, model, localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt])
+  }, [backendId, model, currentDrawThingsParams])
 
   // Update defaults when model changes
   useEffect(() => {
@@ -330,6 +413,9 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
     const count = 1
 
+    if (backendId === 'drawthings') {
+      flushPendingDrawThingsParams(model, currentDrawThingsParams)
+    }
     enqueue({ prompt, backend: backendId, model, params, count })
   }, [backendId, model, quality, outputFormat, background, openaiSizeIdx,
       aspectRatio, imageSize, personGeneration,
@@ -338,7 +424,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       grokAspectRatio,
       grokResolution,
       localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt,
-      apiKeyMissing, cliStatus, downloadedModels, enqueue])
+      apiKeyMissing, cliStatus, downloadedModels, currentDrawThingsParams, flushPendingDrawThingsParams, enqueue])
 
   // Listen for enqueue-all and enqueue-single events from PromptPane
   useEffect(() => {
@@ -533,7 +619,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                 {downloadedModels.length > 0 ? (
                   <div className="setting-row">
                     <label>model</label>
-                    <select value={model} onChange={(e) => setModel(e.target.value)}>
+                    <select value={model} onChange={(e) => handleDrawThingsModelChange(e.target.value)}>
                       {downloadedModels.map((m) => (
                         <option key={m.file} value={m.file}>{localModelName(m)}</option>
                       ))}
@@ -577,6 +663,19 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                   <label>neg.</label>
                   <input type="text" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="negative prompt" />
                 </div>
+                {canRestoreRecommended && effectiveRecommendation && (
+                  <div className="setting-row drawthings-recommendation-row">
+                    <label>preset</label>
+                    <button
+                      type="button"
+                      className="open-models-btn drawthings-recommendation-btn"
+                      title={`Restore Draw Things recommended parameters for ${selectedRecommendation?.matchName ?? model}`}
+                      onClick={handleRestoreRecommended}
+                    >
+                      Restore recommended
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </>

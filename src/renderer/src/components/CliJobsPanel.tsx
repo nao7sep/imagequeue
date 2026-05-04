@@ -10,6 +10,9 @@ function jobTitle(
   status: CliJobStatus,
   exitCode: number | null
 ): string {
+  if (status === 'queued') {
+    return kind === 'import' ? `Queued import: ${target}` : `Queued download: ${target}`
+  }
   if (status === 'running' || status === 'stalled') {
     return kind === 'import' ? `Importing ${target}` : `Downloading ${target}`
   }
@@ -18,6 +21,33 @@ function jobTitle(
   }
   if (status === 'killed') return `Stopped: ${target}`
   return `Failed: ${target}`
+}
+
+function jobSummary(
+  kind: CliJobKind,
+  status: CliJobStatus,
+  exitCode: number | null,
+  chunks: CliChunk[]
+): { tone: 'warning' | 'error'; text: string } | null {
+  if (status === 'queued') {
+    return { tone: 'warning', text: 'Waiting for the previous import to finish.' }
+  }
+  if (status === 'stalled') {
+    return { tone: 'warning', text: 'No progress has appeared for a while. Stop and retry if it stays stuck.' }
+  }
+  if (status === 'killed') {
+    return { tone: 'warning', text: 'Stopped before completion.' }
+  }
+  if (status !== 'exited' || exitCode === 0) return null
+
+  const lines = chunks.map((chunk) => chunk.text.trim()).filter(Boolean)
+  if (lines.some((line) => line.includes('Usage: draw-things-cli'))) {
+    return { tone: 'error', text: 'The CLI rejected the command. See the log below.' }
+  }
+  return {
+    tone: 'error',
+    text: kind === 'import' ? 'Import failed. See the log below.' : 'Download failed. See the log below.',
+  }
 }
 
 // ─── CliJobRow ────────────────────────────────────────────────────────────────
@@ -80,12 +110,13 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
     if (el) el.scrollTop = el.scrollHeight
   }, [chunks])
 
-  const isRunning = status === 'running' || status === 'stalled'
+  const isActive = status === 'queued' || status === 'running' || status === 'stalled'
   const title = jobTitle(kind, target, status, exitCode)
+  const summary = jobSummary(kind, status, exitCode, chunks)
 
   const handleStop = (): void => { void window.electronAPI.cliKillJob(jobId) }
 
-  const titleClass = !isRunning
+  const titleClass = !isActive
     ? status === 'exited' && exitCode === 0
       ? 'cli-job-row-title cli-job-row-title-success'
       : 'cli-job-row-title cli-job-row-title-error'
@@ -95,20 +126,31 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
     <div className="cli-job-row">
       <div className="cli-job-row-header">
         <span className={titleClass} title={title}>{title}</span>
-        {isRunning ? (
+        {isActive ? (
           <button className="cli-job-row-btn cli-job-row-btn-stop" onClick={handleStop}>Stop</button>
         ) : (
           <button className="cli-job-row-btn" onClick={onDismiss} title="Dismiss">×</button>
         )}
       </div>
+      {summary && (
+        <div className={`cli-job-summary cli-job-summary-${summary.tone}`}>
+          {summary.text}
+        </div>
+      )}
       <div className="cli-job-log-tail" ref={tailRef}>
-        {chunks.length === 0 && isRunning ? (
+        {chunks.length === 0 && isActive ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">
-            {kind === 'import' ? 'Conversion in progress\u2026' : 'Starting\u2026'}
+            {status === 'queued'
+              ? 'Waiting for earlier import to finish\u2026'
+              : status === 'stalled'
+                ? 'No new output yet\u2026'
+                : kind === 'import'
+                  ? 'Conversion in progress\u2026'
+                  : 'Starting\u2026'}
           </div>
         ) : (
           chunks.map((c) => (
-            <div key={c.seq} className={`cli-job-tail-line${c.kind === 'stderr' ? ' stderr' : ''}`}>
+            <div key={c.seq} className="cli-job-tail-line">
               {c.text || '\u00a0'}
             </div>
           ))
@@ -140,4 +182,3 @@ export function CliJobsPanel(): React.JSX.Element | null {
     document.body
   )
 }
-
