@@ -27,9 +27,12 @@ export interface CliJobSnapshot {
 }
 
 // Sent on 'cli-job:chunk'.
+// When replace is true, the chunk's seq matches an already-sent entry and the
+// renderer should update it in place rather than appending (CR-coalescing).
 export interface CliChunkEvent {
   jobId: string
   chunk: CliChunk
+  replace?: boolean
 }
 
 // Sent on 'cli-job:status'. Covers stalled/unstalled transitions and final exit.

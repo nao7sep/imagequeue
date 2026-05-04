@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useConfirm } from '../context/ConfirmContext'
-import { CliJobDialog } from './CliJobDialog'
+import { useCliJobs } from '../context/CliJobsContext'
 import './DrawThingsModelsModal.css'
 
 interface LocalModelInfo {
@@ -105,16 +105,12 @@ function mergeModels(availableModels: LocalModelInfo[], downloadedModels: LocalM
 
 export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
+  const { addJob } = useCliJobs()
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
   const [customJsonFiles, setCustomJsonFiles] = useState<Set<string> | null>(null)
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
-  const [activeJob, setActiveJob] = useState<{
-    jobId: string
-    kind: 'import' | 'download'
-    target: string
-  } | null>(null)
   const [importPath, setImportPath] = useState('')
   const [officialFilter, setOfficialFilter] = useState('')
   const [communityFilter, setCommunityFilter] = useState('')
@@ -182,7 +178,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
   const handleStartDownload = async (modelFile: string): Promise<void> => {
     const jobId = await window.electronAPI.cliStartDownload(modelFile)
-    setActiveJob({ jobId, kind: 'download', target: modelFile })
+    addJob(jobId, 'download', modelFile)
   }
 
   const handleBrowse = async (): Promise<void> => {
@@ -193,7 +189,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const handleImport = async (): Promise<void> => {
     if (!importPath) return
     const jobId = await window.electronAPI.cliStartImport(importPath)
-    setActiveJob({ jobId, kind: 'import', target: importPath })
+    addJob(jobId, 'import', importPath)
     setImportPath('')
   }
 
@@ -364,23 +360,5 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     </div>
   )
 
-  return (
-    <>
-      {createPortal(content, document.body)}
-      {activeJob && (
-        <CliJobDialog
-          key={activeJob.jobId}
-          jobId={activeJob.jobId}
-          onRetry={async () => {
-            const next = activeJob.kind === 'import'
-              ? await window.electronAPI.cliStartImport(activeJob.target)
-              : await window.electronAPI.cliStartDownload(activeJob.target)
-            setActiveJob({ ...activeJob, jobId: next })
-            return next
-          }}
-          onClose={() => setActiveJob(null)}
-        />
-      )}
-    </>
-  )
+  return createPortal(content, document.body)
 }

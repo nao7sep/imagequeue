@@ -33,6 +33,10 @@ interface JobState {
   retentionTimer: NodeJS.Timeout | null
   stdoutFragment: string
   stderrFragment: string
+  // True when the last pushed entry for that stream was CR-terminated.
+  // Used to coalesce consecutive progress-bar overwrite lines.
+  stdoutLastCR: boolean
+  stderrLastCR: boolean
 }
 
 const jobs = new Map<string, JobState>()
@@ -67,6 +71,8 @@ export function startCliJob(opts: {
     retentionTimer: null,
     stdoutFragment: '',
     stderrFragment: '',
+    stdoutLastCR: false,
+    stderrLastCR: false,
   }
   jobs.set(jobId, state)
 
@@ -138,13 +144,39 @@ function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string): void
   if (kind === 'stdout') state.lastStdoutMs = Date.now()
   const fragmentField = kind === 'stdout' ? 'stdoutFragment' : 'stderrFragment'
   const data = state[fragmentField] + chunk
-  const lines = data.split(/\r\n|\r|\n/)
-  state[fragmentField] = lines.pop() ?? ''
-  for (const raw of lines) pushChunk(state, kind, stripAnsi(raw))
+
+  // Match complete lines and capture their terminator so we can distinguish
+  // bare \r (progress-bar overwrite) from \n / \r\n (new line).
+  const re = /([^\r\n]*)(\r\n|\r|\n)/g
+  let lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(data)) !== null) {
+    pushChunk(state, kind, stripAnsi(m[1]), m[2] === '\r')
+    lastIndex = re.lastIndex
+  }
+  state[fragmentField] = data.slice(lastIndex)
 }
 
-function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string): void {
+function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isCR = false): void {
   if (text.length === 0 && kind === 'stdout') return
+  const lastCRKey = kind === 'stdout' ? 'stdoutLastCR' : 'stderrLastCR'
+
+  // Coalesce: bare \r after a prior \r replaces the last buffer entry for that
+  // stream instead of appending a new one (keeps progress bars as one live line).
+  if (isCR && state[lastCRKey] && state.buffer.length > 0) {
+    const last = state.buffer[state.buffer.length - 1]
+    if (last.kind === kind) {
+      last.text = text
+      last.tsMs = Date.now()
+      const event: CliChunkEvent = { jobId: state.jobId, chunk: { ...last }, replace: true }
+      for (const wc of state.subscribers) {
+        if (!wc.isDestroyed()) wc.send('cli-job:chunk', event)
+      }
+      return
+    }
+  }
+
+  state[lastCRKey] = isCR
   const chunk: CliChunk = { seq: state.nextSeq++, kind, text, tsMs: Date.now() }
   state.buffer.push(chunk)
   if (state.buffer.length > CLI_JOB_BUFFER_MAX_LINES) {
