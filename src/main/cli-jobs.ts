@@ -51,7 +51,20 @@ export function startCliJob(opts: {
   logContext: Record<string, unknown>
 }): string {
   const jobId = nanoid()
-  const child = spawn(opts.cliPath, opts.args, { stdio: ['pipe', 'pipe', 'pipe'] })
+
+  // draw-things-cli download explicitly flushes stdout after each \r progress
+  // update, so it works fine over a plain pipe.  draw-things-cli import uses
+  // regular println()-style output; without a real TTY, the Swift/C runtime
+  // uses fully-buffered stdio and all output arrives only when the process
+  // exits.  Wrapping with /usr/bin/script creates a PTY that forces
+  // line-buffered output so progress lines stream in real time.
+  const [spawnCmd, spawnArgs] = opts.kind === 'import'
+    ? ['/usr/bin/script', ['-q', '/dev/null', opts.cliPath, ...opts.args]]
+    : [opts.cliPath, opts.args]
+
+  const child = spawn(spawnCmd, spawnArgs, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }) as unknown as ChildProcessWithoutNullStreams
 
   const state: JobState = {
     jobId,
@@ -91,14 +104,17 @@ export function startCliJob(opts: {
     finalize(state, state.status === 'killed' ? 'killed' : 'exited', code)
   })
 
-  // Stall watchdog — meaningful for downloads, harmless for imports.
-  state.stallTimer = setInterval(() => {
-    if (state.status !== 'running') return
-    const idle = Date.now() - state.lastStdoutMs
-    const wasStalled = state.stalled
-    state.stalled = idle >= CLI_JOB_STALL_THRESHOLD_MS
-    if (state.stalled !== wasStalled) emitStatus(state)
-  }, 5_000)
+  // Stall watchdog — only for downloads; imports legitimately wait for the
+  // CLI lock while a generation is in progress, so silence is not an error.
+  if (opts.kind === 'download') {
+    state.stallTimer = setInterval(() => {
+      if (state.status !== 'running') return
+      const idle = Date.now() - state.lastStdoutMs
+      const wasStalled = state.stalled
+      state.stalled = idle >= CLI_JOB_STALL_THRESHOLD_MS
+      if (state.stalled !== wasStalled) emitStatus(state)
+    }, 5_000)
+  }
 
   log('info', 'CLI job started', { jobId, kind: opts.kind, target: opts.target, ...opts.logContext })
   return jobId
@@ -172,6 +188,17 @@ function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isC
       for (const wc of state.subscribers) {
         if (!wc.isDestroyed()) wc.send('cli-job:chunk', event)
       }
+      return
+    }
+  }
+
+  // Deduplicate the "confirmation newline": download tools typically finish a
+  // progress bar with "line\r…line\r\n" — the \r\n version has isCR=false but
+  // is identical to the already-coalesced \r entry.  Skip it.
+  if (!isCR && state[lastCRKey] && state.buffer.length > 0) {
+    const last = state.buffer[state.buffer.length - 1]
+    if (last.kind === kind && last.text === text) {
+      state[lastCRKey] = false
       return
     }
   }

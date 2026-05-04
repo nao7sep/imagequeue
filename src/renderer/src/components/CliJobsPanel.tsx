@@ -4,24 +4,40 @@ import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-job
 import { useCliJobs } from '../context/CliJobsContext'
 import './CliJobsPanel.css'
 
+const TAIL_LINES = 4
+const AUTO_DISMISS_MS = 5000
+
+function jobTitle(
+  kind: CliJobKind,
+  target: string,
+  status: CliJobStatus,
+  exitCode: number | null
+): string {
+  if (status === 'running' || status === 'stalled') {
+    return kind === 'import' ? `Importing ${target}` : `Downloading ${target}`
+  }
+  if (status === 'exited' && exitCode === 0) {
+    return kind === 'import' ? `Imported ${target}` : `Downloaded ${target}`
+  }
+  if (status === 'killed') return `Stopped: ${target}`
+  return `Failed: ${target}`
+}
+
 // ─── CliJobRow ────────────────────────────────────────────────────────────────
 
 interface RowProps {
   jobId: string
   kind: CliJobKind
   target: string
-  onRetry: (newJobId: string) => void
   onDismiss: () => void
 }
 
-function CliJobRow({ jobId, kind, target, onRetry, onDismiss }: RowProps): React.JSX.Element {
+function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Element {
   const [chunks, setChunks] = useState<CliChunk[]>([])
   const [status, setStatus] = useState<CliJobStatus>('running')
   const [exitCode, setExitCode] = useState<number | null>(null)
-  const [stalled, setStalled] = useState(false)
-  const [expanded, setExpanded] = useState(false)
-  const logRef = useRef<HTMLDivElement | null>(null)
-  const stickRef = useRef(true)
+  const onDismissRef = useRef(onDismiss)
+  useEffect(() => { onDismissRef.current = onDismiss }, [onDismiss])
 
   useEffect(() => {
     let cancelled = false
@@ -45,7 +61,6 @@ function CliJobRow({ jobId, kind, target, onRetry, onDismiss }: RowProps): React
       if (e.jobId !== jobId) return
       setStatus(e.status)
       setExitCode(e.exitCode)
-      setStalled(e.stalled)
     })
 
     void window.electronAPI.cliSubscribeJob(jobId).then((snap) => {
@@ -53,7 +68,6 @@ function CliJobRow({ jobId, kind, target, onRetry, onDismiss }: RowProps): React
       setChunks(snap.chunks)
       setStatus(snap.status)
       setExitCode(snap.exitCode)
-      setStalled(snap.stalled)
     })
 
     return () => {
@@ -64,90 +78,42 @@ function CliJobRow({ jobId, kind, target, onRetry, onDismiss }: RowProps): React
     }
   }, [jobId])
 
-  // Auto-scroll log to bottom unless the user has scrolled up.
+  // Auto-dismiss once the job is no longer running.
   useEffect(() => {
-    const el = logRef.current
-    if (!el || !stickRef.current) return
-    el.scrollTop = el.scrollHeight
-  }, [chunks])
+    if (status === 'running' || status === 'stalled') return
+    const t = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS)
+    return () => clearTimeout(t)
+  }, [status])
 
   const isRunning = status === 'running' || status === 'stalled'
+  const title = jobTitle(kind, target, status, exitCode)
 
-  const lastStdoutText = [...chunks].reverse().find((c) => c.kind === 'stdout')?.text ?? ''
+  // Show the last TAIL_LINES chunks; pad to fixed height so cards don't jump.
+  const tail = chunks.slice(-TAIL_LINES)
+  const padCount = Math.max(0, TAIL_LINES - tail.length)
 
-  const handleStop = (): void => {
-    void window.electronAPI.cliKillJob(jobId)
-  }
-
-  const handleRetry = async (): Promise<void> => {
-    await window.electronAPI.cliKillJob(jobId)
-    const newId =
-      kind === 'import'
-        ? await window.electronAPI.cliStartImport(target)
-        : await window.electronAPI.cliStartDownload(target)
-    onRetry(newId)
-  }
-
-  const iconState = isRunning ? (stalled ? 'stalled' : 'running') : status === 'exited' && exitCode === 0 ? 'success' : 'error'
-  const iconChar = iconState === 'running' ? '⟳' : iconState === 'stalled' ? '⚠' : iconState === 'success' ? '✓' : '✗'
-  const titleText = kind === 'import' ? `Importing ${target}` : `Downloading ${target}`
+  const handleStop = (): void => { void window.electronAPI.cliKillJob(jobId) }
 
   return (
     <div className="cli-job-row">
       <div className="cli-job-row-header">
-        <span className="cli-job-row-icon" data-state={iconState}>{iconChar}</span>
-        <span className="cli-job-row-title" title={titleText}>{titleText}</span>
+        <span className="cli-job-row-title" title={title}>{title}</span>
         {isRunning ? (
           <button className="cli-job-row-btn cli-job-row-btn-stop" onClick={handleStop}>Stop</button>
         ) : (
-          <button className="cli-job-row-btn" onClick={onDismiss}>Dismiss</button>
+          <button className="cli-job-row-btn" onClick={onDismiss} title="Dismiss">×</button>
         )}
       </div>
-
-      {stalled && isRunning && (
-        <div className="cli-job-stall-banner">
-          No progress for 60 s.{' '}
-          <button className="cli-job-inline-btn" onClick={() => void handleRetry()}>
-            Stop &amp; retry
-          </button>
-        </div>
-      )}
-
-      {lastStdoutText && (
-        <div className="cli-job-progress">{lastStdoutText}</div>
-      )}
-
-      {status === 'killed' && <div className="cli-job-progress cli-job-progress-note">Stopped.</div>}
-      {status === 'exited' && exitCode !== null && exitCode !== 0 && (
-        <div className="cli-job-progress cli-job-progress-err">[exit {exitCode}]</div>
-      )}
-      {status === 'exited' && exitCode === 0 && (
-        <div className="cli-job-progress cli-job-progress-ok">Done.</div>
-      )}
-
-      {chunks.length > 0 && (
-        <button className="cli-job-expand-btn" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? '▲ hide log' : '▼ show log'}
-        </button>
-      )}
-
-      {expanded && (
-        <div
-          className="cli-job-log"
-          ref={logRef}
-          onScroll={() => {
-            const el = logRef.current
-            if (!el) return
-            stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 16
-          }}
-        >
-          {chunks.map((c) => (
-            <div key={c.seq} className={`cli-job-log-line${c.kind === 'stderr' ? ' stderr' : ''}`}>
-              {c.text || '\u00a0'}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="cli-job-log-tail">
+        {tail.map((c) => (
+          <div key={c.seq} className={`cli-job-tail-line${c.kind === 'stderr' ? ' stderr' : ''}`}>
+            {c.text || '\u00a0'}
+          </div>
+        ))}
+        {Array.from({ length: padCount }).map((_, i) => (
+          <div key={`pad-${i}`} className="cli-job-tail-line">&nbsp;</div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -155,7 +121,7 @@ function CliJobRow({ jobId, kind, target, onRetry, onDismiss }: RowProps): React
 // ─── CliJobsPanel ─────────────────────────────────────────────────────────────
 
 export function CliJobsPanel(): React.JSX.Element | null {
-  const { jobs, removeJob, replaceJob } = useCliJobs()
+  const { jobs, removeJob } = useCliJobs()
 
   if (jobs.size === 0) return null
 
@@ -167,7 +133,6 @@ export function CliJobsPanel(): React.JSX.Element | null {
           jobId={jobId}
           kind={meta.kind}
           target={meta.target}
-          onRetry={(newId) => replaceJob(jobId, newId, meta.kind, meta.target)}
           onDismiss={() => removeJob(jobId)}
         />
       ))}
@@ -175,3 +140,4 @@ export function CliJobsPanel(): React.JSX.Element | null {
     document.body
   )
 }
+
