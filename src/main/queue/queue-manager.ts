@@ -1,8 +1,8 @@
 import crypto from 'crypto'
-import { BackendId, Task, EnqueueRequest } from '../../shared/types'
+import { BackendId, Task, EnqueueRequest, TaskHiddenReason } from '../../shared/types'
 import { estimateCostFromRegistry } from '../../shared/models'
 
-function createEmptyQueues(): Record<BackendId, Task[]> {
+export function createEmptyQueues(): Record<BackendId, Task[]> {
   return {
     openai: [],
     imagen: [],
@@ -13,9 +13,25 @@ function createEmptyQueues(): Record<BackendId, Task[]> {
   }
 }
 
-function cloneTask(task: Task): Task {
+function isVisible(task: Task): boolean {
+  return task.visibility !== 'hidden'
+}
+
+export function normalizeTaskRecord(task: Task): Task {
   return {
     ...task,
+    params: { ...task.params },
+    visibility: task.visibility ?? 'visible',
+    hiddenAt: task.hiddenAt ?? null,
+    hiddenReason: task.hiddenReason ?? null,
+    assetState: task.assetState ?? 'present',
+    deletedAt: task.deletedAt ?? null
+  }
+}
+
+export function cloneTask(task: Task): Task {
+  return {
+    ...normalizeTaskRecord(task),
     params: { ...task.params }
   }
 }
@@ -35,6 +51,11 @@ class QueueManager {
         model: request.model,
         params: { ...request.params },
         status: 'queued',
+        visibility: 'visible',
+        hiddenAt: null,
+        hiddenReason: null,
+        assetState: 'present',
+        deletedAt: null,
         estimatedCostUsd: estimateCostFromRegistry(request.backend, request.model, request.params),
         enqueuedAt: new Date().toISOString(),
         startedAt: null,
@@ -53,10 +74,18 @@ class QueueManager {
   }
 
   getTasks(backend: BackendId): Task[] {
-    return this.queues[backend]
+    return this.queues[backend].filter(isVisible)
   }
 
   getAllTasks(): Record<BackendId, Task[]> {
+    const visible = createEmptyQueues()
+    for (const backend of Object.keys(visible) as BackendId[]) {
+      visible[backend] = this.getTasks(backend)
+    }
+    return visible
+  }
+
+  getAllTasksIncludingHidden(): Record<BackendId, Task[]> {
     return { ...this.queues }
   }
 
@@ -64,18 +93,38 @@ class QueueManager {
     return this.queues[backend].find((t) => t.id === taskId)
   }
 
-  removeTask(backend: BackendId, taskId: string): void {
-    this.queues[backend] = this.queues[backend].filter((t) => t.id !== taskId)
+  hideTask(
+    backend: BackendId,
+    taskId: string,
+    hiddenReason: Exclude<TaskHiddenReason, null>,
+    options?: { assetDeleted?: boolean }
+  ): Task | undefined {
+    const task = this.getTask(backend, taskId)
+    if (!task) return undefined
+
+    const hiddenAt = new Date().toISOString()
+    task.visibility = 'hidden'
+    task.hiddenAt = hiddenAt
+    task.hiddenReason = hiddenReason
+    if (options?.assetDeleted) {
+      task.assetState = 'deleted'
+      task.deletedAt = hiddenAt
+    }
+    return task
   }
 
   reorderTasks(backend: BackendId, taskIds: string[]): void {
-    const taskMap = new Map(this.queues[backend].map((t) => [t.id, t]))
-    this.queues[backend] = taskIds.map((id) => taskMap.get(id)!).filter(Boolean)
+    const visibleTasks = this.queues[backend].filter(isVisible)
+    const hiddenTasks = this.queues[backend].filter((task) => !isVisible(task))
+    const visibleTaskMap = new Map(visibleTasks.map((task) => [task.id, task]))
+    const reorderedVisible = taskIds.map((id) => visibleTaskMap.get(id)).filter(Boolean) as Task[]
+    const remainingVisible = visibleTasks.filter((task) => !taskIds.includes(task.id))
+    this.queues[backend] = [...reorderedVisible, ...remainingVisible, ...hiddenTasks]
   }
 
   retryTask(backend: BackendId, taskId: string): Task | undefined {
     const task = this.getTask(backend, taskId)
-    if (!task || (task.status !== 'failed' && task.status !== 'interrupted')) {
+    if (!task || !isVisible(task) || (task.status !== 'failed' && task.status !== 'interrupted')) {
       return undefined
     }
 
@@ -90,7 +139,7 @@ class QueueManager {
   replaceAllTasks(nextQueues: Record<BackendId, Task[]>): void {
     const replaced = createEmptyQueues()
     for (const backend of Object.keys(replaced) as BackendId[]) {
-      replaced[backend] = (nextQueues[backend] ?? []).map(cloneTask)
+      replaced[backend] = (nextQueues[backend] ?? []).map((task) => cloneTask(normalizeTaskRecord(task)))
     }
     this.queues = replaced
   }

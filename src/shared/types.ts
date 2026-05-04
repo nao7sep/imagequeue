@@ -77,6 +77,9 @@ export interface DrawThingsModelParams {
 
 export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed' | 'interrupted'
+export type TaskVisibility = 'visible' | 'hidden'
+export type TaskHiddenReason = 'remove' | 'delete' | null
+export type TaskAssetState = 'present' | 'deleted'
 
 export interface Task {
   id: string
@@ -85,6 +88,11 @@ export interface Task {
   model: string
   params: Record<string, unknown>
   status: TaskStatus
+  visibility: TaskVisibility
+  hiddenAt: string | null
+  hiddenReason: TaskHiddenReason
+  assetState: TaskAssetState
+  deletedAt: string | null
   estimatedCostUsd: number | null
   enqueuedAt: string
   startedAt: string | null
@@ -141,6 +149,9 @@ export interface SessionSummary {
   updatedAt: string
   lastResumedAt: string | null
   taskCounts: SessionTaskCounts
+  visibleCompletedCount: number
+  visibleRetryCount: number
+  removedCompletedCount: number
   thumbnails: SessionThumbnail[]
   isCurrent: boolean
 }

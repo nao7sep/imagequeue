@@ -12,10 +12,11 @@ interface Props {
 }
 
 function summarizeSession(session: SessionSummary): string {
-  const retryCount = session.taskCounts.total - session.taskCounts.completed
   const parts = [
-    `${session.taskCounts.completed} complete`,
-    `${retryCount} retry`,
+    session.removedCompletedCount > 0
+      ? `${session.visibleCompletedCount} complete (${session.removedCompletedCount} removed)`
+      : `${session.visibleCompletedCount} complete`,
+    `${session.visibleRetryCount} retry`,
     `${session.taskCounts.total} total`,
   ]
   return parts.join(' · ')

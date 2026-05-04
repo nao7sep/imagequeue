@@ -140,6 +140,8 @@ When a completed task is selected, a toolbar appears below the preview:
 
 Each completed task row also has an **exp** button for quick export to the export folder.
 
+Removing a task hides it from the live queue but keeps its files and session history. Deleting a task removes its files and hides it from the queue.
+
 Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
 
 ## Menu
@@ -166,7 +168,7 @@ The hamburger menu (☰) gives access to:
 | Move selection across columns | ← / → | ← / → |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
-| Remove selected task (keep files) | Backspace | Backspace |
+| Hide selected task (keep files and history) | Backspace | Backspace |
 | Delete selected task and files | Delete | Delete |
 | Clear selection / close panel | Esc | Esc |
 

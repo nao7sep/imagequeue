@@ -33,7 +33,7 @@ export function registerQueueIpc(): void {
       return
     }
     log('info', `Task removed from queue: ${taskId}`, { backend })
-    queueManager.removeTask(backend, taskId)
+    queueManager.hideTask(backend, taskId, 'remove')
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })
@@ -42,23 +42,29 @@ export function registerQueueIpc(): void {
     const task = queueManager.getTask(backend, taskId)
     const toTrash = loadConfig().general.delete_to_trash
     log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null, toTrash })
+    let filesDeleted = false
     if (task?.baseName) {
       const ext = imageExtFromPath(task.imagePath)
       if (!ext) {
         log('warn', `Cannot determine image extension for ${taskId}; skipping file removal`, { imagePath: task.imagePath ?? null })
-      } else {
-        try {
-          if (toTrash) {
-            await trashImageOutput(task.baseName, ext)
-          } else {
-            deleteImageOutput(task.baseName, ext)
-          }
-        } catch (err) {
-          log('error', `Failed to ${toTrash ? 'trash' : 'delete'} files for ${taskId}`, { error: String(err) })
-        }
+        return
       }
+      try {
+        if (toTrash) {
+          await trashImageOutput(task.baseName, ext)
+        } else {
+          deleteImageOutput(task.baseName, ext)
+        }
+        filesDeleted = true
+      } catch (err) {
+        log('error', `Failed to ${toTrash ? 'trash' : 'delete'} files for ${taskId}`, { error: String(err) })
+        return
+      }
+    } else {
+      log('warn', `Cannot delete files for ${taskId}; task has no baseName`, { backend })
+      return
     }
-    queueManager.removeTask(backend, taskId)
+    queueManager.hideTask(backend, taskId, 'delete', { assetDeleted: filesDeleted })
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllTasks())
   })

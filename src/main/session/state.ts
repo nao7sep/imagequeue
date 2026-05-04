@@ -13,28 +13,10 @@ import {
 } from '../../shared/types'
 import { loadConfig } from '../config'
 import { initLogger, log, retargetLogger } from '../logger'
-import { queueManager } from '../queue/queue-manager'
+import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
-
-function createEmptyQueues(): Record<BackendId, Task[]> {
-  return {
-    openai: [],
-    imagen: [],
-    nanobanana: [],
-    grok: [],
-    flux: [],
-    drawthings: [],
-  }
-}
-
-function cloneTask(task: Task): Task {
-  return {
-    ...task,
-    params: { ...task.params },
-  }
-}
 
 function cloneQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
   const cloned = createEmptyQueues()
@@ -64,10 +46,41 @@ function createTaskCounts(tasksByBackend: Record<BackendId, Task[]>): SessionTas
   return counts
 }
 
+function collectTasks(tasksByBackend: Record<BackendId, Task[]>): Task[] {
+  return BACKEND_IDS_IN_UI_ORDER.flatMap((backend) => tasksByBackend[backend] ?? [])
+}
+
+function isVisibleTask(task: Task): boolean {
+  return task.visibility !== 'hidden'
+}
+
+function createSessionDisplayCounts(tasksByBackend: Record<BackendId, Task[]>): {
+  visibleCompletedCount: number
+  visibleRetryCount: number
+  removedCompletedCount: number
+} {
+  const allTasks = collectTasks(tasksByBackend)
+  const visibleTasks = allTasks.filter(isVisibleTask)
+
+  return {
+    visibleCompletedCount: visibleTasks.filter((task) => task.status === 'completed' && task.assetState === 'present').length,
+    visibleRetryCount: visibleTasks.filter((task) => task.status !== 'completed').length,
+    removedCompletedCount: allTasks.filter((task) =>
+      task.status === 'completed' &&
+      task.hiddenReason === 'remove' &&
+      task.assetState === 'present'
+    ).length,
+  }
+}
+
 function collectSessionThumbnails(tasksByBackend: Record<BackendId, Task[]>, limit = 3): SessionThumbnail[] {
-  const completedTasks = BACKEND_IDS_IN_UI_ORDER
-    .flatMap((backend) => tasksByBackend[backend] ?? [])
-    .filter((task) => task.status === 'completed' && task.baseName && task.imagePath)
+  const completedTasks = collectTasks(tasksByBackend)
+    .filter((task) =>
+      task.status === 'completed' &&
+      task.baseName &&
+      task.assetState === 'present' &&
+      isVisibleTask(task)
+    )
     .sort((a, b) => {
       const aTime = new Date(a.completedAt ?? a.enqueuedAt).getTime()
       const bTime = new Date(b.completedAt ?? b.enqueuedAt).getTime()
@@ -109,9 +122,13 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
+    const normalizedTasks = createEmptyQueues()
+    for (const backend of BACKEND_IDS_IN_UI_ORDER) {
+      normalizedTasks[backend] = (parsed.tasks[backend] ?? []).map((task) => cloneTask(normalizeTaskRecord(task)))
+    }
     return {
       ...parsed,
-      tasks: cloneQueues(parsed.tasks),
+      tasks: normalizedTasks,
     }
   } catch (error) {
     log('warn', 'Ignoring unreadable session manifest', {
@@ -147,7 +164,7 @@ function ensureSessionId(sessionId: string): string {
 }
 
 function toInterruptedTask(task: Task): Task {
-  if (task.status === 'completed') return cloneTask(task)
+  if (task.visibility === 'hidden' || task.status === 'completed') return cloneTask(task)
   return {
     ...cloneTask(task),
     status: 'interrupted',
@@ -184,7 +201,7 @@ export function persistActiveSession(options?: { lastResumedAt?: string | null }
   const sessionDir = getSessionDir()
   fs.mkdirSync(sessionDir, { recursive: true })
   const previous = readManifestFromDir(sessionDir)
-  const manifest = buildManifest(getSessionId(), queueManager.getAllTasks(), previous, options)
+  const manifest = buildManifest(getSessionId(), queueManager.getAllTasksIncludingHidden(), previous, options)
   writeManifestFile(getManifestPath(sessionDir), manifest)
   return manifest
 }
@@ -213,12 +230,16 @@ export function listSessions(): SessionSummary[] {
     if (!entry.isDirectory()) continue
     const manifest = readManifestFromDir(path.join(outputDir, entry.name))
     if (!manifest) continue
+    const displayCounts = createSessionDisplayCounts(manifest.tasks)
     summaries.push({
       sessionId: manifest.sessionId,
       createdAt: manifest.createdAt,
       updatedAt: manifest.updatedAt,
       lastResumedAt: manifest.lastResumedAt,
       taskCounts: manifest.taskCounts,
+      visibleCompletedCount: displayCounts.visibleCompletedCount,
+      visibleRetryCount: displayCounts.visibleRetryCount,
+      removedCompletedCount: displayCounts.removedCompletedCount,
       thumbnails: collectSessionThumbnails(manifest.tasks),
       isCurrent: manifest.sessionId === currentSessionId,
     })
