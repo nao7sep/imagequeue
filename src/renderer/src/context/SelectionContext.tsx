@@ -8,18 +8,14 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import type { BackendId, Task } from '../../../shared/types'
+import { BACKEND_IDS_IN_UI_ORDER, type BackendId, type Task } from '../../../shared/types'
 import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 
-// Visible backends, in display order. Mirrors the list in Layout.tsx but
-// SelectionContext owns it so keyboard nav can compute neighbors on its own.
-const ALL_BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
-
 function getVisibleBackends(): BackendId[] {
   const isMac = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
-  return isMac ? ALL_BACKENDS : ALL_BACKENDS.filter((b) => b !== 'drawthings')
+  return isMac ? BACKEND_IDS_IN_UI_ORDER : BACKEND_IDS_IN_UI_ORDER.filter((b) => b !== 'drawthings')
 }
 
 export interface Selection {

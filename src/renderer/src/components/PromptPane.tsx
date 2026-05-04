@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BackendId, Task } from '../../../shared/types'
+import { BACKEND_IDS_IN_UI_ORDER, type BackendId, type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
 import './PromptPane.css'
-
-const BACKENDS: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
 
 interface Props {
   selectedTask: Task | null
@@ -109,7 +107,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       }
       if (mod && e.key >= '1' && e.key <= '6') {
         e.preventDefault()
-        const backend = BACKENDS[parseInt(e.key) - 1]
+        const backend = BACKEND_IDS_IN_UI_ORDER[parseInt(e.key) - 1]
         window.dispatchEvent(
           new CustomEvent('enqueue-single', { detail: { prompt: prompt.trim(), backend } })
         )

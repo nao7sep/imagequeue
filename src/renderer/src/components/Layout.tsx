@@ -3,18 +3,12 @@ import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
 import { Settings } from './Settings'
 import { Modal } from './Modal'
+import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useNotifications } from '../hooks/useNotifications'
 
-const ALL_BACKENDS = [
-  { id: 'openai' as const, label: 'GPT Image' },
-  { id: 'imagen' as const, label: 'Google Imagen' },
-  { id: 'nanobanana' as const, label: 'Nano Banana' },
-  { id: 'grok' as const, label: 'Grok Imagine' },
-  { id: 'flux' as const, label: 'FLUX' },
-  { id: 'drawthings' as const, label: 'Draw Things' }
-]
+const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
 
 // Draw Things CLI is macOS-only — show it only on macOS
 const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
@@ -113,14 +107,12 @@ export function Layout(): React.JSX.Element {
               <p className="shortcut-group-name">Sending</p>
               <div className="shortcut-list">
                 <div className="shortcut-item"><span>Send to all backends</span><kbd>{mod}Enter</kbd></div>
-                <div className="shortcut-item"><span>Send to GPT Image</span><kbd>{mod}1</kbd></div>
-                <div className="shortcut-item"><span>Send to Google Imagen</span><kbd>{mod}2</kbd></div>
-                <div className="shortcut-item"><span>Send to Nano Banana</span><kbd>{mod}3</kbd></div>
-                <div className="shortcut-item"><span>Send to Grok Imagine</span><kbd>{mod}4</kbd></div>
-                <div className="shortcut-item"><span>Send to FLUX</span><kbd>{mod}5</kbd></div>
-                {isMac && (
-                  <div className="shortcut-item"><span>Send to Draw Things</span><kbd>{mod}6</kbd></div>
-                )}
+                {BACKENDS.map((backend, index) => (
+                  <div key={backend.id} className="shortcut-item">
+                    <span>Send to {backend.label}</span>
+                    <kbd>{mod}{index + 1}</kbd>
+                  </div>
+                ))}
               </div>
             </div>
             <div className="shortcut-group">

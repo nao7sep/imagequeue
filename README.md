@@ -8,9 +8,9 @@ ImageQueue is a desktop app for comparing image generation backends side-by-side
 |---|---|
 | OpenAI GPT Image | Required |
 | Google Imagen | Required |
-| FLUX (Black Forest Labs) | Required |
 | Nano Banana (Gemini) | Required |
 | Grok Imagine | Required |
+| FLUX (Black Forest Labs) | Required |
 | Draw Things (local CLI, macOS only) | Not required |
 
 ## Requirements

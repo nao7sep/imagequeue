@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { BackendId, Task } from '../../shared/types'
+import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
 import { TimestampAllocator } from '../session'
@@ -75,7 +75,7 @@ export function startProcessor(): void {
 
 function processQueues(): void {
   const config = loadConfig()
-  const backends: BackendId[] = ['openai', 'imagen', 'nanobanana', 'grok', 'flux', 'drawthings']
+  const backends: BackendId[] = BACKEND_IDS_IN_UI_ORDER
 
   for (const backend of backends) {
     const maxConcurrency = backend === 'drawthings' ? 1 :

@@ -2,6 +2,28 @@
 
 export type BackendId = 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
 
+export const BACKEND_IDS_IN_UI_ORDER: BackendId[] = [
+  'openai',
+  'imagen',
+  'nanobanana',
+  'grok',
+  'flux',
+  'drawthings'
+]
+
+export const CLOUD_BACKEND_IDS_IN_UI_ORDER = BACKEND_IDS_IN_UI_ORDER.filter(
+  (backend): backend is Exclude<BackendId, 'drawthings'> => backend !== 'drawthings'
+)
+
+export const BACKEND_LABELS: Record<BackendId, string> = {
+  openai: 'GPT Image',
+  imagen: 'Google Imagen',
+  nanobanana: 'Nano Banana',
+  grok: 'Grok Imagine',
+  flux: 'FLUX',
+  drawthings: 'Draw Things'
+}
+
 export interface CliStatus {
   installed: boolean
   version: string | null
