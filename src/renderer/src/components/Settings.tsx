@@ -229,7 +229,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
               />
               <span className="settings-panel-check-copy">
                 <span>Delete to Trash</span>
-                <span className="settings-panel-check-desc">Move deleted files to Trash instead of permanently deleting them.</span>
+                <span className="settings-panel-check-desc">Move deleted task files and session folders to Trash instead of permanently deleting them.</span>
               </span>
             </label>
           </div>

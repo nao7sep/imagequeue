@@ -21,12 +21,21 @@ export function getOutputDir(): string {
   return outputDir
 }
 
+export function createSessionDir(baseDate = new Date()): string {
+  let candidate = new Date(baseDate)
+  while (true) {
+    const nextDir = path.join(getOutputDir(), `${formatTimestamp(candidate)}-utc`)
+    if (!fs.existsSync(nextDir)) {
+      fs.mkdirSync(nextDir, { recursive: true })
+      return nextDir
+    }
+    candidate = new Date(candidate.getTime() + 1000)
+  }
+}
+
 // Creates the session output directory on app launch. Called once.
 export function initSession(): string {
-  const timestamp = formatTimestamp(new Date())
-  sessionDir = path.join(getOutputDir(), `${timestamp}-utc`)
-  fs.mkdirSync(sessionDir, { recursive: true })
-
+  sessionDir = createSessionDir()
   return sessionDir
 }
 

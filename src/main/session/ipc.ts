@@ -1,7 +1,11 @@
 import { ipcMain, shell } from 'electron'
-import { deleteSession, listSessions, resolveSessionDir, resumeSession } from './state'
+import { createSession, deleteSession, listSessions, resolveSessionDir, resumeSession } from './state'
 
 export function registerSessionIpc(): void {
+  ipcMain.handle('session:create', () => {
+    createSession()
+  })
+
   ipcMain.handle('session:list', () => {
     return listSessions()
   })

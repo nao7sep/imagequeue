@@ -45,6 +45,7 @@ npm run typecheck
 
 Each app launch creates a session folder under the output directory. ImageQueue writes a `session.json` snapshot there as queue state changes, so you can later reopen that session from the menu.
 
+- **New Session** switches to a fresh empty session without needing another app window.
 - **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks with **retry** available.
 - **Delete** moves that session folder to the system Trash/Recycle Bin.
 - Current-session resume is intentionally minimal: it restores task history and outputs, not transient UI state such as the current prompt or selection.
@@ -62,7 +63,7 @@ Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux).
 | Export folder | Desktop | Directory where **Export** saves images. Leave empty to use the Desktop. |
 | Confirm before removing | Off | Confirm before removing a task from the queue while keeping files. |
 | Confirm before deleting | Off | Confirm before deleting a task and its files. |
-| Move deleted files to Trash | On | Send deleted files to the system Trash instead of permanently deleting them. |
+| Move deleted files to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
 
 ### Cloud backends
 

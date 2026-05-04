@@ -50,6 +50,9 @@ const api = {
   reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
 
+  createSession: (): Promise<void> =>
+    ipcRenderer.invoke('session:create'),
+
   listSessions: (): Promise<SessionSummary[]> =>
     ipcRenderer.invoke('session:list'),
 
@@ -65,6 +68,9 @@ const api = {
   // Preview operations
   getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
     ipcRenderer.invoke('preview:getImage', baseName),
+
+  getSessionImage: (sessionId: string, baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
+    ipcRenderer.invoke('preview:getSessionImage', sessionId, baseName),
 
   getMetadata: (baseName: string): Promise<Record<string, unknown> | null> =>
     ipcRenderer.invoke('preview:getMetadata', baseName),

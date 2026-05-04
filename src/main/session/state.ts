@@ -8,11 +8,13 @@ import {
   SessionManifest,
   SessionSummary,
   SessionTaskCounts,
+  SessionThumbnail,
   Task,
 } from '../../shared/types'
-import { log, retargetLogger } from '../logger'
+import { loadConfig } from '../config'
+import { initLogger, log, retargetLogger } from '../logger'
 import { queueManager } from '../queue/queue-manager'
-import { getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
+import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -60,6 +62,19 @@ function createTaskCounts(tasksByBackend: Record<BackendId, Task[]>): SessionTas
   }
 
   return counts
+}
+
+function collectSessionThumbnails(tasksByBackend: Record<BackendId, Task[]>, limit = 3): SessionThumbnail[] {
+  const completedTasks = BACKEND_IDS_IN_UI_ORDER
+    .flatMap((backend) => tasksByBackend[backend] ?? [])
+    .filter((task) => task.status === 'completed' && task.baseName && task.imagePath)
+    .sort((a, b) => {
+      const aTime = new Date(a.completedAt ?? a.enqueuedAt).getTime()
+      const bTime = new Date(b.completedAt ?? b.enqueuedAt).getTime()
+      return bTime - aTime
+    })
+
+  return completedTasks.slice(0, limit).map((task) => ({ baseName: task.baseName! }))
 }
 
 function getManifestPath(sessionDir = getSessionDir()): string {
@@ -174,6 +189,20 @@ export function persistActiveSession(options?: { lastResumedAt?: string | null }
   return manifest
 }
 
+export function createSession(): void {
+  if (queueManager.hasGeneratingTasks()) {
+    throw new Error('Wait for active generation to finish before starting a new session.')
+  }
+
+  persistActiveSession()
+  const sessionDir = createSessionDir()
+  setSessionDir(sessionDir)
+  initLogger(sessionDir)
+  queueManager.replaceAllTasks(createEmptyQueues())
+  persistActiveSession()
+  broadcastQueueUpdate(queueManager.getAllTasks())
+}
+
 export function listSessions(): SessionSummary[] {
   const outputDir = getOutputDir()
   const currentSessionId = getSessionId()
@@ -190,6 +219,7 @@ export function listSessions(): SessionSummary[] {
       updatedAt: manifest.updatedAt,
       lastResumedAt: manifest.lastResumedAt,
       taskCounts: manifest.taskCounts,
+      thumbnails: collectSessionThumbnails(manifest.tasks),
       isCurrent: manifest.sessionId === currentSessionId,
     })
   }
@@ -231,5 +261,10 @@ export async function deleteSession(sessionId: string): Promise<void> {
     throw new Error('That session folder no longer exists.')
   }
 
-  await shell.trashItem(sessionDir)
+  const toTrash = loadConfig().general.delete_to_trash !== false
+  if (toTrash) {
+    await shell.trashItem(sessionDir)
+  } else {
+    fs.rmSync(sessionDir, { recursive: true, force: true })
+  }
 }

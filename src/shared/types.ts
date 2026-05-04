@@ -131,11 +131,16 @@ export interface SessionManifest {
   tasks: Record<BackendId, Task[]>
 }
 
+export interface SessionThumbnail {
+  baseName: string
+}
+
 export interface SessionSummary {
   sessionId: string
   createdAt: string
   updatedAt: string
   lastResumedAt: string | null
   taskCounts: SessionTaskCounts
+  thumbnails: SessionThumbnail[]
   isCurrent: boolean
 }

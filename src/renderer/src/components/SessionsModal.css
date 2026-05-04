@@ -13,11 +13,19 @@
   gap: 12px;
 }
 
+.sessions-modal-topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .sessions-modal-note {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-secondary);
+  flex: 1;
 }
 
 .sessions-modal-warning,
@@ -101,6 +109,25 @@
   color: var(--text-muted);
 }
 
+.session-preview-strip {
+  display: flex;
+  gap: 8px;
+  min-height: 64px;
+}
+
+.session-preview-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+
+.session-preview-thumb-placeholder {
+  background: color-mix(in srgb, var(--bg-surface) 75%, transparent);
+}
+
 .session-card-actions {
   display: flex;
   flex-wrap: wrap;
@@ -130,6 +157,28 @@
   color: var(--accent);
 }
 
+.sessions-new-btn {
+  padding: 8px 14px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.sessions-new-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--text-on-accent);
+}
+
 .session-card-btn-danger {
   color: var(--error);
+}
+
+@media (max-width: 760px) {
+  .sessions-modal-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

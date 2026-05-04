@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
-import type { SessionSummary } from '../../../shared/types'
+import { useSettings } from '../context/SettingsContext'
+import type { SessionSummary, SessionThumbnail } from '../../../shared/types'
 import { formatUiDateTime } from '../utils/formatDateTime'
 import './SessionsModal.css'
 
@@ -20,12 +21,63 @@ function summarizeSession(session: SessionSummary): string {
   return parts.join(' · ')
 }
 
+function SessionPreviewStrip({ sessionId, thumbnails }: { sessionId: string; thumbnails: SessionThumbnail[] }): React.JSX.Element | null {
+  const [images, setImages] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let disposed = false
+
+    if (thumbnails.length === 0) {
+      setImages({})
+      return
+    }
+
+    void Promise.all(
+      thumbnails.map(async ({ baseName }) => {
+        const result = await window.electronAPI.getSessionImage(sessionId, baseName)
+        if (!result) return null
+        const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
+        return [baseName, `data:${mime};base64,${result.data}`] as const
+      })
+    ).then((entries) => {
+      if (disposed) return
+      const next: Record<string, string> = {}
+      for (const entry of entries) {
+        if (!entry) continue
+        next[entry[0]] = entry[1]
+      }
+      setImages(next)
+    })
+
+    return () => {
+      disposed = true
+    }
+  }, [sessionId, thumbnails])
+
+  if (thumbnails.length === 0) return null
+
+  return (
+    <div className="session-preview-strip">
+      {thumbnails.map(({ baseName }) => {
+        const src = images[baseName]
+        return src ? (
+          <img key={baseName} className="session-preview-thumb" src={src} alt="" />
+        ) : (
+          <div key={baseName} className="session-preview-thumb session-preview-thumb-placeholder" aria-hidden="true" />
+        )
+      })}
+    </div>
+  )
+}
+
 export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const { tasks } = useQueue()
   const confirm = useConfirm()
+  const { settings } = useSettings()
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
+  const [creatingSession, setCreatingSession] = useState(false)
   const [message, setMessage] = useState('')
 
   const currentTaskCount = useMemo(
@@ -35,6 +87,10 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const hasGeneratingTasks = useMemo(
     () => Object.values(tasks).some((list) => list.some((task) => task.status === 'generating')),
     [tasks]
+  )
+  const deleteToTrash = useMemo(
+    () => (((settings?.general as { delete_to_trash?: boolean } | undefined)?.delete_to_trash) ?? true),
+    [settings]
   )
 
   const refreshSessions = useCallback(async (): Promise<void> => {
@@ -55,7 +111,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   }, [refreshSessions])
 
   const handleResume = useCallback(async (session: SessionSummary): Promise<void> => {
-    if (session.isCurrent || hasGeneratingTasks) return
+    if (session.isCurrent || hasGeneratingTasks || creatingSession) return
     if (currentTaskCount > 0) {
       const ok = await confirm({
         title: 'Resume Session',
@@ -75,13 +131,38 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusySessionId(null)
     }
-  }, [confirm, currentTaskCount, hasGeneratingTasks, onClose])
+  }, [confirm, creatingSession, currentTaskCount, hasGeneratingTasks, onClose])
+
+  const handleCreateSession = useCallback(async (): Promise<void> => {
+    if (hasGeneratingTasks || creatingSession) return
+    if (currentTaskCount > 0) {
+      const ok = await confirm({
+        title: 'Start New Session',
+        message: 'Start a new session? Your current session will stay saved and can be resumed later.',
+        confirmLabel: 'Start',
+      })
+      if (!ok) return
+    }
+
+    setCreatingSession(true)
+    setMessage('')
+    try {
+      await window.electronAPI.createSession()
+      onClose()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCreatingSession(false)
+    }
+  }, [confirm, creatingSession, currentTaskCount, hasGeneratingTasks, onClose])
 
   const handleDelete = useCallback(async (session: SessionSummary): Promise<void> => {
     if (session.isCurrent) return
     const ok = await confirm({
       title: 'Delete Session',
-      message: 'Move this session folder to the Trash? Generated images and metadata in that session will be removed from ImageQueue history.',
+      message: deleteToTrash
+        ? 'Move this session folder to the Trash? Generated images and metadata in that session will be removed from ImageQueue history.'
+        : 'Permanently delete this session folder? Generated images and metadata in that session will be removed from ImageQueue history.',
       confirmLabel: 'Delete',
       danger: true,
     })
@@ -97,7 +178,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusySessionId(null)
     }
-  }, [confirm, refreshSessions])
+  }, [confirm, deleteToTrash, refreshSessions])
 
   const handleOpenFolder = useCallback(async (session: SessionSummary): Promise<void> => {
     setBusySessionId(session.sessionId)
@@ -114,9 +195,18 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   return (
     <Modal title="Sessions" className="sessions-modal-box" onClose={onClose}>
       <div className="sessions-modal-body">
-        <p className="sessions-modal-note">
-          Resume restores unfinished work as retryable interrupted tasks.
-        </p>
+        <div className="sessions-modal-topbar">
+          <p className="sessions-modal-note">
+            New Session starts fresh. Resume restores interrupted work for retry.
+          </p>
+          <button
+            className="session-card-btn session-card-btn-primary sessions-new-btn"
+            onClick={() => void handleCreateSession()}
+            disabled={creatingSession || hasGeneratingTasks || busySessionId !== null}
+          >
+            New Session
+          </button>
+        </div>
         {hasGeneratingTasks && (
           <div className="sessions-modal-warning">
             Wait for active generation to finish before resuming another session.
@@ -145,25 +235,26 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                     <span>Created {formatUiDateTime(session.createdAt)}</span>
                     {session.lastResumedAt && <span>Resumed {formatUiDateTime(session.lastResumedAt)}</span>}
                   </div>
+                  <SessionPreviewStrip sessionId={session.sessionId} thumbnails={session.thumbnails} />
                   <div className="session-card-actions">
                     <button
                       className="session-card-btn"
                       onClick={() => void handleOpenFolder(session)}
-                      disabled={busy}
+                      disabled={busy || creatingSession}
                     >
                       Open Folder
                     </button>
                     <button
                       className="session-card-btn session-card-btn-primary"
                       onClick={() => void handleResume(session)}
-                      disabled={busy || session.isCurrent || hasGeneratingTasks}
+                      disabled={busy || session.isCurrent || hasGeneratingTasks || creatingSession}
                     >
                       Resume
                     </button>
                     <button
                       className="session-card-btn session-card-btn-danger"
                       onClick={() => void handleDelete(session)}
-                      disabled={busy || session.isCurrent}
+                      disabled={busy || session.isCurrent || creatingSession}
                     >
                       Delete
                     </button>
