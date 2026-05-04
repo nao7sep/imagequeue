@@ -49,6 +49,7 @@ export function startCliJob(opts: {
   args: string[]
   target: string
   logContext: Record<string, unknown>
+  onExit?: (exitCode: number | null) => void
 }): string {
   const jobId = nanoid()
 
@@ -102,6 +103,7 @@ export function startCliJob(opts: {
 
   child.on('close', (code) => {
     finalize(state, state.status === 'killed' ? 'killed' : 'exited', code)
+    opts.onExit?.(code)
   })
 
   // Stall watchdog — only for downloads; imports legitimately wait for the

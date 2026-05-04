@@ -4,8 +4,7 @@ import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-job
 import { useCliJobs } from '../context/CliJobsContext'
 import './CliJobsPanel.css'
 
-const TAIL_LINES = 4
-const AUTO_DISMISS_MS = 5000
+const TAIL_LINES = 3
 
 function jobTitle(
   kind: CliJobKind,
@@ -36,8 +35,6 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   const [chunks, setChunks] = useState<CliChunk[]>([])
   const [status, setStatus] = useState<CliJobStatus>('running')
   const [exitCode, setExitCode] = useState<number | null>(null)
-  const onDismissRef = useRef(onDismiss)
-  useEffect(() => { onDismissRef.current = onDismiss }, [onDismiss])
 
   useEffect(() => {
     let cancelled = false
@@ -78,26 +75,24 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
     }
   }, [jobId])
 
-  // Auto-dismiss once the job is no longer running.
-  useEffect(() => {
-    if (status === 'running' || status === 'stalled') return
-    const t = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS)
-    return () => clearTimeout(t)
-  }, [status])
-
   const isRunning = status === 'running' || status === 'stalled'
   const title = jobTitle(kind, target, status, exitCode)
 
-  // Show the last TAIL_LINES chunks; pad to fixed height so cards don't jump.
+  // Show up to the last TAIL_LINES chunks — no padding, variable height.
   const tail = chunks.slice(-TAIL_LINES)
-  const padCount = Math.max(0, TAIL_LINES - tail.length)
 
   const handleStop = (): void => { void window.electronAPI.cliKillJob(jobId) }
+
+  const titleClass = !isRunning
+    ? status === 'exited' && exitCode === 0
+      ? 'cli-job-row-title cli-job-row-title-success'
+      : 'cli-job-row-title cli-job-row-title-error'
+    : 'cli-job-row-title'
 
   return (
     <div className="cli-job-row">
       <div className="cli-job-row-header">
-        <span className="cli-job-row-title" title={title}>{title}</span>
+        <span className={titleClass} title={title}>{title}</span>
         {isRunning ? (
           <button className="cli-job-row-btn cli-job-row-btn-stop" onClick={handleStop}>Stop</button>
         ) : (
@@ -105,14 +100,17 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         )}
       </div>
       <div className="cli-job-log-tail">
-        {tail.map((c) => (
-          <div key={c.seq} className={`cli-job-tail-line${c.kind === 'stderr' ? ' stderr' : ''}`}>
-            {c.text || '\u00a0'}
+        {tail.length === 0 && isRunning ? (
+          <div className="cli-job-tail-line cli-job-tail-placeholder">
+            {kind === 'import' ? 'Conversion in progress\u2026' : 'Starting\u2026'}
           </div>
-        ))}
-        {Array.from({ length: padCount }).map((_, i) => (
-          <div key={`pad-${i}`} className="cli-job-tail-line">&nbsp;</div>
-        ))}
+        ) : (
+          tail.map((c) => (
+            <div key={c.seq} className={`cli-job-tail-line${c.kind === 'stderr' ? ' stderr' : ''}`}>
+              {c.text || '\u00a0'}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

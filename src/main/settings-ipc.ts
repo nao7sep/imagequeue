@@ -94,19 +94,38 @@ export function registerSettingsIpc(): void {
     shell.openPath(dir)
   })
 
-  ipcMain.handle('cli-job:startImport', (event, artifactPath: string) => {
+  // Serialize imports to avoid concurrent writes to the model registry.
+  // At most one import runs at a time; extras are held in this queue.
+  let importRunning = false
+  const importQueue: Array<{ event: Electron.IpcMainInvokeEvent; artifactPath: string; resolve: (jobId: string) => void }> = []
+
+  function launchNextImport(): void {
+    if (importRunning || importQueue.length === 0) return
+    const { event, artifactPath, resolve } = importQueue.shift()!
+    importRunning = true
     const config = loadConfig()
     const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
     const dir = ensureModelsDir()
     const jobId = startCliJob({
       kind: 'import',
       cliPath,
-      args: ['models', 'import', artifactPath, '--models-dir', dir],
+      args: ['models', 'import', artifactPath, '--models-dir', dir, '--replace'],
       target: path.basename(artifactPath),
       logContext: { artifactPath },
+      onExit: () => {
+        importRunning = false
+        launchNextImport()
+      },
     })
     subscribeCliJob(jobId, event.sender)
-    return jobId
+    resolve(jobId)
+  }
+
+  ipcMain.handle('cli-job:startImport', (event, artifactPath: string) => {
+    return new Promise<string>((resolve) => {
+      importQueue.push({ event, artifactPath, resolve })
+      launchNextImport()
+    })
   })
 
   ipcMain.handle('cli-job:startDownload', (event, modelFile: string) => {
