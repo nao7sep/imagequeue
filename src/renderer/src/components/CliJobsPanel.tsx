@@ -50,6 +50,14 @@ function jobSummary(
   }
 }
 
+function jobIcon(kind: CliJobKind, status: CliJobStatus, exitCode: number | null): string {
+  if (status === 'queued') return '…'
+  if (status === 'running' || status === 'stalled') return kind === 'import' ? '↑' : '↓'
+  if (status === 'exited' && exitCode === 0) return '✓'
+  if (status === 'killed') return '■'
+  return '✗'
+}
+
 // ─── CliJobRow ────────────────────────────────────────────────────────────────
 
 interface RowProps {
@@ -113,6 +121,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   const isActive = status === 'queued' || status === 'running' || status === 'stalled'
   const title = jobTitle(kind, target, status, exitCode)
   const summary = jobSummary(kind, status, exitCode, chunks)
+  const icon = jobIcon(kind, status, exitCode)
 
   const handleStop = (): void => { void window.electronAPI.cliKillJob(jobId) }
 
@@ -125,6 +134,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   return (
     <div className="cli-job-row">
       <div className="cli-job-row-header">
+        <span className="cli-job-row-icon" aria-hidden="true">{icon}</span>
         <span className={titleClass} title={title}>{title}</span>
         {isActive ? (
           <button className="cli-job-row-btn cli-job-row-btn-stop" onClick={handleStop}>Stop</button>
