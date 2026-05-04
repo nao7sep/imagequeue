@@ -103,7 +103,7 @@ export function registerSettingsIpc(): void {
     const jobId = startCliJob({
       kind: 'import',
       cliPath,
-      args: ['models', 'import', artifactPath, '--models-dir', dir, '--replace'],
+      args: ['models', 'import', artifactPath, '--models-dir', dir],
       target: path.basename(artifactPath),
       logContext: { artifactPath },
     })

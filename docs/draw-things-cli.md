@@ -86,7 +86,7 @@ To use a model not in the official catalog (e.g. from Civitai):
 1. Download the model artifact you want Draw Things CLI to import.
 2. Open the Models modal and go to the **Import** section.
 3. Click **Browse…** to pick it, or paste the file path into the import field.
-4. Click **Import**. The floating jobs panel runs `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). Imports are serialized, so later imports show as queued until the earlier one finishes. If the CLI rejects the file, the failure summary and raw log stay visible in the jobs panel.
+4. Click **Import**. The floating jobs panel runs `draw-things-cli models import`, which converts the file to Draw Things format and downloads any required companion files (VAE, text encoders). Imports are serialized, so later imports show as queued until the earlier one finishes. If the model is already imported or the CLI rejects the file, the failure summary and raw log stay visible in the jobs panel.
 5. When the job completes successfully, the model appears under **Local Imports** (sourced from Draw Things' `custom.json`).
 
 ---

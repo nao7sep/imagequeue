@@ -664,8 +664,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                   <input type="text" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="negative prompt" />
                 </div>
                 {canRestoreRecommended && effectiveRecommendation && (
-                  <div className="setting-row drawthings-recommendation-row">
-                    <label>preset</label>
+                  <div className="drawthings-recommendation-row">
                     <button
                       type="button"
                       className="open-models-btn drawthings-recommendation-btn"

@@ -8,6 +8,7 @@ let isShowing = false
 
 const WIN_W = 240
 const WIN_H = 36
+const MARGIN_Y = 100
 
 const NOTIFICATION_HTML = `<!DOCTYPE html>
 <html>
@@ -87,12 +88,10 @@ function showNotification(type: 'success' | 'failure', mainWin: BrowserWindow | 
   const win = notificationWin
   if (!win || win.isDestroyed()) return
 
-  const display = mainWin && !mainWin.isDestroyed()
-    ? screen.getDisplayMatching(mainWin.getBounds())
-    : screen.getPrimaryDisplay()
+  const display = screen.getPrimaryDisplay()
 
   const { x: dx, y: dy, width: dw } = display.workArea
-  win.setBounds({ x: Math.round(dx + (dw - WIN_W) / 2), y: dy + 20, width: WIN_W, height: WIN_H })
+  win.setBounds({ x: Math.round(dx + (dw - WIN_W) / 2), y: dy + MARGIN_Y, width: WIN_W, height: WIN_H })
 
   const label = type === 'success' ? '\u2713 Generation complete' : '\u2717 Generation failed'
   const cssClass = type === 'success' ? 'toast success' : 'toast failure'
