@@ -24,8 +24,6 @@ import {
   type GrokResolution
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
-import { CustomSelect } from './CustomSelect'
-import type { CSOption } from './CustomSelect'
 import './QueueColumn.css'
 
 interface Props {
@@ -190,14 +188,26 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     const fallbackGuidance = (params.fallback_guidance as number | undefined) ?? 1
     const fallbackNegativePrompt = (params.fallback_negative_prompt as string | undefined) ?? ''
 
-    window.electronAPI.resolveRecommendation(model).then((recommendation) => {
+    Promise.all([
+      window.electronAPI.dtGetModelParams(model),
+      window.electronAPI.resolveRecommendation(model),
+    ]).then(([saved, recommendation]) => {
       if (cancelled) return
       setSelectedRecommendation(recommendation)
-      setLocalWidth(recommendation?.width ?? fallbackWidth)
-      setLocalHeight(recommendation?.height ?? fallbackHeight)
-      setLocalSteps(recommendation?.steps ?? fallbackSteps)
-      setLocalGuidance(recommendation?.guidance ?? fallbackGuidance)
-      setNegativePrompt(recommendation?.negativePrompt ?? fallbackNegativePrompt)
+      if (saved) {
+        setLocalWidth(saved.width)
+        setLocalHeight(saved.height)
+        setLocalSteps(saved.steps)
+        setLocalGuidance(saved.guidance)
+        setLocalSeed(saved.seed)
+        setNegativePrompt(saved.negativePrompt)
+      } else {
+        setLocalWidth(recommendation?.width ?? fallbackWidth)
+        setLocalHeight(recommendation?.height ?? fallbackHeight)
+        setLocalSteps(recommendation?.steps ?? fallbackSteps)
+        setLocalGuidance(recommendation?.guidance ?? fallbackGuidance)
+        setNegativePrompt(recommendation?.negativePrompt ?? fallbackNegativePrompt)
+      }
     })
 
     return () => { cancelled = true }
@@ -248,6 +258,22 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       window.removeEventListener('recommendations-updated', recommendationHandler)
     }
   }, [backendId])
+
+  // Autosave Draw Things params ~800ms after any change so they persist across model switches.
+  const saveParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (backendId !== 'drawthings' || !model) return
+    if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
+    saveParamsTimerRef.current = setTimeout(() => {
+      void window.electronAPI.dtSaveModelParams(model, {
+        width: localWidth, height: localHeight, steps: localSteps,
+        guidance: localGuidance, seed: localSeed, negativePrompt,
+      })
+    }, 800)
+    return () => {
+      if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
+    }
+  }, [backendId, model, localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt])
 
   // Update defaults when model changes
   useEffect(() => {
@@ -507,11 +533,11 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                 {downloadedModels.length > 0 ? (
                   <div className="setting-row">
                     <label>model</label>
-                    <CustomSelect
-                      value={model}
-                      onChange={setModel}
-                      options={downloadedModels.map((m): CSOption => ({ value: m.file, label: localModelName(m) }))}
-                    />
+                    <select value={model} onChange={(e) => setModel(e.target.value)}>
+                      {downloadedModels.map((m) => (
+                        <option key={m.file} value={m.file}>{localModelName(m)}</option>
+                      ))}
+                    </select>
                   </div>
                 ) : (
                   <div className="setting-row model-warning">

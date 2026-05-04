@@ -44,6 +44,15 @@ export interface RecommendedParams {
   matchType: 'exact' | 'prefix' | 'prefix-parent' | 'version'
 }
 
+export interface DrawThingsModelParams {
+  width: number
+  height: number
+  steps: number
+  guidance: number
+  seed: string
+  negativePrompt: string
+}
+
 export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'failed'
 

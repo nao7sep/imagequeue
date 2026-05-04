@@ -64,7 +64,13 @@ export function startCliJob(opts: {
     : [opts.cliPath, opts.args]
 
   const child = spawn(spawnCmd, spawnArgs, {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    // For imports, we wrap with /usr/bin/script which reads from its stdin and
+    // forwards to the PTY slave.  If stdin is 'ignore' (fd 0 closed), script
+    // gets EBADF/EOF immediately, interprets it as Ctrl+D, and sends \x04 to
+    // the PTY slave; canonical echo mode then outputs the two-character string
+    // "^D" at the start of the log.  Using 'pipe' and never writing to it
+    // keeps script's stdin open and blocking, preventing that spurious ^D.
+    stdio: [opts.kind === 'import' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
   }) as unknown as ChildProcessWithoutNullStreams
 
   const state: JobState = {

@@ -4,8 +4,6 @@ import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-job
 import { useCliJobs } from '../context/CliJobsContext'
 import './CliJobsPanel.css'
 
-const TAIL_LINES = 3
-
 function jobTitle(
   kind: CliJobKind,
   target: string,
@@ -35,6 +33,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   const [chunks, setChunks] = useState<CliChunk[]>([])
   const [status, setStatus] = useState<CliJobStatus>('running')
   const [exitCode, setExitCode] = useState<number | null>(null)
+  const tailRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -75,11 +74,14 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
     }
   }, [jobId])
 
+  // Auto-scroll log tail to bottom when new chunks arrive.
+  useEffect(() => {
+    const el = tailRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [chunks])
+
   const isRunning = status === 'running' || status === 'stalled'
   const title = jobTitle(kind, target, status, exitCode)
-
-  // Show up to the last TAIL_LINES chunks — no padding, variable height.
-  const tail = chunks.slice(-TAIL_LINES)
 
   const handleStop = (): void => { void window.electronAPI.cliKillJob(jobId) }
 
@@ -99,13 +101,13 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
           <button className="cli-job-row-btn" onClick={onDismiss} title="Dismiss">×</button>
         )}
       </div>
-      <div className="cli-job-log-tail">
-        {tail.length === 0 && isRunning ? (
+      <div className="cli-job-log-tail" ref={tailRef}>
+        {chunks.length === 0 && isRunning ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">
             {kind === 'import' ? 'Conversion in progress\u2026' : 'Starting\u2026'}
           </div>
         ) : (
-          tail.map((c) => (
+          chunks.map((c) => (
             <div key={c.seq} className={`cli-job-tail-line${c.kind === 'stderr' ? ' stderr' : ''}`}>
               {c.text || '\u00a0'}
             </div>

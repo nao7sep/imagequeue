@@ -147,8 +147,12 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const loadDownloaded = useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) setLoadingDownloaded(true)
     try {
-      const list = await window.electronAPI.localListDownloadedModels()
+      const [list, files] = await Promise.all([
+        window.electronAPI.localListDownloadedModels(),
+        window.electronAPI.localReadCustomJsonImportedFiles(),
+      ])
       setDownloadedModels(list)
+      setCustomJsonFiles(files === null ? null : new Set(files))
     } finally {
       setLoadingDownloaded(false)
     }
@@ -159,9 +163,6 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     window.electronAPI.localListAvailableModels().then((list) => {
       setAvailableModels(list)
       setLoadingAvailable(false)
-    })
-    window.electronAPI.localReadCustomJsonImportedFiles().then((files) => {
-      setCustomJsonFiles(files === null ? null : new Set(files))
     })
   }, [loadDownloaded])
 
@@ -189,7 +190,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const handleImport = async (): Promise<void> => {
     if (!importPath) return
     const jobId = await window.electronAPI.cliStartImport(importPath)
-    addJob(jobId, 'import', importPath)
+    addJob(jobId, 'import', importPath.split(/[\\/]/).pop() ?? importPath)
     setImportPath('')
   }
 

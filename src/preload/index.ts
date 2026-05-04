@@ -7,7 +7,8 @@ import {
   LocalModelInfo,
   RecommendedParams,
   RecommendationOperationResult,
-  RecommendationStatus
+  RecommendationStatus,
+  DrawThingsModelParams,
 } from '../shared/types'
 import type {
   CliJobSnapshot,
@@ -131,6 +132,12 @@ const api = {
 
   resolveRecommendation: (modelFile: string): Promise<RecommendedParams | null> =>
     ipcRenderer.invoke('recommendations:resolve', modelFile),
+
+  dtGetModelParams: (modelFile: string): Promise<DrawThingsModelParams | null> =>
+    ipcRenderer.invoke('drawthings:getModelParams', modelFile),
+
+  dtSaveModelParams: (modelFile: string, params: DrawThingsModelParams): Promise<void> =>
+    ipcRenderer.invoke('drawthings:setModelParams', modelFile, params),
 
   openFileDialog: (filters: { name: string; extensions: string[] }[]): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openFile', filters),

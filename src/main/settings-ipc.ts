@@ -28,6 +28,8 @@ import {
   importRecommendations,
   resolveRecommendedParams
 } from './recommendations'
+import { getModelParams, setModelParams } from './model-params'
+import type { DrawThingsModelParams } from '../shared/types'
 
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
@@ -238,5 +240,13 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('dialog:openDirectory', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('drawthings:getModelParams', (_event, modelFile: string) => {
+    return getModelParams(modelFile)
+  })
+
+  ipcMain.handle('drawthings:setModelParams', (_event, modelFile: string, params: DrawThingsModelParams) => {
+    setModelParams(modelFile, params)
   })
 }
