@@ -109,14 +109,6 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'version' in parsed &&
-      parsed.version !== SESSION_MANIFEST_VERSION
-    ) {
-      return null
-    }
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
@@ -170,7 +162,6 @@ function toInterruptedTask(task: Task): Task {
     completedAt: null,
     durationMs: null,
     imagePath: null,
-    thumbnailPath: null,
     baseName: null,
     error: null,
   }
@@ -259,7 +250,7 @@ export function resumeSession(sessionId: string): void {
   const sessionDir = resolveSessionDir(sessionId)
   const manifest = readManifestFromDir(sessionDir)
   if (!manifest) {
-    throw new Error('That session does not have a readable current-format session.json file.')
+    throw new Error('That session is missing a readable session.json file.')
   }
 
   const resumedQueues = normalizeResumedQueues(manifest.tasks)

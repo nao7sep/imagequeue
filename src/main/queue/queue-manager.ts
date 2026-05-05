@@ -51,7 +51,6 @@ class QueueManager {
         startedAt: null,
         completedAt: null,
         durationMs: null,
-        thumbnailPath: null,
         imagePath: null,
         baseName: null,
         error: null

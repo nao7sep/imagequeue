@@ -90,7 +90,6 @@ export interface Task {
   startedAt: string | null
   completedAt: string | null
   durationMs: number | null
-  thumbnailPath: string | null
   imagePath: string | null
   baseName: string | null
   error: string | null
@@ -110,7 +109,7 @@ export interface ColumnSettings {
   imageCount: number
 }
 
-export const SESSION_MANIFEST_VERSION = 2
+export const SESSION_MANIFEST_VERSION = 1
 
 export interface SessionTaskCounts {
   total: number
