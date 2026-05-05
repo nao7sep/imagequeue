@@ -1,5 +1,6 @@
 export { initSession, createSessionDir, getSessionDir, setSessionDir, getSessionId, getOutputDir, formatTimestamp } from './session'
 export { TimestampAllocator } from './timestamp-allocator'
+export { allocateOutputTimestamp, resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 export {
   persistActiveSession,
   createSession,

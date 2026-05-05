@@ -13,8 +13,10 @@ import {
 } from '../../shared/types'
 import { loadConfig } from '../config'
 import { initLogger, log, retargetLogger } from '../logger'
+import { shouldDeleteToTrash } from '../../shared/config'
 import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
+import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -205,6 +207,7 @@ export function createSession(): void {
   setSessionDir(sessionDir)
   initLogger(sessionDir)
   queueManager.replaceAllTasks(createEmptyQueues())
+  resetOutputTimestampAllocators()
   persistActiveSession()
   broadcastQueueUpdate(queueManager.getAllTasks())
 }
@@ -257,6 +260,8 @@ export function resumeSession(sessionId: string): void {
   setSessionDir(sessionDir)
   retargetLogger(sessionDir)
   queueManager.replaceAllTasks(resumedQueues)
+  resetOutputTimestampAllocators()
+  seedOutputTimestampAllocators(manifest.tasks)
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
   broadcastQueueUpdate(queueManager.getAllTasks())
 }
@@ -271,7 +276,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
     throw new Error('That session folder no longer exists.')
   }
 
-  const toTrash = loadConfig().general.delete_to_trash !== false
+  const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   if (toTrash) {
     await shell.trashItem(sessionDir)
   } else {

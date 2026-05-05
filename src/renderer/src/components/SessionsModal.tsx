@@ -3,7 +3,7 @@ import { Modal } from './Modal'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useSettings } from '../context/SettingsContext'
-import type { SessionSummary, SessionThumbnail } from '../../../shared/types'
+import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from '../../../shared'
 import { formatUiDateTime } from '../utils/formatDateTime'
 import './SessionsModal.css'
 
@@ -89,7 +89,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     [tasks]
   )
   const deleteToTrash = useMemo(
-    () => (((settings?.general as { delete_to_trash?: boolean } | undefined)?.delete_to_trash) ?? true),
+    () => shouldDeleteToTrash((settings?.general as { delete_to_trash?: unknown } | undefined)?.delete_to_trash),
     [settings]
   )
 

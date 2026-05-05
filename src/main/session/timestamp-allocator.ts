@@ -4,7 +4,7 @@ import { formatTimestamp } from './session'
 // Ensures uniqueness at second precision within a single backend.
 // A mutex (via promise chain) prevents concurrent tasks from claiming the same second.
 export class TimestampAllocator {
-  private used = new Set<string>()
+  private lastIssuedMs: number | null = null
   private lock: Promise<void> = Promise.resolve()
 
   // Reserves a unique timestamp for the given backend.
@@ -12,17 +12,32 @@ export class TimestampAllocator {
   async allocate(): Promise<string> {
     return new Promise<string>((resolve) => {
       this.lock = this.lock.then(async () => {
-        let ts = formatTimestamp(new Date())
+        const nowMs = Date.now()
+        const currentSecondMs = Math.floor(nowMs / 1000) * 1000
+        const nextMs = this.lastIssuedMs !== null && currentSecondMs <= this.lastIssuedMs
+          ? this.lastIssuedMs + 1000
+          : currentSecondMs
+        const waitMs = nextMs - nowMs
 
-        while (this.used.has(ts)) {
-          await sleep(1000)
-          ts = formatTimestamp(new Date())
+        if (waitMs > 0) {
+          await sleep(waitMs)
         }
 
-        this.used.add(ts)
-        resolve(ts)
+        this.lastIssuedMs = nextMs
+        resolve(formatTimestamp(new Date(nextMs)))
       })
     })
+  }
+
+  seed(timestampMs: number): void {
+    if (this.lastIssuedMs === null || timestampMs > this.lastIssuedMs) {
+      this.lastIssuedMs = timestampMs
+    }
+  }
+
+  reset(): void {
+    this.lastIssuedMs = null
+    this.lock = Promise.resolve()
   }
 }
 

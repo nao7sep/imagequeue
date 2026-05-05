@@ -35,6 +35,10 @@ export function writeImageOutput(
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
+  if (fs.existsSync(imagePath) || fs.existsSync(metaPath)) {
+    throw new Error(`Refusing to overwrite existing output files for ${baseName}`)
+  }
+
   fs.writeFileSync(imagePath, imageBuffer)
   fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf-8')
 

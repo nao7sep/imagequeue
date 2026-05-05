@@ -5,6 +5,7 @@ import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/
 import { loadConfig } from '../config'
 import { logEnqueue, log } from '../logger'
 import { persistActiveSession } from '../session'
+import { shouldDeleteToTrash } from '../../shared/config'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -47,7 +48,7 @@ export function registerQueueIpc(): void {
 
   ipcMain.handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
-    const toTrash = loadConfig().general.delete_to_trash
+    const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
     log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null, toTrash })
     let filesDeleted = false
     if (task?.baseName) {

@@ -4,6 +4,7 @@ import os from 'os'
 import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
 import { log } from '../logger'
+import { shouldDeleteToTrash } from '../../shared/config'
 
 const DATA_DIR = path.join(os.homedir(), '.imagequeue')
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
@@ -58,7 +59,11 @@ export function loadConfig(): AppConfig {
     ...defaults,
     ...loaded,
     text_ai: { ...defaults.text_ai, ...(loaded.text_ai || {}) },
-    general: { ...defaults.general, ...(loaded.general || {}) },
+    general: {
+      ...defaults.general,
+      ...(loaded.general || {}),
+      delete_to_trash: shouldDeleteToTrash((loaded.general as { delete_to_trash?: unknown } | undefined)?.delete_to_trash),
+    },
     notifications: { ...defaults.notifications, ...(loaded.notifications || {}) },
     image_backends: mergedBackends as unknown as AppConfig['image_backends']
   }

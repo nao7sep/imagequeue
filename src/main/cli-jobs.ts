@@ -44,6 +44,7 @@ interface JobState {
   stderrFragment: string
   stdoutLastCR: boolean
   stderrLastCR: boolean
+  finalized: boolean
   cliPath: string
   args: string[]
   logContext: Record<string, unknown>
@@ -52,6 +53,7 @@ interface JobState {
 const jobs = new Map<string, JobState>()
 const queuedImportJobIds: string[] = []
 let activeImportJobId: string | null = null
+const CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS = 30_000
 
 export function startCliJob(opts: StartCliJobOpts): string {
   const jobId = nanoid()
@@ -75,6 +77,7 @@ export function startCliJob(opts: StartCliJobOpts): string {
     stderrFragment: '',
     stdoutLastCR: false,
     stderrLastCR: false,
+    finalized: false,
     cliPath: opts.cliPath,
     args: opts.args,
     logContext: opts.logContext,
@@ -96,12 +99,15 @@ export function subscribeCliJob(jobId: string, wc: WebContents): CliJobSnapshot 
   const state = jobs.get(jobId)
   if (!state) return null
   state.subscribers.add(wc)
-  wc.once('destroyed', () => { state.subscribers.delete(wc) })
+  clearRetentionTimer(state)
+  wc.once('destroyed', () => { removeSubscriber(state, wc) })
   return snapshot(state)
 }
 
 export function unsubscribeCliJob(jobId: string, wc: WebContents): void {
-  jobs.get(jobId)?.subscribers.delete(wc)
+  const state = jobs.get(jobId)
+  if (!state) return
+  removeSubscriber(state, wc)
 }
 
 export function killCliJob(jobId: string): void {
@@ -332,8 +338,34 @@ function emitStatus(state: JobState): void {
   }
 }
 
+function isTerminalStatus(status: CliJobStatus): boolean {
+  return status === 'exited' || status === 'killed'
+}
+
+function clearRetentionTimer(state: JobState): void {
+  if (!state.retentionTimer) return
+  clearTimeout(state.retentionTimer)
+  state.retentionTimer = null
+}
+
+function scheduleRetentionTimer(state: JobState, delayMs: number): void {
+  clearRetentionTimer(state)
+  state.retentionTimer = setTimeout(() => {
+    jobs.delete(state.jobId)
+    state.retentionTimer = null
+  }, delayMs)
+}
+
+function removeSubscriber(state: JobState, wc: WebContents): void {
+  state.subscribers.delete(wc)
+  if (state.subscribers.size === 0 && isTerminalStatus(state.status)) {
+    scheduleRetentionTimer(state, CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS)
+  }
+}
+
 function finalize(state: JobState, status: 'exited' | 'killed', code: number | null): void {
-  if (state.retentionTimer) return
+  if (state.finalized) return
+  state.finalized = true
 
   state.status = status
   state.exitCode = code
@@ -361,14 +393,10 @@ function finalize(state: JobState, status: 'exited' | 'killed', code: number | n
   emitStatus(state)
   log('info', `CLI job ${status}`, { jobId: state.jobId, exitCode: code })
 
-  state.retentionTimer = setTimeout(() => {
-    jobs.delete(state.jobId)
-  }, CLI_JOB_RETENTION_AFTER_EXIT_MS)
-
   if (state.subscribers.size === 0) {
-    clearTimeout(state.retentionTimer)
-    state.retentionTimer = null
-    setTimeout(() => jobs.delete(state.jobId), 30_000)
+    scheduleRetentionTimer(state, CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS)
+  } else {
+    scheduleRetentionTimer(state, CLI_JOB_RETENTION_AFTER_EXIT_MS)
   }
 
   if (state.kind === 'import' && activeImportJobId === state.jobId) {

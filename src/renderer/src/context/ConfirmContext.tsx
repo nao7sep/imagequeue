@@ -23,18 +23,27 @@ interface PendingConfirm {
 export function ConfirmProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [pending, setPending] = useState<PendingConfirm | null>(null)
   const pendingRef = useRef<PendingConfirm | null>(null)
+  const queueRef = useRef<PendingConfirm[]>([])
   pendingRef.current = pending
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
-      setPending({ options, resolve })
+      const nextPending = { options, resolve }
+      if (!pendingRef.current) {
+        pendingRef.current = nextPending
+        setPending(nextPending)
+      } else {
+        queueRef.current.push(nextPending)
+      }
     })
   }, [])
 
   const settle = useCallback((value: boolean): void => {
     const p = pendingRef.current
     if (!p) return
-    setPending(null)
+    const nextPending = queueRef.current.shift() ?? null
+    pendingRef.current = nextPending
+    setPending(nextPending)
     p.resolve(value)
   }, [])
 

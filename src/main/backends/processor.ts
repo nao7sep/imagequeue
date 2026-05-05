@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
-import { persistActiveSession, TimestampAllocator } from '../session'
+import { allocateOutputTimestamp, persistActiveSession } from '../session'
 import { writeImageOutput, ImageExt } from '../utils/file-output'
 import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
@@ -24,16 +24,6 @@ const generators: Record<BackendId, GenerateFn> = {
   grok: generateGrok,
   flux: generateFlux,
   drawthings: generateDrawThings
-}
-
-// Per-backend timestamp allocators
-const allocators: Record<BackendId, TimestampAllocator> = {
-  openai: new TimestampAllocator(),
-  imagen: new TimestampAllocator(),
-  nanobanana: new TimestampAllocator(),
-  grok: new TimestampAllocator(),
-  flux: new TimestampAllocator(),
-  drawthings: new TimestampAllocator()
 }
 
 // Per-backend active task counts for concurrency limiting
@@ -113,7 +103,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
     // Generate slug and allocate timestamp
     const slug = await generateSlug(task.prompt)
-    const timestamp = await allocators[backend].allocate()
+    const timestamp = await allocateOutputTimestamp(backend)
 
     const metadata: ImageMetadata = {
       prompt: task.prompt,

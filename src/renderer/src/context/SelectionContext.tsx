@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import { BACKEND_IDS_IN_UI_ORDER, type BackendId, type Task } from '../../../shared/types'
+import { BACKEND_IDS_IN_UI_ORDER, shouldDeleteToTrash, type BackendId, type Task } from '../../../shared'
 import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
@@ -177,9 +177,9 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     if (!task) return
     if (task.status !== 'completed') return
 
-    const general = (settings?.general as { confirm_delete?: boolean; delete_to_trash?: boolean } | undefined)
+    const general = (settings?.general as { confirm_delete?: boolean; delete_to_trash?: unknown } | undefined)
     if (general?.confirm_delete) {
-      const toTrash = general.delete_to_trash !== false
+      const toTrash = shouldDeleteToTrash(general.delete_to_trash)
       const ok = await confirm({
         title: 'Delete Task',
         message: toTrash
@@ -268,10 +268,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       // Skip when typing in form fields.
-      const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase()
+      const activeElement = document.activeElement as HTMLElement | null
+      const tag = activeElement?.tagName?.toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (document.querySelector('.modal-backdrop')) return
       // Skip while a modifier is held (don't steal Cmd+1..6, Cmd+Enter, etc.)
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      if ((e.key === 'Backspace' || e.key === 'Delete') && e.repeat) return
 
       const sel = selectionRef.current
       const map = tasksRef.current
