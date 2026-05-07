@@ -726,12 +726,12 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 }
 
 function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backendId: BackendId; isSelected: boolean; onClick: () => void }): React.JSX.Element {
-  const { removeTask, deleteTask } = useSelection()
+  const { removeTask, restoreTask, deleteTask } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const itemRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (task.status !== 'completed' || !task.baseName) return
+    if ((task.status !== 'completed' && task.status !== 'kept') || !task.baseName) return
     window.electronAPI.getImage(task.baseName).then((result) => {
       if (result) {
         const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
@@ -752,6 +752,10 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
     e.stopPropagation()
     void removeTask(backendId, task.id)
   }
+  const handleRestore = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    void restoreTask(backendId, task.id)
+  }
   const handleDelete = (e: React.MouseEvent): void => {
     e.stopPropagation()
     void deleteTask(backendId, task.id)
@@ -768,10 +772,15 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
   }
   const removeLabel = task.status === 'completed' ? 'jic' : 'rm'
   const removeTitle = task.status === 'completed' ? 'Keep just in case' : 'Remove from queue'
+  const statusLabel = task.status === 'kept' ? 'jic' : task.status
 
   return (
     <div
-      className={isSelected ? 'task-item task-item-selected' : 'task-item'}
+      className={[
+        'task-item',
+        task.status === 'kept' ? 'task-item-kept' : '',
+        isSelected ? 'task-item-selected' : ''
+      ].filter(Boolean).join(' ')}
       ref={itemRef}
       onClick={onClick}
       data-task-id={task.id}
@@ -796,7 +805,7 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
             ? `failed: ${task.error || 'unknown error'}`
             : task.status === 'interrupted'
               ? 'interrupted'
-              : task.status}
+              : statusLabel}
         </span>
         {task.estimatedCostUsd !== null && (
           <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
@@ -806,13 +815,16 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
         {(task.status === 'failed' || task.status === 'interrupted') && (
           <button className="task-btn task-btn-retry" onClick={handleRetry} title="Retry">retry</button>
         )}
-        {task.status === 'completed' && task.baseName && (
+        {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
           <button className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder">exp</button>
         )}
-        {task.status !== 'generating' && (
+        {task.status === 'kept' && (
+          <button className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list">restore</button>
+        )}
+        {task.status !== 'generating' && task.status !== 'kept' && (
           <button className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle}>{removeLabel}</button>
         )}
-        {task.status === 'completed' && (
+        {(task.status === 'completed' || task.status === 'kept') && (
           <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
         )}
       </div>

@@ -209,7 +209,7 @@ export function createSession(): void {
   queueManager.replaceAllTasks(createEmptyQueues())
   resetOutputTimestampAllocators()
   persistActiveSession()
-  broadcastQueueUpdate(queueManager.getAllVisibleTasks())
+  broadcastQueueUpdate(queueManager.getAllStoredTasks())
 }
 
 export function listSessions(): SessionSummary[] {
@@ -263,7 +263,7 @@ export function resumeSession(sessionId: string): void {
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
-  broadcastQueueUpdate(queueManager.getAllVisibleTasks())
+  broadcastQueueUpdate(queueManager.getAllStoredTasks())
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

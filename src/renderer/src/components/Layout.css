@@ -87,6 +87,19 @@
   color: var(--text-primary);
 }
 
+.dropdown-menu .menu-check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-check-mark {
+  width: 14px;
+  flex: 0 0 14px;
+  color: var(--accent);
+  text-align: center;
+}
+
 /* Shared modal styles live in Modal.css */
 
 /* Shortcuts */

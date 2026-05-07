@@ -7,6 +7,7 @@ import { SessionsModal } from './SessionsModal'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
+import { useQueue } from '../context/QueueContext'
 import { useNotifications } from '../hooks/useNotifications'
 
 const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
@@ -21,11 +22,19 @@ type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | null
 export function Layout(): React.JSX.Element {
   useNotifications()
   const { selectedTask, clear } = useSelection()
+  const { showKeptImages, toggleShowKeptImages } = useQueue()
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (menuCloseTimerRef.current) clearTimeout(menuCloseTimerRef.current)
+    }
+  }, [])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -56,15 +65,27 @@ export function Layout(): React.JSX.Element {
         e.preventDefault()
         setOverlay((o) => (o === 'settings' ? null : 'settings'))
         setShowMenu(false)
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'k') {
+        if (e.repeat) return
+        if (overlay) return
+        e.preventDefault()
+        toggleShowKeptImages()
+        setShowMenu(false)
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [overlay, showMenu, clear])
+  }, [overlay, showMenu, clear, toggleShowKeptImages])
 
   // Load image data when a completed task is selected
   useEffect(() => {
-    if (!selectedTask || selectedTask.status !== 'completed' || !selectedTask.baseName) {
+    if (
+      !selectedTask ||
+      (selectedTask.status !== 'completed' && selectedTask.status !== 'kept') ||
+      !selectedTask.baseName
+    ) {
       setPreviewDataUrl(null)
       return
     }
@@ -91,6 +112,15 @@ export function Layout(): React.JSX.Element {
   const openOverlay = (o: Overlay): void => {
     setShowMenu(false)
     setOverlay(o)
+  }
+
+  const toggleKeptImagesFromMenu = (): void => {
+    toggleShowKeptImages()
+    if (menuCloseTimerRef.current) clearTimeout(menuCloseTimerRef.current)
+    menuCloseTimerRef.current = setTimeout(() => {
+      setShowMenu(false)
+      menuCloseTimerRef.current = null
+    }, 400)
   }
 
   const isMac = window.electronAPI.platform === 'darwin'
@@ -122,7 +152,7 @@ export function Layout(): React.JSX.Element {
                 <div className="shortcut-item"><span>Move up / down within column</span><kbd>↑ / ↓</kbd></div>
                 <div className="shortcut-item"><span>Move to nearest task in adjacent column</span><kbd>← / →</kbd></div>
                 <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
-                <div className="shortcut-item"><span>Remove task from queue (keep files)</span><kbd>Backspace</kbd></div>
+                <div className="shortcut-item"><span>Remove task / restore selected JIC image</span><kbd>Backspace</kbd></div>
                 <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete</kbd></div>
               </div>
             </div>
@@ -130,6 +160,7 @@ export function Layout(): React.JSX.Element {
               <p className="shortcut-group-name">App</p>
               <div className="shortcut-list">
                 <div className="shortcut-item"><span>Settings</span><kbd>{mod},</kbd></div>
+                <div className="shortcut-item"><span>Show / hide JIC images</span><kbd>{mod}Shift+K</kbd></div>
                 <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Esc</kbd></div>
               </div>
             </div>
@@ -178,6 +209,10 @@ export function Layout(): React.JSX.Element {
               <div className="dropdown-menu">
                 <button onClick={() => { setShowMenu(false); void window.electronAPI.openOutputFolder() }}>Open Output Folder</button>
                 <button onClick={() => openOverlay('sessions')}>Sessions</button>
+                <button className="menu-check-item" onClick={toggleKeptImagesFromMenu}>
+                  <span className="menu-check-mark" aria-hidden="true">{showKeptImages ? '✓' : ''}</span>
+                  <span>Show JIC Images</span>
+                </button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>
                 {window.electronAPI.platform === 'darwin' && (
                   <button onClick={() => {

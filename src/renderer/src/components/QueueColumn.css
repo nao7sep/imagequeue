@@ -127,6 +127,15 @@
   box-shadow: 0 0 0 1px var(--col-accent, var(--accent)) inset;
 }
 
+.task-item-kept {
+  background: color-mix(in srgb, var(--bg-secondary) 78%, var(--bg-primary));
+}
+
+.task-item-kept .task-prompt,
+.task-item-kept .task-thumbnail {
+  opacity: 0.72;
+}
+
 .task-prompt {
   font-size: 12px;
   color: var(--text-primary);
@@ -319,6 +328,16 @@
   background: var(--success);
   color: var(--text-on-accent);
   border-color: var(--success);
+}
+.task-btn-restore:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--bg-surface);
+}
+.task-btn-restore:active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 .task-btn-warn:hover {
   color: var(--warning);

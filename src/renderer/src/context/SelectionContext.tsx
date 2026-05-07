@@ -29,15 +29,17 @@ interface SelectionContextValue {
   select: (backend: BackendId, taskId: string) => void
   clear: () => void
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
+  restoreTask: (backend: BackendId, taskId: string) => Promise<void>
   deleteTask: (backend: BackendId, taskId: string) => Promise<void>
   removeSelected: () => Promise<void>
+  restoreSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
 }
 
 const SelectionContext = createContext<SelectionContextValue | null>(null)
 
 export function SelectionProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const { tasks } = useQueue()
+  const { tasks, restoreTask: restoreQueuedTask } = useQueue()
   const { settings } = useSettings()
   const confirm = useConfirm()
 
@@ -175,7 +177,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   const deleteTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task) return
-    if (task.status !== 'completed') return
+    if (task.status !== 'completed' && task.status !== 'kept') return
 
     const general = (settings?.general as { confirm_delete?: boolean; delete_to_trash?: unknown } | undefined)
     if (general?.confirm_delete) {
@@ -195,6 +197,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     await window.electronAPI.deleteWithFiles(backend, taskId)
   }, [confirm, settings, setSelectionInternal])
 
+  const restoreTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
+    const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
+    if (!task || task.status !== 'kept') return
+    lastActionRef.current = Date.now()
+    await restoreQueuedTask(backend, taskId)
+  }, [restoreQueuedTask])
+
   const removeSelected = useCallback(async (): Promise<void> => {
     const sel = selectionRef.current
     if (!sel) return
@@ -206,6 +215,12 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     if (!sel) return
     await deleteTask(sel.backend, sel.taskId)
   }, [deleteTask])
+
+  const restoreSelected = useCallback(async (): Promise<void> => {
+    const sel = selectionRef.current
+    if (!sel) return
+    await restoreTask(sel.backend, sel.taskId)
+  }, [restoreTask])
 
   // ---- Reconcile selection when tasks change ----------------------------
 
@@ -343,8 +358,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
       if (e.key === 'Backspace') {
         if (!sel) return
+        const task = map[sel.backend]?.find((t) => t.id === sel.taskId)
         e.preventDefault()
-        void removeSelected()
+        if (task?.status === 'kept') {
+          void restoreSelected()
+        } else {
+          void removeSelected()
+        }
         return
       }
 
@@ -358,7 +378,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       if (e.key === ' ') {
         if (!sel) return
         const task = map[sel.backend]?.find((t) => t.id === sel.taskId)
-        if (task?.status !== 'completed') return
+        if (task?.status !== 'completed' && task?.status !== 'kept') return
         e.preventDefault()
         window.dispatchEvent(new CustomEvent('viewer:toggle'))
         return
@@ -367,10 +387,10 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [visibleBackends, removeSelected, deleteSelected, setSelectionInternal])
+  }, [visibleBackends, removeSelected, restoreSelected, deleteSelected, setSelectionInternal])
 
   return (
-    <SelectionContext.Provider value={{ selection, selectedTask, select, clear, removeTask, deleteTask, removeSelected, deleteSelected }}>
+    <SelectionContext.Provider value={{ selection, selectedTask, select, clear, removeTask, restoreTask, deleteTask, removeSelected, restoreSelected, deleteSelected }}>
       {children}
     </SelectionContext.Provider>
   )

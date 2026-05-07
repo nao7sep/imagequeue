@@ -15,7 +15,7 @@ export function registerQueueIpc(): void {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllVisibleTasks())
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
     return tasks
   })
 
@@ -25,6 +25,10 @@ export function registerQueueIpc(): void {
 
   ipcMain.handle('queue:getAllTasks', () => {
     return queueManager.getAllVisibleTasks()
+  })
+
+  ipcMain.handle('queue:getAllStoredTasks', () => {
+    return queueManager.getAllStoredTasks()
   })
 
   ipcMain.handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
@@ -43,7 +47,16 @@ export function registerQueueIpc(): void {
       queueManager.removeTask(backend, taskId)
     }
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllVisibleTasks())
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+  })
+
+  ipcMain.handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => {
+    const task = queueManager.restoreTask(backend, taskId)
+    if (!task) return
+
+    log('info', `Task restored from just-in-case list: ${taskId}`, { backend, baseName: task.baseName ?? null })
+    persistActiveSession()
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
 
   ipcMain.handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
@@ -74,7 +87,7 @@ export function registerQueueIpc(): void {
     }
     queueManager.removeTask(backend, taskId)
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllVisibleTasks())
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
 
   ipcMain.handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
@@ -82,14 +95,14 @@ export function registerQueueIpc(): void {
     if (task) {
       log('info', `Retrying task ${taskId}`, { backend })
       persistActiveSession()
-      notifyAllWindows('queue:updated', queueManager.getAllVisibleTasks())
+      notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
     }
   })
 
   ipcMain.handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
     queueManager.reorderTasks(backend, taskIds)
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllVisibleTasks())
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
 }
 

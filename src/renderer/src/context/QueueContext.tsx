@@ -1,34 +1,56 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
 import type { BackendId, Task, EnqueueRequest } from '../../../shared/types'
 
 interface QueueContextValue {
   tasks: Record<BackendId, Task[]>
+  showKeptImages: boolean
+  toggleShowKeptImages: () => void
   enqueue: (request: EnqueueRequest) => Promise<void>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
+  restoreTask: (backend: BackendId, taskId: string) => Promise<void>
 }
 
 const QueueContext = createContext<QueueContextValue | null>(null)
 
-export function QueueProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const [tasks, setTasks] = useState<Record<BackendId, Task[]>>({
+function createEmptyTaskMap(): Record<BackendId, Task[]> {
+  return {
     openai: [],
     imagen: [],
     nanobanana: [],
     grok: [],
     flux: [],
     drawthings: []
-  })
+  }
+}
+
+export function QueueProvider({ children }: { children: ReactNode }): React.JSX.Element {
+  const [storedTasks, setStoredTasks] = useState<Record<BackendId, Task[]>>(createEmptyTaskMap)
+  const [showKeptImages, setShowKeptImages] = useState(false)
+
+  const tasks = useMemo(() => {
+    if (showKeptImages) return storedTasks
+
+    const visible = createEmptyTaskMap()
+    for (const backend of Object.keys(visible) as BackendId[]) {
+      visible[backend] = storedTasks[backend].filter((task) => task.status !== 'kept')
+    }
+    return visible
+  }, [showKeptImages, storedTasks])
 
   useEffect(() => {
     // Load initial state
-    window.electronAPI.getAllTasks().then(setTasks)
+    window.electronAPI.getAllStoredTasks().then(setStoredTasks)
 
     // Subscribe to updates from main process
     const unsubscribe = window.electronAPI.onQueueUpdated((updated) => {
-      setTasks(updated)
+      setStoredTasks(updated)
     })
 
     return unsubscribe
+  }, [])
+
+  const toggleShowKeptImages = useCallback(() => {
+    setShowKeptImages((current) => !current)
   }, [])
 
   const enqueue = useCallback(async (request: EnqueueRequest) => {
@@ -39,8 +61,12 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
     await window.electronAPI.removeTask(backend, taskId)
   }, [])
 
+  const restoreTask = useCallback(async (backend: BackendId, taskId: string) => {
+    await window.electronAPI.restoreTask(backend, taskId)
+  }, [])
+
   return (
-    <QueueContext.Provider value={{ tasks, enqueue, removeTask }}>
+    <QueueContext.Provider value={{ tasks, showKeptImages, toggleShowKeptImages, enqueue, removeTask, restoreTask }}>
       {children}
     </QueueContext.Provider>
   )

@@ -38,8 +38,14 @@ const api = {
   getAllTasks: (): Promise<Record<BackendId, Task[]>> =>
     ipcRenderer.invoke('queue:getAllTasks'),
 
+  getAllStoredTasks: (): Promise<Record<BackendId, Task[]>> =>
+    ipcRenderer.invoke('queue:getAllStoredTasks'),
+
   removeTask: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:removeTask', backend, taskId),
+
+  restoreTask: (backend: BackendId, taskId: string): Promise<void> =>
+    ipcRenderer.invoke('queue:restoreTask', backend, taskId),
 
   deleteWithFiles: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:deleteWithFiles', backend, taskId),

@@ -90,6 +90,13 @@ class QueueManager {
     return task
   }
 
+  restoreTask(backend: BackendId, taskId: string): Task | undefined {
+    const task = this.getTask(backend, taskId)
+    if (!task || task.status !== 'kept') return undefined
+    task.status = 'completed'
+    return task
+  }
+
   removeTask(backend: BackendId, taskId: string): Task | undefined {
     const index = this.queues[backend].findIndex((task) => task.id === taskId)
     if (index < 0) return undefined

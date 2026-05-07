@@ -141,7 +141,7 @@ When a completed task is selected, a toolbar appears below the preview:
 
 Each completed task row also has **exp** for quick export, **jic** to keep the image just in case while removing it from the active list, and **del** to delete the task and its files.
 
-Removing a queued, failed, or interrupted task drops it from the queue. Using **jic** on a completed task keeps that output in session history but removes it from the active list.
+Removing a queued, failed, or interrupted task drops it from the queue. Using **jic** on a completed task keeps that output in session history but removes it from the active list. Enable **Show JIC Images** from the hamburger menu to review kept images; shown JIC rows can be restored, exported, or deleted.
 
 Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
 
@@ -153,6 +153,7 @@ The hamburger menu (☰) gives access to:
 |---|---|
 | Open Output Folder | Open the directory that stores session outputs |
 | Sessions | Browse saved sessions, resume one, or delete one |
+| Show JIC Images | Show or hide completed images that were kept just in case |
 | Settings | Open Settings |
 | Draw Things Models | Open the Draw Things model browser and importer |
 | Keyboard Shortcuts | Open the shortcut reference |
@@ -165,11 +166,12 @@ The hamburger menu (☰) gives access to:
 | Send to all backends | ⌘↩ | Ctrl+Enter |
 | Send to backend 1–6 | ⌘1–6 | Ctrl+1–6 |
 | Open Settings | ⌘, | Ctrl+, |
+| Show / hide JIC images | ⌘⇧K | Ctrl+Shift+K |
 | Move selection within a column | ↑ / ↓ | ↑ / ↓ |
 | Move selection across columns | ← / → | ← / → |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
-| Remove selected task, or keep the selected completed image just in case | Backspace | Backspace |
+| Remove selected task, keep the selected completed image just in case, or restore a selected JIC image | Backspace | Backspace |
 | Delete selected task and files | Delete | Delete |
 | Clear selection / close panel | Esc | Esc |
 

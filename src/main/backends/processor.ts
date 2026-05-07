@@ -147,7 +147,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 }
 
 function broadcastUpdate(): void {
-  const allTasks = queueManager.getAllVisibleTasks()
+  const allTasks = queueManager.getAllStoredTasks()
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('queue:updated', allTasks)
   }
