@@ -90,14 +90,14 @@
 .dropdown-menu .menu-check-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
-.menu-check-mark {
-  width: 14px;
-  flex: 0 0 14px;
-  color: var(--accent);
-  text-align: center;
+.menu-check-item input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+  pointer-events: none;
 }
 
 /* Shared modal styles live in Modal.css */

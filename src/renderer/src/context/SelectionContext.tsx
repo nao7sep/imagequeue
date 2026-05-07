@@ -39,7 +39,7 @@ interface SelectionContextValue {
 const SelectionContext = createContext<SelectionContextValue | null>(null)
 
 export function SelectionProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const { tasks, restoreTask: restoreQueuedTask } = useQueue()
+  const { tasks, showKeptImages, restoreTask: restoreQueuedTask } = useQueue()
   const { settings } = useSettings()
   const confirm = useConfirm()
 
@@ -170,9 +170,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       if (!ok) return
     }
 
-    transitionSelectionForRemoval(backend, taskId)
+    if (task.status !== 'completed' || !showKeptImages) {
+      transitionSelectionForRemoval(backend, taskId)
+    } else {
+      lastActionRef.current = Date.now()
+    }
     await window.electronAPI.removeTask(backend, taskId)
-  }, [confirm, settings, setSelectionInternal])
+  }, [confirm, settings, showKeptImages, setSelectionInternal])
 
   const deleteTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)

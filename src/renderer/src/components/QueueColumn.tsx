@@ -786,30 +786,34 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
       data-task-id={task.id}
     >
       {thumbUrl && (
-        <img
-          className="task-thumbnail"
-          src={thumbUrl}
-          alt=""
-          onLoad={() => itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
-        />
+        <div className="task-thumbnail-frame">
+          <img
+            className="task-thumbnail"
+            src={thumbUrl}
+            alt=""
+            onLoad={() => itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+          />
+        </div>
       )}
-      <div className="task-prompt" title={task.prompt}>
-        {task.prompt}
-      </div>
-      <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
-        <span
-          className={task.status === 'failed' ? 'task-error' : undefined}
-          title={task.status === 'failed' && task.error ? task.error : undefined}
-        >
-          {task.status === 'failed'
-            ? `failed: ${task.error || 'unknown error'}`
-            : task.status === 'interrupted'
-              ? 'interrupted'
-              : statusLabel}
-        </span>
-        {task.estimatedCostUsd !== null && (
-          <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
-        )}
+      <div className="task-info">
+        <div className="task-prompt" title={task.prompt}>
+          {task.prompt}
+        </div>
+        <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
+          <span
+            className={task.status === 'failed' ? 'task-error' : undefined}
+            title={task.status === 'failed' && task.error ? task.error : undefined}
+          >
+            {task.status === 'failed'
+              ? `failed: ${task.error || 'unknown error'}`
+              : task.status === 'interrupted'
+                ? 'interrupted'
+                : statusLabel}
+          </span>
+          {task.estimatedCostUsd !== null && (
+            <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
+          )}
+        </div>
       </div>
       <div className="task-actions">
         {(task.status === 'failed' || task.status === 'interrupted') && (

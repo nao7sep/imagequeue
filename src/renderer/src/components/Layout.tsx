@@ -210,7 +210,7 @@ export function Layout(): React.JSX.Element {
                 <button onClick={() => { setShowMenu(false); void window.electronAPI.openOutputFolder() }}>Open Output Folder</button>
                 <button onClick={() => openOverlay('sessions')}>Sessions</button>
                 <button className="menu-check-item" onClick={toggleKeptImagesFromMenu}>
-                  <span className="menu-check-mark" aria-hidden="true">{showKeptImages ? '✓' : ''}</span>
+                  <input type="checkbox" checked={showKeptImages} readOnly tabIndex={-1} />
                   <span>Show JIC Images</span>
                 </button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>

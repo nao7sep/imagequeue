@@ -177,6 +177,13 @@ function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>): Reco
   return normalized
 }
 
+function hasGeneratedImage(tasksByBackend: Record<BackendId, Task[]>): boolean {
+  return collectTasks(tasksByBackend).some((task) =>
+    (task.status === 'completed' || task.status === 'kept') &&
+    !!task.baseName
+  )
+}
+
 function broadcastQueueUpdate(tasksByBackend: Record<BackendId, Task[]>): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('queue:updated', tasksByBackend)
@@ -250,6 +257,11 @@ export function resumeSession(sessionId: string): void {
     throw new Error('Wait for active generation to finish before resuming another session.')
   }
 
+  const previousSessionDir = getSessionDir()
+  const previousSessionId = getSessionId()
+  const previousQueues = queueManager.getAllStoredTasks()
+  const shouldDeletePreviousSession = !hasGeneratedImage(previousQueues)
+
   const sessionDir = resolveSessionDir(sessionId)
   const manifest = readManifestFromDir(sessionDir)
   if (!manifest) {
@@ -264,6 +276,14 @@ export function resumeSession(sessionId: string): void {
   seedOutputTimestampAllocators(manifest.tasks)
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
+
+  if (shouldDeletePreviousSession && previousSessionId !== sessionId && fs.existsSync(previousSessionDir)) {
+    fs.rmSync(previousSessionDir, { recursive: true, force: true })
+    log('info', 'Deleted previous session with no generated images after resume', {
+      sessionId: previousSessionId,
+      path: previousSessionDir,
+    })
+  }
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

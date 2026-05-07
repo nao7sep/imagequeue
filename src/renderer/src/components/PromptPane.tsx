@@ -189,7 +189,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           )}
         </div>
 
-        {selectedTask?.status === 'completed' && selectedTask?.baseName && (
+        {(selectedTask?.status === 'completed' || selectedTask?.status === 'kept') && selectedTask?.baseName && (
           <div className="preview-toolbar">
             <button className="preview-btn preview-btn-neutral" onClick={handleCopyPrompt}>{promptCopied ? '✓ Copied' : 'Copy Prompt'}</button>
             <button className="preview-btn preview-btn-neutral" onClick={handleReveal}>Reveal</button>

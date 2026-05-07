@@ -110,11 +110,13 @@
 
 .task-item {
   position: relative;
+  --task-bg: var(--bg-secondary);
+  --task-actions-bg: var(--task-bg);
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
   margin-bottom: 6px;
-  background: var(--bg-secondary);
+  background: var(--task-bg);
   cursor: pointer;
 }
 
@@ -128,12 +130,16 @@
 }
 
 .task-item-kept {
-  background: color-mix(in srgb, var(--bg-secondary) 78%, var(--bg-primary));
+  --task-actions-bg: color-mix(in srgb, var(--warning) 18%, var(--bg-secondary));
 }
 
-.task-item-kept .task-prompt,
-.task-item-kept .task-thumbnail {
-  opacity: 0.72;
+.task-info {
+  border-radius: 4px;
+}
+
+.task-item-kept .task-info {
+  padding: 5px 6px;
+  background: var(--task-actions-bg);
 }
 
 .task-prompt {
@@ -293,6 +299,9 @@
   right: 5px;
   display: flex;
   gap: 4px;
+  padding: 3px;
+  border-radius: 6px;
+  background: var(--task-actions-bg);
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -303,7 +312,7 @@
   padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: 3px;
-  background: var(--bg-secondary);
+  background: var(--task-actions-bg);
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
@@ -359,11 +368,19 @@
   color: var(--text-on-accent);
   border-color: var(--error);
 }
-.task-thumbnail {
+.task-thumbnail-frame {
   width: 100%;
   aspect-ratio: 1;
-  object-fit: cover;
   border-radius: 4px;
   margin-bottom: 6px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.task-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
   display: block;
 }
