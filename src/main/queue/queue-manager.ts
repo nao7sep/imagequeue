@@ -20,15 +20,12 @@ function isActiveTask(task: Task): boolean {
 export function normalizeTaskRecord(task: Task): Task {
   return {
     ...task,
-    params: { ...task.params }
+    params: { ...(task.params ?? {}) }
   }
 }
 
 export function cloneTask(task: Task): Task {
-  return {
-    ...normalizeTaskRecord(task),
-    params: { ...task.params }
-  }
+  return normalizeTaskRecord(task)
 }
 
 // In-memory queue manager. One ordered queue per backend.
@@ -62,19 +59,19 @@ class QueueManager {
     return tasks
   }
 
-  getTasks(backend: BackendId): Task[] {
+  getActiveTasks(backend: BackendId): Task[] {
     return this.queues[backend].filter(isActiveTask)
   }
 
-  getAllTasks(): Record<BackendId, Task[]> {
+  getAllVisibleTasks(): Record<BackendId, Task[]> {
     const visible = createEmptyQueues()
     for (const backend of Object.keys(visible) as BackendId[]) {
-      visible[backend] = this.getTasks(backend)
+      visible[backend] = this.getActiveTasks(backend)
     }
     return visible
   }
 
-  getStoredTasks(): Record<BackendId, Task[]> {
+  getAllStoredTasks(): Record<BackendId, Task[]> {
     const stored = createEmptyQueues()
     for (const backend of Object.keys(stored) as BackendId[]) {
       stored[backend] = this.queues[backend].map(cloneTask)
@@ -126,7 +123,7 @@ class QueueManager {
   replaceAllTasks(nextQueues: Record<BackendId, Task[]>): void {
     const replaced = createEmptyQueues()
     for (const backend of Object.keys(replaced) as BackendId[]) {
-      replaced[backend] = (nextQueues[backend] ?? []).map((task) => cloneTask(normalizeTaskRecord(task)))
+      replaced[backend] = (nextQueues[backend] ?? []).map(cloneTask)
     }
     this.queues = replaced
   }

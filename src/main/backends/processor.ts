@@ -70,7 +70,7 @@ function processQueues(): void {
   for (const backend of backends) {
     const maxConcurrency = backend === 'drawthings' ? 1 :
       (config.image_backends[backend] as { concurrency?: number }).concurrency || 3
-    const tasks = queueManager.getTasks(backend)
+    const tasks = queueManager.getActiveTasks(backend)
 
     for (let i = tasks.length - 1; i >= 0; i--) {
       const task = tasks[i]
@@ -147,7 +147,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 }
 
 function broadcastUpdate(): void {
-  const allTasks = queueManager.getAllTasks()
+  const allTasks = queueManager.getAllVisibleTasks()
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('queue:updated', allTasks)
   }

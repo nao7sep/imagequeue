@@ -116,7 +116,7 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     }
     const normalizedTasks = createEmptyQueues()
     for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-      normalizedTasks[backend] = (parsed.tasks[backend] ?? []).map((task) => cloneTask(normalizeTaskRecord(task)))
+      normalizedTasks[backend] = (parsed.tasks[backend] ?? []).map(normalizeTaskRecord)
     }
     return {
       ...parsed,
@@ -192,7 +192,7 @@ export function persistActiveSession(options?: { lastResumedAt?: string | null }
   const sessionDir = getSessionDir()
   fs.mkdirSync(sessionDir, { recursive: true })
   const previous = readManifestFromDir(sessionDir)
-  const manifest = buildManifest(getSessionId(), queueManager.getStoredTasks(), previous, options)
+  const manifest = buildManifest(getSessionId(), queueManager.getAllStoredTasks(), previous, options)
   writeManifestFile(getManifestPath(sessionDir), manifest)
   return manifest
 }
@@ -209,7 +209,7 @@ export function createSession(): void {
   queueManager.replaceAllTasks(createEmptyQueues())
   resetOutputTimestampAllocators()
   persistActiveSession()
-  broadcastQueueUpdate(queueManager.getAllTasks())
+  broadcastQueueUpdate(queueManager.getAllVisibleTasks())
 }
 
 export function listSessions(): SessionSummary[] {
@@ -263,7 +263,7 @@ export function resumeSession(sessionId: string): void {
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
-  broadcastQueueUpdate(queueManager.getAllTasks())
+  broadcastQueueUpdate(queueManager.getAllVisibleTasks())
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
