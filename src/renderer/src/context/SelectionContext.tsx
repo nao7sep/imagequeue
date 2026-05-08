@@ -291,6 +291,14 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       const tag = activeElement?.tagName?.toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
       if (document.querySelector('.modal-backdrop')) return
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === 'Backspace') {
+        if (e.repeat) return
+        const sel = selectionRef.current
+        if (!sel) return
+        e.preventDefault()
+        void deleteSelected()
+        return
+      }
       // Skip while a modifier is held (don't steal Cmd+1..6, Cmd+Enter, etc.)
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if ((e.key === 'Backspace' || e.key === 'Delete') && e.repeat) return

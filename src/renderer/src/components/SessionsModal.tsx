@@ -115,7 +115,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     if (currentTaskCount > 0) {
       const ok = await confirm({
         title: 'Resume Session',
-        message: 'Replace the current queue with this session? Your current session will stay saved and can be resumed later.',
+        message: 'Replace the current queue with this session? The current session will stay saved if it has generated image outputs; otherwise it will be removed.',
         confirmLabel: 'Resume',
       })
       if (!ok) return
@@ -197,7 +197,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
       <div className="sessions-modal-body">
         <div className="sessions-modal-topbar">
           <p className="sessions-modal-note">
-            New Session starts fresh. Resume restores interrupted work for retry.
+            New Session starts fresh. Resume restores interrupted work for retry and removes an empty current session.
           </p>
           <button
             className="session-card-btn session-card-btn-primary sessions-new-btn"

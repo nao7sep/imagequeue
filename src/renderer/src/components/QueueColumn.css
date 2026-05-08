@@ -130,16 +130,12 @@
 }
 
 .task-item-kept {
-  --task-actions-bg: color-mix(in srgb, var(--warning) 18%, var(--bg-secondary));
+  --task-bg: hsl(225 10% 16%);
+  --task-actions-bg: var(--task-bg);
 }
 
-.task-info {
-  border-radius: 4px;
-}
-
-.task-item-kept .task-info {
-  padding: 5px 6px;
-  background: var(--task-actions-bg);
+.task-item-kept .task-status {
+  color: var(--warning) !important;
 }
 
 .task-prompt {
@@ -362,6 +358,9 @@
   color: var(--error);
   border-color: var(--error);
   background: var(--bg-surface);
+}
+.task-item-kept .task-btn:hover {
+  background: var(--task-actions-bg);
 }
 .task-btn-danger:active {
   background: var(--error);

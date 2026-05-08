@@ -173,7 +173,7 @@ The hamburger menu (☰) gives access to:
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
 | Remove selected task, keep the selected completed image just in case, or restore a selected JIC image | Backspace | Backspace |
-| Delete selected task and files | Delete | Delete |
+| Delete selected task and files | Delete or ⌘Backspace | Delete or Ctrl+Backspace |
 | Clear selection / close panel | Esc | Esc |
 
 ## Draw Things
