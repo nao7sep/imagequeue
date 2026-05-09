@@ -104,6 +104,12 @@ class QueueManager {
     return task
   }
 
+  // NOTE: this sweeps all kept tasks to the end of the array, which changes
+  // their absolute position. No UI calls this today, so it's harmless. If a
+  // drag-reorder UI is added later, kept rows visible in the column will
+  // visually jump to the bottom on every reorder — at that point either
+  // preserve kept tasks' original indices here, or block reorder while
+  // showKeptImages is true.
   reorderTasks(backend: BackendId, taskIds: string[]): void {
     const activeTasks = this.queues[backend].filter(isActiveTask)
     const keptTasks = this.queues[backend].filter((task) => !isActiveTask(task))

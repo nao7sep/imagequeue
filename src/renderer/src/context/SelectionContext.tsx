@@ -39,7 +39,7 @@ interface SelectionContextValue {
 const SelectionContext = createContext<SelectionContextValue | null>(null)
 
 export function SelectionProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const { tasks, showKeptImages, restoreTask: restoreQueuedTask } = useQueue()
+  const { tasks, restoreTask: restoreQueuedTask } = useQueue()
   const { settings } = useSettings()
   const confirm = useConfirm()
 
@@ -170,13 +170,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       if (!ok) return
     }
 
-    if (task.status !== 'completed' || !showKeptImages) {
-      transitionSelectionForRemoval(backend, taskId)
-    } else {
-      lastActionRef.current = Date.now()
-    }
+    // Always advance — the gesture means "I'm done with this one." When
+    // showKeptImages is on, the JIC'd task stays in the list as `kept` and
+    // computeNextAfterRemoval still picks the correct neighbor because it
+    // runs before the IPC against the pre-update task list.
+    transitionSelectionForRemoval(backend, taskId)
     await window.electronAPI.removeTask(backend, taskId)
-  }, [confirm, settings, showKeptImages, setSelectionInternal])
+  }, [confirm, settings, setSelectionInternal])
 
   const deleteTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)

@@ -142,7 +142,7 @@ When a completed task is selected, a toolbar appears below the preview:
 
 Each completed task row also has **exp** for quick export, **jic** to keep the image just in case while removing it from the active list, and **del** to delete the task and its files.
 
-Removing a queued, failed, or interrupted task drops it from the queue. Using **jic** on a completed task keeps that output in session history but removes it from the active list. Enable **Show JIC Images** from the hamburger menu to review kept images; shown JIC rows can be restored, exported, or deleted.
+Removing a queued, failed, or interrupted task drops it from the queue. Using **jic** on a completed task keeps that output in session history but removes it from the active list. Enable **Show JIC Images** from the hamburger menu to review kept images; shown JIC rows can be restored, exported, or deleted. The toggle resets to off on each launch — JIC images are typically only useful within the session that produced them.
 
 Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
 

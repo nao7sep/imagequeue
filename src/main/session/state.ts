@@ -62,7 +62,7 @@ function createSessionDisplayCounts(tasksByBackend: Record<BackendId, Task[]>): 
 
   return {
     completedCount: allTasks.filter((task) => task.status === 'completed').length,
-    retryCount: allTasks.filter((task) => task.status !== 'completed' && task.status !== 'kept').length,
+    retryCount: allTasks.filter((task) => task.status === 'failed' || task.status === 'interrupted').length,
     keptCount: allTasks.filter((task) => task.status === 'kept').length,
   }
 }

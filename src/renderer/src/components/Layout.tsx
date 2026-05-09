@@ -152,7 +152,7 @@ export function Layout(): React.JSX.Element {
                 <div className="shortcut-item"><span>Move up / down within column</span><kbd>↑ / ↓</kbd></div>
                 <div className="shortcut-item"><span>Move to nearest task in adjacent column</span><kbd>← / →</kbd></div>
                 <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
-                <div className="shortcut-item"><span>Remove task / restore selected JIC image</span><kbd>Backspace</kbd></div>
+                <div className="shortcut-item"><span>Remove task, keep completed image as JIC, or restore JIC image</span><kbd>Backspace</kbd></div>
                 <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete / {mod}Backspace</kbd></div>
               </div>
             </div>

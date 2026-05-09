@@ -15,7 +15,7 @@ function summarizeSession(session: SessionSummary): string {
   const parts = [
     `${session.completedCount} complete`,
     ...(session.keptCount > 0 ? [`${session.keptCount} just-in-case`] : []),
-    `${session.retryCount} retry`,
+    ...(session.retryCount > 0 ? [`${session.retryCount} retry`] : []),
     `${session.taskCounts.total} total`,
   ]
   return parts.join(' · ')
