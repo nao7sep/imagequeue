@@ -383,7 +383,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     }
   }, [backendId, model])
 
-  const doEnqueue = useCallback((prompt: string) => {
+  const doEnqueue = useCallback((prompt: string, countOverride?: number) => {
     if (!prompt.trim()) return
     if (apiKeyMissing) return
     if (backendId === 'drawthings' && (!cliStatus?.installed || downloadedModels.length === 0)) return
@@ -413,7 +413,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       }
     }
 
-    const count = 1
+    const count = Math.max(1, countOverride ?? 1)
 
     if (backendId === 'drawthings') {
       flushPendingDrawThingsParams(model, currentDrawThingsParams)
@@ -431,12 +431,12 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   // Listen for enqueue-all and enqueue-single events from PromptPane
   useEffect(() => {
     const handleAll = (e: Event): void => {
-      const prompt = (e as CustomEvent).detail.prompt
-      doEnqueue(prompt)
+      const detail = (e as CustomEvent).detail
+      doEnqueue(detail.prompt, detail.count)
     }
     const handleSingle = (e: Event): void => {
-      const { prompt, backend } = (e as CustomEvent).detail
-      if (backend === backendId) doEnqueue(prompt)
+      const detail = (e as CustomEvent).detail
+      if (detail.backend === backendId) doEnqueue(detail.prompt, detail.count)
     }
     window.addEventListener('enqueue-all', handleAll)
     window.addEventListener('enqueue-single', handleSingle)

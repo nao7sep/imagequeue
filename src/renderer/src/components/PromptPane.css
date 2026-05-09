@@ -16,6 +16,26 @@
   background: var(--pane-bg);
 }
 
+.prompt-advanced-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.prompt-advanced-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.prompt-advanced-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .prompt-textarea {
   width: 100%;
   min-height: 72px;

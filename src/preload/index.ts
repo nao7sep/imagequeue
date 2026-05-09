@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   BackendId,
+  Elaborator,
   EnqueueRequest,
   Task,
   CliStatus,
@@ -17,7 +18,7 @@ import type {
   CliStatusEvent,
 } from '../shared/cli-jobs'
 
-export type { CliStatus, LocalModelInfo, SessionSummary }
+export type { CliStatus, Elaborator, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
 
 export interface EnsureModelResult {
@@ -70,6 +71,25 @@ const api = {
 
   openSessionFolder: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke('session:openFolder', sessionId),
+
+  // Elaborators
+  listElaborators: (): Promise<Elaborator[]> =>
+    ipcRenderer.invoke('elaborators:list'),
+
+  createElaborator: (input: { name: string; description?: string; template: string }): Promise<Elaborator> =>
+    ipcRenderer.invoke('elaborators:create', input),
+
+  updateElaborator: (id: string, patch: { name?: string; description?: string; template?: string }): Promise<Elaborator | null> =>
+    ipcRenderer.invoke('elaborators:update', id, patch),
+
+  deleteElaborator: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('elaborators:delete', id),
+
+  resetElaborators: (): Promise<Elaborator[]> =>
+    ipcRenderer.invoke('elaborators:reset'),
+
+  brainstormPrompts: (elaboratorId: string, seed: string, count: number): Promise<{ prompts: string[] }> =>
+    ipcRenderer.invoke('elaborators:brainstorm', elaboratorId, seed, count),
 
   // Preview operations
   getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>

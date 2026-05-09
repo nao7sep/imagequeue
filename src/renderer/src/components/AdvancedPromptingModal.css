@@ -1,0 +1,235 @@
+.advanced-modal-box {
+  width: 1080px;
+  max-width: 95vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.advanced-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.advanced-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-primary);
+  min-width: 0;
+}
+
+.advanced-pane-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.advanced-seed,
+.advanced-elaborated {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.advanced-elaborator-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  background: var(--bg-surface);
+}
+
+.advanced-elab-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.advanced-elab-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.advanced-elab-row.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.advanced-elab-row input[type="radio"] {
+  margin-top: 3px;
+}
+
+.advanced-elab-text {
+  min-width: 0;
+}
+
+.advanced-elab-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.advanced-elab-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.advanced-row {
+  display: flex;
+  gap: 8px;
+}
+
+.advanced-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.advanced-targets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  min-width: 0;
+}
+
+.advanced-targets-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.advanced-targets-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.advanced-target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.advanced-target-row.disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.advanced-target-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advanced-target-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.advanced-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.advanced-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.advanced-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.advanced-radio.disabled,
+.advanced-radio.muted {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.advanced-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 22px;
+}
+
+.advanced-count {
+  width: 110px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.advanced-total {
+  margin-top: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.advanced-message {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.advanced-queue-btn {
+  font-weight: 700;
+  padding: 9px 14px;
+}
+
+@media (max-width: 1100px) {
+  .advanced-body {
+    grid-template-columns: 1fr;
+  }
+}

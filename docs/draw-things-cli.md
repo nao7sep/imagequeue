@@ -65,10 +65,10 @@ That means the modal is usually reliable about showing imported models, but dupl
 ImageQueue remembers the last-used Draw Things values per model in:
 
 ```text
-<models_dir>/params.json
+~/.imagequeue/params.json
 ```
 
-With the default settings, that is `~/.imagequeue/models/params.json`. Saved values win over recommendations when you come back to the same model.
+This file lives at the data directory root because it is owned by ImageQueue, not Draw Things. Saved values win over recommendations when you come back to the same model.
 
 ### Recommendations
 

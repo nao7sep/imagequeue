@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BACKEND_IDS_IN_UI_ORDER, type BackendId, type Task } from '../../../shared/types'
+import { BACKEND_IDS_IN_UI_ORDER, type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
+import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import './PromptPane.css'
 
 interface Props {
@@ -40,6 +41,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const [imageCopied, setImageCopied] = useState(false)
   const [exported, setExported] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const detailsRef = useRef<HTMLDivElement>(null)
 
   // Scroll expanded details into view
@@ -135,6 +137,11 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   return (
     <div className="prompt-pane">
       <div className="prompt-scroll">
+        <div className="prompt-advanced-row">
+          <button className="prompt-advanced-btn" onClick={() => setShowAdvanced(true)}>
+            Advanced…
+          </button>
+        </div>
         <textarea
           className="prompt-textarea"
           rows={3}
@@ -199,6 +206,13 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           </div>
         )}
       </div>
+
+      {showAdvanced && (
+        <AdvancedPromptingModal
+          initialPrompt={prompt}
+          onClose={() => setShowAdvanced(false)}
+        />
+      )}
 
       {selectedTask && (
         <div ref={detailsRef} className="metadata-section">

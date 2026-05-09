@@ -78,6 +78,13 @@ export interface DrawThingsModelParams {
 export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'kept' | 'failed' | 'interrupted'
 
+export interface Elaborator {
+  id: string
+  name: string
+  description?: string
+  template: string
+}
+
 export interface Task {
   id: string
   prompt: string

@@ -6,6 +6,7 @@ import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
+import { registerElaboratorsIpc } from './elaborators-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { initLogger, log } from './logger'
@@ -94,6 +95,7 @@ app.whenReady().then(() => {
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc()
+  registerElaboratorsIpc()
   registerViewerIpc()
   registerNotificationIpc(() => mainWin)
   initNotificationWindow()

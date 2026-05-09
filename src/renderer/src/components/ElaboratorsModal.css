@@ -1,0 +1,122 @@
+.elaborators-modal-box {
+  width: 720px;
+  max-width: 92vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.elaborators-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.elaborators-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.elaborators-message {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.elaborators-empty {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.elaborators-list {
+  display: grid;
+  gap: 8px;
+}
+
+.elaborator-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  padding: 10px 12px;
+}
+
+.elaborator-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.elaborator-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.elaborator-row-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.elaborator-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.elaborator-editor {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+.elaborator-editor-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.elaborator-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.elaborator-field input,
+.elaborator-field textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.elaborator-field textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+
+.elaborator-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

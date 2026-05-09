@@ -1,12 +1,11 @@
 import fs from 'fs'
 import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
-import { resolveModelsDir } from './local-cli'
+import { ensureDataDir, getDataDir } from './config'
 
 function getParamsFilePath(): string {
-  const dir = resolveModelsDir()
-  fs.mkdirSync(dir, { recursive: true })
-  return path.join(dir, 'params.json')
+  ensureDataDir()
+  return path.join(getDataDir(), 'params.json')
 }
 
 type ParamsStore = Record<string, DrawThingsModelParams>
