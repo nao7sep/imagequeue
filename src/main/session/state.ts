@@ -209,7 +209,12 @@ export function createSession(): void {
     throw new Error('Wait for active generation to finish before starting a new session.')
   }
 
-  persistActiveSession()
+  const previousSessionDir = getSessionDir()
+  const previousSessionId = getSessionId()
+  const shouldDeletePreviousSession = !hasGeneratedImage(queueManager.getAllStoredTasks())
+
+  if (!shouldDeletePreviousSession) persistActiveSession()
+
   const sessionDir = createSessionDir()
   setSessionDir(sessionDir)
   initLogger(sessionDir)
@@ -217,6 +222,14 @@ export function createSession(): void {
   resetOutputTimestampAllocators()
   persistActiveSession()
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
+
+  if (shouldDeletePreviousSession && fs.existsSync(previousSessionDir)) {
+    fs.rmSync(previousSessionDir, { recursive: true, force: true })
+    log('info', 'Deleted previous empty session after starting new session', {
+      sessionId: previousSessionId,
+      path: previousSessionDir,
+    })
+  }
 }
 
 export function listSessions(): SessionSummary[] {

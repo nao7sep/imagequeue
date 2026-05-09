@@ -47,7 +47,7 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 
 - **New Session** switches to a fresh empty session without needing another app window.
 - **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks with **retry** available.
-- Resuming another session automatically removes the session you are leaving if it has no generated image outputs.
+- New Session and Resume both drop the session you are leaving if it has no generated image outputs.
 - **Delete** removes that session folder according to the **Delete to Trash** setting.
 - Current-session resume is intentionally minimal: it restores task history and outputs, not transient UI state such as the current prompt or selection.
 - Only sessions with a readable `session.json` snapshot appear.
