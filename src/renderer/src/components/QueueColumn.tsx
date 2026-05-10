@@ -24,6 +24,7 @@ import {
   type GrokResolution
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
+import { localModelName, sortLocalModels } from '../utils/localModels'
 import './QueueColumn.css'
 
 interface Props {
@@ -41,7 +42,6 @@ const STATUS_COLORS: Record<string, string> = {
   interrupted: 'var(--text-secondary)',
 }
 
-const modelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
 const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = [
   { label: '512x512', width: 512, height: 512 },
@@ -59,19 +59,6 @@ const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = [
   { label: '1152x2048 (2K Portrait 9:16)', width: 1152, height: 2048 },
   { label: '2048x1152 (2K Landscape 16:9)', width: 2048, height: 1152 }
 ]
-
-function localModelName(model: LocalModelInfo): string {
-  return model.name || model.file
-}
-
-function sortLocalModels(models: LocalModelInfo[]): LocalModelInfo[] {
-  return [...models].sort((a, b) =>
-    modelCollator.compare(
-      `${localModelName(a)} ${a.file}`.toLowerCase(),
-      `${localModelName(b)} ${b.file}`.toLowerCase()
-    )
-  )
-}
 
 function buildDrawThingsParams(
   width: number,

@@ -1,23 +1,28 @@
 .advanced-modal-box {
-  width: 1080px;
-  max-width: 95vw;
-  max-height: 88vh;
+  width: 95vw;
+  max-width: 1500px;
+  height: 88vh;
+  max-height: 850px;
   display: flex;
   flex-direction: column;
 }
 
+/* Middle and right panes have fixed widths chosen to fit their typical content.
+   Middle truncates long target names; right wraps long radio labels to a 2nd line. */
 .advanced-body {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 300px 260px;
   gap: 12px;
   padding: 16px;
   overflow: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .advanced-pane {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
@@ -34,7 +39,8 @@
 }
 
 .advanced-seed,
-.advanced-elaborated {
+.advanced-elaborated,
+.advanced-override {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
@@ -45,11 +51,20 @@
   resize: vertical;
 }
 
+/* List and textarea share the leftover vertical space 50/50 (flex-grow: 1 each).
+   The basis values give the initial heights; min/max bound the growth. */
+.advanced-elaborated {
+  flex: 1 1 100px;
+  min-height: 60px;
+}
+
 .advanced-elaborator-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 220px;
+  flex: 1 1 220px;
+  min-height: 100px;
+  max-height: 400px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -103,13 +118,6 @@
   justify-content: flex-end;
 }
 
-.advanced-targets-flat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
 .advanced-empty {
   padding: 8px 10px;
   font-size: 12px;
@@ -117,27 +125,27 @@
   text-align: center;
 }
 
-.advanced-targets {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  min-width: 0;
-}
-
-.advanced-targets-col {
+.advanced-targets-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  overflow-y: auto;
   min-width: 0;
 }
 
-.advanced-targets-col-title {
+.advanced-targets-group-title {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-top: 8px;
+  margin-bottom: 2px;
+}
+
+.advanced-targets-group-title:first-child {
+  margin-top: 0;
 }
 
 .advanced-target-row {
@@ -156,7 +164,7 @@
   cursor: not-allowed;
 }
 
-.advanced-target-row span {
+.advanced-target-row span:first-of-type {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -175,7 +183,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .advanced-radio-group {
@@ -193,17 +201,9 @@
   cursor: pointer;
 }
 
-.advanced-radio.disabled,
-.advanced-radio.muted {
+.advanced-radio.disabled {
   color: var(--text-muted);
   cursor: not-allowed;
-}
-
-.advanced-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
-  margin-left: 22px;
 }
 
 .advanced-count {

@@ -8,6 +8,7 @@ import {
   type Elaborator,
   type LocalModelInfo,
 } from '../../../shared/types'
+import { localModelName, sortLocalModels } from '../utils/localModels'
 import './AdvancedPromptingModal.css'
 
 interface Props {
@@ -15,9 +16,8 @@ interface Props {
   onClose: () => void
 }
 
-type PromptSource = 'as-is' | 'elaborated' | 'per-queue'
+type PromptMode = 'as-is' | 'elaborated' | 'fresh-iteration' | 'fresh-task'
 type TargetScope = 'selected' | 'all-proprietary' | 'all-drawthings' | 'all'
-type ElaborationMode = 'per-task' | 'per-model'
 
 interface DtParams {
   width: number
@@ -36,6 +36,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const [elaborators, setElaborators] = useState<Elaborator[]>([])
   const [selectedElaboratorId, setSelectedElaboratorId] = useState<string | null>(null)
   const [elaborated, setElaborated] = useState('')
+  const [override, setOverride] = useState('')
   const [elaborateBusy, setElaborateBusy] = useState(false)
 
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
@@ -44,10 +45,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   }))
   const [selectedDtFiles, setSelectedDtFiles] = useState<Set<string>>(new Set())
 
-  const [promptSource, setPromptSource] = useState<PromptSource>('as-is')
+  const [promptMode, setPromptMode] = useState<PromptMode>('as-is')
   const [targetScope, setTargetScope] = useState<TargetScope>('selected')
   const [count, setCount] = useState(1)
-  const [elaborationMode, setElaborationMode] = useState<ElaborationMode>('per-task')
 
   const [queueBusy, setQueueBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -70,7 +70,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       setDownloadedDtModels([])
       return
     }
-    window.electronAPI.localListDownloadedModels().then(setDownloadedDtModels)
+    window.electronAPI.localListDownloadedModels().then((list) => setDownloadedDtModels(sortLocalModels(list)))
   }, [])
 
   const proprietaryApiKeyByBackend = useMemo<Record<string, boolean>>(() => {
@@ -145,23 +145,23 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     return null
   })()
 
-  const promptSourceDisabledReason = (which: PromptSource): string | null => {
+  const promptModeDisabledReason = (which: PromptMode): string | null => {
     if (which === 'elaborated' && !elaborated.trim()) return 'Run Elaborate first.'
-    if (which === 'per-queue' && !elaboratorPicked) return 'Pick an elaborator first.'
+    if ((which === 'fresh-iteration' || which === 'fresh-task') && !elaboratorPicked) return 'Pick an elaborator first.'
     return null
   }
 
-  // If the chosen prompt source becomes unavailable, fall back to as-is.
+  // If the chosen prompt mode becomes unavailable, fall back to as-is.
   useEffect(() => {
-    if (promptSourceDisabledReason(promptSource)) setPromptSource('as-is')
+    if (promptModeDisabledReason(promptMode)) setPromptMode('as-is')
   }, [elaborated, elaboratorPicked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const queueDisabledReason = (() => {
     if (totalTasks === 0) return 'Select at least one target.'
-    if (promptSource === 'as-is' && !seed.trim()) return 'Seed prompt is empty.'
-    if (promptSource === 'elaborated' && !elaborated.trim()) return 'Elaborated prompt is empty.'
-    if (promptSource === 'per-queue' && !elaboratorPicked) return 'Pick an elaborator first.'
-    if (promptSource === 'per-queue' && !seed.trim()) return 'Enter a seed prompt for elaboration.'
+    if (promptMode === 'as-is' && !seed.trim()) return 'Seed prompt is empty.'
+    if (promptMode === 'elaborated' && !elaborated.trim()) return 'Elaborated prompt is empty.'
+    if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && !elaboratorPicked) return 'Pick an elaborator first.'
+    if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && !seed.trim()) return 'Enter a seed prompt for elaboration.'
     return null
   })()
 
@@ -177,7 +177,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         return
       }
       setElaborated(first)
-      setPromptSource('elaborated')
+      setPromptMode('elaborated')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
     } finally {
@@ -220,56 +220,76 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     try {
       const targets = effectiveTargets
       const copies = Math.max(1, count)
-      const totalUnits = targetCount * copies
+      const allTargetCount = targetCount
 
+      // Pre-generate prompts according to mode.
+      // - as-is / elaborated: a single prompt reused for everything.
+      // - fresh-iteration: one prompt per iteration, shared across models. Length = copies.
+      // - fresh-task: one prompt per (model × iteration). Length = targets × copies.
       let prompts: string[] = []
-      if (promptSource === 'as-is') {
+      if (promptMode === 'as-is') {
         prompts = [seed.trim()]
-      } else if (promptSource === 'elaborated') {
+      } else if (promptMode === 'elaborated') {
         prompts = [elaborated.trim()]
-      } else {
+      } else if (promptMode === 'fresh-iteration') {
         if (!selectedElaboratorId) throw new Error('Pick an elaborator first.')
-        const needed = elaborationMode === 'per-task' ? totalUnits : targetCount
+        const result = await window.electronAPI.brainstormPrompts(selectedElaboratorId, seed, copies)
+        prompts = result.prompts
+      } else {
+        // fresh-task
+        if (!selectedElaboratorId) throw new Error('Pick an elaborator first.')
+        const needed = allTargetCount * copies
         const result = await window.electronAPI.brainstormPrompts(selectedElaboratorId, seed, needed)
         prompts = result.prompts
-        if (prompts.length === 0) throw new Error('Text AI returned no prompts.')
+      }
+      if (prompts.length === 0) throw new Error('No prompts to enqueue.')
+
+      // Indexing: prompts in iteration-major order so fresh-task reads naturally
+      // ("iter 0 across all models, then iter 1 across all models, ...").
+      const promptForUnit = (targetIndex: number, copyIndex: number): string => {
+        if (promptMode === 'as-is' || promptMode === 'elaborated') return prompts[0]
+        if (promptMode === 'fresh-iteration') return prompts[copyIndex % prompts.length]
+        // fresh-task
+        const idx = copyIndex * allTargetCount + targetIndex
+        return prompts[idx % prompts.length]
       }
 
-      const promptForUnit = (targetIndex: number, copyIndex: number): string => {
-        if (promptSource !== 'per-queue') return prompts[0]
-        if (elaborationMode === 'per-model') {
-          return prompts[targetIndex % prompts.length]
-        }
-        const unit = targetIndex * copies + copyIndex
-        return prompts[unit % prompts.length]
-      }
+      // Modes that share one prompt across all copies of a target can collapse N
+      // tasks into a single enqueue with count=copies. The fresh-* modes need
+      // distinct prompts per iteration, so each copy is dispatched separately.
+      const isBatchable = promptMode === 'as-is' || promptMode === 'elaborated'
 
       let dispatched = 0
-
-      // Proprietary: dispatch enqueue-single events. Columns build params from their own UI state.
-      // For per-task elaboration we send one event per copy (each carrying a unique prompt).
-      // For shared prompts we can collapse into a single event with count=copies.
       const proprietaryList = targets.proprietary
       proprietaryList.forEach((backendId, index) => {
-        if (promptSource === 'per-queue' && elaborationMode === 'per-task') {
+        if (isBatchable) {
+          const p = promptForUnit(index, 0)
+          window.dispatchEvent(new CustomEvent('enqueue-single', { detail: { backend: backendId, prompt: p, count: copies } }))
+          dispatched += copies
+        } else {
           for (let c = 0; c < copies; c++) {
             const p = promptForUnit(index, c)
             window.dispatchEvent(new CustomEvent('enqueue-single', { detail: { backend: backendId, prompt: p, count: 1 } }))
             dispatched++
           }
-        } else {
-          const p = promptForUnit(index, 0)
-          window.dispatchEvent(new CustomEvent('enqueue-single', { detail: { backend: backendId, prompt: p, count: copies } }))
-          dispatched += copies
         }
       })
 
-      // DT: direct IPC, model override per selected DT model.
       for (let i = 0; i < targets.dt.length; i++) {
         const modelFile = targets.dt[i]
         const targetIndex = proprietaryList.length + i
         const { params } = await buildDtParams(modelFile)
-        if (promptSource === 'per-queue' && elaborationMode === 'per-task') {
+        if (isBatchable) {
+          const p = promptForUnit(targetIndex, 0)
+          await window.electronAPI.enqueue({
+            prompt: p,
+            backend: 'drawthings',
+            model: modelFile,
+            params: params as unknown as Record<string, unknown>,
+            count: copies,
+          })
+          dispatched += copies
+        } else {
           for (let c = 0; c < copies; c++) {
             const p = promptForUnit(targetIndex, c)
             await window.electronAPI.enqueue({
@@ -281,16 +301,6 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
             })
             dispatched++
           }
-        } else {
-          const p = promptForUnit(targetIndex, 0)
-          await window.electronAPI.enqueue({
-            prompt: p,
-            backend: 'drawthings',
-            model: modelFile,
-            params: params as unknown as Record<string, unknown>,
-            count: copies,
-          })
-          dispatched += copies
         }
       }
 
@@ -302,13 +312,13 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       setQueueBusy(false)
     }
   }, [
-    queueDisabledReason, effectiveTargets, count, targetCount, promptSource,
-    seed, elaborated, selectedElaboratorId, elaborationMode, buildDtParams, onClose,
+    queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
+    seed, elaborated, selectedElaboratorId, buildDtParams, onClose,
   ])
 
   return (
     <Modal title="Advanced Prompting" className="advanced-modal-box" onClose={onClose}>
-      <div className="advanced-body">
+      <div className={`advanced-body${isMacPlatform ? '' : ' advanced-body-no-dt'}`}>
         <div className="advanced-pane">
           <div className="advanced-pane-title">Prompt</div>
           <textarea
@@ -350,72 +360,61 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
           </div>
           <textarea
             className="advanced-elaborated"
-            rows={10}
             placeholder="Elaborated prompt will appear here. You can edit before queueing."
             value={elaborated}
             onChange={(e) => setElaborated(e.target.value)}
+          />
+          <div className="advanced-section-label">Override</div>
+          <textarea
+            className="advanced-override"
+            rows={3}
+            placeholder="Optional constraint applied to every elaborated prompt."
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
           />
         </div>
 
         <div className="advanced-pane">
           <div className="advanced-pane-title">Targets</div>
-          {isMacPlatform ? (
-            <div className="advanced-targets">
-              <div className="advanced-targets-col">
-                <div className="advanced-targets-col-title">Proprietary</div>
-                {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
-                  const hasKey = proprietaryApiKeyByBackend[id]
-                  return (
-                    <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
-                      <input
-                        type="checkbox"
-                        checked={!!selectedProprietary[id]}
-                        disabled={!hasKey}
-                        onChange={() => toggleProprietary(id)}
-                      />
-                      <span>{BACKEND_LABELS[id]}</span>
-                      {!hasKey && <span className="advanced-target-hint">no API key</span>}
-                    </label>
-                  )
-                })}
-              </div>
-              <div className="advanced-targets-col">
-                <div className="advanced-targets-col-title">Draw Things</div>
+          <div className="advanced-targets-list">
+            {isMacPlatform && (
+              <div className="advanced-targets-group-title">Proprietary</div>
+            )}
+            {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
+              const hasKey = proprietaryApiKeyByBackend[id]
+              return (
+                <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
+                  <input
+                    type="checkbox"
+                    checked={!!selectedProprietary[id]}
+                    disabled={!hasKey}
+                    onChange={() => toggleProprietary(id)}
+                  />
+                  <span>{BACKEND_LABELS[id]}</span>
+                  {!hasKey && <span className="advanced-target-hint">no API key</span>}
+                </label>
+              )
+            })}
+            {isMacPlatform && (
+              <>
+                <div className="advanced-targets-group-title">Draw Things</div>
                 {downloadedDtModels.length === 0 ? (
                   <div className="advanced-empty">No models downloaded.</div>
                 ) : (
                   downloadedDtModels.map((m) => (
-                    <label key={m.file} className="advanced-target-row">
+                    <label key={m.file} className="advanced-target-row" title={localModelName(m)}>
                       <input
                         type="checkbox"
                         checked={selectedDtFiles.has(m.file)}
                         onChange={() => toggleDtFile(m.file)}
                       />
-                      <span>{m.name || m.file}</span>
+                      <span>{localModelName(m)}</span>
                     </label>
                   ))
                 )}
-              </div>
-            </div>
-          ) : (
-            <div className="advanced-targets-flat">
-              {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
-                const hasKey = proprietaryApiKeyByBackend[id]
-                return (
-                  <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
-                    <input
-                      type="checkbox"
-                      checked={!!selectedProprietary[id]}
-                      disabled={!hasKey}
-                      onChange={() => toggleProprietary(id)}
-                    />
-                    <span>{BACKEND_LABELS[id]}</span>
-                    {!hasKey && <span className="advanced-target-hint">no API key</span>}
-                  </label>
-                )
-              })}
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         <div className="advanced-pane">
@@ -424,28 +423,38 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
           <div className="advanced-section-label">Prompt source</div>
           <div className="advanced-radio-group">
             <label className="advanced-radio">
-              <input type="radio" name="prompt-source" checked={promptSource === 'as-is'} onChange={() => setPromptSource('as-is')} />
-              <span>Use prompt as-is</span>
+              <input type="radio" name="prompt-mode" checked={promptMode === 'as-is'} onChange={() => setPromptMode('as-is')} />
+              <span>User prompt as-is</span>
             </label>
-            <label className={`advanced-radio${promptSourceDisabledReason('elaborated') ? ' disabled' : ''}`} title={promptSourceDisabledReason('elaborated') ?? ''}>
+            <label className={`advanced-radio${promptModeDisabledReason('elaborated') ? ' disabled' : ''}`} title={promptModeDisabledReason('elaborated') ?? ''}>
               <input
                 type="radio"
-                name="prompt-source"
-                checked={promptSource === 'elaborated'}
-                disabled={promptSourceDisabledReason('elaborated') !== null}
-                onChange={() => setPromptSource('elaborated')}
+                name="prompt-mode"
+                checked={promptMode === 'elaborated'}
+                disabled={promptModeDisabledReason('elaborated') !== null}
+                onChange={() => setPromptMode('elaborated')}
               />
-              <span>Use elaborated prompt</span>
+              <span>Elaborated prompt (same for all)</span>
             </label>
-            <label className={`advanced-radio${promptSourceDisabledReason('per-queue') ? ' disabled' : ''}`} title={promptSourceDisabledReason('per-queue') ?? ''}>
+            <label className={`advanced-radio${promptModeDisabledReason('fresh-iteration') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-iteration') ?? ''}>
               <input
                 type="radio"
-                name="prompt-source"
-                checked={promptSource === 'per-queue'}
-                disabled={promptSourceDisabledReason('per-queue') !== null}
-                onChange={() => setPromptSource('per-queue')}
+                name="prompt-mode"
+                checked={promptMode === 'fresh-iteration'}
+                disabled={promptModeDisabledReason('fresh-iteration') !== null}
+                onChange={() => setPromptMode('fresh-iteration')}
               />
-              <span>Elaborate per task at queue time</span>
+              <span>Fresh elaboration per iteration</span>
+            </label>
+            <label className={`advanced-radio${promptModeDisabledReason('fresh-task') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-task') ?? ''}>
+              <input
+                type="radio"
+                name="prompt-mode"
+                checked={promptMode === 'fresh-task'}
+                disabled={promptModeDisabledReason('fresh-task') !== null}
+                onChange={() => setPromptMode('fresh-task')}
+              />
+              <span>Fresh elaboration per task</span>
             </label>
           </div>
 
@@ -473,7 +482,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
             </label>
           </div>
 
-          <div className="advanced-section-label">How many times</div>
+          <div className="advanced-section-label">How many iterations</div>
           <input
             className="advanced-count"
             type="number"
@@ -482,29 +491,6 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
             value={count}
             onChange={(e) => setCount(Math.max(1, parseInt(e.target.value) || 1))}
           />
-
-          <div className="advanced-section-label">Elaboration mode</div>
-          <div className="advanced-radio-group">
-            <label className={`advanced-radio${promptSource !== 'per-queue' ? ' muted' : ''}`}>
-              <input
-                type="radio"
-                name="elab-mode"
-                checked={elaborationMode === 'per-task'}
-                onChange={() => setElaborationMode('per-task')}
-              />
-              <span>One elaboration per task</span>
-            </label>
-            <label className={`advanced-radio${promptSource !== 'per-queue' ? ' muted' : ''}`}>
-              <input
-                type="radio"
-                name="elab-mode"
-                checked={elaborationMode === 'per-model'}
-                onChange={() => setElaborationMode('per-model')}
-              />
-              <span>One elaboration per model</span>
-            </label>
-            <div className="advanced-hint">Ignored when the prompt is fixed.</div>
-          </div>
 
           <div className="advanced-total">
             {totalTasks} task{totalTasks === 1 ? '' : 's'}
