@@ -1,0 +1,143 @@
+.elaboration-settings-modal-box {
+  width: 760px;
+  max-width: 92vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.elaboration-settings-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.elaboration-settings-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--bg-hover);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+.elaboration-settings-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.elaboration-settings-empty {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.elaboration-settings-section {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+.elaboration-settings-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.elaboration-settings-help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.elaboration-settings-help code {
+  background: var(--bg-surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.elaboration-settings-row {
+  display: grid;
+  grid-template-columns: 180px 140px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.elaboration-settings-row label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.elaboration-settings-row input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.elaboration-settings-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.elaboration-settings-template {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.elaboration-settings-template > span:first-child {
+  font-weight: 600;
+}
+
+.elaboration-settings-tags {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.elaboration-settings-template textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.elaboration-settings-message {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.elaboration-settings-reset-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+  .elaboration-settings-row {
+    grid-template-columns: 1fr;
+  }
+}

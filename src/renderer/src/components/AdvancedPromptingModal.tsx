@@ -39,6 +39,14 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const [override, setOverride] = useState('')
   const [elaborateBusy, setElaborateBusy] = useState(false)
 
+  // Session list of all elaborated prompts produced while this modal instance
+  // is open. Fed to the brainstorm orchestrator as `previousPrompts` so the AI
+  // doesn't repeat itself across separate clicks within one modal session.
+  // Intentionally not persisted: the list is per-modal-open. When the user
+  // closes the modal, this state is unmounted and the list is gone.
+  const [generatedPrompts, setGeneratedPrompts] = useState<string[]>([])
+  const [brainstormProgress, setBrainstormProgress] = useState<{ done: number; total: number } | null>(null)
+
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
   const [selectedProprietary, setSelectedProprietary] = useState<Record<BackendId, boolean>>(() => ({
     openai: false, imagen: false, nanobanana: false, grok: false, flux: false, drawthings: false,
@@ -165,13 +173,57 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     return null
   })()
 
+  // Run a brainstorm request and stream its progress into local state. Each
+  // turn's prompts are appended to generatedPrompts as they arrive, so a
+  // mid-run failure still leaves the successful turns in the session list.
+  // Returns the prompts produced by THIS call (not including prior session
+  // prompts). Reads previousPrompts at call time from a ref-like closure.
+  const runBrainstorm = useCallback(async (count: number): Promise<string[]> => {
+    if (!selectedElaboratorId) throw new Error('Pick an elaborator first.')
+    if (!seed.trim()) throw new Error('Seed prompt is empty.')
+
+    const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`
+
+    const collectedThisRun: string[] = []
+    const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
+      collectedThisRun.push(...event.newPrompts)
+      setGeneratedPrompts((prev) => [...prev, ...event.newPrompts])
+      setBrainstormProgress({ done: event.done, total: event.total })
+    })
+
+    setBrainstormProgress({ done: 0, total: count })
+    try {
+      const result = await window.electronAPI.brainstormPrompts({
+        requestId,
+        elaboratorId: selectedElaboratorId,
+        seed,
+        count,
+        previousPrompts: generatedPrompts,
+      })
+      // The IPC return value is authoritative on success. If progress events
+      // and the return value disagree (e.g., dropped events), trust the return.
+      return result.prompts
+    } finally {
+      unsubscribe()
+      setBrainstormProgress(null)
+    }
+  }, [selectedElaboratorId, seed, generatedPrompts])
+
   const handleElaborate = useCallback(async (): Promise<void> => {
-    if (elaborateDisabledReason || !selectedElaboratorId) return
+    if (elaborateDisabledReason) return
     setElaborateBusy(true)
     setMessage('')
+    const elaboratorName = elaborators.find((e) => e.id === selectedElaboratorId)?.name ?? null
+    void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
+      elaborator: elaboratorName,
+      seedLen: seed.length,
+      previousCount: generatedPrompts.length,
+    })
     try {
-      const result = await window.electronAPI.brainstormPrompts(selectedElaboratorId, seed, 1)
-      const first = result.prompts[0]
+      const newPrompts = await runBrainstorm(1)
+      const first = newPrompts[0]
       if (!first) {
         setMessage('Text AI returned no prompt.')
         return
@@ -183,7 +235,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     } finally {
       setElaborateBusy(false)
     }
-  }, [elaborateDisabledReason, selectedElaboratorId, seed])
+  }, [elaborateDisabledReason, runBrainstorm, elaborators, selectedElaboratorId, seed, generatedPrompts])
 
   const buildDtParams = useCallback(async (modelFile: string): Promise<{ model: string; params: DtParams }> => {
     const saved = await window.electronAPI.dtGetModelParams(modelFile)
@@ -217,10 +269,19 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     if (queueDisabledReason) return
     setQueueBusy(true)
     setMessage('')
+    const targets = effectiveTargets
+    const copies = Math.max(1, count)
+    const allTargetCount = targetCount
+    void window.electronAPI.appLog('info', 'Advanced: Queue clicked', {
+      mode: promptMode,
+      proprietaryCount: targets.proprietary.length,
+      drawthingsCount: targets.dt.length,
+      iterations: copies,
+      overrideApplied: override.trim().length > 0,
+      totalTasks: allTargetCount * copies,
+      previousCount: generatedPrompts.length,
+    })
     try {
-      const targets = effectiveTargets
-      const copies = Math.max(1, count)
-      const allTargetCount = targetCount
 
       // Pre-generate prompts according to mode.
       // - as-is / elaborated: a single prompt reused for everything.
@@ -232,26 +293,40 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       } else if (promptMode === 'elaborated') {
         prompts = [elaborated.trim()]
       } else if (promptMode === 'fresh-iteration') {
-        if (!selectedElaboratorId) throw new Error('Pick an elaborator first.')
-        const result = await window.electronAPI.brainstormPrompts(selectedElaboratorId, seed, copies)
-        prompts = result.prompts
+        prompts = await runBrainstorm(copies)
       } else {
         // fresh-task
-        if (!selectedElaboratorId) throw new Error('Pick an elaborator first.')
         const needed = allTargetCount * copies
-        const result = await window.electronAPI.brainstormPrompts(selectedElaboratorId, seed, needed)
-        prompts = result.prompts
+        prompts = await runBrainstorm(needed)
       }
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
+
+      // Apply override at queue time (never during elaboration). Empty-string
+      // overrides leave the prompt untouched. Format pulled from
+      // brainstorm.templates.override_combine so users can edit it in
+      // Elaboration Settings (e.g. for non-English workflows).
+      const trimmedOverride = override.trim()
+      const overrideTemplate = ((settings?.brainstorm as Record<string, unknown> | undefined)?.templates as Record<string, unknown> | undefined)?.override_combine as string | undefined
+      const finalize = (p: string): string => {
+        if (trimmedOverride === '') return p
+        const tmpl = overrideTemplate || '{{PROMPT}}\n\nOverride: {{OVERRIDE}}'
+        return tmpl.split('{{PROMPT}}').join(p).split('{{OVERRIDE}}').join(trimmedOverride)
+      }
 
       // Indexing: prompts in iteration-major order so fresh-task reads naturally
       // ("iter 0 across all models, then iter 1 across all models, ...").
       const promptForUnit = (targetIndex: number, copyIndex: number): string => {
-        if (promptMode === 'as-is' || promptMode === 'elaborated') return prompts[0]
-        if (promptMode === 'fresh-iteration') return prompts[copyIndex % prompts.length]
-        // fresh-task
-        const idx = copyIndex * allTargetCount + targetIndex
-        return prompts[idx % prompts.length]
+        let raw: string
+        if (promptMode === 'as-is' || promptMode === 'elaborated') {
+          raw = prompts[0]
+        } else if (promptMode === 'fresh-iteration') {
+          raw = prompts[copyIndex % prompts.length]
+        } else {
+          // fresh-task
+          const idx = copyIndex * allTargetCount + targetIndex
+          raw = prompts[idx % prompts.length]
+        }
+        return finalize(raw)
       }
 
       // Modes that share one prompt across all copies of a target can collapse N
@@ -305,7 +380,12 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       }
 
       setMessage(`Queued ${dispatched} task${dispatched === 1 ? '' : 's'}.`)
-      setTimeout(() => onClose(), 600)
+      void window.electronAPI.appLog('info', 'Advanced: Queue dispatched', {
+        mode: promptMode,
+        dispatched,
+      })
+      // Modal stays open by design — the user may want to queue more rounds
+      // using the now-grown session list as previousPrompts.
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
     } finally {
@@ -313,7 +393,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     }
   }, [
     queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
-    seed, elaborated, selectedElaboratorId, buildDtParams, onClose,
+    seed, elaborated, override, runBrainstorm, buildDtParams, generatedPrompts.length, settings,
   ])
 
   return (
@@ -355,7 +435,11 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
               disabled={elaborateBusy || elaborateDisabledReason !== null}
               title={elaborateDisabledReason ?? 'Generate one elaborated prompt'}
             >
-              {elaborateBusy ? 'Elaborating…' : 'Elaborate'}
+              {elaborateBusy
+                ? (brainstormProgress && brainstormProgress.total > 1
+                    ? `Elaborating ${brainstormProgress.done} / ${brainstormProgress.total}…`
+                    : 'Elaborating…')
+                : 'Elaborate'}
             </button>
           </div>
           <textarea
@@ -504,7 +588,11 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
             disabled={queueBusy || queueDisabledReason !== null}
             title={queueDisabledReason ?? ''}
           >
-            {queueBusy ? 'Queueing…' : 'Queue Tasks'}
+            {queueBusy
+              ? (brainstormProgress
+                  ? `Generating ${brainstormProgress.done} / ${brainstormProgress.total}…`
+                  : 'Queueing…')
+              : 'Queue Tasks'}
           </button>
         </div>
       </div>

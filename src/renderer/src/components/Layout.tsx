@@ -5,6 +5,7 @@ import { Settings } from './Settings'
 import { Modal } from './Modal'
 import { SessionsModal } from './SessionsModal'
 import { ElaboratorsModal } from './ElaboratorsModal'
+import { ElaborationSettingsModal } from './ElaborationSettingsModal'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
@@ -18,7 +19,7 @@ const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform =
   ? ALL_BACKENDS
   : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
 
-type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | null
+type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | null
 
 export function Layout(): React.JSX.Element {
   useNotifications()
@@ -174,6 +175,9 @@ export function Layout(): React.JSX.Element {
       {overlay === 'elaborators' && (
         <ElaboratorsModal onClose={() => setOverlay(null)} />
       )}
+      {overlay === 'elaboration-settings' && (
+        <ElaborationSettingsModal onClose={() => setOverlay(null)} />
+      )}
       {overlay === 'about' && (
         <Modal title="About" onClose={() => setOverlay(null)}>
           <div className="about-content">
@@ -227,6 +231,7 @@ export function Layout(): React.JSX.Element {
                   </button>
                 )}
                 <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
+                <button onClick={() => openOverlay('elaboration-settings')}>Elaboration Settings</button>
                 <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
                 <button onClick={() => openOverlay('about')}>About</button>
               </div>

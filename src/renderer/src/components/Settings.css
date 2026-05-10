@@ -61,6 +61,11 @@
   resize: vertical;
 }
 
+.settings-field-reset {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .settings-hint {
   grid-column: 1 / -1;
   font-size: 11px;

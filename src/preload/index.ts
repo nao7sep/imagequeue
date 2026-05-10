@@ -88,8 +88,48 @@ const api = {
   resetElaborators: (): Promise<Elaborator[]> =>
     ipcRenderer.invoke('elaborators:reset'),
 
-  brainstormPrompts: (elaboratorId: string, seed: string, count: number): Promise<{ prompts: string[] }> =>
-    ipcRenderer.invoke('elaborators:brainstorm', elaboratorId, seed, count),
+  brainstormPrompts: (req: {
+    requestId: string
+    elaboratorId: string
+    seed: string
+    count: number
+    previousPrompts: string[]
+  }): Promise<{ prompts: string[] }> =>
+    ipcRenderer.invoke('elaborators:brainstorm', req),
+
+  brainstormGetDefaults: (): Promise<{
+    batch_size: number
+    max_retries_per_turn: number
+    retry_backoff_ms: number[]
+    templates: {
+      first_no_previous: string
+      first_with_previous: string
+      continuation: string
+      override_combine: string
+    }
+  }> =>
+    ipcRenderer.invoke('brainstorm:getDefaults'),
+
+  promptsGetDefaultSlug: (): Promise<string> =>
+    ipcRenderer.invoke('prompts:getDefaultSlug'),
+
+  appLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: Record<string, unknown>): Promise<void> =>
+    ipcRenderer.invoke('app:log', level, message, data),
+
+  onBrainstormProgress: (
+    requestId: string,
+    callback: (event: { done: number; total: number; newPrompts: string[] }) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: { requestId: string; done: number; total: number; newPrompts: string[] }
+    ): void => {
+      if (payload.requestId !== requestId) return
+      callback({ done: payload.done, total: payload.total, newPrompts: payload.newPrompts })
+    }
+    ipcRenderer.on('brainstorm:progress', handler)
+    return () => { ipcRenderer.removeListener('brainstorm:progress', handler) }
+  },
 
   // Preview operations
   getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>

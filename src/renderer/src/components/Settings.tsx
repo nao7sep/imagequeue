@@ -566,6 +566,25 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           <label>Slug template</label>
           <textarea value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
         </div>
+        <div className="settings-field-reset">
+          <button
+            type="button"
+            className="modal-btn modal-btn-danger"
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Reset slug template',
+                message: 'Replace the slug template with the shipped default? Your current text will be lost.',
+                confirmLabel: 'Reset',
+                danger: true,
+              })
+              if (!ok) return
+              const def = await window.electronAPI.promptsGetDefaultSlug()
+              setConfig({ ...config, prompts: { ...prompts, slug: def } })
+            }}
+          >
+            Reset to Default
+          </button>
+        </div>
       </div>
 
       </div>

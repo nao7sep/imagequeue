@@ -396,7 +396,7 @@ export const TEXT_AI_BACKENDS: TextAIBackendDef[] = [
     label: 'Gemini',
     models: [
       { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
-      { id: 'gemini-3.1-flash-preview',      label: 'Gemini 3.1 Flash (Preview)' },
+      { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash (Preview)' },
       { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)' }
     ]
   }

@@ -55,6 +55,8 @@ export function loadConfig(): AppConfig {
     }
   }
 
+  const loadedBrainstorm = (loaded.brainstorm ?? {}) as Partial<AppConfig['brainstorm']>
+  const loadedBrainstormTemplates = (loadedBrainstorm.templates ?? {}) as Partial<AppConfig['brainstorm']['templates']>
   cachedConfig = {
     ...defaults,
     ...loaded,
@@ -65,7 +67,16 @@ export function loadConfig(): AppConfig {
       delete_to_trash: shouldDeleteToTrash((loaded.general as { delete_to_trash?: unknown } | undefined)?.delete_to_trash),
     },
     notifications: { ...defaults.notifications, ...(loaded.notifications || {}) },
-    image_backends: mergedBackends as unknown as AppConfig['image_backends']
+    image_backends: mergedBackends as unknown as AppConfig['image_backends'],
+    prompts: { ...defaults.prompts, ...(loaded.prompts || {}) },
+    brainstorm: {
+      ...defaults.brainstorm,
+      ...loadedBrainstorm,
+      templates: {
+        ...defaults.brainstorm.templates,
+        ...loadedBrainstormTemplates,
+      },
+    },
   }
   return cachedConfig
 }

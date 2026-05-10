@@ -95,6 +95,27 @@ export interface PromptsConfig {
   slug: string
 }
 
+export interface BrainstormTemplates {
+  // Sent on the first turn when the renderer's session has no prior prompts.
+  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{N}}.
+  first_no_previous: string
+  // Sent on the first turn when there ARE prior prompts to avoid.
+  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{PREVIOUS}}, {{N}}.
+  first_with_previous: string
+  // Sent on turns 2+ within the same conversation. Placeholder: {{N}}.
+  continuation: string
+  // Applied at queue time to combine an elaborated prompt with the user's
+  // override. Placeholders: {{PROMPT}}, {{OVERRIDE}}.
+  override_combine: string
+}
+
+export interface BrainstormConfig {
+  batch_size: number
+  max_retries_per_turn: number
+  retry_backoff_ms: number[]
+  templates: BrainstormTemplates
+}
+
 export interface GeneralConfig {
   auto_preview_idle_seconds: number
   export_dir: string
@@ -117,4 +138,5 @@ export interface AppConfig {
   notifications: NotificationsConfig
   image_backends: ImageBackendsConfig
   prompts: PromptsConfig
+  brainstorm: BrainstormConfig
 }

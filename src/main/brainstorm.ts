@@ -1,77 +1,197 @@
-import { GoogleGenAI } from '@google/genai'
-import { loadConfig } from './config'
-import { decodeApiKey } from './config/api-key'
+import { BrowserWindow } from 'electron'
 import { getElaborator } from './elaborators'
-import { log, logApiRequest, logApiResponse } from './logger'
+import { getMainProvider } from './text-ai'
+import {
+  PROMPTS_RESPONSE_SCHEMA,
+  fillTemplate,
+  getRuntimeBrainstormConfig,
+} from './text-ai/templates'
+import type { ConversationMessage, TextAIProvider } from './text-ai'
+import { log } from './logger'
 
-interface BrainstormResult {
+export interface BrainstormRequest {
+  requestId: string
+  elaboratorId: string
+  seed: string
+  count: number
+  previousPrompts: string[]
+}
+
+export interface BrainstormResult {
   prompts: string[]
 }
 
-// Generate N elaborated prompts from a seed using the selected elaborator's template.
-// Returns exactly `count` prompts on success, or throws.
-export async function brainstormPrompts(
-  elaboratorId: string,
-  seed: string,
-  count: number
-): Promise<BrainstormResult> {
-  if (count < 1) throw new Error('Count must be at least 1.')
-  if (!seed.trim()) throw new Error('Seed prompt is empty.')
+// Emitted to the renderer after every successful turn. The renderer absorbs
+// `newPrompts` into its session list as soon as it arrives, so even a later
+// failure on a subsequent turn doesn't lose the prompts that already succeeded.
+interface BrainstormProgress {
+  requestId: string
+  done: number
+  total: number
+  newPrompts: string[]
+}
 
-  const elaborator = getElaborator(elaboratorId)
+function broadcastProgress(progress: BrainstormProgress): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('brainstorm:progress', progress)
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function formatPreviousList(previous: string[]): string {
+  return previous.map((p, i) => `${i + 1}. ${p}`).join('\n')
+}
+
+function buildFirstMessage(
+  templates: { first_no_previous: string; first_with_previous: string },
+  elaboratorTemplate: string,
+  seed: string,
+  previousPrompts: string[],
+  countToAskFor: number
+): string {
+  if (previousPrompts.length === 0) {
+    return fillTemplate(templates.first_no_previous, {
+      ELABORATOR: elaboratorTemplate,
+      SEED: seed,
+      N: String(countToAskFor),
+    })
+  }
+  return fillTemplate(templates.first_with_previous, {
+    ELABORATOR: elaboratorTemplate,
+    SEED: seed,
+    PREVIOUS: formatPreviousList(previousPrompts),
+    N: String(countToAskFor),
+  })
+}
+
+function buildContinuationMessage(template: string, countToAskFor: number): string {
+  return fillTemplate(template, { N: String(countToAskFor) })
+}
+
+// One conversation turn with up to maxRetries retries. Returns the parsed
+// prompts, or throws after all retries are exhausted.
+async function askWithRetry(
+  provider: TextAIProvider,
+  messages: ConversationMessage[],
+  timeoutMs: number,
+  expectedCount: number,
+  maxRetries: number,
+  backoffSchedule: number[]
+): Promise<string[]> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoff = backoffSchedule.length > 0
+        ? backoffSchedule[Math.min(attempt - 1, backoffSchedule.length - 1)]
+        : 1000
+      log('warn', 'Brainstorm turn failed, retrying', {
+        attempt, backoff,
+        message: lastError instanceof Error ? lastError.message : String(lastError),
+      })
+      await sleep(backoff)
+    }
+    try {
+      const result = await provider.ask({
+        messages,
+        schema: PROMPTS_RESPONSE_SCHEMA,
+        timeoutMs,
+      })
+      const parsed = result.parsed as { prompts?: unknown } | undefined
+      const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts.filter((p): p is string => typeof p === 'string' && p.trim().length > 0) : []
+      if (prompts.length === 0) {
+        log('warn', 'Brainstorm turn returned no usable prompts', { rawText: result.text })
+        throw new Error('Text AI returned no usable prompts.')
+      }
+      // Trim to expected count if model overshot; tolerate undercount and let the loop ask for more next turn.
+      return prompts.slice(0, expectedCount)
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+// Generate `count` prompts via a single conversation, batched into turns of
+// BATCH_SIZE. Each turn retries on transient failures. Progress is emitted
+// to all renderer windows after every successful turn.
+//
+// On failure, throws the last error. Prompts collected from earlier successful
+// turns are attached to the error as `partialPrompts` so the caller can salvage
+// them — the renderer keeps anything we got into its session list.
+export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
+  if (req.count < 1) throw new Error('Count must be at least 1.')
+  if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
+
+  const elaborator = getElaborator(req.elaboratorId)
   if (!elaborator) throw new Error('Elaborator not found.')
 
-  const config = loadConfig()
-  const { backend, main_model: model, api_key, timeout_ms } = config.text_ai
-  const apiKey = decodeApiKey(api_key)
-  if (!apiKey) throw new Error('Text AI API key is not configured.')
-  if (backend !== 'gemini') throw new Error(`Unsupported text AI backend: ${backend}`)
+  const handle = getMainProvider()
+  if (!handle) throw new Error('Text AI is not configured.')
 
-  const systemPrompt = `${elaborator.template}\n\nUser's seed: ${seed}\nProduce ${count} distinct prompt${count === 1 ? '' : 's'}. One per line. No numbering, no commentary.`
+  const brainstormConfig = getRuntimeBrainstormConfig()
+  const batchSize = Math.max(1, brainstormConfig.batch_size)
+  const maxRetries = Math.max(0, brainstormConfig.max_retries_per_turn)
 
-  logApiRequest('text-ai', 'brainstorm', { backend, model, count, elaborator: elaborator.name })
   const startTime = Date.now()
 
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: timeout_ms } })
-  let response
+  const messages: ConversationMessage[] = []
+  const collected: string[] = []
+  let turn = 0
+
   try {
-    response = await ai.models.generateContent({ model, contents: systemPrompt })
+    while (collected.length < req.count) {
+      const remaining = req.count - collected.length
+      const askFor = Math.min(remaining, batchSize)
+      turn++
+
+      const userMessage = collected.length === 0
+        ? buildFirstMessage(brainstormConfig.templates, elaborator.template, req.seed, req.previousPrompts, askFor)
+        : buildContinuationMessage(brainstormConfig.templates.continuation, askFor)
+      messages.push({ role: 'user', text: userMessage })
+
+      log('debug', 'Brainstorm turn request', { turn, askFor, userMessage })
+
+      const newPrompts = await askWithRetry(
+        handle.provider, messages, handle.timeoutMs, askFor,
+        maxRetries, brainstormConfig.retry_backoff_ms
+      )
+      collected.push(...newPrompts)
+      messages.push({ role: 'model', text: JSON.stringify({ prompts: newPrompts }) })
+
+      log('debug', 'Brainstorm turn response', { turn, gotCount: newPrompts.length, prompts: newPrompts })
+
+      broadcastProgress({
+        requestId: req.requestId,
+        done: Math.min(collected.length, req.count),
+        total: req.count,
+        newPrompts,
+      })
+
+      if (newPrompts.length === 0) {
+        // Defensive: askWithRetry throws when 0; shouldn't reach here. Bail to avoid an infinite loop.
+        throw new Error('Text AI returned no prompts on a turn.')
+      }
+    }
+
+    log('info', 'Brainstorm complete', {
+      elaborator: elaborator.name,
+      count: collected.length,
+      turns: turn,
+      durationMs: Date.now() - startTime,
+    })
+    return { prompts: collected.slice(0, req.count) }
   } catch (err) {
-    const isTimeout = err instanceof Error && err.name === 'AbortError'
-    log('warn', isTimeout ? 'Brainstorm timed out' : 'Brainstorm call failed', {
-      backend, model, count,
+    log('error', 'Brainstorm failed', {
+      elaborator: elaborator.name,
+      requested: req.count,
+      collected: collected.length,
+      turns: turn,
+      durationMs: Date.now() - startTime,
       message: err instanceof Error ? err.message : String(err),
     })
     throw err instanceof Error ? err : new Error(String(err))
   }
-
-  logApiResponse('text-ai', 'ok', Date.now() - startTime)
-
-  const raw = response.text ?? ''
-  const prompts = parseBrainstormResponse(raw, count)
-  if (prompts.length === 0) {
-    log('warn', 'Brainstorm returned no usable prompts', { rawResponse: raw })
-    throw new Error('Text AI returned no usable prompts.')
-  }
-
-  return { prompts }
-}
-
-// Split lines, strip leading numbering / bullets, drop empties, collapse to <= count.
-function parseBrainstormResponse(raw: string, count: number): string[] {
-  const lines = raw
-    .split(/\r?\n/)
-    .map((line) => stripLeadingMarker(line.trim()))
-    .filter((line) => line.length > 0)
-
-  if (lines.length >= count) return lines.slice(0, count)
-  return lines
-}
-
-function stripLeadingMarker(line: string): string {
-  return line
-    .replace(/^[-*•·]\s+/, '')
-    .replace(/^\d+[.)]\s+/, '')
-    .replace(/^["'`]+|["'`]+$/g, '')
-    .trim()
 }

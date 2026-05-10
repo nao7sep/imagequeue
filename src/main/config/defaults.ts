@@ -7,7 +7,7 @@ export function createDefaultConfig(): AppConfig {
       api_key: '',
       timeout_ms: 30000,
       light_model: 'gemini-3.1-flash-lite-preview',
-      main_model: 'gemini-3.1-pro-preview'
+      main_model: 'gemini-3-flash-preview'
     },
     general: {
       auto_preview_idle_seconds: 30,
@@ -93,6 +93,30 @@ export function createDefaultConfig(): AppConfig {
     },
     prompts: {
       slug: 'Generate a short filename slug (3-5 lowercase English words, hyphens only, no other characters) that captures the essence of this image prompt: {{prompt}}'
+    },
+    brainstorm: {
+      batch_size: 10,
+      max_retries_per_turn: 3,
+      retry_backoff_ms: [1000, 2000, 4000],
+      templates: {
+        first_no_previous: `{{ELABORATOR}}
+
+User's seed prompt: {{SEED}}
+
+Produce {{N}} distinct prompt(s). Reply as JSON: { "prompts": [string, ...] }.`,
+        first_with_previous: `{{ELABORATOR}}
+
+User's seed prompt: {{SEED}}
+
+Previously generated prompts (do not repeat any of these and do not produce minor variations of them):
+{{PREVIOUS}}
+
+Produce {{N}} distinct prompt(s). Reply as JSON: { "prompts": [string, ...] }.`,
+        continuation: `Produce {{N}} more distinct prompt(s) that don't repeat the prompts you've already produced. Reply as JSON: { "prompts": [string, ...] }.`,
+        override_combine: `{{PROMPT}}
+
+Override: {{OVERRIDE}}`,
+      }
     }
   }
 }

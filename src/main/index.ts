@@ -7,6 +7,7 @@ import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
 import { registerElaboratorsIpc } from './elaborators-ipc'
+import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { initLogger, log } from './logger'
@@ -96,6 +97,7 @@ app.whenReady().then(() => {
   registerPreviewIpc()
   registerSettingsIpc()
   registerElaboratorsIpc()
+  registerAppLogIpc()
   registerViewerIpc()
   registerNotificationIpc(() => mainWin)
   initNotificationWindow()

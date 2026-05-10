@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { brainstormPrompts } from './brainstorm'
+import { createDefaultConfig } from './config/defaults'
 import {
   createElaborator,
   deleteElaborator,
@@ -29,7 +30,23 @@ export function registerElaboratorsIpc(): void {
     return resetElaborators()
   })
 
-  ipcMain.handle('elaborators:brainstorm', async (_event, elaboratorId: string, seed: string, count: number) => {
-    return brainstormPrompts(elaboratorId, seed, count)
+  ipcMain.handle(
+    'elaborators:brainstorm',
+    async (_event, req: { requestId: string; elaboratorId: string; seed: string; count: number; previousPrompts: string[] }) => {
+      return brainstormPrompts(req)
+    }
+  )
+
+  // Returns the shipped default brainstorm config — used by the Elaboration
+  // Settings modal's "Reset to Defaults" button. Reads from the same
+  // createDefaultConfig() that seeds new installs, so it stays in sync.
+  ipcMain.handle('brainstorm:getDefaults', () => {
+    return createDefaultConfig().brainstorm
+  })
+
+  // Returns the shipped default slug template — used by Settings' slug field
+  // Reset link. Same source of truth as the rest of the defaults.
+  ipcMain.handle('prompts:getDefaultSlug', () => {
+    return createDefaultConfig().prompts.slug
   })
 }
