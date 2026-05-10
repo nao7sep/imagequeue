@@ -115,12 +115,12 @@ async function askWithRetry(
 }
 
 // Generate `count` prompts via a single conversation, batched into turns of
-// BATCH_SIZE. Each turn retries on transient failures. Progress is emitted
+// `batch_size`. Each turn retries on transient failures. Progress is emitted
 // to all renderer windows after every successful turn.
 //
-// On failure, throws the last error. Prompts collected from earlier successful
-// turns are attached to the error as `partialPrompts` so the caller can salvage
-// them — the renderer keeps anything we got into its session list.
+// On failure, throws the last error. Prompts from earlier successful turns
+// are kept by the renderer through the progress events that streamed them —
+// the orchestrator does not need to re-deliver them.
 export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
   if (req.count < 1) throw new Error('Count must be at least 1.')
   if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
@@ -152,8 +152,6 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
         : buildContinuationMessage(brainstormConfig.templates.continuation, askFor)
       messages.push({ role: 'user', text: userMessage })
 
-      log('debug', 'Brainstorm turn request', { turn, askFor, userMessage })
-
       const newPrompts = await askWithRetry(
         handle.provider, messages, handle.timeoutMs, askFor,
         maxRetries, brainstormConfig.retry_backoff_ms
@@ -161,7 +159,10 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       collected.push(...newPrompts)
       messages.push({ role: 'model', text: JSON.stringify({ prompts: newPrompts }) })
 
-      log('debug', 'Brainstorm turn response', { turn, gotCount: newPrompts.length, prompts: newPrompts })
+      // Log the elaborated prompts but not the full user message — the
+      // template + previous-prompts list reproduces from config + session
+      // state if needed for debugging, and keeps session.log compact.
+      log('info', 'Elaborated prompts', { turn, prompts: newPrompts })
 
       broadcastProgress({
         requestId: req.requestId,
@@ -178,6 +179,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
     log('info', 'Brainstorm complete', {
       elaborator: elaborator.name,
+      backend: handle.backend,
+      model: handle.modelId,
       count: collected.length,
       turns: turn,
       durationMs: Date.now() - startTime,
@@ -186,6 +189,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   } catch (err) {
     log('error', 'Brainstorm failed', {
       elaborator: elaborator.name,
+      backend: handle.backend,
+      model: handle.modelId,
       requested: req.count,
       collected: collected.length,
       turns: turn,

@@ -8,6 +8,7 @@ import {
   resetElaborators,
   updateElaborator,
 } from './elaborators'
+import { log } from './logger'
 
 export function registerElaboratorsIpc(): void {
   ipcMain.handle('elaborators:list', () => {
@@ -15,19 +16,29 @@ export function registerElaboratorsIpc(): void {
   })
 
   ipcMain.handle('elaborators:create', (_event, input: { name: string; description?: string; template: string }) => {
-    return createElaborator(input)
+    const created = createElaborator(input)
+    log('info', 'Elaborator created', { id: created.id, name: created.name })
+    return created
   })
 
   ipcMain.handle('elaborators:update', (_event, id: string, patch: { name?: string; description?: string; template?: string }) => {
-    return updateElaborator(id, patch)
+    const updated = updateElaborator(id, patch)
+    if (updated) {
+      log('info', 'Elaborator updated', { id, name: updated.name, fields: Object.keys(patch) })
+    }
+    return updated
   })
 
   ipcMain.handle('elaborators:delete', (_event, id: string) => {
-    return deleteElaborator(id)
+    const ok = deleteElaborator(id)
+    if (ok) log('info', 'Elaborator deleted', { id })
+    return ok
   })
 
   ipcMain.handle('elaborators:reset', () => {
-    return resetElaborators()
+    const items = resetElaborators()
+    log('info', 'Elaborators reset to defaults', { count: items.length })
+    return items
   })
 
   ipcMain.handle(

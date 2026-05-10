@@ -146,6 +146,22 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           templates: { ...form.templates },
         },
       }
+      // Log only the keys that changed (templates can be large; we don't want
+      // multi-KB log entries every save).
+      const changed: string[] = []
+      const prev = settings.brainstorm as Record<string, unknown> | undefined
+      const prevTemplates = (prev?.templates ?? {}) as Record<string, unknown>
+      if (prev?.batch_size !== form.batch_size) changed.push('batch_size')
+      if (prev?.max_retries_per_turn !== form.max_retries_per_turn) changed.push('max_retries_per_turn')
+      if (JSON.stringify(prev?.retry_backoff_ms ?? []) !== JSON.stringify(backoff.value)) changed.push('retry_backoff_ms')
+      for (const key of Object.keys(form.templates) as (keyof typeof form.templates)[]) {
+        if (prevTemplates[key] !== form.templates[key]) changed.push(`templates.${key}`)
+      }
+      void window.electronAPI.appLog('info', 'Elaboration settings saved', {
+        changed,
+        batch_size: form.batch_size,
+        max_retries_per_turn: form.max_retries_per_turn,
+      })
       await updateSettings(next)
       onClose()
     } catch (error) {

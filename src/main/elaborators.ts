@@ -13,52 +13,24 @@ function defaultElaborators(): Elaborator[] {
   return [
     {
       id: nanoid(10),
-      name: 'Photoreal scene',
-      description: 'Vivid photorealistic, lighting and framing chosen.',
+      name: 'Concrete subject',
+      description: 'Flesh out who or what is present and what is happening.',
       template:
-        'You expand a short concept into a vivid photorealistic image prompt. Pick concrete details for lighting, framing, and atmosphere that resolve ambiguity but leave the image AI room to compose. Each prompt is 25-40 words and reads as natural English.',
+        "You expand the user's seed into a concrete description of the subject and what is happening. Pick specific people, objects, or creatures, what they are doing, and brief context. Do not specify medium, framing, lighting, or visual style — describe only the subject and its situation. Each prompt is 20-35 words of natural English.",
     },
     {
       id: nanoid(10),
-      name: 'App icon',
-      description: 'Centered subject, plain background, flat style, square.',
+      name: 'Subject in setting',
+      description: 'Place the subject in a specific place and time.',
       template:
-        'You expand a short concept into an app icon prompt. Centered subject, plain or simple background, flat or minimal style, suitable for a square format. Each prompt is 15-30 words.',
+        "You expand the user's seed by placing the subject in a specific setting. Pick a concrete place and time, and include environmental details that ground the subject. Do not specify medium, framing, or visual style — describe only the subject, place, and situation. Each prompt is 20-35 words.",
     },
     {
       id: nanoid(10),
-      name: 'Illustration',
-      description: 'Pick a medium and set a mood.',
+      name: 'Diverse situations',
+      description: 'Vary what the subject is doing and where, across outputs.',
       template:
-        'You expand a short concept into an illustration prompt. Pick a specific medium (watercolor, line art, anime, gouache, etc.), set a mood, and frame the subject. Each prompt is 20-35 words.',
-    },
-    {
-      id: nanoid(10),
-      name: 'Cinematic still',
-      description: 'Camera angle, dramatic lighting, brief setting.',
-      template:
-        'You expand a short concept into a cinematic still: pick a camera angle (close-up, wide, low-angle, etc.), dramatic lighting, mood, and a brief setting. Each prompt is 20-30 words.',
-    },
-    {
-      id: nanoid(10),
-      name: 'Concept art',
-      description: 'Painterly, dynamic composition, dramatic.',
-      template:
-        'You expand a short concept into a concept art prompt: dynamic pose or composition, painterly medium, dramatic lighting, evocative mood. Each prompt is 20-35 words.',
-    },
-    {
-      id: nanoid(10),
-      name: 'Diverse variations',
-      description: 'Vary location, time, attire, action across outputs.',
-      template:
-        "You expand a short concept into image prompts that are substantively different from each other. Vary location, time of day, attire, and action across the set. Keep the core subject identifiable but let everything else change. Each prompt is 15-30 words.",
-    },
-    {
-      id: nanoid(10),
-      name: 'Tight variants',
-      description: 'Same subject, change one or two attributes only.',
-      template:
-        "You expand a short concept into image prompts that share an identical core subject. Across the set, change only one or two attributes (color, setting, mood, lighting) at a time. Each prompt is 15-30 words.",
+        "You expand the user's seed into prompts that vary substantially across the set. For each prompt, change what the subject is doing, where they are, and who or what is with them. Keep the core subject identifiable. Do not specify medium or visual style — describe only the subject and its situation. Each prompt is 15-30 words.",
     },
   ]
 }

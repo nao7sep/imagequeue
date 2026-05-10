@@ -59,6 +59,20 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
 
   const [queueBusy, setQueueBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState<'info' | 'error'>('info')
+
+  const showError = useCallback((text: string): void => {
+    setMessage(text)
+    setMessageType('error')
+  }, [])
+  const showInfo = useCallback((text: string): void => {
+    setMessage(text)
+    setMessageType('info')
+  }, [])
+  const clearMessage = useCallback((): void => {
+    setMessage('')
+    setMessageType('info')
+  }, [])
 
   const refreshElaborators = useCallback(async (): Promise<void> => {
     const next = await window.electronAPI.listElaborators()
@@ -186,9 +200,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random()}`
 
-    const collectedThisRun: string[] = []
     const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
-      collectedThisRun.push(...event.newPrompts)
       setGeneratedPrompts((prev) => [...prev, ...event.newPrompts])
       setBrainstormProgress({ done: event.done, total: event.total })
     })
@@ -214,7 +226,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (elaborateDisabledReason) return
     setElaborateBusy(true)
-    setMessage('')
+    clearMessage()
     const elaboratorName = elaborators.find((e) => e.id === selectedElaboratorId)?.name ?? null
     void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
       elaborator: elaboratorName,
@@ -225,17 +237,17 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       const newPrompts = await runBrainstorm(1)
       const first = newPrompts[0]
       if (!first) {
-        setMessage('Text AI returned no prompt.')
+        showError('Text AI returned no prompt.')
         return
       }
       setElaborated(first)
       setPromptMode('elaborated')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      showError(error instanceof Error ? error.message : String(error))
     } finally {
       setElaborateBusy(false)
     }
-  }, [elaborateDisabledReason, runBrainstorm, elaborators, selectedElaboratorId, seed, generatedPrompts])
+  }, [elaborateDisabledReason, runBrainstorm, elaborators, selectedElaboratorId, seed, generatedPrompts, clearMessage, showError])
 
   const buildDtParams = useCallback(async (modelFile: string): Promise<{ model: string; params: DtParams }> => {
     const saved = await window.electronAPI.dtGetModelParams(modelFile)
@@ -268,7 +280,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const handleQueue = useCallback(async (): Promise<void> => {
     if (queueDisabledReason) return
     setQueueBusy(true)
-    setMessage('')
+    clearMessage()
     const targets = effectiveTargets
     const copies = Math.max(1, count)
     const allTargetCount = targetCount
@@ -379,7 +391,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         }
       }
 
-      setMessage(`Queued ${dispatched} task${dispatched === 1 ? '' : 's'}.`)
+      showInfo(`Queued ${dispatched} task${dispatched === 1 ? '' : 's'}.`)
       void window.electronAPI.appLog('info', 'Advanced: Queue dispatched', {
         mode: promptMode,
         dispatched,
@@ -387,13 +399,14 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       // Modal stays open by design — the user may want to queue more rounds
       // using the now-grown session list as previousPrompts.
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      showError(error instanceof Error ? error.message : String(error))
     } finally {
       setQueueBusy(false)
     }
   }, [
     queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, override, runBrainstorm, buildDtParams, generatedPrompts.length, settings,
+    clearMessage, showInfo, showError,
   ])
 
   return (
@@ -410,7 +423,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
           />
           <div className="advanced-elaborator-list">
             {elaborators.length === 0 ? (
-              <div className="advanced-empty">No elaborators. Open Manage…</div>
+              <div className="advanced-empty">No elaborators. Open Elaborators from the menu.</div>
             ) : (
               elaborators.map((el) => (
                 <label key={el.id} className={`advanced-elab-row${selectedElaboratorId === el.id ? ' selected' : ''}`}>
@@ -580,7 +593,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
             {totalTasks} task{totalTasks === 1 ? '' : 's'}
           </div>
 
-          {message && <div className="advanced-message">{message}</div>}
+          {message && <div className={`advanced-message advanced-message-${messageType}`}>{message}</div>}
 
           <button
             className="modal-btn modal-btn-primary advanced-queue-btn"

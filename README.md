@@ -146,6 +146,48 @@ Removing a queued, failed, or interrupted task drops it from the queue. Using **
 
 Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
 
+## Advanced Prompting
+
+The **Advanced Prompting** button above the prompt textarea opens a modal for batch generation across multiple backends and models, optionally with AI-generated prompt variations.
+
+The modal has three panes:
+
+- **Prompt** — your seed text, an elaborator picker, the **Elaborate** button, the resulting elaborated prompt, and an optional **Override** field that gets appended to every queued prompt.
+- **Targets** — checkboxes for proprietary backends and (on macOS) downloaded Draw Things models. Long Draw Things model names are truncated; hover the row to see the full name.
+- **Execution** — the prompt source, target scope, iteration count, and the **Queue Tasks** button.
+
+Four prompt sources:
+
+| Mode | Behavior |
+|---|---|
+| **User prompt as-is** | Send the seed verbatim. No AI involvement. |
+| **Elaborated prompt (same for all)** | Use the result from clicking **Elaborate**, identical for every queued task. |
+| **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; all selected models in that iteration share it. |
+| **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique. |
+
+Generated prompts accumulate in a per-modal-open list. The text AI sees previously generated prompts as context on each new request and avoids repeating them. Closing the modal clears the list — by design.
+
+The modal stays open after queueing so you can run another round.
+
+## Elaborators
+
+**☰ → Elaborators** opens the elaborator manager. An elaborator is a saved system instruction telling the text AI how to elaborate a seed prompt — for example, "expand the seed with concrete details about the subject and what is happening." Each elaborator has a name, optional description, and template text.
+
+Use **New Elaborator** to add one, **Edit** to change one, **Delete** to remove. **Reset to Defaults** at the bottom replaces the entire list with the shipped defaults.
+
+## Elaboration Settings
+
+**☰ → Elaboration Settings** controls how the text AI is called during elaboration:
+
+| Setting | Description |
+|---|---|
+| Batch size | Prompts per conversation turn (1–50) |
+| Max retries per turn | Extra attempts after a transient failure (0–10) |
+| Retry backoff (ms) | Comma-separated delays between attempts |
+| Templates | The four message formats sent to the text AI; placeholders like `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, `{{PROMPT}}`, `{{OVERRIDE}}` are substituted at call time |
+
+Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce.
+
 ## Menu
 
 The hamburger menu (☰) gives access to:
@@ -157,6 +199,8 @@ The hamburger menu (☰) gives access to:
 | Show JIC Images | Show or hide completed images that were kept just in case |
 | Settings | Open Settings |
 | Draw Things Models | Open the Draw Things model browser and importer |
+| Elaborators | Manage prompt elaborators |
+| Elaboration Settings | Tune batch size, retries, and AI message templates |
 | Keyboard Shortcuts | Open the shortcut reference |
 | About | Show version and links |
 

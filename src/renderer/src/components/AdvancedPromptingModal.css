@@ -230,8 +230,17 @@
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 12px;
+}
+
+.advanced-message-info {
   color: var(--text-primary);
   background: var(--bg-surface);
+}
+
+.advanced-message-error {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border-color: color-mix(in srgb, var(--error) 50%, var(--border));
 }
 
 .advanced-queue-btn {

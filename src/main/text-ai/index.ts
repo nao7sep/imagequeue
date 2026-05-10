@@ -9,6 +9,8 @@ export { GeminiProvider } from './gemini'
 interface ProviderHandle {
   provider: TextAIProvider
   timeoutMs: number
+  backend: string
+  modelId: string
 }
 
 // Light tier — short throwaway tasks (slug generation).
@@ -20,6 +22,8 @@ export function getLightProvider(): ProviderHandle | null {
   return {
     provider: createProvider(backend, light_model, apiKey),
     timeoutMs: timeout_ms,
+    backend,
+    modelId: light_model,
   }
 }
 
@@ -32,6 +36,8 @@ export function getMainProvider(): ProviderHandle | null {
   return {
     provider: createProvider(backend, main_model, apiKey),
     timeoutMs: timeout_ms,
+    backend,
+    modelId: main_model,
   }
 }
 
