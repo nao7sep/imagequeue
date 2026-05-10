@@ -235,14 +235,14 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         <div className="elaboration-settings-section">
           <div className="elaboration-settings-section-title">Templates</div>
           <p className="elaboration-settings-help">
-            Sent to the text AI verbatim with placeholders substituted. Edit to add language instructions, change response phrasing, or adjust tone. Always reply as JSON: <code>{'{ "prompts": [string, ...] }'}</code>.
+            Sent to the text AI verbatim with placeholders substituted. Edit to add language instructions, change response phrasing, or adjust tone. <code>{'{{JSON}}'}</code> always resolves to the required response shape <code>{'{ "prompts": [string, ...] }'}</code>, so the parser cannot be broken by edits to that part.
           </p>
 
           <label className="elaboration-settings-template">
             <span>First message — no previous prompts</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{N}}'}</span>
+            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{N}} {{JSON}}'}</span>
             <textarea
-              rows={6}
+              rows={10}
               value={form.templates.first_no_previous}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, first_no_previous: e.target.value } })}
             />
@@ -250,9 +250,9 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
           <label className="elaboration-settings-template">
             <span>First message — with previous prompts</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{PREVIOUS}} {{N}}'}</span>
+            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{PREVIOUS}} {{N}} {{JSON}}'}</span>
             <textarea
-              rows={8}
+              rows={12}
               value={form.templates.first_with_previous}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, first_with_previous: e.target.value } })}
             />
@@ -260,7 +260,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
           <label className="elaboration-settings-template">
             <span>Continuation message</span>
-            <span className="elaboration-settings-tags">{'{{N}}'}</span>
+            <span className="elaboration-settings-tags">{'{{N}} {{JSON}}'}</span>
             <textarea
               rows={3}
               value={form.templates.continuation}
@@ -271,8 +271,11 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           <label className="elaboration-settings-template">
             <span>Override combine</span>
             <span className="elaboration-settings-tags">{'{{PROMPT}} {{OVERRIDE}}'}</span>
+            <span className="elaboration-settings-hint">
+              Sent to the <em>image</em> model (not the text AI), so {'{{JSON}}'} is not available here. The image model treats the combined text as a description with adjustments applied on top.
+            </span>
             <textarea
-              rows={4}
+              rows={8}
               value={form.templates.override_combine}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, override_combine: e.target.value } })}
             />

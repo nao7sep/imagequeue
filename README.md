@@ -184,7 +184,7 @@ Use **New Elaborator** to add one, **Edit** to change one, **Delete** to remove.
 | Batch size | Prompts per conversation turn (1–50) |
 | Max retries per turn | Extra attempts after a transient failure (0–10) |
 | Retry backoff (ms) | Comma-separated delays between attempts |
-| Templates | The four message formats sent to the text AI; placeholders like `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, `{{PROMPT}}`, `{{OVERRIDE}}` are substituted at call time |
+| Templates | The four message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, `{{JSON}}` (text-AI templates) and `{{PROMPT}}`, `{{OVERRIDE}}` (override-combine, image AI) are substituted at call time. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. |
 
 Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce.
 

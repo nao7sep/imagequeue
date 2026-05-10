@@ -23,6 +23,23 @@ export function ensureDataDir(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true })
 }
 
+// True iff `merged` contains any key (or nested key) not present in `loaded`.
+// Used to detect when loadConfig filled in fresh defaults so we can persist
+// them — that way a user's effective settings never drift silently when the
+// app later changes a default value. Existing user values are preserved by
+// the deep merge itself; this function only flags additions.
+function mergedAddedKeys(merged: unknown, loaded: unknown): boolean {
+  if (typeof merged !== 'object' || merged === null || Array.isArray(merged)) return false
+  if (typeof loaded !== 'object' || loaded === null || Array.isArray(loaded)) return true
+  const m = merged as Record<string, unknown>
+  const l = loaded as Record<string, unknown>
+  for (const key of Object.keys(m)) {
+    if (!(key in l)) return true
+    if (mergedAddedKeys(m[key], l[key])) return true
+  }
+  return false
+}
+
 export function loadConfig(): AppConfig {
   if (cachedConfig) return cachedConfig
 
@@ -78,6 +95,15 @@ export function loadConfig(): AppConfig {
       },
     },
   }
+
+  // If the merge introduced any new keys (e.g. the app shipped a new section
+  // since the user's config was written), freeze them to disk now. User-set
+  // values from `loaded` already took precedence in the merge, so this only
+  // persists the additions.
+  if (mergedAddedKeys(cachedConfig, loaded)) {
+    saveConfig(cachedConfig)
+  }
+
   return cachedConfig
 }
 

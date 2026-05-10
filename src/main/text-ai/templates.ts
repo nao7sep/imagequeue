@@ -18,14 +18,21 @@ export const PROMPTS_RESPONSE_SCHEMA = {
   required: ['prompts'],
 } as const
 
+// Literal shown to the model in place of {{JSON}}. Kept as a constant so a
+// user cannot accidentally break the parser by editing the template text.
+export const JSON_FORMAT_LITERAL = '{ "prompts": [string, ...] }'
+
 // Returns the live brainstorm config (defaults filled in via config-store).
 export function getRuntimeBrainstormConfig(): BrainstormConfig {
   return loadConfig().brainstorm
 }
 
 export function fillTemplate(template: string, values: Record<string, string>): string {
+  // {{JSON}} is always provided by us, never by the caller, so users editing
+  // templates cannot corrupt the response shape.
+  const merged: Record<string, string> = { JSON: JSON_FORMAT_LITERAL, ...values }
   let out = template
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(merged)) {
     out = out.split(`{{${key}}}`).join(value)
   }
   return out

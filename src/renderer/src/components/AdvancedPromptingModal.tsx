@@ -316,12 +316,14 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       // Apply override at queue time (never during elaboration). Empty-string
       // overrides leave the prompt untouched. Format pulled from
       // brainstorm.templates.override_combine so users can edit it in
-      // Elaboration Settings (e.g. for non-English workflows).
+      // Elaboration Settings (e.g. for non-English workflows). The fallback
+      // is only hit when settings haven't loaded yet — under normal flow the
+      // user's persisted template (or the shipped default) is used.
       const trimmedOverride = override.trim()
       const overrideTemplate = ((settings?.brainstorm as Record<string, unknown> | undefined)?.templates as Record<string, unknown> | undefined)?.override_combine as string | undefined
       const finalize = (p: string): string => {
         if (trimmedOverride === '') return p
-        const tmpl = overrideTemplate || '{{PROMPT}}\n\nOverride: {{OVERRIDE}}'
+        const tmpl = overrideTemplate || 'The following describes the desired image, followed by modifications to apply on top of it. Keep all elements of the description unchanged except where the modifications direct otherwise.\n\nDescription:\n{{PROMPT}}\n\nModifications:\n{{OVERRIDE}}'
         return tmpl.split('{{PROMPT}}').join(p).split('{{OVERRIDE}}').join(trimmedOverride)
       }
 
