@@ -4,9 +4,10 @@ import { TextAIBackendId } from '../../shared/types'
 
 export interface TextAIConfig {
   backend: TextAIBackendId
-  model: string
   api_key: string
   timeout_ms: number
+  light_model: string
+  main_model: string
 }
 
 export interface OpenAIBackendConfig {

@@ -8,7 +8,7 @@ import { log } from '../logger'
 // Dispatches on config.text_ai.backend; falls back to nanoid on failure or unknown backend.
 export async function generateSlug(prompt: string): Promise<string> {
   const config = loadConfig()
-  const { backend, model, api_key } = config.text_ai
+  const { backend, light_model: model, api_key } = config.text_ai
   const apiKey = decodeApiKey(api_key)
 
   if (!apiKey) {

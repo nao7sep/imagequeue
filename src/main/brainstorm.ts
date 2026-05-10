@@ -22,7 +22,7 @@ export async function brainstormPrompts(
   if (!elaborator) throw new Error('Elaborator not found.')
 
   const config = loadConfig()
-  const { backend, model, api_key, timeout_ms } = config.text_ai
+  const { backend, main_model: model, api_key, timeout_ms } = config.text_ai
   const apiKey = decodeApiKey(api_key)
   if (!apiKey) throw new Error('Text AI API key is not configured.')
   if (backend !== 'gemini') throw new Error(`Unsupported text AI backend: ${backend}`)

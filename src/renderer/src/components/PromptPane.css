@@ -22,18 +22,24 @@
 }
 
 .prompt-advanced-btn {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 10px;
-  background: var(--bg-surface);
+  padding: 6px 12px;
+  border: 1px solid var(--bg-hover);
+  border-radius: 4px;
+  background: var(--bg-hover);
   color: var(--text-primary);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .prompt-advanced-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--bg-hover) 80%, var(--accent));
+  border-color: color-mix(in srgb, var(--bg-hover) 80%, var(--accent));
+}
+
+.prompt-advanced-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .prompt-textarea {

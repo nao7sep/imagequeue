@@ -139,7 +139,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       <div className="prompt-scroll">
         <div className="prompt-advanced-row">
           <button className="prompt-advanced-btn" onClick={() => setShowAdvanced(true)}>
-            Advanced…
+            Advanced Prompting
           </button>
         </div>
         <textarea

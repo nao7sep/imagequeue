@@ -105,7 +105,7 @@ export function createElaborator(input: { name: string; description?: string; te
     description: input.description?.trim() || undefined,
     template: input.template,
   }
-  items.push(created)
+  items.unshift(created)
   writeFile(items)
   return created
 }

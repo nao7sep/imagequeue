@@ -4,9 +4,10 @@ export function createDefaultConfig(): AppConfig {
   return {
     text_ai: {
       backend: 'gemini',
-      model: 'gemini-3.1-flash-lite-preview',
       api_key: '',
-      timeout_ms: 30000
+      timeout_ms: 30000,
+      light_model: 'gemini-3.1-flash-lite-preview',
+      main_model: 'gemini-3.1-pro-preview'
     },
     general: {
       auto_preview_idle_seconds: 30,

@@ -335,13 +335,23 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           <input type="password" value={textAi.api_key as string} onChange={(e) => updateTextAi('api_key', e.target.value)} />
         </div>
         <div className="settings-field">
-          <label>Model</label>
-          <select value={textAi.model as string} onChange={(e) => updateTextAi('model', e.target.value)}>
+          <label>Light model</label>
+          <select value={textAi.light_model as string} onChange={(e) => updateTextAi('light_model', e.target.value)}>
             {getTextAIModels(textAi.backend as string).map((m) => (
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
         </div>
+        <p className="settings-hint">Used for short, lightweight tasks like filename slug generation.</p>
+        <div className="settings-field">
+          <label>Main model</label>
+          <select value={textAi.main_model as string} onChange={(e) => updateTextAi('main_model', e.target.value)}>
+            {getTextAIModels(textAi.backend as string).map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+        <p className="settings-hint">Used for general text work, including prompt elaboration in Advanced Prompting.</p>
         <div className="settings-field">
           <label>Timeout (s)</label>
           <input type="number" min={1} step={1} value={(textAi.timeout_ms as number) / 1000} onChange={(e) => updateTextAi('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />

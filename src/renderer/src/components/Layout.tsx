@@ -218,7 +218,6 @@ export function Layout(): React.JSX.Element {
                   <span>Show JIC Images</span>
                 </button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>
-                <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
                 {window.electronAPI.platform === 'darwin' && (
                   <button onClick={() => {
                     setShowMenu(false)
@@ -227,6 +226,7 @@ export function Layout(): React.JSX.Element {
                     Draw Things Models
                   </button>
                 )}
+                <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
                 <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
                 <button onClick={() => openOverlay('about')}>About</button>
               </div>
