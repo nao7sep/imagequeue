@@ -342,14 +342,14 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
           </div>
           <div className="advanced-row">
             <button
-              className="session-card-btn session-card-btn-primary"
+              className="modal-btn modal-btn-primary"
               onClick={() => void handleElaborate()}
               disabled={elaborateBusy || elaborateDisabledReason !== null}
               title={elaborateDisabledReason ?? 'Generate one elaborated prompt'}
             >
               {elaborateBusy ? 'Elaborating…' : 'Elaborate'}
             </button>
-            <button className="session-card-btn" onClick={() => setShowManager(true)} disabled={queueBusy}>
+            <button className="modal-btn" onClick={() => setShowManager(true)} disabled={queueBusy}>
               Manage…
             </button>
           </div>
@@ -496,7 +496,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
           {message && <div className="advanced-message">{message}</div>}
 
           <button
-            className="session-card-btn session-card-btn-primary advanced-queue-btn"
+            className="modal-btn modal-btn-primary advanced-queue-btn"
             onClick={() => void handleQueue()}
             disabled={queueBusy || queueDisabledReason !== null}
             title={queueDisabledReason ?? ''}

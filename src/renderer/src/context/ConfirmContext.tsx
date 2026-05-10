@@ -57,11 +57,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
         >
           <div className="confirm-body">{pending.options.message}</div>
           <div className="confirm-actions">
-            <button className="confirm-btn" onClick={() => settle(false)}>
+            <button className="modal-btn" onClick={() => settle(false)}>
               {pending.options.cancelLabel ?? 'Cancel'}
             </button>
             <button
-              className={pending.options.danger ? 'confirm-btn confirm-btn-danger' : 'confirm-btn confirm-btn-primary'}
+              className={pending.options.danger ? 'modal-btn modal-btn-danger' : 'modal-btn modal-btn-primary'}
               onClick={() => settle(true)}
               autoFocus
             >

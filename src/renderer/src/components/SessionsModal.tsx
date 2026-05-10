@@ -200,7 +200,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
             New Session and Resume both drop the current session if it has no generated images.
           </p>
           <button
-            className="session-card-btn session-card-btn-primary sessions-new-btn"
+            className="modal-btn modal-btn-primary"
             onClick={() => void handleCreateSession()}
             disabled={creatingSession || hasGeneratingTasks || busySessionId !== null}
           >
@@ -238,21 +238,21 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                   <SessionPreviewStrip sessionId={session.sessionId} thumbnails={session.thumbnails} />
                   <div className="session-card-actions">
                     <button
-                      className="session-card-btn"
+                      className="modal-btn"
                       onClick={() => void handleOpenFolder(session)}
                       disabled={busy || creatingSession}
                     >
                       Open Folder
                     </button>
                     <button
-                      className="session-card-btn session-card-btn-primary"
+                      className="modal-btn modal-btn-primary"
                       onClick={() => void handleResume(session)}
                       disabled={busy || session.isCurrent || hasGeneratingTasks || creatingSession}
                     >
                       Resume
                     </button>
                     <button
-                      className="session-card-btn session-card-btn-danger"
+                      className="modal-btn modal-btn-danger"
                       onClick={() => void handleDelete(session)}
                       disabled={busy || session.isCurrent || creatingSession}
                     >

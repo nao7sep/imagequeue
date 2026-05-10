@@ -190,8 +190,8 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
         />
       </label>
       <div className="elaborator-editor-actions">
-        <button className="elaborators-btn" onClick={cancelDraft} disabled={busy}>Cancel</button>
-        <button className="elaborators-btn elaborators-btn-primary" onClick={() => void saveDraft()} disabled={busy}>
+        <button className="modal-btn" onClick={cancelDraft} disabled={busy}>Cancel</button>
+        <button className="modal-btn modal-btn-primary" onClick={() => void saveDraft()} disabled={busy}>
           Save
         </button>
       </div>
@@ -203,14 +203,14 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
       <div className="elaborators-body" ref={listRef}>
         <div className="elaborators-toolbar">
           <button
-            className="elaborators-btn elaborators-btn-primary"
+            className="modal-btn modal-btn-primary"
             onClick={startNew}
             disabled={busy || creating || editingId !== null}
           >
             New Elaborator
           </button>
           <button
-            className="elaborators-btn elaborators-btn-danger"
+            className="modal-btn modal-btn-danger"
             onClick={() => void handleReset()}
             disabled={busy}
           >
@@ -240,14 +240,14 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
                   </div>
                   <div className="elaborator-row-actions">
                     <button
-                      className="elaborators-btn"
+                      className="modal-btn"
                       onClick={() => startEdit(item)}
                       disabled={busy || creating || editingId !== null}
                     >
                       Edit
                     </button>
                     <button
-                      className="elaborators-btn elaborators-btn-danger"
+                      className="modal-btn modal-btn-danger"
                       onClick={() => void handleDelete(item)}
                       disabled={busy || creating || editingId !== null}
                     >
