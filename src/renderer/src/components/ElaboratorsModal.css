@@ -17,6 +17,7 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .elaborators-message {
@@ -120,4 +121,10 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.elaborators-reset-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }

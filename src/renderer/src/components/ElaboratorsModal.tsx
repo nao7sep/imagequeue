@@ -209,13 +209,6 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
           >
             New Elaborator
           </button>
-          <button
-            className="modal-btn modal-btn-danger"
-            onClick={() => void handleReset()}
-            disabled={busy}
-          >
-            Reset to Defaults
-          </button>
         </div>
 
         {message && <div className="elaborators-message">{message}</div>}
@@ -225,7 +218,7 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
         {loading ? (
           <div className="elaborators-empty">Loading…</div>
         ) : items.length === 0 && !creating ? (
-          <div className="elaborators-empty">No elaborators yet. Click New Elaborator or Reset to Defaults.</div>
+          <div className="elaborators-empty">No elaborators yet. Click New Elaborator or Reset to Defaults below.</div>
         ) : (
           <div className="elaborators-list">
             {items.map((item) => {
@@ -259,6 +252,16 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
             })}
           </div>
         )}
+
+        <div className="elaborators-reset-row">
+          <button
+            className="modal-btn modal-btn-danger"
+            onClick={() => void handleReset()}
+            disabled={busy}
+          >
+            Reset to Defaults
+          </button>
+        </div>
       </div>
     </Modal>
   )
