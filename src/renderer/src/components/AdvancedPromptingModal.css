@@ -99,6 +99,17 @@
   gap: 8px;
 }
 
+.advanced-row-end {
+  justify-content: flex-end;
+}
+
+.advanced-targets-flat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .advanced-empty {
   padding: 8px 10px;
   font-size: 12px;

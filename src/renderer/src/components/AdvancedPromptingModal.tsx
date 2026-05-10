@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
-import { ElaboratorsModal } from './ElaboratorsModal'
 import { useSettings } from '../context/SettingsContext'
 import {
   BACKEND_LABELS,
@@ -17,7 +16,7 @@ interface Props {
 }
 
 type PromptSource = 'as-is' | 'elaborated' | 'per-queue'
-type TargetScope = 'selected' | 'all-paid' | 'all-free' | 'all'
+type TargetScope = 'selected' | 'all-proprietary' | 'all-drawthings' | 'all'
 type ElaborationMode = 'per-task' | 'per-model'
 
 interface DtParams {
@@ -38,10 +37,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const [selectedElaboratorId, setSelectedElaboratorId] = useState<string | null>(null)
   const [elaborated, setElaborated] = useState('')
   const [elaborateBusy, setElaborateBusy] = useState(false)
-  const [showManager, setShowManager] = useState(false)
 
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
-  const [selectedCloud, setSelectedCloud] = useState<Record<BackendId, boolean>>(() => ({
+  const [selectedProprietary, setSelectedProprietary] = useState<Record<BackendId, boolean>>(() => ({
     openai: false, imagen: false, nanobanana: false, grok: false, flux: false, drawthings: false,
   }))
   const [selectedDtFiles, setSelectedDtFiles] = useState<Set<string>>(new Set())
@@ -75,7 +73,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     window.electronAPI.localListDownloadedModels().then(setDownloadedDtModels)
   }, [])
 
-  const cloudApiKeyByBackend = useMemo<Record<string, boolean>>(() => {
+  const proprietaryApiKeyByBackend = useMemo<Record<string, boolean>>(() => {
     const result: Record<string, boolean> = {}
     const backends = (settings?.image_backends ?? {}) as Record<string, Record<string, unknown>>
     for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
@@ -100,8 +98,8 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     }
   }, [settings])
 
-  const toggleCloud = (id: BackendId): void => {
-    setSelectedCloud((cur) => ({ ...cur, [id]: !cur[id] }))
+  const toggleProprietary = (id: BackendId): void => {
+    setSelectedProprietary((cur) => ({ ...cur, [id]: !cur[id] }))
   }
 
   const toggleDtFile = (file: string): void => {
@@ -113,32 +111,32 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   }
 
   const effectiveTargets = useMemo(() => {
-    const cloud: BackendId[] = []
+    const proprietary: BackendId[] = []
     let dt: string[] = []
 
     if (targetScope === 'selected') {
       for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-        if (selectedCloud[id] && cloudApiKeyByBackend[id]) cloud.push(id)
+        if (selectedProprietary[id] && proprietaryApiKeyByBackend[id]) proprietary.push(id)
       }
       dt = downloadedDtModels
         .map((m) => m.file)
         .filter((f) => selectedDtFiles.has(f))
-    } else if (targetScope === 'all-paid') {
+    } else if (targetScope === 'all-proprietary') {
       for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-        if (cloudApiKeyByBackend[id]) cloud.push(id)
+        if (proprietaryApiKeyByBackend[id]) proprietary.push(id)
       }
-    } else if (targetScope === 'all-free') {
+    } else if (targetScope === 'all-drawthings') {
       dt = downloadedDtModels.map((m) => m.file)
     } else {
       for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-        if (cloudApiKeyByBackend[id]) cloud.push(id)
+        if (proprietaryApiKeyByBackend[id]) proprietary.push(id)
       }
       dt = downloadedDtModels.map((m) => m.file)
     }
-    return { cloud, dt }
-  }, [targetScope, selectedCloud, selectedDtFiles, downloadedDtModels, cloudApiKeyByBackend])
+    return { proprietary, dt }
+  }, [targetScope, selectedProprietary, selectedDtFiles, downloadedDtModels, proprietaryApiKeyByBackend])
 
-  const targetCount = effectiveTargets.cloud.length + effectiveTargets.dt.length
+  const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
   const totalTasks = Math.max(0, targetCount * Math.max(1, count))
   const elaboratorPicked = selectedElaboratorId !== null && elaborators.some((e) => e.id === selectedElaboratorId)
   const elaborateDisabledReason = (() => {
@@ -248,11 +246,11 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
 
       let dispatched = 0
 
-      // Cloud: dispatch enqueue-single events. Columns build params from their own UI state.
+      // Proprietary: dispatch enqueue-single events. Columns build params from their own UI state.
       // For per-task elaboration we send one event per copy (each carrying a unique prompt).
       // For shared prompts we can collapse into a single event with count=copies.
-      const cloudList = targets.cloud
-      cloudList.forEach((backendId, index) => {
+      const proprietaryList = targets.proprietary
+      proprietaryList.forEach((backendId, index) => {
         if (promptSource === 'per-queue' && elaborationMode === 'per-task') {
           for (let c = 0; c < copies; c++) {
             const p = promptForUnit(index, c)
@@ -269,7 +267,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       // DT: direct IPC, model override per selected DT model.
       for (let i = 0; i < targets.dt.length; i++) {
         const modelFile = targets.dt[i]
-        const targetIndex = cloudList.length + i
+        const targetIndex = proprietaryList.length + i
         const { params } = await buildDtParams(modelFile)
         if (promptSource === 'per-queue' && elaborationMode === 'per-task') {
           for (let c = 0; c < copies; c++) {
@@ -340,7 +338,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
               ))
             )}
           </div>
-          <div className="advanced-row">
+          <div className="advanced-row advanced-row-end">
             <button
               className="modal-btn modal-btn-primary"
               onClick={() => void handleElaborate()}
@@ -349,13 +347,10 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
             >
               {elaborateBusy ? 'Elaborating…' : 'Elaborate'}
             </button>
-            <button className="modal-btn" onClick={() => setShowManager(true)} disabled={queueBusy}>
-              Manage…
-            </button>
           </div>
           <textarea
             className="advanced-elaborated"
-            rows={4}
+            rows={10}
             placeholder="Elaborated prompt will appear here. You can edit before queueing."
             value={elaborated}
             onChange={(e) => setElaborated(e.target.value)}
@@ -364,18 +359,55 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
 
         <div className="advanced-pane">
           <div className="advanced-pane-title">Targets</div>
-          <div className="advanced-targets">
-            <div className="advanced-targets-col">
-              <div className="advanced-targets-col-title">Paid</div>
+          {isMacPlatform ? (
+            <div className="advanced-targets">
+              <div className="advanced-targets-col">
+                <div className="advanced-targets-col-title">Proprietary</div>
+                {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
+                  const hasKey = proprietaryApiKeyByBackend[id]
+                  return (
+                    <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
+                      <input
+                        type="checkbox"
+                        checked={!!selectedProprietary[id]}
+                        disabled={!hasKey}
+                        onChange={() => toggleProprietary(id)}
+                      />
+                      <span>{BACKEND_LABELS[id]}</span>
+                      {!hasKey && <span className="advanced-target-hint">no API key</span>}
+                    </label>
+                  )
+                })}
+              </div>
+              <div className="advanced-targets-col">
+                <div className="advanced-targets-col-title">Draw Things</div>
+                {downloadedDtModels.length === 0 ? (
+                  <div className="advanced-empty">No models downloaded.</div>
+                ) : (
+                  downloadedDtModels.map((m) => (
+                    <label key={m.file} className="advanced-target-row">
+                      <input
+                        type="checkbox"
+                        checked={selectedDtFiles.has(m.file)}
+                        onChange={() => toggleDtFile(m.file)}
+                      />
+                      <span>{m.name || m.file}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="advanced-targets-flat">
               {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
-                const hasKey = cloudApiKeyByBackend[id]
+                const hasKey = proprietaryApiKeyByBackend[id]
                 return (
                   <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
                     <input
                       type="checkbox"
-                      checked={!!selectedCloud[id]}
+                      checked={!!selectedProprietary[id]}
                       disabled={!hasKey}
-                      onChange={() => toggleCloud(id)}
+                      onChange={() => toggleProprietary(id)}
                     />
                     <span>{BACKEND_LABELS[id]}</span>
                     {!hasKey && <span className="advanced-target-hint">no API key</span>}
@@ -383,26 +415,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
                 )
               })}
             </div>
-            <div className="advanced-targets-col">
-              <div className="advanced-targets-col-title">Free (Draw Things)</div>
-              {!isMacPlatform ? (
-                <div className="advanced-empty">Draw Things is macOS only.</div>
-              ) : downloadedDtModels.length === 0 ? (
-                <div className="advanced-empty">No models downloaded.</div>
-              ) : (
-                downloadedDtModels.map((m) => (
-                  <label key={m.file} className="advanced-target-row">
-                    <input
-                      type="checkbox"
-                      checked={selectedDtFiles.has(m.file)}
-                      onChange={() => toggleDtFile(m.file)}
-                    />
-                    <span>{m.name || m.file}</span>
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="advanced-pane">
@@ -442,14 +455,18 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
               <input type="radio" name="target-scope" checked={targetScope === 'selected'} onChange={() => setTargetScope('selected')} />
               <span>Selected</span>
             </label>
-            <label className="advanced-radio">
-              <input type="radio" name="target-scope" checked={targetScope === 'all-paid'} onChange={() => setTargetScope('all-paid')} />
-              <span>All paid</span>
-            </label>
-            <label className="advanced-radio">
-              <input type="radio" name="target-scope" checked={targetScope === 'all-free'} onChange={() => setTargetScope('all-free')} />
-              <span>All free</span>
-            </label>
+            {isMacPlatform && (
+              <>
+                <label className="advanced-radio">
+                  <input type="radio" name="target-scope" checked={targetScope === 'all-proprietary'} onChange={() => setTargetScope('all-proprietary')} />
+                  <span>All proprietary</span>
+                </label>
+                <label className="advanced-radio">
+                  <input type="radio" name="target-scope" checked={targetScope === 'all-drawthings'} onChange={() => setTargetScope('all-drawthings')} />
+                  <span>All Draw Things</span>
+                </label>
+              </>
+            )}
             <label className="advanced-radio">
               <input type="radio" name="target-scope" checked={targetScope === 'all'} onChange={() => setTargetScope('all')} />
               <span>All</span>
@@ -505,16 +522,6 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
           </button>
         </div>
       </div>
-
-      {showManager && (
-        <ElaboratorsModal onClose={() => setShowManager(false)} onChange={(items) => {
-          setElaborators(items)
-          setSelectedElaboratorId((current) => {
-            if (current && items.some((e) => e.id === current)) return current
-            return items[0]?.id ?? null
-          })
-        }} />
-      )}
     </Modal>
   )
 }

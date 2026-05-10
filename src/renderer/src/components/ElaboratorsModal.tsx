@@ -6,7 +6,6 @@ import './ElaboratorsModal.css'
 
 interface Props {
   onClose: () => void
-  onChange?: (items: Elaborator[]) => void
 }
 
 interface DraftState {
@@ -17,7 +16,7 @@ interface DraftState {
 
 const EMPTY_DRAFT: DraftState = { name: '', description: '', template: '' }
 
-export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Element {
+export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const [items, setItems] = useState<Elaborator[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,11 +34,10 @@ export function ElaboratorsModal({ onClose, onChange }: Props): React.JSX.Elemen
     try {
       const next = await window.electronAPI.listElaborators()
       setItems(next)
-      onChange?.(next)
     } finally {
       setLoading(false)
     }
-  }, [onChange])
+  }, [])
 
   useEffect(() => {
     void refresh()
