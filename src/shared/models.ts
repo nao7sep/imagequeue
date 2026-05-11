@@ -363,8 +363,8 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
 
 export const GROK_MODELS: GrokModelDef[] = [
   {
-    id: 'grok-imagine-image-pro',
-    label: 'Grok Imagine Pro',
+    id: 'grok-imagine-image-quality',
+    label: 'Grok Imagine Quality',
     backend: 'grok',
     pricing: 0.07
   },
