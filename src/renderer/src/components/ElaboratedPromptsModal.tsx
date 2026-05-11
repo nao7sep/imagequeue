@@ -16,16 +16,13 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const { elaboratedPrompts } = state
 
-  const handleDelete = useCallback(async (index: number): Promise<void> => {
-    const ok = await confirm({
-      title: 'Delete prompt',
-      message: 'Remove this prompt from the session list? Future brainstorm calls will no longer try to avoid it.',
-      confirmLabel: 'Delete',
-      danger: true,
-    })
-    if (!ok) return
+  // Per-row delete is unconfirmed — the list is per-session, never persisted
+  // to disk, and trimming a long generated list is a routine cleanup gesture
+  // (cf. the queue's confirm-off default for task removal). Delete All stays
+  // confirmed because its blast radius is the whole session list.
+  const handleDelete = useCallback((index: number): void => {
     deleteElaboratedPromptAt(index)
-  }, [confirm, deleteElaboratedPromptAt])
+  }, [deleteElaboratedPromptAt])
 
   const handleClearAll = useCallback(async (): Promise<void> => {
     if (elaboratedPrompts.length === 0) return
@@ -54,7 +51,7 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
                 <button
                   type="button"
                   className="modal-btn modal-btn-danger"
-                  onClick={() => void handleDelete(index)}
+                  onClick={() => handleDelete(index)}
                   title="Remove this prompt from the session list"
                 >
                   Delete

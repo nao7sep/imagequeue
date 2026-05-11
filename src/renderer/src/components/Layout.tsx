@@ -245,9 +245,17 @@ export function Layout(): React.JSX.Element {
                     Draw Things Models
                   </button>
                 )}
-                <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
-                <button onClick={() => openOverlay('elaboration-settings')}>Elaboration Settings</button>
-                <button onClick={() => openOverlay('elaborated-prompts')}>Elaborated Prompts</button>
+                <div className="menu-has-submenu">
+                  <button className="menu-submenu-parent" type="button">
+                    <span>Elaboration</span>
+                    <span className="menu-submenu-arrow" aria-hidden="true">▸</span>
+                  </button>
+                  <div className="menu-submenu" role="menu">
+                    <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
+                    <button onClick={() => openOverlay('elaboration-settings')}>Elaboration Settings</button>
+                    <button onClick={() => openOverlay('elaborated-prompts')}>Elaborated Prompts</button>
+                  </div>
+                </div>
                 <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
                 <button onClick={() => openOverlay('about')}>About</button>
               </div>

@@ -167,7 +167,7 @@ Four prompt sources:
 
 Elaborated prompts accumulate in a per-session list. The text AI sees previously elaborated prompts as context on each new request and avoids repeating them. The list persists across closing and reopening the modal, and is wiped when you start a new session or resume another one — exactly like the main prompt textarea.
 
-Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager, where you can delete individual prompts or clear the whole list. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
+Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. Per-row **Delete** removes a prompt without confirmation (the list is per-session and never persisted to disk); **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 
 The modal stays open after queueing so you can run another round. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; any other time, it closes freely.
 
@@ -203,11 +203,17 @@ The hamburger menu (☰) gives access to:
 | Show JIC Images | Show or hide completed images that were kept just in case |
 | Settings | Open Settings |
 | Draw Things Models | Open the Draw Things model browser and importer |
+| Elaboration ▸ | Hover to reveal the elaboration submenu (see below) |
+| Keyboard Shortcuts | Open the shortcut reference |
+| About | Show version and links |
+
+The **Elaboration** submenu flies out to the right on hover:
+
+| Submenu item | Description |
+|---|---|
 | Elaborators | Manage prompt elaborators |
 | Elaboration Settings | Tune batch size, retries, and AI message templates |
 | Elaborated Prompts | Review and delete prompts elaborated in the current session |
-| Keyboard Shortcuts | Open the shortcut reference |
-| About | Show version and links |
 
 ## Keyboard shortcuts
 
