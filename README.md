@@ -152,7 +152,7 @@ The **Advanced Prompting** button above the prompt textarea opens a modal for ba
 
 The modal has three panes:
 
-- **Prompt** — your seed text, an elaborator picker, the **Elaborate** button, the resulting elaborated prompt, and an optional **Override** field that gets appended to every queued prompt.
+- **Prompt** — your seed text, an elaborator picker, the **Elaborate** button, the resulting elaborated prompt, and an optional **Override** field that is combined with every queued prompt using the configurable `override_combine` template (see Elaboration Settings).
 - **Targets** — checkboxes for proprietary backends and (on macOS) downloaded Draw Things models. Long Draw Things model names are truncated; hover the row to see the full name.
 - **Execution** — the prompt source, target scope, iteration count, and the **Queue Tasks** button.
 
@@ -173,9 +173,11 @@ The modal stays open after queueing so you can run another round. While an elabo
 
 ## Elaborators
 
-**☰ → Elaborators** opens the elaborator manager. An elaborator is a saved system instruction telling the text AI how to elaborate a seed prompt — for example, "expand the seed with concrete details about the subject and what is happening." Each elaborator has a name, optional description, and template text.
+**☰ → Elaborators** opens the elaborator manager. An elaborator is a saved system instruction telling the text AI how to elaborate a seed prompt. Each elaborator has a name, optional description, and template text.
 
-Use **New Elaborator** to add one, **Edit** to change one, **Delete** to remove. **Reset to Defaults** at the bottom replaces the entire list with the shipped defaults.
+The shipped defaults are a set of 25 stylistic directions — photographic looks (cinematic, documentary, photorealistic), animation styles (Studio Ghibli, modern anime, Disney/Pixar 3D), traditional media (oil, watercolor, ink), art movements (impressionist, surrealist, cubist, pop art, ukiyo-e), design directions (minimalist, vintage poster, advertising), mood/genre (horror, cyberpunk, high fantasy), and a wildly-creative stretch. Each pushes the elaboration toward a specific visual signature rather than a generic expansion.
+
+Use **New Elaborator** to add one, **Edit** to change one, **Delete** to remove. **Reset to Defaults** at the bottom replaces the entire list with the shipped defaults — useful after the shipped set changes between app versions.
 
 ## Elaboration Settings
 

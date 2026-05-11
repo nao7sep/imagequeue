@@ -28,6 +28,17 @@ export function Layout(): React.JSX.Element {
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
+
+  // Reset the main prompt on session change so its lifecycle matches the
+  // Advanced Prompting modal: per-session, not persisted to disk, wiped on
+  // new session / resume. Without this the prompt textarea would carry over
+  // across sessions, which surprises users moving between sessions.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onSessionChanged(() => {
+      setPrompt('')
+    })
+    return unsubscribe
+  }, [])
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
