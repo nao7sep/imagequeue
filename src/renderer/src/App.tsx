@@ -5,6 +5,7 @@ import { CliJobsProvider } from './context/CliJobsContext'
 import { QueueProvider } from './context/QueueContext'
 import { SelectionProvider } from './context/SelectionContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { AdvancedPromptingProvider } from './context/AdvancedPromptingContext'
 import './styles.css'
 
 export function App(): React.JSX.Element {
@@ -14,8 +15,10 @@ export function App(): React.JSX.Element {
         <SettingsProvider>
           <QueueProvider>
             <SelectionProvider>
-              <Layout />
-              <CliJobsPanel />
+              <AdvancedPromptingProvider>
+                <Layout />
+                <CliJobsPanel />
+              </AdvancedPromptingProvider>
             </SelectionProvider>
           </QueueProvider>
         </SettingsProvider>

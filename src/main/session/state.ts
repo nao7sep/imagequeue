@@ -190,6 +190,15 @@ function broadcastQueueUpdate(tasksByBackend: Record<BackendId, Task[]>): void {
   }
 }
 
+// Fired whenever the active session changes (new session, resume into another).
+// Renderer-side session-scoped contexts (e.g. AdvancedPromptingContext) listen
+// to this to reset their in-memory state.
+function broadcastSessionChanged(sessionId: string): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('session:changed', { sessionId })
+  }
+}
+
 export function resolveSessionDir(sessionId: string): string {
   const safeSessionId = ensureSessionId(sessionId)
   return path.join(getOutputDir(), safeSessionId)
@@ -222,6 +231,7 @@ export function createSession(): void {
   resetOutputTimestampAllocators()
   persistActiveSession()
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
+  broadcastSessionChanged(getSessionId())
 
   if (shouldDeletePreviousSession && fs.existsSync(previousSessionDir)) {
     fs.rmSync(previousSessionDir, { recursive: true, force: true })
@@ -289,6 +299,7 @@ export function resumeSession(sessionId: string): void {
   seedOutputTimestampAllocators(manifest.tasks)
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
+  broadcastSessionChanged(getSessionId())
 
   if (shouldDeletePreviousSession && previousSessionId !== sessionId && fs.existsSync(previousSessionDir)) {
     fs.rmSync(previousSessionDir, { recursive: true, force: true })

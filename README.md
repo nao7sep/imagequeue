@@ -165,9 +165,11 @@ Four prompt sources:
 | **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; all selected models in that iteration share it. |
 | **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique. |
 
-Generated prompts accumulate in a per-modal-open list. The text AI sees previously generated prompts as context on each new request and avoids repeating them. Closing the modal clears the list — by design.
+Elaborated prompts accumulate in a per-session list. The text AI sees previously elaborated prompts as context on each new request and avoids repeating them. The list persists across closing and reopening the modal, and is wiped when you start a new session or resume another one — exactly like the main prompt textarea.
 
-The modal stays open after queueing so you can run another round.
+Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager, where you can delete individual prompts or clear the whole list. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
+
+The modal stays open after queueing so you can run another round. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; any other time, it closes freely.
 
 ## Elaborators
 
@@ -201,6 +203,7 @@ The hamburger menu (☰) gives access to:
 | Draw Things Models | Open the Draw Things model browser and importer |
 | Elaborators | Manage prompt elaborators |
 | Elaboration Settings | Tune batch size, retries, and AI message templates |
+| Elaborated Prompts | Review and delete prompts elaborated in the current session |
 | Keyboard Shortcuts | Open the shortcut reference |
 | About | Show version and links |
 

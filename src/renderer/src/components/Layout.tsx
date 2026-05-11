@@ -6,6 +6,7 @@ import { Modal } from './Modal'
 import { SessionsModal } from './SessionsModal'
 import { ElaboratorsModal } from './ElaboratorsModal'
 import { ElaborationSettingsModal } from './ElaborationSettingsModal'
+import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
@@ -19,7 +20,7 @@ const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform =
   ? ALL_BACKENDS
   : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
 
-type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | null
+type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | null
 
 export function Layout(): React.JSX.Element {
   useNotifications()
@@ -178,6 +179,9 @@ export function Layout(): React.JSX.Element {
       {overlay === 'elaboration-settings' && (
         <ElaborationSettingsModal onClose={() => setOverlay(null)} />
       )}
+      {overlay === 'elaborated-prompts' && (
+        <ElaboratedPromptsModal onClose={() => setOverlay(null)} />
+      )}
       {overlay === 'about' && (
         <Modal title="About" onClose={() => setOverlay(null)}>
           <div className="about-content">
@@ -232,6 +236,7 @@ export function Layout(): React.JSX.Element {
                 )}
                 <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
                 <button onClick={() => openOverlay('elaboration-settings')}>Elaboration Settings</button>
+                <button onClick={() => openOverlay('elaborated-prompts')}>Elaborated Prompts</button>
                 <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
                 <button onClick={() => openOverlay('about')}>About</button>
               </div>

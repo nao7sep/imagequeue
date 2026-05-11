@@ -267,6 +267,16 @@ const api = {
     }
     ipcRenderer.on('queue:updated', handler)
     return () => { ipcRenderer.removeListener('queue:updated', handler) }
+  },
+
+  // Fired when the active session changes (new session, resume into another).
+  // Session-scoped renderer state (e.g. AdvancedPromptingContext) resets here.
+  onSessionChanged: (callback: (event: { sessionId: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string }): void => {
+      callback(data)
+    }
+    ipcRenderer.on('session:changed', handler)
+    return () => { ipcRenderer.removeListener('session:changed', handler) }
   }
 }
 

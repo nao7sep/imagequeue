@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import type { Elaborator } from '../../../shared/types'
@@ -133,6 +133,36 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     }
   }, [confirm, editingId, refresh])
 
+  // Dirty when the open editor has unsaved input.
+  // - Creating: any non-empty field counts.
+  // - Editing: any field that differs from the persisted elaborator counts.
+  const dirty = useMemo(() => {
+    if (creating) {
+      return draft.name.trim() !== '' || draft.description.trim() !== '' || draft.template.trim() !== ''
+    }
+    if (editingId) {
+      const original = items.find((i) => i.id === editingId)
+      if (!original) return false
+      return draft.name !== original.name
+        || (draft.description ?? '') !== (original.description ?? '')
+        || draft.template !== original.template
+    }
+    return false
+  }, [creating, editingId, draft, items])
+
+  const handleRequestClose = useCallback(async (): Promise<void> => {
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Discard changes?',
+        message: 'You have an unsaved elaborator draft. Close without saving?',
+        confirmLabel: 'Discard',
+        danger: true,
+      })
+      if (!ok) return
+    }
+    onClose()
+  }, [dirty, confirm, onClose])
+
   const handleReset = useCallback(async (): Promise<void> => {
     const ok = await confirm({
       title: 'Reset Elaborators',
@@ -197,7 +227,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   )
 
   return (
-    <Modal title="Elaborators" className="elaborators-modal-box" onClose={onClose}>
+    <Modal title="Elaborators" className="elaborators-modal-box" onClose={() => void handleRequestClose()}>
       <div className="elaborators-body" ref={listRef}>
         <div className="elaborators-toolbar">
           <button
