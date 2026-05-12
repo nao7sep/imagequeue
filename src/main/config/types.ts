@@ -14,11 +14,11 @@ export interface OpenAIBackendConfig {
   api_key: string
   model: string
   default_params: {
-    quality: 'low' | 'medium' | 'high'
+    quality: 'low' | 'medium' | 'high' | 'auto'
     width: number
     height: number
     outputFormat: 'png' | 'jpeg' | 'webp'
-    background: 'opaque' | 'transparent'
+    background: 'opaque' | 'transparent' | 'auto'
   }
   concurrency: number
   timeout_ms: number
@@ -68,6 +68,10 @@ export interface DrawThingsBackendConfig {
 export interface NanoBananaBackendConfig {
   api_key: string
   model: string
+  default_params: {
+    aspectRatio: string
+    imageSize: string
+  }
   concurrency: number
   timeout_ms: number
 }
@@ -77,6 +81,7 @@ export interface GrokBackendConfig {
   model: string
   default_params: {
     aspectRatio: string
+    resolution: string
   }
   concurrency: number
   timeout_ms: number

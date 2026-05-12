@@ -21,7 +21,7 @@
 }
 
 .elaborated-prompts-list {
-  list-style: decimal inside;
+  list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
@@ -37,6 +37,15 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-surface);
+}
+
+.elaborated-prompts-number {
+  min-width: 2.5em;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  text-align: right;
+  flex: 0 0 auto;
 }
 
 .elaborated-prompts-text {

@@ -15,6 +15,7 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const { state, deleteElaboratedPromptAt, clearElaboratedPrompts } = useAdvancedPrompting()
   const confirm = useConfirm()
   const { elaboratedPrompts } = state
+  const displayPrompts = [...elaboratedPrompts].reverse()
 
   // Per-row delete is unconfirmed — the list is per-session, never persisted
   // to disk, and trimming a long generated list is a routine cleanup gesture
@@ -44,20 +45,25 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
             No prompts elaborated in this session yet. Open Advanced Prompting and click Elaborate, or queue with a fresh-elaboration mode, to produce some.
           </div>
         ) : (
-          <ol className="elaborated-prompts-list">
-            {elaboratedPrompts.map((prompt, index) => (
-              <li key={`${index}-${prompt.slice(0, 24)}`} className="elaborated-prompts-row">
-                <div className="elaborated-prompts-text">{prompt}</div>
-                <button
-                  type="button"
-                  className="modal-btn modal-btn-danger"
-                  onClick={() => handleDelete(index)}
-                  title="Remove this prompt from the session list"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
+          <ol className="elaborated-prompts-list" reversed start={elaboratedPrompts.length}>
+            {displayPrompts.map((prompt, index) => {
+              const originalIndex = elaboratedPrompts.length - 1 - index
+              const displayNumber = elaboratedPrompts.length - index
+              return (
+                <li key={`${originalIndex}-${prompt.slice(0, 24)}`} className="elaborated-prompts-row">
+                  <div className="elaborated-prompts-number" aria-hidden="true">{displayNumber}.</div>
+                  <div className="elaborated-prompts-text">{prompt}</div>
+                  <button
+                    type="button"
+                    className="modal-btn modal-btn-danger"
+                    onClick={() => handleDelete(originalIndex)}
+                    title="Remove this prompt from the session list"
+                  >
+                    Delete
+                  </button>
+                </li>
+              )
+            })}
           </ol>
         )}
       </div>

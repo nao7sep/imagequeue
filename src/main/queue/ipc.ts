@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { queueManager } from './queue-manager'
-import { BackendId, EnqueueRequest } from '../../shared/types'
+import { BackendId, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log } from '../logger'
@@ -14,6 +14,17 @@ export function registerQueueIpc(): void {
     for (const task of tasks) {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
+    persistActiveSession()
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    return tasks
+  })
+
+  ipcMain.handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[]) => {
+    const tasks = queueManager.enqueueBatch(units)
+    tasks.forEach((task, index) => {
+      const unit = units[index]
+      logEnqueue(task.id, unit.backend, unit.model, unit.prompt, unit.params, 1)
+    })
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
     return tasks

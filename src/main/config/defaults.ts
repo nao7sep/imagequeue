@@ -35,8 +35,8 @@ export function createDefaultConfig(): AppConfig {
         model: 'imagen-4.0-generate-001',
         default_params: {
           aspectRatio: '1:1',
-          imageSize: '1024x1024',
-          personGeneration: 'allow_adult',
+          imageSize: '1K',
+          personGeneration: 'allow_all',
           numberOfImages: 1
         },
         concurrency: 3,
@@ -45,6 +45,10 @@ export function createDefaultConfig(): AppConfig {
       nanobanana: {
         api_key: '',
         model: 'gemini-3.1-flash-image-preview',
+        default_params: {
+          aspectRatio: '1:1',
+          imageSize: '1K'
+        },
         concurrency: 3,
         timeout_ms: 180000
       },
@@ -52,7 +56,8 @@ export function createDefaultConfig(): AppConfig {
         api_key: '',
         model: 'grok-imagine-image',
         default_params: {
-          aspectRatio: '1:1'
+          aspectRatio: '1:1',
+          resolution: '1k'
         },
         concurrency: 3,
         timeout_ms: 180000

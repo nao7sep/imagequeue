@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
+import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import {
   useAdvancedPrompting,
   type PromptMode,
@@ -10,6 +11,7 @@ import {
   BACKEND_LABELS,
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
   type BackendId,
+  type EnqueueBatchUnit,
   type Elaborator,
   type LocalModelInfo,
 } from '../../../shared/types'
@@ -36,6 +38,7 @@ const isMacPlatform = typeof window !== 'undefined' && window.electronAPI?.platf
 export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React.JSX.Element {
   const { settings } = useSettings()
   const confirm = useConfirm()
+  const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useAdvancedPrompting()
   const {
     seed, selectedElaboratorId, elaborated, override,
@@ -345,55 +348,42 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         return finalize(raw)
       }
 
-      // Modes that share one prompt across all copies of a target can collapse N
-      // tasks into a single enqueue with count=copies. The fresh-* modes need
-      // distinct prompts per iteration, so each copy is dispatched separately.
-      const isBatchable = promptMode === 'as-is' || promptMode === 'elaborated'
-
-      let dispatched = 0
-      const proprietaryList = targets.proprietary
-      proprietaryList.forEach((backendId, index) => {
-        if (isBatchable) {
-          const p = promptForUnit(index, 0)
-          window.dispatchEvent(new CustomEvent('enqueue-single', { detail: { backend: backendId, prompt: p, count: copies } }))
-          dispatched += copies
-        } else {
-          for (let c = 0; c < copies; c++) {
-            const p = promptForUnit(index, c)
-            window.dispatchEvent(new CustomEvent('enqueue-single', { detail: { backend: backendId, prompt: p, count: 1 } }))
-            dispatched++
-          }
+      const proprietaryUnits = targets.proprietary.map((backendId) => {
+        const snapshot = snapshots[backendId]
+        if (!snapshot || !snapshot.model) {
+          throw new Error(`The ${BACKEND_LABELS[backendId]} column is not ready yet.`)
+        }
+        return {
+          backend: backendId,
+          model: snapshot.model,
+          params: snapshot.params,
         }
       })
 
-      for (let i = 0; i < targets.dt.length; i++) {
-        const modelFile = targets.dt[i]
-        const targetIndex = proprietaryList.length + i
-        const { params } = await buildDtParams(modelFile)
-        if (isBatchable) {
-          const p = promptForUnit(targetIndex, 0)
-          await window.electronAPI.enqueue({
-            prompt: p,
-            backend: 'drawthings',
-            model: modelFile,
-            params: params as unknown as Record<string, unknown>,
-            count: copies,
+      const dtUnits = await Promise.all(targets.dt.map((modelFile) => buildDtParams(modelFile)))
+
+      const units: EnqueueBatchUnit[] = []
+      for (let c = 0; c < copies; c++) {
+        proprietaryUnits.forEach((unit, index) => {
+          units.push({
+            prompt: promptForUnit(index, c),
+            backend: unit.backend,
+            model: unit.model,
+            params: unit.params,
           })
-          dispatched += copies
-        } else {
-          for (let c = 0; c < copies; c++) {
-            const p = promptForUnit(targetIndex, c)
-            await window.electronAPI.enqueue({
-              prompt: p,
-              backend: 'drawthings',
-              model: modelFile,
-              params: params as unknown as Record<string, unknown>,
-              count: 1,
-            })
-            dispatched++
-          }
-        }
+        })
+        dtUnits.forEach((unit, index) => {
+          units.push({
+            prompt: promptForUnit(proprietaryUnits.length + index, c),
+            backend: 'drawthings',
+            model: unit.model,
+            params: unit.params as unknown as Record<string, unknown>,
+          })
+        })
       }
+
+      await window.electronAPI.enqueueBatch(units)
+      const dispatched = units.length
 
       showInfo(`Queued ${dispatched} task${dispatched === 1 ? '' : 's'}.`)
       void window.electronAPI.appLog('info', 'Advanced: Queue dispatched', {
@@ -410,7 +400,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   }, [
     queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, override, runBrainstorm, buildDtParams, elaboratedPrompts.length, settings,
-    clearMessage, showInfo, showError,
+    snapshots, clearMessage, showInfo, showError,
   ])
 
   // Esc / outside-click / X all route through here. The only time we ask the

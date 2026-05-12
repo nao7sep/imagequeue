@@ -6,6 +6,7 @@ import { QueueProvider } from './context/QueueContext'
 import { SelectionProvider } from './context/SelectionContext'
 import { SettingsProvider } from './context/SettingsContext'
 import { AdvancedPromptingProvider } from './context/AdvancedPromptingContext'
+import { EnqueueConfigProvider } from './context/EnqueueConfigContext'
 import './styles.css'
 
 export function App(): React.JSX.Element {
@@ -15,10 +16,12 @@ export function App(): React.JSX.Element {
         <SettingsProvider>
           <QueueProvider>
             <SelectionProvider>
-              <AdvancedPromptingProvider>
-                <Layout />
-                <CliJobsPanel />
-              </AdvancedPromptingProvider>
+              <EnqueueConfigProvider>
+                <AdvancedPromptingProvider>
+                  <Layout />
+                  <CliJobsPanel />
+                </AdvancedPromptingProvider>
+              </EnqueueConfigProvider>
             </SelectionProvider>
           </QueueProvider>
         </SettingsProvider>

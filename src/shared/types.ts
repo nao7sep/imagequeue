@@ -110,6 +110,13 @@ export interface EnqueueRequest {
   count: number
 }
 
+export interface EnqueueBatchUnit {
+  prompt: string
+  backend: BackendId
+  model: string
+  params: Record<string, unknown>
+}
+
 export interface ColumnSettings {
   model: string
   params: Record<string, unknown>

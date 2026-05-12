@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { BackendId, Task, EnqueueRequest } from '../../shared/types'
+import { BackendId, Task, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 import { estimateCostFromRegistry } from '../../shared/models'
 
 export function createEmptyQueues(): Record<BackendId, Task[]> {
@@ -32,31 +32,53 @@ export function cloneTask(task: Task): Task {
 class QueueManager {
   private queues: Record<BackendId, Task[]> = createEmptyQueues()
 
+  private createTask(request: EnqueueBatchUnit): Task {
+    return {
+      id: crypto.randomUUID(),
+      prompt: request.prompt,
+      backend: request.backend,
+      model: request.model,
+      params: { ...request.params },
+      status: 'queued',
+      estimatedCostUsd: estimateCostFromRegistry(request.backend, request.model, request.params),
+      enqueuedAt: new Date().toISOString(),
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      imagePath: null,
+      baseName: null,
+      error: null
+    }
+  }
+
   enqueue(request: EnqueueRequest): Task[] {
     const tasks: Task[] = []
 
     for (let i = 0; i < request.count; i++) {
-      const task: Task = {
-        id: crypto.randomUUID(),
-        prompt: request.prompt,
-        backend: request.backend,
-        model: request.model,
-        params: { ...request.params },
-        status: 'queued',
-        estimatedCostUsd: estimateCostFromRegistry(request.backend, request.model, request.params),
-        enqueuedAt: new Date().toISOString(),
-        startedAt: null,
-        completedAt: null,
-        durationMs: null,
-        imagePath: null,
-        baseName: null,
-        error: null
-      }
+      const task = this.createTask(request)
       this.queues[request.backend].unshift(task)
       tasks.push(task)
     }
 
     return tasks
+  }
+
+  enqueueBatch(units: EnqueueBatchUnit[]): Task[] {
+    const created = createEmptyQueues()
+    const orderedTasks: Task[] = []
+
+    for (const unit of units) {
+      const task = this.createTask(unit)
+      created[unit.backend].push(task)
+      orderedTasks.push(task)
+    }
+
+    for (const backend of Object.keys(created) as BackendId[]) {
+      if (created[backend].length === 0) continue
+      this.queues[backend] = [...created[backend], ...this.queues[backend]]
+    }
+
+    return orderedTasks
   }
 
   getActiveTasks(backend: BackendId): Task[] {

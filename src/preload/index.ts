@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   BackendId,
   Elaborator,
+  EnqueueBatchUnit,
   EnqueueRequest,
   Task,
   CliStatus,
@@ -32,6 +33,9 @@ const api = {
   // Queue operations
   enqueue: (request: EnqueueRequest): Promise<Task[]> =>
     ipcRenderer.invoke('queue:enqueue', request),
+
+  enqueueBatch: (units: EnqueueBatchUnit[]): Promise<Task[]> =>
+    ipcRenderer.invoke('queue:enqueueBatch', units),
 
   getTasks: (backend: BackendId): Promise<Task[]> =>
     ipcRenderer.invoke('queue:getTasks', backend),

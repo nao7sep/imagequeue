@@ -41,6 +41,8 @@ npm run typecheck
 3. Review queued, running, completed, failed, and interrupted tasks in each column.
 4. Select a completed task to preview, inspect metadata, export, reveal, or copy it.
 
+For cloud backends, the queue column remembers the last model and generation settings you used and restores them on the next launch. Draw Things keeps its settings separately per local model.
+
 ## Sessions
 
 Each app launch creates a session folder under the output directory. ImageQueue writes a `session.json` snapshot there as queue state changes, so you can later reopen that session from the menu.
@@ -162,12 +164,12 @@ Four prompt sources:
 |---|---|
 | **User prompt as-is** | Send the seed verbatim. No AI involvement. |
 | **Elaborated prompt (same for all)** | Use the result from clicking **Elaborate**, identical for every queued task. |
-| **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; all selected models in that iteration share it. |
-| **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique. |
+| **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; queue one task per selected target in each round, with all selected models in that round sharing the same prompt. Within a round, cloud backends follow display order and Draw Things models follow alphabetical order. |
+| **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique; queue order is still round-robin by round, with cloud backends first in display order and Draw Things models after them in alphabetical order. |
 
 Elaborated prompts accumulate in a per-session list. The text AI sees previously elaborated prompts as context on each new request and avoids repeating them. The list persists across closing and reopening the modal, and is wiped when you start a new session or resume another one — exactly like the main prompt textarea.
 
-Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. Per-row **Delete** removes a prompt without confirmation (the list is per-session and never persisted to disk); **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
+Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. The list is numbered and shown newest-first so the latest prompt is immediately visible, while the underlying AI context remains chronological. Per-row **Delete** removes a prompt without confirmation (the list is per-session and never persisted to disk); **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 
 The modal stays open after queueing so you can run another round. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; any other time, it closes freely.
 
