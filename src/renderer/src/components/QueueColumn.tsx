@@ -12,6 +12,7 @@ import {
   GROK_ASPECT_RATIOS,
   GROK_RESOLUTIONS,
   FLUX_SIZES,
+  OPENAI_SIZES_GPT2,
   OPENAI_GPT2_MAX_EDGE,
   OPENAI_GPT2_MIN_EDGE,
   OPENAI_GPT2_SIZE_STEP,
@@ -49,22 +50,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
 const CUSTOM_OPENAI_SIZE = 'custom'
-const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = [
-  { label: '512x512', width: 512, height: 512 },
-  { label: '768x768', width: 768, height: 768 },
-  { label: '1024x1024 (Square)', width: 1024, height: 1024 },
-  { label: '768x1024 (Portrait 3:4)', width: 768, height: 1024 },
-  { label: '1024x768 (Landscape 4:3)', width: 1024, height: 768 },
-  { label: '576x1024 (Portrait 9:16)', width: 576, height: 1024 },
-  { label: '1024x576 (Landscape 16:9)', width: 1024, height: 576 },
-  { label: '1024x1536 (Portrait 2:3)', width: 1024, height: 1536 },
-  { label: '1536x1024 (Landscape 3:2)', width: 1536, height: 1024 },
-  { label: '2048x2048 (2K Square)', width: 2048, height: 2048 },
-  { label: '1536x2048 (2K Portrait 3:4)', width: 1536, height: 2048 },
-  { label: '2048x1536 (2K Landscape 4:3)', width: 2048, height: 1536 },
-  { label: '1152x2048 (2K Portrait 9:16)', width: 1152, height: 2048 },
-  { label: '2048x1152 (2K Landscape 16:9)', width: 2048, height: 1152 }
-]
+const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = OPENAI_SIZES_GPT2
 
 function buildDrawThingsParams(
   width: number,
@@ -169,8 +155,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
   // FLUX params
   const [fluxSizeIdx, setFluxSizeIdx] = useState(0)
-  const [fluxSteps, setFluxSteps] = useState(40)
-  const [fluxGuidance, setFluxGuidance] = useState(7)
+  const [fluxSteps, setFluxSteps] = useState(50)
+  const [fluxGuidance, setFluxGuidance] = useState(5)
   const [fluxSeed, setFluxSeed] = useState('')
 
   // Grok Imagine params
@@ -528,10 +514,10 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       const size = FLUX_SIZES[nextSizeIdx >= 0 ? nextSizeIdx : 0]
       const nextSteps = nextModelDef.stepsRange && typeof savedDefaultParams.steps === 'number'
         ? Math.max(nextModelDef.stepsRange.min, Math.min(nextModelDef.stepsRange.max, savedDefaultParams.steps))
-        : (nextModelDef.stepsRange?.default ?? 40)
+        : (nextModelDef.stepsRange?.default ?? 50)
       const nextGuidance = nextModelDef.guidanceRange && typeof savedDefaultParams.guidance === 'number'
         ? Math.max(nextModelDef.guidanceRange.min, Math.min(nextModelDef.guidanceRange.max, savedDefaultParams.guidance))
-        : (nextModelDef.guidanceRange?.default ?? 7)
+        : (nextModelDef.guidanceRange?.default ?? 5)
       const nextSeed = savedDefaultParams.seed == null ? '' : String(savedDefaultParams.seed)
       setFluxSizeIdx(nextSizeIdx >= 0 ? nextSizeIdx : 0)
       if (nextModelDef.stepsRange) setFluxSteps(nextSteps)
@@ -905,13 +891,32 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
             {fluxModelDef?.stepsRange && (
               <div className="setting-row">
                 <label>steps</label>
-                <input type="number" value={fluxSteps} onChange={(e) => setFluxSteps(Math.max(1, parseInt(e.target.value) || 1))} min={fluxModelDef.stepsRange.min} max={fluxModelDef.stepsRange.max} />
+                <input
+                  type="number"
+                  value={fluxSteps}
+                  onChange={(e) => {
+                    const next = parseInt(e.target.value) || fluxModelDef.stepsRange!.default
+                    setFluxSteps(Math.max(fluxModelDef.stepsRange!.min, Math.min(fluxModelDef.stepsRange!.max, next)))
+                  }}
+                  min={fluxModelDef.stepsRange.min}
+                  max={fluxModelDef.stepsRange.max}
+                />
               </div>
             )}
             {fluxModelDef?.guidanceRange && (
               <div className="setting-row">
                 <label>guidance</label>
-                <input type="number" value={fluxGuidance} onChange={(e) => setFluxGuidance(Math.max(fluxModelDef!.guidanceRange!.min, parseFloat(e.target.value) || fluxModelDef!.guidanceRange!.min))} min={fluxModelDef.guidanceRange.min} max={fluxModelDef.guidanceRange.max} step={0.5} />
+                <input
+                  type="number"
+                  value={fluxGuidance}
+                  onChange={(e) => {
+                    const next = parseFloat(e.target.value) || fluxModelDef.guidanceRange!.default
+                    setFluxGuidance(Math.max(fluxModelDef.guidanceRange!.min, Math.min(fluxModelDef.guidanceRange!.max, next)))
+                  }}
+                  min={fluxModelDef.guidanceRange.min}
+                  max={fluxModelDef.guidanceRange.max}
+                  step={0.5}
+                />
               </div>
             )}
             <div className="setting-row">

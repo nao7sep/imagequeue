@@ -4,6 +4,7 @@ import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { formatUiDateTime } from '../utils/formatDateTime'
 import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
+import type { FluxModelDef } from '../../../shared/models'
 import type { RecommendationStatus } from '../../../shared/types'
 import './Settings.css'
 
@@ -77,6 +78,15 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
   const openAiModels = getModelsForBackend('openai')
   const openAiModelDef = openAiModels.find((model) => model.id === (backends.openai.model as string)) ?? openAiModels[0]
+  const fluxModels = getModelsForBackend('flux') as FluxModelDef[]
+  const fluxModelDef = fluxModels.find((model) => model.id === (backends.flux.model as string)) ?? fluxModels[0]
+  const fluxDefaultParams = backends.flux.default_params as Record<string, unknown>
+  const fluxStepsValue = fluxModelDef?.stepsRange && typeof fluxDefaultParams.steps === 'number'
+    ? Math.max(fluxModelDef.stepsRange.min, Math.min(fluxModelDef.stepsRange.max, fluxDefaultParams.steps))
+    : (fluxModelDef?.stepsRange?.default ?? 50)
+  const fluxGuidanceValue = fluxModelDef?.guidanceRange && typeof fluxDefaultParams.guidance === 'number'
+    ? Math.max(fluxModelDef.guidanceRange.min, Math.min(fluxModelDef.guidanceRange.max, fluxDefaultParams.guidance))
+    : (fluxModelDef?.guidanceRange?.default ?? 5)
 
   const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
@@ -481,15 +491,42 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Model</label>
           <select value={backends.flux.model as string} onChange={(e) => updateBackend('flux', 'model', e.target.value)}>
-            {getModelsForBackend('flux').map((m) => (
+            {fluxModels.map((m) => (
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
         </div>
-        <div className="settings-field">
-          <label>Steps</label>
-          <input type="number" min={1} max={50} value={(backends.flux.default_params as Record<string, unknown>).steps as number} onChange={(e) => updateBackendParam('flux', 'steps', parseInt(e.target.value) || 28)} />
-        </div>
+        {fluxModelDef?.stepsRange && (
+          <div className="settings-field">
+            <label>Steps</label>
+            <input
+              type="number"
+              min={fluxModelDef.stepsRange.min}
+              max={fluxModelDef.stepsRange.max}
+              value={fluxStepsValue}
+              onChange={(e) => {
+                const next = parseInt(e.target.value) || fluxModelDef.stepsRange!.default
+                updateBackendParam('flux', 'steps', Math.max(fluxModelDef.stepsRange!.min, Math.min(fluxModelDef.stepsRange!.max, next)))
+              }}
+            />
+          </div>
+        )}
+        {fluxModelDef?.guidanceRange && (
+          <div className="settings-field">
+            <label>Guidance</label>
+            <input
+              type="number"
+              min={fluxModelDef.guidanceRange.min}
+              max={fluxModelDef.guidanceRange.max}
+              step={0.5}
+              value={fluxGuidanceValue}
+              onChange={(e) => {
+                const next = parseFloat(e.target.value) || fluxModelDef.guidanceRange!.default
+                updateBackendParam('flux', 'guidance', Math.max(fluxModelDef.guidanceRange!.min, Math.min(fluxModelDef.guidanceRange!.max, next)))
+              }}
+            />
+          </div>
+        )}
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />

@@ -19,27 +19,27 @@ export const OPENAI_GPT2_MAX_PIXELS = 8_294_400
 // Sizes for GPT Image 1.x models (exactly these three)
 export const OPENAI_SIZES: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '1536×1024 (3:2 Wide)', width: 1536, height: 1024 },
-  { label: '1024×1536 (2:3 Tall)', width: 1024, height: 1536 }
+  { label: '1536×1024 (3:2)', width: 1536, height: 1024 },
+  { label: '1024×1536 (2:3)', width: 1024, height: 1536 }
 ]
 
 // Useful presets for gpt-image-2 custom sizing.
 export const OPENAI_SIZES_GPT2: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
   { label: '2048×2048 (Square Large)', width: 2048, height: 2048 },
-  { label: '2048×1024 (2:1 Wide)', width: 2048, height: 1024 },
-  { label: '2048×1152 (16:9 Wide)', width: 2048, height: 1152 },
-  { label: '2048×1360 (3:2 Wide)', width: 2048, height: 1360 },
+  { label: '2048×1024 (2:1)', width: 2048, height: 1024 },
+  { label: '2048×1152 (16:9)', width: 2048, height: 1152 },
+  { label: '2048×1360 (3:2)', width: 2048, height: 1360 },
   { label: '2048×1456 (A4 Wide)', width: 2048, height: 1456 },
-  { label: '2048×1536 (4:3 Wide)', width: 2048, height: 1536 },
+  { label: '2048×1536 (4:3)', width: 2048, height: 1536 },
   { label: '2048×1584 (Letter Wide)', width: 2048, height: 1584 },
   { label: '2560×1440 (QHD Wide)', width: 2560, height: 1440 },
   { label: '3840×2160 (4K Wide)', width: 3840, height: 2160 },
-  { label: '1024×2048 (1:2 Tall)', width: 1024, height: 2048 },
-  { label: '1152×2048 (9:16 Tall)', width: 1152, height: 2048 },
-  { label: '1360×2048 (2:3 Tall)', width: 1360, height: 2048 },
+  { label: '1024×2048 (1:2)', width: 1024, height: 2048 },
+  { label: '1152×2048 (9:16)', width: 1152, height: 2048 },
+  { label: '1360×2048 (2:3)', width: 1360, height: 2048 },
   { label: '1456×2048 (A4 Tall)', width: 1456, height: 2048 },
-  { label: '1536×2048 (3:4 Tall)', width: 1536, height: 2048 },
+  { label: '1536×2048 (3:4)', width: 1536, height: 2048 },
   { label: '1584×2048 (Letter Tall)', width: 1584, height: 2048 },
   { label: '1440×2560 (QHD Tall)', width: 1440, height: 2560 },
   { label: '2160×3840 (4K Tall)', width: 2160, height: 3840 }
@@ -50,11 +50,11 @@ export type ImagenAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
 export type ImagenImageSize = '1K' | '2K'
 
 export const IMAGEN_ASPECT_RATIOS: { label: string; value: ImagenAspectRatio }[] = [
-  { label: '1:1 (Square)', value: '1:1' },
-  { label: '3:4 (Portrait)', value: '3:4' },
-  { label: '4:3 (Landscape)', value: '4:3' },
-  { label: '9:16 (Tall)', value: '9:16' },
-  { label: '16:9 (Wide)', value: '16:9' }
+  { label: '1:1', value: '1:1' },
+  { label: '3:4', value: '3:4' },
+  { label: '4:3', value: '4:3' },
+  { label: '9:16', value: '9:16' },
+  { label: '16:9', value: '16:9' }
 ]
 
 export const IMAGEN_IMAGE_SIZES: { label: string; value: ImagenImageSize }[] = [
@@ -62,18 +62,11 @@ export const IMAGEN_IMAGE_SIZES: { label: string; value: ImagenImageSize }[] = [
   { label: '2K', value: '2K' }
 ]
 
-// FLUX: common presets (multiples of 16, ≤4MP)
-export const FLUX_SIZES: SizePreset[] = [
-  { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '1024×1536 (Portrait)', width: 1024, height: 1536 },
-  { label: '1536×1024 (Landscape)', width: 1536, height: 1024 },
-  { label: '768×1344 (Portrait)', width: 768, height: 1344 },
-  { label: '1344×768 (Landscape)', width: 1344, height: 768 },
-  { label: '1408×1408 (Square 2MP)', width: 1408, height: 1408 },
-  { label: '2048×2048 (Square 4MP)', width: 2048, height: 2048 },
-  { label: '1536×2048 (Portrait 3MP)', width: 1536, height: 2048 },
-  { label: '2048×1536 (Landscape 3MP)', width: 2048, height: 1536 }
-]
+// FLUX.2 allows flexible sizes up to 4MP. Reuse the GPT-style preset ordering and
+// labels, but keep only the entries that fit within FLUX's 4MP limit.
+export const FLUX_SIZES: SizePreset[] = OPENAI_SIZES_GPT2.filter(
+  ({ width, height }) => width * height <= 4_194_304
+)
 
 // --- Model definitions ---
 
@@ -113,7 +106,7 @@ export interface ImagenModelDef extends ModelDef {
 export interface FluxModelDef extends ModelDef {
   backend: 'flux'
   sizes: SizePreset[]
-  // Only flex supports steps and guidance; max/pro/klein are fixed or use grounding search
+  // Only FLUX.2 Flex exposes steps and guidance in the public API.
   stepsRange?: { min: number; max: number; default: number }
   guidanceRange?: { min: number; max: number; default: number }
   pricing: { firstMp: number; additionalMp: number }
@@ -122,31 +115,41 @@ export interface FluxModelDef extends ModelDef {
 // Nano Banana (Gemini native image generation) aspect ratios and sizes.
 // Source: https://ai.google.dev/gemini-api/docs/image-generation
 const NANO_BANANA_ASPECT_RATIOS_BASE: { label: string; value: string }[] = [
-  { label: '1:1 (Square)',      value: '1:1' },
-  { label: '4:3 (Landscape)',   value: '4:3' },
-  { label: '3:4 (Portrait)',    value: '3:4' },
-  { label: '16:9 (Wide)',       value: '16:9' },
-  { label: '9:16 (Tall)',       value: '9:16' },
-  { label: '3:2 (Photo)',       value: '3:2' },
-  { label: '2:3 (Photo Port.)', value: '2:3' },
-  { label: '4:5',               value: '4:5' },
-  { label: '5:4',               value: '5:4' },
-  { label: '21:9 (Cinematic)',  value: '21:9' }
+  { label: '1:1',  value: '1:1' },
+  { label: '2:3',  value: '2:3' },
+  { label: '3:2',  value: '3:2' },
+  { label: '3:4',  value: '3:4' },
+  { label: '4:3',  value: '4:3' },
+  { label: '4:5',  value: '4:5' },
+  { label: '5:4',  value: '5:4' },
+  { label: '9:16', value: '9:16' },
+  { label: '16:9', value: '16:9' },
+  { label: '21:9', value: '21:9' }
 ]
 
-// Nano Banana 2 (Flash) adds 4:1 and 1:4 (banner-type) in addition to the base set.
-// 8:1 and 1:8 also exist but are too extreme for general use and are omitted.
+// Nano Banana 2 adds the extra extreme ratios documented for Gemini 3.1 Flash Image.
 const NANO_BANANA_ASPECT_RATIOS_FLASH2: { label: string; value: string }[] = [
-  ...NANO_BANANA_ASPECT_RATIOS_BASE,
-  { label: '4:1 (Wide Banner)', value: '4:1' },
-  { label: '1:4 (Tall Banner)', value: '1:4' }
+  { label: '1:1',  value: '1:1' },
+  { label: '1:4',  value: '1:4' },
+  { label: '1:8',  value: '1:8' },
+  { label: '2:3',  value: '2:3' },
+  { label: '3:2',  value: '3:2' },
+  { label: '3:4',  value: '3:4' },
+  { label: '4:1',  value: '4:1' },
+  { label: '4:3',  value: '4:3' },
+  { label: '4:5',  value: '4:5' },
+  { label: '5:4',  value: '5:4' },
+  { label: '8:1',  value: '8:1' },
+  { label: '9:16', value: '9:16' },
+  { label: '16:9', value: '16:9' },
+  { label: '21:9', value: '21:9' }
 ]
 
 const NANO_BANANA_SIZES_FLASH2: { label: string; value: string }[] = [
-  { label: '512 (0.5K)', value: '512' },
-  { label: '1K',         value: '1K' },
-  { label: '2K',         value: '2K' },
-  { label: '4K',         value: '4K' }
+  { label: '0.5K', value: '512' },
+  { label: '1K',   value: '1K' },
+  { label: '2K',   value: '2K' },
+  { label: '4K',   value: '4K' }
 ]
 
 const NANO_BANANA_SIZES_PRO: { label: string; value: string }[] = [
@@ -155,14 +158,20 @@ const NANO_BANANA_SIZES_PRO: { label: string; value: string }[] = [
   { label: '4K', value: '4K' }
 ]
 
+const NANO_BANANA_SIZES: { label: string; value: string }[] = [
+  { label: '1K', value: '1K' },
+  { label: '2K', value: '2K' },
+  { label: '4K', value: '4K' }
+]
+
 export interface NanoBananaModelDef extends ModelDef {
   backend: 'nanobanana'
-  // imageConfig (aspect ratio + image size) is only supported by Gemini 3 models.
+  // Image config support varies by model and is controlled per registry entry.
   supportsImageConfig: boolean
   aspectRatios: { label: string; value: string }[]
   imageSizes: { label: string; value: string }[]
-  // Pricing by imageSize value (e.g. '1K', '2K'). Old models that don't support
-  // imageConfig have a single '1K' entry used as the flat rate.
+  // Pricing by imageSize value (e.g. '1K', '2K'). Flat-price models may repeat the
+  // same value across all supported sizes.
   pricing: Record<string, number>
 }
 
@@ -171,19 +180,19 @@ export type GrokAspectRatio =
   '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
 
 export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
-  { label: '1:1 (Square)',       value: '1:1' },
-  { label: '16:9 (Wide)',        value: '16:9' },
-  { label: '9:16 (Tall)',        value: '9:16' },
-  { label: '4:3 (Landscape)',    value: '4:3' },
-  { label: '3:4 (Portrait)',     value: '3:4' },
-  { label: '3:2 (Landscape)',    value: '3:2' },
-  { label: '2:3 (Portrait)',     value: '2:3' },
-  { label: '2:1 (Wide)',         value: '2:1' },
-  { label: '1:2 (Tall)',         value: '1:2' },
-  { label: '19.5:9 (Phone Wide)', value: '19.5:9' },
-  { label: '9:19.5 (Phone Tall)', value: '9:19.5' },
-  { label: '20:9 (Ultra Wide)',  value: '20:9' },
-  { label: '9:20 (Ultra Tall)',  value: '9:20' }
+  { label: '1:1',    value: '1:1' },
+  { label: '1:2',    value: '1:2' },
+  { label: '2:1',    value: '2:1' },
+  { label: '2:3',    value: '2:3' },
+  { label: '3:2',    value: '3:2' },
+  { label: '3:4',    value: '3:4' },
+  { label: '4:3',    value: '4:3' },
+  { label: '9:16',   value: '9:16' },
+  { label: '9:19.5', value: '9:19.5' },
+  { label: '9:20',   value: '9:20' },
+  { label: '16:9',   value: '16:9' },
+  { label: '19.5:9', value: '19.5:9' },
+  { label: '20:9',   value: '20:9' },
 ]
 
 export type GrokResolution = '1k' | '2k'
@@ -330,7 +339,7 @@ export const FLUX_MODELS: FluxModelDef[] = [
     pricing: { firstMp: 0.06, additionalMp: 0 }
   },
   {
-    id: 'flux-2-klein-9b-preview',
+    id: 'flux-2-klein-9b',
     label: 'FLUX.2 Klein 9B',
     backend: 'flux',
     sizes: FLUX_SIZES,
@@ -376,10 +385,12 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     id: 'gemini-2.5-flash-image',
     label: 'Nano Banana',
     backend: 'nanobanana',
-    supportsImageConfig: false,
-    aspectRatios: [],
-    imageSizes: [],
-    pricing: { '1K': 0.067 }  // flat rate, imageConfig not supported by this model
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
+    imageSizes: NANO_BANANA_SIZES,
+    // Flat per-image pricing from the current Gemini API pricing page.
+    // Source: https://ai.google.dev/gemini-api/docs/pricing
+    pricing: { '1K': 0.039, '2K': 0.039, '4K': 0.039 }
   }
 ]
 

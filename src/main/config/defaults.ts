@@ -69,8 +69,8 @@ export function createDefaultConfig(): AppConfig {
         default_params: {
           width: 1024,
           height: 1024,
-          steps: 40,
-          guidance: 7,
+          steps: 50,
+          guidance: 5,
           seed: null
         },
         concurrency: 3,
