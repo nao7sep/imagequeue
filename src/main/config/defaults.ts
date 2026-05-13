@@ -143,20 +143,9 @@ export function createDefaultConfig(): AppConfig {
 <response_format>
 {{JSON}}
 </response_format>`,
-        override_combine: `Generate one image using the information below.
+        override_combine: `{{OVERRIDE}}
 
-Priority:
-1. Follow every instruction in <required_override>.
-2. Use <base_prompt> for all remaining detail.
-3. If the two conflict, <required_override> wins.
-
-<required_override>
-{{OVERRIDE}}
-</required_override>
-
-<base_prompt>
-{{PROMPT}}
-</base_prompt>`,
+{{PROMPT}}`,
       }
     }
   }

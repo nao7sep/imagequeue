@@ -190,9 +190,9 @@ Use **New Elaborator** to add one, **Edit** to change one, **Delete** to remove.
 | Batch size | Prompts per conversation turn (1–50) |
 | Max retries per turn | Extra attempts after a transient failure (0–10) |
 | Retry backoff (ms) | Comma-separated delays between attempts |
-| Templates | The four message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, `{{JSON}}` (text-AI templates) and `{{PROMPT}}`, `{{OVERRIDE}}` (override-combine, image AI) are substituted at call time. The shipped defaults wrap substituted content in explicit XML-like tags so models can see where embedded strings end. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. |
+| Templates | The four message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, `{{JSON}}` (text-AI templates) and `{{PROMPT}}`, `{{OVERRIDE}}` (override-combine, image AI) are substituted at call time. The shipped text-AI defaults wrap substituted content in explicit XML-like tags so models can see where embedded strings end. The shipped image-model override template is intentionally plain: `{{OVERRIDE}}` first, then `{{PROMPT}}`. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. |
 
-Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce. The shipped `override_combine` template also gives the override block explicit priority over the base prompt so short override text is less likely to be ignored by weaker image models.
+Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce. The shipped `override_combine` template stays deliberately minimal because weaker image models can ignore or literally render scaffolding text; the default simply places the override before the base prompt.
 
 ## Menu
 
