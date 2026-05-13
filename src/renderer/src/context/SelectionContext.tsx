@@ -161,19 +161,19 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     if (general?.confirm_remove) {
       const keepingCompleted = task.status === 'completed'
       const ok = await confirm({
-        title: keepingCompleted ? 'Keep Just in Case' : 'Remove Task',
+        title: keepingCompleted ? 'Keep Image' : 'Remove Task',
         message: keepingCompleted
-          ? 'Keep this completed image just in case and take it out of the active list?'
+          ? 'Mark this completed image as kept and take it out of the active list?'
           : 'Remove this task from the queue?',
         confirmLabel: keepingCompleted ? 'Keep' : 'Remove'
       })
       if (!ok) return
     }
 
-    // Always advance — the gesture means "I'm done with this one." When
-    // showKeptImages is on, the JIC'd task stays in the list as `kept` and
-    // computeNextAfterRemoval still picks the correct neighbor because it
-    // runs before the IPC against the pre-update task list.
+    // Always advance — the gesture means this item no longer needs active
+    // review. When showKeptImages is on, the kept task stays in the list as
+    // `kept` and computeNextAfterRemoval still picks the correct neighbor
+    // because it runs before the IPC against the pre-update task list.
     transitionSelectionForRemoval(backend, taskId)
     await window.electronAPI.removeTask(backend, taskId)
   }, [confirm, settings, setSelectionInternal])

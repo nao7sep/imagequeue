@@ -426,7 +426,12 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   }, [busy, confirm, onClose])
 
   return (
-    <Modal title="Advanced Prompting" className="advanced-modal-box" onClose={() => void handleRequestClose()}>
+    <Modal
+      title="Advanced Prompting"
+      className="advanced-modal-box"
+      closeOnBackdropClick={false}
+      onClose={() => void handleRequestClose()}
+    >
       <div className={`advanced-body${isMacPlatform ? '' : ' advanced-body-no-dt'}`}>
         <div className="advanced-pane">
           <div className="advanced-pane-title">Prompt</div>

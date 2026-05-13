@@ -7,11 +7,18 @@ interface ModalProps {
   onClose: () => void
   className?: string
   children: ReactNode
+  closeOnBackdropClick?: boolean
 }
 
 const modalStack: string[] = []
 
-export function Modal({ title, onClose, className, children }: ModalProps): React.JSX.Element {
+export function Modal({
+  title,
+  onClose,
+  className,
+  children,
+  closeOnBackdropClick = true
+}: ModalProps): React.JSX.Element {
   const modalId = useId()
 
   useEffect(() => {
@@ -42,7 +49,7 @@ export function Modal({ title, onClose, className, children }: ModalProps): Reac
       className="modal-backdrop"
       data-modal-id={modalId}
       onClick={() => {
-        if (!isTopmost()) return
+        if (!isTopmost() || !closeOnBackdropClick) return
         onClose()
       }}
     >

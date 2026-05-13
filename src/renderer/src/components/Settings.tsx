@@ -207,7 +207,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
               />
               <span className="settings-panel-check-copy">
                 <span>Confirm remove</span>
-                <span className="settings-panel-check-desc">Before removing a task from the queue or keeping a completed image just in case.</span>
+                <span className="settings-panel-check-desc">Before removing a task from the queue or marking a completed image as kept.</span>
               </span>
             </label>
             <label className="settings-panel-check">

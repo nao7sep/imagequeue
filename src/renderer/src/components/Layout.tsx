@@ -167,7 +167,7 @@ export function Layout(): React.JSX.Element {
                 <div className="shortcut-item"><span>Move up / down within column</span><kbd>↑ / ↓</kbd></div>
                 <div className="shortcut-item"><span>Move to nearest task in adjacent column</span><kbd>← / →</kbd></div>
                 <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
-                <div className="shortcut-item"><span>Remove task, keep completed image as JIC, or restore JIC image</span><kbd>Backspace</kbd></div>
+                <div className="shortcut-item"><span>Remove task, keep selected completed image, or restore selected kept image</span><kbd>Backspace</kbd></div>
                 <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete / {mod}Backspace</kbd></div>
               </div>
             </div>
@@ -175,7 +175,7 @@ export function Layout(): React.JSX.Element {
               <p className="shortcut-group-name">App</p>
               <div className="shortcut-list">
                 <div className="shortcut-item"><span>Settings</span><kbd>{mod},</kbd></div>
-                <div className="shortcut-item"><span>Show / hide JIC images</span><kbd>{mod}Shift+K</kbd></div>
+                <div className="shortcut-item"><span>Show / hide kept images</span><kbd>{mod}Shift+K</kbd></div>
                 <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Esc</kbd></div>
               </div>
             </div>
@@ -235,7 +235,7 @@ export function Layout(): React.JSX.Element {
                 <button onClick={() => openOverlay('sessions')}>Sessions</button>
                 <button className="menu-check-item" onClick={toggleKeptImagesFromMenu}>
                   <input type="checkbox" checked={showKeptImages} readOnly tabIndex={-1} />
-                  <span>Show JIC Images</span>
+                  <span>Show Kept Images</span>
                 </button>
                 <button onClick={() => openOverlay('settings')}>Settings</button>
                 {window.electronAPI.platform === 'darwin' && (

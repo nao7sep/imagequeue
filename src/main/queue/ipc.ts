@@ -51,7 +51,7 @@ export function registerQueueIpc(): void {
     if (!task) return
 
     if (task.status === 'completed') {
-      log('info', `Task kept just in case: ${taskId}`, { backend, baseName: task.baseName ?? null })
+      log('info', `Task marked kept: ${taskId}`, { backend, baseName: task.baseName ?? null })
       queueManager.keepTask(backend, taskId)
     } else {
       log('info', `Task removed from queue: ${taskId}`, { backend })
@@ -65,7 +65,7 @@ export function registerQueueIpc(): void {
     const task = queueManager.restoreTask(backend, taskId)
     if (!task) return
 
-    log('info', `Task restored from just-in-case list: ${taskId}`, { backend, baseName: task.baseName ?? null })
+    log('info', `Task restored from kept list: ${taskId}`, { backend, baseName: task.baseName ?? null })
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })

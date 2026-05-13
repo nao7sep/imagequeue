@@ -65,7 +65,7 @@ Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux).
 |---|---|---|
 | Auto-preview after idle | 30 s | Auto-selects a newly completed image after this many seconds of inactivity. Set to 0 to disable. |
 | Export folder | Desktop | Directory where **Export** saves images. Leave empty to use the Desktop. |
-| Confirm before removing | Off | Confirm before removing a task from the queue, or keeping a completed image just in case. |
+| Confirm before removing | Off | Confirm before removing a task from the queue, or marking a completed image as kept. |
 | Confirm before deleting | Off | Confirm before deleting a task and its files. |
 | Move deleted files to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
 
@@ -142,9 +142,9 @@ When a completed task is selected, a toolbar appears below the preview:
 | **Export** | Save a copy to the export folder |
 | **Save As…** | Pick the destination and filename manually |
 
-Each completed task row also has **exp** for quick export, **jic** to keep the image just in case while removing it from the active list, and **del** to delete the task and its files.
+Each completed task row also has **exp** for quick export, **keep** to mark the image as kept while removing it from the active list, and **del** to delete the task and its files.
 
-Removing a queued, failed, or interrupted task drops it from the queue. Using **jic** on a completed task keeps that output in session history but removes it from the active list. Enable **Show JIC Images** from the hamburger menu to review kept images; shown JIC rows can be restored, exported, or deleted. The toggle resets to off on each launch — JIC images are typically only useful within the session that produced them.
+Removing a queued, failed, or interrupted task drops it from the queue. Using **keep** on a completed task leaves that output in session history but removes it from the active list and marks it as kept. This keeps the active queue focused on images that still need review, so already-checked acceptable fallbacks do not stay mixed with fresh or unresolved results. Enable **Show Kept Images** from the hamburger menu to review kept images; shown kept rows can be restored, exported, or deleted. The toggle resets to off on each launch — kept images are typically only useful within the session that produced them.
 
 Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
 
@@ -171,7 +171,7 @@ Elaborated prompts accumulate in a per-session list. The text AI sees previously
 
 Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. The list is numbered and shown newest-first so the latest prompt is immediately visible, while the underlying AI context remains chronological. Per-row **Delete** removes a prompt without confirmation (the list is per-session and never persisted to disk); **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 
-The modal stays open after queueing so you can run another round. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; any other time, it closes freely.
+The modal stays open after queueing so you can run another round. Clicking outside it does not close it. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; otherwise you can close it with **Esc** or the close button.
 
 ## Elaborators
 
@@ -202,7 +202,7 @@ The hamburger menu (☰) gives access to:
 |---|---|
 | Open Output Folder | Open the directory that stores session outputs |
 | Sessions | Browse saved sessions, resume one, or delete one |
-| Show JIC Images | Show or hide completed images that were kept just in case |
+| Show Kept Images | Show or hide completed images marked as kept |
 | Settings | Open Settings |
 | Draw Things Models | Open the Draw Things model browser and importer |
 | Elaboration ▸ | Hover to reveal the elaboration submenu (see below) |
@@ -225,12 +225,12 @@ The **Elaboration** submenu flies out to the right on hover:
 | Send to all backends | ⌘↩ | Ctrl+Enter |
 | Send to backend 1–6 | ⌘1–6 | Ctrl+1–6 |
 | Open Settings | ⌘, | Ctrl+, |
-| Show / hide JIC images | ⌘⇧K | Ctrl+Shift+K |
+| Show / hide kept images | ⌘⇧K | Ctrl+Shift+K |
 | Move selection within a column | ↑ / ↓ | ↑ / ↓ |
 | Move selection across columns | ← / → | ← / → |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
-| Remove selected task, keep the selected completed image just in case, or restore a selected JIC image | Backspace | Backspace |
+| Remove selected task, keep the selected completed image, or restore a selected kept image | Backspace | Backspace |
 | Delete selected task and files | Delete or ⌘Backspace | Delete or Ctrl+Backspace |
 | Clear selection / close panel | Esc | Esc |
 

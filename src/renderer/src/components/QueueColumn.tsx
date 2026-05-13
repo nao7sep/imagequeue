@@ -1015,9 +1015,9 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
     if (!task.baseName) return
     void window.electronAPI.exportImage(task.baseName, getExt())
   }
-  const removeLabel = task.status === 'completed' ? 'jic' : 'rm'
-  const removeTitle = task.status === 'completed' ? 'Keep just in case' : 'Remove from queue'
-  const statusLabel = task.status === 'kept' ? 'jic' : task.status
+  const removeLabel = task.status === 'completed' ? 'keep' : 'rm'
+  const removeTitle = task.status === 'completed' ? 'Mark as kept and remove from active list' : 'Remove from queue'
+  const statusLabel = task.status === 'kept' ? 'kept' : task.status
 
   return (
     <div

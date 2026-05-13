@@ -25,8 +25,10 @@ function createEmptyTaskMap(): Record<BackendId, Task[]> {
 
 export function QueueProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [storedTasks, setStoredTasks] = useState<Record<BackendId, Task[]>>(createEmptyTaskMap)
-  // Intentionally not persisted: JIC images are usually obsolete by the next
-  // session — start clean each launch and let the user opt back in via ⌘⇧K.
+  // Intentionally not persisted: kept images are mainly a per-session review
+  // aid for clearing acceptable results out of the active queue, and are
+  // usually obsolete by the next session. Start clean each launch and let the
+  // user opt back in via ⌘⇧K.
   const [showKeptImages, setShowKeptImages] = useState(false)
 
   const tasks = useMemo(() => {
