@@ -79,7 +79,7 @@ Each cloud backend has its own section with:
 | Concurrency | How many simultaneous requests ImageQueue may send |
 | Timeout | Maximum wait time before failing a task |
 
-Some backends also expose backend-specific generation parameters such as quality, aspect ratio, image size, custom width/height, steps, guidance, or seed.
+Some backends also expose backend-specific generation parameters such as moderation, quality, aspect ratio, image size, custom width/height, steps, guidance, or seed.
 
 OpenAI GPT Image 2 supports both presets and editable width/height values. Imagen, Nano Banana, and Grok use aspect-ratio-driven sizing, and FLUX keeps preset size picks.
 

@@ -20,6 +20,7 @@ import {
   type NanoBananaModelDef,
   type FluxModelDef,
   type SizePreset,
+  type OpenAIModeration,
   type OpenAIQuality,
   type OpenAIOutputFormat,
   type OpenAIBackground,
@@ -150,7 +151,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const apiKeyMissing = backendId !== 'drawthings' && (!apiKey || apiKey.trim() === '')
 
   // OpenAI params
-  const [quality, setQuality] = useState<OpenAIQuality>('medium')
+  const [moderation, setModeration] = useState<OpenAIModeration>('auto')
+  const [quality, setQuality] = useState<OpenAIQuality>('auto')
   const [outputFormat, setOutputFormat] = useState<OpenAIOutputFormat>('png')
   const [background, setBackground] = useState<OpenAIBackground>('opaque')
   const [openaiWidth, setOpenaiWidth] = useState(1024)
@@ -431,9 +433,12 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       const nextModelDef = (models.find((m) => m.id === savedModel) ?? defaultModel) as OpenAIModelDef | undefined
       if (!nextModelDef) return
       const nextSize = resolveOpenAiSize(nextModelDef, savedDefaultParams.width, savedDefaultParams.height)
+      const nextModeration = typeof savedDefaultParams.moderation === 'string' && nextModelDef.moderations.includes(savedDefaultParams.moderation as OpenAIModeration)
+        ? savedDefaultParams.moderation as OpenAIModeration
+        : (nextModelDef.moderations.find((moderation) => moderation === 'auto') ?? nextModelDef.moderations[0])
       const nextQuality = typeof savedDefaultParams.quality === 'string' && nextModelDef.qualities.includes(savedDefaultParams.quality as OpenAIQuality)
         ? savedDefaultParams.quality as OpenAIQuality
-        : (nextModelDef.qualities.find((quality) => quality === 'medium') ?? nextModelDef.qualities[0])
+        : (nextModelDef.qualities.find((quality) => quality === 'auto') ?? nextModelDef.qualities[0])
       const nextOutputFormat = typeof savedDefaultParams.outputFormat === 'string' && nextModelDef.outputFormats.includes(savedDefaultParams.outputFormat as OpenAIOutputFormat)
         ? savedDefaultParams.outputFormat as OpenAIOutputFormat
         : (nextModelDef.outputFormats.find((format) => format === 'png') ?? nextModelDef.outputFormats[0])
@@ -442,12 +447,14 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
         : (nextModelDef.backgrounds.find((background) => background === 'opaque') ?? nextModelDef.backgrounds[0])
       setOpenaiWidth(nextSize.width)
       setOpenaiHeight(nextSize.height)
+      setModeration(nextModeration)
       setQuality(nextQuality)
       setOutputFormat(nextOutputFormat)
       setBackground(nextBackground)
       persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(savedModel, {
         width: nextSize.width,
         height: nextSize.height,
+        moderation: nextModeration,
         quality: nextQuality,
         outputFormat: nextOutputFormat,
         background: nextBackground,
@@ -547,8 +554,9 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   // Update defaults when model changes
   useEffect(() => {
     if (backendId === 'openai' && openaiModelDef) {
-      // Reset quality/background if the current value isn't valid for the new model
-      setQuality((prev) => openaiModelDef.qualities.includes(prev) ? prev : 'medium')
+      // Reset moderation/quality/background if the current value isn't valid for the new model
+      setModeration((prev) => openaiModelDef.moderations.includes(prev) ? prev : 'auto')
+      setQuality((prev) => openaiModelDef.qualities.includes(prev) ? prev : 'auto')
       setOutputFormat((prev) => openaiModelDef.outputFormats.includes(prev) ? prev : 'png')
       setBackground((prev) => openaiModelDef.backgrounds.includes(prev) ? prev : 'opaque')
       const nextSize = resolveOpenAiSize(openaiModelDef, openaiWidth, openaiHeight)
@@ -590,7 +598,14 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
   const currentEnqueueParams = useMemo<Record<string, unknown>>(() => {
     if (backendId === 'openai') {
-      return { width: openaiWidth, height: openaiHeight, quality, outputFormat, background }
+      return {
+        width: openaiWidth,
+        height: openaiHeight,
+        moderation,
+        quality,
+        outputFormat,
+        background,
+      }
     }
     if (backendId === 'imagen') {
       return { aspectRatio, imageSize, personGeneration }
@@ -627,6 +642,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     backendId,
     openaiWidth,
     openaiHeight,
+    moderation,
     quality,
     outputFormat,
     background,
@@ -815,6 +831,14 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                 </div>
               </>
             )}
+            <div className="setting-row">
+              <label>moderation</label>
+              <select value={moderation} onChange={(e) => setModeration(e.target.value as OpenAIModeration)}>
+                {openaiModelDef.moderations.map((value) => (
+                  <option key={value} value={value}>{value}</option>
+                ))}
+              </select>
+            </div>
             <div className="setting-row">
               <label>quality</label>
               <select value={quality} onChange={(e) => setQuality(e.target.value as OpenAIQuality)}>

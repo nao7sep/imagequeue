@@ -50,20 +50,20 @@ export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mime
   if (task.model === 'gpt-image-2') validateGptImage2Size(width, height)
   // gpt-image-2 supports many more sizes than the SDK type enumerates.
   const size = `${width}x${height}`
-  const quality = (task.params.quality as 'low' | 'medium' | 'high' | 'auto') || 'high'
+  const moderation = (task.params.moderation as 'auto' | 'low') || 'auto'
+  const quality = (task.params.quality as 'low' | 'medium' | 'high' | 'auto') || 'auto'
   const outputFormat = (task.params.outputFormat as 'png' | 'jpeg' | 'webp') || 'png'
   const background = (task.params.background as 'opaque' | 'auto' | 'transparent') || 'opaque'
   const outputCompression = task.params.outputCompression as number | undefined
-  const moderation = (task.params.moderation as 'auto' | 'low') || 'auto'
 
   const requestParams = {
     model: task.model,
-    quality,
     size,
+    ...(moderation !== 'auto' && { moderation }),
+    ...(quality !== 'auto' && { quality }),
     output_format: outputFormat,
     ...(background !== 'opaque' && { background }),
     ...(outputCompression != null && { output_compression: outputCompression }),
-    ...(moderation !== 'auto' && { moderation })
   }
 
   logApiRequest('openai', 'images.generate', requestParams)

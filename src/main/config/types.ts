@@ -14,9 +14,10 @@ export interface OpenAIBackendConfig {
   api_key: string
   model: string
   default_params: {
-    quality: 'low' | 'medium' | 'high' | 'auto'
     width: number
     height: number
+    moderation: 'low' | 'auto'
+    quality: 'low' | 'medium' | 'high' | 'auto'
     outputFormat: 'png' | 'jpeg' | 'webp'
     background: 'opaque' | 'transparent' | 'auto'
   }

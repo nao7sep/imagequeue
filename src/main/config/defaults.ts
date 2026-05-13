@@ -21,9 +21,10 @@ export function createDefaultConfig(): AppConfig {
         api_key: '',
         model: 'gpt-image-2',
         default_params: {
-          quality: 'medium',
           width: 1024,
           height: 1024,
+          moderation: 'auto',
+          quality: 'auto',
           outputFormat: 'png',
           background: 'opaque'
         },

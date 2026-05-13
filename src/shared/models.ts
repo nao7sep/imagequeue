@@ -19,28 +19,30 @@ export const OPENAI_GPT2_MAX_PIXELS = 8_294_400
 // Sizes for GPT Image 1.x models (exactly these three)
 export const OPENAI_SIZES: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '1024×1536 (Portrait)', width: 1024, height: 1536 },
-  { label: '1536×1024 (Landscape)', width: 1536, height: 1024 }
+  { label: '1536×1024 (3:2 Wide)', width: 1536, height: 1024 },
+  { label: '1024×1536 (2:3 Tall)', width: 1024, height: 1536 }
 ]
 
 // Useful presets for gpt-image-2 custom sizing.
 export const OPENAI_SIZES_GPT2: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '1024×1536 (Photo 2:3)', width: 1024, height: 1536 },
-  { label: '1536×1024 (Photo 3:2)', width: 1536, height: 1024 },
-  { label: '1536×1920 (Print 4:5)', width: 1536, height: 1920 },
-  { label: '1920×1536 (Print 5:4)', width: 1920, height: 1536 },
-  { label: '1456×2048 (A4-ish Portrait)', width: 1456, height: 2048 },
-  { label: '2048×1456 (A4-ish Landscape)', width: 2048, height: 1456 },
-  { label: '1584×2048 (Letter-ish Portrait)', width: 1584, height: 2048 },
-  { label: '2048×1584 (Letter-ish Landscape)', width: 2048, height: 1584 },
-  { label: '2048×2048 (2K Square)', width: 2048, height: 2048 },
-  { label: '1152×2048 (2K Tall 9:16)', width: 1152, height: 2048 },
-  { label: '2048×1152 (2K Wide 16:9)', width: 2048, height: 1152 },
-  { label: '1440×2560 (QHD Tall)', width: 1440, height: 2560 },
+  { label: '2048×2048 (Square Large)', width: 2048, height: 2048 },
+  { label: '2048×1024 (2:1 Wide)', width: 2048, height: 1024 },
+  { label: '2048×1152 (16:9 Wide)', width: 2048, height: 1152 },
+  { label: '2048×1360 (3:2 Wide)', width: 2048, height: 1360 },
+  { label: '2048×1456 (A4 Wide)', width: 2048, height: 1456 },
+  { label: '2048×1536 (4:3 Wide)', width: 2048, height: 1536 },
+  { label: '2048×1584 (Letter Wide)', width: 2048, height: 1584 },
   { label: '2560×1440 (QHD Wide)', width: 2560, height: 1440 },
-  { label: '2160×3840 (4K Tall)', width: 2160, height: 3840 },
-  { label: '3840×2160 (4K Wide)', width: 3840, height: 2160 }
+  { label: '3840×2160 (4K Wide)', width: 3840, height: 2160 },
+  { label: '1024×2048 (1:2 Tall)', width: 1024, height: 2048 },
+  { label: '1152×2048 (9:16 Tall)', width: 1152, height: 2048 },
+  { label: '1360×2048 (2:3 Tall)', width: 1360, height: 2048 },
+  { label: '1456×2048 (A4 Tall)', width: 1456, height: 2048 },
+  { label: '1536×2048 (3:4 Tall)', width: 1536, height: 2048 },
+  { label: '1584×2048 (Letter Tall)', width: 1584, height: 2048 },
+  { label: '1440×2560 (QHD Tall)', width: 1440, height: 2560 },
+  { label: '2160×3840 (4K Tall)', width: 2160, height: 3840 }
 ]
 
 // Google uses aspect ratios; sizes are "1K" (~1024px) or "2K" (~2048px, standard/ultra only)
@@ -76,6 +78,7 @@ export const FLUX_SIZES: SizePreset[] = [
 // --- Model definitions ---
 
 export type OpenAIQuality = 'low' | 'medium' | 'high' | 'auto'
+export type OpenAIModeration = 'low' | 'auto'
 export type OpenAIOutputFormat = 'png' | 'jpeg' | 'webp'
 export type OpenAIBackground = 'opaque' | 'transparent' | 'auto'
 export type ImagenPersonGeneration = 'dont_allow' | 'allow_adult' | 'allow_all'
@@ -90,6 +93,7 @@ export interface ModelDef {
 export interface OpenAIModelDef extends ModelDef {
   backend: 'openai'
   qualities: OpenAIQuality[]
+  moderations: OpenAIModeration[]
   sizes: SizePreset[]
   supportsCustomSizes?: boolean
   outputFormats: OpenAIOutputFormat[]
@@ -163,11 +167,10 @@ export interface NanoBananaModelDef extends ModelDef {
 }
 
 export type GrokAspectRatio =
-  'auto' | '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
+  '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
   '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
 
 export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
-  { label: 'Auto',               value: 'auto' },
   { label: '1:1 (Square)',       value: '1:1' },
   { label: '16:9 (Wide)',        value: '16:9' },
   { label: '9:16 (Tall)',        value: '9:16' },
@@ -203,7 +206,8 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     label: 'GPT Image 2',
     backend: 'openai',
     isDefault: true,
-    qualities: ['low', 'medium', 'high', 'auto'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES_GPT2,
     supportsCustomSizes: true,
     outputFormats: ['png', 'jpeg', 'webp'],
@@ -218,7 +222,8 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     id: 'gpt-image-1.5',
     label: 'GPT Image 1.5',
     backend: 'openai',
-    qualities: ['low', 'medium', 'high'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'transparent'],
@@ -232,7 +237,8 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     id: 'gpt-image-1',
     label: 'GPT Image 1',
     backend: 'openai',
-    qualities: ['low', 'medium', 'high'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'transparent'],
@@ -246,7 +252,8 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     id: 'gpt-image-1-mini',
     label: 'GPT Image 1 Mini',
     backend: 'openai',
-    qualities: ['low', 'medium', 'high'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'transparent'],
@@ -460,7 +467,7 @@ export function estimateCostFromRegistry(
     case 'openai': {
       const model = findModel('openai', modelId)
       if (!model) return null
-      const quality = (params.quality as OpenAIQuality) || 'high'
+      const quality = (params.quality as OpenAIQuality) || 'auto'
       if (quality === 'auto') return null
       const width = (params.width as number) || 1024
       const height = (params.height as number) || 1024

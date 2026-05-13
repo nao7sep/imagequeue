@@ -75,6 +75,8 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const prompts = config.prompts as Record<string, string>
   const general = (config.general ?? {}) as Record<string, unknown>
   const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
+  const openAiModels = getModelsForBackend('openai')
+  const openAiModelDef = openAiModels.find((model) => model.id === (backends.openai.model as string)) ?? openAiModels[0]
 
   const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
@@ -373,12 +375,19 @@ export function Settings({ onClose }: Props): React.JSX.Element {
           </select>
         </div>
         <div className="settings-field">
+          <label>Moderation</label>
+          <select value={(backends.openai.default_params as Record<string, unknown>).moderation as string} onChange={(e) => updateBackendParam('openai', 'moderation', e.target.value)}>
+            {openAiModelDef.moderations.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </div>
+        <div className="settings-field">
           <label>Quality</label>
           <select value={(backends.openai.default_params as Record<string, unknown>).quality as string} onChange={(e) => updateBackendParam('openai', 'quality', e.target.value)}>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-            <option value="auto">auto</option>
+            {openAiModelDef.qualities.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
           </select>
         </div>
         <div className="settings-field">
