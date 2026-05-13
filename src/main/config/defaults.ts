@@ -6,7 +6,7 @@ export function createDefaultConfig(): AppConfig {
       backend: 'gemini',
       api_key: '',
       timeout_ms: 30000,
-      light_model: 'gemini-3.1-flash-lite-preview',
+      light_model: 'gemini-3.1-flash-lite',
       main_model: 'gemini-3-flash-preview'
     },
     general: {

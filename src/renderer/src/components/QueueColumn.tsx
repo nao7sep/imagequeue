@@ -12,6 +12,9 @@ import {
   GROK_ASPECT_RATIOS,
   GROK_RESOLUTIONS,
   FLUX_SIZES,
+  OPENAI_GPT2_MAX_EDGE,
+  OPENAI_GPT2_MIN_EDGE,
+  OPENAI_GPT2_SIZE_STEP,
   type OpenAIModelDef,
   type ImagenModelDef,
   type NanoBananaModelDef,
@@ -44,6 +47,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
+const CUSTOM_OPENAI_SIZE = 'custom'
 const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = [
   { label: '512x512', width: 512, height: 512 },
   { label: '768x768', width: 768, height: 768 },
@@ -70,6 +74,38 @@ function buildDrawThingsParams(
   negativePrompt: string
 ): DrawThingsModelParams {
   return { width, height, steps, guidance, seed, negativePrompt }
+}
+
+function findPresetValue(sizes: SizePreset[], width: number, height: number): string | null {
+  const preset = sizes.find((size) => size.width === width && size.height === height)
+  return preset ? `${preset.width}x${preset.height}` : null
+}
+
+function normalizeOpenAiDimension(value: number): number {
+  if (!Number.isFinite(value)) return OPENAI_GPT2_MIN_EDGE
+  const rounded = Math.round(value / OPENAI_GPT2_SIZE_STEP) * OPENAI_GPT2_SIZE_STEP
+  return Math.max(OPENAI_GPT2_MIN_EDGE, Math.min(OPENAI_GPT2_MAX_EDGE, rounded))
+}
+
+function resolveOpenAiSize(modelDef: OpenAIModelDef, width: unknown, height: unknown): { width: number; height: number } {
+  const fallback = modelDef.sizes[0] ?? { label: '1024×1024', width: 1024, height: 1024 }
+  const matchingPreset = typeof width === 'number' && typeof height === 'number'
+    ? modelDef.sizes.find((size) => size.width === width && size.height === height)
+    : null
+
+  if (!modelDef.supportsCustomSizes) {
+    const next = matchingPreset ?? fallback
+    return { width: next.width, height: next.height }
+  }
+
+  if (typeof width !== 'number' || typeof height !== 'number') {
+    return { width: fallback.width, height: fallback.height }
+  }
+
+  return {
+    width: normalizeOpenAiDimension(width),
+    height: normalizeOpenAiDimension(height),
+  }
 }
 
 export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.Element {
@@ -117,7 +153,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [quality, setQuality] = useState<OpenAIQuality>('medium')
   const [outputFormat, setOutputFormat] = useState<OpenAIOutputFormat>('png')
   const [background, setBackground] = useState<OpenAIBackground>('opaque')
-  const [openaiSizeIdx, setOpenaiSizeIdx] = useState(0)
+  const [openaiWidth, setOpenaiWidth] = useState(1024)
+  const [openaiHeight, setOpenaiHeight] = useState(1024)
 
   // Google Imagen params
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -193,6 +230,11 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     const preset = DRAWTHINGS_SIZE_PRESETS.find((s) => s.width === localWidth && s.height === localHeight)
     return preset ? `${preset.width}x${preset.height}` : CUSTOM_DRAWTHINGS_SIZE
   }, [localWidth, localHeight])
+  const openaiSizeValue = useMemo(() => {
+    if (!openaiModelDef) return CUSTOM_OPENAI_SIZE
+    return findPresetValue(openaiModelDef.sizes, openaiWidth, openaiHeight)
+      ?? (openaiModelDef.supportsCustomSizes ? CUSTOM_OPENAI_SIZE : `${openaiModelDef.sizes[0]?.width ?? 1024}x${openaiModelDef.sizes[0]?.height ?? 1024}`)
+  }, [openaiModelDef, openaiWidth, openaiHeight])
   const canRestoreRecommended = effectiveRecommendation !== null && (
     localWidth !== effectiveRecommendation.width ||
     localHeight !== effectiveRecommendation.height ||
@@ -208,6 +250,22 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     setLocalWidth(preset.width)
     setLocalHeight(preset.height)
   }
+
+  const handleOpenAiSizeChange = useCallback((value: string): void => {
+    if (!openaiModelDef || value === CUSTOM_OPENAI_SIZE) return
+    const preset = openaiModelDef.sizes.find((size) => `${size.width}x${size.height}` === value)
+    if (!preset) return
+    setOpenaiWidth(preset.width)
+    setOpenaiHeight(preset.height)
+  }, [openaiModelDef])
+
+  const handleOpenAiWidthChange = useCallback((value: string): void => {
+    setOpenaiWidth(normalizeOpenAiDimension(Number.parseInt(value, 10)))
+  }, [])
+
+  const handleOpenAiHeightChange = useCallback((value: string): void => {
+    setOpenaiHeight(normalizeOpenAiDimension(Number.parseInt(value, 10)))
+  }, [])
 
   const serializeProprietarySnapshot = useCallback((nextModel: string, params: Record<string, unknown>): string => {
     return JSON.stringify({ model: nextModel, params })
@@ -372,9 +430,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     if (backendId === 'openai') {
       const nextModelDef = (models.find((m) => m.id === savedModel) ?? defaultModel) as OpenAIModelDef | undefined
       if (!nextModelDef) return
-      const nextSizeIdx = nextModelDef.sizes.findIndex(
-        (size) => size.width === savedDefaultParams.width && size.height === savedDefaultParams.height
-      )
+      const nextSize = resolveOpenAiSize(nextModelDef, savedDefaultParams.width, savedDefaultParams.height)
       const nextQuality = typeof savedDefaultParams.quality === 'string' && nextModelDef.qualities.includes(savedDefaultParams.quality as OpenAIQuality)
         ? savedDefaultParams.quality as OpenAIQuality
         : (nextModelDef.qualities.find((quality) => quality === 'medium') ?? nextModelDef.qualities[0])
@@ -384,14 +440,14 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       const nextBackground = typeof savedDefaultParams.background === 'string' && nextModelDef.backgrounds.includes(savedDefaultParams.background as OpenAIBackground)
         ? savedDefaultParams.background as OpenAIBackground
         : (nextModelDef.backgrounds.find((background) => background === 'opaque') ?? nextModelDef.backgrounds[0])
-      const size = nextModelDef.sizes[nextSizeIdx >= 0 ? nextSizeIdx : 0]
-      setOpenaiSizeIdx(nextSizeIdx >= 0 ? nextSizeIdx : 0)
+      setOpenaiWidth(nextSize.width)
+      setOpenaiHeight(nextSize.height)
       setQuality(nextQuality)
       setOutputFormat(nextOutputFormat)
       setBackground(nextBackground)
       persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(savedModel, {
-        width: size.width,
-        height: size.height,
+        width: nextSize.width,
+        height: nextSize.height,
         quality: nextQuality,
         outputFormat: nextOutputFormat,
         background: nextBackground,
@@ -495,7 +551,9 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       setQuality((prev) => openaiModelDef.qualities.includes(prev) ? prev : 'medium')
       setOutputFormat((prev) => openaiModelDef.outputFormats.includes(prev) ? prev : 'png')
       setBackground((prev) => openaiModelDef.backgrounds.includes(prev) ? prev : 'opaque')
-      setOpenaiSizeIdx((prev) => prev >= openaiModelDef.sizes.length ? 0 : prev)
+      const nextSize = resolveOpenAiSize(openaiModelDef, openaiWidth, openaiHeight)
+      if (nextSize.width !== openaiWidth) setOpenaiWidth(nextSize.width)
+      if (nextSize.height !== openaiHeight) setOpenaiHeight(nextSize.height)
     } else if (backendId === 'imagen' && imagenModelDef) {
       setAspectRatio((prev) => IMAGEN_ASPECT_RATIOS.some((ar) => ar.value === prev) ? prev : '1:1')
       setImageSize((prev) => imagenModelDef.imageSizes.some((size) => size.value === prev) ? prev : '1K')
@@ -528,13 +586,11 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
         }
       }
     }
-  }, [backendId, model, openaiModelDef, imagenModelDef, nanoBananaModelDef])
+  }, [backendId, model, openaiModelDef, openaiWidth, openaiHeight, imagenModelDef, nanoBananaModelDef])
 
   const currentEnqueueParams = useMemo<Record<string, unknown>>(() => {
     if (backendId === 'openai') {
-      const size = openaiModelDef?.sizes[openaiSizeIdx]
-      if (!size) return {}
-      return { width: size.width, height: size.height, quality, outputFormat, background }
+      return { width: openaiWidth, height: openaiHeight, quality, outputFormat, background }
     }
     if (backendId === 'imagen') {
       return { aspectRatio, imageSize, personGeneration }
@@ -569,8 +625,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     return {}
   }, [
     backendId,
-    openaiModelDef,
-    openaiSizeIdx,
+    openaiWidth,
+    openaiHeight,
     quality,
     outputFormat,
     background,
@@ -722,7 +778,43 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
         {/* OpenAI parameters */}
         {backendId === 'openai' && openaiModelDef && (
           <>
-            {renderSizeSelect(openaiModelDef.sizes, openaiSizeIdx, setOpenaiSizeIdx)}
+            <div className="setting-row">
+              <label>size</label>
+              <select value={openaiSizeValue} onChange={(e) => handleOpenAiSizeChange(e.target.value)}>
+                {openaiModelDef.sizes.map((size) => (
+                  <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>{size.label}</option>
+                ))}
+                {openaiModelDef.supportsCustomSizes && (
+                  <option value={CUSTOM_OPENAI_SIZE}>Custom width/height</option>
+                )}
+              </select>
+            </div>
+            {openaiModelDef.supportsCustomSizes && (
+              <>
+                <div className="setting-row">
+                  <label>width</label>
+                  <input
+                    type="number"
+                    min={OPENAI_GPT2_MIN_EDGE}
+                    max={OPENAI_GPT2_MAX_EDGE}
+                    step={OPENAI_GPT2_SIZE_STEP}
+                    value={openaiWidth}
+                    onChange={(e) => handleOpenAiWidthChange(e.target.value)}
+                  />
+                </div>
+                <div className="setting-row">
+                  <label>height</label>
+                  <input
+                    type="number"
+                    min={OPENAI_GPT2_MIN_EDGE}
+                    max={OPENAI_GPT2_MAX_EDGE}
+                    step={OPENAI_GPT2_SIZE_STEP}
+                    value={openaiHeight}
+                    onChange={(e) => handleOpenAiHeightChange(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <div className="setting-row">
               <label>quality</label>
               <select value={quality} onChange={(e) => setQuality(e.target.value as OpenAIQuality)}>

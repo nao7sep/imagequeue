@@ -1,8 +1,37 @@
 import OpenAI from 'openai'
+import type { ImageGenerateParamsNonStreaming } from 'openai/resources/images'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
 import { log, logApiRequest, logApiResponse } from '../logger'
+import {
+  OPENAI_GPT2_MAX_ASPECT_RATIO,
+  OPENAI_GPT2_MAX_EDGE,
+  OPENAI_GPT2_MAX_PIXELS,
+  OPENAI_GPT2_MIN_EDGE,
+  OPENAI_GPT2_SIZE_STEP,
+} from '../../shared/models'
+
+function validateGptImage2Size(width: number, height: number): void {
+  if (!Number.isInteger(width) || !Number.isInteger(height)) {
+    throw new Error('GPT Image 2 size must use whole-number width and height values')
+  }
+  if (width < OPENAI_GPT2_MIN_EDGE || height < OPENAI_GPT2_MIN_EDGE) {
+    throw new Error(`GPT Image 2 width and height must be at least ${OPENAI_GPT2_MIN_EDGE}px`)
+  }
+  if (width > OPENAI_GPT2_MAX_EDGE || height > OPENAI_GPT2_MAX_EDGE) {
+    throw new Error(`GPT Image 2 width and height must not exceed ${OPENAI_GPT2_MAX_EDGE}px`)
+  }
+  if (width % OPENAI_GPT2_SIZE_STEP !== 0 || height % OPENAI_GPT2_SIZE_STEP !== 0) {
+    throw new Error(`GPT Image 2 width and height must be multiples of ${OPENAI_GPT2_SIZE_STEP}px`)
+  }
+  if (Math.max(width, height) / Math.min(width, height) > OPENAI_GPT2_MAX_ASPECT_RATIO) {
+    throw new Error(`GPT Image 2 aspect ratio must stay within ${OPENAI_GPT2_MAX_ASPECT_RATIO}:1`)
+  }
+  if (width * height > OPENAI_GPT2_MAX_PIXELS) {
+    throw new Error(`GPT Image 2 size must stay at or below ${OPENAI_GPT2_MAX_PIXELS.toLocaleString()} pixels`)
+  }
+}
 
 // Calls OpenAI image generation API and returns the image bytes plus a
 // MIME-type hint derived from the user-selected output_format.
@@ -18,8 +47,9 @@ export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mime
 
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
-  // gpt-image-2 supports many more sizes than the SDK type enumerates; cast via unknown
-  const size = `${width}x${height}` as unknown as '1024x1024' | '1024x1536' | '1536x1024' | 'auto'
+  if (task.model === 'gpt-image-2') validateGptImage2Size(width, height)
+  // gpt-image-2 supports many more sizes than the SDK type enumerates.
+  const size = `${width}x${height}`
   const quality = (task.params.quality as 'low' | 'medium' | 'high' | 'auto') || 'high'
   const outputFormat = (task.params.outputFormat as 'png' | 'jpeg' | 'webp') || 'png'
   const background = (task.params.background as 'opaque' | 'auto' | 'transparent') || 'opaque'
@@ -44,7 +74,7 @@ export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mime
     prompt: task.prompt,
     n: 1,
     stream: false
-  }).catch((err: unknown) => {
+  } as unknown as ImageGenerateParamsNonStreaming).catch((err: unknown) => {
     log('error', 'OpenAI API call failed', {
       model: task.model,
       requestParams,

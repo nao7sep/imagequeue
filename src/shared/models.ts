@@ -10,6 +10,12 @@ export interface SizePreset {
   height: number
 }
 
+export const OPENAI_GPT2_MIN_EDGE = 512
+export const OPENAI_GPT2_MAX_EDGE = 3840
+export const OPENAI_GPT2_SIZE_STEP = 16
+export const OPENAI_GPT2_MAX_ASPECT_RATIO = 3
+export const OPENAI_GPT2_MAX_PIXELS = 8_294_400
+
 // Sizes for GPT Image 1.x models (exactly these three)
 export const OPENAI_SIZES: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
@@ -17,16 +23,24 @@ export const OPENAI_SIZES: SizePreset[] = [
   { label: '1536×1024 (Landscape)', width: 1536, height: 1024 }
 ]
 
-// Popular sizes for gpt-image-2 (multiples of 16, ratio ≤ 3:1, max edge 3840)
+// Useful presets for gpt-image-2 custom sizing.
 export const OPENAI_SIZES_GPT2: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '1024×1536 (Portrait)', width: 1024, height: 1536 },
-  { label: '1536×1024 (Landscape)', width: 1536, height: 1024 },
+  { label: '1024×1536 (Photo 2:3)', width: 1024, height: 1536 },
+  { label: '1536×1024 (Photo 3:2)', width: 1536, height: 1024 },
+  { label: '1536×1920 (Print 4:5)', width: 1536, height: 1920 },
+  { label: '1920×1536 (Print 5:4)', width: 1920, height: 1536 },
+  { label: '1456×2048 (A4-ish Portrait)', width: 1456, height: 2048 },
+  { label: '2048×1456 (A4-ish Landscape)', width: 2048, height: 1456 },
+  { label: '1584×2048 (Letter-ish Portrait)', width: 1584, height: 2048 },
+  { label: '2048×1584 (Letter-ish Landscape)', width: 2048, height: 1584 },
   { label: '2048×2048 (2K Square)', width: 2048, height: 2048 },
-  { label: '1152×2048 (2K Portrait)', width: 1152, height: 2048 },
-  { label: '2048×1152 (2K Landscape)', width: 2048, height: 1152 },
-  { label: '2160×3840 (4K Portrait)', width: 2160, height: 3840 },
-  { label: '3840×2160 (4K Landscape)', width: 3840, height: 2160 }
+  { label: '1152×2048 (2K Tall 9:16)', width: 1152, height: 2048 },
+  { label: '2048×1152 (2K Wide 16:9)', width: 2048, height: 1152 },
+  { label: '1440×2560 (QHD Tall)', width: 1440, height: 2560 },
+  { label: '2560×1440 (QHD Wide)', width: 2560, height: 1440 },
+  { label: '2160×3840 (4K Tall)', width: 2160, height: 3840 },
+  { label: '3840×2160 (4K Wide)', width: 3840, height: 2160 }
 ]
 
 // Google uses aspect ratios; sizes are "1K" (~1024px) or "2K" (~2048px, standard/ultra only)
@@ -77,6 +91,7 @@ export interface OpenAIModelDef extends ModelDef {
   backend: 'openai'
   qualities: OpenAIQuality[]
   sizes: SizePreset[]
+  supportsCustomSizes?: boolean
   outputFormats: OpenAIOutputFormat[]
   backgrounds: OpenAIBackground[]
   pricing: Record<'low' | 'medium' | 'high', { square: number; rect: number }>
@@ -148,10 +163,11 @@ export interface NanoBananaModelDef extends ModelDef {
 }
 
 export type GrokAspectRatio =
-  '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
+  'auto' | '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
   '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
 
 export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
+  { label: 'Auto',               value: 'auto' },
   { label: '1:1 (Square)',       value: '1:1' },
   { label: '16:9 (Wide)',        value: '16:9' },
   { label: '9:16 (Tall)',        value: '9:16' },
@@ -189,6 +205,7 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     isDefault: true,
     qualities: ['low', 'medium', 'high', 'auto'],
     sizes: OPENAI_SIZES_GPT2,
+    supportsCustomSizes: true,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'auto'],
     pricing: {
@@ -397,7 +414,7 @@ export const TEXT_AI_BACKENDS: TextAIBackendDef[] = [
     models: [
       { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
       { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash (Preview)' },
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)' }
+      { id: 'gemini-3.1-flash-lite',         label: 'Gemini 3.1 Flash Lite' }
     ]
   }
 ]

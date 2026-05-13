@@ -79,7 +79,9 @@ Each cloud backend has its own section with:
 | Concurrency | How many simultaneous requests ImageQueue may send |
 | Timeout | Maximum wait time before failing a task |
 
-Some backends also expose backend-specific generation parameters such as quality, aspect ratio, image size, steps, guidance, or seed.
+Some backends also expose backend-specific generation parameters such as quality, aspect ratio, image size, custom width/height, steps, guidance, or seed.
+
+OpenAI GPT Image 2 supports both presets and editable width/height values. Imagen, Nano Banana, and Grok use aspect-ratio-driven sizing, and FLUX keeps preset size picks.
 
 ### Draw Things
 
@@ -93,7 +95,7 @@ ImageQueue uses a text AI model to create short filename slugs from prompts. If 
 |---|---|---|
 | Backend | Gemini | AI service used for slug generation |
 | API Key | — | API key for the selected backend |
-| Model | Gemini 3.1 Flash Lite (Preview) | Model used for slug generation |
+| Model | Gemini 3.1 Flash Lite | Model used for slug generation |
 | Timeout | 30 s | Maximum wait time before falling back to a random ID |
 
 The **Prompts → Slug template** setting controls the instruction sent to the text model.
