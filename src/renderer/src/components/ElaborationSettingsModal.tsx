@@ -235,7 +235,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         <div className="elaboration-settings-section">
           <div className="elaboration-settings-section-title">Templates</div>
           <p className="elaboration-settings-help">
-            Sent to the text AI verbatim with placeholders substituted. Edit to add language instructions, change response phrasing, or adjust tone. <code>{'{{JSON}}'}</code> always resolves to the required response shape <code>{'{ "prompts": [string, ...] }'}</code>, so the parser cannot be broken by edits to that part.
+            Sent to the text AI verbatim with placeholders substituted. The shipped defaults wrap inserted content in explicit XML-like tags so the model can see where embedded strings end; preserving that pattern is recommended when editing. <code>{'{{JSON}}'}</code> always resolves to the required response shape <code>{'{ "prompts": [string, ...] }'}</code>, so the parser cannot be broken by edits to that part.
           </p>
 
           <label className="elaboration-settings-template">
@@ -272,7 +272,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <span>Override combine</span>
             <span className="elaboration-settings-tags">{'{{PROMPT}} {{OVERRIDE}}'}</span>
             <span className="elaboration-settings-hint">
-              Sent to the <em>image</em> model (not the text AI), so {'{{JSON}}'} is not available here. The image model treats the combined text as a description with adjustments applied on top.
+              Sent to the <em>image</em> model (not the text AI), so {'{{JSON}}'} is not available here. The shipped default gives <code>{'<required_override>'}</code> higher priority than <code>{'<base_prompt>'}</code> so short overrides are less likely to be ignored.
             </span>
             <textarea
               rows={8}

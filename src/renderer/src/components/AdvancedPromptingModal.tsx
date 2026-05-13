@@ -327,15 +327,17 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       // Apply override at queue time (never during elaboration). Empty-string
       // overrides leave the prompt untouched. Format pulled from
       // brainstorm.templates.override_combine so users can edit it in
-      // Elaboration Settings (e.g. for non-English workflows). The fallback
-      // is only hit when settings haven't loaded yet — under normal flow the
-      // user's persisted template (or the shipped default) is used.
+      // Elaboration Settings (e.g. for non-English workflows). If settings
+      // have not loaded yet, fetch the shipped default from main-process IPC
+      // rather than duplicating the template text in the renderer.
       const trimmedOverride = override.trim()
       const overrideTemplate = ((settings?.brainstorm as Record<string, unknown> | undefined)?.templates as Record<string, unknown> | undefined)?.override_combine as string | undefined
+        ?? (trimmedOverride === ''
+          ? undefined
+          : (await window.electronAPI.brainstormGetDefaults()).templates.override_combine)
       const finalize = (p: string): string => {
         if (trimmedOverride === '') return p
-        const tmpl = overrideTemplate || 'The following describes the desired image, followed by modifications to apply on top of it. Keep all elements of the description unchanged except where the modifications direct otherwise.\n\nDescription:\n{{PROMPT}}\n\nModifications:\n{{OVERRIDE}}'
-        return tmpl.split('{{PROMPT}}').join(p).split('{{OVERRIDE}}').join(trimmedOverride)
+        return overrideTemplate!.split('{{PROMPT}}').join(p).split('{{OVERRIDE}}').join(trimmedOverride)
       }
 
       // Indexing: prompts in iteration-major order so fresh-task reads naturally

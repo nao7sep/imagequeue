@@ -14,7 +14,7 @@ export async function generateSlug(prompt: string): Promise<string> {
   }
 
   try {
-    const systemPrompt = config.prompts.slug.replace('{{prompt}}', prompt)
+    const systemPrompt = config.prompts.slug.replace(/\{\{PROMPT\}\}/i, prompt)
     const result = await handle.provider.ask({
       messages: [{ role: 'user', text: systemPrompt }],
       timeoutMs: handle.timeoutMs,
