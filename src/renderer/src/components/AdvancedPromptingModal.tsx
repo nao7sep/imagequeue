@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -65,6 +65,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'info' | 'error'>('info')
   const [showHistory, setShowHistory] = useState(false)
+  const elaboratorRowRefs = useRef(new Map<string, HTMLLabelElement>())
 
   const busy = elaborateBusy || queueBusy
 
@@ -93,6 +94,11 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   useEffect(() => {
     void refreshElaborators()
   }, [refreshElaborators])
+
+  useEffect(() => {
+    if (!selectedElaboratorId) return
+    elaboratorRowRefs.current.get(selectedElaboratorId)?.scrollIntoView({ block: 'nearest' })
+  }, [selectedElaboratorId, elaborators])
 
   useEffect(() => {
     if (!isMacPlatform) {
@@ -436,7 +442,17 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
               <div className="advanced-empty">No elaborators. Open Elaborators from the menu.</div>
             ) : (
               elaborators.map((el) => (
-                <label key={el.id} className={`advanced-elab-row${selectedElaboratorId === el.id ? ' selected' : ''}`}>
+                <label
+                  key={el.id}
+                  ref={(node) => {
+                    if (node) {
+                      elaboratorRowRefs.current.set(el.id, node)
+                    } else {
+                      elaboratorRowRefs.current.delete(el.id)
+                    }
+                  }}
+                  className={`advanced-elab-row${selectedElaboratorId === el.id ? ' selected' : ''}`}
+                >
                   <input
                     type="radio"
                     name="advanced-elaborator"
