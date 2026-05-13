@@ -246,6 +246,12 @@ const api = {
   exportImageAs: (baseName: string, ext: string): Promise<string | null> =>
     ipcRenderer.invoke('shell:exportImageAs', baseName, ext),
 
+  readClipboardText: (): Promise<string> =>
+    ipcRenderer.invoke('clipboard:readText'),
+
+  hasClipboardText: (): Promise<boolean> =>
+    ipcRenderer.invoke('clipboard:hasText'),
+
   copyImageToClipboard: (baseName: string, ext: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:copyImage', baseName, ext),
 

@@ -36,7 +36,7 @@ npm run typecheck
 
 ## Everyday workflow
 
-1. Enter a prompt.
+1. Enter a prompt, or click **Paste Text** to replace it with plain text from the clipboard when available.
 2. Choose a backend column, or use **Send to All**.
 3. Review queued, running, completed, failed, and interrupted tasks in each column.
 4. Select a completed task to preview, inspect metadata, export, reveal, or copy it.
@@ -221,6 +221,7 @@ The **Elaboration** submenu flies out to the right on hover:
 
 | Action | macOS | Windows/Linux |
 |---|---|---|
+| Replace prompt with clipboard text | ⌘P | Ctrl+P |
 | Send to all backends | ⌘↩ | Ctrl+Enter |
 | Send to backend 1–6 | ⌘1–6 | Ctrl+1–6 |
 | Open Settings | ⌘, | Ctrl+, |

@@ -151,6 +151,7 @@ export function Layout(): React.JSX.Element {
             <div className="shortcut-group">
               <p className="shortcut-group-name">Sending</p>
               <div className="shortcut-list">
+                <div className="shortcut-item"><span>Replace prompt with clipboard text</span><kbd>{mod}P</kbd></div>
                 <div className="shortcut-item"><span>Send to all backends</span><kbd>{mod}Enter</kbd></div>
                 {BACKENDS.map((backend, index) => (
                   <div key={backend.id} className="shortcut-item">

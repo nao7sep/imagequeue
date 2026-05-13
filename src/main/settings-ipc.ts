@@ -31,6 +31,10 @@ import {
 import { getModelParams, setModelParams } from './model-params'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type DrawThingsModelParams } from '../shared/types'
 
+function readClipboardText(): string {
+  return clipboard.readText()
+}
+
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:get', () => {
@@ -210,6 +214,14 @@ export function registerSettingsIpc(): void {
     fs.mkdirSync(path.dirname(result.filePath), { recursive: true })
     fs.copyFileSync(src, result.filePath)
     return result.filePath
+  })
+
+  ipcMain.handle('clipboard:readText', () => {
+    return readClipboardText()
+  })
+
+  ipcMain.handle('clipboard:hasText', () => {
+    return readClipboardText().trim().length > 0
   })
 
   ipcMain.handle('clipboard:copyImage', (_event, baseName: string, ext: string) => {

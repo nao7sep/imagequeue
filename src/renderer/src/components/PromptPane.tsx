@@ -40,6 +40,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const [promptCopied, setPromptCopied] = useState(false)
   const [imageCopied, setImageCopied] = useState(false)
   const [exported, setExported] = useState(false)
+  const [clipboardTextAvailable, setClipboardTextAvailable] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const detailsRef = useRef<HTMLDivElement>(null)
@@ -67,6 +68,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     if (!selectedTask?.prompt) return
     void navigator.clipboard.writeText(selectedTask.prompt).then(() => {
       setPromptCopied(true)
+      setClipboardTextAvailable(true)
       setTimeout(() => setPromptCopied(false), 1500)
     })
   }, [selectedTask])
@@ -80,6 +82,9 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     if (!selectedTask?.baseName) return
     void window.electronAPI.copyImageToClipboard(selectedTask.baseName, getExt()).then(() => {
       setImageCopied(true)
+      void window.electronAPI.hasClipboardText().then((hasText) => {
+        setClipboardTextAvailable(hasText)
+      })
       setTimeout(() => setImageCopied(false), 1500)
     })
   }, [selectedTask, getExt])
@@ -97,6 +102,23 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     void window.electronAPI.exportImageAs(selectedTask.baseName, getExt())
   }, [selectedTask, getExt])
 
+  const refreshClipboardTextAvailable = useCallback((): void => {
+    void window.electronAPI.hasClipboardText().then((hasText) => {
+      setClipboardTextAvailable(hasText)
+    })
+  }, [])
+
+  const handlePasteClipboardText = useCallback((): void => {
+    void window.electronAPI.readClipboardText().then((clipboardText) => {
+      if (!clipboardText.trim()) {
+        setClipboardTextAvailable(false)
+        return
+      }
+      onPromptChange(clipboardText)
+      setClipboardTextAvailable(true)
+    })
+  }, [onPromptChange])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
@@ -105,6 +127,13 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       if (mod && e.key === 'Enter') {
         e.preventDefault()
         handleSendToAll()
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        if (clipboardTextAvailable) {
+          handlePasteClipboardText()
+        }
         return
       }
       if (mod && e.key >= '1' && e.key <= '6') {
@@ -118,7 +147,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [prompt, handleSendToAll])
+  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText])
 
   // Handle "+ Queue" button requests from QueueColumn
   useEffect(() => {
@@ -134,10 +163,36 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     return () => window.removeEventListener('request-enqueue', handler)
   }, [prompt])
 
+  useEffect(() => {
+    refreshClipboardTextAvailable()
+
+    const intervalId = window.setInterval(() => {
+      refreshClipboardTextAvailable()
+    }, 1000)
+
+    const handleFocus = (): void => {
+      refreshClipboardTextAvailable()
+    }
+
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [refreshClipboardTextAvailable])
+
   return (
     <div className="prompt-pane">
       <div className="prompt-scroll">
         <div className="prompt-advanced-row">
+          <button
+            className="prompt-advanced-btn"
+            disabled={!clipboardTextAvailable}
+            onClick={handlePasteClipboardText}
+          >
+            Paste Text
+          </button>
           <button className="prompt-advanced-btn" onClick={() => setShowAdvanced(true)}>
             Advanced Prompting
           </button>
