@@ -23,11 +23,14 @@ export interface Selection {
   taskId: string
 }
 
+export type NavDirection = 'up' | 'down' | 'left' | 'right'
+
 interface SelectionContextValue {
   selection: Selection | null
   selectedTask: Task | null
   select: (backend: BackendId, taskId: string) => void
   clear: () => void
+  navigate: (dir: NavDirection) => void
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
   deleteTask: (backend: BackendId, taskId: string) => Promise<void>
@@ -226,6 +229,70 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     await restoreTask(sel.backend, sel.taskId)
   }, [restoreTask])
 
+  // ---- Navigation -------------------------------------------------------
+
+  // Shared arrow-key navigation logic. Used by the local keydown handler in
+  // the main window and by the viewer bridge in Layout (which forwards arrow
+  // keys pressed while the fullscreen viewer has focus). Both call sites
+  // change selection and scroll the main window's list — scrollIntoView works
+  // regardless of focus, so the main view stays in sync even while hidden.
+  const navigate = useCallback((dir: NavDirection): void => {
+    const sel = selectionRef.current
+    const map = tasksRef.current
+    if (!sel) return
+
+    if (dir === 'up' || dir === 'down') {
+      const list = map[sel.backend]
+      const idx = list.findIndex((t) => t.id === sel.taskId)
+      if (idx < 0) return
+      const nextIdx = dir === 'down' ? idx + 1 : idx - 1
+      if (nextIdx < 0 || nextIdx >= list.length) return
+      const nextId = list[nextIdx].id
+      setSelectionInternal({ backend: sel.backend, taskId: nextId }, { userInitiated: true })
+      requestAnimationFrame(() => {
+        getTaskElement(nextId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+      return
+    }
+
+    const colIdx = visibleBackends.indexOf(sel.backend)
+    if (colIdx < 0) return
+    const step = dir === 'right' ? 1 : -1
+    const selEl = getTaskElement(sel.taskId)
+    const selRect = selEl?.getBoundingClientRect()
+    const cy = selRect ? selRect.top + selRect.height / 2 : null
+
+    for (let i = colIdx + step; i >= 0 && i < visibleBackends.length; i += step) {
+      const b = visibleBackends[i]
+      const colTasks = map[b]
+      if (!colTasks || colTasks.length === 0) continue
+      let bestId: string | null = null
+      if (cy === null) {
+        bestId = colTasks[0].id
+      } else {
+        let bestDist = Infinity
+        for (const t of colTasks) {
+          const el = getTaskElement(t.id)
+          if (!el) continue
+          const r = el.getBoundingClientRect()
+          const elCy = r.top + r.height / 2
+          const d = Math.abs(elCy - cy)
+          if (d < bestDist) {
+            bestDist = d
+            bestId = t.id
+          }
+        }
+        if (!bestId) bestId = colTasks[0].id
+      }
+      setSelectionInternal({ backend: b, taskId: bestId }, { userInitiated: true })
+      const targetId = bestId
+      requestAnimationFrame(() => {
+        getTaskElement(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+      return
+    }
+  }, [visibleBackends, setSelectionInternal])
+
   // ---- Reconcile selection when tasks change ----------------------------
 
   // If the selected task has disappeared (e.g. removed externally), clear it.
@@ -306,65 +373,14 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       const sel = selectionRef.current
       const map = tasksRef.current
 
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         if (!sel) return
-        const list = map[sel.backend]
-        const idx = list.findIndex((t) => t.id === sel.taskId)
-        if (idx < 0) return
-        const nextIdx = e.key === 'ArrowDown' ? idx + 1 : idx - 1
-        if (nextIdx < 0 || nextIdx >= list.length) {
-          e.preventDefault()
-          return
-        }
         e.preventDefault()
-        const nextId = list[nextIdx].id
-        setSelectionInternal({ backend: sel.backend, taskId: nextId }, { userInitiated: true })
-        // Scroll into view after React applies the state.
-        requestAnimationFrame(() => {
-          getTaskElement(nextId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-        })
-        return
-      }
-
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        if (!sel) return
-        const colIdx = visibleBackends.indexOf(sel.backend)
-        if (colIdx < 0) return
-        const dir = e.key === 'ArrowRight' ? 1 : -1
-        const selEl = getTaskElement(sel.taskId)
-        const selRect = selEl?.getBoundingClientRect()
-        const cy = selRect ? selRect.top + selRect.height / 2 : null
-
-        for (let i = colIdx + dir; i >= 0 && i < visibleBackends.length; i += dir) {
-          const b = visibleBackends[i]
-          const colTasks = map[b]
-          if (!colTasks || colTasks.length === 0) continue
-          let bestId: string | null = null
-          if (cy === null) {
-            bestId = colTasks[0].id
-          } else {
-            let bestDist = Infinity
-            for (const t of colTasks) {
-              const el = getTaskElement(t.id)
-              if (!el) continue
-              const r = el.getBoundingClientRect()
-              const elCy = r.top + r.height / 2
-              const d = Math.abs(elCy - cy)
-              if (d < bestDist) {
-                bestDist = d
-                bestId = t.id
-              }
-            }
-            if (!bestId) bestId = colTasks[0].id
-          }
-          e.preventDefault()
-          setSelectionInternal({ backend: b, taskId: bestId }, { userInitiated: true })
-          requestAnimationFrame(() => {
-            getTaskElement(bestId!)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-          })
-          return
-        }
-        // No neighbor column with tasks — do nothing.
+        const dir: NavDirection =
+          e.key === 'ArrowUp' ? 'up' :
+          e.key === 'ArrowDown' ? 'down' :
+          e.key === 'ArrowLeft' ? 'left' : 'right'
+        navigate(dir)
         return
       }
 
@@ -399,10 +415,10 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [visibleBackends, removeSelected, restoreSelected, deleteSelected, setSelectionInternal])
+  }, [visibleBackends, removeSelected, restoreSelected, deleteSelected, setSelectionInternal, navigate])
 
   return (
-    <SelectionContext.Provider value={{ selection, selectedTask, select, clear, removeTask, restoreTask, deleteTask, removeSelected, restoreSelected, deleteSelected }}>
+    <SelectionContext.Provider value={{ selection, selectedTask, select, clear, navigate, removeTask, restoreTask, deleteTask, removeSelected, restoreSelected, deleteSelected }}>
       {children}
     </SelectionContext.Provider>
   )

@@ -98,7 +98,7 @@ app.whenReady().then(() => {
   registerSettingsIpc()
   registerElaboratorsIpc()
   registerAppLogIpc()
-  registerViewerIpc()
+  registerViewerIpc(() => mainWin)
   registerNotificationIpc(() => mainWin)
   initNotificationWindow()
   void updateRecommendationsAtLaunch().catch((err) => {

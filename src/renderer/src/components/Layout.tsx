@@ -24,9 +24,10 @@ type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' |
 
 export function Layout(): React.JSX.Element {
   useNotifications()
-  const { selectedTask, clear } = useSelection()
+  const { selectedTask, clear, navigate } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
 
   // Reset the main prompt on session change so its lifecycle matches the
@@ -115,13 +116,49 @@ export function Layout(): React.JSX.Element {
   }, [selectedTask])
 
   // Open the fullscreen viewer window when Space is pressed on a completed task.
+  // If the viewer is already open, Space toggles it closed.
   useEffect(() => {
     const handler = (): void => {
-      if (previewDataUrl) void window.electronAPI.openViewer(previewDataUrl)
+      if (viewerOpen) {
+        void window.electronAPI.closeViewer()
+      } else if (previewDataUrl) {
+        void window.electronAPI.openViewer(previewDataUrl)
+      }
     }
     window.addEventListener('viewer:toggle', handler)
     return () => window.removeEventListener('viewer:toggle', handler)
-  }, [previewDataUrl])
+  }, [previewDataUrl, viewerOpen])
+
+  // Track viewer open/closed state so we know when to push updates vs. open
+  // fresh, and so Space can toggle.
+  useEffect(() => {
+    return window.electronAPI.onViewerStateChanged((open) => setViewerOpen(open))
+  }, [])
+
+  // Forward arrow keys pressed in the fullscreen viewer to the same nav
+  // function the main window uses. Selection (and main-window scroll) updates
+  // immediately; the next two effects push the image or close the viewer.
+  useEffect(() => {
+    return window.electronAPI.onViewerNavigate((dir) => navigate(dir))
+  }, [navigate])
+
+  // While the viewer is open, push new image data whenever the selected task's
+  // image finishes loading. The main viewer code awaits img.decode() before
+  // showing, so swaps are flash-free.
+  useEffect(() => {
+    if (!viewerOpen || !previewDataUrl) return
+    void window.electronAPI.openViewer(previewDataUrl)
+  }, [viewerOpen, previewDataUrl])
+
+  // While the viewer is open, close it if navigation lands on a task without
+  // a viewable image (queued/generating/failed, or selection cleared). The
+  // main process refocuses the main window on close.
+  useEffect(() => {
+    if (!viewerOpen) return
+    const status = selectedTask?.status
+    const canShow = (status === 'completed' || status === 'kept') && !!selectedTask?.baseName
+    if (!canShow) void window.electronAPI.closeViewer()
+  }, [viewerOpen, selectedTask])
 
   const openOverlay = (o: Overlay): void => {
     setShowMenu(false)

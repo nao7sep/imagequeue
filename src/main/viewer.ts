@@ -4,6 +4,11 @@ import path from 'path'
 let viewerWin: BrowserWindow | null = null
 let hidePromise: Promise<void> | null = null
 let viewerClosing = false
+let getMainWin: (() => BrowserWindow | null) | null = null
+// Each open/update increments this. Stale async work (image decoding for an
+// older navigation) checks the counter before showing the window so rapid
+// arrow-key navigation never paints an intermediate frame.
+let openGeneration = 0
 
 const VIEWER_HTML = `<!DOCTYPE html>
 <html>
@@ -20,9 +25,17 @@ img { width: 100%; height: 100%; object-fit: contain; display: block; }
 <img id="img" alt="">
 <script>
 document.addEventListener('keydown', function(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Escape' || e.key === ' ') {
     e.preventDefault();
     window.electronAPI.closeViewer();
+    return;
+  }
+  var navMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  var dir = navMap[e.key];
+  if (dir) {
+    e.preventDefault();
+    window.electronAPI.viewerNavigate(dir);
   }
 });
 </script>
@@ -48,6 +61,19 @@ function leavePresentationMode(win: BrowserWindow): void {
   win.setKiosk(false)
   win.setVisibleOnAllWorkspaces(false)
   win.setAlwaysOnTop(false)
+}
+
+function notifyMainWin(channel: 'viewer:opened' | 'viewer:closed' | 'viewer:navigate', payload?: unknown): void {
+  const main = getMainWin?.()
+  if (!main || main.isDestroyed()) return
+  main.webContents.send(channel, payload)
+}
+
+function focusMainWin(): void {
+  const main = getMainWin?.()
+  if (!main || main.isDestroyed()) return
+  if (main.isMinimized()) main.restore()
+  main.focus()
 }
 
 function createViewerWindow(display: Electron.Display): BrowserWindow {
@@ -92,6 +118,7 @@ async function openViewer(event: IpcMainInvokeEvent, dataUrl: string): Promise<v
   if (hidePromise) await hidePromise
 
   const display = getViewerDisplay(event)
+  const generation = ++openGeneration
 
   if (!viewerWin || viewerWin.isDestroyed()) {
     viewerWin = createViewerWindow(display)
@@ -100,15 +127,24 @@ async function openViewer(event: IpcMainInvokeEvent, dataUrl: string): Promise<v
     viewerWin.setBounds(display.bounds, false)
   }
 
+  // If a newer open superseded us while loading, bail.
+  if (generation !== openGeneration) return
+
   const win = viewerWin
+  if (!win || win.isDestroyed()) return
   applyPresentationMode(win)
   await win.webContents.executeJavaScript(
     '(() => { const img = document.getElementById("img"); img.src = ' +
       JSON.stringify(dataUrl) +
       '; return img.decode().catch(() => {}); })()'
   )
+  // Another navigation arrived while we were decoding — let it paint instead.
+  if (generation !== openGeneration) return
+  if (win.isDestroyed()) return
+  const wasVisible = win.isVisible()
   win.show()
   win.focus()
+  if (!wasVisible) notifyMainWin('viewer:opened')
 }
 
 async function hideViewer(): Promise<void> {
@@ -120,6 +156,10 @@ async function hideViewer(): Promise<void> {
 
   if (hidePromise) return hidePromise
 
+  // Bump generation so any in-flight openViewer call discards its result.
+  openGeneration++
+  const wasVisible = win.isVisible()
+
   hidePromise = new Promise<void>((resolve) => {
     leavePresentationMode(win)
     win.hide()
@@ -128,20 +168,31 @@ async function hideViewer(): Promise<void> {
     hidePromise = null
   })
 
-  return hidePromise
+  await hidePromise
+  if (wasVisible) {
+    notifyMainWin('viewer:closed')
+    focusMainWin()
+  }
 }
 
 export function closeViewerWindow(): void {
   const win = viewerWin
   if (!win || win.isDestroyed()) return
   viewerClosing = true
+  const wasVisible = win.isVisible()
+  openGeneration++
   leavePresentationMode(win)
   win.destroy()
   viewerClosing = false
   viewerWin = null
+  if (wasVisible) notifyMainWin('viewer:closed')
 }
 
-export function registerViewerIpc(): void {
+export function registerViewerIpc(getMain: () => BrowserWindow | null): void {
+  getMainWin = getMain
   ipcMain.handle('viewer:open', openViewer)
   ipcMain.handle('viewer:close', hideViewer)
+  ipcMain.handle('viewer:navigate', (_event, dir: 'up' | 'down' | 'left' | 'right') => {
+    notifyMainWin('viewer:navigate', dir)
+  })
 }

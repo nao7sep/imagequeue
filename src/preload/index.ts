@@ -264,6 +264,28 @@ const api = {
   closeViewer: (): Promise<void> =>
     ipcRenderer.invoke('viewer:close'),
 
+  viewerNavigate: (dir: 'up' | 'down' | 'left' | 'right'): Promise<void> =>
+    ipcRenderer.invoke('viewer:navigate', dir),
+
+  onViewerNavigate: (callback: (dir: 'up' | 'down' | 'left' | 'right') => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, dir: 'up' | 'down' | 'left' | 'right'): void => {
+      callback(dir)
+    }
+    ipcRenderer.on('viewer:navigate', handler)
+    return () => { ipcRenderer.removeListener('viewer:navigate', handler) }
+  },
+
+  onViewerStateChanged: (callback: (open: boolean) => void): (() => void) => {
+    const opened = (): void => callback(true)
+    const closed = (): void => callback(false)
+    ipcRenderer.on('viewer:opened', opened)
+    ipcRenderer.on('viewer:closed', closed)
+    return () => {
+      ipcRenderer.removeListener('viewer:opened', opened)
+      ipcRenderer.removeListener('viewer:closed', closed)
+    }
+  },
+
   showNotification: (type: 'success' | 'failure'): Promise<void> =>
     ipcRenderer.invoke('notification:show', type),
 
