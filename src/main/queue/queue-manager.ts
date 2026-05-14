@@ -51,31 +51,31 @@ class QueueManager {
     }
   }
 
+  private insertNewTask(task: Task): void {
+    this.queues[task.backend].unshift(task)
+  }
+
+  private enqueueUnit(request: EnqueueBatchUnit): Task {
+    const task = this.createTask(request)
+    this.insertNewTask(task)
+    return task
+  }
+
   enqueue(request: EnqueueRequest): Task[] {
     const tasks: Task[] = []
 
     for (let i = 0; i < request.count; i++) {
-      const task = this.createTask(request)
-      this.queues[request.backend].unshift(task)
-      tasks.push(task)
+      tasks.push(this.enqueueUnit(request))
     }
 
     return tasks
   }
 
   enqueueBatch(units: EnqueueBatchUnit[]): Task[] {
-    const created = createEmptyQueues()
     const orderedTasks: Task[] = []
 
     for (const unit of units) {
-      const task = this.createTask(unit)
-      created[unit.backend].push(task)
-      orderedTasks.push(task)
-    }
-
-    for (const backend of Object.keys(created) as BackendId[]) {
-      if (created[backend].length === 0) continue
-      this.queues[backend] = [...created[backend], ...this.queues[backend]]
+      orderedTasks.push(this.enqueueUnit(unit))
     }
 
     return orderedTasks

@@ -166,8 +166,8 @@ Four prompt sources:
 |---|---|
 | **User prompt as-is** | Send the seed verbatim. No AI involvement. |
 | **Elaborated prompt (same for all)** | Use the result from clicking **Elaborate**, identical for every queued task. |
-| **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; queue one task per selected target in each round, with all selected models in that round sharing the same prompt. Within a round, cloud backends follow display order and Draw Things models follow alphabetical order. |
-| **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique; queue order is still round-robin by round, with cloud backends first in display order and Draw Things models after them in alphabetical order. |
+| **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; queue one task per selected target in each round, with all selected models in that round sharing the same prompt. Task creation within a round uses cloud display order and Draw Things alphabetical order. New tasks are inserted at the top of each backend column, while execution still proceeds from the bottom upward. |
+| **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique. Task creation is still round-robin by round, with cloud backends first in display order and Draw Things models after them in alphabetical order. New tasks are inserted at the top of each backend column, while execution still proceeds from the bottom upward. |
 
 Elaborated prompts accumulate in a per-session list. The text AI sees previously elaborated prompts as context on each new request and avoids repeating them. The list persists across closing and reopening the modal, and is wiped when you start a new session or resume another one — exactly like the main prompt textarea.
 
