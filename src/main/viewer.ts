@@ -132,7 +132,6 @@ async function openViewer(event: IpcMainInvokeEvent, dataUrl: string): Promise<v
 
   const win = viewerWin
   if (!win || win.isDestroyed()) return
-  applyPresentationMode(win)
   await win.webContents.executeJavaScript(
     '(() => { const img = document.getElementById("img"); img.src = ' +
       JSON.stringify(dataUrl) +
@@ -142,6 +141,11 @@ async function openViewer(event: IpcMainInvokeEvent, dataUrl: string): Promise<v
   if (generation !== openGeneration) return
   if (win.isDestroyed()) return
   const wasVisible = win.isVisible()
+  // Apply kiosk / always-on-top only when the window is about to appear for
+  // the first time (or after being hidden). On subsequent arrow-key swaps it
+  // is already in presentation mode, so re-applying is unnecessary and would
+  // briefly hide the menu/dock earlier than needed.
+  if (!wasVisible) applyPresentationMode(win)
   win.show()
   win.focus()
   if (!wasVisible) notifyMainWin('viewer:opened')
