@@ -201,8 +201,8 @@ export function Layout(): React.JSX.Element {
             <div className="shortcut-group">
               <p className="shortcut-group-name">Queue Navigation</p>
               <div className="shortcut-list">
-                <div className="shortcut-item"><span>Move up / down within column</span><kbd>↑ / ↓</kbd></div>
-                <div className="shortcut-item"><span>Move to nearest task in adjacent column</span><kbd>← / →</kbd></div>
+                <div className="shortcut-item"><span>Move up / down within column (also in fullscreen viewer)</span><kbd>↑ / ↓</kbd></div>
+                <div className="shortcut-item"><span>Move to nearest task in adjacent column (also in fullscreen viewer)</span><kbd>← / →</kbd></div>
                 <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
                 <div className="shortcut-item"><span>Remove task, keep selected completed image, or restore selected kept image</span><kbd>Backspace</kbd></div>
                 <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete / {mod}Backspace</kbd></div>

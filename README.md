@@ -228,8 +228,8 @@ The **Elaboration** submenu flies out to the right on hover:
 | Send to backend 1–6 | ⌘1–6 | Ctrl+1–6 |
 | Open Settings | ⌘, | Ctrl+, |
 | Show / hide kept images | ⌘⇧K | Ctrl+Shift+K |
-| Move selection within a column | ↑ / ↓ | ↑ / ↓ |
-| Move selection across columns | ← / → | ← / → |
+| Move selection within a column (also navigates in fullscreen viewer) | ↑ / ↓ | ↑ / ↓ |
+| Move selection across columns (also navigates in fullscreen viewer) | ← / → | ← / → |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
 | Remove selected task, keep the selected completed image, or restore a selected kept image | Backspace | Backspace |
