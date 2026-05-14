@@ -103,7 +103,9 @@ async function openViewer(event: IpcMainInvokeEvent, dataUrl: string): Promise<v
   const win = viewerWin
   applyPresentationMode(win)
   await win.webContents.executeJavaScript(
-    'document.getElementById("img").src = ' + JSON.stringify(dataUrl)
+    '(() => { const img = document.getElementById("img"); img.src = ' +
+      JSON.stringify(dataUrl) +
+      '; return img.decode().catch(() => {}); })()'
   )
   win.show()
   win.focus()
