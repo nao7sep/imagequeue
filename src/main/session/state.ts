@@ -102,10 +102,8 @@ function isSessionManifest(value: unknown): value is SessionManifest {
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
-  if (!(candidate.elaboratedPrompts === undefined || (
-    Array.isArray(candidate.elaboratedPrompts) &&
-    candidate.elaboratedPrompts.every((prompt) => typeof prompt === 'string')
-  ))) return false
+  if (!Array.isArray(candidate.elaboratedPrompts)) return false
+  if (!candidate.elaboratedPrompts.every((prompt) => typeof prompt === 'string')) return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
@@ -122,11 +120,11 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     }
     const normalizedTasks = createEmptyQueues()
     for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-      normalizedTasks[backend] = (parsed.tasks[backend] ?? []).map(normalizeTaskRecord)
+      normalizedTasks[backend] = parsed.tasks[backend].map(normalizeTaskRecord)
     }
     return {
       ...parsed,
-      elaboratedPrompts: Array.isArray(parsed.elaboratedPrompts) ? [...parsed.elaboratedPrompts] : [],
+      elaboratedPrompts: [...parsed.elaboratedPrompts],
       tasks: normalizedTasks,
     }
   } catch (error) {

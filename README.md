@@ -217,7 +217,7 @@ The hamburger menu (☰) gives access to:
 | Sessions | Browse saved sessions, resume one, or delete one |
 | Show Kept Images | Show or hide completed images marked as kept |
 | Settings | Open Settings |
-| Draw Things Models | Open the Draw Things model browser and importer |
+| Draw Things Models (macOS) | Open the Draw Things model browser and importer |
 | Elaboration ▸ | Hover to reveal the elaboration submenu (see below) |
 | Keyboard Shortcuts | Open the shortcut reference |
 | About | Show version and links |
@@ -236,7 +236,7 @@ The **Elaboration** submenu flies out to the right on hover:
 |---|---|---|
 | Replace prompt with clipboard text | ⌘P | Ctrl+P |
 | Send to all backends | ⌘↩ | Ctrl+Enter |
-| Send to backend 1–6 | ⌘1–6 | Ctrl+1–6 |
+| Send to visible backend by column number | ⌘1–6 | Ctrl+1–5 |
 | Open Settings | ⌘, | Ctrl+, |
 | Show / hide kept images | ⌘⇧K | Ctrl+Shift+K |
 | Move selection within a column (also navigates in fullscreen viewer) | ↑ / ↓ | ↑ / ↓ |
