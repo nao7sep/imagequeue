@@ -6,7 +6,9 @@ export type TargetScope = 'selected' | 'all-proprietary' | 'all-drawthings' | 'a
 
 export interface AdvancedPromptingState {
   seed: string
-  selectedElaboratorId: string | null
+  selectedContentElaboratorId: string | null
+  selectedCompositionElaboratorId: string | null
+  selectedStyleElaboratorId: string | null
   elaborated: string
   override: string
   selectedProprietary: Record<BackendId, boolean>
@@ -24,7 +26,9 @@ export interface AdvancedPromptingState {
 function emptyState(): AdvancedPromptingState {
   return {
     seed: '',
-    selectedElaboratorId: null,
+    selectedContentElaboratorId: null,
+    selectedCompositionElaboratorId: null,
+    selectedStyleElaboratorId: null,
     elaborated: '',
     override: '',
     selectedProprietary: {

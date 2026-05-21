@@ -9,22 +9,23 @@ import {
   updateElaborator,
 } from './elaborators'
 import { log } from './logger'
+import type { ElaboratorKind } from '../shared/types'
 
 export function registerElaboratorsIpc(): void {
   ipcMain.handle('elaborators:list', () => {
     return listElaborators()
   })
 
-  ipcMain.handle('elaborators:create', (_event, input: { name: string; description?: string; template: string }) => {
+  ipcMain.handle('elaborators:create', (_event, input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => {
     const created = createElaborator(input)
-    log('info', 'Elaborator created', { id: created.id, name: created.name })
+    log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
     return created
   })
 
   ipcMain.handle('elaborators:update', (_event, id: string, patch: { name?: string; description?: string; template?: string }) => {
     const updated = updateElaborator(id, patch)
     if (updated) {
-      log('info', 'Elaborator updated', { id, name: updated.name, fields: Object.keys(patch) })
+      log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
     }
     return updated
   })
@@ -35,15 +36,26 @@ export function registerElaboratorsIpc(): void {
     return ok
   })
 
-  ipcMain.handle('elaborators:reset', () => {
-    const items = resetElaborators()
-    log('info', 'Elaborators reset to defaults', { count: items.length })
+  ipcMain.handle('elaborators:reset', (_event, kind?: ElaboratorKind) => {
+    const items = resetElaborators(kind)
+    log('info', 'Elaborators reset to defaults', { kind: kind ?? 'all', count: items.length })
     return items
   })
 
   ipcMain.handle(
     'elaborators:brainstorm',
-    async (_event, req: { requestId: string; elaboratorId: string; seed: string; count: number; previousPrompts: string[] }) => {
+    async (
+      _event,
+      req: {
+        requestId: string
+        contentElaboratorId: string
+        compositionElaboratorId: string
+        styleElaboratorId: string
+        seed: string
+        count: number
+        previousPrompts: string[]
+      }
+    ) => {
       return brainstormPrompts(req)
     }
   )

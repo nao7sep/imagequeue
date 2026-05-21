@@ -77,9 +77,17 @@ export interface DrawThingsModelParams {
 
 export type TextAIBackendId = 'gemini'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'kept' | 'failed' | 'interrupted'
+export type ElaboratorKind = 'content' | 'composition' | 'style'
+
+export const ELABORATOR_KIND_LABELS: Record<ElaboratorKind, string> = {
+  content: 'Content',
+  composition: 'Composition',
+  style: 'Style',
+}
 
 export interface Elaborator {
   id: string
+  kind: ElaboratorKind
   name: string
   description?: string
   template: string

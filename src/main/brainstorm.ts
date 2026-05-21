@@ -11,7 +11,9 @@ import { log } from './logger'
 
 export interface BrainstormRequest {
   requestId: string
-  elaboratorId: string
+  contentElaboratorId: string
+  compositionElaboratorId: string
+  styleElaboratorId: string
   seed: string
   count: number
   previousPrompts: string[]
@@ -71,6 +73,28 @@ function buildContinuationMessage(template: string, countToAskFor: number): stri
   return fillTemplate(template, { N: String(countToAskFor) })
 }
 
+function buildCombinedElaboratorInstructions(parts: {
+  content: string
+  composition: string
+  style: string
+}): string {
+  return [
+    'Apply the following elaborator instruction sets in order. Preserve explicit user intent throughout.',
+    '',
+    '<content_elaborator>',
+    parts.content,
+    '</content_elaborator>',
+    '',
+    '<composition_elaborator>',
+    parts.composition,
+    '</composition_elaborator>',
+    '',
+    '<style_elaborator>',
+    parts.style,
+    '</style_elaborator>',
+  ].join('\n')
+}
+
 // One conversation turn with up to maxRetries retries. Returns the parsed
 // prompts, or throws after all retries are exhausted.
 async function askWithRetry(
@@ -125,8 +149,24 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   if (req.count < 1) throw new Error('Count must be at least 1.')
   if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
 
-  const elaborator = getElaborator(req.elaboratorId)
-  if (!elaborator) throw new Error('Elaborator not found.')
+  const contentElaborator = getElaborator(req.contentElaboratorId)
+  const compositionElaborator = getElaborator(req.compositionElaboratorId)
+  const styleElaborator = getElaborator(req.styleElaboratorId)
+  if (!contentElaborator || contentElaborator.kind !== 'content') {
+    throw new Error('Content elaborator not found.')
+  }
+  if (!compositionElaborator || compositionElaborator.kind !== 'composition') {
+    throw new Error('Composition elaborator not found.')
+  }
+  if (!styleElaborator || styleElaborator.kind !== 'style') {
+    throw new Error('Style elaborator not found.')
+  }
+
+  const combinedElaboratorTemplate = buildCombinedElaboratorInstructions({
+    content: contentElaborator.template,
+    composition: compositionElaborator.template,
+    style: styleElaborator.template,
+  })
 
   const handle = getMainProvider()
   if (!handle) throw new Error('Text AI is not configured.')
@@ -148,7 +188,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       turn++
 
       const userMessage = collected.length === 0
-        ? buildFirstMessage(brainstormConfig.templates, elaborator.template, req.seed, req.previousPrompts, askFor)
+        ? buildFirstMessage(brainstormConfig.templates, combinedElaboratorTemplate, req.seed, req.previousPrompts, askFor)
         : buildContinuationMessage(brainstormConfig.templates.continuation, askFor)
       messages.push({ role: 'user', text: userMessage })
 
@@ -178,7 +218,9 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     }
 
     log('info', 'Brainstorm complete', {
-      elaborator: elaborator.name,
+      contentElaborator: contentElaborator.name,
+      compositionElaborator: compositionElaborator.name,
+      styleElaborator: styleElaborator.name,
       backend: handle.backend,
       model: handle.modelId,
       count: collected.length,
@@ -188,7 +230,9 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     return { prompts: collected.slice(0, req.count) }
   } catch (err) {
     log('error', 'Brainstorm failed', {
-      elaborator: elaborator.name,
+      contentElaborator: contentElaborator.name,
+      compositionElaborator: compositionElaborator.name,
+      styleElaborator: styleElaborator.name,
       backend: handle.backend,
       model: handle.modelId,
       requested: req.count,

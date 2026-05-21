@@ -13,6 +13,8 @@ import {
   type BackendId,
   type EnqueueBatchUnit,
   type Elaborator,
+  ELABORATOR_KIND_LABELS,
+  type ElaboratorKind,
   type LocalModelInfo,
 } from '../../../shared/types'
 import { localModelName, sortLocalModels } from '../utils/localModels'
@@ -34,6 +36,15 @@ interface DtParams {
 }
 
 const isMacPlatform = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
+const ELABORATOR_KINDS: ElaboratorKind[] = ['content', 'composition', 'style']
+
+function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborator[]> {
+  return {
+    content: items.filter((item) => item.kind === 'content'),
+    composition: items.filter((item) => item.kind === 'composition'),
+    style: items.filter((item) => item.kind === 'style'),
+  }
+}
 
 export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React.JSX.Element {
   const { settings } = useSettings()
@@ -41,7 +52,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useAdvancedPrompting()
   const {
-    seed, selectedElaboratorId, elaborated, override,
+    seed, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated, override,
     selectedProprietary, selectedDtFiles, promptMode, targetScope, count, elaboratedPrompts,
   } = state
 
@@ -82,23 +93,35 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     setMessageType('info')
   }, [])
 
+  const elaboratorsByKind = useMemo(() => groupElaborators(elaborators), [elaborators])
+
   const refreshElaborators = useCallback(async (): Promise<void> => {
     const next = await window.electronAPI.listElaborators()
     setElaborators(next)
-    // If the currently selected elaborator was deleted or never picked, snap
-    // to the first available. Persisted across open/close via context.
-    if (selectedElaboratorId && next.some((e) => e.id === selectedElaboratorId)) return
-    update({ selectedElaboratorId: next[0]?.id ?? null })
-  }, [selectedElaboratorId, update])
+    const grouped = groupElaborators(next)
+    update({
+      selectedContentElaboratorId: grouped.content.some((e) => e.id === selectedContentElaboratorId)
+        ? selectedContentElaboratorId
+        : grouped.content[0]?.id ?? null,
+      selectedCompositionElaboratorId: grouped.composition.some((e) => e.id === selectedCompositionElaboratorId)
+        ? selectedCompositionElaboratorId
+        : grouped.composition[0]?.id ?? null,
+      selectedStyleElaboratorId: grouped.style.some((e) => e.id === selectedStyleElaboratorId)
+        ? selectedStyleElaboratorId
+        : grouped.style[0]?.id ?? null,
+    })
+  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, update])
 
   useEffect(() => {
     void refreshElaborators()
   }, [refreshElaborators])
 
   useEffect(() => {
-    if (!selectedElaboratorId) return
-    elaboratorRowRefs.current.get(selectedElaboratorId)?.scrollIntoView({ block: 'nearest' })
-  }, [selectedElaboratorId, elaborators])
+    for (const id of [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId]) {
+      if (!id) continue
+      elaboratorRowRefs.current.get(id)?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborators])
 
   useEffect(() => {
     if (!isMacPlatform) {
@@ -175,29 +198,43 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
 
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
   const totalTasks = Math.max(0, targetCount * Math.max(1, count))
-  const elaboratorPicked = selectedElaboratorId !== null && elaborators.some((e) => e.id === selectedElaboratorId)
+  const contentElaboratorPicked = selectedContentElaboratorId !== null && elaboratorsByKind.content.some((e) => e.id === selectedContentElaboratorId)
+  const compositionElaboratorPicked = selectedCompositionElaboratorId !== null && elaboratorsByKind.composition.some((e) => e.id === selectedCompositionElaboratorId)
+  const styleElaboratorPicked = selectedStyleElaboratorId !== null && elaboratorsByKind.style.some((e) => e.id === selectedStyleElaboratorId)
+  const missingElaboratorKind = !contentElaboratorPicked
+    ? 'content'
+    : !compositionElaboratorPicked
+      ? 'composition'
+      : !styleElaboratorPicked
+        ? 'style'
+        : null
   const elaborateDisabledReason = (() => {
     if (!seed.trim()) return 'Enter a seed prompt above.'
-    if (!elaboratorPicked) return 'Pick an elaborator first.'
+    if (missingElaboratorKind) return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
     return null
   })()
 
   const promptModeDisabledReason = useCallback((which: PromptMode): string | null => {
     if (which === 'elaborated' && !elaborated.trim()) return 'Run Elaborate first.'
-    if ((which === 'fresh-iteration' || which === 'fresh-task') && !elaboratorPicked) return 'Pick an elaborator first.'
+    if ((which === 'fresh-iteration' || which === 'fresh-task') && missingElaboratorKind) {
+      return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
+    }
     return null
-  }, [elaborated, elaboratorPicked])
+  }, [elaborated, missingElaboratorKind])
 
   // Note: we do NOT auto-reset promptMode when preconditions go away. On
-  // modal open, elaboratorPicked transiently flips false before elaborators
-  // load, which would silently wipe a persisted fresh-* mode. The radio
-  // disabled state and queueDisabledReason already signal a problem.
+  // modal open, one or more category selections can transiently read as
+  // missing before elaborators load, which would silently wipe a persisted
+  // fresh-* mode. The radio disabled state and queueDisabledReason already
+  // signal a problem.
 
   const queueDisabledReason = (() => {
     if (totalTasks === 0) return 'Select at least one target.'
     if (promptMode === 'as-is' && !seed.trim()) return 'Seed prompt is empty.'
     if (promptMode === 'elaborated' && !elaborated.trim()) return 'Elaborated prompt is empty.'
-    if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && !elaboratorPicked) return 'Pick an elaborator first.'
+    if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && missingElaboratorKind) {
+      return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
+    }
     if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && !seed.trim()) return 'Enter a seed prompt for elaboration.'
     return null
   })()
@@ -207,7 +244,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   // a mid-run failure still leaves the successful turns in the list. Returns
   // the prompts produced by THIS call (not including prior session prompts).
   const runBrainstorm = useCallback(async (count: number): Promise<string[]> => {
-    if (!selectedElaboratorId) throw new Error('Pick an elaborator first.')
+    if (!selectedContentElaboratorId || !selectedCompositionElaboratorId || !selectedStyleElaboratorId) {
+      throw new Error('Pick content, composition, and style elaborators first.')
+    }
     if (!seed.trim()) throw new Error('Seed prompt is empty.')
 
     const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
@@ -223,7 +262,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     try {
       const result = await window.electronAPI.brainstormPrompts({
         requestId,
-        elaboratorId: selectedElaboratorId,
+        contentElaboratorId: selectedContentElaboratorId,
+        compositionElaboratorId: selectedCompositionElaboratorId,
+        styleElaboratorId: selectedStyleElaboratorId,
         seed,
         count,
         previousPrompts: elaboratedPrompts,
@@ -233,15 +274,16 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       unsubscribe()
       setBrainstormProgress(null)
     }
-  }, [selectedElaboratorId, seed, elaboratedPrompts, appendElaboratedPrompts])
+  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, elaboratedPrompts, appendElaboratedPrompts])
 
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (elaborateDisabledReason) return
     setElaborateBusy(true)
     clearMessage()
-    const elaboratorName = elaborators.find((e) => e.id === selectedElaboratorId)?.name ?? null
     void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
-      elaborator: elaboratorName,
+      contentElaborator: elaboratorsByKind.content.find((e) => e.id === selectedContentElaboratorId)?.name ?? null,
+      compositionElaborator: elaboratorsByKind.composition.find((e) => e.id === selectedCompositionElaboratorId)?.name ?? null,
+      styleElaborator: elaboratorsByKind.style.find((e) => e.id === selectedStyleElaboratorId)?.name ?? null,
       seedLen: seed.length,
       previousCount: elaboratedPrompts.length,
     })
@@ -258,7 +300,10 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     } finally {
       setElaborateBusy(false)
     }
-  }, [elaborateDisabledReason, runBrainstorm, elaborators, selectedElaboratorId, seed, elaboratedPrompts.length, clearMessage, showError, update])
+  }, [
+    elaborateDisabledReason, runBrainstorm, elaboratedPrompts.length, clearMessage, showError, update,
+    elaboratorsByKind, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
+  ])
 
   const buildDtParams = useCallback(async (modelFile: string): Promise<{ model: string; params: DtParams }> => {
     const saved = await window.electronAPI.dtGetModelParams(modelFile)
@@ -427,6 +472,65 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     onClose()
   }, [busy, confirm, onClose])
 
+  const selectElaborator = useCallback((kind: ElaboratorKind, id: string): void => {
+    switch (kind) {
+      case 'content':
+        update({ selectedContentElaboratorId: id })
+        return
+      case 'composition':
+        update({ selectedCompositionElaboratorId: id })
+        return
+      case 'style':
+        update({ selectedStyleElaboratorId: id })
+        return
+    }
+  }, [update])
+
+  const selectedElaboratorIds: Record<ElaboratorKind, string | null> = {
+    content: selectedContentElaboratorId,
+    composition: selectedCompositionElaboratorId,
+    style: selectedStyleElaboratorId,
+  }
+
+  const renderElaboratorColumn = (kind: ElaboratorKind): React.JSX.Element => {
+    const items = elaboratorsByKind[kind]
+    return (
+      <div className="advanced-elaborator-column" key={kind}>
+        <div className="advanced-elaborator-column-title">{ELABORATOR_KIND_LABELS[kind]}</div>
+        <div className="advanced-elaborator-column-list">
+          {items.length === 0 ? (
+            <div className="advanced-empty">No {kind} elaborators.</div>
+          ) : (
+            items.map((el) => (
+              <label
+                key={el.id}
+                ref={(node) => {
+                  if (node) {
+                    elaboratorRowRefs.current.set(el.id, node)
+                  } else {
+                    elaboratorRowRefs.current.delete(el.id)
+                  }
+                }}
+                className={`advanced-elab-row${selectedElaboratorIds[kind] === el.id ? ' selected' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name={`advanced-elaborator-${kind}`}
+                  checked={selectedElaboratorIds[kind] === el.id}
+                  onChange={() => selectElaborator(kind, el.id)}
+                />
+                <div className="advanced-elab-text">
+                  <div className="advanced-elab-name">{el.name}</div>
+                  {el.description && <div className="advanced-elab-desc">{el.description}</div>}
+                </div>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Modal
       title="Advanced Prompting"
@@ -445,35 +549,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
               value={seed}
               onChange={(e) => update({ seed: e.target.value })}
             />
-            <div className="advanced-elaborator-list">
-              {elaborators.length === 0 ? (
-                <div className="advanced-empty">No elaborators. Open Elaborators from the menu.</div>
-              ) : (
-                elaborators.map((el) => (
-                  <label
-                    key={el.id}
-                    ref={(node) => {
-                      if (node) {
-                        elaboratorRowRefs.current.set(el.id, node)
-                      } else {
-                        elaboratorRowRefs.current.delete(el.id)
-                      }
-                    }}
-                    className={`advanced-elab-row${selectedElaboratorId === el.id ? ' selected' : ''}`}
-                  >
-                    <input
-                      type="radio"
-                      name="advanced-elaborator"
-                      checked={selectedElaboratorId === el.id}
-                      onChange={() => update({ selectedElaboratorId: el.id })}
-                    />
-                    <div className="advanced-elab-text">
-                      <div className="advanced-elab-name">{el.name}</div>
-                      {el.description && <div className="advanced-elab-desc">{el.description}</div>}
-                    </div>
-                  </label>
-                ))
-              )}
+            <div className="advanced-section-label">Elaborators</div>
+            <div className="advanced-elaborator-columns">
+              {ELABORATOR_KINDS.map((kind) => renderElaboratorColumn(kind))}
             </div>
             <div className="advanced-row advanced-row-end">
               <button

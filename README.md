@@ -96,8 +96,10 @@ ImageQueue uses text AI models for short filename slugs and for prompt elaborati
 | Backend | Gemini | AI service used for slug generation |
 | API Key | — | API key for the selected backend |
 | Light model | Gemini 3.1 Flash Lite | Used for short, lightweight tasks like filename slug generation |
-| Main model | Gemini 3 Flash | Used for general text work, including prompt elaboration in Advanced Prompting |
+| Main model | Gemini 3 Flash (Preview) | Used for general text work, including prompt elaboration in Advanced Prompting |
 | Timeout | 30 s | Maximum wait time before falling back to a random ID |
+
+The built-in Gemini text model list currently offers **Gemini 3.5 Flash**, **Gemini 3 Flash (Preview)**, and **Gemini 3.1 Flash Lite**. **Gemini 3 Pro (Preview)** is not listed because Google marks it shut down.
 
 The **Prompts → Slug template** setting controls the instruction sent to the text model.
 
@@ -157,7 +159,7 @@ The **Advanced Prompting** button above the prompt textarea opens a modal for ba
 
 The modal has three panes:
 
-- **Prompt** — your seed text, an elaborator picker, the **Elaborate** button, the resulting elaborated prompt, and an optional **Override** field that is combined with every queued prompt using the configurable `override_combine` template (see Elaboration Settings).
+- **Prompt** — your seed text, three elaborator pickers (**Content**, **Composition**, **Style**), the **Elaborate** button, the resulting elaborated prompt, and an optional **Override** field that is combined with every queued prompt using the configurable `override_combine` template (see Elaboration Settings).
 - **Targets** — checkboxes for proprietary backends and (on macOS) downloaded Draw Things models. Long Draw Things model names are truncated; hover the row to see the full name.
 - **Execution** — the prompt source, target scope, iteration count, and the **Queue Tasks** button.
 
@@ -178,11 +180,15 @@ The modal stays open after queueing so you can run another round. Clicking outsi
 
 ## Elaborators
 
-**☰ → Elaborators** opens the elaborator manager. An elaborator is a saved system instruction telling the text AI how to elaborate a seed prompt. Each elaborator has a name, optional description, and template text.
+**☰ → Elaborators** opens the elaborator manager. An elaborator is a saved system instruction telling the text AI how to elaborate a seed prompt. Each elaborator belongs to one of three categories:
 
-The shipped defaults are a set of 25 stylistic directions — photographic looks (cinematic, documentary, photorealistic), animation styles (Studio Ghibli, modern anime, Disney/Pixar 3D), traditional media (oil, watercolor, ink), art movements (impressionist, surrealist, cubist, pop art, ukiyo-e), design directions (minimalist, vintage poster, advertising), mood/genre (horror, cyberpunk, high fantasy), and a wildly-creative stretch. Each pushes the elaboration toward a specific visual signature rather than a generic expansion.
+- **Content** — makes the subject and scene more distinct without breaking intent.
+- **Composition** — controls framing, camera distance, arrangement, and visual hierarchy.
+- **Style** — controls rendering medium and overall visual finish.
 
-Use **New Elaborator** to add one, **Edit** to change one, **Delete** to remove. **Reset to Defaults** at the bottom replaces the entire list with the shipped defaults — useful after the shipped set changes between app versions.
+The manager shows these as three side-by-side panes with independent **New**, **Edit**, **Delete**, and **Reset Defaults** controls. Each category keeps its own list.
+
+The shipped defaults are a subject-aware starter set across all three categories: content defaults for people, creatures, vehicles, places, objects, and events; composition defaults for close, medium, wide, dynamic, and graphic framing; and style defaults for photorealism, cinematic work, documentary photography, anime, painterly media, ink, minimalist graphics, and vintage poster treatment.
 
 ## Elaboration Settings
 

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   BackendId,
   Elaborator,
+  ElaboratorKind,
   EnqueueBatchUnit,
   EnqueueRequest,
   Task,
@@ -19,7 +20,7 @@ import type {
   CliStatusEvent,
 } from '../shared/cli-jobs'
 
-export type { CliStatus, Elaborator, LocalModelInfo, SessionSummary }
+export type { CliStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
 
 export interface EnsureModelResult {
@@ -92,7 +93,7 @@ const api = {
   listElaborators: (): Promise<Elaborator[]> =>
     ipcRenderer.invoke('elaborators:list'),
 
-  createElaborator: (input: { name: string; description?: string; template: string }): Promise<Elaborator> =>
+  createElaborator: (input: { kind: ElaboratorKind; name: string; description?: string; template: string }): Promise<Elaborator> =>
     ipcRenderer.invoke('elaborators:create', input),
 
   updateElaborator: (id: string, patch: { name?: string; description?: string; template?: string }): Promise<Elaborator | null> =>
@@ -101,12 +102,14 @@ const api = {
   deleteElaborator: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('elaborators:delete', id),
 
-  resetElaborators: (): Promise<Elaborator[]> =>
-    ipcRenderer.invoke('elaborators:reset'),
+  resetElaborators: (kind?: ElaboratorKind): Promise<Elaborator[]> =>
+    ipcRenderer.invoke('elaborators:reset', kind),
 
   brainstormPrompts: (req: {
     requestId: string
-    elaboratorId: string
+    contentElaboratorId: string
+    compositionElaboratorId: string
+    styleElaboratorId: string
     seed: string
     count: number
     previousPrompts: string[]
