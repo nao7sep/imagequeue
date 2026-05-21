@@ -1,4 +1,4 @@
-import { ipcMain, shell, dialog, app, clipboard, nativeImage } from 'electron'
+import { BrowserWindow, ipcMain, shell, dialog, app, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { loadConfig, saveConfig, encodeApiKey, decodeApiKey, getDataDir } from './config'
@@ -162,8 +162,10 @@ export function registerSettingsIpc(): void {
     return resolveRecommendedParams(modelFile)
   })
 
-  ipcMain.handle('dialog:openFile', async (_event, filters: Electron.FileFilter[]) => {
-    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters })
+  ipcMain.handle('dialog:openFile', async (event, filters: Electron.FileFilter[]) => {
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const options = { properties: ['openFile'] as const, filters }
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
   })
 
@@ -202,14 +204,16 @@ export function registerSettingsIpc(): void {
     return destPath
   })
 
-  ipcMain.handle('shell:exportImageAs', async (_event, baseName: string, ext: string) => {
+  ipcMain.handle('shell:exportImageAs', async (event, baseName: string, ext: string) => {
     const config = loadConfig()
     const exportDir = config.general.export_dir || app.getPath('desktop')
     const src = path.join(getSessionDir(), `${baseName}.${ext}`)
-    const result = await dialog.showSaveDialog({
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const options = {
       defaultPath: path.join(exportDir, `${baseName}.${ext}`),
       filters: [{ name: 'Images', extensions: [ext, 'png', 'jpg', 'webp'] }]
-    })
+    }
+    const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
     fs.mkdirSync(path.dirname(result.filePath), { recursive: true })
     fs.copyFileSync(src, result.filePath)
@@ -230,8 +234,10 @@ export function registerSettingsIpc(): void {
     clipboard.writeImage(nativeImage.createFromBuffer(buffer))
   })
 
-  ipcMain.handle('dialog:openDirectory', async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+  ipcMain.handle('dialog:openDirectory', async (event) => {
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const options = { properties: ['openDirectory', 'createDirectory'] as const }
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
   })
 
