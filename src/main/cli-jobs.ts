@@ -314,6 +314,14 @@ function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isC
     }
   }
 
+  if (!isCR && state.buffer.length > 0) {
+    const last = state.buffer[state.buffer.length - 1]
+    if (last.kind === kind && last.text === text) {
+      state[lastCRKey] = false
+      return
+    }
+  }
+
   state[lastCRKey] = isCR
   const chunk: CliChunk = { seq: state.nextSeq++, kind, text, tsMs: Date.now() }
   state.buffer.push(chunk)

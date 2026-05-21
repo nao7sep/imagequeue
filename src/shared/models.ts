@@ -1,4 +1,4 @@
-// Centralized model registry — single source of truth for models, sizes, parameters, and pricing.
+// Centralized model registry — single source of truth for models, sizes, parameters, and rough cost estimates.
 
 import { BackendId } from './types'
 
@@ -336,7 +336,8 @@ export const FLUX_MODELS: FluxModelDef[] = [
     // Source: https://api.bfl.ai/openapi.json — Flux2FlexInputs
     stepsRange: { min: 1, max: 50, default: 50 },
     guidanceRange: { min: 1.5, max: 10, default: 5 },
-    pricing: { firstMp: 0.06, additionalMp: 0 }
+    // Source: https://bfl.ai/pricing?category=flux.2
+    pricing: { firstMp: 0.05, additionalMp: 0.05 }
   },
   {
     id: 'flux-2-klein-9b',
@@ -377,6 +378,7 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
     imageSizes: NANO_BANANA_SIZES_PRO,
+    // Rough per-image estimate from documented output token counts.
     // 1K and 2K both use 1120 tokens at $120/1M; 4K uses 2000 tokens
     // Source: https://ai.google.dev/gemini-api/docs/pricing
     pricing: { '1K': 0.134, '2K': 0.134, '4K': 0.24 }
@@ -470,7 +472,8 @@ export function findModel(backend: BackendId, modelId: string): ModelDef | undef
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
 
-// Estimate cost for a task based on model registry
+// Rough pre-run estimate based on the local registry. This intentionally does
+// not parse provider token usage or try to be a full billing calculator.
 export function estimateCostFromRegistry(
   backend: BackendId,
   modelId: string,
@@ -487,13 +490,13 @@ export function estimateCostFromRegistry(
       const isSquare = width === height
 
       if (modelId === 'gpt-image-2') {
-        // gpt-image-2 uses a token-based model that scales with image area.
-        // OpenAI does not publish the per-token rate directly, but per-image prices
-        // are documented for 3 anchor sizes. We extrapolate using 512-pixel tiles:
+        // GPT Image 2 billing is more granular than this app tries to model.
+        // Use documented per-image anchor prices and extrapolate custom sizes
+        // with 512-pixel tiles:
         //   tiles = ceil(W/512) × ceil(H/512)
         //   anchor tiles: 1024×1024 (square) = 4, 1024×1536 (rect) = 6
         //   cost ≈ (tiles / anchorTiles) × anchorPrice
-        // This reproduces exact prices for all 3 documented sizes.
+        // This reproduces the table prices for the 3 documented sizes.
         // Source: https://platform.openai.com/docs/guides/image-generation
         const tiles = Math.ceil(width / 512) * Math.ceil(height / 512)
         const anchorTiles = isSquare ? 4 : 6
@@ -501,7 +504,8 @@ export function estimateCostFromRegistry(
         return (tiles / anchorTiles) * anchorPrice
       }
 
-      // Older GPT Image models support only the 3 fixed sizes; pricing is exact.
+      // Older GPT Image models support only the 3 fixed sizes in the UI; use
+      // the registry's table price for the selected quality and orientation.
       return isSquare ? model.pricing[quality].square : model.pricing[quality].rect
     }
     case 'imagen': {
@@ -514,8 +518,8 @@ export function estimateCostFromRegistry(
       if (!model) return null
       const width = (params.width as number) || 1024
       const height = (params.height as number) || 1024
-      const mp = (width * height) / 1_000_000
-      if (mp <= 1) return model.pricing.firstMp
+      const mp = Math.max(1, Math.ceil((width * height) / (1024 * 1024)))
+      if (mp === 1) return model.pricing.firstMp
       return model.pricing.firstMp + (mp - 1) * model.pricing.additionalMp
     }
     case 'nanobanana': {

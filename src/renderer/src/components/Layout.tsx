@@ -24,7 +24,7 @@ type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' |
 
 export function Layout(): React.JSX.Element {
   useNotifications()
-  const { selectedTask, clear, navigate } = useSelection()
+  const { selectedTask, clear, navigate, removeSelected, restoreSelected, deleteSelected } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
@@ -141,6 +141,20 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     return window.electronAPI.onViewerNavigate((dir) => navigate(dir))
   }, [navigate])
+
+  useEffect(() => {
+    return window.electronAPI.onViewerAction((action) => {
+      if (action === 'delete') {
+        void deleteSelected()
+        return
+      }
+      if (selectedTask?.status === 'kept') {
+        void restoreSelected()
+      } else {
+        void removeSelected()
+      }
+    })
+  }, [deleteSelected, removeSelected, restoreSelected, selectedTask?.status])
 
   // While the viewer is open, push new image data whenever the selected task's
   // image finishes loading. The main viewer code awaits img.decode() before

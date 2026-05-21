@@ -282,12 +282,23 @@ const api = {
   viewerNavigate: (dir: 'up' | 'down' | 'left' | 'right'): Promise<void> =>
     ipcRenderer.invoke('viewer:navigate', dir),
 
+  viewerAction: (action: 'remove' | 'delete'): Promise<void> =>
+    ipcRenderer.invoke('viewer:action', action),
+
   onViewerNavigate: (callback: (dir: 'up' | 'down' | 'left' | 'right') => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, dir: 'up' | 'down' | 'left' | 'right'): void => {
       callback(dir)
     }
     ipcRenderer.on('viewer:navigate', handler)
     return () => { ipcRenderer.removeListener('viewer:navigate', handler) }
+  },
+
+  onViewerAction: (callback: (action: 'remove' | 'delete') => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, action: 'remove' | 'delete'): void => {
+      callback(action)
+    }
+    ipcRenderer.on('viewer:action', handler)
+    return () => { ipcRenderer.removeListener('viewer:action', handler) }
   },
 
   onViewerStateChanged: (callback: (open: boolean) => void): (() => void) => {

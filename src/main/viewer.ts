@@ -25,10 +25,25 @@ img { width: 100%; height: 100%; object-fit: contain; display: block; }
 <img id="img" alt="">
 <script>
 document.addEventListener('keydown', function(e) {
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === 'Backspace') {
+    e.preventDefault();
+    window.electronAPI.viewerAction('delete');
+    return;
+  }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Escape' || e.key === ' ') {
     e.preventDefault();
     window.electronAPI.closeViewer();
+    return;
+  }
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    window.electronAPI.viewerAction('remove');
+    return;
+  }
+  if (e.key === 'Delete') {
+    e.preventDefault();
+    window.electronAPI.viewerAction('delete');
     return;
   }
   var navMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
@@ -63,7 +78,7 @@ function leavePresentationMode(win: BrowserWindow): void {
   win.setAlwaysOnTop(false)
 }
 
-function notifyMainWin(channel: 'viewer:opened' | 'viewer:closed' | 'viewer:navigate', payload?: unknown): void {
+function notifyMainWin(channel: 'viewer:opened' | 'viewer:closed' | 'viewer:navigate' | 'viewer:action', payload?: unknown): void {
   const main = getMainWin?.()
   if (!main || main.isDestroyed()) return
   main.webContents.send(channel, payload)
@@ -198,5 +213,8 @@ export function registerViewerIpc(getMain: () => BrowserWindow | null): void {
   ipcMain.handle('viewer:close', hideViewer)
   ipcMain.handle('viewer:navigate', (_event, dir: 'up' | 'down' | 'left' | 'right') => {
     notifyMainWin('viewer:navigate', dir)
+  })
+  ipcMain.handle('viewer:action', (_event, action: 'remove' | 'delete') => {
+    notifyMainWin('viewer:action', action)
   })
 }

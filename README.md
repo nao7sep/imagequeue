@@ -83,6 +83,10 @@ Some backends also expose backend-specific generation parameters such as moderat
 
 OpenAI GPT Image 2 supports both presets and editable width/height values. Imagen, Nano Banana, and Grok use aspect-ratio-driven sizing, and FLUX keeps curated preset size picks. Only FLUX.2 Flex exposes steps and guidance.
 
+### Cost estimates
+
+ImageQueue shows rough pre-run cost estimates for proprietary image backends when a simple model-registry estimate is available. These estimates are intentionally approximate: provider billing can depend on tokens, quality, dimensions, rounding rules, input images, discounts, and provider-side changes. ImageQueue does not parse provider token usage or maintain a full token/parameter billing calculator; that was considered and rejected as too complex to maintain for an alpha comparison tool.
+
 ### Draw Things
 
 Draw Things has its own setup and workflow guide in [docs/draw-things-cli.md](docs/draw-things-cli.md).
@@ -151,7 +155,7 @@ Each completed task row also has **exp** for quick export, **keep** to mark the 
 
 Removing a queued, failed, or interrupted task drops it from the queue. Using **keep** on a completed task leaves that output in session history but removes it from the active list and marks it as kept. This keeps the active queue focused on images that still need review, so already-checked acceptable fallbacks do not stay mixed with fresh or unresolved results. Enable **Show Kept Images** from the hamburger menu to review kept images; shown kept rows can be restored, exported, or deleted. The toggle resets to off on each launch — kept images are typically only useful within the session that produced them.
 
-Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, cost, duration, and generation parameters.
+Below the toolbar, a collapsible details strip shows the model and prompt at a glance. Expand it for full metadata such as status, rough estimated cost, duration, and generation parameters.
 
 ## Advanced Prompting
 
