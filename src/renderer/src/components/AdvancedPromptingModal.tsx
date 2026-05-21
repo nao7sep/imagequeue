@@ -77,6 +77,10 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const [messageType, setMessageType] = useState<'info' | 'error'>('info')
   const [showHistory, setShowHistory] = useState(false)
   const elaboratorRowRefs = useRef(new Map<string, HTMLLabelElement>())
+  // Set to true when the user confirms closing mid-operation, so that any still-
+  // in-flight async continuations know to discard their results rather than
+  // append prompts or enqueue tasks.
+  const cancelledRef = useRef(false)
 
   const busy = elaborateBusy || queueBusy
 
@@ -254,7 +258,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       : `${Date.now()}-${Math.random()}`
 
     const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
-      appendElaboratedPrompts(event.newPrompts)
+      if (!cancelledRef.current) {
+        appendElaboratedPrompts(event.newPrompts)
+      }
       setBrainstormProgress({ done: event.done, total: event.total })
     })
 
@@ -289,6 +295,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     })
     try {
       const newPrompts = await runBrainstorm(1)
+      if (cancelledRef.current) return
       const first = newPrompts[0]
       if (!first) {
         showError('Text AI returned no prompt.')
@@ -367,6 +374,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         const needed = allTargetCount * copies
         prompts = await runBrainstorm(needed)
       }
+      if (cancelledRef.current) return
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
 
       // Apply override at queue time (never during elaboration). Empty-string
@@ -463,11 +471,12 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     if (busy) {
       const ok = await confirm({
         title: 'Operation in progress',
-        message: 'An elaboration or queue operation is still running. Close anyway? Prompts produced after close will not be added to the session list.',
+        message: 'An elaboration or queue operation is still running. Close anyway? Any results still being generated will be discarded.',
         confirmLabel: 'Close',
         danger: true,
       })
       if (!ok) return
+      cancelledRef.current = true
     }
     onClose()
   }, [busy, confirm, onClose])
