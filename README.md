@@ -67,7 +67,7 @@ Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux).
 | Export folder | Desktop | Directory where **Export** saves images. Leave empty to use the Desktop. |
 | Confirm before removing | Off | Confirm before removing a task from the queue, or marking a completed image as kept. |
 | Confirm before deleting | Off | Confirm before deleting a task and its files. |
-| Move deleted files to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
+| Delete to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
 
 ### Cloud backends
 
@@ -243,8 +243,8 @@ The **Elaboration** submenu flies out to the right on hover:
 | Move selection across columns (also navigates in fullscreen viewer) | ← / → | ← / → |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
-| Remove selected task, keep the selected completed image, or restore a selected kept image | Backspace | Backspace |
-| Delete selected task and files | Delete or ⌘Backspace | Delete or Ctrl+Backspace |
+| Remove selected task, keep the selected completed image, or restore a selected kept image (also works in fullscreen viewer) | Backspace | Backspace |
+| Delete selected task and files (also works in fullscreen viewer) | Delete or ⌘Backspace | Delete or Ctrl+Backspace |
 | Clear selection / close panel | Esc | Esc |
 
 ## Draw Things
