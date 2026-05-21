@@ -19,6 +19,8 @@ import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSession
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
+let currentElaboratedPrompts: string[] = []
+let currentElaboratedPromptsLoaded = false
 
 function cloneQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
   const cloned = createEmptyQueues()
@@ -100,6 +102,10 @@ function isSessionManifest(value: unknown): value is SessionManifest {
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
+  if (!(candidate.elaboratedPrompts === undefined || (
+    Array.isArray(candidate.elaboratedPrompts) &&
+    candidate.elaboratedPrompts.every((prompt) => typeof prompt === 'string')
+  ))) return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
@@ -120,6 +126,7 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     }
     return {
       ...parsed,
+      elaboratedPrompts: Array.isArray(parsed.elaboratedPrompts) ? [...parsed.elaboratedPrompts] : [],
       tasks: normalizedTasks,
     }
   } catch (error) {
@@ -129,6 +136,13 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     })
     return null
   }
+}
+
+function ensureActiveElaboratedPromptsLoaded(): void {
+  if (currentElaboratedPromptsLoaded) return
+  const manifest = readManifestFromDir(getSessionDir())
+  currentElaboratedPrompts = manifest?.elaboratedPrompts ? [...manifest.elaboratedPrompts] : []
+  currentElaboratedPromptsLoaded = true
 }
 
 function buildManifest(
@@ -144,6 +158,7 @@ function buildManifest(
     updatedAt: new Date().toISOString(),
     lastResumedAt: options?.lastResumedAt ?? previous?.lastResumedAt ?? null,
     taskCounts: createTaskCounts(tasksByBackend),
+    elaboratedPrompts: [...currentElaboratedPrompts],
     tasks: cloneQueues(tasksByBackend),
   }
 }
@@ -205,6 +220,7 @@ export function resolveSessionDir(sessionId: string): string {
 }
 
 export function persistActiveSession(options?: { lastResumedAt?: string | null }): SessionManifest {
+  ensureActiveElaboratedPromptsLoaded()
   const sessionDir = getSessionDir()
   fs.mkdirSync(sessionDir, { recursive: true })
   const previous = readManifestFromDir(sessionDir)
@@ -229,6 +245,8 @@ export function createSession(): void {
   initLogger(sessionDir)
   queueManager.replaceAllTasks(createEmptyQueues())
   resetOutputTimestampAllocators()
+  currentElaboratedPrompts = []
+  currentElaboratedPromptsLoaded = true
   persistActiveSession()
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
@@ -297,6 +315,8 @@ export function resumeSession(sessionId: string): void {
   queueManager.replaceAllTasks(resumedQueues)
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)
+  currentElaboratedPrompts = [...manifest.elaboratedPrompts]
+  currentElaboratedPromptsLoaded = true
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
@@ -326,4 +346,32 @@ export async function deleteSession(sessionId: string): Promise<void> {
   } else {
     fs.rmSync(sessionDir, { recursive: true, force: true })
   }
+}
+
+export function getActiveSessionElaboratedPrompts(): string[] {
+  ensureActiveElaboratedPromptsLoaded()
+  return [...currentElaboratedPrompts]
+}
+
+export function appendActiveSessionElaboratedPrompts(prompts: string[]): string[] {
+  if (prompts.length === 0) return getActiveSessionElaboratedPrompts()
+  ensureActiveElaboratedPromptsLoaded()
+  currentElaboratedPrompts = [...currentElaboratedPrompts, ...prompts]
+  persistActiveSession()
+  return [...currentElaboratedPrompts]
+}
+
+export function deleteActiveSessionElaboratedPromptAt(index: number): string[] {
+  ensureActiveElaboratedPromptsLoaded()
+  if (index < 0 || index >= currentElaboratedPrompts.length) return [...currentElaboratedPrompts]
+  currentElaboratedPrompts = currentElaboratedPrompts.filter((_, promptIndex) => promptIndex !== index)
+  persistActiveSession()
+  return [...currentElaboratedPrompts]
+}
+
+export function clearActiveSessionElaboratedPrompts(): string[] {
+  ensureActiveElaboratedPromptsLoaded()
+  currentElaboratedPrompts = []
+  persistActiveSession()
+  return []
 }

@@ -17,7 +17,7 @@ export interface AdvancedPromptingState {
   // Source of truth for the elaborated-prompts history within this session.
   // Fed to the brainstorm orchestrator as previousPrompts on each call so the
   // text AI avoids repeats across separate clicks. Also shown in the Generated
-  // Prompts manager modal. There is exactly one copy of this list.
+  // Prompts manager modal and persisted in session.json for session resume.
   elaboratedPrompts: string[]
 }
 
@@ -54,14 +54,25 @@ const AdvancedPromptingContext = createContext<AdvancedPromptingContextValue | n
 export function AdvancedPromptingProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, setState] = useState<AdvancedPromptingState>(emptyState)
 
-  // Reset on session change. The advanced-prompting state is intentionally
-  // not persisted to disk and not scoped per-modal-open — it lives for the
-  // duration of one session and is wiped when the session boundary moves.
   useEffect(() => {
+    let cancelled = false
+
+    const hydrateSessionPrompts = async (resetAll: boolean): Promise<void> => {
+      const elaboratedPrompts = await window.electronAPI.getSessionElaboratedPrompts()
+      if (cancelled) return
+      setState((prev) => resetAll ? { ...emptyState(), elaboratedPrompts } : { ...prev, elaboratedPrompts })
+    }
+
+    void hydrateSessionPrompts(false)
+
     const unsubscribe = window.electronAPI.onSessionChanged(() => {
-      setState(emptyState())
+      void hydrateSessionPrompts(true)
     })
-    return unsubscribe
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   const update = useCallback((patch: Partial<AdvancedPromptingState>): void => {
@@ -75,6 +86,7 @@ export function AdvancedPromptingProvider({ children }: { children: ReactNode })
   const appendElaboratedPrompts = useCallback((prompts: string[]): void => {
     if (prompts.length === 0) return
     setState((prev) => ({ ...prev, elaboratedPrompts: [...prev.elaboratedPrompts, ...prompts] }))
+    void window.electronAPI.appendSessionElaboratedPrompts(prompts)
   }, [])
 
   const deleteElaboratedPromptAt = useCallback((index: number): void => {
@@ -84,10 +96,12 @@ export function AdvancedPromptingProvider({ children }: { children: ReactNode })
       next.splice(index, 1)
       return { ...prev, elaboratedPrompts: next }
     })
+    void window.electronAPI.deleteSessionElaboratedPromptAt(index)
   }, [])
 
   const clearElaboratedPrompts = useCallback((): void => {
     setState((prev) => ({ ...prev, elaboratedPrompts: [] }))
+    void window.electronAPI.clearSessionElaboratedPrompts()
   }, [])
 
   return (

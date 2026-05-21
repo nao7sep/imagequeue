@@ -1,5 +1,15 @@
 import { ipcMain, shell } from 'electron'
-import { createSession, deleteSession, listSessions, resolveSessionDir, resumeSession } from './state'
+import {
+  appendActiveSessionElaboratedPrompts,
+  clearActiveSessionElaboratedPrompts,
+  createSession,
+  deleteActiveSessionElaboratedPromptAt,
+  deleteSession,
+  getActiveSessionElaboratedPrompts,
+  listSessions,
+  resolveSessionDir,
+  resumeSession,
+} from './state'
 
 export function registerSessionIpc(): void {
   ipcMain.handle('session:create', () => {
@@ -20,5 +30,21 @@ export function registerSessionIpc(): void {
 
   ipcMain.handle('session:openFolder', async (_event, sessionId: string) => {
     await shell.openPath(resolveSessionDir(sessionId))
+  })
+
+  ipcMain.handle('session:getElaboratedPrompts', () => {
+    return getActiveSessionElaboratedPrompts()
+  })
+
+  ipcMain.handle('session:appendElaboratedPrompts', (_event, prompts: string[]) => {
+    return appendActiveSessionElaboratedPrompts(prompts)
+  })
+
+  ipcMain.handle('session:deleteElaboratedPromptAt', (_event, index: number) => {
+    return deleteActiveSessionElaboratedPromptAt(index)
+  })
+
+  ipcMain.handle('session:clearElaboratedPrompts', () => {
+    return clearActiveSessionElaboratedPrompts()
   })
 }

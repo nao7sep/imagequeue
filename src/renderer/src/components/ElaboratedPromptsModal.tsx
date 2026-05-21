@@ -17,10 +17,9 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const { elaboratedPrompts } = state
   const displayPrompts = [...elaboratedPrompts].reverse()
 
-  // Per-row delete is unconfirmed — the list is per-session, never persisted
-  // to disk, and trimming a long generated list is a routine cleanup gesture
-  // (cf. the queue's confirm-off default for task removal). Delete All stays
-  // confirmed because its blast radius is the whole session list.
+  // Per-row delete is unconfirmed — trimming a long generated list is a routine
+  // cleanup gesture (cf. the queue's confirm-off default for task removal).
+  // Delete All stays confirmed because its blast radius is the whole session list.
   const handleDelete = useCallback((index: number): void => {
     deleteElaboratedPromptAt(index)
   }, [deleteElaboratedPromptAt])

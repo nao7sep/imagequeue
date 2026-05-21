@@ -142,6 +142,7 @@ export interface SessionManifest {
   updatedAt: string
   lastResumedAt: string | null
   taskCounts: SessionTaskCounts
+  elaboratedPrompts: string[]
   tasks: Record<BackendId, Task[]>
 }
 

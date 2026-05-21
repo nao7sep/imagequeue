@@ -437,219 +437,226 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       <div className={`advanced-body${isMacPlatform ? '' : ' advanced-body-no-dt'}`}>
         <div className="advanced-pane">
           <div className="advanced-pane-title">Prompt</div>
-          <textarea
-            className="advanced-seed"
-            rows={3}
-            placeholder="Seed prompt or full prompt..."
-            value={seed}
-            onChange={(e) => update({ seed: e.target.value })}
-          />
-          <div className="advanced-elaborator-list">
-            {elaborators.length === 0 ? (
-              <div className="advanced-empty">No elaborators. Open Elaborators from the menu.</div>
-            ) : (
-              elaborators.map((el) => (
-                <label
-                  key={el.id}
-                  ref={(node) => {
-                    if (node) {
-                      elaboratorRowRefs.current.set(el.id, node)
-                    } else {
-                      elaboratorRowRefs.current.delete(el.id)
-                    }
-                  }}
-                  className={`advanced-elab-row${selectedElaboratorId === el.id ? ' selected' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="advanced-elaborator"
-                    checked={selectedElaboratorId === el.id}
-                    onChange={() => update({ selectedElaboratorId: el.id })}
-                  />
-                  <div className="advanced-elab-text">
-                    <div className="advanced-elab-name">{el.name}</div>
-                    {el.description && <div className="advanced-elab-desc">{el.description}</div>}
-                  </div>
-                </label>
-              ))
-            )}
+          <div className="advanced-pane-scroll advanced-pane-scroll-prompt">
+            <textarea
+              className="advanced-seed"
+              rows={3}
+              placeholder="Seed prompt or full prompt..."
+              value={seed}
+              onChange={(e) => update({ seed: e.target.value })}
+            />
+            <div className="advanced-elaborator-list">
+              {elaborators.length === 0 ? (
+                <div className="advanced-empty">No elaborators. Open Elaborators from the menu.</div>
+              ) : (
+                elaborators.map((el) => (
+                  <label
+                    key={el.id}
+                    ref={(node) => {
+                      if (node) {
+                        elaboratorRowRefs.current.set(el.id, node)
+                      } else {
+                        elaboratorRowRefs.current.delete(el.id)
+                      }
+                    }}
+                    className={`advanced-elab-row${selectedElaboratorId === el.id ? ' selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="advanced-elaborator"
+                      checked={selectedElaboratorId === el.id}
+                      onChange={() => update({ selectedElaboratorId: el.id })}
+                    />
+                    <div className="advanced-elab-text">
+                      <div className="advanced-elab-name">{el.name}</div>
+                      {el.description && <div className="advanced-elab-desc">{el.description}</div>}
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="advanced-row advanced-row-end">
+              <button
+                className="modal-btn modal-btn-primary"
+                onClick={() => void handleElaborate()}
+                disabled={elaborateBusy || elaborateDisabledReason !== null}
+                title={elaborateDisabledReason ?? 'Generate one elaborated prompt'}
+              >
+                {elaborateBusy
+                  ? (brainstormProgress && brainstormProgress.total > 1
+                      ? `Elaborating ${brainstormProgress.done} / ${brainstormProgress.total}…`
+                      : 'Elaborating…')
+                  : 'Elaborate'}
+              </button>
+            </div>
+            <textarea
+              className="advanced-elaborated"
+              placeholder="Elaborated prompt will appear here. You can edit before queueing."
+              value={elaborated}
+              onChange={(e) => update({ elaborated: e.target.value })}
+            />
+            <div className="advanced-row advanced-row-end">
+              <button
+                type="button"
+                className="modal-btn"
+                onClick={() => setShowHistory(true)}
+                title="View prompts elaborated this session"
+              >
+                Elaborated ({elaboratedPrompts.length})
+              </button>
+            </div>
+            <div className="advanced-section-label">Override</div>
+            <textarea
+              className="advanced-override"
+              rows={3}
+              placeholder="Optional constraint applied to every elaborated prompt."
+              value={override}
+              onChange={(e) => update({ override: e.target.value })}
+            />
           </div>
-          <div className="advanced-row advanced-row-end">
-            <button
-              className="modal-btn modal-btn-primary"
-              onClick={() => void handleElaborate()}
-              disabled={elaborateBusy || elaborateDisabledReason !== null}
-              title={elaborateDisabledReason ?? 'Generate one elaborated prompt'}
-            >
-              {elaborateBusy
-                ? (brainstormProgress && brainstormProgress.total > 1
-                    ? `Elaborating ${brainstormProgress.done} / ${brainstormProgress.total}…`
-                    : 'Elaborating…')
-                : 'Elaborate'}
-            </button>
-          </div>
-          <textarea
-            className="advanced-elaborated"
-            placeholder="Elaborated prompt will appear here. You can edit before queueing."
-            value={elaborated}
-            onChange={(e) => update({ elaborated: e.target.value })}
-          />
-          <div className="advanced-row advanced-row-end">
-            <button
-              type="button"
-              className="modal-btn"
-              onClick={() => setShowHistory(true)}
-              title="View prompts elaborated this session"
-            >
-              Elaborated ({elaboratedPrompts.length})
-            </button>
-          </div>
-          <div className="advanced-section-label">Override</div>
-          <textarea
-            className="advanced-override"
-            rows={3}
-            placeholder="Optional constraint applied to every elaborated prompt."
-            value={override}
-            onChange={(e) => update({ override: e.target.value })}
-          />
         </div>
 
         <div className="advanced-pane">
           <div className="advanced-pane-title">Targets</div>
-          <div className="advanced-targets-list">
-            {isMacPlatform && (
-              <div className="advanced-targets-group-title">Proprietary</div>
-            )}
-            {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
-              const hasKey = proprietaryApiKeyByBackend[id]
-              return (
-                <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
-                  <input
-                    type="checkbox"
-                    checked={!!selectedProprietary[id]}
-                    disabled={!hasKey}
-                    onChange={() => toggleProprietary(id)}
-                  />
-                  <span>{BACKEND_LABELS[id]}</span>
-                  {!hasKey && <span className="advanced-target-hint">no API key</span>}
-                </label>
-              )
-            })}
-            {isMacPlatform && (
-              <>
-                <div className="advanced-targets-group-title">Draw Things</div>
-                {downloadedDtModels.length === 0 ? (
-                  <div className="advanced-empty">No models downloaded.</div>
-                ) : (
-                  downloadedDtModels.map((m) => (
-                    <label key={m.file} className="advanced-target-row" title={localModelName(m)}>
-                      <input
-                        type="checkbox"
-                        checked={selectedDtFiles.includes(m.file)}
-                        onChange={() => toggleDtFile(m.file)}
-                      />
-                      <span>{localModelName(m)}</span>
-                    </label>
-                  ))
-                )}
-              </>
-            )}
+          <div className="advanced-pane-scroll">
+            <div className="advanced-targets-list">
+              {isMacPlatform && (
+                <div className="advanced-targets-group-title">Proprietary</div>
+              )}
+              {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
+                const hasKey = proprietaryApiKeyByBackend[id]
+                return (
+                  <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedProprietary[id]}
+                      disabled={!hasKey}
+                      onChange={() => toggleProprietary(id)}
+                    />
+                    <span>{BACKEND_LABELS[id]}</span>
+                    {!hasKey && <span className="advanced-target-hint">no API key</span>}
+                  </label>
+                )
+              })}
+              {isMacPlatform && (
+                <>
+                  <div className="advanced-targets-group-title">Draw Things</div>
+                  {downloadedDtModels.length === 0 ? (
+                    <div className="advanced-empty">No models downloaded.</div>
+                  ) : (
+                    downloadedDtModels.map((m) => (
+                      <label key={m.file} className="advanced-target-row" title={localModelName(m)}>
+                        <input
+                          type="checkbox"
+                          checked={selectedDtFiles.includes(m.file)}
+                          onChange={() => toggleDtFile(m.file)}
+                        />
+                        <span>{localModelName(m)}</span>
+                      </label>
+                    ))
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="advanced-pane">
+        <div className="advanced-pane advanced-pane-execution">
           <div className="advanced-pane-title">Execution</div>
+          <div className="advanced-pane-scroll">
+            <div className="advanced-section-label">Prompt source</div>
+            <div className="advanced-radio-group">
+              <label className="advanced-radio">
+                <input type="radio" name="prompt-mode" checked={promptMode === 'as-is'} onChange={() => update({ promptMode: 'as-is' })} />
+                <span>User prompt as-is</span>
+              </label>
+              <label className={`advanced-radio${promptModeDisabledReason('elaborated') ? ' disabled' : ''}`} title={promptModeDisabledReason('elaborated') ?? ''}>
+                <input
+                  type="radio"
+                  name="prompt-mode"
+                  checked={promptMode === 'elaborated'}
+                  disabled={promptModeDisabledReason('elaborated') !== null}
+                  onChange={() => update({ promptMode: 'elaborated' })}
+                />
+                <span>Elaborated prompt (same for all)</span>
+              </label>
+              <label className={`advanced-radio${promptModeDisabledReason('fresh-iteration') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-iteration') ?? ''}>
+                <input
+                  type="radio"
+                  name="prompt-mode"
+                  checked={promptMode === 'fresh-iteration'}
+                  disabled={promptModeDisabledReason('fresh-iteration') !== null}
+                  onChange={() => update({ promptMode: 'fresh-iteration' })}
+                />
+                <span>Fresh elaboration per iteration</span>
+              </label>
+              <label className={`advanced-radio${promptModeDisabledReason('fresh-task') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-task') ?? ''}>
+                <input
+                  type="radio"
+                  name="prompt-mode"
+                  checked={promptMode === 'fresh-task'}
+                  disabled={promptModeDisabledReason('fresh-task') !== null}
+                  onChange={() => update({ promptMode: 'fresh-task' })}
+                />
+                <span>Fresh elaboration per task</span>
+              </label>
+            </div>
 
-          <div className="advanced-section-label">Prompt source</div>
-          <div className="advanced-radio-group">
-            <label className="advanced-radio">
-              <input type="radio" name="prompt-mode" checked={promptMode === 'as-is'} onChange={() => update({ promptMode: 'as-is' })} />
-              <span>User prompt as-is</span>
-            </label>
-            <label className={`advanced-radio${promptModeDisabledReason('elaborated') ? ' disabled' : ''}`} title={promptModeDisabledReason('elaborated') ?? ''}>
-              <input
-                type="radio"
-                name="prompt-mode"
-                checked={promptMode === 'elaborated'}
-                disabled={promptModeDisabledReason('elaborated') !== null}
-                onChange={() => update({ promptMode: 'elaborated' })}
-              />
-              <span>Elaborated prompt (same for all)</span>
-            </label>
-            <label className={`advanced-radio${promptModeDisabledReason('fresh-iteration') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-iteration') ?? ''}>
-              <input
-                type="radio"
-                name="prompt-mode"
-                checked={promptMode === 'fresh-iteration'}
-                disabled={promptModeDisabledReason('fresh-iteration') !== null}
-                onChange={() => update({ promptMode: 'fresh-iteration' })}
-              />
-              <span>Fresh elaboration per iteration</span>
-            </label>
-            <label className={`advanced-radio${promptModeDisabledReason('fresh-task') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-task') ?? ''}>
-              <input
-                type="radio"
-                name="prompt-mode"
-                checked={promptMode === 'fresh-task'}
-                disabled={promptModeDisabledReason('fresh-task') !== null}
-                onChange={() => update({ promptMode: 'fresh-task' })}
-              />
-              <span>Fresh elaboration per task</span>
-            </label>
+            <div className="advanced-section-label">Target scope</div>
+            <div className="advanced-radio-group">
+              <label className="advanced-radio">
+                <input type="radio" name="target-scope" checked={targetScope === 'selected'} onChange={() => update({ targetScope: 'selected' })} />
+                <span>Selected</span>
+              </label>
+              {isMacPlatform && (
+                <>
+                  <label className="advanced-radio">
+                    <input type="radio" name="target-scope" checked={targetScope === 'all-proprietary'} onChange={() => update({ targetScope: 'all-proprietary' })} />
+                    <span>All proprietary</span>
+                  </label>
+                  <label className="advanced-radio">
+                    <input type="radio" name="target-scope" checked={targetScope === 'all-drawthings'} onChange={() => update({ targetScope: 'all-drawthings' })} />
+                    <span>All Draw Things</span>
+                  </label>
+                </>
+              )}
+              <label className="advanced-radio">
+                <input type="radio" name="target-scope" checked={targetScope === 'all'} onChange={() => update({ targetScope: 'all' })} />
+                <span>All</span>
+              </label>
+            </div>
+
+            <div className="advanced-section-label">How many iterations</div>
+            <input
+              className="advanced-count"
+              type="number"
+              min={1}
+              max={9999}
+              value={count}
+              onChange={(e) => update({ count: Math.max(1, parseInt(e.target.value) || 1) })}
+            />
           </div>
 
-          <div className="advanced-section-label">Target scope</div>
-          <div className="advanced-radio-group">
-            <label className="advanced-radio">
-              <input type="radio" name="target-scope" checked={targetScope === 'selected'} onChange={() => update({ targetScope: 'selected' })} />
-              <span>Selected</span>
-            </label>
-            {isMacPlatform && (
-              <>
-                <label className="advanced-radio">
-                  <input type="radio" name="target-scope" checked={targetScope === 'all-proprietary'} onChange={() => update({ targetScope: 'all-proprietary' })} />
-                  <span>All proprietary</span>
-                </label>
-                <label className="advanced-radio">
-                  <input type="radio" name="target-scope" checked={targetScope === 'all-drawthings'} onChange={() => update({ targetScope: 'all-drawthings' })} />
-                  <span>All Draw Things</span>
-                </label>
-              </>
-            )}
-            <label className="advanced-radio">
-              <input type="radio" name="target-scope" checked={targetScope === 'all'} onChange={() => update({ targetScope: 'all' })} />
-              <span>All</span>
-            </label>
+          <div className="advanced-pane-footer">
+            <div className="advanced-total">
+              {totalTasks} task{totalTasks === 1 ? '' : 's'}
+            </div>
+
+            {message && <div className={`advanced-message advanced-message-${messageType}`}>{message}</div>}
+
+            <button
+              className="modal-btn modal-btn-primary advanced-queue-btn"
+              onClick={() => void handleQueue()}
+              disabled={queueBusy || queueDisabledReason !== null}
+              title={queueDisabledReason ?? ''}
+            >
+              {queueBusy
+                ? (brainstormProgress
+                    ? `Generating ${brainstormProgress.done} / ${brainstormProgress.total}…`
+                    : 'Queueing…')
+                : 'Queue Tasks'}
+            </button>
           </div>
-
-          <div className="advanced-section-label">How many iterations</div>
-          <input
-            className="advanced-count"
-            type="number"
-            min={1}
-            max={9999}
-            value={count}
-            onChange={(e) => update({ count: Math.max(1, parseInt(e.target.value) || 1) })}
-          />
-
-          <div className="advanced-total">
-            {totalTasks} task{totalTasks === 1 ? '' : 's'}
-          </div>
-
-          {message && <div className={`advanced-message advanced-message-${messageType}`}>{message}</div>}
-
-          <button
-            className="modal-btn modal-btn-primary advanced-queue-btn"
-            onClick={() => void handleQueue()}
-            disabled={queueBusy || queueDisabledReason !== null}
-            title={queueDisabledReason ?? ''}
-          >
-            {queueBusy
-              ? (brainstormProgress
-                  ? `Generating ${brainstormProgress.done} / ${brainstormProgress.total}…`
-                  : 'Queueing…')
-              : 'Queue Tasks'}
-          </button>
         </div>
       </div>
 

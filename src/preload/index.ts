@@ -76,6 +76,18 @@ const api = {
   openSessionFolder: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke('session:openFolder', sessionId),
 
+  getSessionElaboratedPrompts: (): Promise<string[]> =>
+    ipcRenderer.invoke('session:getElaboratedPrompts'),
+
+  appendSessionElaboratedPrompts: (prompts: string[]): Promise<string[]> =>
+    ipcRenderer.invoke('session:appendElaboratedPrompts', prompts),
+
+  deleteSessionElaboratedPromptAt: (index: number): Promise<string[]> =>
+    ipcRenderer.invoke('session:deleteElaboratedPromptAt', index),
+
+  clearSessionElaboratedPrompts: (): Promise<string[]> =>
+    ipcRenderer.invoke('session:clearElaboratedPrompts'),
+
   // Elaborators
   listElaborators: (): Promise<Elaborator[]> =>
     ipcRenderer.invoke('elaborators:list'),
