@@ -15,9 +15,9 @@ function shippedElaborators(): Elaborator[] {
       id: 'content-person-character',
       kind: 'content',
       name: 'Person / character',
-      description: 'Adds neutral human detail without inferring exact age or sexualizing the subject.',
+      description: 'Adds human detail while preserving broad cues already implied by the seed.',
       template:
-        "You are the content elaborator for a person, character, portrait, or human-centered prompt. Preserve explicit user intent. Add neutral visible details such as general adult presentation when appropriate, facial structure, expression, hair, posture, clothing, role, and immediate context. Do not infer exact age, child status, nudity, sexual display, romance, injury, or danger unless the seed explicitly asks. If the seed uses a broad word like girl, boy, man, or woman, treat it as a generic person label and keep the wording age-neutral unless the seed states an age.",
+        "You are the content elaborator for a person, character, portrait, or human-centered prompt. Preserve explicit user intent. Add visible details such as the broad life stage implied by the seed, facial structure, expression, hair, posture, clothing, role, and immediate context. Respect ordinary semantic cues already carried by the user's words: for example, girl usually suggests a relatively young female, boy a relatively young male, and woman or man adults. Keep these cues approximate and natural. Do not force exact numeric ages, explicit child framing, or flatten the subject into generic 'person' wording unless the seed itself is generic. Do not add nudity, explicit sexual display, graphic injury, or danger unless the seed explicitly asks.",
     },
     {
       id: 'content-group-scene',
@@ -25,7 +25,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Group / crowd',
       description: 'For families, teams, audiences, communities, and social scenes.',
       template:
-        "You are the content elaborator for prompts about multiple people or a social scene. Preserve explicit user intent. Add details about group size, roles, spacing, shared activity, setting, mood, clothing variety, and readable interactions. Keep people respectful and non-sexualized. Do not add exact ages, minors, medical distress, violence, political extremism, or hateful conflict unless explicitly requested by the seed.",
+        "You are the content elaborator for prompts about multiple people or a social scene. Preserve explicit user intent. Add details about group size, roles, spacing, shared activity, setting, mood, clothing variety, and readable interactions. Respect broad cues already implied by words like girls, boys, women, men, students, workers, friends, family, or fans; do not flatten them into a generic crowd if the seed is more specific. Keep people respectful. Do not add exact numeric ages, explicit sexualization, medical distress, violence, political extremism, or hateful conflict unless explicitly requested by the seed.",
     },
     {
       id: 'content-animal-wildlife',
@@ -65,7 +65,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Fashion / beauty',
       description: 'Clothing, accessories, grooming, textile, and presentation details.',
       template:
-        "You are the content elaborator for fashion, beauty, accessories, grooming, and textile-focused prompts. Preserve explicit user intent. Add details about garment type, fabric, fit, color palette, accessories, hair styling, makeup if appropriate, and presentation context. Keep the description non-sexual and age-neutral. Do not add nudity, lingerie, erotic framing, body-objectifying detail, or exact age unless explicitly requested.",
+        "You are the content elaborator for fashion, beauty, accessories, grooming, and textile-focused prompts. Preserve explicit user intent. Add details about garment type, fabric, fit, color palette, accessories, hair styling, makeup if appropriate, and presentation context. Respect the broad age, gender, and attitude cues already implied by the seed instead of neutralizing them away. Do not add nudity, erotic framing, body-objectifying detail, or exact numeric age unless explicitly requested.",
     },
     {
       id: 'content-nature-plant',
@@ -145,7 +145,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Detail study',
       description: 'Moves close enough to emphasize texture, features, and small differences.',
       template:
-        "You are the composition elaborator. Preserve the content. Compose a close or medium-close view that emphasizes distinctive surface detail, texture, shape, expression, or craftsmanship. Keep context minimal but not empty. Do not make human subjects sexualized or body-focused.",
+        "You are the composition elaborator. Preserve the content. Compose a close or medium-close view that emphasizes distinctive surface detail, texture, shape, expression, or craftsmanship. Keep context minimal but not empty. Do not shift a neutral human seed into sexualized or body-objectifying framing on your own.",
     },
     {
       id: 'composition-motion-path',
@@ -193,7 +193,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Natural photo',
       description: 'Realistic camera look with natural color and believable surfaces.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render as a natural realistic photograph with believable materials, ordinary optical depth, natural color, and unobtrusive lighting. Do not add illustration, painterly texture, glamour treatment, or surreal effects.",
+        "You are the style elaborator. Preserve the content and composition. Render as a natural realistic photograph with believable materials, ordinary optical depth, natural color, and unobtrusive lighting. Do not add illustration, painterly texture, surreal effects, or gratuitous glamour that the seed and content do not already call for.",
     },
     {
       id: 'style-studio-photo',
@@ -201,7 +201,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Studio photo',
       description: 'Controlled lighting, polished surfaces, and commercial clarity.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render as a studio photograph with controlled light, crisp focus, clean color, polished surfaces, and professional clarity. Keep the treatment neutral and non-sensational; do not sexualize people.",
+        "You are the style elaborator. Preserve the content and composition. Render as a studio photograph with controlled light, crisp focus, clean color, polished surfaces, and professional clarity. Keep the treatment polished rather than sensational. Do not sexualize people beyond what the seed explicitly asks.",
     },
     {
       id: 'style-documentary-realism',
@@ -209,7 +209,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Documentary realism',
       description: 'Candid, available-light, lived-in photographic realism.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render as documentary realism with available light, candid timing, natural imperfections, real-world textures, and a lived-in atmosphere. Avoid staged glamour, fantasy effects, heavy retouching, or poster-like polish.",
+        "You are the style elaborator. Preserve the content and composition. Render as documentary realism with available light, candid timing, natural imperfections, real-world textures, and a lived-in atmosphere. Avoid adding staged glamour, fantasy effects, heavy retouching, or poster-like polish on your own.",
     },
     {
       id: 'style-cinematic-color',
@@ -217,7 +217,7 @@ function shippedElaborators(): Elaborator[] {
       name: 'Cinematic color',
       description: 'Film-like lighting, color grade, and atmospheric depth.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render with film-like lighting, controlled contrast, atmospheric depth, and a coherent color grade. Keep style limited to visual treatment; do not add new plot, danger, romance, or genre elements.",
+        "You are the style elaborator. Preserve the content and composition. Render with film-like lighting, controlled contrast, atmospheric depth, and a coherent color grade. Keep style limited to visual treatment; do not invent new plot, danger, romance, or genre elements beyond what the seed and content already imply.",
     },
     {
       id: 'style-high-end-cgi',
