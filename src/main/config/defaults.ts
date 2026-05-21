@@ -7,7 +7,7 @@ export function createDefaultConfig(): AppConfig {
       api_key: '',
       timeout_ms: 30000,
       light_model: 'gemini-3.1-flash-lite',
-      main_model: 'gemini-3-flash-preview'
+      main_model: 'gemini-3-flash'
     },
     general: {
       auto_preview_idle_seconds: 30,

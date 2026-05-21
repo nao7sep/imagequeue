@@ -89,13 +89,14 @@ Draw Things has its own setup and workflow guide in [docs/draw-things-cli.md](do
 
 ### Text AI
 
-ImageQueue uses a text AI model to create short filename slugs from prompts. If slug generation fails or times out, ImageQueue falls back to a random ID automatically.
+ImageQueue uses text AI models for short filename slugs and for prompt elaboration in Advanced Prompting. If slug generation fails or times out, ImageQueue falls back to a random ID automatically.
 
 | Setting | Default | Description |
 |---|---|---|
 | Backend | Gemini | AI service used for slug generation |
 | API Key | — | API key for the selected backend |
-| Model | Gemini 3.1 Flash Lite | Model used for slug generation |
+| Light model | Gemini 3.1 Flash Lite | Used for short, lightweight tasks like filename slug generation |
+| Main model | Gemini 3 Flash | Used for general text work, including prompt elaboration in Advanced Prompting |
 | Timeout | 30 s | Maximum wait time before falling back to a random ID |
 
 The **Prompts → Slug template** setting controls the instruction sent to the text model.
