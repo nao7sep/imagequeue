@@ -99,7 +99,7 @@ ImageQueue uses text AI models for short filename slugs and for prompt elaborati
 | Main model | Gemini 3 Flash (Preview) | Used for general text work, including prompt elaboration in Advanced Prompting |
 | Timeout | 30 s | Maximum wait time before falling back to a random ID |
 
-The built-in Gemini text model list currently offers **Gemini 3.5 Flash**, **Gemini 3 Flash (Preview)**, and **Gemini 3.1 Flash Lite**. **Gemini 3 Pro (Preview)** is not listed because Google marks it shut down.
+The built-in Gemini text model list currently offers **Gemini 3.1 Pro (Preview)**, **Gemini 3.5 Flash**, **Gemini 3 Flash (Preview)**, and **Gemini 3.1 Flash Lite**.
 
 The **Prompts → Slug template** setting controls the instruction sent to the text model.
 

@@ -429,9 +429,9 @@ export const TEXT_AI_BACKENDS: TextAIBackendDef[] = [
   {
     id: 'gemini',
     label: 'Gemini',
-    // Keep this aligned with publicly usable Gemini text models.
-    // Gemini 3 Pro Preview is documented but marked shut down, so it is not offered here.
+    // Keep this aligned with the currently documented Gemini text model IDs.
     models: [
+      { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
       { id: 'gemini-3.5-flash',              label: 'Gemini 3.5 Flash' },
       { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash (Preview)' },
       { id: 'gemini-3.1-flash-lite',         label: 'Gemini 3.1 Flash Lite' }
