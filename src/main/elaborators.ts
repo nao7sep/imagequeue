@@ -12,212 +12,324 @@ function getElaboratorsFilePath(): string {
 function shippedElaborators(): Elaborator[] {
   return [
     {
-      id: 'content-distinct-scene',
+      id: 'content-person-character',
       kind: 'content',
-      name: 'Distinct scene',
-      description: 'General-purpose gap filler that strengthens subject identity and scene specificity.',
+      name: 'Person / character',
+      description: 'Adds neutral human detail without inferring exact age or sexualizing the subject.',
       template:
-        "You are the content elaborator. Preserve all explicit user intent. Fill missing high-salience content details so the image becomes distinct rather than generic. For human subjects, prioritize human-salience cues: age impression, ancestry or regional impression when appropriate, face shape, eye shape, nose, lips, complexion, hair, expression, posture, and silhouette before clothing. For non-human subjects, prioritize the most identity-defining features for that subject class: vehicles by body type, era, condition, modifications, and silhouette; animals by species, breed, markings, age, pose, and behavior; places by structure, era, materials, and surroundings; objects by form, material, condition, and notable use context; events and effects by geometry, density, scale, and physical behavior. Add plausible specifics only where the seed is underspecified. Do not add random absurd twists or unrelated genre drift.",
+        "You are the content elaborator for a person, character, portrait, or human-centered prompt. Preserve explicit user intent. Add neutral visible details such as general adult presentation when appropriate, facial structure, expression, hair, posture, clothing, role, and immediate context. Do not infer exact age, child status, nudity, sexual display, romance, injury, or danger unless the seed explicitly asks. If the seed uses a broad word like girl, boy, man, or woman, treat it as a generic person label and keep the wording age-neutral unless the seed states an age.",
     },
     {
-      id: 'content-human-priority',
+      id: 'content-group-scene',
       kind: 'content',
-      name: 'Human priority',
-      description: 'Identity-first elaboration for people and characters, with human-salience details leading.',
+      name: 'Group / crowd',
+      description: 'For families, teams, audiences, communities, and social scenes.',
       template:
-        "You are the content elaborator for human or humanoid subjects. Preserve explicit user intent and strengthen identity before scene dressing. If the seed is sparse, spend most of the creativity budget on identity cues that humans notice first: ancestry or regional impression when appropriate, age impression, facial structure, eyes, nose, lips, complexion, hair shape and texture, expression, gaze, posture, and silhouette. Clothing, props, action, and setting should support that person rather than dominate them. If the seed already specifies identity traits, keep them and only fill missing identity axes. Avoid stereotype collapse, random cosplay, or decorative clutter.",
+        "You are the content elaborator for prompts about multiple people or a social scene. Preserve explicit user intent. Add details about group size, roles, spacing, shared activity, setting, mood, clothing variety, and readable interactions. Keep people respectful and non-sexualized. Do not add exact ages, minors, medical distress, violence, political extremism, or hateful conflict unless explicitly requested by the seed.",
     },
     {
-      id: 'content-animal-creature',
+      id: 'content-animal-wildlife',
       kind: 'content',
-      name: 'Animal / creature',
-      description: 'Species-first distinctness for animals, monsters, and creatures.',
+      name: 'Animal / wildlife',
+      description: 'Species, markings, habitat, pose, and natural behavior.',
       template:
-        "You are the content elaborator for animals and creatures. Preserve explicit user intent. Make the subject distinct through species or breed cues, markings, age, build, anatomy, pose, behavior, and habitat before adding style. Choose one coherent behavior or moment rather than many. For fantasy creatures, keep the design internally consistent and readable instead of piling on random features.",
+        "You are the content elaborator for animals, pets, wildlife, and natural creatures. Preserve explicit user intent. Add details about species or breed, size, markings, fur, feathers, scales, posture, behavior, habitat, weather, and nearby natural elements. Keep the scene non-graphic: do not add injury, predation gore, abuse, or threatening danger unless the seed explicitly asks.",
     },
     {
-      id: 'content-vehicle-machine',
+      id: 'content-place-landscape',
       kind: 'content',
-      name: 'Vehicle / machine',
-      description: 'Silhouette, era, condition, and mechanical identity come first.',
+      name: 'Place / landscape',
+      description: 'Natural scenery, cities, landmarks, rooms, and atmosphere.',
       template:
-        "You are the content elaborator for vehicles, machines, and industrial subjects. Preserve explicit user intent. Strengthen distinctness through silhouette, class, era, scale, condition, materials, modifications, markings, and use context. If motion matters, pick one clear mechanical action or operating state. Avoid replacing the user's chosen machine type with something else or adding unrelated sci-fi fantasy unless the seed asks for it.",
-    },
-    {
-      id: 'content-place-architecture',
-      kind: 'content',
-      name: 'Place / architecture',
-      description: 'Makes environments more distinct through structure, era, materials, and surroundings.',
-      template:
-        "You are the content elaborator for places, architecture, and environment-heavy prompts. Preserve explicit user intent. Strengthen distinctness through structure type, era, materials, scale, weathering, landscape context, and human traces where appropriate. Prefer one coherent place with a readable function and atmosphere instead of mixing many unrelated location ideas together.",
+        "You are the content elaborator for places, landscapes, city scenes, interiors, and environments. Preserve explicit user intent. Add details about location type, scale, weather, time of day, materials, terrain, architecture, vegetation, signs of use, and atmosphere. Keep the place coherent and plausible. Do not add disaster, crime, war, or hazardous events unless the seed explicitly asks.",
     },
     {
       id: 'content-object-product',
       kind: 'content',
       name: 'Object / product',
-      description: 'Clarifies form, material, use, and distinguishing product details.',
+      description: 'Everyday objects, products, tools, packaging, and still-life subjects.',
       template:
-        "You are the content elaborator for objects, products, food, and still-life subjects. Preserve explicit user intent. Make the subject distinct through form factor, materials, surface finish, craftsmanship, scale, condition, era, and use context. If there is a supporting environment, keep it subordinate to the object. Avoid turning a simple product into a busy narrative scene unless the seed clearly invites that.",
+        "You are the content elaborator for objects, products, tools, packaging, and still-life prompts. Preserve explicit user intent. Add details about form, material, surface finish, color, condition, scale, function, packaging, and supporting props. Keep the subject central and brand-neutral unless the seed names a brand. Do not add unsafe use, weapons, illegal products, or medical claims unless explicitly requested.",
     },
     {
-      id: 'content-event-effect',
+      id: 'content-food-drink',
       kind: 'content',
-      name: 'Event / effect',
-      description: 'For fireworks, explosions, weather, energy, and other transient phenomena.',
+      name: 'Food / drink',
+      description: 'Ingredients, preparation, plating, serving context, and freshness.',
       template:
-        "You are the content elaborator for events, effects, and transient phenomena such as fireworks, lightning, explosions, smoke, mist, waves, and magical energy. Preserve explicit user intent. Make the image distinct through shape, phase, density, rhythm, scale, color behavior, reflections, debris or smoke behavior, and surrounding context. Do not inject unrelated character or object detail unless the seed already contains it.",
+        "You are the content elaborator for food, drinks, ingredients, kitchens, restaurants, and table scenes. Preserve explicit user intent. Add details about ingredients, preparation method, texture, serving vessel, garnish, temperature, freshness, and dining context. Keep it appetizing and safe. Do not add intoxication, unsafe consumption, medical diet claims, or gross-out content unless explicitly requested.",
     },
     {
-      id: 'composition-balanced-editorial',
+      id: 'content-fashion-beauty',
+      kind: 'content',
+      name: 'Fashion / beauty',
+      description: 'Clothing, accessories, grooming, textile, and presentation details.',
+      template:
+        "You are the content elaborator for fashion, beauty, accessories, grooming, and textile-focused prompts. Preserve explicit user intent. Add details about garment type, fabric, fit, color palette, accessories, hair styling, makeup if appropriate, and presentation context. Keep the description non-sexual and age-neutral. Do not add nudity, lingerie, erotic framing, body-objectifying detail, or exact age unless explicitly requested.",
+    },
+    {
+      id: 'content-nature-plant',
+      kind: 'content',
+      name: 'Plant / nature detail',
+      description: 'Flowers, gardens, forests, botanicals, minerals, and small natural subjects.',
+      template:
+        "You are the content elaborator for plants, gardens, forests, flowers, minerals, shells, clouds, water, and small natural subjects. Preserve explicit user intent. Add details about species or type when useful, shape, color, texture, growth stage, season, surrounding habitat, light, and weather. Keep the scene peaceful and non-graphic unless the seed explicitly asks otherwise.",
+    },
+    {
+      id: 'content-technology-machine',
+      kind: 'content',
+      name: 'Technology / machine',
+      description: 'Devices, vehicles, robots, tools, infrastructure, and mechanical subjects.',
+      template:
+        "You are the content elaborator for technology, devices, vehicles, machines, robots, tools, and infrastructure. Preserve explicit user intent. Add details about form factor, materials, scale, controls, condition, function, era, lighting, and use context. Keep it safe and non-instructional. Do not add weapons, illegal hacking, dangerous procedures, crashes, or explosions unless explicitly requested.",
+    },
+    {
+      id: 'content-event-activity',
+      kind: 'content',
+      name: 'Event / activity',
+      description: 'Celebrations, sports, work, performance, travel, and everyday moments.',
+      template:
+        "You are the content elaborator for events, activities, performances, sports, travel, hobbies, and everyday moments. Preserve explicit user intent. Add details about the activity, participants or objects, setting, timing, props, motion, weather, and atmosphere. Keep it non-graphic and lawful. Do not add injury, unsafe stunts, alcohol misuse, political conflict, or sexualized situations unless explicitly requested.",
+    },
+    {
+      id: 'content-fantasy-sci-fi',
+      kind: 'content',
+      name: 'Fantasy / sci-fi',
+      description: 'Imaginary worlds, creatures, magic, spaceships, and speculative objects.',
+      template:
+        "You are the content elaborator for fantasy, science fiction, mythic, magical, futuristic, and surreal prompts. Preserve explicit user intent. Add details about world rules, materials, symbols, creatures, technology, setting, and atmosphere while keeping the design coherent. Keep danger, horror, body transformation, and combat non-graphic unless the seed explicitly asks.",
+    },
+    {
+      id: 'content-abstract-concept',
+      kind: 'content',
+      name: 'Abstract / concept',
+      description: 'Ideas, emotions, data, symbols, patterns, and non-literal subjects.',
+      template:
+        "You are the content elaborator for abstract ideas, concepts, moods, symbols, data, patterns, and non-literal prompts. Preserve explicit user intent. Add concrete visual metaphors, shapes, materials, color relationships, scale, rhythm, and symbolic elements that make the idea imageable. Keep symbolism clear and avoid hate, self-harm, sexual, or violent implications unless explicitly requested.",
+    },
+    {
+      id: 'composition-world-around-subject',
       kind: 'composition',
-      name: 'Balanced editorial',
-      description: 'Readable, natural framing with one clear focal subject.',
+      name: 'World around subject',
+      description: 'Adds a readable surrounding world instead of isolating the subject.',
       template:
-        "You are the composition elaborator. Preserve the content. Use balanced, readable framing with one clear focal subject, sensible depth, and a camera distance that shows the important details without clutter. Prefer strong visual hierarchy and clean negative space over gimmicks.",
+        "You are the composition elaborator. Preserve the content. Compose the image so the subject is clearly embedded in a specific surrounding world. Include foreground, middle ground, and background cues that explain place, scale, and context. Avoid turning it into a tight portrait or blank-background sample unless the seed asks for that.",
     },
     {
-      id: 'composition-close-focus',
+      id: 'composition-story-moment',
       kind: 'composition',
-      name: 'Close focus',
-      description: 'Close-up or tight framing that emphasizes distinctive detail.',
+      name: 'Story moment',
+      description: 'Freezes one readable action or situation with contextual detail.',
       template:
-        "You are the composition elaborator. Preserve the content. Frame the image close enough that distinctive details dominate the read. Use tight portrait, close-up, or detail-oriented framing as appropriate, with clear subject isolation and minimal distracting background information.",
+        "You are the composition elaborator. Preserve the content. Frame the image as one clear moment with a before-and-after feeling: a readable action, gesture, interaction, or environmental cue. Add enough surrounding detail to make the situation understandable without changing the subject's identity.",
     },
     {
-      id: 'composition-environmental-medium',
+      id: 'composition-layered-depth',
       kind: 'composition',
-      name: 'Environmental medium',
-      description: 'Subject plus enough environment to understand the scene.',
+      name: 'Layered depth',
+      description: 'Uses foreground, subject plane, and background to add richness.',
       template:
-        "You are the composition elaborator. Preserve the content. Use an environmental medium shot that keeps the subject readable while showing enough surrounding context to explain where they are and what is happening. Balance subject clarity with scene storytelling.",
+        "You are the composition elaborator. Preserve the content. Build the image with clear spatial layers: a meaningful foreground element, the main subject plane, and a background with context. Use overlap, scale, atmospheric depth, and light direction to make the scene feel dimensional and detailed.",
     },
     {
-      id: 'composition-wide-establishing',
+      id: 'composition-scale-distance',
       kind: 'composition',
-      name: 'Wide establishing',
-      description: 'Wider framing that prioritizes place, scale, and atmosphere.',
+      name: 'Scale and distance',
+      description: 'Shows the subject with enough distance to reveal size and environment.',
       template:
-        "You are the composition elaborator. Preserve the content. Use a wide establishing composition that emphasizes scale, location, and atmosphere while keeping the key subject still identifiable. Let foreground, middle ground, and background read clearly.",
+        "You are the composition elaborator. Preserve the content. Use a wider camera distance that reveals scale, surroundings, and the relationship between subject and environment. Keep the subject identifiable, but let the setting and spatial context contribute substantial detail.",
     },
     {
-      id: 'composition-dynamic-angle',
+      id: 'composition-detail-study',
       kind: 'composition',
-      name: 'Dynamic angle',
-      description: 'Stronger angle and movement cues for energy and impact.',
+      name: 'Detail study',
+      description: 'Moves close enough to emphasize texture, features, and small differences.',
       template:
-        "You are the composition elaborator. Preserve the content. Introduce dynamic framing through viewpoint, angle, motion cues, or perspective exaggeration when it helps energy. Keep the scene readable and coherent; do not make it chaotic just to look dramatic.",
+        "You are the composition elaborator. Preserve the content. Compose a close or medium-close view that emphasizes distinctive surface detail, texture, shape, expression, or craftsmanship. Keep context minimal but not empty. Do not make human subjects sexualized or body-focused.",
     },
     {
-      id: 'composition-graphic-centered',
+      id: 'composition-motion-path',
       kind: 'composition',
-      name: 'Graphic centered',
-      description: 'Centered, poster-like arrangement with bold shape readability.',
+      name: 'Motion path',
+      description: 'Uses direction, gesture, and implied movement.',
       template:
-        "You are the composition elaborator. Preserve the content. Use a centered or strongly graphic arrangement with clean shape readability, symmetrical or near-symmetrical balance when helpful, and simple spatial layering suitable for posters, icons, or bold key art.",
+        "You are the composition elaborator. Preserve the content. Arrange the subject and environment to imply motion through direction, gesture, repeated shapes, leading lines, or trails. Keep the action readable and safe. Avoid adding crashes, injury, or danger unless the seed explicitly asks.",
     },
     {
-      id: 'style-photorealistic',
-      kind: 'style',
-      name: 'Photorealistic',
-      description: 'Clean, modern professional photograph.',
+      id: 'composition-unusual-viewpoint',
+      kind: 'composition',
+      name: 'Unusual viewpoint',
+      description: 'Changes viewpoint for a stronger visual read.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the scene as a clean, modern, photorealistic image with natural texture, believable materials, and realistic light. Avoid painterly or illustrated language.",
+        "You are the composition elaborator. Preserve the content. Use a deliberate viewpoint such as low angle, high angle, over-the-shoulder, through-a-frame, reflection, or top-down view when it strengthens the image. Keep the subject and context legible; do not use angle alone as a gimmick.",
     },
     {
-      id: 'style-cinematic',
-      kind: 'style',
-      name: 'Cinematic',
-      description: 'Single frame from a film, composed and color-graded.',
+      id: 'composition-arranged-layout',
+      kind: 'composition',
+      name: 'Arranged layout',
+      description: 'Organizes multiple elements clearly, like flat lay or display.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the scene like a single frame from a film, with cinematic lighting, disciplined color grading, atmospheric depth, and a sense of story contained in one image.",
+        "You are the composition elaborator. Preserve the content. Arrange the important elements in an intentional layout with clear spacing, grouping, and hierarchy. Useful for objects, food, products, tools, collections, diagrams, and scenes where relationship between parts matters.",
     },
     {
-      id: 'style-documentary-photo',
-      kind: 'style',
-      name: 'Documentary photo',
-      description: 'Candid, imperfect, photojournalistic realism.',
+      id: 'composition-centered-poster',
+      kind: 'composition',
+      name: 'Centered poster',
+      description: 'Strong central read for posters, covers, icons, and key art.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image with documentary or photojournalistic realism: candid timing, available light, slight imperfection, and a lived-in non-commercial feel.",
+        "You are the composition elaborator. Preserve the content. Use a centered or near-centered composition with strong silhouette, clean negative space, and a clear visual hierarchy. Add supporting elements around the main subject only when they improve poster-like readability.",
     },
     {
-      id: 'style-modern-anime',
-      kind: 'style',
-      name: 'Modern anime',
-      description: 'Clean contemporary anime illustration.',
+      id: 'composition-plain-reference',
+      kind: 'composition',
+      name: 'Plain reference',
+      description: 'Least transformative: clear subject presentation with minimal scene change.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as a clean contemporary anime illustration with purposeful linework, vivid but controlled color, expressive faces, and polished digital finishing.",
+        "You are the composition elaborator. Preserve the content. Present the subject clearly with simple readable framing, minimal staging, and little added narrative. Use this when the user likely wants a straightforward reference image rather than a heavily elaborated scene.",
     },
     {
-      id: 'style-studio-ghibli',
+      id: 'style-natural-photo',
       kind: 'style',
-      name: 'Studio Ghibli',
-      description: 'Warm painted anime with gentle atmosphere.',
+      name: 'Natural photo',
+      description: 'Realistic camera look with natural color and believable surfaces.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image with the warmth and softness associated with Studio Ghibli-inspired painted animation: gentle expression, atmospheric background painting, and natural light with nostalgic calm.",
+        "You are the style elaborator. Preserve the content and composition. Render as a natural realistic photograph with believable materials, ordinary optical depth, natural color, and unobtrusive lighting. Do not add illustration, painterly texture, glamour treatment, or surreal effects.",
     },
     {
-      id: 'style-disney-pixar-3d',
+      id: 'style-studio-photo',
       kind: 'style',
-      name: 'Disney / Pixar 3D',
-      description: 'Appealing stylized 3D animation.',
+      name: 'Studio photo',
+      description: 'Controlled lighting, polished surfaces, and commercial clarity.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as stylized 3D animation with appealing forms, expressive surfaces, rich lighting, and polished family-film readability.",
+        "You are the style elaborator. Preserve the content and composition. Render as a studio photograph with controlled light, crisp focus, clean color, polished surfaces, and professional clarity. Keep the treatment neutral and non-sensational; do not sexualize people.",
     },
     {
-      id: 'style-american-comic',
+      id: 'style-documentary-realism',
       kind: 'style',
-      name: 'American comic book',
-      description: 'Bold inks, halftones, and graphic action.',
+      name: 'Documentary realism',
+      description: 'Candid, available-light, lived-in photographic realism.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image like an American comic-book panel with bold inking, graphic shadow, halftone or print texture, and punchy visual storytelling.",
+        "You are the style elaborator. Preserve the content and composition. Render as documentary realism with available light, candid timing, natural imperfections, real-world textures, and a lived-in atmosphere. Avoid staged glamour, fantasy effects, heavy retouching, or poster-like polish.",
     },
     {
-      id: 'style-manga-bw',
+      id: 'style-cinematic-color',
       kind: 'style',
-      name: 'Japanese manga (B&W)',
-      description: 'Black-and-white ink with screentones and dramatic contrast.',
+      name: 'Cinematic color',
+      description: 'Film-like lighting, color grade, and atmospheric depth.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as black-and-white manga art with decisive linework, screentone logic, dramatic contrast, and expressive monochrome design.",
+        "You are the style elaborator. Preserve the content and composition. Render with film-like lighting, controlled contrast, atmospheric depth, and a coherent color grade. Keep style limited to visual treatment; do not add new plot, danger, romance, or genre elements.",
     },
     {
-      id: 'style-oil-painting',
+      id: 'style-high-end-cgi',
       kind: 'style',
-      name: 'Oil painting',
-      description: 'Classical painted texture and rich pigment.',
+      name: 'High-end CGI',
+      description: 'Detailed 3D realism with precise materials and lighting.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as an oil painting with visible brushwork, rich pigment, and painterly depth while keeping the scene legible and specific.",
+        "You are the style elaborator. Preserve the content and composition. Render as high-end computer graphics with physically plausible materials, detailed surfaces, clean global illumination, and realistic depth. Keep shapes specific and avoid cartoon exaggeration unless the seed asks.",
     },
     {
-      id: 'style-watercolor',
+      id: 'style-stylized-3d',
       kind: 'style',
-      name: 'Watercolor',
-      description: 'Soft translucent washes and light paper feel.',
+      name: 'Stylized 3D',
+      description: 'Appealing 3D forms, simplified surfaces, and expressive color.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as watercolor with translucent washes, softened edges, restrained line support, and a light paper-based feel.",
+        "You are the style elaborator. Preserve the content and composition. Render as stylized 3D with simplified but appealing forms, smooth surfaces, expressive color, and readable lighting. Do not imitate a named studio, franchise, or character design.",
     },
     {
-      id: 'style-ink-drawing',
+      id: 'style-digital-illustration',
       kind: 'style',
-      name: 'Ink drawing',
-      description: 'Fine line, hatching, and minimal color.',
+      name: 'Digital illustration',
+      description: 'Clean modern illustration with controlled edges and color.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as an ink drawing with deliberate line quality, hatching or crosshatching, strong shape design, and little or no color.",
+        "You are the style elaborator. Preserve the content and composition. Render as a clean contemporary digital illustration with purposeful edges, controlled color, readable forms, and polished finishing. Do not add comic panels, animation branding, or painterly texture unless requested.",
     },
     {
-      id: 'style-minimalist',
+      id: 'style-anime-illustration',
       kind: 'style',
-      name: 'Minimalist graphic',
-      description: 'Flat, restrained, and shape-driven.',
+      name: 'Anime illustration',
+      description: 'Broad anime-inspired rendering without named franchises.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image with minimalist graphic restraint: limited palette, simplified forms, clean edges, and strong use of negative space.",
+        "You are the style elaborator. Preserve the content and composition. Render as broad anime-inspired illustration with clean linework, simplified planes, expressive but respectful character rendering when people are present, and controlled color. Do not imitate a named artist, studio, franchise, or specific character.",
     },
     {
-      id: 'style-vintage-poster',
+      id: 'style-graphic-novel',
       kind: 'style',
-      name: 'Vintage poster',
-      description: 'Retro print design with bold stylized shapes.',
+      name: 'Graphic novel',
+      description: 'Ink, shadow, panels-influenced contrast, and narrative drawing.',
       template:
-        "You are the style elaborator. Preserve the content and composition. Render the image as a vintage poster with print-like texture, limited palette, bold stylized shapes, and retro graphic energy without literal typography.",
+        "You are the style elaborator. Preserve the content and composition. Render with graphic-novel visual language: confident linework, shaped shadows, controlled texture, strong contrast, and readable forms. Keep violence, threat, and shock out unless explicitly requested by the seed.",
+    },
+    {
+      id: 'style-vector-graphic',
+      kind: 'style',
+      name: 'Vector graphic',
+      description: 'Flat shapes, crisp edges, simple palettes, and scalable design.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render as vector-like graphic art with crisp edges, flat or lightly graded color, simplified geometry, and clear silhouette. Avoid photorealism, painterly texture, and tiny surface detail.",
+    },
+    {
+      id: 'style-editorial-collage',
+      kind: 'style',
+      name: 'Editorial collage',
+      description: 'Layered cutout, paper, photo, and graphic texture.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render as an editorial collage with layered cutout shapes, paper or print textures, subtle photographic fragments, and graphic contrast. Keep symbols neutral and avoid adding political, hateful, sexual, or violent implications unless requested.",
+    },
+    {
+      id: 'style-hand-painted',
+      kind: 'style',
+      name: 'Hand-painted illustration',
+      description: 'Painterly color, visible brushwork, and crafted surfaces.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render as hand-painted illustration with visible brushwork, crafted color transitions, textured surfaces, and a human-made feel. Do not imitate a named living artist or specific studio.",
+    },
+    {
+      id: 'style-oil-acrylic',
+      kind: 'style',
+      name: 'Oil / acrylic paint',
+      description: 'Opaque paint, layered pigment, and tactile brush texture.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render with oil or acrylic painting qualities: opaque pigment, layered brushwork, rich color mixing, tactile texture, and painterly depth. Keep the scene legible and avoid adding symbolic drama not present in the seed.",
+    },
+    {
+      id: 'style-watercolor-gouache',
+      kind: 'style',
+      name: 'Watercolor / gouache',
+      description: 'Soft washes, paper grain, matte color, and gentle edges.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render with watercolor or gouache qualities: paper grain, translucent or matte color, softened edges, restrained detail, and gentle layering. Avoid photorealistic camera language.",
+    },
+    {
+      id: 'style-ink-line',
+      kind: 'style',
+      name: 'Ink line art',
+      description: 'Line weight, hatching, monochrome or sparse color.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render with ink line art: deliberate line weight, hatching or stipple when useful, strong contour, and monochrome or sparse color. Keep forms clear and avoid graphic injury detail unless requested.",
+    },
+    {
+      id: 'style-retro-print',
+      kind: 'style',
+      name: 'Retro print',
+      description: 'Screenprint, risograph, poster grain, and limited palettes.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render with retro print qualities such as screenprint texture, risograph grain, limited palette, slight registration imperfection, and bold color fields. Avoid literal readable typography unless the seed asks for text.",
+    },
+    {
+      id: 'style-pixel-art',
+      kind: 'style',
+      name: 'Pixel art',
+      description: 'Low-resolution grid, tileable shapes, and deliberate palette limits.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render as pixel art with visible pixel structure, deliberate palette limits, blocky silhouettes, and readable sprite-like forms. Avoid photorealistic texture and tiny illegible detail.",
+    },
+    {
+      id: 'style-minimal-shape',
+      kind: 'style',
+      name: 'Minimal shape',
+      description: 'Reduced forms, quiet color, and strong negative space.',
+      template:
+        "You are the style elaborator. Preserve the content and composition. Render with minimal shape language: reduced forms, limited palette, clean edges, quiet surfaces, and strong negative space. Do not remove essential subject identity or context.",
     },
   ]
 }

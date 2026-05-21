@@ -188,7 +188,7 @@ The modal stays open after queueing so you can run another round. Clicking outsi
 
 The manager shows these as three side-by-side panes with independent **New**, **Edit**, **Delete**, and **Reset Defaults** controls. Each category keeps its own list.
 
-The shipped defaults are a subject-aware starter set across all three categories: content defaults for people, creatures, vehicles, places, objects, and events; composition defaults for close, medium, wide, dynamic, and graphic framing; and style defaults for photorealism, cinematic work, documentary photography, anime, painterly media, ink, minimalist graphics, and vintage poster treatment.
+The shipped defaults are broad, neutral starter sets across all three categories: content defaults for common subject families such as people, groups, animals, places, objects, food, fashion, nature, technology, events, fantasy, and abstract concepts; composition defaults ordered from more scene-building choices to simpler reference-like choices; and style defaults that focus on rendering language rather than content or camera framing.
 
 ## Elaboration Settings
 
