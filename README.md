@@ -57,7 +57,7 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 
 ## Settings overview
 
-Open Settings with **⌘ Comma** (macOS) or **Ctrl+Comma** (Windows/Linux).
+Open Settings with **Cmd+Comma** (macOS) or **Ctrl+Comma** (Windows/Linux).
 
 ### General
 
@@ -234,17 +234,17 @@ The **Elaboration** submenu flies out to the right on hover:
 
 | Action | macOS | Windows/Linux |
 |---|---|---|
-| Replace prompt with clipboard text | ⌘P | Ctrl+P |
-| Send to all backends | ⌘↩ | Ctrl+Enter |
-| Send to visible backend by column number | ⌘1–6 | Ctrl+1–5 |
-| Open Settings | ⌘ Comma | Ctrl+Comma |
-| Show / hide kept images | ⌘⇧K | Ctrl+Shift+K |
-| Move selection within a column (also navigates in fullscreen viewer) | ↑ / ↓ | ↑ / ↓ |
-| Move selection across columns (also navigates in fullscreen viewer) | ← / → | ← / → |
+| Replace prompt with clipboard text | Cmd+P | Ctrl+P |
+| Send to all backends | Cmd+Enter | Ctrl+Enter |
+| Send to visible backend by column number | Cmd+1 to Cmd+6 | Ctrl+1 to Ctrl+5 |
+| Open Settings | Cmd+Comma | Ctrl+Comma |
+| Show / hide kept images | Cmd+Shift+K | Ctrl+Shift+K |
+| Move selection within a column (also navigates in fullscreen viewer) | Up / Down | Up / Down |
+| Move selection across columns (also navigates in fullscreen viewer) | Left / Right | Left / Right |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
 | Remove selected task, keep the selected completed image, or restore a selected kept image (also works in fullscreen viewer) | Backspace | Backspace |
-| Delete selected task and files (also works in fullscreen viewer) | Delete or ⌘Backspace | Delete or Ctrl+Backspace |
+| Delete selected task and files (also works in fullscreen viewer) | Delete or Cmd+Backspace | Delete or Ctrl+Backspace |
 | Clear selection / close panel | Esc | Esc |
 
 ## Draw Things
