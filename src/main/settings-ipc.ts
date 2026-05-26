@@ -28,7 +28,7 @@ import {
   importRecommendations,
   resolveRecommendedParams
 } from './recommendations'
-import { getModelParams, setModelParams } from './model-params'
+import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type DrawThingsModelParams } from '../shared/types'
 
 function readClipboardText(): string {
@@ -166,7 +166,7 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('dialog:openFile', async (event, filters: Electron.FileFilter[]) => {
     const owner = BrowserWindow.fromWebContents(event.sender)
-    const options = { properties: ['openFile'] as const, filters }
+    const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
   })
@@ -238,7 +238,7 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('dialog:openDirectory', async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender)
-    const options = { properties: ['openDirectory', 'createDirectory'] as const }
+    const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'] }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
   })
@@ -247,7 +247,15 @@ export function registerSettingsIpc(): void {
     return getModelParams(modelFile)
   })
 
+  ipcMain.handle('drawthings:getAllModelParams', () => {
+    return getAllModelParams()
+  })
+
   ipcMain.handle('drawthings:setModelParams', (_event, modelFile: string, params: DrawThingsModelParams) => {
     setModelParams(modelFile, params)
+  })
+
+  ipcMain.handle('drawthings:applyParamsToAll', (_event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
+    applyDimensionsToModels(modelFiles, patch)
   })
 }

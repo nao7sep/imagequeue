@@ -294,7 +294,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
           {loading ? (
             <div className="elaborators-empty">Loading…</div>
           ) : itemsForKind.length === 0 && !draftOpenHere ? (
-            <div className="elaborators-empty">No {kind} elaborators yet.</div>
+            <div className="elaborators-empty">No {ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators yet.</div>
           ) : (
             <div className="elaborators-list">
               {itemsForKind.map((item) => (

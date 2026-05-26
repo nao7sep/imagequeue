@@ -175,6 +175,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
+  const [allModelParams, setAllModelParams] = useState<Record<string, DrawThingsModelParams>>({})
   const saveParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestDrawThingsSaveRef = useRef<{ model: string; params: DrawThingsModelParams }>({
     model: '',
@@ -303,10 +304,59 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     setNegativePrompt(effectiveRecommendation.negativePrompt)
   }, [effectiveRecommendation])
 
+  const refreshAllModelParams = useCallback(async (): Promise<void> => {
+    if (backendId !== 'drawthings') return
+    const store = await window.electronAPI.dtGetAllModelParams()
+    setAllModelParams(store)
+  }, [backendId])
+
+  const canApplyToAllModels = useMemo(() => {
+    if (backendId !== 'drawthings' || downloadedModels.length <= 1) return false
+    return downloadedModels.some((m) => {
+      if (m.file === model) return false
+      const entry = allModelParams[m.file]
+      if (!entry) return true
+      return entry.width !== localWidth
+        || entry.height !== localHeight
+        || entry.steps !== localSteps
+        || entry.guidance !== localGuidance
+    })
+  }, [backendId, downloadedModels, model, allModelParams, localWidth, localHeight, localSteps, localGuidance])
+
+  const handleApplyToAllModels = useCallback(async (): Promise<void> => {
+    if (backendId !== 'drawthings' || downloadedModels.length === 0) return
+    const modelFiles = downloadedModels.map((m) => m.file)
+    flushPendingDrawThingsParams(model, currentDrawThingsParams)
+    await window.electronAPI.dtApplyParamsToAllModels(modelFiles, {
+      width: localWidth,
+      height: localHeight,
+      steps: localSteps,
+      guidance: localGuidance,
+    })
+    await refreshAllModelParams()
+  }, [
+    backendId,
+    downloadedModels,
+    flushPendingDrawThingsParams,
+    model,
+    currentDrawThingsParams,
+    localWidth,
+    localHeight,
+    localSteps,
+    localGuidance,
+    refreshAllModelParams,
+  ])
+
   const handleDrawThingsModelChange = useCallback((nextModel: string): void => {
     flushPendingDrawThingsParams()
     setModel(nextModel)
-  }, [flushPendingDrawThingsParams])
+    void refreshAllModelParams()
+  }, [flushPendingDrawThingsParams, refreshAllModelParams])
+
+  useEffect(() => {
+    if (backendId !== 'drawthings') return
+    void refreshAllModelParams()
+  }, [backendId, downloadedModels, refreshAllModelParams])
 
   useEffect(() => {
     if (backendId !== 'drawthings') return
@@ -1023,6 +1073,16 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                   <label>guidance</label>
                   <input type="number" value={localGuidance} onChange={(e) => setLocalGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
                 </div>
+                {canApplyToAllModels && (
+                  <button
+                    type="button"
+                    className="open-models-btn drawthings-recommendation-btn"
+                    title="Copy width, height, steps, and guidance to every downloaded Draw Things model. Each model's seed and negative prompt are preserved."
+                    onClick={() => { void handleApplyToAllModels() }}
+                  >
+                    Apply to all models
+                  </button>
+                )}
                 <div className="setting-row">
                   <label>seed</label>
                   <input type="text" value={localSeed} onChange={(e) => setLocalSeed(e.target.value)} placeholder="random" />
@@ -1032,16 +1092,14 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
                   <input type="text" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} placeholder="negative prompt" />
                 </div>
                 {canRestoreRecommended && effectiveRecommendation && (
-                  <div className="drawthings-recommendation-row">
-                    <button
-                      type="button"
-                      className="open-models-btn drawthings-recommendation-btn"
-                      title={`Restore Draw Things recommended parameters for ${selectedRecommendation?.matchName ?? model}`}
-                      onClick={handleRestoreRecommended}
-                    >
-                      Restore recommended
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="open-models-btn drawthings-recommendation-btn"
+                    title={`Restore Draw Things recommended parameters for ${selectedRecommendation?.matchName ?? model}`}
+                    onClick={handleRestoreRecommended}
+                  >
+                    Use recommended
+                  </button>
                 )}
               </>
             )}

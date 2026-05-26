@@ -239,8 +239,17 @@ const api = {
   dtGetModelParams: (modelFile: string): Promise<DrawThingsModelParams | null> =>
     ipcRenderer.invoke('drawthings:getModelParams', modelFile),
 
+  dtGetAllModelParams: (): Promise<Record<string, DrawThingsModelParams>> =>
+    ipcRenderer.invoke('drawthings:getAllModelParams'),
+
   dtSaveModelParams: (modelFile: string, params: DrawThingsModelParams): Promise<void> =>
     ipcRenderer.invoke('drawthings:setModelParams', modelFile, params),
+
+  dtApplyParamsToAllModels: (
+    modelFiles: string[],
+    patch: Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
+  ): Promise<void> =>
+    ipcRenderer.invoke('drawthings:applyParamsToAll', modelFiles, patch),
 
   openFileDialog: (filters: { name: string; extensions: string[] }[]): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openFile', filters),

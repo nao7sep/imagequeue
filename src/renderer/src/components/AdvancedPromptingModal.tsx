@@ -489,7 +489,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         <div className="advanced-elaborator-column-title">{ELABORATOR_KIND_LABELS[kind]}</div>
         <div className="advanced-elaborator-column-list">
           {items.length === 0 ? (
-            <div className="advanced-empty">No {kind} elaborators.</div>
+            <div className="advanced-empty">No {ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators.</div>
           ) : (
             items.map((el) => (
               <label

@@ -231,12 +231,10 @@
   border-color: var(--col-accent, var(--accent));
 }
 
-.drawthings-recommendation-row {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .drawthings-recommendation-btn {
+  width: 100%;
+  padding: 7px 8px;
+  font-size: 12px;
   text-align: center;
 }
 

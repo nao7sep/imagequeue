@@ -24,9 +24,28 @@ export function getModelParams(modelFile: string): DrawThingsModelParams | null 
   return load()[modelFile] ?? null
 }
 
+export function getAllModelParams(): ParamsStore {
+  return load()
+}
+
 export function setModelParams(modelFile: string, params: DrawThingsModelParams): void {
   const file = getParamsFilePath()
   const store = load()
   store[modelFile] = params
+  fs.writeFileSync(file, JSON.stringify(store, null, 2), 'utf-8')
+}
+
+export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
+
+export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): void {
+  if (modelFiles.length === 0) return
+  const file = getParamsFilePath()
+  const store = load()
+  for (const modelFile of modelFiles) {
+    const existing = store[modelFile]
+    store[modelFile] = existing
+      ? { ...existing, ...patch }
+      : { ...patch, seed: '', negativePrompt: '' }
+  }
   fs.writeFileSync(file, JSON.stringify(store, null, 2), 'utf-8')
 }

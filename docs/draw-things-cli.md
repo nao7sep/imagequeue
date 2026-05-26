@@ -78,7 +78,9 @@ ImageQueue can download or import Draw Things recommendation data. The file is s
 ~/.imagequeue/data/configs.json
 ```
 
-Recommendations fill the starting values for width, height, steps, guidance, and negative prompt. They do not secretly override your current controls. If you change the values and want to go back, the Draw Things column shows **Restore recommended**.
+Recommendations fill the starting values for width, height, steps, guidance, and negative prompt. They do not secretly override your current controls. If you change the values and want to go back, the Draw Things column shows **Use recommended**.
+
+When two or more models are downloaded and at least one of them has a different width, height, steps, or guidance than the current values, the Draw Things column shows **Apply to all models** between the guidance and seed rows. Clicking it copies the current width, height, steps, and guidance into every downloaded model's saved parameters; each model keeps its own seed and negative prompt. The button hides again once every other model matches.
 
 ## 3. Common workflows
 
