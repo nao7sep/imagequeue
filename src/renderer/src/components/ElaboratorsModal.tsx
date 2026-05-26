@@ -182,7 +182,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const handleReset = useCallback(async (kind: ElaboratorKind): Promise<void> => {
     const ok = await confirm({
       title: `Reset ${ELABORATOR_KIND_LABELS[kind]} Elaborators`,
-      message: `Replace all ${kind} elaborators with the shipped defaults?`,
+      message: `Replace all ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators with the shipped defaults?`,
       confirmLabel: 'Reset',
       danger: true,
     })

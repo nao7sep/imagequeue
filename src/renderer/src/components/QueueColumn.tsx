@@ -177,6 +177,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
   const [allModelParams, setAllModelParams] = useState<Record<string, DrawThingsModelParams>>({})
   const saveParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveParamsQueueRef = useRef<Promise<void>>(Promise.resolve())
   const latestDrawThingsSaveRef = useRef<{ model: string; params: DrawThingsModelParams }>({
     model: '',
     params: buildDrawThingsParams(1024, 1024, 4, 1, '', ''),
@@ -260,17 +261,31 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     return JSON.stringify({ model: nextModel, params })
   }, [])
 
-  const flushPendingDrawThingsParams = useCallback((
+  const saveDrawThingsParams = useCallback((modelFile: string, params: DrawThingsModelParams): Promise<void> => {
+    if (backendId !== 'drawthings' || !modelFile) return Promise.resolve()
+    const save = saveParamsQueueRef.current.then(
+      () => window.electronAPI.dtSaveModelParams(modelFile, params),
+      () => window.electronAPI.dtSaveModelParams(modelFile, params)
+    )
+    saveParamsQueueRef.current = save.catch((error: unknown) => {
+      void window.electronAPI.appLog('error', 'Failed to persist Draw Things model params', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+    return save
+  }, [backendId])
+
+  const flushPendingDrawThingsParams = useCallback(async (
     modelFile = latestDrawThingsSaveRef.current.model,
     params = latestDrawThingsSaveRef.current.params
-  ): void => {
+  ): Promise<void> => {
     if (saveParamsTimerRef.current) {
       clearTimeout(saveParamsTimerRef.current)
       saveParamsTimerRef.current = null
     }
     if (backendId !== 'drawthings' || !modelFile) return
-    void window.electronAPI.dtSaveModelParams(modelFile, params)
-  }, [backendId])
+    await saveDrawThingsParams(modelFile, params)
+  }, [backendId, saveDrawThingsParams])
 
   const refreshDrawThingsModels = useCallback((isInitial = false): void => {
     if (backendId !== 'drawthings') return
@@ -326,7 +341,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const handleApplyToAllModels = useCallback(async (): Promise<void> => {
     if (backendId !== 'drawthings' || downloadedModels.length === 0) return
     const modelFiles = downloadedModels.map((m) => m.file)
-    flushPendingDrawThingsParams(model, currentDrawThingsParams)
+    await flushPendingDrawThingsParams(model, currentDrawThingsParams)
     await window.electronAPI.dtApplyParamsToAllModels(modelFiles, {
       width: localWidth,
       height: localHeight,
@@ -348,7 +363,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   ])
 
   const handleDrawThingsModelChange = useCallback((nextModel: string): void => {
-    flushPendingDrawThingsParams()
+    void flushPendingDrawThingsParams()
     setModel(nextModel)
     void refreshAllModelParams()
   }, [flushPendingDrawThingsParams, refreshAllModelParams])
@@ -438,7 +453,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
   useEffect(() => {
     return () => {
-      flushPendingDrawThingsParams()
+      void flushPendingDrawThingsParams()
     }
   }, [flushPendingDrawThingsParams])
 
@@ -448,12 +463,12 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
     saveParamsTimerRef.current = setTimeout(() => {
       saveParamsTimerRef.current = null
-      void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
+      void flushPendingDrawThingsParams(model, currentDrawThingsParams)
     }, 800)
     return () => {
       if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
     }
-  }, [backendId, model, currentDrawThingsParams])
+  }, [backendId, model, currentDrawThingsParams, flushPendingDrawThingsParams])
 
   useEffect(() => {
     if (!backendSettings || backendId === 'drawthings') return
@@ -766,7 +781,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     const count = Math.max(1, countOverride ?? 1)
 
     if (backendId === 'drawthings') {
-      flushPendingDrawThingsParams(model, currentDrawThingsParams)
+      void flushPendingDrawThingsParams(model, currentDrawThingsParams)
     }
     enqueue({ prompt, backend: backendId, model, params: currentEnqueueParams, count })
   }, [
