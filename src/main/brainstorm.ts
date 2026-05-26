@@ -95,6 +95,23 @@ function buildCombinedElaboratorInstructions(parts: {
   ].join('\n')
 }
 
+// Sent ahead of the user message on retry attempts. Models that wrapped the
+// first response in prose or markdown fences typically obey this on the
+// second pass, so the retry is meaningfully different from the first attempt
+// rather than a blind resend.
+const STRICT_JSON_NUDGE = 'Reply with valid JSON only — no prose, no markdown fences.'
+
+// Accepts either the documented `{ prompts: string[] }` shape or a bare
+// `string[]` (some OpenAI-compatible servers emit this when the prompt asks
+// for "a list of N items" in JSON mode). Anything else returns [].
+function extractPromptsFromParsed(parsed: unknown): string[] {
+  const candidate = Array.isArray(parsed)
+    ? parsed
+    : (parsed as { prompts?: unknown } | null | undefined)?.prompts
+  if (!Array.isArray(candidate)) return []
+  return candidate.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+}
+
 // One conversation turn with up to maxRetries retries. Returns the parsed
 // prompts, or throws after all retries are exhausted.
 async function askWithRetry(
@@ -118,13 +135,21 @@ async function askWithRetry(
       await sleep(backoff)
     }
     try {
+      // On retry, prepend a strict-JSON nudge to the most recent user message
+      // without mutating the caller's conversation history.
+      const effectiveMessages = attempt === 0
+        ? messages
+        : messages.map((msg, i) =>
+            i === messages.length - 1 && msg.role === 'user'
+              ? { ...msg, text: `${STRICT_JSON_NUDGE}\n\n${msg.text}` }
+              : msg
+          )
       const result = await provider.ask({
-        messages,
+        messages: effectiveMessages,
         schema: PROMPTS_RESPONSE_SCHEMA,
         timeoutMs,
       })
-      const parsed = result.parsed as { prompts?: unknown } | undefined
-      const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts.filter((p): p is string => typeof p === 'string' && p.trim().length > 0) : []
+      const prompts = extractPromptsFromParsed(result.parsed)
       if (prompts.length === 0) {
         log('warn', 'Brainstorm turn returned no usable prompts', { rawText: result.text })
         throw new Error('Text AI returned no usable prompts.')
@@ -199,10 +224,9 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       collected.push(...newPrompts)
       messages.push({ role: 'model', text: JSON.stringify({ prompts: newPrompts }) })
 
-      // Log the elaborated prompts but not the full user message — the
-      // template + previous-prompts list reproduces from config + session
-      // state if needed for debugging, and keeps session.log compact.
-      log('info', 'Elaborated prompts', { turn, prompts: newPrompts })
+      // The prompts themselves persist in the session manifest's
+      // `elaboratedPrompts` array — no need to duplicate them here.
+      log('info', 'Brainstorm turn complete', { turn, count: newPrompts.length })
 
       broadcastProgress({
         requestId: req.requestId,

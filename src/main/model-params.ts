@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
+import { log } from './logger'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -10,42 +11,88 @@ function getParamsFilePath(): string {
 
 type ParamsStore = Record<string, DrawThingsModelParams>
 
-function load(): ParamsStore {
-  try {
-    const file = getParamsFilePath()
-    if (!fs.existsSync(file)) return {}
-    return JSON.parse(fs.readFileSync(file, 'utf-8')) as ParamsStore
-  } catch {
-    return {}
+const WRITE_DEBOUNCE_MS = 200
+
+let store: ParamsStore | null = null
+let writeTimer: NodeJS.Timeout | null = null
+
+function ensureLoaded(): ParamsStore {
+  if (store !== null) return store
+  const file = getParamsFilePath()
+  if (!fs.existsSync(file)) {
+    store = {}
+    return store
   }
+  try {
+    store = JSON.parse(fs.readFileSync(file, 'utf-8')) as ParamsStore
+  } catch (err) {
+    // Surface the parse failure so a subsequent debounced write that
+    // overwrites the file with an empty store doesn't happen silently.
+    log('warn', 'params.json: failed to read or parse; starting with empty store', {
+      path: file,
+      message: (err as Error).message,
+    })
+    store = {}
+  }
+  return store
+}
+
+function writeNow(): void {
+  if (store === null) return
+  const file = getParamsFilePath()
+  fs.writeFileSync(file, JSON.stringify(store, null, 2), 'utf-8')
+}
+
+function scheduleWrite(): void {
+  if (writeTimer !== null) return
+  writeTimer = setTimeout(() => {
+    writeTimer = null
+    writeNow()
+  }, WRITE_DEBOUNCE_MS)
 }
 
 export function getModelParams(modelFile: string): DrawThingsModelParams | null {
-  return load()[modelFile] ?? null
+  return ensureLoaded()[modelFile] ?? null
 }
 
 export function getAllModelParams(): ParamsStore {
-  return load()
+  return structuredClone(ensureLoaded())
 }
 
 export function setModelParams(modelFile: string, params: DrawThingsModelParams): void {
-  const file = getParamsFilePath()
-  const store = load()
-  store[modelFile] = params
-  fs.writeFileSync(file, JSON.stringify(store, null, 2), 'utf-8')
+  const s = ensureLoaded()
+  s[modelFile] = params
+  scheduleWrite()
 }
 
 export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
 
 export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): void {
   if (modelFiles.length === 0) return
-  const file = getParamsFilePath()
-  const store = load()
+  const s = ensureLoaded()
   for (const modelFile of modelFiles) {
-    const existing = store[modelFile]
-    store[modelFile] = existing
+    const existing = s[modelFile]
+    s[modelFile] = existing
       ? { ...existing, ...patch }
       : { ...patch, seed: '', negativePrompt: '' }
   }
-  fs.writeFileSync(file, JSON.stringify(store, null, 2), 'utf-8')
+  log('info', 'Applied dimensions to all Draw Things models', {
+    modelCount: modelFiles.length,
+    patch,
+  })
+  scheduleWrite()
+}
+
+// Cancel any pending debounced write and flush synchronously. Called from
+// before-quit so an edit made just before Cmd+Q can't be lost in the timer gap.
+export function drainPendingWrites(): void {
+  const hadPending = writeTimer !== null
+  if (writeTimer !== null) {
+    clearTimeout(writeTimer)
+    writeTimer = null
+  }
+  writeNow()
+  if (hadPending) {
+    log('info', 'Drained pending model param writes on quit')
+  }
 }

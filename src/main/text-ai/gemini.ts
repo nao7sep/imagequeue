@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import type { AskOptions, AskResult, ConversationMessage, TextAIProvider } from './types'
+import { extractJson } from './json'
 
 interface GeminiContent {
   role: 'user' | 'model'
@@ -39,12 +40,7 @@ export class GeminiProvider implements TextAIProvider {
     const result: AskResult = { text }
 
     if (opts.schema) {
-      try {
-        result.parsed = JSON.parse(text)
-      } catch {
-        // Caller decides how to handle unparsable schema-mode responses.
-        result.parsed = undefined
-      }
+      result.parsed = extractJson(text)
     }
 
     return result

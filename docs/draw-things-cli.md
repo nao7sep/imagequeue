@@ -56,9 +56,11 @@ The model browser gets Draw Things model metadata from `draw-things-cli models l
 
 ### Local imports
 
-The **Local Imports** section is based on `custom.json` inside the models directory. That file is Draw Things' own record of imported external models, so it is the main source of truth. If `custom.json` is missing or unreadable, ImageQueue falls back to a name-based heuristic.
+The **Local Imports** section is based on `custom.json` inside the models directory. That file is Draw Things' own record of imported external models, and it is the only fully trustworthy signal here: `draw-things-cli models list` reports `source: official` for every entry in `custom.json`, so the CLI's source column on its own cannot tell an import apart from a real official-catalog download.
 
-That means the modal is usually reliable about showing imported models, but duplicate prevention is still ultimately enforced by Draw Things CLI itself.
+If `custom.json` is **absent** — the common case on a fresh install or any models directory where no model has been imported — ImageQueue falls back to the CLI's source column. No imports can leak to the Official pane in that state because no imports exist.
+
+If `custom.json` is **present but unreadable**, ImageQueue still falls back to the CLI's source column (so downloaded official models don't get hidden) but shows a warning above the Local Imports section. While that state persists, genuine imports may appear in the Official pane; fixing or removing `custom.json` resolves it. Duplicate prevention is still ultimately enforced by Draw Things CLI itself.
 
 ### Saved per-model parameters
 
@@ -154,7 +156,8 @@ Each generation runs `draw-things-cli generate`. Output is written to a temporar
 ### A model is missing from Local Imports
 
 - Check whether `custom.json` exists in the models directory and contains the imported file.
-- If `custom.json` is unavailable, ImageQueue falls back to a heuristic and may be less certain.
+- If `custom.json` is missing entirely (no imports yet), this is expected — the section will populate after the first successful import.
+- If `custom.json` exists but the warning banner says it can't be parsed, fix or remove that file; while it's unreadable, imports may show up in Official Models instead.
 
 ### Import says the model already exists
 

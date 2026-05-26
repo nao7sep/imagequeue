@@ -13,6 +13,7 @@ import { closeNotificationWindow, initNotificationWindow, registerNotificationIp
 import { initLogger, log } from './logger'
 import { updateRecommendationsAtLaunch } from './recommendations'
 import { killAllCliJobs } from './cli-jobs'
+import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 
 let mainWin: BrowserWindow | null = null
 
@@ -128,6 +129,7 @@ app.on('window-all-closed', () => {
 // convert OS-close into a hide; if that fired during quit, will-quit would
 // never be reached and the app would get stuck.
 app.on('before-quit', () => {
+  drainPendingModelParamsWrites()
   closeViewerWindow()
   closeNotificationWindow()
   killAllCliJobs()

@@ -7,6 +7,7 @@ import {
   EnqueueRequest,
   Task,
   CliStatus,
+  CustomJsonStatus,
   LocalModelInfo,
   RecommendedParams,
   RecommendationOperationResult,
@@ -20,7 +21,7 @@ import type {
   CliStatusEvent,
 } from '../shared/cli-jobs'
 
-export type { CliStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
+export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
 
 export interface EnsureModelResult {
@@ -179,7 +180,7 @@ const api = {
   localListAvailableModels: (): Promise<LocalModelInfo[]> =>
     ipcRenderer.invoke('local:listAvailableModels'),
 
-  localReadCustomJsonImportedFiles: (): Promise<string[] | null> =>
+  localReadCustomJsonImportedFiles: (): Promise<CustomJsonStatus> =>
     ipcRenderer.invoke('local:readCustomJsonImportedFiles'),
 
   localEnsureModel: (modelFile: string): Promise<EnsureModelResult> =>

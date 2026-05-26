@@ -39,6 +39,17 @@ export interface LocalModelInfo {
   huggingFace: string | null
 }
 
+// Result of attempting to read the Draw Things `custom.json` file in the
+// effective models directory. The three states are distinguished so the
+// renderer can pick the right fallback: when the file is genuinely absent
+// (a fresh install with no imports yet) we trust the CLI's source column;
+// when it exists but can't be parsed we trust the CLI for usability but
+// surface a warning, since imports there may be misclassified as official.
+export type CustomJsonStatus =
+  | { kind: 'present'; files: string[] }
+  | { kind: 'absent' }
+  | { kind: 'unreadable'; reason: string }
+
 export interface RecommendationStatus {
   path: string
   directory: string

@@ -428,10 +428,8 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       const dispatched = units.length
 
       showInfo(`Queued ${dispatched} task${dispatched === 1 ? '' : 's'}.`)
-      void window.electronAPI.appLog('info', 'Advanced: Queue dispatched', {
-        mode: promptMode,
-        dispatched,
-      })
+      // Per-task enqueue is already logged in main; the click-time log above
+      // carries the user's intent, so no separate dispatch log is needed here.
       // Modal stays open by design — the user may want to queue more rounds
       // using the now-grown session list as previousPrompts.
     } catch (error) {

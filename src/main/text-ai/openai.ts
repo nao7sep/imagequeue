@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import type { AskOptions, AskResult, ConversationMessage, TextAIProvider } from './types'
+import { extractJson } from './json'
 
 const OFFICIAL_OPENAI_ENDPOINT = 'https://api.openai.com/v1'
 
@@ -24,8 +25,8 @@ export class OpenAIProvider implements TextAIProvider {
 
     // json_object is the broadly-compatible JSON mode across OpenAI-compatible
     // servers (OpenAI, OpenRouter, xAI, DeepSeek, llama.cpp). Strict json_schema
-    // works only on some endpoints; the brainstorm caller already retries on
-    // shape mismatch, so server-side schema enforcement isn't worth the
+    // works only on some endpoints; we parse the response loosely via
+    // extractJson, so server-side schema enforcement isn't worth the
     // compatibility cost.
     const response = await client.chat.completions.create({
       model: this.model,
@@ -37,11 +38,7 @@ export class OpenAIProvider implements TextAIProvider {
     const result: AskResult = { text }
 
     if (opts.schema) {
-      try {
-        result.parsed = JSON.parse(text)
-      } catch {
-        result.parsed = undefined
-      }
+      result.parsed = extractJson(text)
     }
 
     return result

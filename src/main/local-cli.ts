@@ -7,9 +7,9 @@ import path from 'path'
 import os from 'os'
 import { loadConfig } from './config'
 import { log } from './logger'
-import { CliStatus, LocalModelInfo } from '../shared/types'
+import { CliStatus, LocalModelInfo, CustomJsonStatus } from '../shared/types'
 
-export type { CliStatus, LocalModelInfo }
+export type { CliStatus, LocalModelInfo, CustomJsonStatus }
 
 const DEFAULT_MODELS_DIR = path.join(os.homedir(), '.imagequeue', 'models')
 
@@ -194,32 +194,34 @@ export function getDefaultModelsDir(): string {
 
 /**
  * Read the `file` values from `custom.json` in the effective models directory.
- * Returns `null` when the file is absent or unreadable — callers should fall
- * back to heuristic detection in that case.
- * Returns a (possibly empty) array when the file exists and was parsed.
- * `custom.json` is the ground truth for locally-imported (external) models.
+ * `custom.json` is Draw Things' ground truth for locally-imported (external)
+ * models. The three return states are distinguished so callers can pick the
+ * right fallback when the file isn't usable.
  */
-export function readCustomJsonImportedFiles(): string[] | null {
+export function readCustomJsonImportedFiles(): CustomJsonStatus {
   const dir = resolveModelsDir()
   const customJsonPath = path.join(dir, 'custom.json')
-  if (!fs.existsSync(customJsonPath)) return null
+  if (!fs.existsSync(customJsonPath)) return { kind: 'absent' }
 
   try {
     const raw = fs.readFileSync(customJsonPath, 'utf-8')
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) {
-      log('warn', 'custom.json: top-level value is not an array', { customJsonPath })
-      return null
+      const reason = 'top-level value is not an array'
+      log('warn', `custom.json: ${reason}`, { customJsonPath })
+      return { kind: 'unreadable', reason }
     }
-    return parsed
+    const files = parsed
       .filter((entry): entry is { file: string } =>
         entry !== null &&
         typeof entry === 'object' &&
         typeof (entry as Record<string, unknown>).file === 'string'
       )
       .map((entry) => entry.file)
+    return { kind: 'present', files }
   } catch (err) {
-    log('warn', 'custom.json: failed to read or parse', { customJsonPath, message: (err as Error).message })
-    return null
+    const reason = (err as Error).message
+    log('warn', 'custom.json: failed to read or parse', { customJsonPath, message: reason })
+    return { kind: 'unreadable', reason }
   }
 }

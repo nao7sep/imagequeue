@@ -176,12 +176,11 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
   const [allModelParams, setAllModelParams] = useState<Record<string, DrawThingsModelParams>>({})
-  const saveParamsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveParamsQueueRef = useRef<Promise<void>>(Promise.resolve())
-  const latestDrawThingsSaveRef = useRef<{ model: string; params: DrawThingsModelParams }>({
-    model: '',
-    params: buildDrawThingsParams(1024, 1024, 4, 1, '', ''),
-  })
+  // Tracks which model's saved params are currently reflected in local state.
+  // The autosave effect uses this to skip writes between a model switch and
+  // the new model's load completing, so we never persist model A's params
+  // under model B's key.
+  const [loadedModel, setLoadedModel] = useState('')
 
   const columnTasks = tasks[backendId]
   const backendSettings = useMemo(
@@ -261,32 +260,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     return JSON.stringify({ model: nextModel, params })
   }, [])
 
-  const saveDrawThingsParams = useCallback((modelFile: string, params: DrawThingsModelParams): Promise<void> => {
-    if (backendId !== 'drawthings' || !modelFile) return Promise.resolve()
-    const save = saveParamsQueueRef.current.then(
-      () => window.electronAPI.dtSaveModelParams(modelFile, params),
-      () => window.electronAPI.dtSaveModelParams(modelFile, params)
-    )
-    saveParamsQueueRef.current = save.catch((error: unknown) => {
-      void window.electronAPI.appLog('error', 'Failed to persist Draw Things model params', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    })
-    return save
-  }, [backendId])
-
-  const flushPendingDrawThingsParams = useCallback(async (
-    modelFile = latestDrawThingsSaveRef.current.model,
-    params = latestDrawThingsSaveRef.current.params
-  ): Promise<void> => {
-    if (saveParamsTimerRef.current) {
-      clearTimeout(saveParamsTimerRef.current)
-      saveParamsTimerRef.current = null
-    }
-    if (backendId !== 'drawthings' || !modelFile) return
-    await saveDrawThingsParams(modelFile, params)
-  }, [backendId, saveDrawThingsParams])
-
   const refreshDrawThingsModels = useCallback((isInitial = false): void => {
     if (backendId !== 'drawthings') return
     window.electronAPI.localCheckCli().then((status) => {
@@ -341,7 +314,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const handleApplyToAllModels = useCallback(async (): Promise<void> => {
     if (backendId !== 'drawthings' || downloadedModels.length === 0) return
     const modelFiles = downloadedModels.map((m) => m.file)
-    await flushPendingDrawThingsParams(model, currentDrawThingsParams)
     await window.electronAPI.dtApplyParamsToAllModels(modelFiles, {
       width: localWidth,
       height: localHeight,
@@ -352,9 +324,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   }, [
     backendId,
     downloadedModels,
-    flushPendingDrawThingsParams,
-    model,
-    currentDrawThingsParams,
     localWidth,
     localHeight,
     localSteps,
@@ -363,10 +332,9 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   ])
 
   const handleDrawThingsModelChange = useCallback((nextModel: string): void => {
-    void flushPendingDrawThingsParams()
     setModel(nextModel)
     void refreshAllModelParams()
-  }, [flushPendingDrawThingsParams, refreshAllModelParams])
+  }, [refreshAllModelParams])
 
   useEffect(() => {
     if (backendId !== 'drawthings') return
@@ -381,6 +349,9 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     setLocalGuidance(drawThingsFallbacks.guidance)
     setLocalSeed(drawThingsFallbacks.seed)
     setNegativePrompt(drawThingsFallbacks.negativePrompt)
+    // Block autosave while these transient fallback values sit in local state;
+    // the load effect re-opens the gate after the model's saved params land.
+    setLoadedModel('')
   }, [backendId, drawThingsFallbacks])
 
   useEffect(() => {
@@ -408,6 +379,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
         setLocalSeed(drawThingsFallbacks.seed)
         setNegativePrompt(recommendation?.negativePrompt ?? drawThingsFallbacks.negativePrompt)
       }
+      setLoadedModel(model)
     })
 
     return () => { cancelled = true }
@@ -447,28 +419,16 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     }
   }, [backendId])
 
-  useEffect(() => {
-    latestDrawThingsSaveRef.current = { model, params: currentDrawThingsParams }
-  }, [model, currentDrawThingsParams])
-
-  useEffect(() => {
-    return () => {
-      void flushPendingDrawThingsParams()
-    }
-  }, [flushPendingDrawThingsParams])
-
-  // Autosave Draw Things params ~800ms after any change so they persist across model switches.
+  // Autosave Draw Things params on every change. The main process coalesces
+  // rapid writes and drains pending writes on `before-quit`, so we don't
+  // debounce here. The `loadedModel === model` gate prevents writing model A's
+  // params under model B's key during the brief window between a model switch
+  // and the new model's load completing.
   useEffect(() => {
     if (backendId !== 'drawthings' || !model) return
-    if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
-    saveParamsTimerRef.current = setTimeout(() => {
-      saveParamsTimerRef.current = null
-      void flushPendingDrawThingsParams(model, currentDrawThingsParams)
-    }, 800)
-    return () => {
-      if (saveParamsTimerRef.current) clearTimeout(saveParamsTimerRef.current)
-    }
-  }, [backendId, model, currentDrawThingsParams, flushPendingDrawThingsParams])
+    if (loadedModel !== model) return
+    void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
+  }, [backendId, model, loadedModel, currentDrawThingsParams])
 
   useEffect(() => {
     if (!backendSettings || backendId === 'drawthings') return
@@ -780,8 +740,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
     const count = Math.max(1, countOverride ?? 1)
 
-    if (backendId === 'drawthings') {
-      void flushPendingDrawThingsParams(model, currentDrawThingsParams)
+    if (backendId === 'drawthings' && model) {
+      void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
     }
     enqueue({ prompt, backend: backendId, model, params: currentEnqueueParams, count })
   }, [
@@ -791,7 +751,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     cliStatus,
     downloadedModels,
     currentDrawThingsParams,
-    flushPendingDrawThingsParams,
     enqueue,
     currentEnqueueParams
   ])

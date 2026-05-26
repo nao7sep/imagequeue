@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
 import { useCliJobs } from '../context/CliJobsContext'
+import type { CustomJsonStatus } from '../../../shared/types'
 import { Modal } from './Modal'
 import './DrawThingsModelsModal.css'
 
@@ -57,28 +58,6 @@ function sourceLabel(model: LocalModelInfo): string {
   return source.replace(/[_-]/g, ' ')
 }
 
-function withoutExtension(value: string): string {
-  return value.replace(/\.[^.]+$/, '')
-}
-
-function looksLikeLocalImport(model: LocalModelInfo): boolean {
-  const name = model.name.trim()
-  const file = model.file.trim()
-  if (!name) return true
-
-  const nameLower = name.toLowerCase()
-  const fileStemLower = withoutExtension(file).toLowerCase()
-  if (nameLower === fileStemLower) return true
-
-  const hasUnderscore = name.includes('_') || file.includes('_')
-  const hasNoSpaces = !/\s/.test(name)
-  // CamelCase names like "OpenJourney" come from the official catalog,
-  // not local imports.
-  const looksCamelCase = hasNoSpaces && /[A-Z]/.test(name) && /[a-z]/.test(name)
-
-  return hasUnderscore && hasNoSpaces && !looksCamelCase
-}
-
 function mergeModelInfo(primary: LocalModelInfo, secondary: LocalModelInfo): LocalModelInfo {
   return {
     file: primary.file || secondary.file,
@@ -108,7 +87,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const { addJob } = useCliJobs()
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
-  const [customJsonFiles, setCustomJsonFiles] = useState<Set<string> | null>(null)
+  const [customJsonStatus, setCustomJsonStatus] = useState<CustomJsonStatus>({ kind: 'absent' })
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
   const [importPath, setImportPath] = useState('')
@@ -133,12 +112,12 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const loadDownloaded = useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) setLoadingDownloaded(true)
     try {
-      const [list, files] = await Promise.all([
+      const [list, status] = await Promise.all([
         window.electronAPI.localListDownloadedModels(),
         window.electronAPI.localReadCustomJsonImportedFiles(),
       ])
       setDownloadedModels(list)
-      setCustomJsonFiles(files === null ? null : new Set(files))
+      setCustomJsonStatus(status)
     } finally {
       setLoadingDownloaded(false)
     }
@@ -197,14 +176,27 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const loadingModels = loadingDownloaded || loadingAvailable
   const allModels = mergeModels(availableModels, downloadedModels)
 
-  // A model is a local import if custom.json says so (ground truth), or if the
-  // heuristic fires for downloaded models when custom.json isn't available yet.
+  // `custom.json` is the only fully trustworthy signal here: draw-things-cli
+  // reports `source: official` for every entry in custom.json, so its source
+  // column on its own cannot distinguish a downloaded import from a real
+  // official catalog download.
+  //
+  // - present: use the file set as ground truth.
+  // - absent: no imports exist yet (fresh install, or no imports ever made),
+  //   so the CLI's source column is safe to trust.
+  // - unreadable: custom.json is there but we can't parse it. We still
+  //   trust the CLI rather than flooding Local Imports with downloaded
+  //   official models, but we surface a warning so the user knows imports
+  //   in this state may be misclassified.
+  const customJsonFiles = customJsonStatus.kind === 'present'
+    ? new Set(customJsonStatus.files)
+    : null
   const localImportFiles = new Set(
     allModels
       .filter((model) => {
         if (!model.downloaded) return false
-        if (customJsonFiles !== null) return customJsonFiles.has(model.file)
-        return looksLikeLocalImport(model)
+        if (customJsonFiles === null) return false
+        return customJsonFiles.has(model.file)
       })
       .map((model) => model.file)
   )
@@ -332,6 +324,11 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
               <section className="dt-section">
                 <h4 className="dt-section-title">Local Imports</h4>
+                {customJsonStatus.kind === 'unreadable' && (
+                  <p className="dt-hint">
+                    Couldn&apos;t read <code>custom.json</code> ({customJsonStatus.reason}). Any imported models may currently be listed under Official Models until this file can be parsed.
+                  </p>
+                )}
                 {renderModelList(filteredLocalImportModels, 'local', 'No local imports detected.')}
               </section>
 
