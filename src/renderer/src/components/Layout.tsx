@@ -225,7 +225,7 @@ export function Layout(): React.JSX.Element {
             <div className="shortcut-group">
               <p className="shortcut-group-name">App</p>
               <div className="shortcut-list">
-                <div className="shortcut-item"><span>Settings</span><kbd>{mod},</kbd></div>
+                <div className="shortcut-item"><span>Settings</span><kbd>{mod}Comma</kbd></div>
                 <div className="shortcut-item"><span>Show / hide kept images</span><kbd>{mod}Shift+K</kbd></div>
                 <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Esc</kbd></div>
               </div>

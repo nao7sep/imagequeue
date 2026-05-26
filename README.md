@@ -57,7 +57,7 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 
 ## Settings overview
 
-Open Settings with **⌘,** (macOS) or **Ctrl+,** (Windows/Linux).
+Open Settings with **⌘ Comma** (macOS) or **Ctrl+Comma** (Windows/Linux).
 
 ### General
 
@@ -237,7 +237,7 @@ The **Elaboration** submenu flies out to the right on hover:
 | Replace prompt with clipboard text | ⌘P | Ctrl+P |
 | Send to all backends | ⌘↩ | Ctrl+Enter |
 | Send to visible backend by column number | ⌘1–6 | Ctrl+1–5 |
-| Open Settings | ⌘, | Ctrl+, |
+| Open Settings | ⌘ Comma | Ctrl+Comma |
 | Show / hide kept images | ⌘⇧K | Ctrl+Shift+K |
 | Move selection within a column (also navigates in fullscreen viewer) | ↑ / ↓ | ↑ / ↓ |
 | Move selection across columns (also navigates in fullscreen viewer) | ← / → | ← / → |
