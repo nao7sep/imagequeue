@@ -95,15 +95,34 @@ Draw Things has its own setup and workflow guide in [docs/draw-things-cli.md](do
 
 ImageQueue uses text AI models for short filename slugs and for prompt elaboration in Advanced Prompting. If slug generation fails or times out, ImageQueue falls back to a random ID automatically.
 
+Pick a provider with **Backend**. Each backend keeps its own credentials, models, and timeout; only the selected one is called at runtime.
+
 | Setting | Default | Description |
 |---|---|---|
-| Backend | Gemini | AI service used for text tasks (slug generation, prompt elaboration) |
-| API Key | — | API key for the selected backend |
+| Backend | Gemini | Which provider to use: Gemini or OpenAI |
+
+#### Gemini
+
+| Setting | Default | Description |
+|---|---|---|
+| API Key | — | Gemini API key |
 | Light model | Gemini 3.1 Flash Lite | Used for short, lightweight tasks like filename slug generation |
 | Main model | Gemini 3 Flash (Preview) | Used for general text work, including prompt elaboration in Advanced Prompting |
 | Timeout | 30 s | Maximum wait time per request; slug generation falls back to a random ID on timeout |
 
 The built-in Gemini text model list currently offers **Gemini 3.1 Pro (Preview)**, **Gemini 3.5 Flash**, **Gemini 3 Flash (Preview)**, and **Gemini 3.1 Flash Lite**.
+
+#### OpenAI
+
+Works with the official OpenAI endpoint and with any OpenAI-compatible server (OpenRouter, xAI, DeepSeek, local llama-server, etc.).
+
+| Setting | Default | Description |
+|---|---|---|
+| Endpoint | — | OpenAI-compatible base URL. Leave empty for the official OpenAI endpoint (`https://api.openai.com/v1`) |
+| API Key | — | API key for the selected endpoint |
+| Light model | — | Free-text model ID used for slug generation |
+| Main model | — | Free-text model ID used for prompt elaboration |
+| Timeout | 60 s | Maximum wait time per request; slug generation falls back to a random ID on timeout |
 
 The **Prompts → Slug template** setting controls the instruction sent to the text model.
 
@@ -163,7 +182,7 @@ The **Advanced Prompting** button above the prompt textarea opens a modal for ba
 
 The modal has three panes:
 
-- **Prompt** — your seed text, three elaborator pickers (**Content**, **Composition**, **Style**), the **Elaborate** button, the resulting elaborated prompt, and an optional **Override** field that is combined with every queued prompt using the configurable `override_combine` template (see Elaboration Settings).
+- **Prompt** — your seed text, three elaborator pickers (**Content**, **Composition**, **Style**), the **Elaborate** button, and the resulting elaborated prompt.
 - **Targets** — checkboxes for proprietary backends and (on macOS) downloaded Draw Things models. Long Draw Things model names are truncated; hover the row to see the full name.
 - **Execution** — the prompt source, target scope, iteration count, and the **Queue Tasks** button.
 
@@ -203,9 +222,9 @@ The shipped defaults are broad, neutral starter sets across all three categories
 | Batch size | Prompts per conversation turn (1–50) |
 | Max retries per turn | Extra attempts after a transient failure (0–10) |
 | Retry backoff (ms) | Comma-separated delays between attempts |
-| Templates | The four message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, `{{JSON}}` (text-AI templates) and `{{PROMPT}}`, `{{OVERRIDE}}` (override-combine, image AI) are substituted at call time. The shipped text-AI defaults wrap substituted content in explicit XML-like tags so models can see where embedded strings end. The shipped image-model override template is intentionally plain: `{{OVERRIDE}}` first, then `{{PROMPT}}`. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. |
+| Templates | The three message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, and `{{JSON}}` are substituted at call time. The shipped defaults wrap substituted content in explicit XML-like tags so models can see where embedded strings end. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. |
 
-Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce. The shipped `override_combine` template stays deliberately minimal because weaker image models can ignore or literally render scaffolding text; the default simply places the override before the base prompt.
+Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce.
 
 ## Menu
 

@@ -4,10 +4,20 @@ export function createDefaultConfig(): AppConfig {
   return {
     text_ai: {
       backend: 'gemini',
-      api_key: '',
-      timeout_ms: 30000,
-      light_model: 'gemini-3.1-flash-lite',
-      main_model: 'gemini-3-flash-preview'
+      gemini: {
+        api_key: '',
+        timeout_ms: 30000,
+        light_model: 'gemini-3.1-flash-lite',
+        main_model: 'gemini-3-flash-preview'
+      },
+      openai: {
+        // Empty endpoint resolves to the official https://api.openai.com/v1 at call time.
+        endpoint: '',
+        api_key: '',
+        timeout_ms: 60000,
+        light_model: '',
+        main_model: ''
+      }
     },
     general: {
       auto_preview_idle_seconds: 30,
@@ -144,9 +154,6 @@ export function createDefaultConfig(): AppConfig {
 <response_format>
 {{JSON}}
 </response_format>`,
-        override_combine: `{{OVERRIDE}}
-
-{{PROMPT}}`,
       }
     }
   }

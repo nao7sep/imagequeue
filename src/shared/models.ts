@@ -1,6 +1,6 @@
 // Centralized model registry — single source of truth for models, sizes, parameters, and rough cost estimates.
 
-import { BackendId } from './types'
+import { BackendId, TextAIBackendId } from './types'
 
 // --- Size presets ---
 
@@ -416,34 +416,28 @@ export const GROK_MODELS: GrokModelDef[] = [
 
 // --- Text AI backends and models ---
 
-export interface TextAIModelDef {
+export interface GeminiTextModelDef {
   id: string
   label: string
 }
 
-export interface TextAIBackendDef {
-  id: string
-  label: string
-  models: TextAIModelDef[]
-}
-
-export const TEXT_AI_BACKENDS: TextAIBackendDef[] = [
-  {
-    id: 'gemini',
-    label: 'Gemini',
-    // Keep this aligned with the currently documented Gemini text model IDs.
-    models: [
-      { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
-      { id: 'gemini-3.5-flash',              label: 'Gemini 3.5 Flash' },
-      { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash (Preview)' },
-      { id: 'gemini-3.1-flash-lite',         label: 'Gemini 3.1 Flash Lite' }
-    ]
-  }
+// Keep aligned with the currently documented Gemini text model IDs.
+export const GEMINI_TEXT_MODELS: GeminiTextModelDef[] = [
+  { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
+  { id: 'gemini-3.5-flash',              label: 'Gemini 3.5 Flash' },
+  { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash (Preview)' },
+  { id: 'gemini-3.1-flash-lite',         label: 'Gemini 3.1 Flash Lite' }
 ]
 
-export function getTextAIModels(backendId: string): TextAIModelDef[] {
-  return TEXT_AI_BACKENDS.find((b) => b.id === backendId)?.models ?? []
+export interface TextAIBackendOption {
+  id: TextAIBackendId
+  label: string
 }
+
+export const TEXT_AI_BACKEND_OPTIONS: TextAIBackendOption[] = [
+  { id: 'gemini', label: 'Gemini' },
+  { id: 'openai', label: 'OpenAI' }
+]
 
 // --- Lookup helpers ---
 

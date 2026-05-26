@@ -60,8 +60,7 @@
 }
 
 .advanced-seed,
-.advanced-elaborated,
-.advanced-override {
+.advanced-elaborated {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;

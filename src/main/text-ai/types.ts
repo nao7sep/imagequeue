@@ -1,5 +1,5 @@
-// Provider-agnostic text-AI interface. New providers (Claude, OpenAI, etc.)
-// implement TextAIProvider and slot in via getMainProvider/getLightProvider.
+// Provider-agnostic text-AI interface. Implementers slot in via
+// getMainProvider / getLightProvider.
 
 export interface ConversationMessage {
   role: 'user' | 'model'

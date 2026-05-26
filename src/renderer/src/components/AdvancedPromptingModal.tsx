@@ -52,7 +52,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useAdvancedPrompting()
   const {
-    seed, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated, override,
+    seed, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated,
     selectedProprietary, selectedDtFiles, promptMode, targetScope, count, elaboratedPrompts,
   } = state
 
@@ -352,7 +352,6 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       proprietaryCount: targets.proprietary.length,
       drawthingsCount: targets.dt.length,
       iterations: copies,
-      overrideApplied: override.trim().length > 0,
       totalTasks: allTargetCount * copies,
       previousCount: elaboratedPrompts.length,
     })
@@ -377,36 +376,18 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       if (cancelledRef.current) return
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
 
-      // Apply override at queue time (never during elaboration). Empty-string
-      // overrides leave the prompt untouched. Format pulled from
-      // brainstorm.templates.override_combine so users can edit it in
-      // Elaboration Settings (e.g. for non-English workflows). If settings
-      // have not loaded yet, fetch the shipped default from main-process IPC
-      // rather than duplicating the template text in the renderer.
-      const trimmedOverride = override.trim()
-      const overrideTemplate = ((settings?.brainstorm as Record<string, unknown> | undefined)?.templates as Record<string, unknown> | undefined)?.override_combine as string | undefined
-        ?? (trimmedOverride === ''
-          ? undefined
-          : (await window.electronAPI.brainstormGetDefaults()).templates.override_combine)
-      const finalize = (p: string): string => {
-        if (trimmedOverride === '') return p
-        return overrideTemplate!.split('{{PROMPT}}').join(p).split('{{OVERRIDE}}').join(trimmedOverride)
-      }
-
       // Indexing: prompts in iteration-major order so fresh-task reads naturally
       // ("iter 0 across all models, then iter 1 across all models, ...").
       const promptForUnit = (targetIndex: number, copyIndex: number): string => {
-        let raw: string
         if (promptMode === 'as-is' || promptMode === 'elaborated') {
-          raw = prompts[0]
-        } else if (promptMode === 'fresh-iteration') {
-          raw = prompts[copyIndex % prompts.length]
-        } else {
-          // fresh-task
-          const idx = copyIndex * allTargetCount + targetIndex
-          raw = prompts[idx % prompts.length]
+          return prompts[0]
         }
-        return finalize(raw)
+        if (promptMode === 'fresh-iteration') {
+          return prompts[copyIndex % prompts.length]
+        }
+        // fresh-task
+        const idx = copyIndex * allTargetCount + targetIndex
+        return prompts[idx % prompts.length]
       }
 
       const proprietaryUnits = targets.proprietary.map((backendId) => {
@@ -460,7 +441,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     }
   }, [
     queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
-    seed, elaborated, override, runBrainstorm, buildDtParams, elaboratedPrompts.length, settings,
+    seed, elaborated, runBrainstorm, buildDtParams, elaboratedPrompts.length,
     snapshots, clearMessage, showInfo, showError,
   ])
 
@@ -592,14 +573,6 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
                 Elaborated ({elaboratedPrompts.length})
               </button>
             </div>
-            <div className="advanced-section-label">Override</div>
-            <textarea
-              className="advanced-override"
-              rows={3}
-              placeholder="Optional constraint applied to every elaborated prompt."
-              value={override}
-              onChange={(e) => update({ override: e.target.value })}
-            />
           </div>
         </div>
 

@@ -10,7 +10,6 @@ export interface AdvancedPromptingState {
   selectedCompositionElaboratorId: string | null
   selectedStyleElaboratorId: string | null
   elaborated: string
-  override: string
   selectedProprietary: Record<BackendId, boolean>
   selectedDtFiles: string[]
   promptMode: PromptMode
@@ -30,7 +29,6 @@ function emptyState(): AdvancedPromptingState {
     selectedCompositionElaboratorId: null,
     selectedStyleElaboratorId: null,
     elaborated: '',
-    override: '',
     selectedProprietary: {
       openai: false, imagen: false, nanobanana: false, grok: false, flux: false, drawthings: false,
     },

@@ -75,7 +75,7 @@ export interface DrawThingsModelParams {
   negativePrompt: string
 }
 
-export type TextAIBackendId = 'gemini'
+export type TextAIBackendId = 'gemini' | 'openai'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'kept' | 'failed' | 'interrupted'
 export type ElaboratorKind = 'content' | 'composition' | 'style'
 

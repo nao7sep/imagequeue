@@ -16,7 +16,6 @@ interface BrainstormForm {
     first_no_previous: string
     first_with_previous: string
     continuation: string
-    override_combine: string
   }
 }
 
@@ -58,8 +57,6 @@ function checkPlaceholders(form: BrainstormForm): string | null {
   if (!t.first_with_previous.includes('{{PREVIOUS}}')) return 'First (with previous): missing {{PREVIOUS}}.'
   if (!t.first_with_previous.includes('{{N}}')) return 'First (with previous): missing {{N}}.'
   if (!t.continuation.includes('{{N}}')) return 'Continuation: missing {{N}}.'
-  if (!t.override_combine.includes('{{PROMPT}}')) return 'Override combine: missing {{PROMPT}}.'
-  if (!t.override_combine.includes('{{OVERRIDE}}')) return 'Override combine: missing {{OVERRIDE}}.'
   return null
 }
 
@@ -265,19 +262,6 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
               rows={3}
               value={form.templates.continuation}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, continuation: e.target.value } })}
-            />
-          </label>
-
-          <label className="elaboration-settings-template">
-            <span>Override combine</span>
-            <span className="elaboration-settings-tags">{'{{PROMPT}} {{OVERRIDE}}'}</span>
-            <span className="elaboration-settings-hint">
-              Sent to the <em>image</em> model (not the text AI), so {'{{JSON}}'} is not available here. The shipped default is intentionally plain for weak image models: <code>{'{{OVERRIDE}}'}</code> comes first, then <code>{'{{PROMPT}}'}</code>, with no extra wrapper text that might be rendered into the image.
-            </span>
-            <textarea
-              rows={8}
-              value={form.templates.override_combine}
-              onChange={(e) => setForm({ ...form, templates: { ...form.templates, override_combine: e.target.value } })}
             />
           </label>
 

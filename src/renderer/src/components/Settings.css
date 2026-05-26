@@ -9,7 +9,7 @@
   flex-direction: column;
   gap: 12px;
   margin-bottom: 24px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 16px;
   background: var(--bg-secondary);
@@ -23,6 +23,20 @@
   font-size: 14px;
   margin: 0;
   color: var(--accent);
+}
+
+.settings-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.settings-subsection h4 {
+  font-size: 13px;
+  margin: 0;
+  color: var(--text-secondary);
 }
 
 .settings-field {
@@ -67,7 +81,7 @@
 }
 
 .settings-hint {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 0;
@@ -135,7 +149,7 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 12px 24px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-strong);
 }
 
 .settings-status {

@@ -124,7 +124,6 @@ const api = {
       first_no_previous: string
       first_with_previous: string
       continuation: string
-      override_combine: string
     }
   }> =>
     ipcRenderer.invoke('brainstorm:getDefaults'),

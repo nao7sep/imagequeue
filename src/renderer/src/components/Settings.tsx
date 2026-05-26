@@ -3,7 +3,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { formatUiDateTime } from '../utils/formatDateTime'
-import { TEXT_AI_BACKENDS, getTextAIModels, getModelsForBackend } from '../../../shared/models'
+import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
 import type { FluxModelDef } from '../../../shared/models'
 import type { RecommendationStatus } from '../../../shared/types'
 import './Settings.css'
@@ -72,6 +72,8 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   )
 
   const textAi = config.text_ai as Record<string, unknown>
+  const gemini = (textAi.gemini ?? {}) as Record<string, unknown>
+  const openai = (textAi.openai ?? {}) as Record<string, unknown>
   const backends = config.image_backends as Record<string, Record<string, unknown>>
   const prompts = config.prompts as Record<string, string>
   const general = (config.general ?? {}) as Record<string, unknown>
@@ -90,6 +92,14 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
   const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
+  }
+
+  const updateGemini = (key: string, value: unknown): void => {
+    setConfig({ ...config, text_ai: { ...textAi, gemini: { ...gemini, [key]: value } } })
+  }
+
+  const updateOpenai = (key: string, value: unknown): void => {
+    setConfig({ ...config, text_ai: { ...textAi, openai: { ...openai, [key]: value } } })
   }
 
   const updateGeneral = (key: string, value: unknown): void => {
@@ -337,36 +347,63 @@ export function Settings({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>Backend</label>
           <select value={textAi.backend as string} onChange={(e) => updateTextAi('backend', e.target.value)}>
-            {TEXT_AI_BACKENDS.map((b) => (
+            {TEXT_AI_BACKEND_OPTIONS.map((b) => (
               <option key={b.id} value={b.id}>{b.label}</option>
             ))}
           </select>
         </div>
-        <div className="settings-field">
-          <label>API Key</label>
-          <input type="password" value={textAi.api_key as string} onChange={(e) => updateTextAi('api_key', e.target.value)} />
+
+        <div className="settings-subsection">
+          <h4>Gemini</h4>
+          <div className="settings-field">
+            <label>API Key</label>
+            <input type="password" value={gemini.api_key as string} onChange={(e) => updateGemini('api_key', e.target.value)} />
+          </div>
+          <div className="settings-field">
+            <label>Light model</label>
+            <select value={gemini.light_model as string} onChange={(e) => updateGemini('light_model', e.target.value)}>
+              {GEMINI_TEXT_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="settings-field">
+            <label>Main model</label>
+            <select value={gemini.main_model as string} onChange={(e) => updateGemini('main_model', e.target.value)}>
+              {GEMINI_TEXT_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="settings-field">
+            <label>Timeout (s)</label>
+            <input type="number" min={1} step={1} value={(gemini.timeout_ms as number) / 1000} onChange={(e) => updateGemini('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+          </div>
         </div>
-        <div className="settings-field">
-          <label>Light model</label>
-          <select value={textAi.light_model as string} onChange={(e) => updateTextAi('light_model', e.target.value)}>
-            {getTextAIModels(textAi.backend as string).map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-        <p className="settings-hint">Used for short, lightweight tasks like filename slug generation.</p>
-        <div className="settings-field">
-          <label>Main model</label>
-          <select value={textAi.main_model as string} onChange={(e) => updateTextAi('main_model', e.target.value)}>
-            {getTextAIModels(textAi.backend as string).map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-        <p className="settings-hint">Used for general text work, including prompt elaboration in Advanced Prompting.</p>
-        <div className="settings-field">
-          <label>Timeout (s)</label>
-          <input type="number" min={1} step={1} value={(textAi.timeout_ms as number) / 1000} onChange={(e) => updateTextAi('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+
+        <div className="settings-subsection">
+          <h4>OpenAI</h4>
+          <div className="settings-field">
+            <label>Endpoint</label>
+            <input type="text" placeholder="https://api.openai.com/v1" value={openai.endpoint as string} onChange={(e) => updateOpenai('endpoint', e.target.value)} />
+            <p className="settings-hint">Leave empty for the official OpenAI endpoint.</p>
+          </div>
+          <div className="settings-field">
+            <label>API Key</label>
+            <input type="password" value={openai.api_key as string} onChange={(e) => updateOpenai('api_key', e.target.value)} />
+          </div>
+          <div className="settings-field">
+            <label>Light model</label>
+            <input type="text" value={openai.light_model as string} onChange={(e) => updateOpenai('light_model', e.target.value)} />
+          </div>
+          <div className="settings-field">
+            <label>Main model</label>
+            <input type="text" value={openai.main_model as string} onChange={(e) => updateOpenai('main_model', e.target.value)} />
+          </div>
+          <div className="settings-field">
+            <label>Timeout (s)</label>
+            <input type="number" min={1} step={1} value={(openai.timeout_ms as number) / 1000} onChange={(e) => updateOpenai('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+          </div>
         </div>
       </div>
 

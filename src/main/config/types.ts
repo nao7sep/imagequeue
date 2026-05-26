@@ -2,12 +2,26 @@
 
 import { TextAIBackendId } from '../../shared/types'
 
-export interface TextAIConfig {
-  backend: TextAIBackendId
+export interface GeminiTextAIConfig {
   api_key: string
   timeout_ms: number
   light_model: string
   main_model: string
+}
+
+export interface OpenAITextAIConfig {
+  // Empty string means the official OpenAI endpoint (https://api.openai.com/v1).
+  endpoint: string
+  api_key: string
+  timeout_ms: number
+  light_model: string
+  main_model: string
+}
+
+export interface TextAIConfig {
+  backend: TextAIBackendId
+  gemini: GeminiTextAIConfig
+  openai: OpenAITextAIConfig
 }
 
 export interface OpenAIBackendConfig {
@@ -110,9 +124,6 @@ export interface BrainstormTemplates {
   first_with_previous: string
   // Sent on turns 2+ within the same conversation. Placeholder: {{N}}.
   continuation: string
-  // Applied at queue time to combine an elaborated prompt with the user's
-  // override. Placeholders: {{PROMPT}}, {{OVERRIDE}}.
-  override_combine: string
 }
 
 export interface BrainstormConfig {
