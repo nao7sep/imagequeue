@@ -29,10 +29,87 @@ import {
   resolveRecommendedParams
 } from './recommendations'
 import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
-import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type DrawThingsModelParams } from '../shared/types'
+import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type CloudBackendId, type DrawThingsModelParams } from '../shared/types'
 
 function readClipboardText(): string {
   return clipboard.readText()
+}
+
+const cloudBackendIds = new Set<string>(CLOUD_BACKEND_IDS_IN_UI_ORDER)
+const notificationFields = new Set<string>([
+  'notifications_enabled',
+  'sounds_enabled',
+  'volume',
+  'success_file',
+  'failure_file',
+])
+const settingsRootFields = new Set<string>([
+  'text_ai',
+  'general',
+  'image_backends',
+  'notifications',
+  'prompts',
+])
+const encodedApiKeyPaths = new Set<string>([
+  'text_ai.gemini.api_key',
+  'text_ai.openai.api_key',
+  ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => `image_backends.${backend}.api_key`),
+])
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function valueForConfigPath(pathParts: string[], value: unknown): unknown {
+  return encodedApiKeyPaths.has(pathParts.join('.')) ? encodeApiKey(String(value ?? '')) : value
+}
+
+function setConfigPath(target: Record<string, unknown>, pathParts: string[], value: unknown): void {
+  if (pathParts.length === 0) return
+  let cursor = target
+  for (const part of pathParts.slice(0, -1)) {
+    const next = cursor[part]
+    if (!isPlainObject(next)) {
+      cursor[part] = {}
+    }
+    cursor = cursor[part] as Record<string, unknown>
+  }
+  cursor[pathParts[pathParts.length - 1]] = valueForConfigPath(pathParts, value)
+}
+
+function applyChangedFields(
+  target: Record<string, unknown>,
+  base: unknown,
+  next: unknown,
+  pathParts: string[] = []
+): void {
+  if (valuesEqual(base, next)) return
+
+  if (pathParts.length === 0) {
+    if (!isPlainObject(next)) throw new Error('Settings changes must be an object')
+    for (const key of Object.keys(next)) {
+      const baseValue = isPlainObject(base) ? base[key] : undefined
+      if (!settingsRootFields.has(key)) {
+        if (valuesEqual(baseValue, next[key])) continue
+        throw new Error(`Cannot save unsupported settings section: ${key}`)
+      }
+      applyChangedFields(target, baseValue, next[key], [key])
+    }
+    return
+  }
+
+  if (isPlainObject(next)) {
+    for (const key of Object.keys(next)) {
+      applyChangedFields(target, isPlainObject(base) ? base[key] : undefined, next[key], [...pathParts, key])
+    }
+    return
+  }
+
+  setConfigPath(target, pathParts, next)
 }
 
 // IPC handlers for reading/writing settings.
@@ -50,14 +127,55 @@ export function registerSettingsIpc(): void {
     return config
   })
 
-  ipcMain.handle('settings:save', (_event, config: AppConfig) => {
-    // Always encode API keys before persisting (renderer sends plain text)
-    config.text_ai.gemini.api_key = encodeApiKey(config.text_ai.gemini.api_key)
-    config.text_ai.openai.api_key = encodeApiKey(config.text_ai.openai.api_key)
-    for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-      config.image_backends[backend].api_key = encodeApiKey(config.image_backends[backend].api_key)
+  ipcMain.handle('settings:saveChangedFields', (_event, base: AppConfig, next: AppConfig) => {
+    const config = loadConfig()
+    applyChangedFields(config as unknown as Record<string, unknown>, base, next)
+    saveConfig(config)
+    return { success: true }
+  })
+
+  ipcMain.handle('settings:saveBrainstorm', (_event, brainstorm: AppConfig['brainstorm']) => {
+    const config = loadConfig()
+    config.brainstorm = brainstorm
+    saveConfig(config)
+    return { success: true }
+  })
+
+  ipcMain.handle(
+    'settings:saveImageBackendDefaults',
+    (_event, backend: CloudBackendId, model: string, params: Record<string, unknown>) => {
+      if (!cloudBackendIds.has(backend)) {
+        throw new Error(`Cannot save image backend defaults for unsupported backend: ${backend}`)
+      }
+
+      const config = loadConfig()
+      const backends = config.image_backends as unknown as Record<
+        CloudBackendId,
+        { model: string; default_params: Record<string, unknown> } & Record<string, unknown>
+      >
+      const current = backends[backend]
+      backends[backend] = {
+        ...current,
+        model,
+        default_params: {
+          ...current.default_params,
+          ...params,
+        },
+      }
+
+      saveConfig(config)
+      return { success: true }
+    }
+  )
+
+  ipcMain.handle('settings:saveNotificationField', (_event, field: string, value: unknown) => {
+    if (!notificationFields.has(field)) {
+      throw new Error(`Cannot save unsupported notification setting: ${field}`)
     }
 
+    const config = loadConfig()
+    const notifications = config.notifications as unknown as Record<string, unknown>
+    notifications[field] = value
     saveConfig(config)
     return { success: true }
   })

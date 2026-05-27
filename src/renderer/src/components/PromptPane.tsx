@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
-  const { settings, updateSettings } = useSettings()
+  const { settings, saveNotificationField } = useSettings()
 
   const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
@@ -23,14 +23,9 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const [localVolume, setLocalVolume] = useState<number>(volume)
   useEffect(() => { setLocalVolume(volume) }, [volume])
 
-  const saveNotificationField = useCallback((field: string, value: unknown): void => {
-    if (!settings) return
-    const next = {
-      ...settings,
-      notifications: { ...(settings.notifications as Record<string, unknown> ?? {}), [field]: value }
-    }
-    void updateSettings(next)
-  }, [settings, updateSettings])
+  const persistNotificationField = useCallback((field: string, value: unknown): void => {
+    void saveNotificationField(field, value)
+  }, [saveNotificationField])
 
   const handleSendToAll = useCallback(() => {
     if (!prompt.trim()) return
@@ -210,7 +205,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             <input
               type="checkbox"
               checked={notificationsEnabled}
-              onChange={(e) => saveNotificationField('notifications_enabled', e.target.checked)}
+              onChange={(e) => persistNotificationField('notifications_enabled', e.target.checked)}
             />
             Notify
           </label>
@@ -218,7 +213,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             <input
               type="checkbox"
               checked={soundsEnabled}
-              onChange={(e) => saveNotificationField('sounds_enabled', e.target.checked)}
+              onChange={(e) => persistNotificationField('sounds_enabled', e.target.checked)}
             />
             Sound
           </label>
@@ -231,7 +226,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             value={localVolume}
             title={`Volume: ${Math.round(localVolume * 100)}%`}
             onChange={(e) => setLocalVolume(parseFloat(e.target.value))}
-            onPointerUp={(e) => saveNotificationField('volume', parseFloat((e.target as HTMLInputElement).value))}
+            onPointerUp={(e) => persistNotificationField('volume', parseFloat((e.target as HTMLInputElement).value))}
           />
           <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
             Send to All

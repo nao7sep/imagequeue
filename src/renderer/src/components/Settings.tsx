@@ -12,11 +12,24 @@ interface Props {
   onClose: () => void
 }
 
+function cloneSettings(value: Record<string, unknown> | null): Record<string, unknown> | null {
+  return value ? JSON.parse(JSON.stringify(value)) as Record<string, unknown> : null
+}
+
+function withNotificationField(config: Record<string, unknown> | null, key: string, value: unknown): Record<string, unknown> | null {
+  if (!config) return config
+  return {
+    ...config,
+    notifications: { ...(config.notifications as Record<string, unknown> ?? {}), [key]: value },
+  }
+}
+
 export function Settings({ onClose }: Props): React.JSX.Element {
-  const { settings, updateSettings } = useSettings()
+  const { settings, saveChangedSettings, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   // Local copy — user edits freely; changes commit to context only on Save
-  const [config, setConfig] = useState<Record<string, unknown> | null>(() => settings)
+  const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
+  const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [status, setStatus] = useState('')
   const [settingsVolume, setSettingsVolume] = useState<number>((((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7)
   useEffect(() => {
@@ -26,17 +39,23 @@ export function Settings({ onClose }: Props): React.JSX.Element {
   const [recommendationStatus, setRecommendationStatus] = useState<RecommendationStatus | null>(null)
   const [recommendationMessage, setRecommendationMessage] = useState('')
   const [recommendationBusy, setRecommendationBusy] = useState(false)
-  const [originalSnapshot, setOriginalSnapshot] = useState<string>(() => JSON.stringify(settings))
+  useEffect(() => {
+    if (config || !settings) return
+    const next = cloneSettings(settings)
+    setConfig(next)
+    setBaseConfig(cloneSettings(settings))
+  }, [config, settings])
 
   const dirty = useMemo(
-    () => (config ? JSON.stringify(config) !== originalSnapshot : false),
-    [config, originalSnapshot]
+    () => (config && baseConfig ? JSON.stringify(config) !== JSON.stringify(baseConfig) : false),
+    [config, baseConfig]
   )
 
   const handleSave = async (): Promise<void> => {
-    if (!config) return
-    await updateSettings(config)
-    setOriginalSnapshot(JSON.stringify(config))
+    if (!config || !baseConfig) return
+    const fresh = await saveChangedSettings(baseConfig, config)
+    setConfig(cloneSettings(fresh))
+    setBaseConfig(cloneSettings(fresh))
     setStatus('Saved')
     setTimeout(() => setStatus(''), 2000)
   }
@@ -113,18 +132,11 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
   // Notification toggles and volume save immediately (bypass staged config).
   const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
-    const current = await window.electronAPI.getSettings() as Record<string, unknown>
-    const merged = {
-      ...current,
-      notifications: { ...(current.notifications as Record<string, unknown> ?? {}), [key]: value }
-    }
-    await updateSettings(merged)
-    // Mirror into local staged config so the UI stays consistent if user then saves.
-    setConfig((prev) => prev ? {
-      ...prev,
-      notifications: { ...(prev.notifications as Record<string, unknown> ?? {}), [key]: value }
-    } : prev)
-  }, [updateSettings])
+    await saveNotificationField(key, value)
+    // Immediate settings are no longer dirty once the main process accepts them.
+    setConfig((prev) => withNotificationField(prev, key, value))
+    setBaseConfig((prev) => withNotificationField(prev, key, value))
+  }, [saveNotificationField])
 
   const updateBackend = (backend: string, key: string, value: unknown): void => {
     setConfig({

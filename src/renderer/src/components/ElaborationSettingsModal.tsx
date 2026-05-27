@@ -61,30 +61,28 @@ function checkPlaceholders(form: BrainstormForm): string | null {
 }
 
 export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element {
-  const { settings, updateSettings } = useSettings()
+  const { settings, saveBrainstormSettings } = useSettings()
   const confirm = useConfirm()
   const [form, setForm] = useState<BrainstormForm | null>(null)
+  const [baseForm, setBaseForm] = useState<BrainstormForm | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
   // Initialize the form from settings.brainstorm. Only run once per modal
   // open; the user's edits live in form state until Save.
   useEffect(() => {
-    if (!settings) return
+    if (!settings || form) return
     const bs = settings.brainstorm as BrainstormConfig | undefined
     if (!bs) return
-    setForm(fromConfig(bs))
-  }, [settings])
-
-  const original = useMemo(() => {
-    const bs = settings?.brainstorm as BrainstormConfig | undefined
-    return bs ? fromConfig(bs) : null
-  }, [settings])
+    const next = fromConfig(bs)
+    setForm(next)
+    setBaseForm(fromConfig(bs))
+  }, [settings, form])
 
   const dirty = useMemo(() => {
-    if (!form || !original) return false
-    return JSON.stringify(form) !== JSON.stringify(original)
-  }, [form, original])
+    if (!form || !baseForm) return false
+    return JSON.stringify(form) !== JSON.stringify(baseForm)
+  }, [form, baseForm])
 
   const handleReset = useCallback(async (): Promise<void> => {
     const ok = await confirm({
@@ -107,7 +105,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   }, [confirm])
 
   const handleSave = useCallback(async (): Promise<void> => {
-    if (!form || !settings) return
+    if (!form) return
     if (form.batch_size < 1 || form.batch_size > 50 || !Number.isInteger(form.batch_size)) {
       setMessage('Batch size must be an integer between 1 and 50.')
       return
@@ -134,25 +132,22 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     setBusy(true)
     setMessage('')
     try {
-      const next: Record<string, unknown> = {
-        ...settings,
-        brainstorm: {
-          batch_size: form.batch_size,
-          max_retries_per_turn: form.max_retries_per_turn,
-          retry_backoff_ms: backoff.value,
-          templates: { ...form.templates },
-        },
+      const next = {
+        batch_size: form.batch_size,
+        max_retries_per_turn: form.max_retries_per_turn,
+        retry_backoff_ms: backoff.value,
+        templates: { ...form.templates },
       }
       // Main logs `Config saved` whenever the config file is rewritten, so
       // there's nothing extra to record from the renderer side here.
-      await updateSettings(next)
+      await saveBrainstormSettings(next)
       onClose()
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
-  }, [form, settings, updateSettings, onClose, confirm])
+  }, [form, saveBrainstormSettings, onClose, confirm])
 
   const handleCancel = useCallback(async (): Promise<void> => {
     if (dirty) {

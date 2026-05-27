@@ -3,7 +3,7 @@ import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
-import type { BackendId, Task, CliStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
+import type { BackendId, CloudBackendId, Task, CliStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
 import {
   getModelsForBackend,
   findModel,
@@ -30,6 +30,13 @@ import {
   type GrokResolution
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
+import { useAutosavedImageBackendDefaults } from '../hooks/useAutosavedImageBackendDefaults'
+import {
+  normalizeOpenAiDimension,
+  resolveOpenAiSize,
+  resolveSavedImageBackendDefaults,
+  type SavedImageBackendDefaults,
+} from '../utils/imageBackendDefaults'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import './QueueColumn.css'
 
@@ -68,43 +75,15 @@ function findPresetValue(sizes: SizePreset[], width: number, height: number): st
   return preset ? `${preset.width}x${preset.height}` : null
 }
 
-function normalizeOpenAiDimension(value: number): number {
-  if (!Number.isFinite(value)) return OPENAI_GPT2_MIN_EDGE
-  const rounded = Math.round(value / OPENAI_GPT2_SIZE_STEP) * OPENAI_GPT2_SIZE_STEP
-  return Math.max(OPENAI_GPT2_MIN_EDGE, Math.min(OPENAI_GPT2_MAX_EDGE, rounded))
-}
-
-function resolveOpenAiSize(modelDef: OpenAIModelDef, width: unknown, height: unknown): { width: number; height: number } {
-  const fallback = modelDef.sizes[0] ?? { label: '1024×1024', width: 1024, height: 1024 }
-  const matchingPreset = typeof width === 'number' && typeof height === 'number'
-    ? modelDef.sizes.find((size) => size.width === width && size.height === height)
-    : null
-
-  if (!modelDef.supportsCustomSizes) {
-    const next = matchingPreset ?? fallback
-    return { width: next.width, height: next.height }
-  }
-
-  if (typeof width !== 'number' || typeof height !== 'number') {
-    return { width: fallback.width, height: fallback.height }
-  }
-
-  return {
-    width: normalizeOpenAiDimension(width),
-    height: normalizeOpenAiDimension(height),
-  }
-}
-
 export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.Element {
   const { tasks, enqueue } = useQueue()
   const { selection, select, clear } = useSelection()
-  const { settings, updateSettings } = useSettings()
+  const { settings, saveImageBackendDefaults } = useSettings()
   const { setSnapshot } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId as 'openai')
   const defaultModel = models.find((m) => m.isDefault) ?? models[0]
   const [model, setModel] = useState(defaultModel?.id ?? '')
-  const proprietarySaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const persistedProprietarySnapshotRef = useRef('')
+  const proprietaryBackend = backendId === 'drawthings' ? null : backendId as CloudBackendId
 
   // For openai: the full model definition, used to drive dynamic size/quality/background options
   const openaiModelDef = useMemo(
@@ -183,24 +162,42 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const [loadedModel, setLoadedModel] = useState('')
 
   const columnTasks = tasks[backendId]
+  const settingsLoaded = settings !== null
   const backendSettings = useMemo(
     () => (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.[backendId] ?? null,
     [settings, backendId]
   )
-  const drawThingsFallbacks = useMemo(() => {
-    const params = (
-      (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
-        ?.default_params as Record<string, unknown> | undefined
-    ) ?? {}
-    return {
-      width: (params.fallback_width as number | undefined) ?? 1024,
-      height: (params.fallback_height as number | undefined) ?? 1024,
-      steps: (params.fallback_steps as number | undefined) ?? 4,
-      guidance: (params.fallback_guidance as number | undefined) ?? 1,
-      seed: params.seed == null ? '' : String(params.seed),
-      negativePrompt: (params.fallback_negative_prompt as string | undefined) ?? '',
-    }
-  }, [settings])
+  const savedProprietaryDefaults = useMemo(
+    () => proprietaryBackend
+      ? resolveSavedImageBackendDefaults(proprietaryBackend, backendSettings, models, defaultModel)
+      : null,
+    [proprietaryBackend, backendSettings, models, defaultModel]
+  )
+  const drawThingsDefaultParams = (
+    (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
+      ?.default_params as Record<string, unknown> | undefined
+  ) ?? {}
+  const drawThingsFallbackWidth = (drawThingsDefaultParams.fallback_width as number | undefined) ?? 1024
+  const drawThingsFallbackHeight = (drawThingsDefaultParams.fallback_height as number | undefined) ?? 1024
+  const drawThingsFallbackSteps = (drawThingsDefaultParams.fallback_steps as number | undefined) ?? 4
+  const drawThingsFallbackGuidance = (drawThingsDefaultParams.fallback_guidance as number | undefined) ?? 1
+  const drawThingsFallbackSeed = drawThingsDefaultParams.seed == null ? '' : String(drawThingsDefaultParams.seed)
+  const drawThingsFallbackNegativePrompt = (drawThingsDefaultParams.fallback_negative_prompt as string | undefined) ?? ''
+  const drawThingsFallbacks = useMemo(() => ({
+    width: drawThingsFallbackWidth,
+    height: drawThingsFallbackHeight,
+    steps: drawThingsFallbackSteps,
+    guidance: drawThingsFallbackGuidance,
+    seed: drawThingsFallbackSeed,
+    negativePrompt: drawThingsFallbackNegativePrompt,
+  }), [
+    drawThingsFallbackWidth,
+    drawThingsFallbackHeight,
+    drawThingsFallbackSteps,
+    drawThingsFallbackGuidance,
+    drawThingsFallbackSeed,
+    drawThingsFallbackNegativePrompt,
+  ])
   const currentDrawThingsParams = useMemo(
     () => buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt),
     [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt]
@@ -254,10 +251,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
   const handleOpenAiHeightChange = useCallback((value: string): void => {
     setOpenaiHeight(normalizeOpenAiDimension(Number.parseInt(value, 10)))
-  }, [])
-
-  const serializeProprietarySnapshot = useCallback((nextModel: string, params: Record<string, unknown>): string => {
-    return JSON.stringify({ model: nextModel, params })
   }, [])
 
   const refreshDrawThingsModels = useCallback((isInitial = false): void => {
@@ -430,138 +423,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
   }, [backendId, model, loadedModel, currentDrawThingsParams])
 
-  useEffect(() => {
-    if (!backendSettings || backendId === 'drawthings') return
-
-    const savedDefaultParams = (backendSettings.default_params as Record<string, unknown> | undefined) ?? {}
-    const savedModel = typeof backendSettings.model === 'string' && models.some((m) => m.id === backendSettings.model)
-      ? backendSettings.model
-      : (defaultModel?.id ?? '')
-
-    setModel(savedModel)
-
-    if (backendId === 'openai') {
-      const nextModelDef = (models.find((m) => m.id === savedModel) ?? defaultModel) as OpenAIModelDef | undefined
-      if (!nextModelDef) return
-      const nextSize = resolveOpenAiSize(nextModelDef, savedDefaultParams.width, savedDefaultParams.height)
-      const nextModeration = typeof savedDefaultParams.moderation === 'string' && nextModelDef.moderations.includes(savedDefaultParams.moderation as OpenAIModeration)
-        ? savedDefaultParams.moderation as OpenAIModeration
-        : (nextModelDef.moderations.find((moderation) => moderation === 'auto') ?? nextModelDef.moderations[0])
-      const nextQuality = typeof savedDefaultParams.quality === 'string' && nextModelDef.qualities.includes(savedDefaultParams.quality as OpenAIQuality)
-        ? savedDefaultParams.quality as OpenAIQuality
-        : (nextModelDef.qualities.find((quality) => quality === 'auto') ?? nextModelDef.qualities[0])
-      const nextOutputFormat = typeof savedDefaultParams.outputFormat === 'string' && nextModelDef.outputFormats.includes(savedDefaultParams.outputFormat as OpenAIOutputFormat)
-        ? savedDefaultParams.outputFormat as OpenAIOutputFormat
-        : (nextModelDef.outputFormats.find((format) => format === 'png') ?? nextModelDef.outputFormats[0])
-      const nextBackground = typeof savedDefaultParams.background === 'string' && nextModelDef.backgrounds.includes(savedDefaultParams.background as OpenAIBackground)
-        ? savedDefaultParams.background as OpenAIBackground
-        : (nextModelDef.backgrounds.find((background) => background === 'opaque') ?? nextModelDef.backgrounds[0])
-      setOpenaiWidth(nextSize.width)
-      setOpenaiHeight(nextSize.height)
-      setModeration(nextModeration)
-      setQuality(nextQuality)
-      setOutputFormat(nextOutputFormat)
-      setBackground(nextBackground)
-      persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(savedModel, {
-        width: nextSize.width,
-        height: nextSize.height,
-        moderation: nextModeration,
-        quality: nextQuality,
-        outputFormat: nextOutputFormat,
-        background: nextBackground,
-      })
-      return
-    }
-
-    if (backendId === 'imagen') {
-      const nextModelDef = (models.find((m) => m.id === savedModel) ?? defaultModel) as unknown as ImagenModelDef | undefined
-      if (!nextModelDef) return
-      const nextAspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && IMAGEN_ASPECT_RATIOS.some((item) => item.value === savedDefaultParams.aspectRatio)
-        ? savedDefaultParams.aspectRatio
-        : '1:1'
-      const nextImageSize = typeof savedDefaultParams.imageSize === 'string' && nextModelDef.imageSizes.some((item) => item.value === savedDefaultParams.imageSize)
-        ? savedDefaultParams.imageSize
-        : '1K'
-      const nextPersonGeneration = typeof savedDefaultParams.personGeneration === 'string' && nextModelDef.personGeneration.includes(savedDefaultParams.personGeneration as ImagenPersonGeneration)
-        ? savedDefaultParams.personGeneration as ImagenPersonGeneration
-        : (nextModelDef.personGeneration.find((value) => value === 'allow_all') ?? nextModelDef.personGeneration[0])
-      setAspectRatio(nextAspectRatio)
-      setImageSize(nextImageSize)
-      setPersonGeneration(nextPersonGeneration)
-      persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(savedModel, {
-        aspectRatio: nextAspectRatio,
-        imageSize: nextImageSize,
-        personGeneration: nextPersonGeneration,
-      })
-      return
-    }
-
-    if (backendId === 'nanobanana') {
-      const nextModelDef = (models.find((m) => m.id === savedModel) ?? defaultModel) as unknown as NanoBananaModelDef | undefined
-      if (!nextModelDef) return
-      const nextAspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && nextModelDef.aspectRatios.some((item) => item.value === savedDefaultParams.aspectRatio)
-        ? savedDefaultParams.aspectRatio
-        : (nextModelDef.aspectRatios[0]?.value ?? '1:1')
-      const nextImageSize = typeof savedDefaultParams.imageSize === 'string' && nextModelDef.imageSizes.some((item) => item.value === savedDefaultParams.imageSize)
-        ? savedDefaultParams.imageSize
-        : (nextModelDef.imageSizes[0]?.value ?? '1K')
-      setNanoBananaAspectRatio(nextAspectRatio)
-      setNanoBananaImageSize(nextImageSize)
-      persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(
-        savedModel,
-        nextModelDef.supportsImageConfig ? { aspectRatio: nextAspectRatio, imageSize: nextImageSize } : {}
-      )
-      return
-    }
-
-    if (backendId === 'grok') {
-      const nextAspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && GROK_ASPECT_RATIOS.some((item) => item.value === savedDefaultParams.aspectRatio)
-        ? savedDefaultParams.aspectRatio as GrokAspectRatio
-        : '1:1'
-      const nextResolution = typeof savedDefaultParams.resolution === 'string' && GROK_RESOLUTIONS.some((item) => item.value === savedDefaultParams.resolution)
-        ? savedDefaultParams.resolution as GrokResolution
-        : '1k'
-      setGrokAspectRatio(nextAspectRatio)
-      setGrokResolution(nextResolution)
-      persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(savedModel, {
-        aspectRatio: nextAspectRatio,
-        resolution: nextResolution,
-      })
-      return
-    }
-
-    if (backendId === 'flux') {
-      const nextModelDef = (models.find((m) => m.id === savedModel) ?? defaultModel) as unknown as FluxModelDef | undefined
-      if (!nextModelDef) return
-      const nextSizeIdx = FLUX_SIZES.findIndex(
-        (size) => size.width === savedDefaultParams.width && size.height === savedDefaultParams.height
-      )
-      const size = FLUX_SIZES[nextSizeIdx >= 0 ? nextSizeIdx : 0]
-      const nextSteps = nextModelDef.stepsRange && typeof savedDefaultParams.steps === 'number'
-        ? Math.max(nextModelDef.stepsRange.min, Math.min(nextModelDef.stepsRange.max, savedDefaultParams.steps))
-        : (nextModelDef.stepsRange?.default ?? 50)
-      const nextGuidance = nextModelDef.guidanceRange && typeof savedDefaultParams.guidance === 'number'
-        ? Math.max(nextModelDef.guidanceRange.min, Math.min(nextModelDef.guidanceRange.max, savedDefaultParams.guidance))
-        : (nextModelDef.guidanceRange?.default ?? 5)
-      const nextSeed = savedDefaultParams.seed == null ? '' : String(savedDefaultParams.seed)
-      setFluxSizeIdx(nextSizeIdx >= 0 ? nextSizeIdx : 0)
-      if (nextModelDef.stepsRange) setFluxSteps(nextSteps)
-      if (nextModelDef.guidanceRange) setFluxGuidance(nextGuidance)
-      setFluxSeed(nextSeed)
-      const normalizedParams: Record<string, unknown> = { width: size.width, height: size.height }
-      if (nextModelDef.stepsRange) normalizedParams.steps = nextSteps
-      if (nextModelDef.guidanceRange) normalizedParams.guidance = nextGuidance
-      if (nextSeed) normalizedParams.seed = Number.parseInt(nextSeed, 10)
-      persistedProprietarySnapshotRef.current = serializeProprietarySnapshot(savedModel, normalizedParams)
-    }
-  }, [
-    backendId,
-    backendSettings,
-    models,
-    defaultModel,
-    serializeProprietarySnapshot,
-  ])
-
   // Update defaults when model changes
   useEffect(() => {
     if (backendId === 'openai' && openaiModelDef) {
@@ -627,7 +488,7 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
       if (fluxModelDef?.stepsRange) params.steps = fluxSteps
       if (fluxModelDef?.guidanceRange) params.guidance = fluxGuidance
       const parsedSeed = fluxSeed ? Number.parseInt(fluxSeed, 10) : NaN
-      if (!Number.isNaN(parsedSeed)) params.seed = parsedSeed
+      params.seed = Number.isNaN(parsedSeed) ? null : parsedSeed
       return params
     }
     if (backendId === 'drawthings') {
@@ -678,6 +539,52 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     nanoBananaImageSize
   ])
 
+  const applySavedProprietaryDefaults = useCallback((saved: SavedImageBackendDefaults): void => {
+    setModel(saved.model)
+    const ui = saved.ui
+    if (backendId === 'openai') {
+      setOpenaiWidth(ui.width as number)
+      setOpenaiHeight(ui.height as number)
+      setModeration(ui.moderation as OpenAIModeration)
+      setQuality(ui.quality as OpenAIQuality)
+      setOutputFormat(ui.outputFormat as OpenAIOutputFormat)
+      setBackground(ui.background as OpenAIBackground)
+      return
+    }
+    if (backendId === 'imagen') {
+      setAspectRatio(ui.aspectRatio as string)
+      setImageSize(ui.imageSize as string)
+      setPersonGeneration(ui.personGeneration as ImagenPersonGeneration)
+      return
+    }
+    if (backendId === 'nanobanana') {
+      setNanoBananaAspectRatio(ui.aspectRatio as string)
+      setNanoBananaImageSize(ui.imageSize as string)
+      return
+    }
+    if (backendId === 'grok') {
+      setGrokAspectRatio(ui.aspectRatio as GrokAspectRatio)
+      setGrokResolution(ui.resolution as GrokResolution)
+      return
+    }
+    if (backendId === 'flux') {
+      setFluxSizeIdx(ui.sizeIdx as number)
+      if (typeof ui.steps === 'number') setFluxSteps(ui.steps)
+      if (typeof ui.guidance === 'number') setFluxGuidance(ui.guidance)
+      setFluxSeed(ui.seed as string)
+    }
+  }, [backendId])
+
+  useAutosavedImageBackendDefaults({
+    backend: proprietaryBackend,
+    settingsLoaded,
+    saved: savedProprietaryDefaults,
+    currentModel: model,
+    currentParams: currentEnqueueParams,
+    applySaved: applySavedProprietaryDefaults,
+    saveDefaults: saveImageBackendDefaults,
+  })
+
   useEffect(() => {
     if (!model) {
       setSnapshot(backendId, null)
@@ -689,49 +596,6 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   useEffect(() => {
     return () => { setSnapshot(backendId, null) }
   }, [backendId, setSnapshot])
-
-  useEffect(() => {
-    if (backendId === 'drawthings' || !settings || !model) return
-    const nextSnapshot = serializeProprietarySnapshot(model, currentEnqueueParams)
-    if (nextSnapshot === persistedProprietarySnapshotRef.current) return
-    if (proprietarySaveTimerRef.current) clearTimeout(proprietarySaveTimerRef.current)
-    proprietarySaveTimerRef.current = setTimeout(() => {
-      proprietarySaveTimerRef.current = null
-      const backends = (settings.image_backends as Record<string, Record<string, unknown>> | undefined) ?? {}
-      const currentBackendSettings = backends[backendId] ?? {}
-      const nextSettings = {
-        ...settings,
-        image_backends: {
-          ...backends,
-          [backendId]: {
-            ...currentBackendSettings,
-            model,
-            default_params: {
-              ...((currentBackendSettings.default_params as Record<string, unknown> | undefined) ?? {}),
-              ...currentEnqueueParams,
-            },
-          },
-        },
-      }
-      void updateSettings(nextSettings).then(() => {
-        persistedProprietarySnapshotRef.current = nextSnapshot
-      }).catch((error) => {
-        void window.electronAPI.appLog('error', 'Failed to persist proprietary queue defaults', {
-          backend: backendId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
-    }, 800)
-    return () => {
-      if (proprietarySaveTimerRef.current) clearTimeout(proprietarySaveTimerRef.current)
-    }
-  }, [backendId, settings, model, currentEnqueueParams, serializeProprietarySnapshot, updateSettings])
-
-  useEffect(() => {
-    return () => {
-      if (proprietarySaveTimerRef.current) clearTimeout(proprietarySaveTimerRef.current)
-    }
-  }, [])
 
   const doEnqueue = useCallback((prompt: string, countOverride?: number) => {
     if (!prompt.trim()) return

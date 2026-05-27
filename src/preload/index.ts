@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   BackendId,
+  CloudBackendId,
   Elaborator,
   ElaboratorKind,
   EnqueueBatchUnit,
@@ -164,8 +165,24 @@ const api = {
   getSettings: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('settings:get'),
 
-  saveSettings: (config: Record<string, unknown>): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:save', config),
+  saveChangedSettings: (
+    base: Record<string, unknown>,
+    next: Record<string, unknown>
+  ): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:saveChangedFields', base, next),
+
+  saveBrainstormSettings: (brainstorm: Record<string, unknown>): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
+
+  saveImageBackendDefaults: (
+    backend: CloudBackendId,
+    model: string,
+    params: Record<string, unknown>
+  ): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:saveImageBackendDefaults', backend, model, params),
+
+  saveNotificationField: (field: string, value: unknown): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:saveNotificationField', field, value),
 
   checkLocalModel: (filename: string): Promise<boolean> =>
     ipcRenderer.invoke('settings:checkLocalModel', filename),

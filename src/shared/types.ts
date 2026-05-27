@@ -1,6 +1,7 @@
 // Shared types between main and renderer processes.
 
 export type BackendId = 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
+export type CloudBackendId = Exclude<BackendId, 'drawthings'>
 
 export const BACKEND_IDS_IN_UI_ORDER: BackendId[] = [
   'openai',
@@ -12,7 +13,7 @@ export const BACKEND_IDS_IN_UI_ORDER: BackendId[] = [
 ]
 
 export const CLOUD_BACKEND_IDS_IN_UI_ORDER = BACKEND_IDS_IN_UI_ORDER.filter(
-  (backend): backend is Exclude<BackendId, 'drawthings'> => backend !== 'drawthings'
+  (backend): backend is CloudBackendId => backend !== 'drawthings'
 )
 
 export const BACKEND_LABELS: Record<BackendId, string> = {
