@@ -8,5 +8,6 @@ export {
   resumeSession,
   deleteSession,
   resolveSessionDir,
+  dropCurrentSessionIfEmpty,
 } from './state'
 export { registerSessionIpc } from './ipc'

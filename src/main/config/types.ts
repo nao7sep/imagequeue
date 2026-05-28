@@ -139,6 +139,7 @@ export interface GeneralConfig {
   confirm_remove: boolean
   confirm_delete: boolean
   delete_to_trash: boolean
+  drop_empty_sessions: boolean
 }
 
 export interface NotificationsConfig {

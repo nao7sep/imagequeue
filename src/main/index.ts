@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
-import { initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
+import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
@@ -128,11 +128,32 @@ app.on('window-all-closed', () => {
 // to any window. The viewer's close handler calls event.preventDefault() to
 // convert OS-close into a hide; if that fired during quit, will-quit would
 // never be reached and the app would get stuck.
-app.on('before-quit', () => {
-  drainPendingModelParamsWrites()
-  closeViewerWindow()
-  closeNotificationWindow()
-  killAllCliJobs()
+//
+// The handler is async because dropCurrentSessionIfEmpty may call
+// shell.trashItem. We preventDefault the first invocation, finish cleanup,
+// then call app.exit() to bypass re-entry into this handler.
+let quitInProgress = false
+app.on('before-quit', (event) => {
+  if (quitInProgress) return
+  event.preventDefault()
+  quitInProgress = true
+  void (async () => {
+    try {
+      drainPendingModelParamsWrites()
+      closeViewerWindow()
+      closeNotificationWindow()
+      killAllCliJobs()
+      try {
+        await dropCurrentSessionIfEmpty('quit')
+      } catch (err) {
+        log('warn', 'Failed to drop empty session on quit', {
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
+    } finally {
+      app.exit()
+    }
+  })()
 })
 
 app.on('will-quit', () => {

@@ -266,6 +266,17 @@ export function Settings({ onClose }: Props): React.JSX.Element {
                 <span className="settings-panel-check-desc">Move deleted task files and session folders to Trash instead of permanently deleting them.</span>
               </span>
             </label>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(general.drop_empty_sessions as boolean) ?? true}
+                onChange={(e) => updateGeneral('drop_empty_sessions', e.target.checked)}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Drop empty sessions</span>
+                <span className="settings-panel-check-desc">Automatically delete the session folder when leaving or quitting if no tasks remain. Honors Delete to Trash.</span>
+              </span>
+            </label>
           </div>
         </div>
       </div>

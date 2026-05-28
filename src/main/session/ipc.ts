@@ -12,16 +12,16 @@ import {
 } from './state'
 
 export function registerSessionIpc(): void {
-  ipcMain.handle('session:create', () => {
-    createSession()
+  ipcMain.handle('session:create', async () => {
+    await createSession()
   })
 
   ipcMain.handle('session:list', () => {
     return listSessions()
   })
 
-  ipcMain.handle('session:resume', (_event, sessionId: string) => {
-    resumeSession(sessionId)
+  ipcMain.handle('session:resume', async (_event, sessionId: string) => {
+    await resumeSession(sessionId)
   })
 
   ipcMain.handle('session:delete', (_event, sessionId: string) => {

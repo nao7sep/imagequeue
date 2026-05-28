@@ -13,7 +13,7 @@ import {
 } from '../../shared/types'
 import { loadConfig } from '../config'
 import { initLogger, log, retargetLogger } from '../logger'
-import { shouldDeleteToTrash } from '../../shared/config'
+import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
 import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
@@ -190,11 +190,36 @@ function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>): Reco
   return normalized
 }
 
-function hasGeneratedImage(tasksByBackend: Record<BackendId, Task[]>): boolean {
-  return collectTasks(tasksByBackend).some((task) =>
-    (task.status === 'completed' || task.status === 'kept') &&
-    !!task.baseName
-  )
+// A session has user value if any task exists in any backend, regardless of
+// status. Elaborated prompts deliberately do not count: they exist only to
+// steer future elaborations and are discarded with the session.
+export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): boolean {
+  return collectTasks(tasksByBackend).length > 0
+}
+
+// Drops a session directory, honoring delete_to_trash. Used by the three
+// auto-drop paths (new session, resume session, quit) when the setting is on
+// and the session is empty.
+async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
+  if (!fs.existsSync(sessionDir)) return
+  const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
+  if (toTrash) {
+    await shell.trashItem(sessionDir)
+  } else {
+    fs.rmSync(sessionDir, { recursive: true, force: true })
+  }
+  log('info', `Dropped empty session (${reason})`, { sessionId, path: sessionDir, toTrash })
+}
+
+function shouldAutoDropSession(tasksByBackend: Record<BackendId, Task[]>): boolean {
+  if (!shouldDropEmptySessions(loadConfig().general.drop_empty_sessions)) return false
+  return !sessionHasUserValue(tasksByBackend)
+}
+
+export async function dropCurrentSessionIfEmpty(reason: string): Promise<boolean> {
+  if (!shouldAutoDropSession(queueManager.getAllStoredTasks())) return false
+  await dropSession(getSessionDir(), getSessionId(), reason)
+  return true
 }
 
 function broadcastQueueUpdate(tasksByBackend: Record<BackendId, Task[]>): void {
@@ -227,16 +252,16 @@ export function persistActiveSession(options?: { lastResumedAt?: string | null }
   return manifest
 }
 
-export function createSession(): void {
+export async function createSession(): Promise<void> {
   if (queueManager.hasGeneratingTasks()) {
     throw new Error('Wait for active generation to finish before starting a new session.')
   }
 
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
-  const shouldDeletePreviousSession = !hasGeneratedImage(queueManager.getAllStoredTasks())
+  const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
 
-  if (!shouldDeletePreviousSession) persistActiveSession()
+  if (!dropPrevious) persistActiveSession()
 
   const sessionDir = createSessionDir()
   setSessionDir(sessionDir)
@@ -249,12 +274,8 @@ export function createSession(): void {
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
 
-  if (shouldDeletePreviousSession && fs.existsSync(previousSessionDir)) {
-    fs.rmSync(previousSessionDir, { recursive: true, force: true })
-    log('info', 'Deleted previous empty session after starting new session', {
-      sessionId: previousSessionId,
-      path: previousSessionDir,
-    })
+  if (dropPrevious) {
+    await dropSession(previousSessionDir, previousSessionId, 'new-session')
   }
 }
 
@@ -290,7 +311,7 @@ export function listSessions(): SessionSummary[] {
   })
 }
 
-export function resumeSession(sessionId: string): void {
+export async function resumeSession(sessionId: string): Promise<void> {
   if (sessionId === getSessionId()) return
   if (queueManager.hasGeneratingTasks()) {
     throw new Error('Wait for active generation to finish before resuming another session.')
@@ -298,8 +319,7 @@ export function resumeSession(sessionId: string): void {
 
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
-  const previousQueues = queueManager.getAllStoredTasks()
-  const shouldDeletePreviousSession = !hasGeneratedImage(previousQueues)
+  const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
 
   const sessionDir = resolveSessionDir(sessionId)
   const manifest = readManifestFromDir(sessionDir)
@@ -319,12 +339,8 @@ export function resumeSession(sessionId: string): void {
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
 
-  if (shouldDeletePreviousSession && previousSessionId !== sessionId && fs.existsSync(previousSessionDir)) {
-    fs.rmSync(previousSessionDir, { recursive: true, force: true })
-    log('info', 'Deleted previous session with no generated images after resume', {
-      sessionId: previousSessionId,
-      path: previousSessionDir,
-    })
+  if (dropPrevious && previousSessionId !== sessionId) {
+    await dropSession(previousSessionDir, previousSessionId, 'resume')
   }
 }
 

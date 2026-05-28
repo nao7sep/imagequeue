@@ -24,7 +24,8 @@ export function createDefaultConfig(): AppConfig {
       export_dir: '',
       confirm_remove: false,
       confirm_delete: false,
-      delete_to_trash: true
+      delete_to_trash: true,
+      drop_empty_sessions: true
     },
     image_backends: {
       openai: {

@@ -49,7 +49,8 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 
 - **New Session** switches to a fresh empty session without needing another app window.
 - **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks with **retry** available.
-- New Session and Resume both drop the session you are leaving if it has no generated image outputs.
+- A session is considered **empty** when no tasks remain in any backend, regardless of status. Elaborated prompts do not count — they exist only to steer future elaborations and are discarded with the session.
+- When **Drop empty sessions** is on (the default), the current session is auto-dropped on New Session, Resume, and graceful quit if it is empty. Auto-drops honor the **Delete to Trash** setting.
 - **Delete** removes that session folder according to the **Delete to Trash** setting.
 - Current-session resume is intentionally minimal: it restores task history and outputs, not transient UI state such as the current prompt or selection.
 - Only sessions with a readable `session.json` snapshot appear.
@@ -68,6 +69,7 @@ Open Settings with **Cmd+Comma** (macOS) or **Ctrl+Comma** (Windows/Linux).
 | Confirm before removing | Off | Confirm before removing a task from the queue, or marking a completed image as kept. |
 | Confirm before deleting | Off | Confirm before deleting a task and its files. |
 | Delete to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
+| Drop empty sessions | On | Auto-delete the current session folder on New Session, Resume, or graceful quit when no tasks remain. Honors **Delete to Trash**. |
 
 ### Cloud backends
 
