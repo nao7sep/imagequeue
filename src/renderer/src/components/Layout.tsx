@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
-import { Settings } from './Settings'
-import { Modal } from './Modal'
+import { SettingsModal } from './SettingsModal'
 import { SessionsModal } from './SessionsModal'
 import { ElaboratorsModal } from './ElaboratorsModal'
 import { ElaborationSettingsModal } from './ElaborationSettingsModal'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
+import { ShortcutsModal } from './ShortcutsModal'
+import { AboutModal } from './AboutModal'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
@@ -16,7 +17,7 @@ import { useNotifications } from '../hooks/useNotifications'
 const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
 
 // Draw Things CLI is macOS-only — show it only on macOS
-const BACKENDS = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
+const BACKENDS = window.electronAPI.platform === 'darwin'
   ? ALL_BACKENDS
   : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
 
@@ -188,50 +189,13 @@ export function Layout(): React.JSX.Element {
     }, 400)
   }
 
-  const isMac = window.electronAPI.platform === 'darwin'
-  const mod = isMac ? 'Cmd+' : 'Ctrl+'
-
   return (
     <div className="layout">
       {overlay === 'settings' && (
-        <Settings onClose={() => setOverlay(null)} />
+        <SettingsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'shortcuts' && (
-        <Modal title="Keyboard Shortcuts" className="shortcuts-modal-box" onClose={() => setOverlay(null)}>
-          <div className="shortcuts-body">
-            <div className="shortcut-group">
-              <p className="shortcut-group-name">Sending</p>
-              <div className="shortcut-list">
-                <div className="shortcut-item"><span>Replace prompt with clipboard text</span><kbd>{mod}P</kbd></div>
-                <div className="shortcut-item"><span>Send to all backends</span><kbd>{mod}Enter</kbd></div>
-                {BACKENDS.map((backend, index) => (
-                  <div key={backend.id} className="shortcut-item">
-                    <span>Send to {backend.label}</span>
-                    <kbd>{mod}{index + 1}</kbd>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="shortcut-group">
-              <p className="shortcut-group-name">Queue Navigation</p>
-              <div className="shortcut-list">
-                <div className="shortcut-item"><span>Move up / down within column (also in fullscreen viewer)</span><kbd>Up / Down</kbd></div>
-                <div className="shortcut-item"><span>Move to nearest task in adjacent column (also in fullscreen viewer)</span><kbd>Left / Right</kbd></div>
-                <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
-                <div className="shortcut-item"><span>Remove task, keep selected completed image, or restore selected kept image</span><kbd>Backspace</kbd></div>
-                <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete / {mod}Backspace</kbd></div>
-              </div>
-            </div>
-            <div className="shortcut-group">
-              <p className="shortcut-group-name">App</p>
-              <div className="shortcut-list">
-                <div className="shortcut-item"><span>Settings</span><kbd>{mod}Comma</kbd></div>
-                <div className="shortcut-item"><span>Show / hide kept images</span><kbd>{mod}Shift+K</kbd></div>
-                <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Esc</kbd></div>
-              </div>
-            </div>
-          </div>
-        </Modal>
+        <ShortcutsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'sessions' && (
         <SessionsModal onClose={() => setOverlay(null)} />
@@ -246,34 +210,7 @@ export function Layout(): React.JSX.Element {
         <ElaboratedPromptsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'about' && (
-        <Modal title="About" onClose={() => setOverlay(null)}>
-          <div className="about-content">
-            <div className="about-name">ImageQueue</div>
-            <p className="about-version">Version 0.1.0</p>
-            <p className="about-desc">Multi-backend AI image generation queue.</p>
-            <div className="about-links">
-              <a
-                href="https://github.com/nao7sep/imagequeue"
-                target="_blank"
-                rel="noreferrer"
-                className="about-link"
-              >
-                GitHub ↗
-              </a>
-              <a
-                href="https://github.com/nao7sep/imagequeue/issues"
-                target="_blank"
-                rel="noreferrer"
-                className="about-link"
-              >
-                Report Issue ↗
-              </a>
-            </div>
-            <p className="about-copyright">
-              &copy; 2026 Yoshinao Inoguchi &mdash; MIT License
-            </p>
-          </div>
-        </Modal>
+        <AboutModal onClose={() => setOverlay(null)} />
       )}
       <div className="left-pane">
         <div className="pane-toolbar">

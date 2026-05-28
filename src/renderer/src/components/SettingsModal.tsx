@@ -6,7 +6,7 @@ import { formatUiDateTime } from '../utils/formatDateTime'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
 import type { FluxModelDef } from '../../../shared/models'
 import type { RecommendationStatus } from '../../../shared/types'
-import './Settings.css'
+import './SettingsModal.css'
 
 interface Props {
   onClose: () => void
@@ -24,13 +24,13 @@ function withNotificationField(config: Record<string, unknown> | null, key: stri
   }
 }
 
-export function Settings({ onClose }: Props): React.JSX.Element {
+export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const { settings, saveChangedSettings, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
-  const [status, setStatus] = useState('')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [settingsVolume, setSettingsVolume] = useState<number>((((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7)
   useEffect(() => {
     const v = (((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7
@@ -53,11 +53,13 @@ export function Settings({ onClose }: Props): React.JSX.Element {
 
   const handleSave = async (): Promise<void> => {
     if (!config || !baseConfig) return
-    const fresh = await saveChangedSettings(baseConfig, config)
-    setConfig(cloneSettings(fresh))
-    setBaseConfig(cloneSettings(fresh))
-    setStatus('Saved')
-    setTimeout(() => setStatus(''), 2000)
+    setErrorMessage(null)
+    try {
+      await saveChangedSettings(baseConfig, config)
+      onClose()
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : String(e))
+    }
   }
 
   const handleClose = useCallback(async (): Promise<void> => {
@@ -696,8 +698,8 @@ export function Settings({ onClose }: Props): React.JSX.Element {
       </div>
 
       <div className="settings-footer">
-        {dirty && !status && <span className="settings-status settings-unsaved">Unsaved changes</span>}
-        {status && <span className="settings-status">{status}</span>}
+        {errorMessage && <span className="settings-status settings-error">{errorMessage}</span>}
+        {!errorMessage && dirty && <span className="settings-status settings-unsaved">Unsaved changes</span>}
         <button className="settings-save" onClick={handleSave}>Save</button>
       </div>
     </Modal>

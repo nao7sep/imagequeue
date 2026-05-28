@@ -155,11 +155,14 @@
 .settings-status {
   margin-left: 12px;
   font-size: 12px;
-  color: var(--success);
 }
 
 .settings-unsaved {
   color: var(--text-muted);
+}
+
+.settings-error {
+  color: var(--error);
 }
 
 .settings-option-panel {
