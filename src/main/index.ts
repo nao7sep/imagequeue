@@ -124,38 +124,46 @@ app.on('window-all-closed', () => {
   }
 })
 
-// Destroy auxiliary windows in before-quit, before Electron sends close events
-// to any window. The viewer's close handler calls event.preventDefault() to
-// convert OS-close into a hide; if that fired during quit, will-quit would
-// never be reached and the app would get stuck.
+// Async cleanup run from before-quit. Each step is independently guarded so
+// one failing step doesn't skip the rest, and the whole thing is wrapped in
+// .catch().finally(app.quit()) at the call site so an unexpected throw can't
+// strand the process or escape as an unhandled rejection.
 //
-// The handler is async because dropCurrentSessionIfEmpty may call
-// shell.trashItem. We preventDefault the first invocation, finish cleanup,
-// then call app.exit() to bypass re-entry into this handler.
-let quitInProgress = false
-app.on('before-quit', (event) => {
-  if (quitInProgress) return
-  event.preventDefault()
-  quitInProgress = true
-  void (async () => {
+// We close the viewer and notification windows here, before Electron starts
+// sending close events to the main window. The viewer's own close handler
+// calls event.preventDefault() to convert OS-close into a hide; if that fired
+// during quit, the app would get stuck.
+async function gracefulShutdown(reason: string): Promise<void> {
+  const guarded = async (name: string, fn: () => unknown): Promise<void> => {
     try {
-      drainPendingModelParamsWrites()
-      closeViewerWindow()
-      closeNotificationWindow()
-      killAllCliJobs()
-      try {
-        await dropCurrentSessionIfEmpty('quit')
-      } catch (err) {
-        log('warn', 'Failed to drop empty session on quit', {
-          message: err instanceof Error ? err.message : String(err),
-        })
-      }
-    } finally {
-      app.exit()
+      await fn()
+    } catch (err) {
+      log('error', `Shutdown step failed: ${name}`, {
+        message: err instanceof Error ? err.message : String(err),
+      })
     }
-  })()
-})
+  }
+  await guarded('drainPendingModelParamsWrites', () => drainPendingModelParamsWrites())
+  await guarded('closeViewerWindow', () => closeViewerWindow())
+  await guarded('closeNotificationWindow', () => closeNotificationWindow())
+  await guarded('killAllCliJobs', () => killAllCliJobs())
+  await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
+  log('info', 'Session ended', { reason })
+}
 
-app.on('will-quit', () => {
-  log('info', 'Session ended')
+// before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
+// any programmatic app.quit(). We preventDefault the first invocation, run
+// async cleanup, then call app.quit() again — the re-entry guard short-circuits
+// without preventDefault, so Electron's default flow proceeds (windows close,
+// will-quit fires, process exits).
+let shutdownStarted = false
+app.on('before-quit', (event) => {
+  if (shutdownStarted) return
+  shutdownStarted = true
+  event.preventDefault()
+  gracefulShutdown('quit')
+    .catch((err) => log('error', 'Graceful shutdown error', {
+      message: err instanceof Error ? err.message : String(err),
+    }))
+    .finally(() => app.quit())
 })

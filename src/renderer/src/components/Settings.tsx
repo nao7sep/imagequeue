@@ -269,7 +269,7 @@ export function Settings({ onClose }: Props): React.JSX.Element {
             <label className="settings-panel-check">
               <input
                 type="checkbox"
-                checked={(general.drop_empty_sessions as boolean) ?? true}
+                checked={general.drop_empty_sessions as boolean}
                 onChange={(e) => updateGeneral('drop_empty_sessions', e.target.checked)}
               />
               <span className="settings-panel-check-copy">

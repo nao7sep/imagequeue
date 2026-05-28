@@ -3,6 +3,7 @@ import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log } from './logger'
+import { writeJsonAtomic } from './utils/atomic-write'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -15,6 +16,13 @@ const WRITE_DEBOUNCE_MS = 200
 
 let store: ParamsStore | null = null
 let writeTimer: NodeJS.Timeout | null = null
+// When params.json exists but cannot be parsed, we refuse to write rather than
+// overwrite the corrupted-but-possibly-recoverable file with an empty store.
+// Reads degrade to empty (UI shows missing values) and writes throw with an
+// actionable message naming the file. The bad file is left untouched so the
+// user can inspect or repair it manually.
+let loadFailed = false
+let loadFailedMessage = ''
 
 function ensureLoaded(): ParamsStore {
   if (store !== null) return store
@@ -26,11 +34,14 @@ function ensureLoaded(): ParamsStore {
   try {
     store = JSON.parse(fs.readFileSync(file, 'utf-8')) as ParamsStore
   } catch (err) {
-    // Surface the parse failure so a subsequent debounced write that
-    // overwrites the file with an empty store doesn't happen silently.
-    log('warn', 'params.json: failed to read or parse; starting with empty store', {
+    const message = (err as Error).message
+    loadFailed = true
+    loadFailedMessage =
+      `Cannot save Draw Things model parameters: ${file} is unreadable. ` +
+      `Move or repair the file and restart ImageQueue. (parse error: ${message})`
+    log('error', 'params.json: failed to parse; halting writes until resolved', {
       path: file,
-      message: (err as Error).message,
+      message,
     })
     store = {}
   }
@@ -39,8 +50,11 @@ function ensureLoaded(): ParamsStore {
 
 function writeNow(): void {
   if (store === null) return
-  const file = getParamsFilePath()
-  fs.writeFileSync(file, JSON.stringify(store, null, 2), 'utf-8')
+  // Defensive: public setters already throw when loadFailed, so this branch
+  // should be unreachable. Kept so drainPendingWrites on quit can't slip
+  // through and clobber a corrupted file.
+  if (loadFailed) return
+  writeJsonAtomic(getParamsFilePath(), store)
 }
 
 function scheduleWrite(): void {
@@ -60,7 +74,9 @@ export function getAllModelParams(): ParamsStore {
 }
 
 export function setModelParams(modelFile: string, params: DrawThingsModelParams): void {
-  const s = ensureLoaded()
+  ensureLoaded()
+  if (loadFailed) throw new Error(loadFailedMessage)
+  const s = store as ParamsStore
   s[modelFile] = params
   scheduleWrite()
 }
@@ -69,7 +85,9 @@ export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'he
 
 export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): void {
   if (modelFiles.length === 0) return
-  const s = ensureLoaded()
+  ensureLoaded()
+  if (loadFailed) throw new Error(loadFailedMessage)
+  const s = store as ParamsStore
   for (const modelFile of modelFiles) {
     const existing = s[modelFile]
     s[modelFile] = existing

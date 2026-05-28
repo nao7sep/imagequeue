@@ -17,6 +17,7 @@ import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/confi
 import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
+import { writeJsonAtomic } from '../utils/atomic-write'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 let currentElaboratedPrompts: string[] = []
@@ -86,12 +87,6 @@ function collectSessionThumbnails(tasksByBackend: Record<BackendId, Task[]>, lim
 
 function getManifestPath(sessionDir = getSessionDir()): string {
   return path.join(sessionDir, SESSION_MANIFEST_FILENAME)
-}
-
-function writeManifestFile(filePath: string, manifest: SessionManifest): void {
-  const tempPath = `${filePath}.tmp`
-  fs.writeFileSync(tempPath, JSON.stringify(manifest, null, 2), 'utf-8')
-  fs.renameSync(tempPath, filePath)
 }
 
 function isSessionManifest(value: unknown): value is SessionManifest {
@@ -200,15 +195,21 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 // Drops a session directory, honoring delete_to_trash. Used by the three
 // auto-drop paths (new session, resume session, quit) when the setting is on
 // and the session is empty.
+//
+// The log call is intentionally BEFORE the destructive operation. The logger
+// writes into session.log inside sessionDir; if we logged after the trash/rm,
+// the append would silently fail (file is gone). Logging the intent up front
+// means the line lands on disk regardless of whether the op succeeds, and any
+// thrown error from the op surfaces to the caller for further handling.
 async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
   if (!fs.existsSync(sessionDir)) return
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
+  log('info', `Dropping empty session (${reason})`, { sessionId, path: sessionDir, toTrash })
   if (toTrash) {
     await shell.trashItem(sessionDir)
   } else {
     fs.rmSync(sessionDir, { recursive: true, force: true })
   }
-  log('info', `Dropped empty session (${reason})`, { sessionId, path: sessionDir, toTrash })
 }
 
 function shouldAutoDropSession(tasksByBackend: Record<BackendId, Task[]>): boolean {
@@ -248,7 +249,7 @@ export function persistActiveSession(options?: { lastResumedAt?: string | null }
   fs.mkdirSync(sessionDir, { recursive: true })
   const previous = readManifestFromDir(sessionDir)
   const manifest = buildManifest(getSessionId(), queueManager.getAllStoredTasks(), previous, options)
-  writeManifestFile(getManifestPath(sessionDir), manifest)
+  writeJsonAtomic(getManifestPath(sessionDir), manifest)
   return manifest
 }
 

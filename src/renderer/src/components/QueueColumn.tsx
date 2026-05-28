@@ -59,6 +59,16 @@ const CUSTOM_DRAWTHINGS_SIZE = 'custom'
 const CUSTOM_OPENAI_SIZE = 'custom'
 const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = OPENAI_SIZES_GPT2
 
+// Sends a save error to the session log. Used by the fire-and-forget autosave
+// paths so a halted main-side write (e.g., when params.json is unreadable) is
+// recorded instead of becoming an unhandled promise rejection. The user-
+// visible symptom remains "saves don't persist", which they'll notice on
+// reload — the log entry exists for diagnosis.
+function logSaveError(context: string, err: unknown, extra?: Record<string, unknown>): void {
+  const message = err instanceof Error ? err.message : String(err)
+  void window.electronAPI.appLog('error', `Failed to ${context}`, { message, ...extra })
+}
+
 function buildDrawThingsParams(
   width: number,
   height: number,
@@ -307,12 +317,17 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   const handleApplyToAllModels = useCallback(async (): Promise<void> => {
     if (backendId !== 'drawthings' || downloadedModels.length === 0) return
     const modelFiles = downloadedModels.map((m) => m.file)
-    await window.electronAPI.dtApplyParamsToAllModels(modelFiles, {
-      width: localWidth,
-      height: localHeight,
-      steps: localSteps,
-      guidance: localGuidance,
-    })
+    try {
+      await window.electronAPI.dtApplyParamsToAllModels(modelFiles, {
+        width: localWidth,
+        height: localHeight,
+        steps: localSteps,
+        guidance: localGuidance,
+      })
+    } catch (err) {
+      logSaveError('apply parameters to all Draw Things models', err, { modelCount: modelFiles.length })
+      return
+    }
     await refreshAllModelParams()
   }, [
     backendId,
@@ -420,7 +435,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
   useEffect(() => {
     if (backendId !== 'drawthings' || !model) return
     if (loadedModel !== model) return
-    void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
+    window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
+      .catch((err) => logSaveError('autosave Draw Things model parameters', err, { model }))
   }, [backendId, model, loadedModel, currentDrawThingsParams])
 
   // Update defaults when model changes
@@ -605,7 +621,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     const count = Math.max(1, countOverride ?? 1)
 
     if (backendId === 'drawthings' && model) {
-      void window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
+      window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
+        .catch((err) => logSaveError('save Draw Things model parameters before enqueue', err, { model }))
     }
     enqueue({ prompt, backend: backendId, model, params: currentEnqueueParams, count })
   }, [

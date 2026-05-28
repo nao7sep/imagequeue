@@ -72,6 +72,8 @@ ImageQueue remembers the last-used Draw Things values per model in:
 
 This file lives at the data directory root because it is owned by ImageQueue, not Draw Things. Saved values win over recommendations when you come back to the same model.
 
+If `params.json` becomes unreadable — invalid JSON from a manual edit, or a partial file left behind by an external interruption — ImageQueue refuses to save any Draw Things parameters rather than overwrite the file with an empty store. The symptom is that every model's saved values appear blank in the Draw Things column, and any attempt to save (autosave, **Apply to all models**, or queueing a task) records an error in the session log. The bad file is left untouched so you can inspect or repair it. Move or fix `~/.imagequeue/params.json` and restart ImageQueue to recover.
+
 ### Recommendations
 
 ImageQueue can download or import Draw Things recommendation data. The file is stored at:

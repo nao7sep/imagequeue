@@ -115,7 +115,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     if (currentTaskCount > 0) {
       const ok = await confirm({
         title: 'Resume Session',
-        message: 'Replace the current queue with this session? The current session will stay saved if it has generated image outputs; otherwise it will be removed.',
+        message: 'Replace the current queue with this session? The current session is kept if it contains any tasks; if it is empty, it is dropped per the "Drop empty sessions" setting.',
         confirmLabel: 'Resume',
       })
       if (!ok) return
@@ -138,7 +138,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     if (currentTaskCount > 0) {
       const ok = await confirm({
         title: 'Start New Session',
-        message: 'Start a new session? The current session will stay saved if it has generated image outputs; otherwise it will be removed.',
+        message: 'Start a new session? The current session is kept if it contains any tasks; if it is empty, it is dropped per the "Drop empty sessions" setting.',
         confirmLabel: 'Start',
       })
       if (!ok) return
@@ -161,8 +161,8 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     const ok = await confirm({
       title: 'Delete Session',
       message: deleteToTrash
-        ? 'Move this session folder to the Trash? Generated images and metadata in that session will be removed from ImageQueue history.'
-        : 'Permanently delete this session folder? Generated images and metadata in that session will be removed from ImageQueue history.',
+        ? 'Move this session folder to the Trash? The session and everything in it — images, metadata, and task records — will be removed from ImageQueue history.'
+        : 'Permanently delete this session folder? The session and everything in it — images, metadata, and task records — will be removed from ImageQueue history.',
       confirmLabel: 'Delete',
       danger: true,
     })
@@ -197,7 +197,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
       <div className="sessions-modal-body">
         <div className="sessions-modal-topbar">
           <p className="sessions-modal-note">
-            New Session and Resume both drop the current session if it has no generated images.
+            New Session and Resume keep the current session if it contains any tasks; an empty session is dropped per the &ldquo;Drop empty sessions&rdquo; setting.
           </p>
           <button
             className="modal-btn modal-btn-primary"
