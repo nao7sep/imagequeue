@@ -1,5 +1,6 @@
 import { BrowserWindow, IpcMainInvokeEvent, ipcMain, screen } from 'electron'
 import path from 'path'
+import { applyDevDockIcon } from './dock-icon'
 
 let viewerWin: BrowserWindow | null = null
 let hidePromise: Promise<void> | null = null
@@ -189,6 +190,10 @@ async function hideViewer(): Promise<void> {
 
   await hidePromise
   if (wasVisible) {
+    // Leaving the viewer's kiosk mode lets the Dock reappear, which makes macOS
+    // rebuild the Dock tile and drop our dev icon overlay. Re-assert it now that
+    // we're back on the main window. See dock-icon.ts for the full rationale.
+    applyDevDockIcon()
     notifyMainWin('viewer:closed')
     focusMainWin()
   }
