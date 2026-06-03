@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
+import icon from '../../resources/icon.png?asset'
 import { loadConfig, ensureDataDir } from './config'
 import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
@@ -92,6 +93,24 @@ app.whenReady().then(() => {
   initSession()
   resetOutputTimestampAllocators()
   initLogger(getSessionDir())
+
+  // In dev the app runs under the prebuilt Electron.app binary, whose bundle
+  // carries Electron's default Dock icon. Set our own Dock icon at runtime so a
+  // command-line launch shows the right icon. Purely cosmetic and dev-only: the
+  // packaged build gets its icon from build/icon.icns (and resources/ isn't
+  // shipped). setIcon throws if the image path is missing/unreadable, so it is
+  // wrapped — a decorative icon must never stop the app from starting. macOS
+  // only; app.dock is undefined elsewhere.
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    try {
+      app.dock?.setIcon(icon)
+    } catch (err) {
+      log('warn', 'Failed to set dev Dock icon', {
+        message: err instanceof Error ? err.message : String(err)
+      })
+    }
+  }
+
   persistActiveSession()
   registerSessionIpc()
   registerQueueIpc()
