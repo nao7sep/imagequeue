@@ -3,17 +3,18 @@ name: Release
 # ImageQueue is built for macOS and Windows in CI: macOS on a macos-latest
 # runner, Windows on a windows-latest one (Windows can't be built from a Mac).
 #
-# fail-fast is disabled so a Windows build failure never blocks the macOS one
-# (Windows is the secondary target).
+# fail-fast is disabled so a Windows build failure never blocks the macOS one.
 #
 # Two ways to trigger:
-#   - Push a tag like v0.1.0  -> builds both platforms and uploads the installers
-#     to a single DRAFT GitHub Release for that tag (test it, then publish the
-#     draft). electron-builder names the release v<version>, so the tag must
-#     match package.json's version (0.1.0 -> v0.1.0).
+#   - Push a tag like v0.1.0  -> builds both platforms and attaches ONLY the two
+#     installers (macOS .dmg + Windows .exe) to a single DRAFT GitHub Release for
+#     that tag (test it, then publish the draft).
 #   - Run manually from the Actions tab ("Run workflow") -> builds both and
-#     uploads the installers as run artifacts, without creating a release. Use
-#     this to grab a Windows build for testing without cutting a tag.
+#     uploads the installers as run artifacts, without creating a release.
+#
+# We build with `electron-builder --publish never` and attach the installers via
+# the gh CLI, so electron-builder's auto-update extras (latest*.yml, *.blockmap,
+# the mac update .zip) are never uploaded — releases stay to the essentials.
 
 on:
   push:
@@ -21,7 +22,7 @@ on:
       - 'v*'
   workflow_dispatch:
 
-# electron-builder needs write access to create/upload the draft release.
+# Needed for the gh CLI to create/upload the draft release.
 permissions:
   contents: write
 
@@ -57,18 +58,33 @@ jobs:
       - name: Build renderer/main/preload
         run: npm run build
 
-      # Package and, on tag pushes, publish to a draft GitHub Release. node-pty
-      # is N-API + prebuilt (npmRebuild:false), so no native toolchain is needed.
-      # On macOS, CSC_IDENTITY_AUTO_DISCOVERY=false makes electron-builder fall
-      # back to an ad-hoc signature (no Developer ID cert available). Both matrix
-      # jobs publish into the same v<version> draft release; manual runs use
-      # --publish never and fall through to the artifact upload below.
+      # Package the installer only. node-pty is N-API + prebuilt (npmRebuild:false),
+      # so no native toolchain is needed. On macOS, CSC_IDENTITY_AUTO_DISCOVERY=false
+      # makes electron-builder fall back to an ad-hoc signature (no Developer ID).
       - name: Package ${{ matrix.platform }}
-        run: npx --no-install electron-builder --${{ matrix.platform }} --publish ${{ github.ref_type == 'tag' && 'always' || 'never' }}
+        run: npx --no-install electron-builder --${{ matrix.platform }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Tag pushes: attach this platform's installer to the shared draft release.
+      # The first matrix job to finish creates the draft; the other's create is a
+      # no-op (|| true). --clobber makes re-running the same tag idempotent.
+      - name: Attach installer to the draft release (tag pushes)
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          shopt -s nullglob
+          files=(dist/*.dmg dist/*-setup.exe)
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "ImageQueue $TAG" \
+            --notes "ImageQueue $TAG — unsigned macOS (.dmg) and Windows (.exe) installers." \
+            2>/dev/null || true
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "${files[@]}" --clobber
+
+      # Manual runs: no release, just the installers as downloadable artifacts.
       - name: Upload installers as run artifacts (manual runs)
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v7
@@ -77,8 +93,4 @@ jobs:
           if-no-files-found: error
           path: |
             dist/*.dmg
-            dist/*.exe
-            dist/*-mac.zip
-            dist/*-win.zip
-            dist/*.blockmap
-            dist/latest*.yml
+            dist/*-setup.exe
