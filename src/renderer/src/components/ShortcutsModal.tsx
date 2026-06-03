@@ -1,12 +1,9 @@
 import { Modal } from './Modal'
-import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
+import { BACKEND_LABELS } from '../../../shared/types'
+import { getVisibleBackends } from '../utils/visibleBackends'
 
-const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
-
-// Draw Things CLI is macOS-only — show it only on macOS
-const BACKENDS = window.electronAPI.platform === 'darwin'
-  ? ALL_BACKENDS
-  : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
+// Mirror the actual column shortcuts: each visible backend maps to mod+(index+1).
+const BACKENDS = getVisibleBackends().map((id) => ({ id, label: BACKEND_LABELS[id] }))
 
 interface Props {
   onClose: () => void
