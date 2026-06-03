@@ -48,7 +48,7 @@ For cloud backends, the queue column remembers the last model and generation set
 Each app launch creates a session folder under the output directory. ImageQueue writes a `session.json` snapshot there as queue state changes, so you can later reopen that session from the menu.
 
 - **New Session** switches to a fresh empty session without needing another app window.
-- **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks with **retry** available.
+- **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks. When a reopened session still has interrupted tasks, a prompt offers **Resume All** (re-queue every interrupted task for generation at once) or **Not Now** (leave them paused); either way each task keeps its individual **retry**.
 - A session is considered **empty** when no tasks remain in any backend, regardless of status. Elaborated prompts do not count — they exist only to steer future elaborations and are discarded with the session.
 - When **Drop empty sessions** is on (the default), the current session is auto-dropped on New Session, Resume, and graceful quit if it is empty. Auto-drops honor the **Delete to Trash** setting.
 - **Delete** removes that session folder according to the **Delete to Trash** setting.

@@ -1,5 +1,6 @@
 import { Layout } from './components/Layout'
 import { CliJobsPanel } from './components/CliJobsPanel'
+import { ResumeInterruptedPrompt } from './components/ResumeInterruptedPrompt'
 import { ConfirmProvider } from './context/ConfirmContext'
 import { CliJobsProvider } from './context/CliJobsContext'
 import { QueueProvider } from './context/QueueContext'
@@ -20,6 +21,7 @@ export function App(): React.JSX.Element {
                 <AdvancedPromptingProvider>
                   <Layout />
                   <CliJobsPanel />
+                  <ResumeInterruptedPrompt />
                 </AdvancedPromptingProvider>
               </EnqueueConfigProvider>
             </SelectionProvider>

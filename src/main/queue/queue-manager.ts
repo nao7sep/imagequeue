@@ -141,18 +141,40 @@ class QueueManager {
     this.queues[backend] = [...reorderedActive, ...remainingActive, ...keptTasks]
   }
 
+  // Resets a task back to 'queued' so the processor picks it up again, clearing
+  // the per-attempt result fields. Shared by single retry and bulk resume.
+  private requeueTask(task: Task): void {
+    task.status = 'queued'
+    task.error = null
+    task.startedAt = null
+    task.completedAt = null
+    task.durationMs = null
+  }
+
   retryTask(backend: BackendId, taskId: string): Task | undefined {
     const task = this.getTask(backend, taskId)
     if (!task || !isActiveTask(task) || (task.status !== 'failed' && task.status !== 'interrupted')) {
       return undefined
     }
 
-    task.status = 'queued'
-    task.error = null
-    task.startedAt = null
-    task.completedAt = null
-    task.durationMs = null
+    this.requeueTask(task)
     return task
+  }
+
+  // Re-queues every interrupted task across all backends and returns how many
+  // were affected. Backs the "resume interrupted tasks" prompt shown after a
+  // session with unfinished work is reopened.
+  retryAllInterrupted(): number {
+    let count = 0
+    for (const backend of Object.keys(this.queues) as BackendId[]) {
+      for (const task of this.queues[backend]) {
+        if (task.status === 'interrupted') {
+          this.requeueTask(task)
+          count++
+        }
+      }
+    }
+    return count
   }
 
   replaceAllTasks(nextQueues: Record<BackendId, Task[]>): void {

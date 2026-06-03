@@ -110,6 +110,16 @@ export function registerQueueIpc(): void {
     }
   })
 
+  ipcMain.handle('queue:resumeInterrupted', () => {
+    const count = queueManager.retryAllInterrupted()
+    if (count > 0) {
+      log('info', `Resuming ${count} interrupted task(s)`)
+      persistActiveSession()
+      notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    }
+    return count
+  })
+
   ipcMain.handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
     queueManager.reorderTasks(backend, taskIds)
     persistActiveSession()

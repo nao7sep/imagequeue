@@ -61,6 +61,9 @@ const api = {
   retryTask: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:retryTask', backend, taskId),
 
+  resumeInterruptedTasks: (): Promise<number> =>
+    ipcRenderer.invoke('queue:resumeInterrupted'),
+
   reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
 
@@ -361,6 +364,16 @@ const api = {
     }
     ipcRenderer.on('session:changed', handler)
     return () => { ipcRenderer.removeListener('session:changed', handler) }
+  },
+
+  // Fired after resuming a session that still has unfinished (interrupted)
+  // tasks, so the renderer can prompt the user to re-queue them all.
+  onInterruptedTasksOnResume: (callback: (event: { count: number }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { count: number }): void => {
+      callback(data)
+    }
+    ipcRenderer.on('session:interruptedTasks', handler)
+    return () => { ipcRenderer.removeListener('session:interruptedTasks', handler) }
   }
 }
 

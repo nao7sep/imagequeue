@@ -238,6 +238,14 @@ function broadcastSessionChanged(sessionId: string): void {
   }
 }
 
+// Fired after resuming a session that still has tasks left unfinished when it
+// was last open. The renderer uses this to prompt the user to re-queue them.
+function broadcastInterruptedOnResume(count: number): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('session:interruptedTasks', { count })
+  }
+}
+
 export function resolveSessionDir(sessionId: string): string {
   const safeSessionId = ensureSessionId(sessionId)
   return path.join(getOutputDir(), safeSessionId)
@@ -339,6 +347,9 @@ export async function resumeSession(sessionId: string): Promise<void> {
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
+
+  const interruptedCount = collectTasks(resumedQueues).filter((task) => task.status === 'interrupted').length
+  if (interruptedCount > 0) broadcastInterruptedOnResume(interruptedCount)
 
   if (dropPrevious && previousSessionId !== sessionId) {
     await dropSession(previousSessionDir, previousSessionId, 'resume')
