@@ -91,7 +91,7 @@ When two or more models are downloaded and at least one of them has a different 
 ### Download an official model
 
 1. Open **☰ → Draw Things Models**.
-2. Find a model in **Official Models** or **Community Catalog**.
+2. Find a model in **Official Models**, or in the **Community Models** column (which lists the **Community Catalog** and your local imports).
 3. Click **Download**.
 
 What happens:

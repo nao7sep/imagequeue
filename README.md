@@ -15,7 +15,7 @@ ImageQueue is a desktop app for comparing image generation backends side-by-side
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+ (CI builds on the current LTS)
 - macOS, Windows, or Linux
 - Draw Things support is macOS-only
 

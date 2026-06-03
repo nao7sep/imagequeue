@@ -1,0 +1,84 @@
+name: Release
+
+# ImageQueue is built for macOS and Windows in CI: macOS on a macos-latest
+# runner, Windows on a windows-latest one (Windows can't be built from a Mac).
+#
+# fail-fast is disabled so a Windows build failure never blocks the macOS one
+# (Windows is the secondary target).
+#
+# Two ways to trigger:
+#   - Push a tag like v0.1.0  -> builds both platforms and uploads the installers
+#     to a single DRAFT GitHub Release for that tag (test it, then publish the
+#     draft). electron-builder names the release v<version>, so the tag must
+#     match package.json's version (0.1.0 -> v0.1.0).
+#   - Run manually from the Actions tab ("Run workflow") -> builds both and
+#     uploads the installers as run artifacts, without creating a release. Use
+#     this to grab a Windows build for testing without cutting a tag.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# electron-builder needs write access to create/upload the draft release.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            artifact-name: imagequeue-macos
+          - os: windows-latest
+            platform: win
+            artifact-name: imagequeue-windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      # Installs exactly from package-lock.json. The darwin-only postinstall
+      # (spawn-helper perms) no-ops on Windows.
+      - name: Install dependencies
+        run: npm ci
+
+      # electron-vite -> out/
+      - name: Build renderer/main/preload
+        run: npm run build
+
+      # Package and, on tag pushes, publish to a draft GitHub Release. node-pty
+      # is N-API + prebuilt (npmRebuild:false), so no native toolchain is needed.
+      # On macOS, CSC_IDENTITY_AUTO_DISCOVERY=false makes electron-builder fall
+      # back to an ad-hoc signature (no Developer ID cert available). Both matrix
+      # jobs publish into the same v<version> draft release; manual runs use
+      # --publish never and fall through to the artifact upload below.
+      - name: Package ${{ matrix.platform }}
+        run: npx --no-install electron-builder --${{ matrix.platform }} --publish ${{ github.ref_type == 'tag' && 'always' || 'never' }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installers as run artifacts (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*-mac.zip
+            dist/*-win.zip
+            dist/*.blockmap
+            dist/latest*.yml

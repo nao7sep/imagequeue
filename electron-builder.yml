@@ -2,6 +2,17 @@ appId: com.imagequeue.app
 productName: ImageQueue
 copyright: Copyright © 2026 Yoshinao Inoguchi
 
+# On tag pushes, CI runs electron-builder with `--publish always` + GH_TOKEN,
+# which creates/uploads installers to a DRAFT GitHub Release named v<version>
+# (so the pushed tag must match package.json's version, e.g. v0.1.0). Test the
+# draft, then publish it. Manual CI runs use `--publish never` (run artifacts
+# only). releaseType is electron-builder's default, set here for clarity.
+publish:
+  provider: github
+  owner: nao7sep
+  repo: imagequeue
+  releaseType: draft
+
 directories:
   buildResources: build
   output: dist
