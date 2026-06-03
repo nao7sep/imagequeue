@@ -12,6 +12,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win",
     "postinstall": "node scripts/fix-node-pty-helper-perms.js",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
@@ -30,6 +33,7 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
     "vite": "^7.3.2"
