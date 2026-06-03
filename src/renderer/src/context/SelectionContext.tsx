@@ -8,15 +8,11 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import { BACKEND_IDS_IN_UI_ORDER, shouldDeleteToTrash, type BackendId, type Task } from '../../../shared'
+import { shouldDeleteToTrash, type BackendId, type Task } from '../../../shared'
 import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
-
-function getVisibleBackends(): BackendId[] {
-  const isMac = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
-  return isMac ? BACKEND_IDS_IN_UI_ORDER : BACKEND_IDS_IN_UI_ORDER.filter((b) => b !== 'drawthings')
-}
+import { getVisibleBackends } from '../utils/visibleBackends'
 
 export interface Selection {
   backend: BackendId

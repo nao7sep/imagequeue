@@ -18,6 +18,27 @@ import { drainPendingWrites as drainPendingModelParamsWrites } from './model-par
 
 let mainWin: BrowserWindow | null = null
 
+// In dev the app runs under the prebuilt Electron.app binary, whose bundle
+// carries Electron's default Dock icon. app.dock.setIcon only draws a temporary
+// overlay on the in-memory Dock tile — it does not change the bundle on disk, so
+// macOS discards it whenever it rebuilds the tile (notably when a window is
+// (re)created via the activate handler). We therefore re-assert the icon after
+// each window creation rather than once at startup. Purely cosmetic and dev-only:
+// the packaged build gets its icon from build/icon.icns (and resources/ isn't
+// shipped). setIcon throws if the image path is missing/unreadable, so it is
+// wrapped — a decorative icon must never stop the app from starting. macOS only;
+// app.dock is undefined elsewhere.
+function applyDevDockIcon(): void {
+  if (process.platform !== 'darwin' || app.isPackaged) return
+  try {
+    app.dock?.setIcon(icon)
+  } catch (err) {
+    log('warn', 'Failed to set dev Dock icon', {
+      message: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -94,23 +115,6 @@ app.whenReady().then(() => {
   resetOutputTimestampAllocators()
   initLogger(getSessionDir())
 
-  // In dev the app runs under the prebuilt Electron.app binary, whose bundle
-  // carries Electron's default Dock icon. Set our own Dock icon at runtime so a
-  // command-line launch shows the right icon. Purely cosmetic and dev-only: the
-  // packaged build gets its icon from build/icon.icns (and resources/ isn't
-  // shipped). setIcon throws if the image path is missing/unreadable, so it is
-  // wrapped — a decorative icon must never stop the app from starting. macOS
-  // only; app.dock is undefined elsewhere.
-  if (process.platform === 'darwin' && !app.isPackaged) {
-    try {
-      app.dock?.setIcon(icon)
-    } catch (err) {
-      log('warn', 'Failed to set dev Dock icon', {
-        message: err instanceof Error ? err.message : String(err)
-      })
-    }
-  }
-
   persistActiveSession()
   registerSessionIpc()
   registerQueueIpc()
@@ -129,11 +133,13 @@ app.whenReady().then(() => {
   startProcessor()
 
   createWindow()
+  applyDevDockIcon()
 
   app.on('activate', () => {
     if (!mainWin || mainWin.isDestroyed()) {
       createWindow()
     }
+    applyDevDockIcon()
   })
 })
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BACKEND_IDS_IN_UI_ORDER, type Task } from '../../../shared/types'
+import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
+import { getVisibleBackends } from '../utils/visibleBackends'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import './PromptPane.css'
 
@@ -131,9 +132,11 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         }
         return
       }
-      if (mod && e.key >= '1' && e.key <= '6') {
+      if (mod && e.key >= '1' && e.key <= '9') {
+        const visibleBackends = getVisibleBackends()
+        const backend = visibleBackends[parseInt(e.key) - 1]
+        if (!backend) return
         e.preventDefault()
-        const backend = BACKEND_IDS_IN_UI_ORDER[parseInt(e.key) - 1]
         window.dispatchEvent(
           new CustomEvent('enqueue-single', { detail: { prompt: prompt.trim(), backend } })
         )
