@@ -1,0 +1,303 @@
+.settings-overlay {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 16px;
+  background: var(--bg-secondary);
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 14px;
+  margin: 0;
+  color: var(--accent);
+}
+
+.settings-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.settings-subsection h4 {
+  font-size: 13px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.settings-field {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
+.settings-field > label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.settings-field > input,
+.settings-field > select {
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.settings-field > textarea {
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.settings-field-reset {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-hint {
+  grid-column: 2 / -1;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 0;
+}
+
+.settings-field-full {
+  display: block;
+  width: 100%;
+}
+
+.settings-panel-after-hint {
+  margin-top: 4px;
+}
+
+.settings-browse {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+}
+
+.settings-browse input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.settings-browse-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.settings-browse-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.settings-save {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.settings-save:hover {
+  background: var(--accent-hover);
+}
+
+.settings-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.settings-status {
+  margin-left: 12px;
+  font-size: 12px;
+}
+
+.settings-unsaved {
+  color: var(--text-muted);
+}
+
+.settings-error {
+  color: var(--error);
+}
+
+.settings-option-panel {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.settings-option-panel label,
+.recommendation-panel label {
+  width: auto;
+  flex-shrink: 1;
+}
+
+.settings-option-panel input[type='checkbox'],
+.recommendation-panel input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+}
+
+.settings-option-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.settings-panel-check {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.settings-panel-check input[type='checkbox'] {
+  margin: 0;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.settings-panel-check-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-panel-check-desc {
+  display: block;
+  width: 100%;
+  color: var(--text-muted);
+}
+
+.recommendation-panel {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.recommendation-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.recommendation-panel-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.recommendation-panel-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.recommendation-message {
+  color: var(--success);
+}
+
+.recommendation-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.recommendation-actions button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.recommendation-actions button:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.recommendation-actions button:disabled {
+  opacity: 0.5;
+}
+
+.recommendation-auto-update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.recommendation-auto-update input[type='checkbox'] {
+  margin: 0;
+}

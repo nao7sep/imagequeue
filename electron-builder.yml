@@ -1,0 +1,54 @@
+appId: com.imagequeue.app
+productName: ImageQueue
+copyright: Copyright © 2026 Yoshinao Inoguchi
+
+directories:
+  buildResources: build
+  output: dist
+
+# electron-vite emits the app into out/; electron-builder also auto-includes
+# production dependencies from package.json (node-pty, openai, @google/genai, …).
+files:
+  - 'out/**'
+  - 'package.json'
+
+# node-pty is N-API based (node-addon-api) and ships prebuilt binaries for
+# darwin-{arm64,x64} and win32-{arm64,x64}. N-API is ABI-stable across Node and
+# Electron, so those prebuilds load under Electron as-is — do NOT recompile them
+# (source build needs a toolchain we don't want CI to depend on).
+npmRebuild: false
+
+# node-pty ships a native addon (pty.node) and a plain executable (spawn-helper).
+# The .node is unpacked automatically, but spawn-helper would be trapped inside
+# the asar and fail to exec — so unpack the whole module.
+asarUnpack:
+  - '**/node_modules/node-pty/**'
+
+mac:
+  category: public.app-category.graphics-design
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  # No Apple Developer certificate available. Do NOT set identity:null — that
+  # skips signing entirely and leaves the arm64 bundle's seal broken so it won't
+  # launch cleanly. Instead we ad-hoc sign the whole bundle (electron-builder's
+  # fallback when CSC_IDENTITY_AUTO_DISCOVERY=false, set in the build env), which
+  # runs locally; macOS still shows "unidentified developer" until a Developer ID
+  # cert + notarization are added via CI secrets.
+  notarize: false
+
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+    - zip
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${name}-${version}-setup.${ext}
+
+dmg:
+  artifactName: ${name}-${version}.${ext}

@@ -1,0 +1,142 @@
+.sessions-modal-box {
+  width: 700px;
+  max-width: 92vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sessions-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.sessions-modal-topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sessions-modal-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.sessions-modal-warning,
+.sessions-modal-message,
+.sessions-modal-empty {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.sessions-modal-warning {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.sessions-modal-message {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.sessions-modal-empty {
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+}
+
+.sessions-list {
+  display: grid;
+  gap: 10px;
+}
+
+.session-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.session-card-header {
+  display: grid;
+  gap: 4px;
+}
+
+.session-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-card-title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.session-card-badge {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.session-card-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.session-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.session-preview-strip {
+  display: flex;
+  gap: 8px;
+  min-height: 64px;
+}
+
+.session-preview-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+
+.session-preview-thumb-placeholder {
+  background: color-mix(in srgb, var(--bg-surface) 75%, transparent);
+}
+
+.session-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .sessions-modal-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

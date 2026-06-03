@@ -1,0 +1,309 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.left-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pane-bg);
+}
+
+
+.pane-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-top: 3px solid var(--accent);
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 18%, var(--bg-secondary)),
+    var(--bg-secondary)
+  );
+}
+
+.app-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  user-select: none;
+}
+
+/* Hamburger button + dropdown */
+.menu-anchor {
+  position: relative;
+}
+
+.hamburger-btn {
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 19px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.hamburger-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  /* overflow not clipped — submenu flies out to the right. Buttons get
+     their own rounded corners at top/bottom so hover bgs respect the menu's
+     rounded border. */
+}
+
+.dropdown-menu > :first-child,
+.dropdown-menu > :first-child > button {
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+
+.dropdown-menu > :last-child,
+.dropdown-menu > :last-child > button {
+  border-bottom-left-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+.dropdown-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dropdown-menu button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dropdown-menu .menu-check-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.menu-check-item input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+  pointer-events: none;
+}
+
+/* Submenu (Elaboration → Elaborators / Elaboration Settings / Elaborated Prompts).
+   Pure-CSS hover flyout. The submenu lives inside .menu-has-submenu so hovering
+   the submenu still satisfies the parent's :hover, keeping it open as the cursor
+   moves into it. */
+.menu-has-submenu {
+  position: relative;
+}
+
+.dropdown-menu .menu-submenu-parent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.menu-submenu-arrow {
+  margin-left: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.menu-submenu {
+  position: absolute;
+  top: -1px;
+  left: 100%;
+  min-width: 200px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  display: none;
+  padding-left: 4px;
+  margin-left: -4px;
+  z-index: 201;
+}
+
+.menu-has-submenu:hover > .menu-submenu {
+  display: block;
+}
+
+.menu-has-submenu:hover > .menu-submenu-parent {
+  background: var(--bg-hover);
+}
+
+.menu-submenu > button {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menu-submenu > button:hover {
+  background: var(--bg-hover);
+}
+
+.menu-submenu > button:first-child {
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+
+.menu-submenu > button:last-child {
+  border-bottom-left-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+/* Shared modal styles live in Modal.css */
+
+/* Shortcuts */
+.shortcuts-body {
+  overflow-y: auto;
+  max-height: 60vh;
+  padding: 16px;
+  display: grid;
+  gap: 20px;
+}
+
+.shortcut-group-name {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 5px;
+}
+
+.shortcut-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-primary);
+}
+
+.shortcut-item span {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.shortcut-item kbd {
+  border-radius: 4px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+
+.about-content {
+  padding: 20px 16px 24px;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.about-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.about-version {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.about-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.about-links {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}
+
+.about-copyright {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.settings-modal-box {
+  width: 540px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-modal-box .settings-overlay {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.right-pane {
+  display: flex;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--pane-bg);
+}
+
+.about-link {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-link:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+
+# OS artifacts
+.DS_Store
+
+# TypeScript incremental compilation
+*.tsbuildinfo

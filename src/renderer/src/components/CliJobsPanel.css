@@ -1,0 +1,134 @@
+.cli-jobs-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 400;
+  width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Job card ───────────────────────────────────────────────────────────── */
+
+.cli-job-row {
+  background: rgba(7, 11, 24, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.cli-job-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cli-job-row-icon {
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.cli-job-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cli-job-row-title-success { color: var(--success); }
+.cli-job-row-title-error   { color: var(--error); }
+
+.cli-job-row-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.cli-job-row-btn:hover {
+  background: var(--hover);
+}
+
+.cli-job-row-btn-stop {
+  border-color: color-mix(in srgb, var(--error) 50%, var(--border));
+  color: var(--error);
+}
+
+.cli-job-row-btn-stop:hover {
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+.cli-job-summary {
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cli-job-summary-warning {
+  color: var(--warning);
+}
+
+.cli-job-summary-error {
+  color: var(--text-secondary);
+}
+
+/* ─── Log tail (scrollable, fixed ~3-line height) ────────────────────────── */
+
+.cli-job-log-tail {
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+  max-height: calc(1.5em * 3 + 5px);
+  overflow-y: auto;
+}
+
+/* Always-visible thin scrollbar (WebKit/Electron) */
+.cli-job-log-tail::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cli-job-log-tail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cli-job-log-tail::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.cli-job-log-tail::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.cli-job-tail-line {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+
+.cli-job-tail-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: normal;
+}

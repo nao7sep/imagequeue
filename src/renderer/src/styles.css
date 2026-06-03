@@ -1,0 +1,86 @@
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-surface: #0f3460;
+  --bg-input: #1a1a2e;
+  --bg-hover: #24436f;
+  --hover: var(--bg-hover);
+  --pane-bg: rgba(7, 11, 24, 0.66);
+  --pane-bg-strong: rgba(7, 11, 24, 0.86);
+  --preview-bg: rgba(7, 11, 24, 0.38);
+  --text-primary: #e0e0e0;
+  --text-secondary: #b2bacb;
+  --text-muted: #a1adc3;
+  --text-on-accent: #06121f;
+  --border: #3a4470;
+  --border-strong: #454f80;
+  --accent: #38bdf8;
+  --accent-hover: #7dd3fc;
+  --success: #22c55e;
+  --error: #f87171;
+  --warning: #f59e0b;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      ellipse 75% 65% at 15% 10%,
+      hsl(330 96% 56% / 0.72),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 80% 70% at 85% 90%,
+      hsl(190 94% 52% / 0.66),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 60% 55% at 90% 15%,
+      hsl(45 96% 55% / 0.45),
+      transparent 70%
+    ),
+    linear-gradient(
+      135deg,
+      hsl(320 80% 30%) 0%,
+      hsl(265 72% 28%) 35%,
+      hsl(195 78% 28%) 70%,
+      hsl(150 70% 28%) 100%
+    );
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button:active:not(:disabled) {
+  opacity: 0.6;
+  transform: scale(0.95);
+}
+
+textarea, select, input {
+  font-family: inherit;
+  font-size: inherit;
+}
