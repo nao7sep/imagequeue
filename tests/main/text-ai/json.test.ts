@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractJson } from './json'
+import { extractJson } from '../../../src/main/text-ai/json'
 
 describe('extractJson', () => {
   it('parses a clean JSON object directly', () => {

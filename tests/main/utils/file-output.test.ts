@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { imageExtFromPath } from './file-output'
+import { imageExtFromPath } from '../../../src/main/utils/file-output'
 
 describe('imageExtFromPath', () => {
   it('parses known extensions case-insensitively', () => {

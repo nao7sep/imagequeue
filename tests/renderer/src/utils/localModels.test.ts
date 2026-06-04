@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { localModelName, sortLocalModels } from './localModels'
-import type { LocalModelInfo } from '../../../shared/types'
+import { localModelName, sortLocalModels } from '../../../../src/renderer/src/utils/localModels'
+import type { LocalModelInfo } from '../../../../src/shared/types'
 
 function model(partial: Partial<LocalModelInfo>): LocalModelInfo {
   return { file: '', name: '', source: '', downloaded: false, huggingFace: null, ...partial }

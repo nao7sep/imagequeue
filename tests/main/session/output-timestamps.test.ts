@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTimestampMs } from './output-timestamps'
+import { parseTimestampMs } from '../../../src/main/session/output-timestamps'
 
 describe('parseTimestampMs', () => {
   it('parses a leading yyyymmdd-hhmmss-utc basename as a UTC instant', () => {

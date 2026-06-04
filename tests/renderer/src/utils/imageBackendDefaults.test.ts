@@ -4,7 +4,7 @@ import {
   resolveOpenAiSize,
   resolveSavedImageBackendDefaults,
   serializeImageBackendDefaults
-} from './imageBackendDefaults'
+} from '../../../../src/renderer/src/utils/imageBackendDefaults'
 import {
   findModel,
   OPENAI_GPT2_MAX_EDGE,
@@ -12,7 +12,7 @@ import {
   OPENAI_GPT2_SIZE_STEP,
   OPENAI_MODELS,
   FLUX_MODELS
-} from '../../../shared/models'
+} from '../../../../src/shared/models'
 
 describe('normalizeOpenAiDimension', () => {
   it('snaps to the 16px step', () => {

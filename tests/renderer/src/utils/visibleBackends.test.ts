@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getVisibleBackends } from './visibleBackends'
-import { BACKEND_IDS_IN_UI_ORDER } from '../../../shared/types'
+import { getVisibleBackends } from '../../../../src/renderer/src/utils/visibleBackends'
+import { BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 
 // getVisibleBackends reads window.electronAPI?.platform. The vitest node env has
 // no window, so we stub it per-case. Draw Things must only appear on macOS — an

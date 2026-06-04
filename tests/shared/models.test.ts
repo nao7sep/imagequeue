@@ -7,7 +7,7 @@ import {
   IMAGEN_MODELS,
   NANO_BANANA_MODELS,
   OPENAI_MODELS
-} from './models'
+} from '../../src/shared/models'
 
 describe('estimateCostFromRegistry', () => {
   it('returns null for unknown models and the local-only backend', () => {

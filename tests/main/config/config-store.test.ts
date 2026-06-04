@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deepMergeDefaults } from './config-store'
+import { deepMergeDefaults } from '../../../src/main/config/config-store'
 
 describe('deepMergeDefaults', () => {
   it('fills structurally absent keys from defaults', () => {

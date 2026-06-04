@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TimestampAllocator } from './timestamp-allocator'
+import { TimestampAllocator } from '../../../src/main/session/timestamp-allocator'
 
 // The allocator guarantees second-unique timestamps per backend; a collision
 // would make writeImageOutput throw "refusing to overwrite". These tests pin

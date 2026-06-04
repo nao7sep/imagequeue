@@ -39,12 +39,14 @@ npm run typecheck
 Unit tests (Vitest) cover the pure main- and shared-process logic — cost
 estimation, image-type detection, the queue state machine, timestamp
 allocation, config merging, and session manifest handling. They run in a plain
-Node environment with no Electron or DOM dependencies; tests live next to their
-source as `*.test.ts`.
+Node environment with no Electron or DOM dependencies. Tests live under
+`tests/`, mirroring the `src/` layout, so `src/` stays pure shipped code; they
+are type-checked separately via `tsconfig.test.json`.
 
 ```sh
 npm test          # run once
 npm run test:watch
+npm run typecheck  # includes the tests
 ```
 
 ## Everyday workflow

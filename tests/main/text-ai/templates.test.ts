@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fillTemplate, JSON_FORMAT_LITERAL } from './templates'
+import { fillTemplate, JSON_FORMAT_LITERAL } from '../../../src/main/text-ai/templates'
 
 describe('fillTemplate', () => {
   it('substitutes provided placeholders', () => {

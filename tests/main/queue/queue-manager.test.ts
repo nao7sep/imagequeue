@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { QueueManager, createEmptyQueues } from './queue-manager'
-import { BackendId, Task, TaskStatus } from '../../shared/types'
+import { QueueManager, createEmptyQueues } from '../../../src/main/queue/queue-manager'
+import { BackendId, Task, TaskStatus } from '../../../src/shared/types'
 
 // Builds a fully-populated task so status-transition tests can flip one field
 // and assert the requeue logic clears the rest.

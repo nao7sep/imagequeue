@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldDeleteToTrash, shouldDropEmptySessions } from './config'
+import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../src/shared/config'
 
 // Both settings default to "on" (the safer behavior) for any value except an
 // explicit false — including undefined/null from an older config that predates

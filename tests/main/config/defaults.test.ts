@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultConfig } from './defaults'
-import { deepMergeDefaults } from './config-store'
+import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { deepMergeDefaults } from '../../../src/main/config/config-store'
 
 describe('createDefaultConfig', () => {
   it('returns a fresh object each call (no shared mutable state)', () => {

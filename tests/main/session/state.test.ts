@@ -5,9 +5,9 @@ import {
   isSessionManifest,
   normalizeResumedQueues,
   toInterruptedTask
-} from './state'
-import { createEmptyQueues } from '../queue/queue-manager'
-import { BackendId, SESSION_MANIFEST_VERSION, Task, TaskStatus } from '../../shared/types'
+} from '../../../src/main/session/state'
+import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
+import { BackendId, SESSION_MANIFEST_VERSION, Task, TaskStatus } from '../../../src/shared/types'
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
   return {

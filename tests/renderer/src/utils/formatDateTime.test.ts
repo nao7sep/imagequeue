@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatUiDateTime } from './formatDateTime'
+import { formatUiDateTime } from '../../../../src/renderer/src/utils/formatDateTime'
 
 describe('formatUiDateTime', () => {
   it('formats a valid ISO instant as yyyy-mm-dd hh:mm UTC', () => {

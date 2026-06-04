@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTimestamp } from './session'
+import { formatTimestamp } from '../../../src/main/session/session'
 
 describe('formatTimestamp', () => {
   it('formats a UTC date as yyyymmdd-hhmmss', () => {
