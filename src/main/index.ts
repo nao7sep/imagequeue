@@ -130,7 +130,7 @@ app.on('window-all-closed', () => {
 
 // Async cleanup run from before-quit. Each step is independently guarded so
 // one failing step doesn't skip the rest, and the whole thing is wrapped in
-// .catch().finally(app.quit()) at the call site so an unexpected throw can't
+// .catch().finally(app.exit) at the call site so an unexpected throw can't
 // strand the process or escape as an unhandled rejection.
 //
 // We close the viewer and notification windows here, before Electron starts
@@ -157,9 +157,16 @@ async function gracefulShutdown(reason: string): Promise<void> {
 
 // before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
 // any programmatic app.quit(). We preventDefault the first invocation, run
-// async cleanup, then call app.quit() again — the re-entry guard short-circuits
-// without preventDefault, so Electron's default flow proceeds (windows close,
-// will-quit fires, process exits).
+// async cleanup, then terminate with app.exit(0).
+//
+// app.exit(0), not a second app.quit(): on macOS, calling app.quit() after the
+// cleanup closes the windows but then stalls — once the last window closes the
+// app stays alive instead of proceeding to will-quit/quit, so the dock dot
+// lingers and the user has to quit a second time to actually terminate. All
+// cleanup is already done by the time the finally runs, so app.exit(0) ends the
+// process deterministically. The shutdownStarted guard still lets a second quit
+// during cleanup fall through without preventDefault, as a force-quit escape
+// hatch in case cleanup ever hangs.
 let shutdownStarted = false
 app.on('before-quit', (event) => {
   if (shutdownStarted) return
@@ -169,5 +176,5 @@ app.on('before-quit', (event) => {
     .catch((err) => log('error', 'Graceful shutdown error', {
       message: err instanceof Error ? err.message : String(err),
     }))
-    .finally(() => app.quit())
+    .finally(() => app.exit(0))
 })

@@ -36,3 +36,34 @@ export function applyDevDockIcon(): void {
     })
   }
 }
+
+// Dismissing the fullscreen viewer makes macOS rebuild the Dock tile from the
+// on-disk bundle (the Dock un-hides as kiosk mode exits), which drops our icon
+// overlay. That rebuild is asynchronous and rides the un-hide animation, and
+// there is NO event that fires once it settles — a single synchronous re-assert
+// at close time provably loses the race (verified via logging: setIcon reports
+// success, then the tile reverts). The repaint lands at a VARIABLE time, so a
+// re-assert only sticks if it fires after that repaint.
+//
+// Four swings, spread across the window the repaint can land in:
+//   0ms    — immediate, covers the case where the tile was never dropped.
+//   300ms  — the common, fast repaint.
+//   1000ms — a mid-range repaint.
+//   3000ms — the late repaint; this is the swing that actually fixes the
+//            intermittent misses. It is deliberately generous because the
+//            repaint lands well past a second on some machines. The only cost
+//            of a later final swing is cosmetic (the default icon may show that
+//            much longer before snapping back); if it still occasionally
+//            reverts, raise this value further — the earlier swings barely
+//            matter for the repaint case.
+// Best-effort and dev-only: app.dock.setIcon is idempotent, so overlapping
+// schedules from rapid open/close are harmless, and every call is guarded by
+// applyDevDockIcon's platform / packaged checks.
+const DEV_DOCK_REASSERT_DELAYS_MS = [0, 300, 1000, 3000]
+
+export function reassertDevDockIconAfterRepaint(): void {
+  if (process.platform !== 'darwin' || app.isPackaged) return
+  for (const delay of DEV_DOCK_REASSERT_DELAYS_MS) {
+    setTimeout(applyDevDockIcon, delay)
+  }
+}
