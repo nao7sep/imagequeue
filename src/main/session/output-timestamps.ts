@@ -33,7 +33,7 @@ export function seedOutputTimestampAllocators(tasksByBackend: Record<BackendId, 
   }
 }
 
-function parseTimestampMs(baseName: string | null): number | null {
+export function parseTimestampMs(baseName: string | null): number | null {
   if (!baseName) return null
   const match = BASENAME_TIMESTAMP_RE.exec(baseName)
   if (!match) return null

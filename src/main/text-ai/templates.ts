@@ -28,9 +28,9 @@ export function getRuntimeBrainstormConfig(): BrainstormConfig {
 }
 
 export function fillTemplate(template: string, values: Record<string, string>): string {
-  // {{JSON}} is always provided by us, never by the caller, so users editing
-  // templates cannot corrupt the response shape.
-  const merged: Record<string, string> = { JSON: JSON_FORMAT_LITERAL, ...values }
+  // {{JSON}} is always provided by us and wins over any caller-supplied key,
+  // so users editing templates cannot corrupt the response shape.
+  const merged: Record<string, string> = { ...values, JSON: JSON_FORMAT_LITERAL }
   let out = template
   for (const [key, value] of Object.entries(merged)) {
     out = out.split(`{{${key}}}`).join(value)

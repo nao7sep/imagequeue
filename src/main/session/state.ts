@@ -31,7 +31,7 @@ function cloneQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendI
   return cloned
 }
 
-function createTaskCounts(tasksByBackend: Record<BackendId, Task[]>): SessionTaskCounts {
+export function createTaskCounts(tasksByBackend: Record<BackendId, Task[]>): SessionTaskCounts {
   const counts: SessionTaskCounts = {
     total: 0,
     queued: 0,
@@ -70,7 +70,7 @@ function createSessionDisplayCounts(tasksByBackend: Record<BackendId, Task[]>): 
   }
 }
 
-function collectSessionThumbnails(tasksByBackend: Record<BackendId, Task[]>, limit = 3): SessionThumbnail[] {
+export function collectSessionThumbnails(tasksByBackend: Record<BackendId, Task[]>, limit = 3): SessionThumbnail[] {
   const completedTasks = collectTasks(tasksByBackend)
     .filter((task) =>
       task.status === 'completed' &&
@@ -89,7 +89,7 @@ function getManifestPath(sessionDir = getSessionDir()): string {
   return path.join(sessionDir, SESSION_MANIFEST_FILENAME)
 }
 
-function isSessionManifest(value: unknown): value is SessionManifest {
+export function isSessionManifest(value: unknown): value is SessionManifest {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<SessionManifest>
   if (candidate.version !== SESSION_MANIFEST_VERSION) return false
@@ -163,7 +163,7 @@ function ensureSessionId(sessionId: string): string {
   return sessionId
 }
 
-function toInterruptedTask(task: Task): Task {
+export function toInterruptedTask(task: Task): Task {
   if (task.status === 'completed' || task.status === 'kept') return cloneTask(task)
   return {
     ...cloneTask(task),
@@ -177,7 +177,7 @@ function toInterruptedTask(task: Task): Task {
   }
 }
 
-function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
+export function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
   const normalized = createEmptyQueues()
   for (const backend of BACKEND_IDS_IN_UI_ORDER) {
     normalized[backend] = (tasksByBackend[backend] ?? []).map(toInterruptedTask)

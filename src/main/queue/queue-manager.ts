@@ -29,7 +29,7 @@ export function cloneTask(task: Task): Task {
 }
 
 // In-memory queue manager. One ordered queue per backend.
-class QueueManager {
+export class QueueManager {
   private queues: Record<BackendId, Task[]> = createEmptyQueues()
 
   private createTask(request: EnqueueBatchUnit): Task {

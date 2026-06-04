@@ -30,7 +30,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 // Fills missing keys in `loaded` from `defaults`, recursively for plain
 // objects. Existing keys in `loaded` are preserved as-is, including explicit
 // false/0/""/null and arrays — only structurally absent keys are filled.
-function deepMergeDefaults<T>(loaded: unknown, defaults: T): T {
+export function deepMergeDefaults<T>(loaded: unknown, defaults: T): T {
   if (!isPlainObject(loaded) || !isPlainObject(defaults)) {
     return (loaded === undefined ? defaults : (loaded as T))
   }

@@ -139,7 +139,7 @@ Each generation runs `draw-things-cli generate`. Output is written to a temporar
 | `--steps` | Current steps control |
 | `--cfg` | Current guidance control |
 | `--seed` | Current seed control, omitted when random |
-| `--negative-prompt` | Current negative prompt, omitted when empty |
+| `--negative-prompt` | Current negative prompt, omitted when none is set |
 | `--disable-preview` | Always set |
 | `--models-dir` | Always set |
 
