@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { brainstormPrompts } from './brainstorm'
+import { brainstormPrompts, cancelBrainstorm } from './brainstorm'
 import { createDefaultConfig } from './config/defaults'
 import {
   createElaborator,
@@ -59,6 +59,10 @@ export function registerElaboratorsIpc(): void {
       return brainstormPrompts(req)
     }
   )
+
+  ipcMain.handle('elaborators:brainstormCancel', (_event, requestId: string) => {
+    cancelBrainstorm(requestId)
+  })
 
   // Returns the shipped default brainstorm config — used by the Elaboration
   // Settings modal's "Reset to Defaults" button. Reads from the same

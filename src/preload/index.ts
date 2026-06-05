@@ -121,6 +121,9 @@ const api = {
   }): Promise<{ prompts: string[] }> =>
     ipcRenderer.invoke('elaborators:brainstorm', req),
 
+  cancelBrainstorm: (requestId: string): Promise<void> =>
+    ipcRenderer.invoke('elaborators:brainstormCancel', requestId),
+
   brainstormGetDefaults: (): Promise<{
     batch_size: number
     max_retries_per_turn: number
@@ -141,14 +144,14 @@ const api = {
 
   onBrainstormProgress: (
     requestId: string,
-    callback: (event: { done: number; total: number; newPrompts: string[] }) => void
+    callback: (event: { done: number; total: number }) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      payload: { requestId: string; done: number; total: number; newPrompts: string[] }
+      payload: { requestId: string; done: number; total: number }
     ): void => {
       if (payload.requestId !== requestId) return
-      callback({ done: payload.done, total: payload.total, newPrompts: payload.newPrompts })
+      callback({ done: payload.done, total: payload.total })
     }
     ipcRenderer.on('brainstorm:progress', handler)
     return () => { ipcRenderer.removeListener('brainstorm:progress', handler) }

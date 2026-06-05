@@ -18,6 +18,7 @@ import {
   type LocalModelInfo,
 } from '../../../shared/types'
 import { localModelName, sortLocalModels } from '../utils/localModels'
+import { isBrainstormMode } from '../utils/promptMode'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import './AdvancedPromptingModal.css'
 
@@ -81,6 +82,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   // in-flight async continuations know to discard their results rather than
   // append prompts or enqueue tasks.
   const cancelledRef = useRef(false)
+  // The brainstorm requestId of the run in flight, so a deliberate close can
+  // tell the main process to stop generating. Null when no brainstorm is running.
+  const activeRequestIdRef = useRef<string | null>(null)
 
   const busy = elaborateBusy || queueBusy
 
@@ -220,7 +224,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
 
   const promptModeDisabledReason = useCallback((which: PromptMode): string | null => {
     if (which === 'elaborated' && !elaborated.trim()) return 'Run Elaborate first.'
-    if ((which === 'fresh-iteration' || which === 'fresh-task') && missingElaboratorKind) {
+    if (isBrainstormMode(which) && missingElaboratorKind) {
       return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
     }
     return null
@@ -236,17 +240,18 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     if (totalTasks === 0) return 'Select at least one target.'
     if (promptMode === 'as-is' && !seed.trim()) return 'Seed prompt is empty.'
     if (promptMode === 'elaborated' && !elaborated.trim()) return 'Elaborated prompt is empty.'
-    if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && missingElaboratorKind) {
+    if (isBrainstormMode(promptMode) && missingElaboratorKind) {
       return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
     }
-    if ((promptMode === 'fresh-iteration' || promptMode === 'fresh-task') && !seed.trim()) return 'Enter a seed prompt for elaboration.'
+    if (isBrainstormMode(promptMode) && !seed.trim()) return 'Enter a seed prompt for elaboration.'
     return null
   })()
 
-  // Run a brainstorm request and stream its progress into the session list.
-  // Each turn's prompts append to context.elaboratedPrompts as they arrive, so
-  // a mid-run failure still leaves the successful turns in the list. Returns
-  // the prompts produced by THIS call (not including prior session prompts).
+  // Run a brainstorm request and return the prompts it produced (not including
+  // prior session prompts). Prompts are NOT written to the session history here
+  // — the caller persists them only after committing the run (queueing the
+  // tasks, or accepting the single Elaborate result), so an aborted or failed
+  // run leaves nothing behind. Progress events drive only the live counter.
   const runBrainstorm = useCallback(async (count: number): Promise<string[]> => {
     if (!selectedContentElaboratorId || !selectedCompositionElaboratorId || !selectedStyleElaboratorId) {
       throw new Error('Pick content, composition, and style elaborators first.')
@@ -256,11 +261,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random()}`
+    activeRequestIdRef.current = requestId
 
     const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
-      if (!cancelledRef.current) {
-        appendElaboratedPrompts(event.newPrompts)
-      }
       setBrainstormProgress({ done: event.done, total: event.total })
     })
 
@@ -279,8 +282,9 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     } finally {
       unsubscribe()
       setBrainstormProgress(null)
+      activeRequestIdRef.current = null
     }
-  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, elaboratedPrompts, appendElaboratedPrompts])
+  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, elaboratedPrompts])
 
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (elaborateDisabledReason) return
@@ -302,13 +306,16 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         return
       }
       update({ elaborated: first, promptMode: 'elaborated' })
+      // Commit: the elaborated prompt is now the accepted result, so record it
+      // in the session history (it feeds future runs' "avoid repeats" context).
+      appendElaboratedPrompts([first])
     } catch (error) {
       showError(error instanceof Error ? error.message : String(error))
     } finally {
       setElaborateBusy(false)
     }
   }, [
-    elaborateDisabledReason, runBrainstorm, elaboratedPrompts.length, clearMessage, showError, update,
+    elaborateDisabledReason, runBrainstorm, elaboratedPrompts.length, clearMessage, showError, update, appendElaboratedPrompts,
     elaboratorsByKind, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
   ])
 
@@ -361,6 +368,10 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
       // - as-is / elaborated: a single prompt reused for everything.
       // - fresh-iteration: one prompt per iteration, shared across models. Length = copies.
       // - fresh-task: one prompt per (model × iteration). Length = targets × copies.
+      // fresh-* modes brainstorm new prompts; as-is/elaborated reuse existing
+      // text. Only brainstormed prompts get recorded in the session history, and
+      // only after their tasks are queued below.
+      const brainstormed = isBrainstormMode(promptMode)
       let prompts: string[] = []
       if (promptMode === 'as-is') {
         prompts = [seed.trim()]
@@ -424,8 +435,18 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
         })
       }
 
+      // Re-check after the awaits above (snapshot reads, DT param resolution):
+      // a deliberate close could have landed mid-build, and nothing should be
+      // queued then. No await sits between this gate and the enqueue, so it
+      // can't be raced.
+      if (cancelledRef.current) return
       await window.electronAPI.enqueueBatch(units)
       const dispatched = units.length
+
+      // Commit: the tasks now exist, so record the freshly brainstormed prompts
+      // in the session history. A run that was cancelled or failed never reaches
+      // this point, so it leaves no orphan entries.
+      if (brainstormed) appendElaboratedPrompts(prompts)
 
       showInfo(`Queued ${dispatched} task${dispatched === 1 ? '' : 's'}.`)
       // Per-task enqueue is already logged in main; the click-time log above
@@ -440,7 +461,7 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   }, [
     queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, runBrainstorm, buildDtParams, elaboratedPrompts.length,
-    snapshots, clearMessage, showInfo, showError,
+    snapshots, clearMessage, showInfo, showError, appendElaboratedPrompts,
   ])
 
   // Esc / outside-click / X all route through here. The only time we ask the
@@ -450,12 +471,17 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
     if (busy) {
       const ok = await confirm({
         title: 'Operation in progress',
-        message: 'An elaboration or queue operation is still running. Close anyway? Any results still being generated will be discarded.',
+        message: 'An elaboration or queue operation is still running. Close anyway? The prompts generated by this run will be discarded along with any unfinished work.',
         confirmLabel: 'Close',
         danger: true,
       })
       if (!ok) return
       cancelledRef.current = true
+      // Stop the main-process brainstorm so it doesn't keep calling the text AI.
+      // Nothing to clean up in the history: this run's prompts are only recorded
+      // after its tasks are queued, which a cancelled run never reaches.
+      const requestId = activeRequestIdRef.current
+      if (requestId) void window.electronAPI.cancelBrainstorm(requestId)
     }
     onClose()
   }, [busy, confirm, onClose])

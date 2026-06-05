@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
 import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
@@ -24,6 +24,7 @@ function createWindow(): void {
     height: 720,
     minWidth: 1200,
     minHeight: 600,
+    backgroundColor: '#1a1a2e',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -88,6 +89,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // The app ships a single dark theme; force dark native chrome (title bar,
+  // menus) so it doesn't follow a light OS appearance.
+  nativeTheme.themeSource = 'dark'
   ensureDataDir()
   loadConfig()
   initSession()

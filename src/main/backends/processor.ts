@@ -103,7 +103,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
     // Generate slug and allocate timestamp
     const slug = await generateSlug(task.prompt)
-    const timestamp = await allocateOutputTimestamp(backend)
+    const { timestamp, ordinal } = allocateOutputTimestamp(backend)
 
     const metadata: ImageMetadata = {
       prompt: task.prompt,
@@ -124,7 +124,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
     const fallback = getFallbackExt(backend, task.params)
     const ext = detectImageExt(imageBuffer, mimeType, fallback, { backend, model: task.model })
-    const baseName = writeImageOutput(timestamp, slug, backend, imageBuffer, metadata, ext)
+    const baseName = writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)
 
     task.status = 'completed'
     task.baseName = baseName

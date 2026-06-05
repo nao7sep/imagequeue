@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TimestampAllocator } from '../../../src/main/session/timestamp-allocator'
 
-// The allocator guarantees second-unique timestamps per backend; a collision
-// would make writeImageOutput throw "refusing to overwrite". These tests pin
-// that guarantee using fake timers so no real wall-clock waiting occurs.
+// The allocator hands out a second-precision timestamp plus an ordinal that
+// disambiguates outputs landing in the same second, without stalling. These
+// tests use a fixed system clock; no real or fake timers are advanced because
+// allocation is synchronous and never waits.
 describe('TimestampAllocator', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -11,34 +12,47 @@ describe('TimestampAllocator', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('issues the current second on the first allocation', async () => {
+  it('issues the current second at ordinal 0 on the first allocation', () => {
     const alloc = new TimestampAllocator()
-    await expect(alloc.allocate()).resolves.toBe('20260604-093015')
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 0 })
   })
 
-  it('advances to the next second when the current one is already taken', async () => {
+  it('keeps the same second and increments the ordinal within one second', () => {
     const alloc = new TimestampAllocator()
-    const first = alloc.allocate()
-    const second = alloc.allocate()
-    await vi.runAllTimersAsync()
-    expect(await first).toBe('20260604-093015')
-    expect(await second).toBe('20260604-093016')
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 0 })
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 1 })
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 2 })
   })
 
-  it('never reuses a seeded second', async () => {
+  it('resets the ordinal to 0 when the clock advances to a new second', () => {
     const alloc = new TimestampAllocator()
-    // Seed the current second as already used.
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 0 })
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 1 })
+    vi.setSystemTime(new Date(Date.UTC(2026, 5, 4, 9, 30, 16)))
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093016', ordinal: 0 })
+  })
+
+  it('never predates a seeded second: bumps the ordinal instead', () => {
+    const alloc = new TimestampAllocator()
+    // Seed the current second as already used by a resumed output.
     alloc.seed(Date.UTC(2026, 5, 4, 9, 30, 15))
-    const next = alloc.allocate()
-    await vi.runAllTimersAsync()
-    expect(await next).toBe('20260604-093016')
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 1 })
   })
 
-  it('clears all state on reset', async () => {
+  it('does not go backwards when the clock rewinds within a second', () => {
     const alloc = new TimestampAllocator()
-    await alloc.allocate() // claims 093015
+    vi.setSystemTime(new Date(Date.UTC(2026, 5, 4, 9, 30, 16)))
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093016', ordinal: 0 })
+    // Clock steps back a second; the allocator holds its last second.
+    vi.setSystemTime(new Date(Date.UTC(2026, 5, 4, 9, 30, 15)))
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093016', ordinal: 1 })
+  })
+
+  it('clears all state on reset', () => {
+    const alloc = new TimestampAllocator()
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 0 })
     alloc.reset()
-    // After reset the same second is available again.
-    await expect(alloc.allocate()).resolves.toBe('20260604-093015')
+    // After reset the same second is available again at ordinal 0.
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 0 })
   })
 })

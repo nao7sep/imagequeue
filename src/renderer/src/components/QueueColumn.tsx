@@ -38,12 +38,14 @@ import {
   type SavedImageBackendDefaults,
 } from '../utils/imageBackendDefaults'
 import { localModelName, sortLocalModels } from '../utils/localModels'
+import { isBackendReadyToEnqueue } from '../utils/enqueue'
+import { isFreshCompletion } from '../utils/taskScroll'
 import './QueueColumn.css'
 
 interface Props {
   backendId: BackendId
   label: string
-  hasPrompt: boolean
+  prompt: string
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -85,11 +87,12 @@ function findPresetValue(sizes: SizePreset[], width: number, height: number): st
   return preset ? `${preset.width}x${preset.height}` : null
 }
 
-export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.Element {
-  const { tasks, enqueue } = useQueue()
+export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Element {
+  const hasPrompt = prompt.trim().length > 0
+  const { tasks } = useQueue()
   const { selection, select, clear } = useSelection()
   const { settings, saveImageBackendDefaults } = useSettings()
-  const { setSnapshot } = useEnqueueConfigs()
+  const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId as 'openai')
   const defaultModel = models.find((m) => m.isDefault) ?? models[0]
   const [model, setModel] = useState(defaultModel?.id ?? '')
@@ -601,58 +604,27 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
     saveDefaults: saveImageBackendDefaults,
   })
 
+  // Backend-config readiness only (no prompt check — the prompt is validated by
+  // the enqueue action). Mirrored into the snapshot so Send-to-All / Cmd+N can
+  // skip not-ready backends, and reused for the "+ Queue" button's disabled state.
+  const readyToEnqueue = isBackendReadyToEnqueue({
+    backendId,
+    apiKeyMissing,
+    cliInstalled: !!cliStatus?.installed,
+    downloadedModelCount: downloadedModels.length,
+  })
+
   useEffect(() => {
     if (!model) {
       setSnapshot(backendId, null)
       return
     }
-    setSnapshot(backendId, { model, params: currentEnqueueParams })
-  }, [backendId, model, currentEnqueueParams, setSnapshot])
+    setSnapshot(backendId, { model, params: currentEnqueueParams, ready: readyToEnqueue })
+  }, [backendId, model, currentEnqueueParams, readyToEnqueue, setSnapshot])
 
   useEffect(() => {
     return () => { setSnapshot(backendId, null) }
   }, [backendId, setSnapshot])
-
-  const doEnqueue = useCallback((prompt: string, countOverride?: number) => {
-    if (!prompt.trim()) return
-    if (apiKeyMissing) return
-    if (backendId === 'drawthings' && (!cliStatus?.installed || downloadedModels.length === 0)) return
-
-    const count = Math.max(1, countOverride ?? 1)
-
-    if (backendId === 'drawthings' && model) {
-      window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
-        .catch((err) => logSaveError('save Draw Things model parameters before enqueue', err, { model }))
-    }
-    enqueue({ prompt, backend: backendId, model, params: currentEnqueueParams, count })
-  }, [
-    backendId,
-    model,
-    apiKeyMissing,
-    cliStatus,
-    downloadedModels,
-    currentDrawThingsParams,
-    enqueue,
-    currentEnqueueParams
-  ])
-
-  // Listen for enqueue-all and enqueue-single events from PromptPane
-  useEffect(() => {
-    const handleAll = (e: Event): void => {
-      const detail = (e as CustomEvent).detail
-      doEnqueue(detail.prompt, detail.count)
-    }
-    const handleSingle = (e: Event): void => {
-      const detail = (e as CustomEvent).detail
-      if (detail.backend === backendId) doEnqueue(detail.prompt, detail.count)
-    }
-    window.addEventListener('enqueue-all', handleAll)
-    window.addEventListener('enqueue-single', handleSingle)
-    return () => {
-      window.removeEventListener('enqueue-all', handleAll)
-      window.removeEventListener('enqueue-single', handleSingle)
-    }
-  }, [backendId, doEnqueue])
 
   const renderSizeSelect = (sizes: SizePreset[], idx: number, setIdx: (n: number) => void): React.JSX.Element => (
     <div className="setting-row">
@@ -967,12 +939,8 @@ export function QueueColumn({ backendId, label, hasPrompt }: Props): React.JSX.E
 
         <button
           className="enqueue-btn"
-          disabled={!hasPrompt || apiKeyMissing || (backendId === 'drawthings' && (!cliStatus?.installed || downloadedModels.length === 0))}
-          onClick={() => {
-            window.dispatchEvent(
-              new CustomEvent('request-enqueue', { detail: { backend: backendId } })
-            )
-          }}
+          disabled={!hasPrompt || !readyToEnqueue}
+          onClick={() => enqueueToBackend(backendId, prompt)}
         >
           + Queue
         </button>
@@ -1008,6 +976,13 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
   const { removeTask, restoreTask, deleteTask } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const itemRef = useRef<HTMLDivElement>(null)
+  // Seeded with the status at mount so an item that is *already* completed or
+  // kept when it first renders — app launch restoring stored tasks, or the user
+  // revealing kept images with ⌘⇧K — is not mistaken for a fresh completion.
+  const prevStatusRef = useRef(task.status)
+  // Armed on a genuine completion transition; consumed by the thumbnail's
+  // onLoad so the scroll runs against the item's final height.
+  const justCompletedRef = useRef(false)
 
   useEffect(() => {
     if ((task.status !== 'completed' && task.status !== 'kept') || !task.baseName) return
@@ -1019,10 +994,18 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
     })
   }, [task.status, task.baseName])
 
-  // Scroll into view when generation completes
+  // Auto-scroll only on a real queued/generating -> completed transition, so a
+  // freshly generated image reveals itself. Mounting an already-completed task
+  // or flipping kept items into the list must not move the viewport. A fresh
+  // completion always carries a baseName (set together in the processor), so we
+  // defer to the thumbnail's onLoad; the no-thumbnail branch is a safety net.
   useEffect(() => {
-    if (task.status === 'completed' && !task.baseName) {
-      // No thumbnail — element size is already final, scroll now
+    const prevStatus = prevStatusRef.current
+    prevStatusRef.current = task.status
+    if (!isFreshCompletion(prevStatus, task.status)) return
+    if (task.baseName) {
+      justCompletedRef.current = true
+    } else {
       itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [task.status, task.baseName])
@@ -1070,7 +1053,11 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
             className="task-thumbnail"
             src={thumbUrl}
             alt=""
-            onLoad={() => itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+            onLoad={() => {
+              if (!justCompletedRef.current) return
+              justCompletedRef.current = false
+              itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+            }}
           />
         </div>
       )}

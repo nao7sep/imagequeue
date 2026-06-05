@@ -216,7 +216,7 @@ Elaborated prompts accumulate in a per-session list. The text AI sees previously
 
 Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. The list is numbered and shown newest-first so the latest prompt is immediately visible, while the underlying AI context remains chronological. Per-row **Delete** removes a prompt without confirmation; **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 
-The modal stays open after queueing so you can run another round. Clicking outside it does not close it. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; otherwise you can close it with **Esc** or the close button.
+The modal stays open after queueing so you can run another round. Clicking outside it does not close it. Prompts are recorded in the elaborated-prompts list only once their tasks are queued (or, for a single **Elaborate**, once the result appears), so a run that is cancelled or fails partway leaves nothing behind. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; confirming stops the in-flight generation and discards that run entirely. When nothing is running, you can close the modal with **Esc** or the close button.
 
 ## Elaborators
 

@@ -23,20 +23,30 @@ export interface BrainstormResult {
   prompts: string[]
 }
 
-// Emitted to the renderer after every successful turn. The renderer absorbs
-// `newPrompts` into its session list as soon as it arrives, so even a later
-// failure on a subsequent turn doesn't lose the prompts that already succeeded.
+// Emitted to the renderer after every successful turn so it can show live
+// progress. Prompts are not delivered here — the renderer takes the full set
+// from brainstormPrompts' return value and persists it only once the run
+// commits (its tasks are queued, or the single Elaborate result is accepted).
 interface BrainstormProgress {
   requestId: string
   done: number
   total: number
-  newPrompts: string[]
 }
 
 function broadcastProgress(progress: BrainstormProgress): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('brainstorm:progress', progress)
   }
+}
+
+// Request IDs the renderer has asked to cancel. brainstormPrompts checks this
+// at each turn boundary and stops collecting, so a deliberately aborted run
+// doesn't keep calling the text AI in the background. An in-flight turn still
+// finishes (we don't abort the underlying request), but no further turns start.
+const cancelledRequests = new Set<string>()
+
+export function cancelBrainstorm(requestId: string): void {
+  cancelledRequests.add(requestId)
 }
 
 function sleep(ms: number): Promise<void> {
@@ -164,12 +174,12 @@ async function askWithRetry(
 }
 
 // Generate `count` prompts via a single conversation, batched into turns of
-// `batch_size`. Each turn retries on transient failures. Progress is emitted
-// to all renderer windows after every successful turn.
+// `batch_size`. Each turn retries on transient failures. Progress (done/total)
+// is emitted to all renderer windows after every successful turn.
 //
-// On failure, throws the last error. Prompts from earlier successful turns
-// are kept by the renderer through the progress events that streamed them —
-// the orchestrator does not need to re-deliver them.
+// Returns the full set on success, or the prompts collected so far if the run
+// is cancelled between turns. On failure, throws the last error — the caller
+// persists nothing for a run that didn't complete and queue its tasks.
 export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
   if (req.count < 1) throw new Error('Count must be at least 1.')
   if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
@@ -208,6 +218,12 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
   try {
     while (collected.length < req.count) {
+      if (cancelledRequests.has(req.requestId)) {
+        log('info', 'Brainstorm cancelled', {
+          requestId: req.requestId, collected: collected.length, turns: turn,
+        })
+        break
+      }
       const remaining = req.count - collected.length
       const askFor = Math.min(remaining, batchSize)
       turn++
@@ -232,7 +248,6 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
         requestId: req.requestId,
         done: Math.min(collected.length, req.count),
         total: req.count,
-        newPrompts,
       })
 
       if (newPrompts.length === 0) {
@@ -266,5 +281,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       message: err instanceof Error ? err.message : String(err),
     })
     throw err instanceof Error ? err : new Error(String(err))
+  } finally {
+    cancelledRequests.delete(req.requestId)
   }
 }

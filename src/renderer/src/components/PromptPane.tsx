@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
+import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { getVisibleBackends } from '../utils/visibleBackends'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import './PromptPane.css'
@@ -14,6 +15,7 @@ interface Props {
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
   const { settings, saveNotificationField } = useSettings()
+  const { enqueueToBackend, enqueueToAll } = useEnqueueConfigs()
 
   const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
@@ -29,9 +31,8 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   }, [saveNotificationField])
 
   const handleSendToAll = useCallback(() => {
-    if (!prompt.trim()) return
-    window.dispatchEvent(new CustomEvent('enqueue-all', { detail: { prompt: prompt.trim() } }))
-  }, [prompt])
+    enqueueToAll(prompt)
+  }, [prompt, enqueueToAll])
 
   const [promptCopied, setPromptCopied] = useState(false)
   const [imageCopied, setImageCopied] = useState(false)
@@ -137,29 +138,13 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         const backend = visibleBackends[parseInt(e.key) - 1]
         if (!backend) return
         e.preventDefault()
-        window.dispatchEvent(
-          new CustomEvent('enqueue-single', { detail: { prompt: prompt.trim(), backend } })
-        )
+        enqueueToBackend(backend, prompt)
         return
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText])
-
-  // Handle "+ Queue" button requests from QueueColumn
-  useEffect(() => {
-    const handler = (e: Event): void => {
-      const { backend } = (e as CustomEvent).detail
-      if (prompt.trim()) {
-        window.dispatchEvent(
-          new CustomEvent('enqueue-single', { detail: { prompt: prompt.trim(), backend } })
-        )
-      }
-    }
-    window.addEventListener('request-enqueue', handler)
-    return () => window.removeEventListener('request-enqueue', handler)
-  }, [prompt])
+  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText, enqueueToBackend])
 
   useEffect(() => {
     refreshClipboardTextAvailable()

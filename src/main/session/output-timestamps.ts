@@ -1,5 +1,5 @@
 import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
-import { TimestampAllocator } from './timestamp-allocator'
+import { TimestampAllocator, type OutputTimestamp } from './timestamp-allocator'
 
 const allocators: Record<BackendId, TimestampAllocator> = {
   openai: new TimestampAllocator(),
@@ -12,7 +12,7 @@ const allocators: Record<BackendId, TimestampAllocator> = {
 
 const BASENAME_TIMESTAMP_RE = /^(\d{8})-(\d{6})-utc(?:-|$)/
 
-export function allocateOutputTimestamp(backend: BackendId): Promise<string> {
+export function allocateOutputTimestamp(backend: BackendId): OutputTimestamp {
   return allocators[backend].allocate()
 }
 

@@ -264,7 +264,7 @@ export function Layout(): React.JSX.Element {
             key={b.id}
             backendId={b.id}
             label={b.label}
-            hasPrompt={!!prompt.trim()}
+            prompt={prompt}
           />
         ))}
       </div>
