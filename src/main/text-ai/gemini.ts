@@ -23,10 +23,12 @@ export class GeminiProvider implements TextAIProvider {
       httpOptions: { timeout: opts.timeoutMs },
     })
 
-    const config = opts.schema
+    const config = opts.schema || opts.signal
       ? {
-          responseMimeType: 'application/json',
-          responseSchema: opts.schema,
+          ...(opts.schema
+            ? { responseMimeType: 'application/json', responseSchema: opts.schema }
+            : {}),
+          ...(opts.signal ? { abortSignal: opts.signal } : {}),
         }
       : undefined
 

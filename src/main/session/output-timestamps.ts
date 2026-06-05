@@ -27,10 +27,23 @@ export function seedOutputTimestampAllocators(tasksByBackend: Record<BackendId, 
     for (const task of tasksByBackend[backend] ?? []) {
       const timestampMs = parseTimestampMs(task.baseName)
       if (timestampMs !== null) {
-        allocators[backend].seed(timestampMs)
+        allocators[backend].seed(timestampMs, parseOutputOrdinal(task.baseName, backend))
       }
     }
   }
+}
+
+// Recovers the ordinal a basename was written with — the inverse of
+// outputBaseName's suffix (file-output.ts), which appends `-{ordinal+1}` after
+// the backend token only when ordinal > 0. So a trailing `-{backend}-{N}`
+// (N >= 2) means ordinal N-1, and a bare trailing `-{backend}` means ordinal 0.
+// Backend ids are plain lowercase words, so they carry no regex metacharacters.
+export function parseOutputOrdinal(baseName: string | null, backend: BackendId): number {
+  if (!baseName) return 0
+  const match = new RegExp(`-${backend}-(\\d+)$`).exec(baseName)
+  if (!match) return 0
+  const suffix = Number(match[1])
+  return suffix >= 2 ? suffix - 1 : 0
 }
 
 export function parseTimestampMs(baseName: string | null): number | null {

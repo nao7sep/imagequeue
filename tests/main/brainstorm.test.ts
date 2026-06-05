@@ -95,4 +95,29 @@ describe('brainstormPrompts cancellation', () => {
     expect(second.prompts).toEqual(['p1', 'p2'])
     expect(ask).toHaveBeenCalledTimes(2)
   })
+
+  it('aborts the in-flight request mid-turn and keeps the prompts collected so far', async () => {
+    // Turn 1 resolves; turn 2 hangs until its AbortSignal fires, then rejects
+    // like a real SDK abort. The loop should treat that as cancellation, not a
+    // failure, and return only the prompt from turn 1.
+    let calls = 0
+    const ask = vi.fn((opts: AskOptions): Promise<AskResult> => {
+      calls += 1
+      if (calls === 1) return Promise.resolve({ text: '', parsed: { prompts: ['p1'] } })
+      return new Promise((_resolve, reject) => {
+        opts.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+      })
+    })
+    vi.mocked(getMainProvider).mockReturnValue({
+      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
+    })
+
+    const pending = brainstormPrompts(request({ requestId: 'r4', count: 5 }))
+    // Let turn 1 resolve and turn 2's ask reach its awaiting state, then cancel.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    cancelBrainstorm('r4')
+    const result = await pending
+    expect(result.prompts).toEqual(['p1'])
+    expect(ask).toHaveBeenCalledTimes(2)
+  })
 })

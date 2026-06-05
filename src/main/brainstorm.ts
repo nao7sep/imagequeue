@@ -39,14 +39,15 @@ function broadcastProgress(progress: BrainstormProgress): void {
   }
 }
 
-// Request IDs the renderer has asked to cancel. brainstormPrompts checks this
-// at each turn boundary and stops collecting, so a deliberately aborted run
-// doesn't keep calling the text AI in the background. An in-flight turn still
-// finishes (we don't abort the underlying request), but no further turns start.
-const cancelledRequests = new Set<string>()
+// AbortControllers for in-flight runs, keyed by requestId. cancelBrainstorm
+// aborts the controller, which both halts the in-flight text-AI request
+// (the signal is threaded into the SDK call) and stops the loop from starting
+// another turn. brainstormPrompts registers its controller on entry and deletes
+// it on exit, so a cancel arriving after a run finished is a harmless no-op.
+const activeControllers = new Map<string, AbortController>()
 
 export function cancelBrainstorm(requestId: string): void {
-  cancelledRequests.add(requestId)
+  activeControllers.get(requestId)?.abort()
 }
 
 function sleep(ms: number): Promise<void> {
@@ -130,10 +131,13 @@ async function askWithRetry(
   timeoutMs: number,
   expectedCount: number,
   maxRetries: number,
-  backoffSchedule: number[]
+  backoffSchedule: number[],
+  signal: AbortSignal
 ): Promise<string[]> {
   let lastError: unknown = null
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Once aborted, don't start or retry a request — the caller handles the abort.
+    if (signal.aborted) break
     if (attempt > 0) {
       const backoff = backoffSchedule.length > 0
         ? backoffSchedule[Math.min(attempt - 1, backoffSchedule.length - 1)]
@@ -158,6 +162,7 @@ async function askWithRetry(
         messages: effectiveMessages,
         schema: PROMPTS_RESPONSE_SCHEMA,
         timeoutMs,
+        signal,
       })
       const prompts = extractPromptsFromParsed(result.parsed)
       if (prompts.length === 0) {
@@ -216,9 +221,12 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   const collected: string[] = []
   let turn = 0
 
+  const controller = new AbortController()
+  activeControllers.set(req.requestId, controller)
+
   try {
     while (collected.length < req.count) {
-      if (cancelledRequests.has(req.requestId)) {
+      if (controller.signal.aborted) {
         log('info', 'Brainstorm cancelled', {
           requestId: req.requestId, collected: collected.length, turns: turn,
         })
@@ -233,10 +241,23 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
         : buildContinuationMessage(brainstormConfig.templates.continuation, askFor)
       messages.push({ role: 'user', text: userMessage })
 
-      const newPrompts = await askWithRetry(
-        handle.provider, messages, handle.timeoutMs, askFor,
-        maxRetries, brainstormConfig.retry_backoff_ms
-      )
+      let newPrompts: string[]
+      try {
+        newPrompts = await askWithRetry(
+          handle.provider, messages, handle.timeoutMs, askFor,
+          maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
+        )
+      } catch (err) {
+        // An aborted request rejects; treat that as cancellation (keep what we
+        // collected) rather than a failure to report and rethrow.
+        if (controller.signal.aborted) {
+          log('info', 'Brainstorm cancelled', {
+            requestId: req.requestId, collected: collected.length, turns: turn,
+          })
+          break
+        }
+        throw err
+      }
       collected.push(...newPrompts)
       messages.push({ role: 'model', text: JSON.stringify({ prompts: newPrompts }) })
 
@@ -282,6 +303,6 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     })
     throw err instanceof Error ? err : new Error(String(err))
   } finally {
-    cancelledRequests.delete(req.requestId)
+    activeControllers.delete(req.requestId)
   }
 }

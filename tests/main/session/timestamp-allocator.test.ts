@@ -34,9 +34,34 @@ describe('TimestampAllocator', () => {
 
   it('never predates a seeded second: bumps the ordinal instead', () => {
     const alloc = new TimestampAllocator()
-    // Seed the current second as already used by a resumed output.
-    alloc.seed(Date.UTC(2026, 5, 4, 9, 30, 15))
+    // Seed the current second as already used (ordinal 0) by a resumed output.
+    alloc.seed(Date.UTC(2026, 5, 4, 9, 30, 15), 0)
     expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 1 })
+  })
+
+  it('continues past the highest seeded ordinal for a resumed second', () => {
+    const alloc = new TimestampAllocator()
+    // Resumed files in this second used ordinals 0..2 (basename suffix -3).
+    alloc.seed(Date.UTC(2026, 5, 4, 9, 30, 15), 2)
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 3 })
+  })
+
+  it('keeps the max ordinal when a second is seeded out of order', () => {
+    const alloc = new TimestampAllocator()
+    const S = Date.UTC(2026, 5, 4, 9, 30, 15)
+    alloc.seed(S, 0)
+    alloc.seed(S, 3)
+    alloc.seed(S, 1)
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093015', ordinal: 4 })
+  })
+
+  it('ignores ordinals seeded for an older second than the latest', () => {
+    const alloc = new TimestampAllocator()
+    alloc.seed(Date.UTC(2026, 5, 4, 9, 30, 16), 0) // newer second
+    alloc.seed(Date.UTC(2026, 5, 4, 9, 30, 15), 5) // older second, higher ordinal
+    vi.setSystemTime(new Date(Date.UTC(2026, 5, 4, 9, 30, 16)))
+    // Allocation lands in the newer seeded second, so it continues from ordinal 0.
+    expect(alloc.allocate()).toEqual({ timestamp: '20260604-093016', ordinal: 1 })
   })
 
   it('does not go backwards when the clock rewinds within a second', () => {

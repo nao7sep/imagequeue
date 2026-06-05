@@ -22,7 +22,8 @@ export function imageExtFromPath(imagePath: string | null | undefined): ImageExt
 // disambiguates multiple outputs that landed in the same second; ordinal 0 (the
 // first of its second) gets no suffix so the common case stays
 // `{timestamp}-utc-{slug}-{backend}`, and later ones get a `-2`, `-3`, … tail
-// after the backend so the front timestamp token stays intact.
+// after the backend so the front timestamp token stays intact. parseOutputOrdinal
+// (output-timestamps.ts) inverts this suffix on resume — keep the two in sync.
 export function outputBaseName(
   timestamp: string,
   ordinal: number,

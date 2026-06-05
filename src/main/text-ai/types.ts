@@ -13,6 +13,10 @@ export interface AskOptions {
   // populating `parsed` on the result.
   schema?: object
   timeoutMs: number
+  // When provided, aborting it cancels the in-flight request. Implementations
+  // pass it through to the underlying SDK call so a cancelled brainstorm stops
+  // spending tokens immediately rather than only between turns.
+  signal?: AbortSignal
 }
 
 export interface AskResult {

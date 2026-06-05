@@ -35,15 +35,17 @@ export class TimestampAllocator {
     return { timestamp: formatTimestamp(new Date(secondMs)), ordinal: this.lastOrdinal }
   }
 
-  // Seeds the last-issued second from a resumed session's existing output so new
-  // allocations never predate it. Only the second is recovered, not the ordinal:
-  // a new output landing in the exact same second as a resumed file (effectively
-  // impossible after any real resume gap) would re-use an ordinal, which
-  // writeImageOutput's overwrite guard catches as a thrown error, never a clobber.
-  seed(timestampMs: number): void {
+  // Seeds the allocator from a resumed session's existing output so new
+  // allocations continue past it. Recovers both the second and that second's
+  // highest used ordinal, so a new output landing in the same second as resumed
+  // files gets the next free ordinal instead of re-using one. Tasks may be
+  // seeded in any order, so for the latest second we keep the max ordinal seen.
+  seed(timestampMs: number, ordinal: number): void {
     if (this.lastSecondMs === null || timestampMs > this.lastSecondMs) {
       this.lastSecondMs = timestampMs
-      this.lastOrdinal = 0
+      this.lastOrdinal = ordinal
+    } else if (timestampMs === this.lastSecondMs) {
+      this.lastOrdinal = Math.max(this.lastOrdinal, ordinal)
     }
   }
 

@@ -32,7 +32,7 @@ export class OpenAIProvider implements TextAIProvider {
       model: this.model,
       messages: toOpenAIMessages(opts.messages),
       ...(opts.schema ? { response_format: { type: 'json_object' as const } } : {}),
-    })
+    }, { signal: opts.signal })
 
     const text = response.choices[0]?.message?.content ?? ''
     const result: AskResult = { text }
