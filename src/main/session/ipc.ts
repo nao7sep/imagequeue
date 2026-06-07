@@ -1,14 +1,17 @@
 import { ipcMain, shell } from 'electron'
+import type { SessionDraft } from '../../shared/session-draft'
 import {
   appendActiveSessionElaboratedPrompts,
   clearActiveSessionElaboratedPrompts,
   createSession,
   deleteActiveSessionElaboratedPromptAt,
   deleteSession,
+  getActiveSessionDraft,
   getActiveSessionElaboratedPrompts,
   listSessions,
   resolveSessionDir,
   resumeSession,
+  setActiveSessionDraft,
 } from './state'
 
 export function registerSessionIpc(): void {
@@ -30,6 +33,14 @@ export function registerSessionIpc(): void {
 
   ipcMain.handle('session:openFolder', async (_event, sessionId: string) => {
     await shell.openPath(resolveSessionDir(sessionId))
+  })
+
+  ipcMain.handle('session:getDraft', () => {
+    return getActiveSessionDraft()
+  })
+
+  ipcMain.handle('session:saveDraft', (_event, draft: SessionDraft) => {
+    setActiveSessionDraft(draft)
   })
 
   ipcMain.handle('session:getElaboratedPrompts', () => {

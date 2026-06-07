@@ -247,7 +247,6 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
 
       {showAdvanced && (
         <AdvancedPromptingModal
-          initialPrompt={prompt}
           onClose={() => setShowAdvanced(false)}
         />
       )}

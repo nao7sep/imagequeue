@@ -1,5 +1,7 @@
 // Shared types between main and renderer processes.
 
+import type { SessionDraft } from './session-draft'
+
 export type BackendId = 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
 export type CloudBackendId = Exclude<BackendId, 'drawthings'>
 
@@ -163,6 +165,11 @@ export interface SessionManifest {
   lastResumedAt: string | null
   taskCounts: SessionTaskCounts
   elaboratedPrompts: string[]
+  // The renderer's working state for this session (prompt + Advanced Prompting
+  // selections). Optional on disk: manifests written before this field existed,
+  // or with a malformed draft, load fine and are backfilled with an empty draft
+  // on read (see normalizeSessionDraft).
+  draft: SessionDraft
   tasks: Record<BackendId, Task[]>
 }
 

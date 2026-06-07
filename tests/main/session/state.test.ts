@@ -8,6 +8,7 @@ import {
 } from '../../../src/main/session/state'
 import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
 import { BackendId, SESSION_MANIFEST_VERSION, Task, TaskStatus } from '../../../src/shared/types'
+import { createEmptySessionDraft } from '../../../src/shared/session-draft'
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
   return {
@@ -123,5 +124,14 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest({ ...valid, elaboratedPrompts: 'nope' })).toBe(false)
     expect(isSessionManifest({ ...valid, elaboratedPrompts: [1, 2] })).toBe(false)
     expect(isSessionManifest({ ...valid, tasks: { openai: 'not-an-array' } })).toBe(false)
+  })
+
+  it('does not gate on the draft: absent or malformed drafts still validate', () => {
+    // The draft is repaired on read (normalizeSessionDraft), not validated here,
+    // so a missing or broken draft must never discard an otherwise-good session.
+    expect(isSessionManifest(valid)).toBe(true) // no draft at all
+    expect(isSessionManifest({ ...valid, draft: createEmptySessionDraft() })).toBe(true)
+    expect(isSessionManifest({ ...valid, draft: 'garbage' })).toBe(true)
+    expect(isSessionManifest({ ...valid, draft: null })).toBe(true)
   })
 })

@@ -16,6 +16,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
 } from '../shared/types'
+import type { SessionDraft } from '../shared/session-draft'
 import type {
   CliJobSnapshot,
   CliChunkEvent,
@@ -81,6 +82,12 @@ const api = {
 
   openSessionFolder: (sessionId: string): Promise<void> =>
     ipcRenderer.invoke('session:openFolder', sessionId),
+
+  getSessionDraft: (): Promise<SessionDraft> =>
+    ipcRenderer.invoke('session:getDraft'),
+
+  saveSessionDraft: (draft: SessionDraft): Promise<void> =>
+    ipcRenderer.invoke('session:saveDraft', draft),
 
   getSessionElaboratedPrompts: (): Promise<string[]> =>
     ipcRenderer.invoke('session:getElaboratedPrompts'),
@@ -360,7 +367,7 @@ const api = {
   },
 
   // Fired when the active session changes (new session, resume into another).
-  // Session-scoped renderer state (e.g. AdvancedPromptingContext) resets here.
+  // Session-scoped renderer state (e.g. SessionDraftContext) re-hydrates here.
   onSessionChanged: (callback: (event: { sessionId: string }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string }): void => {
       callback(data)

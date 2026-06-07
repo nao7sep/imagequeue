@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { Modal } from './Modal'
-import { useAdvancedPrompting } from '../context/AdvancedPromptingContext'
+import { useSessionDraft } from '../context/SessionDraftContext'
 import { useConfirm } from '../context/ConfirmContext'
 import './ElaboratedPromptsModal.css'
 
@@ -12,7 +12,7 @@ interface Props {
 // list the brainstorm orchestrator reads as previousPrompts, so deletions
 // here genuinely tell the AI to stop avoiding those prompts on future calls.
 export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
-  const { state, deleteElaboratedPromptAt, clearElaboratedPrompts } = useAdvancedPrompting()
+  const { state, deleteElaboratedPromptAt, clearElaboratedPrompts } = useSessionDraft()
   const confirm = useConfirm()
   const { elaboratedPrompts } = state
   const displayPrompts = [...elaboratedPrompts].reverse()

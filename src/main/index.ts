@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir } from './config'
-import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
+import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
@@ -152,6 +152,7 @@ async function gracefulShutdown(reason: string): Promise<void> {
     }
   }
   await guarded('drainPendingModelParamsWrites', () => drainPendingModelParamsWrites())
+  await guarded('drainPendingDraftWrites', () => drainPendingDraftWrites())
   await guarded('closeViewerWindow', () => closeViewerWindow())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
   await guarded('killAllCliJobs', () => killAllCliJobs())

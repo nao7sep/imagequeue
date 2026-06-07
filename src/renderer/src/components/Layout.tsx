@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
 import { SettingsModal } from './SettingsModal'
@@ -12,6 +12,7 @@ import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
+import { useSessionDraft } from '../context/SessionDraftContext'
 import { useNotifications } from '../hooks/useNotifications'
 
 const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
@@ -27,20 +28,14 @@ export function Layout(): React.JSX.Element {
   useNotifications()
   const { selectedTask, clear, navigate, removeSelected, restoreSelected, deleteSelected } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
+  // The main prompt lives in the session draft: persisted per session and
+  // re-hydrated on session change (new/resume), alongside the Advanced
+  // Prompting state. No local reset is needed — the context handles it.
+  const { state: draft, update: updateDraft } = useSessionDraft()
+  const prompt = draft.prompt
+  const setPrompt = useCallback((value: string): void => updateDraft({ prompt: value }), [updateDraft])
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
-  const [prompt, setPrompt] = useState('')
-
-  // Reset the main prompt on session change so its lifecycle matches the
-  // Advanced Prompting modal: per-session, not persisted to disk, wiped on
-  // new session / resume. Without this the prompt textarea would carry over
-  // across sessions, which surprises users moving between sessions.
-  useEffect(() => {
-    const unsubscribe = window.electronAPI.onSessionChanged(() => {
-      setPrompt('')
-    })
-    return unsubscribe
-  }, [])
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)

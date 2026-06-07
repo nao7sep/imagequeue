@@ -11,6 +11,7 @@ import {
   SessionThumbnail,
   Task,
 } from '../../shared/types'
+import { createEmptySessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
 import { loadConfig } from '../config'
 import { initLogger, log, retargetLogger } from '../logger'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
@@ -22,6 +23,17 @@ import { writeJsonAtomic } from '../utils/atomic-write'
 const SESSION_MANIFEST_FILENAME = 'session.json'
 let currentElaboratedPrompts: string[] = []
 let currentElaboratedPromptsLoaded = false
+let currentDraft: SessionDraft = createEmptySessionDraft()
+let currentDraftLoaded = false
+
+// The draft changes on every keystroke in the prompt/seed/elaborated fields, so
+// its write-through is coalesced here (the renderer sends each change without
+// debouncing, mirroring Draw Things model-param autosave). persistActiveSession
+// rewrites the whole manifest, so coalescing keeps large sessions from doing a
+// full serialize per keystroke. drainPendingDraftWrites flushes a pending write
+// on quit and before switching sessions so nothing typed is lost.
+const DRAFT_PERSIST_DEBOUNCE_MS = 300
+let draftPersistTimer: ReturnType<typeof setTimeout> | null = null
 
 function cloneQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
   const cloned = createEmptyQueues()
@@ -120,6 +132,10 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     return {
       ...parsed,
       elaboratedPrompts: [...parsed.elaboratedPrompts],
+      // draft is intentionally not validated by isSessionManifest: a missing or
+      // malformed draft must not discard an otherwise-good session, so it is
+      // repaired to a clean draft here instead.
+      draft: normalizeSessionDraft((parsed as Partial<SessionManifest>).draft),
       tasks: normalizedTasks,
     }
   } catch (error) {
@@ -138,6 +154,13 @@ function ensureActiveElaboratedPromptsLoaded(): void {
   currentElaboratedPromptsLoaded = true
 }
 
+function ensureActiveDraftLoaded(): void {
+  if (currentDraftLoaded) return
+  const manifest = readManifestFromDir(getSessionDir())
+  currentDraft = manifest ? normalizeSessionDraft(manifest.draft) : createEmptySessionDraft()
+  currentDraftLoaded = true
+}
+
 function buildManifest(
   sessionId: string,
   tasksByBackend: Record<BackendId, Task[]>,
@@ -152,6 +175,7 @@ function buildManifest(
     lastResumedAt: options?.lastResumedAt ?? previous?.lastResumedAt ?? null,
     taskCounts: createTaskCounts(tasksByBackend),
     elaboratedPrompts: [...currentElaboratedPrompts],
+    draft: normalizeSessionDraft(currentDraft),
     tasks: cloneQueues(tasksByBackend),
   }
 }
@@ -230,8 +254,8 @@ function broadcastQueueUpdate(tasksByBackend: Record<BackendId, Task[]>): void {
 }
 
 // Fired whenever the active session changes (new session, resume into another).
-// Renderer-side session-scoped contexts (e.g. AdvancedPromptingContext) listen
-// to this to reset their in-memory state.
+// Renderer-side session-scoped contexts (e.g. SessionDraftContext) listen to
+// this to re-hydrate their in-memory state from the now-active session.
 function broadcastSessionChanged(sessionId: string): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('session:changed', { sessionId })
@@ -253,12 +277,43 @@ export function resolveSessionDir(sessionId: string): string {
 
 export function persistActiveSession(options?: { lastResumedAt?: string | null }): SessionManifest {
   ensureActiveElaboratedPromptsLoaded()
+  ensureActiveDraftLoaded()
   const sessionDir = getSessionDir()
   fs.mkdirSync(sessionDir, { recursive: true })
   const previous = readManifestFromDir(sessionDir)
   const manifest = buildManifest(getSessionId(), queueManager.getAllStoredTasks(), previous, options)
   writeJsonAtomic(getManifestPath(sessionDir), manifest)
   return manifest
+}
+
+function scheduleDraftPersist(): void {
+  if (draftPersistTimer !== null) return
+  draftPersistTimer = setTimeout(() => {
+    draftPersistTimer = null
+    try {
+      persistActiveSession()
+    } catch (error) {
+      log('error', 'Failed to persist session draft', {
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, DRAFT_PERSIST_DEBOUNCE_MS)
+}
+
+function cancelScheduledDraftPersist(): void {
+  if (draftPersistTimer === null) return
+  clearTimeout(draftPersistTimer)
+  draftPersistTimer = null
+}
+
+// Flush a pending coalesced draft write synchronously. Called on quit so a
+// keystroke made just before Cmd+Q isn't lost in the debounce gap, and before
+// switching away from a session so the outgoing session's draft lands on disk.
+export function drainPendingDraftWrites(): void {
+  if (draftPersistTimer === null) return
+  cancelScheduledDraftPersist()
+  persistActiveSession()
+  log('info', 'Drained pending session draft write')
 }
 
 export async function createSession(): Promise<void> {
@@ -270,6 +325,10 @@ export async function createSession(): Promise<void> {
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
 
+  // The explicit persist below captures the outgoing draft when the session is
+  // kept; either way, cancel the pending timer so it can't fire after the
+  // switch and write the old draft into the new session.
+  cancelScheduledDraftPersist()
   if (!dropPrevious) persistActiveSession()
 
   const sessionDir = createSessionDir()
@@ -279,6 +338,8 @@ export async function createSession(): Promise<void> {
   resetOutputTimestampAllocators()
   currentElaboratedPrompts = []
   currentElaboratedPromptsLoaded = true
+  currentDraft = createEmptySessionDraft()
+  currentDraftLoaded = true
   persistActiveSession()
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
@@ -330,6 +391,12 @@ export async function resumeSession(sessionId: string): Promise<void> {
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
 
+  // Capture the outgoing session's pending draft before we switch away (unless
+  // it's being dropped). Unlike createSession, resume does not persist the
+  // previous session wholesale, so this flush is what saves its draft.
+  if (dropPrevious) cancelScheduledDraftPersist()
+  else drainPendingDraftWrites()
+
   const sessionDir = resolveSessionDir(sessionId)
   const manifest = readManifestFromDir(sessionDir)
   if (!manifest) {
@@ -344,6 +411,8 @@ export async function resumeSession(sessionId: string): Promise<void> {
   seedOutputTimestampAllocators(manifest.tasks)
   currentElaboratedPrompts = [...manifest.elaboratedPrompts]
   currentElaboratedPromptsLoaded = true
+  currentDraft = normalizeSessionDraft(manifest.draft)
+  currentDraftLoaded = true
   persistActiveSession({ lastResumedAt: new Date().toISOString() })
   broadcastQueueUpdate(queueManager.getAllStoredTasks())
   broadcastSessionChanged(getSessionId())
@@ -372,6 +441,17 @@ export async function deleteSession(sessionId: string): Promise<void> {
   } else {
     fs.rmSync(sessionDir, { recursive: true, force: true })
   }
+}
+
+export function getActiveSessionDraft(): SessionDraft {
+  ensureActiveDraftLoaded()
+  return normalizeSessionDraft(currentDraft)
+}
+
+export function setActiveSessionDraft(draft: SessionDraft): void {
+  ensureActiveDraftLoaded()
+  currentDraft = normalizeSessionDraft(draft)
+  scheduleDraftPersist()
 }
 
 export function getActiveSessionElaboratedPrompts(): string[] {

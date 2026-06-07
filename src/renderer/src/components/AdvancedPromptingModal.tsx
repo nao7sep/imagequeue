@@ -3,10 +3,8 @@ import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
-import {
-  useAdvancedPrompting,
-  type PromptMode,
-} from '../context/AdvancedPromptingContext'
+import { useSessionDraft } from '../context/SessionDraftContext'
+import type { PromptMode } from '../../../shared/session-draft'
 import {
   BACKEND_LABELS,
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
@@ -23,7 +21,6 @@ import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import './AdvancedPromptingModal.css'
 
 interface Props {
-  initialPrompt?: string
   onClose: () => void
 }
 
@@ -47,13 +44,13 @@ function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborato
   }
 }
 
-export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React.JSX.Element {
+export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const { settings } = useSettings()
   const confirm = useConfirm()
   const { snapshots } = useEnqueueConfigs()
-  const { state, update, appendElaboratedPrompts } = useAdvancedPrompting()
+  const { state, update, appendElaboratedPrompts } = useSessionDraft()
   const {
-    seed, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated,
+    prompt, seed, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated,
     selectedProprietary, selectedDtFiles, promptMode, targetScope, count, elaboratedPrompts,
   } = state
 
@@ -62,10 +59,10 @@ export function AdvancedPromptingModal({ initialPrompt, onClose }: Props): React
   // in the seed, we leave it alone — including across modal open/close — so
   // their work is preserved when reopening within the same session.
   useEffect(() => {
-    if (!seed && initialPrompt && initialPrompt.trim()) {
-      update({ seed: initialPrompt })
+    if (!seed && prompt.trim()) {
+      update({ seed: prompt })
     }
-    // Intentionally only on mount: subsequent prop changes shouldn't clobber edits.
+    // Intentionally only on mount: later prompt edits shouldn't clobber the seed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

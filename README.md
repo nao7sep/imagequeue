@@ -61,14 +61,14 @@ For cloud backends, the queue column remembers the last model and generation set
 
 ## Sessions
 
-Each app launch creates a session folder under the output directory. ImageQueue writes a `session.json` snapshot there as queue state changes, so you can later reopen that session from the menu.
+Each app launch creates a session folder under the output directory. ImageQueue writes a `session.json` snapshot there as queue and draft state change, so you can later reopen that session from the menu.
 
 - **New Session** switches to a fresh empty session without needing another app window.
 - **Resume** restores completed outputs as-is and brings unfinished work back as interrupted tasks. When a reopened session still has interrupted tasks, a prompt offers **Resume All** (re-queue every interrupted task for generation at once) or **Not Now** (leave them paused); either way each task keeps its individual **retry**.
-- A session is considered **empty** when no tasks remain in any backend, regardless of status. Elaborated prompts do not count — they exist only to steer future elaborations and are discarded with the session.
+- A session is considered **empty** when no tasks remain in any backend, regardless of status. The elaborated-prompts list and the working draft (the prompt and Advanced Prompting selections) do not count — they support work in progress and are discarded with an empty session.
 - When **Drop empty sessions** is on (the default), the current session is auto-dropped on New Session, Resume, and graceful quit if it is empty. Auto-drops honor the **Delete to Trash** setting.
 - **Delete** removes that session folder according to the **Delete to Trash** setting.
-- Current-session resume is intentionally minimal: it restores task history and outputs, not transient UI state such as the current prompt or selection.
+- Resume also restores the session's working draft: the prompt you were composing and the Advanced Prompting selections (seed, elaborator picks, targets, mode, iteration count). Genuinely transient UI state — the current selection and preview, the fullscreen viewer, and the **Show Kept Images** toggle — is not restored.
 - Only sessions with a readable `session.json` snapshot appear.
 - Session previews currently read the original output images directly. Cached thumbnail files are intentionally not generated yet; if browsing later becomes measurably slow, add relative thumbnail paths in `session.json` and generate missing thumbs on demand.
 
@@ -214,6 +214,8 @@ Four prompt sources:
 | **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique. Task creation is still round-robin by round, with cloud backends first in display order and Draw Things models after them in alphabetical order. New tasks are inserted at the top of each backend column, while execution still proceeds from the bottom upward. |
 
 Elaborated prompts accumulate in a per-session list. The text AI sees previously elaborated prompts as context on each new request and avoids repeating them. The list persists across closing and reopening the modal, and is saved in `session.json` so it comes back when you resume that session later. Starting a different session still gives you that other session's own list.
+
+The rest of your Advanced Prompting setup persists the same way: the seed, the three elaborator selections, the chosen targets, the prompt-source mode, and the iteration count are saved in `session.json` alongside the main prompt. Resuming a session brings the whole working context back; a new session starts blank.
 
 Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. The list is numbered and shown newest-first so the latest prompt is immediately visible, while the underlying AI context remains chronological. Per-row **Delete** removes a prompt without confirmation; **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 

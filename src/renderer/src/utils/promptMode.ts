@@ -1,4 +1,4 @@
-import type { PromptMode } from '../context/AdvancedPromptingContext'
+import type { PromptMode } from '../../../shared/session-draft'
 
 // A "brainstorm" mode generates fresh prompts via the text AI (one per
 // iteration, or one per task), as opposed to reusing the seed as-is or a single

@@ -9,5 +9,6 @@ export {
   deleteSession,
   resolveSessionDir,
   dropCurrentSessionIfEmpty,
+  drainPendingDraftWrites,
 } from './state'
 export { registerSessionIpc } from './ipc'

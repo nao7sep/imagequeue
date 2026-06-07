@@ -6,7 +6,7 @@ import { CliJobsProvider } from './context/CliJobsContext'
 import { QueueProvider } from './context/QueueContext'
 import { SelectionProvider } from './context/SelectionContext'
 import { SettingsProvider } from './context/SettingsContext'
-import { AdvancedPromptingProvider } from './context/AdvancedPromptingContext'
+import { SessionDraftProvider } from './context/SessionDraftContext'
 import { EnqueueConfigProvider } from './context/EnqueueConfigContext'
 import './styles.css'
 
@@ -18,11 +18,11 @@ export function App(): React.JSX.Element {
           <QueueProvider>
             <SelectionProvider>
               <EnqueueConfigProvider>
-                <AdvancedPromptingProvider>
+                <SessionDraftProvider>
                   <Layout />
                   <CliJobsPanel />
                   <ResumeInterruptedPrompt />
-                </AdvancedPromptingProvider>
+                </SessionDraftProvider>
               </EnqueueConfigProvider>
             </SelectionProvider>
           </QueueProvider>
