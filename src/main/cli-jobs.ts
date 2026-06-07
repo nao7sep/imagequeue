@@ -1,4 +1,4 @@
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
+import { spawn } from 'child_process'
 import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
 import { spawn as spawnPty } from 'node-pty'
@@ -156,6 +156,16 @@ function launchNextImport(): void {
   }
 }
 
+// Two launch mechanisms, deliberately:
+//   download (`models ensure`) → a plain pipe. The CLI flushes stdout after
+//     each `\r` progress update, so progress streams fine over a pipe.
+//   import (`models import`)    → a real PTY (node-pty). The import path uses
+//     plain println()-style output and, without a controlling TTY, the CLI's
+//     Swift/C runtime aborts before producing any output. node-pty allocates a
+//     pseudo-terminal so it runs and streams. (An earlier attempt wrapped the
+//     command in `/usr/bin/script` to fake a PTY, but that echoed a stray "^D"
+//     into the log and fought with stdin; node-pty is the clean replacement.)
+// Do NOT "simplify" import onto the pipe path — it will break imports entirely.
 function launchJob(state: JobState): void {
   if (state.kind === 'import') {
     launchImportJob(state)
@@ -168,7 +178,19 @@ function launchJob(state: JobState): void {
 function launchPipeJob(state: JobState): void {
   const child = spawn(state.cliPath, state.args, {
     stdio: ['ignore', 'pipe', 'pipe'],
-  }) as unknown as ChildProcessWithoutNullStreams
+  })
+
+  // stdio fds 1 and 2 are 'pipe', so Node creates these streams; the guard
+  // narrows the `Readable | null` the spawn() return type reports for an
+  // explicit stdio tuple, and routes the impossible miss through the same
+  // failure path as a spawn error rather than throwing uncaught.
+  const { stdout, stderr } = child
+  if (!stdout || !stderr) {
+    log('error', 'CLI job spawned without stdout/stderr pipes', { jobId: state.jobId, ...state.logContext })
+    pushChunk(state, 'stderr', '[spawn error] missing output stream')
+    finalize(state, 'exited', null)
+    return
+  }
 
   state.child = {
     kill: (signal?: string) => {
@@ -179,10 +201,10 @@ function launchPipeJob(state: JobState): void {
   state.status = 'running'
   state.stalled = false
 
-  child.stdout.setEncoding('utf8')
-  child.stderr.setEncoding('utf8')
-  child.stdout.on('data', (chunk: string) => onData(state, 'stdout', chunk))
-  child.stderr.on('data', (chunk: string) => onData(state, 'stderr', chunk))
+  stdout.setEncoding('utf8')
+  stderr.setEncoding('utf8')
+  stdout.on('data', (chunk: string) => onData(state, 'stdout', chunk))
+  stderr.on('data', (chunk: string) => onData(state, 'stderr', chunk))
 
   child.on('error', (err) => {
     log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, message: err.message })

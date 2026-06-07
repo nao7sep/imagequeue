@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createEmptySessionDraft,
   MAX_DRAFT_ITERATIONS,
+  normalizeCount,
   normalizeSessionDraft,
   type SessionDraft,
 } from '../../src/shared/session-draft'
@@ -172,5 +173,40 @@ describe('normalizeSessionDraft', () => {
     result.selectedDtFiles.push('mutated')
     expect(input.selectedProprietary.openai).toBe(true)
     expect(input.selectedDtFiles).toEqual(['model-a.ckpt', 'model-b.ckpt'])
+  })
+})
+
+// Exported and consumed directly by the Advanced Prompting count input
+// (normalizeCount(parseInt(value, 10))), so its contract is locked here at its
+// own boundary, not only through normalizeSessionDraft.
+describe('normalizeCount', () => {
+  it('returns 1 for a NaN from a failed parse (empty/invalid input field)', () => {
+    expect(normalizeCount(parseInt('', 10))).toBe(1)
+    expect(normalizeCount(parseInt('abc', 10))).toBe(1)
+    expect(normalizeCount(NaN)).toBe(1)
+  })
+
+  it('floors fractional values', () => {
+    expect(normalizeCount(2.9)).toBe(2)
+  })
+
+  it('clamps below 1 up to 1', () => {
+    expect(normalizeCount(0)).toBe(1)
+    expect(normalizeCount(-5)).toBe(1)
+  })
+
+  it('clamps above the max down to the max', () => {
+    expect(normalizeCount(1_000_000)).toBe(MAX_DRAFT_ITERATIONS)
+    expect(normalizeCount(MAX_DRAFT_ITERATIONS)).toBe(MAX_DRAFT_ITERATIONS)
+  })
+
+  it('passes a valid in-range count through unchanged', () => {
+    expect(normalizeCount(5)).toBe(5)
+  })
+
+  it('returns 1 for non-finite or non-number input', () => {
+    expect(normalizeCount(Infinity)).toBe(1)
+    expect(normalizeCount('5')).toBe(1)
+    expect(normalizeCount(undefined)).toBe(1)
   })
 })

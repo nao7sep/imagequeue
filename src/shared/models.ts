@@ -446,6 +446,9 @@ export function getModelsForBackend(backend: 'imagen'): ImagenModelDef[]
 export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
 export function getModelsForBackend(backend: 'grok'): GrokModelDef[]
 export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
+// A non-literal backend (e.g. one that may be 'drawthings') gets the common
+// ModelDef[]; 'drawthings' has no cloud model registry and returns [].
+export function getModelsForBackend(backend: BackendId): ModelDef[]
 export function getModelsForBackend(backend: BackendId): ModelDef[] {
   switch (backend) {
     case 'openai': return OPENAI_MODELS

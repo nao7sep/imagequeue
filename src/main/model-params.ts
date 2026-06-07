@@ -4,6 +4,7 @@ import type { DrawThingsModelParams } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
+import { createCoalescedWriter } from './utils/coalesced-writer'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -15,7 +16,6 @@ type ParamsStore = Record<string, DrawThingsModelParams>
 const WRITE_DEBOUNCE_MS = 200
 
 let store: ParamsStore | null = null
-let writeTimer: NodeJS.Timeout | null = null
 // When params.json exists but cannot be parsed, we refuse to write rather than
 // overwrite the corrupted-but-possibly-recoverable file with an empty store.
 // Reads degrade to empty (UI shows missing values) and writes throw with an
@@ -57,13 +57,15 @@ function writeNow(): void {
   writeJsonAtomic(getParamsFilePath(), store)
 }
 
-function scheduleWrite(): void {
-  if (writeTimer !== null) return
-  writeTimer = setTimeout(() => {
-    writeTimer = null
-    writeNow()
-  }, WRITE_DEBOUNCE_MS)
-}
+const writer = createCoalescedWriter({
+  flush: writeNow,
+  debounceMs: WRITE_DEBOUNCE_MS,
+  onError: (error) =>
+    log('error', 'params.json: write failed', {
+      message: error instanceof Error ? error.message : String(error),
+    }),
+  onDrain: () => log('info', 'Drained pending model param writes on quit'),
+})
 
 export function getModelParams(modelFile: string): DrawThingsModelParams | null {
   return ensureLoaded()[modelFile] ?? null
@@ -78,7 +80,7 @@ export function setModelParams(modelFile: string, params: DrawThingsModelParams)
   if (loadFailed) throw new Error(loadFailedMessage)
   const s = store as ParamsStore
   s[modelFile] = params
-  scheduleWrite()
+  writer.schedule()
 }
 
 export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
@@ -98,19 +100,11 @@ export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsD
     modelCount: modelFiles.length,
     patch,
   })
-  scheduleWrite()
+  writer.schedule()
 }
 
 // Cancel any pending debounced write and flush synchronously. Called from
 // before-quit so an edit made just before Cmd+Q can't be lost in the timer gap.
 export function drainPendingWrites(): void {
-  const hadPending = writeTimer !== null
-  if (writeTimer !== null) {
-    clearTimeout(writeTimer)
-    writeTimer = null
-  }
-  writeNow()
-  if (hadPending) {
-    log('info', 'Drained pending model param writes on quit')
-  }
+  writer.drain()
 }

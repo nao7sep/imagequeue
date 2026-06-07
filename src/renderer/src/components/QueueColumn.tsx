@@ -16,10 +16,6 @@ import {
   OPENAI_GPT2_MAX_EDGE,
   OPENAI_GPT2_MIN_EDGE,
   OPENAI_GPT2_SIZE_STEP,
-  type OpenAIModelDef,
-  type ImagenModelDef,
-  type NanoBananaModelDef,
-  type FluxModelDef,
   type SizePreset,
   type OpenAIModeration,
   type OpenAIQuality,
@@ -93,32 +89,32 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   const { selection, select, clear } = useSelection()
   const { settings, saveImageBackendDefaults } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
-  const models = getModelsForBackend(backendId as 'openai')
+  const models = getModelsForBackend(backendId)
   const defaultModel = models.find((m) => m.isDefault) ?? models[0]
   const [model, setModel] = useState(defaultModel?.id ?? '')
   const proprietaryBackend = backendId === 'drawthings' ? null : backendId as CloudBackendId
 
-  // For openai: the full model definition, used to drive dynamic size/quality/background options
+  // Per-backend model definitions, used to drive that backend's dynamic option
+  // controls. Each resolves only for its own backend (null otherwise) via the
+  // typed findModel lookup, falling back to the backend's first model. No
+  // cross-type casting needed.
   const openaiModelDef = useMemo(
-    () => backendId === 'openai' ? (models.find((m) => m.id === model) ?? models[0]) as OpenAIModelDef : null,
+    () => (backendId === 'openai' ? findModel('openai', model) ?? getModelsForBackend('openai')[0] : null),
     [backendId, model]
   )
 
-  // For imagen: model definition, used to know whether imageSize is supported
   const imagenModelDef = useMemo(
-    () => backendId === 'imagen' ? (models.find((m) => m.id === model) ?? models[0]) as unknown as ImagenModelDef : null,
+    () => (backendId === 'imagen' ? findModel('imagen', model) ?? getModelsForBackend('imagen')[0] : null),
     [backendId, model]
   )
 
-  // For nanobanana: model definition, used to know whether imageConfig is supported
   const nanoBananaModelDef = useMemo(
-    () => backendId === 'nanobanana' ? (models.find((m) => m.id === model) ?? models[0]) as unknown as NanoBananaModelDef : null,
+    () => (backendId === 'nanobanana' ? findModel('nanobanana', model) ?? getModelsForBackend('nanobanana')[0] : null),
     [backendId, model]
   )
 
-  // For flux: model definition, used to know whether steps/guidance are supported
   const fluxModelDef = useMemo(
-    () => backendId === 'flux' ? (models.find((m) => m.id === model) ?? models[0]) as unknown as FluxModelDef : null,
+    () => (backendId === 'flux' ? findModel('flux', model) ?? getModelsForBackend('flux')[0] : null),
     [backendId, model]
   )
 
@@ -467,7 +463,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         nanoBananaModelDef.imageSizes.some((s) => s.value === prev) ? prev : '1K'
       )
     } else if (backendId === 'flux') {
-      const m = findModel('flux', model) as FluxModelDef | undefined
+      const m = findModel('flux', model)
       if (m) {
         if (m.stepsRange) {
           setFluxSteps((prev) =>

@@ -4,7 +4,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
-import type { PromptMode } from '../../../shared/session-draft'
+import { MAX_DRAFT_ITERATIONS, normalizeCount, type PromptMode } from '../../../shared/session-draft'
 import {
   BACKEND_LABELS,
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
@@ -712,9 +712,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               className="advanced-count"
               type="number"
               min={1}
-              max={9999}
+              max={MAX_DRAFT_ITERATIONS}
               value={count}
-              onChange={(e) => update({ count: Math.max(1, parseInt(e.target.value) || 1) })}
+              onChange={(e) => update({ count: normalizeCount(parseInt(e.target.value, 10)) })}
             />
           </div>
 

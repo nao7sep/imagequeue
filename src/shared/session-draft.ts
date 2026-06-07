@@ -65,7 +65,11 @@ function asNullableId(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
-function normalizeCount(value: unknown): number {
+// Clamps an iteration count to a whole number in [1, MAX_DRAFT_ITERATIONS].
+// Non-numeric/non-finite input (including a NaN from a failed parse) becomes 1.
+// Shared by draft normalization and the Advanced Prompting count input so the
+// policy lives in one place.
+export function normalizeCount(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 1
   const floored = Math.floor(value)
   if (floored < 1) return 1
