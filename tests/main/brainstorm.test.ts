@@ -16,15 +16,27 @@ vi.mock('../../src/main/text-ai', () => ({ getMainProvider: vi.fn() }))
 
 // One prompt per turn (batch_size 1) and no retries, so a brainstorm of N runs
 // exactly N turns — letting us observe cancellation taking effect at a turn
-// boundary. Templates are pass-through.
+// boundary. fillTemplate does minimal real substitution and the templates embed
+// {{FORMAT}} so tests can assert which template ran and that the format directive
+// is injected. The directive itself comes from config.format_directives, stubbed
+// here to recognizable tokens.
 vi.mock('../../src/main/text-ai/templates', () => ({
   PROMPTS_RESPONSE_SCHEMA: {},
-  fillTemplate: (template: string) => template,
+  fillTemplate: (template: string, values: Record<string, string>) =>
+    Object.entries(values).reduce((out, [key, value]) => out.split(`{{${key}}}`).join(value), template),
   getRuntimeBrainstormConfig: () => ({
     batch_size: 1,
     max_retries_per_turn: 0,
     retry_backoff_ms: [],
-    templates: { first_no_previous: '', first_with_previous: '', continuation: '' },
+    templates: {
+      first_no_previous: 'first|{{FORMAT}}|{{SEED}}|{{N}}',
+      first_with_previous: 'firstprev|{{FORMAT}}|{{PREVIOUS}}|{{N}}',
+      continuation: 'cont|{{FORMAT}}|{{N}}',
+    },
+    format_directives: {
+      formats: { sentences: 'FMT(sentences)', phrases: 'FMT(phrases)' },
+      lengths: { short: 'LEN(short)', medium: 'LEN(medium)', long: 'LEN(long)' },
+    },
   }),
 }))
 
@@ -56,6 +68,8 @@ const request = (over: { requestId: string; count: number }): Parameters<typeof 
   seed: 'a cat',
   count: over.count,
   previousPrompts: [],
+  format: 'phrases',
+  length: 'medium',
 })
 
 describe('brainstormPrompts cancellation', () => {
@@ -119,5 +133,50 @@ describe('brainstormPrompts cancellation', () => {
     const result = await pending
     expect(result.prompts).toEqual(['p1'])
     expect(ask).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('brainstormPrompts format directive', () => {
+  beforeEach(() => {
+    vi.mocked(getElaborator).mockImplementation((id: string) =>
+      id === 'content' || id === 'composition' || id === 'style'
+        ? elaboratorFor(id as ElaboratorKind)
+        : null
+    )
+  })
+
+  // Records the latest user message sent to the provider on each turn.
+  function installCapturingProvider(): { messages: string[] } {
+    const messages: string[] = []
+    const ask = vi.fn(async (opts: AskOptions): Promise<AskResult> => {
+      messages.push(opts.messages[opts.messages.length - 1].text)
+      return { text: '', parsed: { prompts: [`p${messages.length}`] } }
+    })
+    vi.mocked(getMainProvider).mockReturnValue({
+      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
+    })
+    return { messages }
+  }
+
+  it('injects the directive on both the first and the continuation turns', async () => {
+    const { messages } = installCapturingProvider()
+    await brainstormPrompts({ ...request({ requestId: 'fmt', count: 2 }), format: 'sentences', length: 'long' })
+    expect(messages).toHaveLength(2)
+    // Turn 1 uses the no-previous template; turn 2 uses continuation. Both carry
+    // the composed directive (format part + space + length part).
+    expect(messages[0]).toContain('first|FMT(sentences) LEN(long)|')
+    expect(messages[1]).toContain('cont|FMT(sentences) LEN(long)|')
+  })
+
+  it('injects the directive into the with-previous template', async () => {
+    const { messages } = installCapturingProvider()
+    await brainstormPrompts({
+      ...request({ requestId: 'fmtp', count: 1 }),
+      previousPrompts: ['an old prompt'],
+      format: 'phrases',
+      length: 'short',
+    })
+    expect(messages[0]).toContain('firstprev|FMT(phrases) LEN(short)|')
+    expect(messages[0]).toContain('an old prompt')
   })
 })

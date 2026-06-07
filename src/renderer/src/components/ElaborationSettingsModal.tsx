@@ -2,10 +2,28 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
+import { PROMPT_FORMATS, PROMPT_LENGTHS, type PromptFormat, type PromptLength } from '../../../shared/session-draft'
 import './ElaborationSettingsModal.css'
 
 interface Props {
   onClose: () => void
+}
+
+// The pieces of the {{FORMAT}} directive — one per format, one per length —
+// joined with a single space at call time. Mirrors config.format_directives.
+type FormatDirectivesForm = {
+  formats: Record<PromptFormat, string>
+  lengths: Record<PromptLength, string>
+}
+
+const FORMAT_LABELS: Record<PromptFormat, string> = {
+  phrases: 'Comma phrases',
+  sentences: 'Natural sentences',
+}
+const LENGTH_LABELS: Record<PromptLength, string> = {
+  short: 'Short',
+  medium: 'Medium',
+  long: 'Long',
 }
 
 interface BrainstormForm {
@@ -17,6 +35,7 @@ interface BrainstormForm {
     first_with_previous: string
     continuation: string
   }
+  format_directives: FormatDirectivesForm
 }
 
 interface BrainstormConfig {
@@ -24,6 +43,11 @@ interface BrainstormConfig {
   max_retries_per_turn: number
   retry_backoff_ms: number[]
   templates: BrainstormForm['templates']
+  format_directives: FormatDirectivesForm
+}
+
+function cloneDirectives(d: FormatDirectivesForm): FormatDirectivesForm {
+  return { formats: { ...d.formats }, lengths: { ...d.lengths } }
 }
 
 function fromConfig(cfg: BrainstormConfig): BrainstormForm {
@@ -32,6 +56,7 @@ function fromConfig(cfg: BrainstormConfig): BrainstormForm {
     max_retries_per_turn: cfg.max_retries_per_turn,
     retry_backoff_ms_csv: cfg.retry_backoff_ms.join(', '),
     templates: { ...cfg.templates },
+    format_directives: cloneDirectives(cfg.format_directives),
   }
 }
 
@@ -53,11 +78,48 @@ function checkPlaceholders(form: BrainstormForm): string | null {
   const t = form.templates
   if (!t.first_no_previous.includes('{{ELABORATOR}}')) return 'First (no previous): missing {{ELABORATOR}}.'
   if (!t.first_no_previous.includes('{{N}}')) return 'First (no previous): missing {{N}}.'
+  if (!t.first_no_previous.includes('{{FORMAT}}')) return 'First (no previous): missing {{FORMAT}}.'
   if (!t.first_with_previous.includes('{{ELABORATOR}}')) return 'First (with previous): missing {{ELABORATOR}}.'
   if (!t.first_with_previous.includes('{{PREVIOUS}}')) return 'First (with previous): missing {{PREVIOUS}}.'
   if (!t.first_with_previous.includes('{{N}}')) return 'First (with previous): missing {{N}}.'
+  if (!t.first_with_previous.includes('{{FORMAT}}')) return 'First (with previous): missing {{FORMAT}}.'
   if (!t.continuation.includes('{{N}}')) return 'Continuation: missing {{N}}.'
+  if (!t.continuation.includes('{{FORMAT}}')) return 'Continuation: missing {{FORMAT}}.'
   return null
+}
+
+function checkFormatDirectives(form: BrainstormForm): string | null {
+  for (const format of PROMPT_FORMATS) {
+    if (!form.format_directives.formats[format].trim()) {
+      return `Format part "${FORMAT_LABELS[format]}" is empty.`
+    }
+  }
+  for (const length of PROMPT_LENGTHS) {
+    if (!form.format_directives.lengths[length].trim()) {
+      return `Length part "${LENGTH_LABELS[length]}" is empty.`
+    }
+  }
+  return null
+}
+
+function setFormatPart(form: BrainstormForm, format: PromptFormat, value: string): BrainstormForm {
+  return {
+    ...form,
+    format_directives: {
+      ...form.format_directives,
+      formats: { ...form.format_directives.formats, [format]: value },
+    },
+  }
+}
+
+function setLengthPart(form: BrainstormForm, length: PromptLength, value: string): BrainstormForm {
+  return {
+    ...form,
+    format_directives: {
+      ...form.format_directives,
+      lengths: { ...form.format_directives.lengths, [length]: value },
+    },
+  }
 }
 
 export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element {
@@ -87,7 +149,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   const handleReset = useCallback(async (): Promise<void> => {
     const ok = await confirm({
       title: 'Reset Elaboration Settings',
-      message: 'Replace the current values with the shipped defaults? Templates and numeric settings will both be reset. You can still cancel before saving.',
+      message: 'Replace the current values with the shipped defaults? Templates, format directives, and numeric settings will all be reset. You can still cancel before saving.',
       confirmLabel: 'Reset',
       danger: true,
     })
@@ -119,11 +181,11 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       setMessage(backoff.error)
       return
     }
-    const placeholderWarn = checkPlaceholders(form)
-    if (placeholderWarn) {
+    const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
+    if (warn) {
       const ok = await confirm({
         title: 'Save anyway?',
-        message: `${placeholderWarn} The brainstorm may not work as expected. Save anyway?`,
+        message: `${warn} The brainstorm may not work as expected. Save anyway?`,
         confirmLabel: 'Save',
       })
       if (!ok) return
@@ -137,6 +199,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         max_retries_per_turn: form.max_retries_per_turn,
         retry_backoff_ms: backoff.value,
         templates: { ...form.templates },
+        format_directives: cloneDirectives(form.format_directives),
       }
       // Main logs `Config saved` whenever the config file is rewritten, so
       // there's nothing extra to record from the renderer side here.
@@ -213,14 +276,14 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         <div className="elaboration-settings-section">
           <div className="elaboration-settings-section-title">Templates</div>
           <p className="elaboration-settings-help">
-            Sent to the text AI verbatim with placeholders substituted. The shipped text-AI defaults wrap inserted content in explicit XML-like tags so the model can see where embedded strings end; preserving that pattern is recommended when editing. <code>{'{{JSON}}'}</code> always resolves to the required response shape <code>{'{ "prompts": [string, ...] }'}</code>, so the parser cannot be broken by edits to that part.
+            Sent to the AI with placeholders filled in at call time. Keep <code>{'{{FORMAT}}'}</code> and <code>{'{{JSON}}'}</code> in every template; the README explains each placeholder.
           </p>
 
           <label className="elaboration-settings-template">
             <span>First message — no previous prompts</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{N}} {{JSON}}'}</span>
+            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{FORMAT}} {{N}} {{JSON}}'}</span>
             <textarea
-              rows={10}
+              rows={5}
               value={form.templates.first_no_previous}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, first_no_previous: e.target.value } })}
             />
@@ -228,9 +291,9 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
           <label className="elaboration-settings-template">
             <span>First message — with previous prompts</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{PREVIOUS}} {{N}} {{JSON}}'}</span>
+            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{PREVIOUS}} {{FORMAT}} {{N}} {{JSON}}'}</span>
             <textarea
-              rows={12}
+              rows={5}
               value={form.templates.first_with_previous}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, first_with_previous: e.target.value } })}
             />
@@ -238,19 +301,46 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
           <label className="elaboration-settings-template">
             <span>Continuation message</span>
-            <span className="elaboration-settings-tags">{'{{N}} {{JSON}}'}</span>
+            <span className="elaboration-settings-tags">{'{{FORMAT}} {{N}} {{JSON}}'}</span>
             <textarea
-              rows={3}
+              rows={5}
               value={form.templates.continuation}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, continuation: e.target.value } })}
             />
           </label>
+        </div>
 
-          <div className="elaboration-settings-reset-row">
-            <button className="modal-btn modal-btn-danger" onClick={() => void handleReset()} disabled={busy}>
-              Reset to Defaults
-            </button>
-          </div>
+        <div className="elaboration-settings-section">
+          <div className="elaboration-settings-section-title">Format directives</div>
+          <p className="elaboration-settings-help">
+            <code>{'{{FORMAT}}'}</code> is built from the chosen format part and length part joined with a single space, so write each as a complete sentence. The format and length themselves are picked in Advanced Prompting.
+          </p>
+          {PROMPT_FORMATS.map((format) => (
+            <label className="elaboration-settings-template" key={`format-${format}`}>
+              <span>{`Format — ${FORMAT_LABELS[format]}`}</span>
+              <textarea
+                rows={2}
+                value={form.format_directives.formats[format]}
+                onChange={(e) => setForm(setFormatPart(form, format, e.target.value))}
+              />
+            </label>
+          ))}
+          {PROMPT_LENGTHS.map((length) => (
+            <label className="elaboration-settings-template" key={`length-${length}`}>
+              <span>{`Length — ${LENGTH_LABELS[length]}`}</span>
+              <textarea
+                rows={2}
+                value={form.format_directives.lengths[length]}
+                onChange={(e) => setForm(setLengthPart(form, length, e.target.value))}
+              />
+            </label>
+          ))}
+        </div>
+
+        <div className="elaboration-settings-reset-row">
+          <button className="modal-btn modal-btn-danger" onClick={() => void handleReset()} disabled={busy}>
+            Reset to Defaults
+          </button>
         </div>
       </div>
       <div className="elaboration-settings-footer">

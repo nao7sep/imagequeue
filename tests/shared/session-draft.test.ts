@@ -21,6 +21,8 @@ function fullDraft(): SessionDraft {
     promptMode: 'fresh-task',
     targetScope: 'all',
     count: 12,
+    promptFormat: 'phrases',
+    promptLength: 'long',
   }
 }
 
@@ -37,6 +39,8 @@ describe('createEmptySessionDraft', () => {
     expect(draft.promptMode).toBe('as-is')
     expect(draft.targetScope).toBe('selected')
     expect(draft.count).toBe(1)
+    expect(draft.promptFormat).toBe('sentences')
+    expect(draft.promptLength).toBe('medium')
     for (const backend of BACKEND_IDS_IN_UI_ORDER) {
       expect(draft.selectedProprietary[backend]).toBe(false)
     }
@@ -75,6 +79,8 @@ describe('normalizeSessionDraft', () => {
     expect(result.promptMode).toBe('as-is')
     expect(result.targetScope).toBe('selected')
     expect(result.selectedDtFiles).toEqual([])
+    expect(result.promptFormat).toBe('sentences')
+    expect(result.promptLength).toBe('medium')
   })
 
   it('coerces wrong-typed string fields to defaults', () => {
@@ -125,6 +131,23 @@ describe('normalizeSessionDraft', () => {
     it('rejects unknown values back to defaults', () => {
       expect(normalizeSessionDraft({ promptMode: 'wat' }).promptMode).toBe('as-is')
       expect(normalizeSessionDraft({ targetScope: 'everything' }).targetScope).toBe('selected')
+    })
+  })
+
+  describe('promptFormat and promptLength', () => {
+    it('keeps recognized values', () => {
+      expect(normalizeSessionDraft({ promptFormat: 'sentences' }).promptFormat).toBe('sentences')
+      expect(normalizeSessionDraft({ promptLength: 'short' }).promptLength).toBe('short')
+    })
+
+    it('rejects unknown values back to defaults', () => {
+      expect(normalizeSessionDraft({ promptFormat: 'haiku' }).promptFormat).toBe('sentences')
+      expect(normalizeSessionDraft({ promptLength: 'epic' }).promptLength).toBe('medium')
+    })
+
+    it('rejects wrong-typed values back to defaults', () => {
+      expect(normalizeSessionDraft({ promptFormat: 42, promptLength: null }).promptFormat).toBe('sentences')
+      expect(normalizeSessionDraft({ promptFormat: 42, promptLength: null }).promptLength).toBe('medium')
     })
   })
 

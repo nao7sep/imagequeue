@@ -23,6 +23,8 @@ export const PROMPTS_RESPONSE_SCHEMA = {
 export const JSON_FORMAT_LITERAL = '{ "prompts": [string, ...] }'
 
 // Returns the live brainstorm config (defaults filled in via config-store).
+// The {{FORMAT}} directive lives in brainstorm.format_directives — fully
+// editable from Elaboration Settings — and is resolved by the caller.
 export function getRuntimeBrainstormConfig(): BrainstormConfig {
   return loadConfig().brainstorm
 }

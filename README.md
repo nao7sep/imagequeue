@@ -202,24 +202,26 @@ The modal has three panes:
 
 - **Prompt** — your seed text, three elaborator pickers (**Content**, **Composition**, **Style**), the **Elaborate** button, and the resulting elaborated prompt.
 - **Targets** — checkboxes for proprietary backends and (on macOS) downloaded Draw Things models. Long Draw Things model names are truncated; hover the row to see the full name.
-- **Execution** — the prompt source, target scope, iteration count, and the **Queue Tasks** button.
+- **Execution** — top to bottom: target scope, prompt source, prompt format, prompt length, iteration count, and the **Queue Tasks** button.
 
 Four prompt sources:
 
 | Mode | Behavior |
 |---|---|
 | **User prompt as-is** | Send the seed verbatim. No AI involvement. |
-| **Elaborated prompt (same for all)** | Use the result from clicking **Elaborate**, identical for every queued task. |
+| **Elaborated prompt (same for all)** | Use the result from clicking **Elaborate**, identical for every queued task. **Elaborate** is a preview — it fills the elaborated box and records the result, but does not switch the prompt source; select this mode yourself to queue that text. |
 | **Fresh elaboration per iteration** | Generate one new elaborated prompt per iteration; queue one task per selected target in each round, with all selected models in that round sharing the same prompt. Task creation within a round uses cloud display order and Draw Things alphabetical order. New tasks are inserted at the top of each backend column, while execution still proceeds from the bottom upward. |
 | **Fresh elaboration per task** | Generate one new elaborated prompt for every (model × iteration) pair — all unique. Task creation is still round-robin by round, with cloud backends first in display order and Draw Things models after them in alphabetical order. New tasks are inserted at the top of each backend column, while execution still proceeds from the bottom upward. |
 
+**Prompt format** and **prompt length** control the shape of the generated text — *Natural sentences* or *Comma phrases* (tag style), at *Short*, *Medium*, or *Long*. They apply whenever the app generates text: the **Elaborate** preview and both fresh modes. The default is *Natural sentences* / *Medium*, geared to the cloud backends; *Comma phrases* suits Draw Things, and shorter lengths keep prompts distinct as the session's avoid-list grows.
+
 Elaborated prompts accumulate in a per-session list. The text AI sees previously elaborated prompts as context on each new request and avoids repeating them. The list persists across closing and reopening the modal, and is saved in `session.json` so it comes back when you resume that session later. Starting a different session still gives you that other session's own list.
 
-The rest of your Advanced Prompting setup persists the same way: the seed, the three elaborator selections, the chosen targets, the prompt-source mode, and the iteration count are saved in `session.json` alongside the main prompt. Resuming a session brings the whole working context back; a new session starts blank.
+The rest of your Advanced Prompting setup persists the same way: the seed, the three elaborator selections, the chosen targets, the prompt-source mode, the prompt format and length, and the iteration count are saved in `session.json` alongside the main prompt. Resuming a session brings the whole working context back; a new session starts blank.
 
 Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. The list is numbered and shown newest-first so the latest prompt is immediately visible, while the underlying AI context remains chronological. Per-row **Delete** removes a prompt without confirmation; **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 
-The modal stays open after queueing so you can run another round. Clicking outside it does not close it. Prompts are recorded in the elaborated-prompts list only once their tasks are queued (or, for a single **Elaborate**, once the result appears), so a run that is cancelled or fails partway leaves nothing behind. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; confirming stops the in-flight generation and discards that run entirely. When nothing is running, you can close the modal with **Esc** or the close button.
+A successful **Queue Tasks** closes the modal — the newly filled queue columns are the confirmation, so there is no success message. To run another round, reopen Advanced Prompting; your whole setup, including the grown avoid-list, is restored. If queueing fails, the modal stays open with the error so you can retry. Clicking outside it does not close it. Prompts are recorded in the elaborated-prompts list only once their tasks are queued (or, for a single **Elaborate**, once the result appears), so a run that is cancelled or fails partway leaves nothing behind. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; confirming stops the in-flight generation and discards that run entirely. When nothing is running, you can close the modal with **Esc** or the close button.
 
 ## Elaborators
 
@@ -242,7 +244,8 @@ The shipped defaults are broad, neutral starter sets across all three categories
 | Batch size | Prompts per conversation turn (1–50) |
 | Max retries per turn | Extra attempts after a transient failure (0–10) |
 | Retry backoff (ms) | Comma-separated delays between attempts |
-| Templates | The three message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{N}}`, and `{{JSON}}` are substituted at call time. The shipped defaults wrap substituted content in explicit XML-like tags so models can see where embedded strings end. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. |
+| Templates | The three message formats sent to the AI; placeholders `{{ELABORATOR}}`, `{{SEED}}`, `{{PREVIOUS}}`, `{{FORMAT}}`, `{{N}}`, and `{{JSON}}` are substituted at call time. The shipped defaults wrap substituted content in explicit XML-like tags so models can see where embedded strings end. `{{JSON}}` is filled by the app and cannot be corrupted by editing the template. `{{FORMAT}}` is filled from **Format directives** below; keep it in every template so the directive is restated on each turn. |
+| Format directives | The pieces of the `{{FORMAT}}` instruction: one sentence per format (2) and one per length (3). The chosen format part and length part are joined with a single space at call time. Lengths use approximate word counts, which models obey more consistently than phrase counts. Edit any part to retune. |
 
 Editing the templates lets you, for example, instruct the AI to translate seed prompts from another language to English before elaborating, or to adjust tone and phrasing for the kind of prompts you produce.
 

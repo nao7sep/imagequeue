@@ -10,6 +10,7 @@ import {
 } from './elaborators'
 import { log } from './logger'
 import type { ElaboratorKind } from '../shared/types'
+import type { PromptFormat, PromptLength } from '../shared/session-draft'
 
 export function registerElaboratorsIpc(): void {
   ipcMain.handle('elaborators:list', () => {
@@ -54,6 +55,8 @@ export function registerElaboratorsIpc(): void {
         seed: string
         count: number
         previousPrompts: string[]
+        format: PromptFormat
+        length: PromptLength
       }
     ) => {
       return brainstormPrompts(req)

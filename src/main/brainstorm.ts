@@ -7,6 +7,7 @@ import {
   getRuntimeBrainstormConfig,
 } from './text-ai/templates'
 import type { ConversationMessage, TextAIProvider } from './text-ai'
+import type { PromptFormat, PromptLength } from '../shared/session-draft'
 import { log } from './logger'
 
 export interface BrainstormRequest {
@@ -17,6 +18,8 @@ export interface BrainstormRequest {
   seed: string
   count: number
   previousPrompts: string[]
+  format: PromptFormat
+  length: PromptLength
 }
 
 export interface BrainstormResult {
@@ -61,6 +64,7 @@ function formatPreviousList(previous: string[]): string {
 function buildFirstMessage(
   templates: { first_no_previous: string; first_with_previous: string },
   elaboratorTemplate: string,
+  formatDirective: string,
   seed: string,
   previousPrompts: string[],
   countToAskFor: number
@@ -68,20 +72,22 @@ function buildFirstMessage(
   if (previousPrompts.length === 0) {
     return fillTemplate(templates.first_no_previous, {
       ELABORATOR: elaboratorTemplate,
+      FORMAT: formatDirective,
       SEED: seed,
       N: String(countToAskFor),
     })
   }
   return fillTemplate(templates.first_with_previous, {
     ELABORATOR: elaboratorTemplate,
+    FORMAT: formatDirective,
     SEED: seed,
     PREVIOUS: formatPreviousList(previousPrompts),
     N: String(countToAskFor),
   })
 }
 
-function buildContinuationMessage(template: string, countToAskFor: number): string {
-  return fillTemplate(template, { N: String(countToAskFor) })
+function buildContinuationMessage(template: string, formatDirective: string, countToAskFor: number): string {
+  return fillTemplate(template, { FORMAT: formatDirective, N: String(countToAskFor) })
 }
 
 function buildCombinedElaboratorInstructions(parts: {
@@ -212,6 +218,11 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   if (!handle) throw new Error('Text AI is not configured.')
 
   const brainstormConfig = getRuntimeBrainstormConfig()
+  // Surface-form directive substituted for {{FORMAT}} on every turn so adherence
+  // doesn't drift across batches. Composed from the editable format + length
+  // parts in config.format_directives, joined with a single space.
+  const { formats, lengths } = brainstormConfig.format_directives
+  const formatDirective = `${formats[req.format]} ${lengths[req.length]}`
   const batchSize = Math.max(1, brainstormConfig.batch_size)
   const maxRetries = Math.max(0, brainstormConfig.max_retries_per_turn)
 
@@ -237,8 +248,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       turn++
 
       const userMessage = collected.length === 0
-        ? buildFirstMessage(brainstormConfig.templates, combinedElaboratorTemplate, req.seed, req.previousPrompts, askFor)
-        : buildContinuationMessage(brainstormConfig.templates.continuation, askFor)
+        ? buildFirstMessage(brainstormConfig.templates, combinedElaboratorTemplate, formatDirective, req.seed, req.previousPrompts, askFor)
+        : buildContinuationMessage(brainstormConfig.templates.continuation, formatDirective, askFor)
       messages.push({ role: 'user', text: userMessage })
 
       let newPrompts: string[]

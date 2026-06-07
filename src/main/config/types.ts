@@ -1,6 +1,7 @@
 // Matches the config.json schema from the product spec.
 
 import { TextAIBackendId } from '../../shared/types'
+import type { PromptFormat, PromptLength } from '../../shared/session-draft'
 
 export interface GeminiTextAIConfig {
   api_key: string
@@ -126,11 +127,22 @@ export interface BrainstormTemplates {
   continuation: string
 }
 
+// The pieces that compose the {{FORMAT}} directive: one sentence per format and
+// one per length. At call time the chosen format part and length part are joined
+// with a single space. Split this way (2 + 3 instead of 6 full strings) so the
+// shared wording isn't duplicated. Held in config so both are editable from
+// Elaboration Settings.
+export interface FormatDirectives {
+  formats: Record<PromptFormat, string>
+  lengths: Record<PromptLength, string>
+}
+
 export interface BrainstormConfig {
   batch_size: number
   max_retries_per_turn: number
   retry_backoff_ms: number[]
   templates: BrainstormTemplates
+  format_directives: FormatDirectives
 }
 
 export interface GeneralConfig {

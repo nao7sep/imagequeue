@@ -71,18 +71,28 @@
   resize: vertical;
 }
 
-/* List and textarea share the leftover vertical space 50/50 (flex-grow: 1 each).
-   The basis values give the initial heights; min/max bound the growth. */
+/* Seed and elaborated hold a fixed 2:3 height ratio at every modal size — the
+   elaborated field stays 50% taller than the seed. Both flex-grow AND flex-basis
+   are in 2:3 proportion, which keeps the ratio constant as the window resizes (a
+   shared basis would drift toward 1:1 when maximized, ballooning the seed). The
+   elaborator columns are unchanged: grow 5 keeps them at exactly ½ of the leftover
+   space (5 of 2+3+5), and the seed+elaborated bases still sum to 200, so the
+   elaborators render identically to before. min bounds the shrink (also 2:3). */
+.advanced-seed {
+  flex: 2 1 80px;
+  min-height: 48px;
+}
+
 .advanced-elaborated {
-  flex: 1 1 100px;
-  min-height: 60px;
+  flex: 3 1 120px;
+  min-height: 72px;
 }
 
 .advanced-elaborator-columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  flex: 1 1 220px;
+  flex: 5 1 220px;
   min-height: 110px;
 }
 
@@ -284,11 +294,6 @@
   font-size: 12px;
 }
 
-.advanced-message-info {
-  color: var(--text-primary);
-  background: var(--bg-surface);
-}
-
 .advanced-message-error {
   color: var(--error);
   background: color-mix(in srgb, var(--error) 12%, transparent);
@@ -310,9 +315,14 @@
     max-height: 190px;
   }
 
+  .advanced-seed {
+    flex-basis: 58px;
+    min-height: 38px;
+  }
+
   .advanced-elaborated {
-    flex-basis: 72px;
-    min-height: 48px;
+    flex-basis: 86px;
+    min-height: 58px;
   }
 }
 

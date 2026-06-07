@@ -16,7 +16,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
 } from '../shared/types'
-import type { SessionDraft } from '../shared/session-draft'
+import type { SessionDraft, PromptFormat, PromptLength } from '../shared/session-draft'
 import type {
   CliJobSnapshot,
   CliChunkEvent,
@@ -125,6 +125,8 @@ const api = {
     seed: string
     count: number
     previousPrompts: string[]
+    format: PromptFormat
+    length: PromptLength
   }): Promise<{ prompts: string[] }> =>
     ipcRenderer.invoke('elaborators:brainstorm', req),
 
@@ -139,6 +141,10 @@ const api = {
       first_no_previous: string
       first_with_previous: string
       continuation: string
+    }
+    format_directives: {
+      formats: { sentences: string; phrases: string }
+      lengths: { short: string; medium: string; long: string }
     }
   }> =>
     ipcRenderer.invoke('brainstorm:getDefaults'),

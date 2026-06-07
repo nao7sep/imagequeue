@@ -10,9 +10,17 @@ import { BACKEND_IDS_IN_UI_ORDER, type BackendId } from './types'
 
 export type PromptMode = 'as-is' | 'elaborated' | 'fresh-iteration' | 'fresh-task'
 export type TargetScope = 'selected' | 'all-proprietary' | 'all-drawthings' | 'all'
+// The shape of brainstormed/elaborated prompt text: comma-separated phrases
+// (tag style) versus natural prose, and how verbose either form should be.
+export type PromptFormat = 'phrases' | 'sentences'
+export type PromptLength = 'short' | 'medium' | 'long'
 
 export const PROMPT_MODES: readonly PromptMode[] = ['as-is', 'elaborated', 'fresh-iteration', 'fresh-task']
 export const TARGET_SCOPES: readonly TargetScope[] = ['selected', 'all-proprietary', 'all-drawthings', 'all']
+// Natural language first: the cloud APIs are the primary target, and Draw
+// Things (which favors tag-style phrases) is optional and hidden off macOS.
+export const PROMPT_FORMATS: readonly PromptFormat[] = ['sentences', 'phrases']
+export const PROMPT_LENGTHS: readonly PromptLength[] = ['short', 'medium', 'long']
 
 // Matches the max enforced by the iteration input in the Advanced Prompting modal.
 export const MAX_DRAFT_ITERATIONS = 9999
@@ -33,6 +41,9 @@ export interface SessionDraft {
   promptMode: PromptMode
   targetScope: TargetScope
   count: number
+  // Advanced Prompting: the shape of brainstormed/elaborated prompt text.
+  promptFormat: PromptFormat
+  promptLength: PromptLength
 }
 
 function emptySelectedProprietary(): Record<BackendId, boolean> {
@@ -54,6 +65,8 @@ export function createEmptySessionDraft(): SessionDraft {
     promptMode: 'as-is',
     targetScope: 'selected',
     count: 1,
+    promptFormat: 'sentences',
+    promptLength: 'medium',
   }
 }
 
@@ -113,5 +126,7 @@ export function normalizeSessionDraft(value: unknown): SessionDraft {
     promptMode: PROMPT_MODES.includes(v.promptMode as PromptMode) ? (v.promptMode as PromptMode) : base.promptMode,
     targetScope: TARGET_SCOPES.includes(v.targetScope as TargetScope) ? (v.targetScope as TargetScope) : base.targetScope,
     count: normalizeCount(v.count),
+    promptFormat: PROMPT_FORMATS.includes(v.promptFormat as PromptFormat) ? (v.promptFormat as PromptFormat) : base.promptFormat,
+    promptLength: PROMPT_LENGTHS.includes(v.promptLength as PromptLength) ? (v.promptLength as PromptLength) : base.promptLength,
   }
 }

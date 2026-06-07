@@ -247,7 +247,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       </label>
       <div className="elaborator-editor-actions">
         <button className="modal-btn" onClick={cancelDraft} disabled={busy}>Cancel</button>
-        <button className="modal-btn modal-btn-primary" onClick={() => void saveDraft()} disabled={busy}>
+        <button className="modal-btn modal-btn-primary" onClick={() => void saveDraft()} disabled={busy || !dirty}>
           Save
         </button>
       </div>

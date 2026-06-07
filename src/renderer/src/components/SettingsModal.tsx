@@ -672,7 +672,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <h3>Prompts</h3>
         <div className="settings-field">
           <label>Slug template</label>
-          <textarea value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
+          <textarea rows={5} value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
         </div>
         <div className="settings-field-reset">
           <button
@@ -699,8 +699,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
 
       <div className="settings-footer">
         {errorMessage && <span className="settings-status settings-error">{errorMessage}</span>}
-        {!errorMessage && dirty && <span className="settings-status settings-unsaved">Unsaved changes</span>}
-        <button className="settings-save" onClick={handleSave}>Save</button>
+        <button className="modal-btn" onClick={() => void handleClose()}>Cancel</button>
+        <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>Save</button>
       </div>
     </Modal>
   )
