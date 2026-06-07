@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { brainstormPrompts, cancelBrainstorm } from '../../src/main/brainstorm'
+import { brainstormPrompts, cancelBrainstorm, hasActiveBrainstorms } from '../../src/main/brainstorm'
 import { getElaborator } from '../../src/main/elaborators'
 import { getMainProvider } from '../../src/main/text-ai'
 import type { AskOptions, AskResult, TextAIProvider } from '../../src/main/text-ai'
@@ -178,5 +178,67 @@ describe('brainstormPrompts format directive', () => {
     })
     expect(messages[0]).toContain('firstprev|FMT(phrases) LEN(short)|')
     expect(messages[0]).toContain('an old prompt')
+  })
+})
+
+// hasActiveBrainstorms backs the wake lock: elaboration runs before any task is
+// queued, so it is the one long operation neither task nor CLI status reflects.
+// Each test drives a full run and owns its lifecycle — no test leans on another's
+// cleanup, and the in-flight case releases its hung turn even if an assertion
+// throws, so a regression fails one test instead of cascading into the rest.
+describe('hasActiveBrainstorms', () => {
+  beforeEach(() => {
+    vi.mocked(getElaborator).mockImplementation((id: string) =>
+      id === 'content' || id === 'composition' || id === 'style'
+        ? elaboratorFor(id as ElaboratorKind)
+        : null
+    )
+  })
+
+  it('is false before a run, true while in flight, and false once it settles', async () => {
+    // The only turn hangs until released, exposing the in-flight window.
+    let release!: () => void
+    const ask = vi.fn(
+      () =>
+        new Promise<AskResult>((resolve) => {
+          release = () => resolve({ text: '', parsed: { prompts: ['p1'] } })
+        })
+    )
+    vi.mocked(getMainProvider).mockReturnValue({
+      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
+    })
+
+    expect(hasActiveBrainstorms()).toBe(false)
+
+    // brainstormPrompts registers its controller synchronously, before its first
+    // await, so the flag is already true here with no need to yield to the loop.
+    const pending = brainstormPrompts(request({ requestId: 'busy', count: 1 }))
+    try {
+      expect(hasActiveBrainstorms()).toBe(true)
+    } finally {
+      release()
+      await pending
+    }
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  it('clears the flag when a run fails after the controller is registered', async () => {
+    const ask = vi.fn(async (): Promise<AskResult> => { throw new Error('boom') })
+    vi.mocked(getMainProvider).mockReturnValue({
+      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
+    })
+
+    await expect(brainstormPrompts(request({ requestId: 'fail', count: 1 }))).rejects.toThrow('boom')
+    // ask having run proves the failure landed past controller registration, so
+    // the cleared flag reflects the finally block, not a run that never started.
+    expect(ask).toHaveBeenCalled()
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  it('clears the flag when a run is cancelled', async () => {
+    const { ask } = installProvider((call) => { if (call === 1) cancelBrainstorm('cancel') })
+    await brainstormPrompts(request({ requestId: 'cancel', count: 4 }))
+    expect(ask).toHaveBeenCalled()
+    expect(hasActiveBrainstorms()).toBe(false)
   })
 })

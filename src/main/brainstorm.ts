@@ -53,6 +53,16 @@ export function cancelBrainstorm(requestId: string): void {
   activeControllers.get(requestId)?.abort()
 }
 
+// True while any brainstorm/elaboration run is in flight. A run registers its
+// controller on entry and deletes it in a finally block, so this covers the
+// whole duration — including retries and abort handling — and clears on
+// success, failure, or cancel. Used by the wake lock: elaboration is a long
+// run of sequential text-AI calls that holds no 'generating' task and starts no
+// CLI job, so without this the machine could sleep mid-elaboration.
+export function hasActiveBrainstorms(): boolean {
+  return activeControllers.size > 0
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

@@ -16,6 +16,15 @@ describe('createDefaultConfig', () => {
     const defaults = createDefaultConfig()
     expect(deepMergeDefaults(createDefaultConfig(), defaults)).toEqual(defaults)
   })
+
+  // The wake lock ships opt-out, not opt-in: keeping the machine awake during
+  // work is the default, and a pre-existing config without the key inherits it
+  // (deepMergeDefaults fills absent keys). Pin the default so it can't silently flip.
+  it('keeps the system awake during work by default', () => {
+    expect(createDefaultConfig().general.keep_awake_during_work).toBe(true)
+    const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
+    expect(legacy.general.keep_awake_during_work).toBe(true)
+  })
 })
 
 // The {{FORMAT}} directive lives in config now (not code), so its contract is

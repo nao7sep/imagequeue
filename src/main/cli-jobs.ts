@@ -143,6 +143,17 @@ export function getCliJobSnapshot(jobId: string): CliJobSnapshot | null {
   return state ? snapshot(state) : null
 }
 
+// True while any CLI job is doing work. Queued imports always sit behind an
+// active one (launchNextImport promotes immediately), so running and stalled
+// cover every in-flight case. Used by the wake lock to keep the machine awake
+// during long Draw Things downloads and imports.
+export function hasRunningCliJobs(): boolean {
+  for (const state of jobs.values()) {
+    if (state.status === 'running' || state.status === 'stalled') return true
+  }
+  return false
+}
+
 function launchNextImport(): void {
   if (activeImportJobId !== null) return
 

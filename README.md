@@ -38,8 +38,9 @@ npm run typecheck
 
 Unit tests (Vitest) cover the pure main-, shared-, and renderer-process logic —
 cost estimation, image-type detection, the queue state machine, timestamp
-allocation, config merging, session manifest handling, and renderer-side helpers
-like enqueue composition and backend readiness. They run in a plain Node
+allocation, config merging, session manifest handling, the brainstorm run
+lifecycle the wake lock keys off, and renderer-side helpers like enqueue
+composition and backend readiness. They run in a plain Node
 environment with no Electron or DOM dependencies. Tests live under
 `tests/`, mirroring the `src/` layout, so `src/` stays pure shipped code; they
 are type-checked separately via `tsconfig.test.json`.
@@ -86,6 +87,7 @@ Open Settings with **Cmd+Comma** (macOS) or **Ctrl+Comma** (Windows/Linux).
 | Confirm before deleting | Off | Confirm before deleting a task and its files. |
 | Delete to Trash | On | Send deleted task files and session folders to the system Trash instead of permanently deleting them. |
 | Drop empty sessions | On | Auto-delete the current session folder on New Session, Resume, or graceful quit when no tasks remain. Honors **Delete to Trash**. |
+| Keep system awake during work | On | Prevent the computer from sleeping while generating images, downloading or importing Draw Things models, or elaborating prompts. The display may still turn off. See [Staying awake during long runs](#staying-awake-during-long-runs). |
 
 ### Cloud backends
 
@@ -175,6 +177,15 @@ The full Notifications settings page provides the same toggles plus custom sound
 ### Platform notes
 
 Notifications and sounds work reliably on macOS and Windows. On Linux, visual notification behavior depends on the desktop environment; sounds work regardless.
+
+## Staying awake during long runs
+
+While image generation is running, a Draw Things model is downloading or importing, or a prompt elaboration is in flight, ImageQueue holds a system power assertion so the machine does not go to sleep and interrupt the work. The assertion is released automatically the moment all such work finishes, so the computer can sleep normally again. The display is still allowed to turn off — only system sleep is prevented.
+
+This is the cross-platform equivalent of macOS `caffeinate`, using the OS's native mechanism on each platform. It is on by default; if you would rather let the machine sleep on its normal schedule, turn off **Settings → General → Keep system awake during work** and save — the change applies within a second, even mid-run. Two limits are inherent to the OS, not the app:
+
+- On macOS, closing the lid on battery with no external power or display still sleeps the machine — no app can override clamshell sleep.
+- On Linux, the assertion is honored only by desktop environments that implement the standard inhibit interface.
 
 ## Working with completed images
 

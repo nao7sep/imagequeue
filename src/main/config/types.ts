@@ -142,6 +142,7 @@ export interface GeneralConfig {
   confirm_delete: boolean
   delete_to_trash: boolean
   drop_empty_sessions: boolean
+  keep_awake_during_work: boolean
 }
 
 export interface NotificationsConfig {

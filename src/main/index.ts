@@ -15,6 +15,7 @@ import { updateRecommendationsAtLaunch } from './recommendations'
 import { killAllCliJobs } from './cli-jobs'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { applyDevDockIcon } from './dock-icon'
+import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 
 let mainWin: BrowserWindow | null = null
 
@@ -114,6 +115,7 @@ app.whenReady().then(() => {
     })
   })
   startProcessor()
+  startWakeLockMonitor()
 
   createWindow()
   applyDevDockIcon()
@@ -156,6 +158,7 @@ async function gracefulShutdown(reason: string): Promise<void> {
   await guarded('closeViewerWindow', () => closeViewerWindow())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
   await guarded('killAllCliJobs', () => killAllCliJobs())
+  await guarded('releaseWakeLock', () => releaseWakeLock())
   await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
   log('info', 'Session ended', { reason })
 }

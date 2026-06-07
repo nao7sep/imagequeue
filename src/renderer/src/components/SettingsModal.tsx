@@ -281,6 +281,22 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             </label>
           </div>
         </div>
+        <div className="settings-field settings-field-full">
+          <div className="settings-option-panel">
+            <div className="settings-option-title">Power</div>
+            <label className="settings-panel-check">
+              <input
+                type="checkbox"
+                checked={(general.keep_awake_during_work as boolean) ?? true}
+                onChange={(e) => updateGeneral('keep_awake_during_work', e.target.checked)}
+              />
+              <span className="settings-panel-check-copy">
+                <span>Keep system awake during work</span>
+                <span className="settings-panel-check-desc">Prevent the computer from sleeping during long-running work like image generation, model downloads, and prompt elaboration. The display may still turn off.</span>
+              </span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <div className="settings-section">
