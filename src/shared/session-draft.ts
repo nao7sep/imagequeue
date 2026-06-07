@@ -22,6 +22,28 @@ export const TARGET_SCOPES: readonly TargetScope[] = ['selected', 'all-proprieta
 export const PROMPT_FORMATS: readonly PromptFormat[] = ['sentences', 'phrases']
 export const PROMPT_LENGTHS: readonly PromptLength[] = ['short', 'medium', 'long']
 
+// Display labels, kept beside the enums (as the codebase does for backends and
+// elaborator kinds) so a new tier can't be added without one, and so the
+// Advanced Prompting picker and the Elaboration Settings editor never disagree.
+export const PROMPT_FORMAT_LABELS: Record<PromptFormat, string> = {
+  sentences: 'Natural sentences',
+  phrases: 'Comma phrases',
+}
+export const PROMPT_LENGTH_LABELS: Record<PromptLength, string> = {
+  short: 'Short',
+  medium: 'Medium',
+  long: 'Long',
+}
+
+// The editable pieces of the {{FORMAT}} directive: one sentence per format and
+// one per length, joined with a single space at brainstorm time. Defined here
+// (next to the enums) as the single source consumed by config, preload, and the
+// modals — the renderer can't import main-process config types.
+export interface FormatDirectives {
+  formats: Record<PromptFormat, string>
+  lengths: Record<PromptLength, string>
+}
+
 // Matches the max enforced by the iteration input in the Advanced Prompting modal.
 export const MAX_DRAFT_ITERATIONS = 9999
 

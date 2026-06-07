@@ -1,7 +1,7 @@
 // Matches the config.json schema from the product spec.
 
 import { TextAIBackendId } from '../../shared/types'
-import type { PromptFormat, PromptLength } from '../../shared/session-draft'
+import type { FormatDirectives } from '../../shared/session-draft'
 
 export interface GeminiTextAIConfig {
   api_key: string
@@ -118,23 +118,13 @@ export interface PromptsConfig {
 
 export interface BrainstormTemplates {
   // Sent on the first turn when the renderer's session has no prior prompts.
-  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{N}}.
+  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{FORMAT}}, {{N}}, {{JSON}}.
   first_no_previous: string
   // Sent on the first turn when there ARE prior prompts to avoid.
-  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{PREVIOUS}}, {{N}}.
+  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{PREVIOUS}}, {{FORMAT}}, {{N}}, {{JSON}}.
   first_with_previous: string
-  // Sent on turns 2+ within the same conversation. Placeholder: {{N}}.
+  // Sent on turns 2+ within the same conversation. Placeholders: {{FORMAT}}, {{N}}, {{JSON}}.
   continuation: string
-}
-
-// The pieces that compose the {{FORMAT}} directive: one sentence per format and
-// one per length. At call time the chosen format part and length part are joined
-// with a single space. Split this way (2 + 3 instead of 6 full strings) so the
-// shared wording isn't duplicated. Held in config so both are editable from
-// Elaboration Settings.
-export interface FormatDirectives {
-  formats: Record<PromptFormat, string>
-  lengths: Record<PromptLength, string>
 }
 
 export interface BrainstormConfig {

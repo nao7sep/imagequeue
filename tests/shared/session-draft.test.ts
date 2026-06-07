@@ -4,6 +4,10 @@ import {
   MAX_DRAFT_ITERATIONS,
   normalizeCount,
   normalizeSessionDraft,
+  PROMPT_FORMATS,
+  PROMPT_LENGTHS,
+  PROMPT_FORMAT_LABELS,
+  PROMPT_LENGTH_LABELS,
   type SessionDraft,
 } from '../../src/shared/session-draft'
 import { BACKEND_IDS_IN_UI_ORDER } from '../../src/shared/types'
@@ -231,5 +235,24 @@ describe('normalizeCount', () => {
     expect(normalizeCount(Infinity)).toBe(1)
     expect(normalizeCount('5')).toBe(1)
     expect(normalizeCount(undefined)).toBe(1)
+  })
+})
+
+// The label maps are the single source shared by the Advanced Prompting picker
+// and the Elaboration Settings editor; these guard against a tier being added
+// without a label (or a stale label outliving its enum value).
+describe('prompt format/length labels', () => {
+  it('has exactly one non-empty label per format', () => {
+    expect(Object.keys(PROMPT_FORMAT_LABELS).sort()).toEqual([...PROMPT_FORMATS].sort())
+    for (const format of PROMPT_FORMATS) {
+      expect(PROMPT_FORMAT_LABELS[format].trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it('has exactly one non-empty label per length', () => {
+    expect(Object.keys(PROMPT_LENGTH_LABELS).sort()).toEqual([...PROMPT_LENGTHS].sort())
+    for (const length of PROMPT_LENGTHS) {
+      expect(PROMPT_LENGTH_LABELS[length].trim().length).toBeGreaterThan(0)
+    }
   })
 })

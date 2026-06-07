@@ -9,8 +9,8 @@ import {
   normalizeCount,
   PROMPT_FORMATS,
   PROMPT_LENGTHS,
-  type PromptFormat,
-  type PromptLength,
+  PROMPT_FORMAT_LABELS,
+  PROMPT_LENGTH_LABELS,
   type PromptMode,
 } from '../../../shared/session-draft'
 import {
@@ -43,15 +43,6 @@ interface DtParams {
 
 const isMacPlatform = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
 const ELABORATOR_KINDS: ElaboratorKind[] = ['content', 'composition', 'style']
-const PROMPT_FORMAT_LABELS: Record<PromptFormat, string> = {
-  phrases: 'Comma phrases',
-  sentences: 'Natural sentences',
-}
-const PROMPT_LENGTH_LABELS: Record<PromptLength, string> = {
-  short: 'Short',
-  medium: 'Medium',
-  long: 'Long',
-}
 
 function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborator[]> {
   return {

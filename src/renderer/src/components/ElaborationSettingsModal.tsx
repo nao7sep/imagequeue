@@ -2,28 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
-import { PROMPT_FORMATS, PROMPT_LENGTHS, type PromptFormat, type PromptLength } from '../../../shared/session-draft'
+import {
+  PROMPT_FORMATS,
+  PROMPT_LENGTHS,
+  PROMPT_FORMAT_LABELS,
+  PROMPT_LENGTH_LABELS,
+  type PromptFormat,
+  type PromptLength,
+  type FormatDirectives,
+} from '../../../shared/session-draft'
 import './ElaborationSettingsModal.css'
 
 interface Props {
   onClose: () => void
-}
-
-// The pieces of the {{FORMAT}} directive — one per format, one per length —
-// joined with a single space at call time. Mirrors config.format_directives.
-type FormatDirectivesForm = {
-  formats: Record<PromptFormat, string>
-  lengths: Record<PromptLength, string>
-}
-
-const FORMAT_LABELS: Record<PromptFormat, string> = {
-  phrases: 'Comma phrases',
-  sentences: 'Natural sentences',
-}
-const LENGTH_LABELS: Record<PromptLength, string> = {
-  short: 'Short',
-  medium: 'Medium',
-  long: 'Long',
 }
 
 interface BrainstormForm {
@@ -35,7 +26,7 @@ interface BrainstormForm {
     first_with_previous: string
     continuation: string
   }
-  format_directives: FormatDirectivesForm
+  format_directives: FormatDirectives
 }
 
 interface BrainstormConfig {
@@ -43,10 +34,10 @@ interface BrainstormConfig {
   max_retries_per_turn: number
   retry_backoff_ms: number[]
   templates: BrainstormForm['templates']
-  format_directives: FormatDirectivesForm
+  format_directives: FormatDirectives
 }
 
-function cloneDirectives(d: FormatDirectivesForm): FormatDirectivesForm {
+function cloneDirectives(d: FormatDirectives): FormatDirectives {
   return { formats: { ...d.formats }, lengths: { ...d.lengths } }
 }
 
@@ -91,12 +82,12 @@ function checkPlaceholders(form: BrainstormForm): string | null {
 function checkFormatDirectives(form: BrainstormForm): string | null {
   for (const format of PROMPT_FORMATS) {
     if (!form.format_directives.formats[format].trim()) {
-      return `Format part "${FORMAT_LABELS[format]}" is empty.`
+      return `Format part "${PROMPT_FORMAT_LABELS[format]}" is empty.`
     }
   }
   for (const length of PROMPT_LENGTHS) {
     if (!form.format_directives.lengths[length].trim()) {
-      return `Length part "${LENGTH_LABELS[length]}" is empty.`
+      return `Length part "${PROMPT_LENGTH_LABELS[length]}" is empty.`
     }
   }
   return null
@@ -317,7 +308,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           </p>
           {PROMPT_FORMATS.map((format) => (
             <label className="elaboration-settings-template" key={`format-${format}`}>
-              <span>{`Format — ${FORMAT_LABELS[format]}`}</span>
+              <span>{`Format — ${PROMPT_FORMAT_LABELS[format]}`}</span>
               <textarea
                 rows={2}
                 value={form.format_directives.formats[format]}
@@ -327,7 +318,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           ))}
           {PROMPT_LENGTHS.map((length) => (
             <label className="elaboration-settings-template" key={`length-${length}`}>
-              <span>{`Length — ${LENGTH_LABELS[length]}`}</span>
+              <span>{`Length — ${PROMPT_LENGTH_LABELS[length]}`}</span>
               <textarea
                 rows={2}
                 value={form.format_directives.lengths[length]}

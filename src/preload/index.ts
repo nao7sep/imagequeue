@@ -16,7 +16,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
 } from '../shared/types'
-import type { SessionDraft, PromptFormat, PromptLength } from '../shared/session-draft'
+import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
 import type {
   CliJobSnapshot,
   CliChunkEvent,
@@ -142,10 +142,7 @@ const api = {
       first_with_previous: string
       continuation: string
     }
-    format_directives: {
-      formats: { sentences: string; phrases: string }
-      lengths: { short: string; medium: string; long: string }
-    }
+    format_directives: FormatDirectives
   }> =>
     ipcRenderer.invoke('brainstorm:getDefaults'),
 
