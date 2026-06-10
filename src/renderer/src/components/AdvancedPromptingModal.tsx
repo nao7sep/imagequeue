@@ -25,6 +25,11 @@ import {
 } from '../../../shared/types'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { isBrainstormMode } from '../utils/promptMode'
+import {
+  computeAdvancedGates,
+  promptModeDisabledReason as promptModeDisabledReasonFor,
+  type ActiveOperation,
+} from '../utils/advancedPromptingGates'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import './AdvancedPromptingModal.css'
 
@@ -76,10 +81,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [])
 
   const [elaborators, setElaborators] = useState<Elaborator[]>([])
-  const [elaborateBusy, setElaborateBusy] = useState(false)
+  // Elaborate and Queue are mutually exclusive: both drive the single brainstorm
+  // engine, so at most one runs at a time. One value (not a boolean per action)
+  // means there is no second flag a control can read by mistake.
+  const [activeOperation, setActiveOperation] = useState<ActiveOperation>(null)
   const [brainstormProgress, setBrainstormProgress] = useState<{ done: number; total: number } | null>(null)
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
-  const [queueBusy, setQueueBusy] = useState(false)
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
   const [error, setError] = useState('')
@@ -92,8 +99,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // The brainstorm requestId of the run in flight, so a deliberate close can
   // tell the main process to stop generating. Null when no brainstorm is running.
   const activeRequestIdRef = useRef<string | null>(null)
-
-  const busy = elaborateBusy || queueBusy
 
   const elaboratorsByKind = useMemo(() => groupElaborators(elaborators), [elaborators])
 
@@ -204,46 +209,32 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
   const totalTasks = Math.max(0, targetCount * Math.max(1, count))
-  const contentElaboratorPicked = selectedContentElaboratorId !== null && elaboratorsByKind.content.some((e) => e.id === selectedContentElaboratorId)
-  const compositionElaboratorPicked = selectedCompositionElaboratorId !== null && elaboratorsByKind.composition.some((e) => e.id === selectedCompositionElaboratorId)
-  const styleElaboratorPicked = selectedStyleElaboratorId !== null && elaboratorsByKind.style.some((e) => e.id === selectedStyleElaboratorId)
-  const missingElaboratorKind = !contentElaboratorPicked
-    ? 'content'
-    : !compositionElaboratorPicked
-      ? 'composition'
-      : !styleElaboratorPicked
-        ? 'style'
-        : null
-  const elaborateDisabledReason = (() => {
-    if (!seed.trim()) return 'Enter a seed prompt above.'
-    if (missingElaboratorKind) return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
-    return null
-  })()
-
-  const promptModeDisabledReason = useCallback((which: PromptMode): string | null => {
-    if (which === 'elaborated' && !elaborated.trim()) return 'Run Elaborate first.'
-    if (isBrainstormMode(which) && missingElaboratorKind) {
-      return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
-    }
-    return null
-  }, [elaborated, missingElaboratorKind])
+  const picks = {
+    content: selectedContentElaboratorId !== null && elaboratorsByKind.content.some((e) => e.id === selectedContentElaboratorId),
+    composition: selectedCompositionElaboratorId !== null && elaboratorsByKind.composition.some((e) => e.id === selectedCompositionElaboratorId),
+    style: selectedStyleElaboratorId !== null && elaboratorsByKind.style.some((e) => e.id === selectedStyleElaboratorId),
+  }
+  // Single source of truth for the three action surfaces (Elaborate, Queue,
+  // Elaborated history). While an operation runs, all three are disabled so the
+  // single brainstorm engine is never driven twice at once; when idle, each
+  // reflects its own precondition reason.
+  const gates = computeAdvancedGates({
+    activeOperation,
+    seedFilled: seed.trim().length > 0,
+    elaboratedFilled: elaborated.trim().length > 0,
+    picks,
+    promptMode,
+    totalTasks,
+  })
+  const busy = gates.busy
 
   // Note: we do NOT auto-reset promptMode when preconditions go away. On
   // modal open, one or more category selections can transiently read as
   // missing before elaborators load, which would silently wipe a persisted
-  // fresh-* mode. The radio disabled state and queueDisabledReason already
-  // signal a problem.
-
-  const queueDisabledReason = (() => {
-    if (totalTasks === 0) return 'Select at least one target.'
-    if (promptMode === 'as-is' && !seed.trim()) return 'Seed prompt is empty.'
-    if (promptMode === 'elaborated' && !elaborated.trim()) return 'Elaborated prompt is empty.'
-    if (isBrainstormMode(promptMode) && missingElaboratorKind) {
-      return `Pick a ${ELABORATOR_KIND_LABELS[missingElaboratorKind].toLowerCase()} elaborator first.`
-    }
-    if (isBrainstormMode(promptMode) && !seed.trim()) return 'Enter a seed prompt for elaboration.'
-    return null
-  })()
+  // fresh-* mode. The radio disabled state and the queue gate already signal a
+  // problem.
+  const promptModeDisabledReason = (which: PromptMode): string | null =>
+    promptModeDisabledReasonFor(which, elaborated.trim().length > 0, gates.missingElaboratorKind)
 
   // Run a brainstorm request and return the prompts it produced (not including
   // prior session prompts). Prompts are NOT written to the session history here
@@ -287,8 +278,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, elaboratedPrompts, promptFormat, promptLength])
 
   const handleElaborate = useCallback(async (): Promise<void> => {
-    if (elaborateDisabledReason) return
-    setElaborateBusy(true)
+    if (gates.elaborate.disabled) return
+    setActiveOperation('elaborate')
     setError('')
     void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
       contentElaborator: elaboratorsByKind.content.find((e) => e.id === selectedContentElaboratorId)?.name ?? null,
@@ -314,10 +305,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setElaborateBusy(false)
+      setActiveOperation(null)
     }
   }, [
-    elaborateDisabledReason, runBrainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts,
+    gates.elaborate.disabled, runBrainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts,
     elaboratorsByKind, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
   ])
 
@@ -353,8 +344,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [drawThingsFallbacks])
 
   const handleQueue = useCallback(async (): Promise<void> => {
-    if (queueDisabledReason) return
-    setQueueBusy(true)
+    if (gates.queue.disabled) return
+    setActiveOperation('queue')
     setError('')
     const targets = effectiveTargets
     const copies = Math.max(1, count)
@@ -461,11 +452,11 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // Stay open so the user can read the error and retry.
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setQueueBusy(false)
+      setActiveOperation(null)
     }
     if (succeeded) onClose()
   }, [
-    queueDisabledReason, effectiveTargets, count, targetCount, promptMode,
+    gates.queue.disabled, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, runBrainstorm, buildDtParams, elaboratedPrompts.length,
     snapshots, appendElaboratedPrompts, onClose,
   ])
@@ -576,10 +567,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               <button
                 className="modal-btn modal-btn-primary"
                 onClick={() => void handleElaborate()}
-                disabled={elaborateBusy || elaborateDisabledReason !== null}
-                title={elaborateDisabledReason ?? 'Generate one elaborated prompt'}
+                disabled={gates.elaborate.disabled}
+                title={gates.busy ? '' : (gates.elaborate.reason ?? 'Generate one elaborated prompt')}
               >
-                {elaborateBusy
+                {activeOperation === 'elaborate'
                   ? (brainstormProgress && brainstormProgress.total > 1
                       ? `Elaborating ${brainstormProgress.done} / ${brainstormProgress.total}…`
                       : 'Elaborating…')
@@ -597,6 +588,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 type="button"
                 className="modal-btn"
                 onClick={() => setShowHistory(true)}
+                disabled={gates.history.disabled}
                 title="View prompts elaborated this session"
               >
                 Elaborated ({elaboratedPrompts.length})
@@ -770,10 +762,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
             <button
               className="modal-btn modal-btn-primary advanced-queue-btn"
               onClick={() => void handleQueue()}
-              disabled={queueBusy || queueDisabledReason !== null}
-              title={queueDisabledReason ?? ''}
+              disabled={gates.queue.disabled}
+              title={gates.queue.reason ?? ''}
             >
-              {queueBusy
+              {activeOperation === 'queue'
                 ? (brainstormProgress
                     ? `Generating ${brainstormProgress.done} / ${brainstormProgress.total}…`
                     : 'Queueing…')

@@ -36,21 +36,9 @@ npm run typecheck
 
 ### Tests
 
-Unit tests (Vitest) cover the pure main-, shared-, and renderer-process logic —
-cost estimation, image-type detection, the queue state machine, timestamp
-allocation, config merging, session manifest handling, the brainstorm run
-lifecycle the wake lock keys off, and renderer-side helpers like enqueue
-composition and backend readiness. They run in a plain Node
-environment with no Electron or DOM dependencies. Tests live under
-`tests/`, mirroring the `src/` layout, so `src/` stays pure shipped code; they
-are type-checked separately via `tsconfig.test.json`.
+Unit tests (Vitest) cover the pure main-, shared-, and renderer-process logic — cost estimation, image-type detection, the queue state machine, timestamp allocation, config merging, session manifest handling, the brainstorm run lifecycle the wake lock keys off, and renderer-side helpers like enqueue composition and backend readiness. They run in a plain Node environment with no Electron or DOM dependencies. Tests live under `tests/`, mirroring the `src/` layout, so `src/` stays pure shipped code; they are type-checked separately via `tsconfig.test.json`.
 
-The production typecheck is split by runtime environment so cross-environment mistakes are
-caught statically: `tsconfig.node.json` (main + preload — Node, no DOM) and
-`tsconfig.web.json` (renderer — DOM, no Node types). A main-process file reaching for a
-browser global, or a renderer file reaching for a Node global, fails the check. Preload is
-checked on the Node side (it imports `electron`); the `ElectronAPI` bridge type lives in
-`src/shared`, so the renderer never imports preload.
+The production typecheck is split by runtime environment so cross-environment mistakes are caught statically: `tsconfig.node.json` (main + preload — Node, no DOM) and `tsconfig.web.json` (renderer — DOM, no Node types). A main-process file reaching for a browser global, or a renderer file reaching for a Node global, fails the check. Preload is checked on the Node side (it imports `electron`); the `ElectronAPI` bridge type lives in `src/shared`, so the renderer never imports preload.
 
 ```sh
 npm test          # run once
@@ -244,7 +232,7 @@ The rest of your Advanced Prompting setup persists the same way: the seed, the t
 
 Click **Elaborated (N)** below the elaborated prompt textarea — or open **☰ → Elaborated Prompts** — to open the manager. The list is numbered and shown newest-first so the latest prompt is immediately visible, while the underlying AI context remains chronological. Per-row **Delete** removes a prompt without confirmation; **Delete All** is gated by a confirm. Deletions affect future brainstorm calls — anything removed from the list is no longer presented to the text AI as something to avoid.
 
-A successful **Queue Tasks** closes the modal — the newly filled queue columns are the confirmation, so there is no success message. To run another round, reopen Advanced Prompting; your whole setup, including the grown avoid-list, is restored. If queueing fails, the modal stays open with the error so you can retry. Clicking outside it does not close it. Prompts are recorded in the elaborated-prompts list only once their tasks are queued (or, for a single **Elaborate**, once the result appears), so a run that is cancelled or fails partway leaves nothing behind. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; confirming stops the in-flight generation and discards that run entirely. When nothing is running, you can close the modal with **Esc** or the close button.
+A successful **Queue Tasks** closes the modal — the newly filled queue columns are the confirmation, so there is no success message. To run another round, reopen Advanced Prompting; your whole setup, including the grown avoid-list, is restored. If queueing fails, the modal stays open with the error so you can retry. Clicking outside it does not close it. Prompts are recorded in the elaborated-prompts list only once their tasks are queued (or, for a single **Elaborate**, once the result appears), so a run that is cancelled or fails partway leaves nothing behind. While an elaboration or queue operation is in flight, closing the modal asks for confirmation; confirming stops the in-flight generation and discards that run entirely. While that run is in flight the **Elaborate**, **Queue Tasks**, and **Elaborated (N)** controls are all disabled — only one operation can drive the text AI at a time — and they re-enable the moment it finishes. When nothing is running, you can close the modal with **Esc** or the close button.
 
 ## Elaborators
 
