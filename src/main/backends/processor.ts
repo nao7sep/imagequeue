@@ -132,8 +132,10 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     logGenerationComplete(task.id, task.durationMs, task.baseName, task.estimatedCostUsd)
   } catch (err) {
     task.status = 'failed'
+    // task.error stays a short string for the UI and the persisted manifest;
+    // the log captures the full error (type, message, stack, cause).
     task.error = err instanceof Error ? err.message : String(err)
-    logGenerationFailed(task.id, task.error, {
+    logGenerationFailed(task.id, err, {
       backend,
       model: task.model,
       prompt: task.prompt,

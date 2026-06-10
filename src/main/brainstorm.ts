@@ -8,7 +8,7 @@ import {
 } from './text-ai/templates'
 import type { ConversationMessage, TextAIProvider } from './text-ai'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
-import { log } from './logger'
+import { log, serializeError } from './logger'
 
 export interface BrainstormRequest {
   requestId: string
@@ -160,7 +160,7 @@ async function askWithRetry(
         : 1000
       log('warn', 'Brainstorm turn failed, retrying', {
         attempt, backoff,
-        message: lastError instanceof Error ? lastError.message : String(lastError),
+        error: serializeError(lastError),
       })
       await sleep(backoff)
     }
@@ -320,7 +320,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       collected: collected.length,
       turns: turn,
       durationMs: Date.now() - startTime,
-      message: err instanceof Error ? err.message : String(err),
+      error: serializeError(err),
     })
     throw err instanceof Error ? err : new Error(String(err))
   } finally {

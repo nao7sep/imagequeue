@@ -3,6 +3,7 @@ import path from 'path'
 import { nanoid } from 'nanoid'
 import type { Elaborator, ElaboratorKind } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
+import { log, serializeError } from './logger'
 
 function getElaboratorsFilePath(): string {
   ensureDataDir()
@@ -352,13 +353,20 @@ function isElaborator(value: unknown): value is Elaborator {
 
 function readFile(): Elaborator[] | null {
   const file = getElaboratorsFilePath()
+  // A missing file is the expected first-run case — probe silently and let the
+  // caller seed defaults. A file that exists but is unparseable or malformed is
+  // unexpected (corrupt or hand-edited), and the caller will overwrite it with
+  // defaults, so warn before that happens rather than swallowing it.
   if (!fs.existsSync(file)) return null
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
-    if (!Array.isArray(parsed)) return null
-    if (!parsed.every(isElaborator)) return null
+    if (!Array.isArray(parsed) || !parsed.every(isElaborator)) {
+      log('warn', 'Ignoring malformed elaborators file; reseeding defaults', { path: file })
+      return null
+    }
     return parsed
-  } catch {
+  } catch (err) {
+    log('warn', 'Ignoring unreadable elaborators file; reseeding defaults', { path: file, error: serializeError(err) })
     return null
   }
 }

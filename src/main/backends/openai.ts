@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { log, logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { buildOpenAIImageParams } from './openai-request'
 
 // Calls OpenAI image generation API and returns the image bytes plus a
@@ -34,7 +34,7 @@ export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mime
       status: (err as Record<string, unknown>).status,
       code: (err as Record<string, unknown>).code,
       errorBody: (err as Record<string, unknown>).error,
-      message: err instanceof Error ? err.message : String(err)
+      error: serializeError(err)
     })
     throw err
   })

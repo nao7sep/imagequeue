@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
-import { log } from './logger'
+import { log, serializeError } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
 import { createCoalescedWriter } from './utils/coalesced-writer'
 
@@ -41,7 +41,7 @@ function ensureLoaded(): ParamsStore {
       `Move or repair the file and restart ImageQueue. (parse error: ${message})`
     log('error', 'params.json: failed to parse; halting writes until resolved', {
       path: file,
-      message,
+      error: serializeError(err),
     })
     store = {}
   }
@@ -62,7 +62,7 @@ const writer = createCoalescedWriter({
   debounceMs: WRITE_DEBOUNCE_MS,
   onError: (error) =>
     log('error', 'params.json: write failed', {
-      message: error instanceof Error ? error.message : String(error),
+      error: serializeError(error),
     }),
   onDrain: () => log('info', 'Drained pending model param writes on quit'),
 })

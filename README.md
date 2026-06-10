@@ -51,6 +51,10 @@ npm run test:watch
 npm run typecheck  # includes the tests
 ```
 
+### Logging
+
+Each launch writes a `session.log` into that session's folder (see [Sessions](#sessions)). `debug`-level lines are developer-only: they are enabled automatically in a development build (`npm run dev`) and can be forced in any build with `IMAGEQUEUE_DEBUG=1`. Release builds never write `debug` lines, so the verbose firehose stays out of end users' logs.
+
 ## Everyday workflow
 
 1. Enter a prompt, or click **Paste Text** to replace it with plain text from the clipboard when available.
@@ -71,6 +75,7 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 - **Delete** removes that session folder according to the **Delete to Trash** setting.
 - Resume also restores the session's working draft: the prompt you were composing and the Advanced Prompting selections (seed, elaborator picks, targets, mode, iteration count). Genuinely transient UI state — the current selection and preview, the fullscreen viewer, and the **Show Kept Images** toggle — is not restored.
 - Only sessions with a readable `session.json` snapshot appear.
+- Each session folder also holds a `session.log`: a per-launch [JSON Lines](https://jsonlines.org) record (one JSON event per line) of what the app did — startup and effective settings, each queued and generated task, external calls, and every warning or error with its full stack. Logs are never auto-deleted, and secret-bearing fields (API keys) are redacted; attach the relevant `session.log` when filing an issue.
 - Session previews currently read the original output images directly. Cached thumbnail files are intentionally not generated yet; if browsing later becomes measurably slow, add relative thumbnail paths in `session.json` and generate missing thumbs on demand.
 
 ## Settings overview

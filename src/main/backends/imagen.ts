@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { log, logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 
 // Calls Google Imagen API and returns the image bytes plus the MIME-type
@@ -49,7 +49,7 @@ export async function generateImagen(task: Task): Promise<{ buffer: Buffer; mime
       model: task.model,
       requestParams,
       status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,
-      message: err instanceof Error ? err.message : String(err)
+      error: serializeError(err)
     })
     throw err
   })

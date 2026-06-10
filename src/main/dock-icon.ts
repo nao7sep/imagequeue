@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import icon from '../../resources/icon.png?asset'
-import { log } from './logger'
+import { log, serializeError } from './logger'
 
 // In dev the app runs under the prebuilt Electron.app binary, whose bundle
 // carries Electron's default Dock icon. app.dock.setIcon only draws a temporary
@@ -32,7 +32,7 @@ export function applyDevDockIcon(): void {
     app.dock?.setIcon(icon)
   } catch (err) {
     log('warn', 'Failed to set dev Dock icon', {
-      message: err instanceof Error ? err.message : String(err)
+      error: serializeError(err)
     })
   }
 }

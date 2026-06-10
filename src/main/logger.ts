@@ -1,63 +1,188 @@
 import fs from 'fs'
 import path from 'path'
+import { serializeError } from '../shared/serialize-error'
+
+// Re-exported so main-process modules can keep importing serializeError from the
+// logger alongside log(); the single implementation lives in shared/ so the
+// renderer produces identical structured errors when forwarding over IPC.
+export { serializeError }
+
+// A small, hand-rolled, dependency-free logger that writes one JSON object per
+// line (JSON Lines) to the active session's session.log. It is deliberately
+// free of any electron import so it stays unit-testable under plain Node (see
+// vitest.config.ts) and so the file-IO edge here carries no app logic.
+//
+// The caller describes *what happened* as a stable message plus structured
+// fields; this module builds the envelope, redacts denied keys, serializes, and
+// appends. Writes are synchronous, so every line is durable the moment it is
+// logged — there is no buffer to lose on a crash, which satisfies the
+// "flush warn/error/debug immediately and on crash" requirement for free.
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+type LogFields = Record<string, unknown>
 
 let logFilePath: string | null = null
+
+// Debug is developer-only and off by default: a release build must never write
+// debug lines. The privileged process flips this on for a development build or
+// an explicit IMAGEQUEUE_DEBUG=1 via setLoggerDebug (kept out of this module so
+// it stays electron-free).
+let debugEnabled = false
+
+const REDACTED = '[redacted]'
+
+// Field names whose VALUES are replaced before serialization. Matched by exact,
+// case-insensitive name — never by substring, so `token` never matches
+// `tokenCount`. Both camelCase and snake_case spellings are listed because the
+// match is exact: this app stores keys as `api_key`. Seeded with the obvious
+// secrets and extended as needed (no cross-app taxonomy).
+const DENIED_KEYS: ReadonlySet<string> = new Set(
+  ['apiKey', 'api_key', 'authorization', 'token', 'password', 'secret'].map((key) => key.toLowerCase())
+)
+
+// Enables or disables debug output for the whole process. Called once at
+// startup by the privileged process with (devBuild || IMAGEQUEUE_DEBUG=1).
+export function setLoggerDebug(enabled: boolean): void {
+  debugEnabled = enabled
+}
 
 function setLogSessionDir(sessionDir: string): void {
   logFilePath = path.join(sessionDir, 'session.log')
 }
 
-// Initializes the logger to write to session.log in the given session directory.
+// Points the logger at a session directory's session.log and records the
+// session start. The per-session directory + fixed session.log name is the
+// logging-convention's explicitly allowed alternative to a <utc>.log file.
 export function initLogger(sessionDir: string): void {
   setLogSessionDir(sessionDir)
   log('info', 'Session started', { sessionDir })
 }
 
+// Repoints the logger when the user resumes a different session.
 export function retargetLogger(sessionDir: string): void {
   setLogSessionDir(sessionDir)
   log('info', 'Session resumed', { sessionDir })
 }
 
-type LogLevel = 'info' | 'warn' | 'error' | 'debug'
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
 
-// Appends a timestamped line to the session log file.
-export function log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
+// Non-destructive, type-preserving redactor. Rebuilds only plain objects and
+// arrays, replacing the value of a denied key with a fixed marker and leaving
+// every other value byte-identical. It never inspects string contents and never
+// edits the message. Non-plain objects (Date, Buffer, Map, Set, class
+// instances) pass through untouched — JSON.stringify renders them correctly
+// (e.g. a Date to an ISO string), whereas iterating them via Object.entries
+// would flatten them to `{}` and destroy data. It is total: a true reference
+// cycle (unrepresentable in JSON) is collapsed to a marker rather than
+// overflowing the stack, while a value merely shared between sibling fields is
+// still fully processed in each place — so legitimate fields are never dropped.
+function redactInner(value: unknown, ancestors: Set<object>): unknown {
+  if (Array.isArray(value)) {
+    if (ancestors.has(value)) return '[circular]'
+    ancestors.add(value)
+    const result = value.map((item) => redactInner(item, ancestors))
+    ancestors.delete(value)
+    return result
+  }
+  if (isPlainObject(value)) {
+    if (ancestors.has(value)) return '[circular]'
+    ancestors.add(value)
+    const out: Record<string, unknown> = {}
+    for (const [key, fieldValue] of Object.entries(value)) {
+      out[key] = DENIED_KEYS.has(key.toLowerCase()) ? REDACTED : redactInner(fieldValue, ancestors)
+    }
+    ancestors.delete(value)
+    return out
+  }
+  return value
+}
+
+export function redact(value: unknown): unknown {
+  return redactInner(value, new Set<object>())
+}
+
+// The envelope keys the logger owns; a caller field may not overwrite them.
+const RESERVED_KEYS: ReadonlySet<string> = new Set(['time', 'level', 'message'])
+
+// Appends one JSON Lines event to the active session log. Takes a structured
+// event — a short, stable message plus arbitrary fields — and builds the
+// envelope { time, level, message, ...redactedFields }. debug lines are written
+// only when debug is enabled. Logging never throws and never crashes the app: a
+// field that cannot be serialized falls back to a minimal envelope, and a
+// failed write degrades to the console (best-effort, no new dependencies).
+export function log(level: LogLevel, message: string, fields?: LogFields): void {
+  if (level === 'debug' && !debugEnabled) return
   if (!logFilePath) return
 
-  const ts = new Date().toISOString()
-  let line = `[${ts}] [${level.toUpperCase()}] ${message}`
-  if (data) {
-    line += ' ' + JSON.stringify(data)
+  const time = new Date().toISOString()
+  const entry: Record<string, unknown> = { time, level, message }
+  if (fields) {
+    const redacted = redact(fields) as Record<string, unknown>
+    for (const key of Object.keys(redacted)) {
+      // Envelope keys are reserved: a caller field named time/level/message
+      // cannot overwrite them and corrupt the line's schema.
+      if (RESERVED_KEYS.has(key)) continue
+      entry[key] = redacted[key]
+    }
   }
-  line += '\n'
+
+  let line: string
+  try {
+    line = JSON.stringify(entry) + '\n'
+  } catch {
+    // A field was not serializable (e.g. a BigInt, or a getter that throws).
+    // Never lose the event: fall back to the bare envelope. message/level/time
+    // are all strings, so this stringify cannot itself throw.
+    line = JSON.stringify({ time, level, message, logSerializeError: 'fields not serializable' }) + '\n'
+  }
 
   try {
     fs.appendFileSync(logFilePath, line, 'utf-8')
-  } catch {
-    // Logging must never crash the app.
+  } catch (err) {
+    // The log file may be unwritable (disk full, permissions). Degrade to the
+    // console and keep running — never crash because logging failed, but never
+    // swallow the failure silently either.
+    console.error('[logger] failed to write log line', err)
   }
 }
 
-export function logEnqueue(taskId: string, backend: string, model: string, prompt: string, params: Record<string, unknown>, count: number): void {
-  log('info', `Enqueued task ${taskId}`, { backend, model, prompt, params, count })
+export function logEnqueue(
+  taskId: string,
+  backend: string,
+  model: string,
+  prompt: string,
+  params: Record<string, unknown>,
+  count: number
+): void {
+  log('info', 'Task enqueued', { taskId, backend, model, prompt, params, count })
 }
 
 export function logGenerationStart(taskId: string, backend: string, model: string): void {
-  log('info', `Generation started: ${taskId}`, { backend, model })
+  log('info', 'Generation started', { taskId, backend, model })
 }
 
-export function logGenerationComplete(taskId: string, durationMs: number, baseName: string | null, estimatedCostUsd: number | null): void {
-  log('info', `Generation complete: ${taskId}`, { durationMs, baseName, estimatedCostUsd })
+export function logGenerationComplete(
+  taskId: string,
+  durationMs: number,
+  baseName: string | null,
+  estimatedCostUsd: number | null
+): void {
+  log('info', 'Generation complete', { taskId, durationMs, baseName, estimatedCostUsd })
 }
 
-export function logGenerationFailed(taskId: string, error: string, context?: Record<string, unknown>): void {
-  log('error', `Generation failed: ${taskId}`, { error, ...context })
+export function logGenerationFailed(taskId: string, err: unknown, context?: Record<string, unknown>): void {
+  log('error', 'Generation failed', { taskId, error: serializeError(err), ...context })
 }
 
 export function logApiRequest(backend: string, endpoint: string, params: Record<string, unknown>): void {
-  log('debug', `API request: ${backend}`, { endpoint, params })
+  log('debug', 'API request', { backend, endpoint, params })
 }
 
 export function logApiResponse(backend: string, status: number | string, durationMs?: number): void {
-  log('debug', `API response: ${backend}`, { status, durationMs })
+  log('debug', 'API response', { backend, status, durationMs })
 }

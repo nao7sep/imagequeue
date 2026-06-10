@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createEmptySessionDraft, type SessionDraft } from '../../../shared/session-draft'
+import { serializeError } from '../../../shared/serialize-error'
 
 // The renderer's working state for the active session: the SessionDraft fields
 // (main prompt + Advanced Prompting selections) plus the elaborated-prompts
@@ -81,7 +82,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     lastPersistedDraftRef.current = draftSnapshot
     void window.electronAPI.saveSessionDraft(JSON.parse(draftSnapshot) as SessionDraft).catch((error) => {
       void window.electronAPI.appLog('error', 'Failed to persist session draft', {
-        error: error instanceof Error ? error.message : String(error),
+        error: serializeError(error),
       })
     })
   }, [draftSnapshot])

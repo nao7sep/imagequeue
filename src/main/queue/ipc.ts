@@ -3,7 +3,7 @@ import { queueManager } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
 import { loadConfig } from '../config'
-import { logEnqueue, log } from '../logger'
+import { logEnqueue, log, serializeError } from '../logger'
 import { persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
 
@@ -45,16 +45,16 @@ export function registerQueueIpc(): void {
   ipcMain.handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
     if (task?.status === 'generating') {
-      log('warn', `Refusing to remove generating task ${taskId}`, { backend })
+      log('warn', 'Refusing to remove generating task', { taskId, backend })
       return
     }
     if (!task) return
 
     if (task.status === 'completed') {
-      log('info', `Task marked kept: ${taskId}`, { backend, baseName: task.baseName ?? null })
+      log('info', 'Task marked kept', { taskId, backend, baseName: task.baseName ?? null })
       queueManager.keepTask(backend, taskId)
     } else {
-      log('info', `Task removed from queue: ${taskId}`, { backend })
+      log('info', 'Task removed from queue', { taskId, backend })
       queueManager.removeTask(backend, taskId)
     }
     persistActiveSession()
@@ -65,7 +65,7 @@ export function registerQueueIpc(): void {
     const task = queueManager.restoreTask(backend, taskId)
     if (!task) return
 
-    log('info', `Task restored from kept list: ${taskId}`, { backend, baseName: task.baseName ?? null })
+    log('info', 'Task restored from kept list', { taskId, backend, baseName: task.baseName ?? null })
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
@@ -73,12 +73,12 @@ export function registerQueueIpc(): void {
   ipcMain.handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
     const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
-    log('info', `Task deleted with files: ${taskId}`, { backend, baseName: task?.baseName ?? null, toTrash })
+    log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
     let filesDeleted = false
     if (task?.baseName) {
       const ext = imageExtFromPath(task.imagePath)
       if (!ext) {
-        log('warn', `Cannot determine image extension for ${taskId}; skipping file removal`, { imagePath: task.imagePath ?? null })
+        log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
         return
       }
       try {
@@ -89,11 +89,11 @@ export function registerQueueIpc(): void {
         }
         filesDeleted = true
       } catch (err) {
-        log('error', `Failed to ${toTrash ? 'trash' : 'delete'} files for ${taskId}`, { error: String(err) })
+        log('error', 'Failed to remove task files', { taskId, toTrash, error: serializeError(err) })
         return
       }
     } else {
-      log('warn', `Cannot delete files for ${taskId}; task has no baseName`, { backend })
+      log('warn', 'Cannot delete files: task has no baseName', { taskId, backend })
       return
     }
     queueManager.removeTask(backend, taskId)
@@ -104,7 +104,7 @@ export function registerQueueIpc(): void {
   ipcMain.handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.retryTask(backend, taskId)
     if (task) {
-      log('info', `Retrying task ${taskId}`, { backend })
+      log('info', 'Task retry requested', { taskId, backend })
       persistActiveSession()
       notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
     }
@@ -113,7 +113,7 @@ export function registerQueueIpc(): void {
   ipcMain.handle('queue:resumeInterrupted', () => {
     const count = queueManager.retryAllInterrupted()
     if (count > 0) {
-      log('info', `Resuming ${count} interrupted task(s)`)
+      log('info', 'Resuming interrupted tasks', { count })
       persistActiveSession()
       notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
     }

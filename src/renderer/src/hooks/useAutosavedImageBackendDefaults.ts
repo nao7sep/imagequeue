@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { CloudBackendId } from '../../../shared/types'
+import { serializeError } from '../../../shared/serialize-error'
 import {
   serializeImageBackendDefaults,
   type SavedImageBackendDefaults,
@@ -53,7 +54,7 @@ export function useAutosavedImageBackendDefaults({
       }).catch((error) => {
         void window.electronAPI.appLog('error', 'Failed to persist image backend defaults', {
           backend,
-          error: error instanceof Error ? error.message : String(error),
+          error: serializeError(error),
         })
       })
     }, 800)

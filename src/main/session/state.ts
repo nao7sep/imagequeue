@@ -13,7 +13,7 @@ import {
 } from '../../shared/types'
 import { createEmptySessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
 import { loadConfig } from '../config'
-import { initLogger, log, retargetLogger } from '../logger'
+import { initLogger, log, retargetLogger, serializeError } from '../logger'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
 import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
@@ -51,7 +51,7 @@ const draftWriter = createCoalescedWriter({
   debounceMs: DRAFT_PERSIST_DEBOUNCE_MS,
   onError: (error) =>
     log('error', 'Failed to persist session draft', {
-      message: error instanceof Error ? error.message : String(error),
+      error: serializeError(error),
     }),
   onDrain: () => log('info', 'Drained pending session draft write'),
 })
@@ -154,7 +154,7 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
   } catch (error) {
     log('warn', 'Ignoring unreadable session manifest', {
       filePath,
-      error: error instanceof Error ? error.message : String(error),
+      error: serializeError(error),
     })
     return null
   }
@@ -255,7 +255,7 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
   if (!fs.existsSync(sessionDir)) return
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
-  log('info', `Dropping empty session (${reason})`, { sessionId, path: sessionDir, toTrash })
+  log('info', 'Dropping empty session', { reason, sessionId, path: sessionDir, toTrash })
   if (toTrash) {
     await shell.trashItem(sessionDir)
   } else {

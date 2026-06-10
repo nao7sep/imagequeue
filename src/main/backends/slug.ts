@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
 import { loadConfig } from '../config'
 import { getLightProvider } from '../text-ai'
-import { log } from '../logger'
+import { log, serializeError } from '../logger'
 
 // Generates a filename slug from a prompt using the configured Text AI's
 // light tier. Falls back to nanoid on any failure or if the AI is not
@@ -33,7 +33,7 @@ export async function generateSlug(prompt: string): Promise<string> {
   } catch (err) {
     const isTimeout = err instanceof Error && err.name === 'AbortError'
     log('warn', isTimeout ? 'Slug AI timed out, falling back to nanoid' : 'Slug AI call failed, falling back to nanoid', {
-      message: err instanceof Error ? err.message : String(err),
+      error: serializeError(err),
     })
     return nanoid(10)
   }

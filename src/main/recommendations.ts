@@ -3,7 +3,7 @@ import path from 'path'
 import os from 'os'
 import https from 'https'
 import { getDataDir, loadConfig } from './config'
-import { log } from './logger'
+import { log, serializeError } from './logger'
 import {
   RecommendedParams,
   RecommendationOperationResult,
@@ -83,13 +83,13 @@ export async function updateRecommendationsAtLaunch(): Promise<void> {
     const result = await downloadLatestRecommendations()
     log('info', 'Recommendations launch update finished', {
       changed: result.changed,
-      message: result.message,
+      detail: result.message,
       entryCount: result.entryCount,
       updatedAt: result.updatedAt
     })
   } catch (err) {
     log('warn', 'Recommendations launch update failed', {
-      message: (err as Error).message
+      error: serializeError(err)
     })
   }
 }

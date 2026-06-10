@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
 import path from 'path'
-import { loadConfig, ensureDataDir } from './config'
+import { loadConfig, ensureDataDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
@@ -10,7 +10,7 @@ import { registerElaboratorsIpc } from './elaborators-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
-import { initLogger, log } from './logger'
+import { initLogger, log, setLoggerDebug, serializeError } from './logger'
 import { updateRecommendationsAtLaunch } from './recommendations'
 import { killAllCliJobs } from './cli-jobs'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
@@ -18,6 +18,35 @@ import { applyDevDockIcon } from './dock-icon'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 
 let mainWin: BrowserWindow | null = null
+
+// Debug is developer-only: enabled for an unpackaged (development) build or an
+// explicit IMAGEQUEUE_DEBUG=1, and compiled off in a release build. Set once at
+// process start so every debug line — including any logged before the session
+// file is opened — honors the gate.
+const DEBUG_ENABLED = !app.isPackaged || process.env['IMAGEQUEUE_DEBUG'] === '1'
+setLoggerDebug(DEBUG_ENABLED)
+
+// Global last-resort hooks: log with full error fidelity before the process
+// dies, and also surface to the console as a backstop for the brief window
+// before the session log file is open. An uncaught exception leaves the process
+// in an undefined state, so we exit after logging; an unhandled rejection is
+// logged but allowed to continue.
+process.on('uncaughtException', (err) => {
+  log('error', 'Uncaught exception', { error: serializeError(err) })
+  console.error('Uncaught exception:', err)
+  // app.exit() skips the before-quit graceful shutdown that normally drains the
+  // debounced session-draft and model-param writes, so flush them here first —
+  // the writers are synchronous and route their own errors to onError, so this
+  // best-effort flush cannot itself throw. OS resources (CLI jobs, wake lock)
+  // are reclaimed by the OS on exit and need no cleanup on a crash.
+  drainPendingModelParamsWrites()
+  drainPendingDraftWrites()
+  app.exit(1)
+})
+process.on('unhandledRejection', (reason) => {
+  log('error', 'Unhandled rejection', { error: serializeError(reason) })
+  console.error('Unhandled rejection:', reason)
+})
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -98,6 +127,12 @@ app.whenReady().then(() => {
   initSession()
   resetOutputTimestampAllocators()
   initLogger(getSessionDir())
+  log('info', 'App started', {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    debug: DEBUG_ENABLED,
+    config: summarizeConfig(loadConfig()),
+  })
 
   persistActiveSession()
   registerSessionIpc()
@@ -111,7 +146,7 @@ app.whenReady().then(() => {
   initNotificationWindow()
   void updateRecommendationsAtLaunch().catch((err) => {
     log('warn', 'Recommendations launch update rejected unexpectedly', {
-      message: (err as Error).message
+      error: serializeError(err)
     })
   })
   startProcessor()
@@ -148,8 +183,9 @@ async function gracefulShutdown(reason: string): Promise<void> {
     try {
       await fn()
     } catch (err) {
-      log('error', `Shutdown step failed: ${name}`, {
-        message: err instanceof Error ? err.message : String(err),
+      log('error', 'Shutdown step failed', {
+        step: name,
+        error: serializeError(err),
       })
     }
   }
@@ -182,7 +218,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   gracefulShutdown('quit')
     .catch((err) => log('error', 'Graceful shutdown error', {
-      message: err instanceof Error ? err.message : String(err),
+      error: serializeError(err),
     }))
     .finally(() => app.exit(0))
 })

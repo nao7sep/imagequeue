@@ -6,7 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { loadConfig } from './config'
-import { log } from './logger'
+import { log, serializeError } from './logger'
 import { CliStatus, LocalModelInfo, CustomJsonStatus } from '../shared/types'
 
 export type { CliStatus, LocalModelInfo, CustomJsonStatus }
@@ -48,7 +48,7 @@ export async function checkCli(): Promise<CliStatus> {
   return new Promise((resolve) => {
     execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout, stderr) => {
       if (error) {
-        log('warn', 'draw-things-cli check failed', { cliPath, message: error.message, stderr })
+        log('warn', 'draw-things-cli check failed', { cliPath, error: serializeError(error), stderr })
         resolve({ installed: false, version: null, path: null, platform: 'darwin' })
       } else {
         const version = stdout.trim() || null
@@ -120,7 +120,7 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   return new Promise((resolve) => {
     execFile(cliPath, args, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error) {
-        log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, message: error.message, stderr })
+        log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, error: serializeError(error), stderr })
         resolve([])
       } else {
         resolve(parseModelList(stdout))
@@ -138,7 +138,7 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   return new Promise((resolve) => {
     execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
       if (error) {
-        log('error', 'draw-things-cli models list (all) failed', { cliPath, args, message: error.message, stderr })
+        log('error', 'draw-things-cli models list (all) failed', { cliPath, args, error: serializeError(error), stderr })
         resolve([])
       } else {
         resolve(parseModelList(stdout))
@@ -181,7 +181,7 @@ export async function ensureModel(modelFile: string): Promise<EnsureModelResult>
     })
 
     proc.on('error', (err) => {
-      log('error', 'Model download spawn failed', { modelFile, message: err.message })
+      log('error', 'Model download spawn failed', { modelFile, error: serializeError(err) })
       resolve({ success: false, error: err.message })
     })
   })
@@ -208,7 +208,7 @@ export function readCustomJsonImportedFiles(): CustomJsonStatus {
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) {
       const reason = 'top-level value is not an array'
-      log('warn', `custom.json: ${reason}`, { customJsonPath })
+      log('warn', 'custom.json is not an array', { customJsonPath, reason })
       return { kind: 'unreadable', reason }
     }
     const files = parsed
@@ -221,7 +221,7 @@ export function readCustomJsonImportedFiles(): CustomJsonStatus {
     return { kind: 'present', files }
   } catch (err) {
     const reason = (err as Error).message
-    log('warn', 'custom.json: failed to read or parse', { customJsonPath, message: reason })
+    log('warn', 'custom.json failed to read or parse', { customJsonPath, error: serializeError(err) })
     return { kind: 'unreadable', reason }
   }
 }

@@ -1,4 +1,9 @@
 {
+  // Main-process + preload environment: Node, NO DOM. `lib: ["ES2022"]` (no DOM)
+  // statically catches a main/preload file reaching for a browser global
+  // (document, window) that would be undefined at runtime; `types: ["node"]` keeps
+  // it to Node. Preload sits here because it imports `electron`, whose types pull
+  // in @types/node — which would otherwise leak Node globals into the renderer.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -11,7 +16,9 @@
     "isolatedModules": true,
     "noEmit": true,
     "composite": true,
-    "outDir": "./out"
+    "outDir": "./out",
+    "lib": ["ES2022"],
+    "types": ["node"]
   },
   "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "electron.vite.config.ts"]
 }

@@ -4,6 +4,7 @@ import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import type { BackendId, CloudBackendId, Task, CliStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
+import { serializeError } from '../../../shared/serialize-error'
 import {
   getModelsForBackend,
   findModel,
@@ -63,8 +64,7 @@ const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = OPENAI_SIZES_GPT2
 // visible symptom remains "saves don't persist", which they'll notice on
 // reload — the log entry exists for diagnosis.
 function logSaveError(context: string, err: unknown, extra?: Record<string, unknown>): void {
-  const message = err instanceof Error ? err.message : String(err)
-  void window.electronAPI.appLog('error', `Failed to ${context}`, { message, ...extra })
+  void window.electronAPI.appLog('error', 'Renderer save failed', { context, error: serializeError(err), ...extra })
 }
 
 function buildDrawThingsParams(

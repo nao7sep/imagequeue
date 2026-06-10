@@ -1,7 +1,7 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { log, logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 
 // Calls the xAI Grok Imagine image generation API and returns the image bytes
 // with an `image/jpeg` MIME hint. The API always returns JPEG — no format
@@ -69,7 +69,7 @@ export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeTy
     if (!(err instanceof Error && err.message.startsWith('Grok API'))) {
       log('error', 'Grok Imagine API call failed', {
         model: task.model,
-        message: err instanceof Error ? err.message : String(err)
+        error: serializeError(err)
       })
     }
     throw err

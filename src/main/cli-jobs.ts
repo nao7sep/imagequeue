@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
 import { spawn as spawnPty } from 'node-pty'
-import { log } from './logger'
+import { log, serializeError } from './logger'
 import {
   CliChunk,
   CliChunkEvent,
@@ -218,7 +218,7 @@ function launchPipeJob(state: JobState): void {
   stderr.on('data', (chunk: string) => onData(state, 'stderr', chunk))
 
   child.on('error', (err) => {
-    log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, message: err.message })
+    log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
     pushChunk(state, 'stderr', `[spawn error] ${err.message}`)
     finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
   })
@@ -292,7 +292,7 @@ function launchImportJob(state: JobState): void {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    log('error', 'CLI PTY spawn error', { jobId: state.jobId, ...state.logContext, message })
+    log('error', 'CLI PTY spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
     pushChunk(state, 'stderr', `[spawn error] ${message}`)
     finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
   }
@@ -432,7 +432,7 @@ function finalize(state: JobState, status: 'exited' | 'killed', code: number | n
   }
 
   emitStatus(state)
-  log('info', `CLI job ${status}`, { jobId: state.jobId, exitCode: code })
+  log('info', 'CLI job finished', { jobId: state.jobId, status, exitCode: code })
 
   if (state.subscribers.size === 0) {
     scheduleRetentionTimer(state, CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS)

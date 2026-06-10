@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, screen } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { log, serializeError } from './logger'
 
 let notificationWin: BrowserWindow | null = null
 let dismissTimeout: ReturnType<typeof setTimeout> | null = null
@@ -151,8 +152,16 @@ function showNotification(type: 'success' | 'failure', _mainWin: BrowserWindow |
       if (!win.isDestroyed()) win.hide()
       isShowing = false
     }, 3000)
-  }).catch(() => {
+  }).catch((err) => {
     isShowing = false
+    // A destroyed window mid-measurement is an expected race (the toast window
+    // was closed while executeJavaScript was in flight), not an incident — keep
+    // it quiet. Anything else is an unexpected render failure worth a warning.
+    if (win.isDestroyed()) {
+      log('debug', 'Notification render aborted: window closed', { type })
+      return
+    }
+    log('warn', 'Notification render failed', { type, error: serializeError(err) })
   })
 }
 

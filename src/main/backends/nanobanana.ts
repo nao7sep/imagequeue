@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { decodeApiKey } from '../config/api-key'
-import { log, logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 
 // Calls the Gemini native image generation API (generateContent) and returns
@@ -48,7 +48,7 @@ export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; 
       model: task.model,
       requestParams,
       status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,
-      message: err instanceof Error ? err.message : String(err)
+      error: serializeError(err)
     })
     throw err
   })

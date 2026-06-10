@@ -4,7 +4,7 @@ import path from 'path'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
-import { log, logApiRequest, logApiResponse } from '../logger'
+import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir } from '../local-cli'
 
 export async function generateDrawThings(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
@@ -73,7 +73,7 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
       }
     })
     proc.on('error', (err) => {
-      log('error', 'draw-things-cli spawn failed', { cliPath, message: err.message })
+      log('error', 'draw-things-cli spawn failed', { cliPath, error: serializeError(err) })
       reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
     })
   })
