@@ -1,6 +1,7 @@
-import { BrowserWindow, ipcMain, screen } from 'electron'
+import { BrowserWindow, screen } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { handle } from './ipc-boundary'
 import { log, serializeError } from './logger'
 
 let notificationWin: BrowserWindow | null = null
@@ -174,11 +175,11 @@ export function closeNotificationWindow(): void {
 }
 
 export function registerNotificationIpc(getMainWin: () => BrowserWindow | null): void {
-  ipcMain.handle('notification:show', (_event, type: 'success' | 'failure') => {
+  handle('notification:show', (_event, type: 'success' | 'failure') => {
     showNotification(type, getMainWin())
   })
 
-  ipcMain.handle('notification:loadAudioFile', async (_event, filePath: string) => {
+  handle('notification:loadAudioFile', async (_event, filePath: string) => {
     if (!filePath || !fs.existsSync(filePath)) return null
     const data = await fs.promises.readFile(filePath)
     const ext = path.extname(filePath).slice(1).toLowerCase()

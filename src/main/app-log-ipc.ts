@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { handle } from './ipc-boundary'
 import { log, type LogLevel } from './logger'
 
 const ALLOWED_LEVELS: ReadonlySet<LogLevel> = new Set<LogLevel>(['info', 'warn', 'error', 'debug'])
@@ -10,7 +10,7 @@ const ALLOWED_LEVELS: ReadonlySet<LogLevel> = new Set<LogLevel>(['info', 'warn',
 // Queue with mode=fresh-task and 4 targets). Diagnostic-only — not a generic
 // data channel: keep payloads small and structured.
 export function registerAppLogIpc(): void {
-  ipcMain.handle('app:log', (_event, level: string, message: string, data?: Record<string, unknown>) => {
+  handle('app:log', (_event, level: string, message: string, data?: Record<string, unknown>) => {
     const safeLevel: LogLevel = ALLOWED_LEVELS.has(level as LogLevel) ? (level as LogLevel) : 'info'
     log(safeLevel, message, data)
   })

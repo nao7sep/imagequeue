@@ -6,7 +6,8 @@ import { allocateOutputTimestamp, persistActiveSession } from '../session'
 import { writeImageOutput, ImageExt } from '../utils/file-output'
 import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
-import { logGenerationStart, logGenerationComplete, logGenerationFailed } from '../logger'
+import { log, logGenerationStart, logGenerationComplete, logGenerationFailed } from '../logger'
+import { DrainTracker } from './drain-tracker'
 import { generateOpenAI } from './openai'
 import { generateImagen } from './imagen'
 import { generateNanoBanana } from './nanobanana'
@@ -34,6 +35,15 @@ const activeCounts: Record<BackendId, number> = {
   grok: 0,
   flux: 0,
   drawthings: 0
+}
+
+// Tracks one continuous busy period (a "drain") across all backends so the
+// queue logs a single aggregate summary instead of an info line per image.
+// Process-global like the queue itself; per-image start/complete stay at debug.
+const drainTracker = new DrainTracker()
+
+function totalActive(): number {
+  return Object.values(activeCounts).reduce((sum, count) => sum + count, 0)
 }
 
 // Returns the per-backend default extension, used when both the MIME hint
@@ -64,6 +74,15 @@ export function startProcessor(): void {
 }
 
 function processQueues(): void {
+  // Close out a finished drain before scheduling new work: once nothing is in
+  // flight and nothing is queued, the busy period that just ended gets its one
+  // summary line. The 500ms tick that observes the idle state may land up to
+  // half a second after the last task settled — fine for an aggregate summary.
+  const summary = drainTracker.finalize(Date.now(), totalActive() === 0 && !queueManager.hasQueuedTasks())
+  if (summary) {
+    log('info', 'Queue drained', { ...summary })
+  }
+
   const config = loadConfig()
   const backends: BackendId[] = BACKEND_IDS_IN_UI_ORDER
 
@@ -77,6 +96,7 @@ function processQueues(): void {
       if (activeCounts[backend] >= maxConcurrency) break
       if (task.status !== 'queued') continue
 
+      drainTracker.begin(Date.now())
       activeCounts[backend]++
       task.status = 'generating'
       task.startedAt = new Date().toISOString()
@@ -129,12 +149,14 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     task.status = 'completed'
     task.baseName = baseName
     task.imagePath = `${baseName}.${ext}`
+    drainTracker.recordOk()
     logGenerationComplete(task.id, task.durationMs, task.baseName, task.estimatedCostUsd)
   } catch (err) {
     task.status = 'failed'
     // task.error stays a short string for the UI and the persisted manifest;
     // the log captures the full error (type, message, stack, cause).
     task.error = err instanceof Error ? err.message : String(err)
+    drainTracker.recordFailed()
     logGenerationFailed(task.id, err, {
       backend,
       model: task.model,

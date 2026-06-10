@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { handle } from './ipc-boundary'
 import fs from 'fs'
 import path from 'path'
 import { getSessionDir, resolveSessionDir } from './session'
@@ -19,15 +19,15 @@ function readImageFromDir(dir: string, baseName: string): { data: string; ext: I
 // Returns the base64-encoded bytes and the extension of the file that was
 // actually found on disk, so the renderer can build a correctly-typed data URL.
 export function registerPreviewIpc(): void {
-  ipcMain.handle('preview:getImage', (_event, baseName: string): { data: string; ext: ImageExt } | null => {
+  handle('preview:getImage', (_event, baseName: string): { data: string; ext: ImageExt } | null => {
     return readImageFromDir(getSessionDir(), baseName)
   })
 
-  ipcMain.handle('preview:getSessionImage', (_event, sessionId: string, baseName: string): { data: string; ext: ImageExt } | null => {
+  handle('preview:getSessionImage', (_event, sessionId: string, baseName: string): { data: string; ext: ImageExt } | null => {
     return readImageFromDir(resolveSessionDir(sessionId), baseName)
   })
 
-  ipcMain.handle('preview:getMetadata', (_event, baseName: string) => {
+  handle('preview:getMetadata', (_event, baseName: string) => {
     const dir = getSessionDir()
     const metaPath = path.join(dir, `${baseName}.json`)
 

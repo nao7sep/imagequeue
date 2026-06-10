@@ -1,4 +1,5 @@
-import { ipcMain, shell } from 'electron'
+import { shell } from 'electron'
+import { handle } from '../ipc-boundary'
 import type { SessionDraft } from '../../shared/session-draft'
 import {
   appendActiveSessionElaboratedPrompts,
@@ -15,47 +16,47 @@ import {
 } from './state'
 
 export function registerSessionIpc(): void {
-  ipcMain.handle('session:create', async () => {
+  handle('session:create', async () => {
     await createSession()
   })
 
-  ipcMain.handle('session:list', () => {
+  handle('session:list', () => {
     return listSessions()
   })
 
-  ipcMain.handle('session:resume', async (_event, sessionId: string) => {
+  handle('session:resume', async (_event, sessionId: string) => {
     await resumeSession(sessionId)
   })
 
-  ipcMain.handle('session:delete', (_event, sessionId: string) => {
+  handle('session:delete', (_event, sessionId: string) => {
     return deleteSession(sessionId)
   })
 
-  ipcMain.handle('session:openFolder', async (_event, sessionId: string) => {
+  handle('session:openFolder', async (_event, sessionId: string) => {
     await shell.openPath(resolveSessionDir(sessionId))
   })
 
-  ipcMain.handle('session:getDraft', () => {
+  handle('session:getDraft', () => {
     return getActiveSessionDraft()
   })
 
-  ipcMain.handle('session:saveDraft', (_event, draft: SessionDraft) => {
+  handle('session:saveDraft', (_event, draft: SessionDraft) => {
     setActiveSessionDraft(draft)
   })
 
-  ipcMain.handle('session:getElaboratedPrompts', () => {
+  handle('session:getElaboratedPrompts', () => {
     return getActiveSessionElaboratedPrompts()
   })
 
-  ipcMain.handle('session:appendElaboratedPrompts', (_event, prompts: string[]) => {
+  handle('session:appendElaboratedPrompts', (_event, prompts: string[]) => {
     return appendActiveSessionElaboratedPrompts(prompts)
   })
 
-  ipcMain.handle('session:deleteElaboratedPromptAt', (_event, index: number) => {
+  handle('session:deleteElaboratedPromptAt', (_event, index: number) => {
     return deleteActiveSessionElaboratedPromptAt(index)
   })
 
-  ipcMain.handle('session:clearElaboratedPrompts', () => {
+  handle('session:clearElaboratedPrompts', () => {
     return clearActiveSessionElaboratedPrompts()
   })
 }

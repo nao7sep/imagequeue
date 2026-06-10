@@ -173,8 +173,14 @@ export function logEnqueue(
   log('info', 'Task enqueued', { taskId, backend, model, prompt, params, count })
 }
 
+// Per-image lifecycle lines. These fire once per task — 2N per batch — so they
+// are debug, not info: a developer running unpackaged sees the full per-image
+// trace, while a packaged build stays silent. The queue's one info "Queue
+// drained" summary (X ok / Y failed / duration) carries the production signal;
+// individual failures still log at error via logGenerationFailed. This is the
+// loops-aggregate rule: enumerate failures, count successes, don't log per item.
 export function logGenerationStart(taskId: string, backend: string, model: string): void {
-  log('info', 'Generation started', { taskId, backend, model })
+  log('debug', 'Generation started', { taskId, backend, model })
 }
 
 export function logGenerationComplete(
@@ -183,7 +189,7 @@ export function logGenerationComplete(
   baseName: string | null,
   estimatedCostUsd: number | null
 ): void {
-  log('info', 'Generation complete', { taskId, durationMs, baseName, estimatedCostUsd })
+  log('debug', 'Generation complete', { taskId, durationMs, baseName, estimatedCostUsd })
 }
 
 export function logGenerationFailed(taskId: string, err: unknown, context?: Record<string, unknown>): void {

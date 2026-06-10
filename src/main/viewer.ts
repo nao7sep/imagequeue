@@ -1,5 +1,6 @@
-import { BrowserWindow, IpcMainInvokeEvent, ipcMain, screen } from 'electron'
+import { BrowserWindow, IpcMainInvokeEvent, screen } from 'electron'
 import path from 'path'
+import { handle } from './ipc-boundary'
 import { reassertDevDockIconAfterRepaint } from './dock-icon'
 
 let viewerWin: BrowserWindow | null = null
@@ -215,12 +216,12 @@ export function closeViewerWindow(): void {
 
 export function registerViewerIpc(getMain: () => BrowserWindow | null): void {
   getMainWin = getMain
-  ipcMain.handle('viewer:open', openViewer)
-  ipcMain.handle('viewer:close', hideViewer)
-  ipcMain.handle('viewer:navigate', (_event, dir: 'up' | 'down' | 'left' | 'right') => {
+  handle('viewer:open', openViewer)
+  handle('viewer:close', hideViewer)
+  handle('viewer:navigate', (_event, dir: 'up' | 'down' | 'left' | 'right') => {
     notifyMainWin('viewer:navigate', dir)
   })
-  ipcMain.handle('viewer:action', (_event, action: 'remove' | 'delete') => {
+  handle('viewer:action', (_event, action: 'remove' | 'delete') => {
     notifyMainWin('viewer:action', action)
   })
 }

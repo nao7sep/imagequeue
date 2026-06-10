@@ -133,4 +133,13 @@ describe('QueueManager', () => {
     expect(qm.hasGeneratingTasks()).toBe(false)
     expect(qm.removeTask('openai', 'nope')).toBeUndefined()
   })
+
+  it('reports queued state across backends (drives the drain-idle check)', () => {
+    expect(qm.hasQueuedTasks()).toBe(false)
+    seed(qm, [makeTask('a', 'generating'), makeTask('b', 'queued', 'flux')])
+    expect(qm.hasQueuedTasks()).toBe(true)
+    // Only a 'queued' task counts: generating/completed/failed do not.
+    seed(qm, [makeTask('a', 'generating'), makeTask('c', 'completed')])
+    expect(qm.hasQueuedTasks()).toBe(false)
+  })
 })

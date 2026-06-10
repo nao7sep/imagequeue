@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
+import { handle } from '../ipc-boundary'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
@@ -9,7 +10,7 @@ import { shouldDeleteToTrash } from '../../shared/config'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
-  ipcMain.handle('queue:enqueue', (_event, request: EnqueueRequest) => {
+  handle('queue:enqueue', (_event, request: EnqueueRequest) => {
     const tasks = queueManager.enqueue(request)
     for (const task of tasks) {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
@@ -19,7 +20,7 @@ export function registerQueueIpc(): void {
     return tasks
   })
 
-  ipcMain.handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[]) => {
+  handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[]) => {
     const tasks = queueManager.enqueueBatch(units)
     tasks.forEach((task, index) => {
       const unit = units[index]
@@ -30,19 +31,19 @@ export function registerQueueIpc(): void {
     return tasks
   })
 
-  ipcMain.handle('queue:getTasks', (_event, backend: BackendId) => {
+  handle('queue:getTasks', (_event, backend: BackendId) => {
     return queueManager.getActiveTasks(backend)
   })
 
-  ipcMain.handle('queue:getAllTasks', () => {
+  handle('queue:getAllTasks', () => {
     return queueManager.getAllVisibleTasks()
   })
 
-  ipcMain.handle('queue:getAllStoredTasks', () => {
+  handle('queue:getAllStoredTasks', () => {
     return queueManager.getAllStoredTasks()
   })
 
-  ipcMain.handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
+  handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
     if (task?.status === 'generating') {
       log('warn', 'Refusing to remove generating task', { taskId, backend })
@@ -61,7 +62,7 @@ export function registerQueueIpc(): void {
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
 
-  ipcMain.handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => {
+  handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.restoreTask(backend, taskId)
     if (!task) return
 
@@ -70,7 +71,7 @@ export function registerQueueIpc(): void {
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
 
-  ipcMain.handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
+  handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
     const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
     log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
@@ -101,7 +102,7 @@ export function registerQueueIpc(): void {
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
 
-  ipcMain.handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
+  handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.retryTask(backend, taskId)
     if (task) {
       log('info', 'Task retry requested', { taskId, backend })
@@ -110,7 +111,7 @@ export function registerQueueIpc(): void {
     }
   })
 
-  ipcMain.handle('queue:resumeInterrupted', () => {
+  handle('queue:resumeInterrupted', () => {
     const count = queueManager.retryAllInterrupted()
     if (count > 0) {
       log('info', 'Resuming interrupted tasks', { count })
@@ -120,7 +121,7 @@ export function registerQueueIpc(): void {
     return count
   })
 
-  ipcMain.handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
+  handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
     queueManager.reorderTasks(backend, taskIds)
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())

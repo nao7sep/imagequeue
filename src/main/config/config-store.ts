@@ -3,7 +3,7 @@ import path from 'path'
 import os from 'os'
 import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
-import { log } from '../logger'
+import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
 
 const DATA_DIR = path.join(os.homedir(), '.imagequeue')
@@ -59,7 +59,19 @@ export function loadConfig(): AppConfig {
   }
 
   const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
-  const parsed = JSON.parse(raw) as unknown
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    // A corrupt config.json is an unexpected failure at a file boundary, not a
+    // normal branch, so it is logged with full fidelity and propagated. We do
+    // NOT fall back to defaults: that would silently discard the user's
+    // settings, and the next saveConfig would overwrite the still-recoverable
+    // file. The caller — app startup, or an IPC handler via the boundary
+    // wrapper — surfaces the clear error.
+    log('error', 'Failed to parse config file', { path: CONFIG_PATH, error: serializeError(err) })
+    throw new Error(`Config file is not valid JSON: ${CONFIG_PATH}`, { cause: err })
+  }
   const merged = deepMergeDefaults(parsed, createDefaultConfig())
   // If the merge filled in any new keys (e.g., a setting added since this
   // file was last written), persist the canonical form so the on-disk file

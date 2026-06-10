@@ -188,6 +188,10 @@ export class QueueManager {
   hasGeneratingTasks(): boolean {
     return Object.values(this.queues).some((tasks) => tasks.some((task) => task.status === 'generating'))
   }
+
+  hasQueuedTasks(): boolean {
+    return Object.values(this.queues).some((tasks) => tasks.some((task) => task.status === 'queued'))
+  }
 }
 
 export const queueManager = new QueueManager()
