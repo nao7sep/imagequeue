@@ -22,14 +22,11 @@ import type {
   CliChunkEvent,
   CliStatusEvent,
 } from '../shared/cli-jobs'
+import type { ElectronAPI, EnsureModelResult } from '../shared/electron-api'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
-
-export interface EnsureModelResult {
-  success: boolean
-  error?: string
-}
+export type { ElectronAPI, EnsureModelResult } from '../shared/electron-api'
 
 const api = {
   platform: process.platform,
@@ -388,8 +385,6 @@ const api = {
     ipcRenderer.on('session:interruptedTasks', handler)
     return () => { ipcRenderer.removeListener('session:interruptedTasks', handler) }
   }
-}
+} satisfies ElectronAPI
 
 contextBridge.exposeInMainWorld('electronAPI', api)
-
-export type ElectronAPI = typeof api

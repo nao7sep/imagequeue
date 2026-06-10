@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { initLogger, log, redact, serializeError, setLoggerDebug } from '../../src/main/logger'
+import { initLogger, log, redact, serializeError, setLoggerDebug, shouldEnableDebugLogging } from '../../src/main/logger'
 
 const createdDirs: string[] = []
 
@@ -143,6 +143,21 @@ describe('serializeError', () => {
     expect(serializeError('oops')).toEqual({ name: 'string', message: 'oops' })
     expect(serializeError(42)).toEqual({ name: 'number', message: '42' })
     expect(serializeError(null)).toEqual({ name: 'object', message: 'null' })
+  })
+})
+
+describe('shouldEnableDebugLogging', () => {
+  it('enables debug automatically for development builds', () => {
+    expect(shouldEnableDebugLogging({ isPackaged: false })).toBe(true)
+    expect(shouldEnableDebugLogging({ isPackaged: false, imagequeueDebug: '0' })).toBe(true)
+  })
+
+  it('keeps packaged builds quiet unless IMAGEQUEUE_DEBUG is exactly 1', () => {
+    expect(shouldEnableDebugLogging({ isPackaged: true })).toBe(false)
+    expect(shouldEnableDebugLogging({ isPackaged: true, imagequeueDebug: '' })).toBe(false)
+    expect(shouldEnableDebugLogging({ isPackaged: true, imagequeueDebug: '0' })).toBe(false)
+    expect(shouldEnableDebugLogging({ isPackaged: true, imagequeueDebug: 'true' })).toBe(false)
+    expect(shouldEnableDebugLogging({ isPackaged: true, imagequeueDebug: '1' })).toBe(true)
   })
 })
 

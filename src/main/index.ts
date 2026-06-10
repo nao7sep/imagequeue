@@ -10,7 +10,7 @@ import { registerElaboratorsIpc } from './elaborators-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
-import { initLogger, log, setLoggerDebug, serializeError } from './logger'
+import { initLogger, log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
 import { updateRecommendationsAtLaunch } from './recommendations'
 import { killAllCliJobs } from './cli-jobs'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
@@ -19,11 +19,14 @@ import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 
 let mainWin: BrowserWindow | null = null
 
-// Debug is developer-only: enabled for an unpackaged (development) build or an
-// explicit IMAGEQUEUE_DEBUG=1, and compiled off in a release build. Set once at
-// process start so every debug line — including any logged before the session
-// file is opened — honors the gate.
-const DEBUG_ENABLED = !app.isPackaged || process.env['IMAGEQUEUE_DEBUG'] === '1'
+// Debug is diagnostic-only: enabled automatically for an unpackaged development
+// build, and available in packaged builds only through an explicit
+// IMAGEQUEUE_DEBUG=1 launch. Set once at process start so every debug line —
+// including any logged before the session file is opened — honors the gate.
+const DEBUG_ENABLED = shouldEnableDebugLogging({
+  isPackaged: app.isPackaged,
+  imagequeueDebug: process.env['IMAGEQUEUE_DEBUG'],
+})
 setLoggerDebug(DEBUG_ENABLED)
 
 // Global last-resort hooks: log with full error fidelity before the process

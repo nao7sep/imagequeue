@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { ElectronAPI } from '../../preload/index'
+import type { ElectronAPI } from '../../shared/electron-api'
 
 declare global {
   // Injected at build time from package.json (see electron.vite.config.ts).

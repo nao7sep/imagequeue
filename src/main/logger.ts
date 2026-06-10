@@ -22,12 +22,23 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 type LogFields = Record<string, unknown>
 
+// Single source of truth for the startup debug gate. Development builds write
+// debug logs automatically; packaged builds stay quiet unless deliberately
+// launched with IMAGEQUEUE_DEBUG=1 for diagnostics.
+export function shouldEnableDebugLogging({
+  isPackaged,
+  imagequeueDebug,
+}: {
+  isPackaged: boolean
+  imagequeueDebug?: string
+}): boolean {
+  return !isPackaged || imagequeueDebug === '1'
+}
+
 let logFilePath: string | null = null
 
-// Debug is developer-only and off by default: a release build must never write
-// debug lines. The privileged process flips this on for a development build or
-// an explicit IMAGEQUEUE_DEBUG=1 via setLoggerDebug (kept out of this module so
-// it stays electron-free).
+// Debug is off by default; the process startup policy flips it on for a
+// development build or an explicit packaged-build diagnostic run.
 let debugEnabled = false
 
 const REDACTED = '[redacted]'
@@ -42,7 +53,7 @@ const DENIED_KEYS: ReadonlySet<string> = new Set(
 )
 
 // Enables or disables debug output for the whole process. Called once at
-// startup by the privileged process with (devBuild || IMAGEQUEUE_DEBUG=1).
+// startup using shouldEnableDebugLogging().
 export function setLoggerDebug(enabled: boolean): void {
   debugEnabled = enabled
 }

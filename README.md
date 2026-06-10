@@ -45,15 +45,22 @@ environment with no Electron or DOM dependencies. Tests live under
 `tests/`, mirroring the `src/` layout, so `src/` stays pure shipped code; they
 are type-checked separately via `tsconfig.test.json`.
 
+The production typecheck is split by runtime environment so cross-environment mistakes are
+caught statically: `tsconfig.node.json` (main + preload — Node, no DOM) and
+`tsconfig.web.json` (renderer — DOM, no Node types). A main-process file reaching for a
+browser global, or a renderer file reaching for a Node global, fails the check. Preload is
+checked on the Node side (it imports `electron`); the `ElectronAPI` bridge type lives in
+`src/shared`, so the renderer never imports preload.
+
 ```sh
 npm test          # run once
 npm run test:watch
-npm run typecheck  # includes the tests
+npm run typecheck  # node + web + tests
 ```
 
 ### Logging
 
-Each launch writes a `session.log` into that session's folder (see [Sessions](#sessions)). `debug`-level lines are developer-only: they are enabled automatically in a development build (`npm run dev`) and can be forced in any build with `IMAGEQUEUE_DEBUG=1`. Release builds never write `debug` lines, so the verbose firehose stays out of end users' logs.
+Each launch writes a `session.log` into that session's folder (see [Sessions](#sessions)). `debug`-level lines are diagnostic-only: they are enabled automatically in a development build (`npm run dev`) and suppressed in packaged builds unless the app is deliberately launched with `IMAGEQUEUE_DEBUG=1`. Without that opt-in, packaged builds do not write `debug` lines, so the verbose firehose stays out of end users' logs.
 
 ## Everyday workflow
 
@@ -75,7 +82,7 @@ Each app launch creates a session folder under the output directory. ImageQueue 
 - **Delete** removes that session folder according to the **Delete to Trash** setting.
 - Resume also restores the session's working draft: the prompt you were composing and the Advanced Prompting selections (seed, elaborator picks, targets, mode, iteration count). Genuinely transient UI state — the current selection and preview, the fullscreen viewer, and the **Show Kept Images** toggle — is not restored.
 - Only sessions with a readable `session.json` snapshot appear.
-- Each session folder also holds a `session.log`: a per-launch [JSON Lines](https://jsonlines.org) record (one JSON event per line) of what the app did — startup and effective settings, each queued and generated task, external calls, and every warning or error with its full stack. Logs are never auto-deleted, and secret-bearing fields (API keys) are redacted; attach the relevant `session.log` when filing an issue.
+- Each session folder also holds a `session.log`: a per-launch [JSON Lines](https://jsonlines.org) record (one JSON event per line) of what the app did — startup and effective settings, each queued and generated task, external calls, and every warning or error with its full stack. Logs follow the session folder lifecycle: auto-dropping or deleting a session removes or trashes its `session.log` with it. Secret-bearing fields (API keys) are redacted; attach the relevant `session.log` when filing an issue.
 - Session previews currently read the original output images directly. Cached thumbnail files are intentionally not generated yet; if browsing later becomes measurably slow, add relative thumbnail paths in `session.json` and generate missing thumbs on demand.
 
 ## Settings overview
