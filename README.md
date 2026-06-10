@@ -291,6 +291,7 @@ The **Elaboration** submenu flies out to the right on hover:
 | Send to all backends | Cmd+Enter | Ctrl+Enter |
 | Send to visible backend by column number | Cmd+1 to Cmd+6 | Ctrl+1 to Ctrl+5 |
 | Open Settings | Cmd+Comma | Ctrl+Comma |
+| Open keyboard shortcuts | Cmd+/ | Ctrl+/ |
 | Show / hide kept images | Cmd+Shift+K | Ctrl+Shift+K |
 | Move selection within a column (also navigates in fullscreen viewer) | Up / Down | Up / Down |
 | Move selection across columns (also navigates in fullscreen viewer) | Left / Right | Left / Right |

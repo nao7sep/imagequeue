@@ -3,6 +3,8 @@ import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { getVisibleBackends } from '../utils/visibleBackends'
+import { useImeGuard } from '../utils/imeGuard'
+import { isAnyModalOpen } from './modalStack'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import './PromptPane.css'
 
@@ -16,6 +18,7 @@ interface Props {
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
   const { settings, saveNotificationField } = useSettings()
   const { enqueueToBackend, enqueueToAll } = useEnqueueConfigs()
+  const isImeComposing = useImeGuard()
 
   const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
@@ -119,6 +122,13 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      // These are window-level shortcuts that queue work or mutate the prompt;
+      // a modal owns the keyboard while it is open, so stay out of its way.
+      if (isAnyModalOpen()) return
+      // No prompt action (send, paste, enqueue) should fire while an IME
+      // candidate is being composed — that key belongs to the composition.
+      if (isImeComposing(e)) return
+
       const mod = e.metaKey || e.ctrlKey
 
       if (mod && e.key === 'Enter') {
@@ -144,7 +154,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText, enqueueToBackend])
+  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText, enqueueToBackend, isImeComposing])
 
   useEffect(() => {
     refreshClipboardTextAvailable()

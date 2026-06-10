@@ -8,6 +8,7 @@ import { ElaborationSettingsModal } from './ElaborationSettingsModal'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import { ShortcutsModal } from './ShortcutsModal'
 import { AboutModal } from './AboutModal'
+import { isAnyModalOpen } from './modalStack'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
@@ -59,9 +60,12 @@ export function Layout(): React.JSX.Element {
     return () => document.removeEventListener('mousedown', handler)
   }, [showMenu])
 
-  // Cmd+, opens Settings. Escape (when no Modal/menu intercepts) clears
-  // the menu / clears selection. Modals own their own Escape handling
-  // (see Modal.tsx) and stop the event in the capture phase.
+  // App/window chrome shortcuts. Cmd+, opens Settings, Cmd+/ opens the shortcut
+  // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal/menu
+  // intercepts) clears the menu / clears selection. Modals own their own Escape
+  // handling (see Modal.tsx) and stop the event in the capture phase; the
+  // isAnyModalOpen guard keeps these shortcuts from stacking a second modal or
+  // firing under an open one.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
@@ -72,15 +76,23 @@ export function Layout(): React.JSX.Element {
         }
         return
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+      if (isAnyModalOpen()) return
+
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key === ',') {
         e.preventDefault()
-        setOverlay((o) => (o === 'settings' ? null : 'settings'))
+        setOverlay('settings')
         setShowMenu(false)
         return
       }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'k') {
+      if (mod && e.key === '/') {
+        e.preventDefault()
+        setOverlay('shortcuts')
+        setShowMenu(false)
+        return
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'k') {
         if (e.repeat) return
-        if (overlay) return
         e.preventDefault()
         toggleShowKeptImages()
         setShowMenu(false)

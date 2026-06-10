@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ConfirmModal } from '../components/ConfirmModal'
 
 export interface ConfirmOptions {
@@ -45,6 +45,16 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
     pendingRef.current = nextPending
     setPending(nextPending)
     p.resolve(value)
+  }, [])
+
+  // If the host unmounts (app teardown), settle every outstanding dialog —
+  // current and queued — through the cancel path so no awaiting caller hangs.
+  useEffect(() => {
+    return () => {
+      pendingRef.current?.resolve(false)
+      pendingRef.current = null
+      for (const queued of queueRef.current.splice(0)) queued.resolve(false)
+    }
   }, [])
 
   return (

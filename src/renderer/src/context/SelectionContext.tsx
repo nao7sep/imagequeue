@@ -13,6 +13,7 @@ import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 import { getVisibleBackends } from '../utils/visibleBackends'
+import { isAnyModalOpen } from '../components/modalStack'
 
 export interface Selection {
   backend: BackendId
@@ -353,7 +354,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       const activeElement = document.activeElement as HTMLElement | null
       const tag = activeElement?.tagName?.toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
-      if (document.querySelector('.modal-backdrop')) return
+      if (isAnyModalOpen()) return
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === 'Backspace') {
         if (e.repeat) return
         const sel = selectionRef.current
