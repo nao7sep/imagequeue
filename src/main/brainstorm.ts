@@ -284,7 +284,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
       // The prompts themselves persist in the session manifest's
       // `elaboratedPrompts` array — no need to duplicate them here.
-      log('info', 'Brainstorm turn complete', { turn, count: newPrompts.length })
+      log('debug', 'Brainstorm turn complete', { turn, count: newPrompts.length })
 
       broadcastProgress({
         requestId: req.requestId,
