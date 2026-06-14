@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
+import { useListbox } from '../hooks/useListbox'
+import { useImeGuard } from '../utils/imeGuard'
 import type { Elaborator, ElaboratorKind } from '../../../shared/types'
 import { ELABORATOR_KIND_LABELS } from '../../../shared/types'
 import './ElaboratorsModal.css'
@@ -296,22 +298,13 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
           ) : itemsForKind.length === 0 && !draftOpenHere ? (
             <div className="elaborators-empty">No {ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators yet.</div>
           ) : (
-            <div className="elaborators-list">
-              {itemsForKind.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={`elaborator-row${selectedId === item.id ? ' selected' : ''}`}
-                  onClick={() => setSelectedIds((prev) => ({ ...prev, [kind]: item.id }))}
-                  disabled={busy || (draftTarget !== null && !draftOpenHere)}
-                >
-                  <div className="elaborator-row-text">
-                    <div className="elaborator-row-name">{item.name}</div>
-                    {item.description && <div className="elaborator-row-desc">{item.description}</div>}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <ElaboratorList
+              label={ELABORATOR_KIND_LABELS[kind]}
+              items={itemsForKind}
+              selectedId={selectedId}
+              disabled={busy || (draftTarget !== null && !draftOpenHere)}
+              onSelect={(id) => setSelectedIds((prev) => ({ ...prev, [kind]: id }))}
+            />
           )}
         </div>
 
@@ -337,5 +330,53 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
     </Modal>
+  )
+}
+
+// One pane's elaborator list as a composite listbox. Activation follows focus:
+// arrowing only sets the cheap local `selectedIds[kind]` (the Edit/Delete buttons
+// then act on the active row). One tab stop per list; type-ahead by name.
+function ElaboratorList({
+  label,
+  items,
+  selectedId,
+  disabled,
+  onSelect,
+}: {
+  label: string
+  items: Elaborator[]
+  selectedId: string | null
+  disabled: boolean
+  onSelect: (id: string) => void
+}): React.JSX.Element {
+  const isComposing = useImeGuard()
+  const { listboxProps, getOptionProps } = useListbox({
+    ids: items.map((item) => item.id),
+    selectedId,
+    onSelect,
+    activation: 'follows-focus',
+    isComposing,
+  })
+
+  return (
+    <div className="elaborators-list" aria-label={`${label} elaborators`} {...listboxProps}>
+      {items.map((item) => {
+        const optionProps = getOptionProps(item.id)
+        return (
+          <button
+            type="button"
+            key={item.id}
+            className={`elaborator-row${selectedId === item.id ? ' selected' : ''}`}
+            disabled={disabled}
+            {...optionProps}
+          >
+            <div className="elaborator-row-text">
+              <div className="elaborator-row-name">{item.name}</div>
+              {item.description && <div className="elaborator-row-desc">{item.description}</div>}
+            </div>
+          </button>
+        )
+      })}
+    </div>
   )
 }

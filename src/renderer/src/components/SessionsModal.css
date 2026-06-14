@@ -66,6 +66,20 @@
   gap: 10px;
 }
 
+/* Persistent selected mark: a bordered item, so it emphasizes via its own
+   border/ring and stays visible when focus moves to a detail/action. */
+.session-card.selected {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, var(--border)) inset;
+}
+
+/* Keyboard cursor (roving focus): a clip-safe inset ring inside the scroll
+   container, kept distinct from the persistent `.selected` mark above. */
+.session-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
 .session-card-header {
   display: grid;
   gap: 4px;

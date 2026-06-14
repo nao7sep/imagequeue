@@ -37,6 +37,7 @@ import {
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { isBackendReadyToEnqueue } from '../utils/enqueue'
 import { isFreshCompletion } from '../utils/taskScroll'
+import { useImeGuard } from '../utils/imeGuard'
 import './QueueColumn.css'
 
 interface Props {
@@ -86,7 +87,17 @@ function findPresetValue(sizes: SizePreset[], width: number, height: number): st
 export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
   const { tasks } = useQueue()
-  const { selection, select, clear } = useSelection()
+  const {
+    selection,
+    select,
+    clear,
+    navigate,
+    selectEdge,
+    removeSelected,
+    restoreSelected,
+    deleteSelected,
+  } = useSelection()
+  const isComposing = useImeGuard()
   const { settings, saveImageBackendDefaults } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId)
@@ -633,6 +644,76 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     </div>
   )
 
+  // This column is the board's listbox: its `.task-list` is one tab stop, and
+  // while it has focus it owns all four arrows plus Home/End for navigation and
+  // the scoped command keys for the selected task. Navigation (Up/Down within,
+  // Left/Right to the adjacent column) is delegated to SelectionContext, which
+  // keeps the single source of truth and follows focus to the moved-to row.
+  // Backspace/Delete/Space form the command layer, scoped here so they act only
+  // while focus is inside the queue — they read the selection from the context,
+  // never from the DOM.
+  const handleListKeyDown = useCallback((e: React.KeyboardEvent): void => {
+    const sel = selection
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (!sel) return
+      e.preventDefault()
+      navigate(
+        e.key === 'ArrowUp' ? 'up' :
+        e.key === 'ArrowDown' ? 'down' :
+        e.key === 'ArrowLeft' ? 'left' : 'right'
+      )
+      return
+    }
+    if (e.key === 'Home') {
+      e.preventDefault()
+      selectEdge(backendId, 'first')
+      return
+    }
+    if (e.key === 'End') {
+      e.preventDefault()
+      selectEdge(backendId, 'last')
+      return
+    }
+    if (!sel) return
+
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === 'Backspace') {
+      if (e.repeat) return
+      e.preventDefault()
+      void deleteSelected()
+      return
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return
+
+    if (e.key === 'Backspace') {
+      if (e.repeat) return
+      e.preventDefault()
+      const task = tasks[sel.backend]?.find((t) => t.id === sel.taskId)
+      if (task?.status === 'kept') void restoreSelected()
+      else void removeSelected()
+      return
+    }
+    if (e.key === 'Delete') {
+      if (e.repeat) return
+      e.preventDefault()
+      void deleteSelected()
+      return
+    }
+    if (e.key === ' ') {
+      if (isComposing(e.nativeEvent)) return
+      const task = tasks[sel.backend]?.find((t) => t.id === sel.taskId)
+      if (task?.status !== 'completed' && task?.status !== 'kept') return
+      e.preventDefault()
+      window.dispatchEvent(new CustomEvent('viewer:toggle'))
+    }
+  }, [selection, navigate, selectEdge, backendId, tasks, deleteSelected, restoreSelected, removeSelected, isComposing])
+
+  // The single roving tab stop for this column: the selected row when the
+  // selection lives here, otherwise the first row. Exactly one option per column
+  // is tabbable, so Tab enters the column at the active row and Tab leaves it.
+  const tabbableTaskId = selection?.backend === backendId && columnTasks.some((t) => t.id === selection.taskId)
+    ? selection.taskId
+    : columnTasks[0]?.id ?? null
+
   return (
     <>
     <div className="queue-column" data-backend={backendId}>
@@ -942,7 +1023,13 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         </button>
       </div>
 
-      <div className="task-list" onClick={(e) => { if (e.target === e.currentTarget) clear() }}>
+      <div
+        className="task-list"
+        role="listbox"
+        aria-label={`${label} queue`}
+        onKeyDown={handleListKeyDown}
+        onClick={(e) => { if (e.target === e.currentTarget) clear() }}
+      >
         {columnTasks.length === 0 ? (
           <div className="task-list-empty">No tasks queued</div>
         ) : (
@@ -952,7 +1039,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
               task={task}
               backendId={backendId}
               isSelected={selection?.backend === backendId && selection.taskId === task.id}
-              onClick={() => select(backendId, task.id)}
+              isTabbable={task.id === tabbableTaskId}
+              onSelect={() => select(backendId, task.id)}
             />
           ))
         )}
@@ -968,7 +1056,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   )
 }
 
-function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backendId: BackendId; isSelected: boolean; onClick: () => void }): React.JSX.Element {
+function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task: Task; backendId: BackendId; isSelected: boolean; isTabbable: boolean; onSelect: () => void }): React.JSX.Element {
   const { removeTask, restoreTask, deleteTask } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const itemRef = useRef<HTMLDivElement>(null)
@@ -1040,7 +1128,15 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
         isSelected ? 'task-item-selected' : ''
       ].filter(Boolean).join(' ')}
       ref={itemRef}
-      onClick={onClick}
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={isTabbable ? 0 : -1}
+      onClick={onSelect}
+      // Activation follows focus: Tab-ing into the column (or focusing a row any
+      // other way) commits that row as the selection, the single source of truth
+      // the arrows and command keys then read. `select` only sets state — it
+      // never moves focus — so this can't recurse with the nav focus-follow.
+      onFocus={onSelect}
       data-task-id={task.id}
     >
       {thumbUrl && (
@@ -1077,21 +1173,25 @@ function TaskItem({ task, backendId, isSelected, onClick }: { task: Task; backen
           )}
         </div>
       </div>
+      {/* Per-row actions are pointer-only affordances (tabIndex -1), never tab
+          stops inside the listbox: the keyboard reaches them via the column's
+          command keys (Backspace removes/keeps/restores, Delete deletes) on the
+          active row. This keeps the column a single tab stop. */}
       <div className="task-actions">
         {(task.status === 'failed' || task.status === 'interrupted') && (
-          <button className="task-btn task-btn-retry" onClick={handleRetry} title="Retry">retry</button>
+          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title="Retry">retry</button>
         )}
         {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
-          <button className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder">exp</button>
+          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder">exp</button>
         )}
         {task.status === 'kept' && (
-          <button className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list">restore</button>
+          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list">restore</button>
         )}
         {task.status !== 'generating' && task.status !== 'kept' && (
-          <button className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle}>{removeLabel}</button>
+          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle}>{removeLabel}</button>
         )}
         {(task.status === 'completed' || task.status === 'kept') && (
-          <button className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
+          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
         )}
       </div>
     </div>

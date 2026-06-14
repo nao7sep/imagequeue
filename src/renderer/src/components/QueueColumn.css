@@ -124,6 +124,19 @@
   border-color: var(--col-accent, var(--accent));
 }
 
+/* The keyboard cursor (roving focus). The `.task-list` is an overflow scroll
+   container, so a focus ring/outline at the row edge would be clipped into stray
+   fragments — use a clip-safe background fill inside the box instead, and drop
+   the default outline. Kept distinct from the persistent `.task-item-selected`
+   border mark below, which must stay visible even when focus leaves the row. */
+.task-item:focus-visible {
+  outline: none;
+  background:
+    linear-gradient(color-mix(in srgb, var(--col-accent, var(--accent)) 14%, transparent),
+                    color-mix(in srgb, var(--col-accent, var(--accent)) 14%, transparent)),
+    var(--task-bg);
+}
+
 .task-item-selected {
   border-color: var(--col-accent, var(--accent));
   box-shadow: 0 0 0 1px var(--col-accent, var(--accent)) inset;

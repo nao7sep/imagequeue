@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
 import { SettingsModal } from './SettingsModal'
@@ -8,6 +8,7 @@ import { ElaborationSettingsModal } from './ElaborationSettingsModal'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import { ShortcutsModal } from './ShortcutsModal'
 import { AboutModal } from './AboutModal'
+import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
 import './Layout.css'
@@ -40,45 +41,20 @@ export function Layout(): React.JSX.Element {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [overlay, setOverlay] = useState<Overlay>(null)
-  const [showMenu, setShowMenu] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const menuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (menuCloseTimerRef.current) clearTimeout(menuCloseTimerRef.current)
-    }
-  }, [])
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    if (!showMenu) return
-    const handler = (e: MouseEvent): void => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showMenu])
 
   // App/window chrome shortcuts. Cmd+, opens Settings, Cmd+/ opens the shortcut
-  // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal/menu
-  // intercepts) clears the menu / clears selection. Modals own their own Escape
-  // handling (see Modal.tsx) and stop the event in the capture phase; the
-  // isAnyModalOpen guard keeps these shortcuts from stacking a second modal or
-  // firing under an open one.
+  // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal intercepts)
+  // clears the selection — the hamburger Menu owns its own Escape and is not
+  // handled here. Modals own their own Escape handling (see Modal.tsx) and stop
+  // the event in the capture phase; the isAnyModalOpen guard keeps these
+  // shortcuts from stacking a second modal or firing under an open one.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         // During an IME composition, Escape cancels the composition and belongs
-        // to the IME — it must not also clear the menu/selection here.
+        // to the IME — it must not also clear the selection here.
         if (isImeComposing(e)) return
-        if (showMenu) {
-          setShowMenu(false)
-        } else if (!overlay) {
-          clear()
-        }
+        if (!overlay) clear()
         return
       }
       if (isAnyModalOpen()) return
@@ -87,25 +63,22 @@ export function Layout(): React.JSX.Element {
       if (mod && e.key === ',') {
         e.preventDefault()
         setOverlay('settings')
-        setShowMenu(false)
         return
       }
       if (mod && e.key === '/') {
         e.preventDefault()
         setOverlay('shortcuts')
-        setShowMenu(false)
         return
       }
       if (mod && e.shiftKey && e.key.toLowerCase() === 'k') {
         if (e.repeat) return
         e.preventDefault()
         toggleShowKeptImages()
-        setShowMenu(false)
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [overlay, showMenu, clear, toggleShowKeptImages, isImeComposing])
+  }, [overlay, clear, toggleShowKeptImages, isImeComposing])
 
   // Load image data when a completed task is selected
   useEffect(() => {
@@ -187,20 +160,6 @@ export function Layout(): React.JSX.Element {
     if (!canShow) void window.electronAPI.closeViewer()
   }, [viewerOpen, selectedTask])
 
-  const openOverlay = (o: Overlay): void => {
-    setShowMenu(false)
-    setOverlay(o)
-  }
-
-  const toggleKeptImagesFromMenu = (): void => {
-    toggleShowKeptImages()
-    if (menuCloseTimerRef.current) clearTimeout(menuCloseTimerRef.current)
-    menuCloseTimerRef.current = setTimeout(() => {
-      setShowMenu(false)
-      menuCloseTimerRef.current = null
-    }, 400)
-  }
-
   return (
     <div className="layout">
       {overlay === 'settings' && (
@@ -227,41 +186,31 @@ export function Layout(): React.JSX.Element {
       <div className="left-pane">
         <div className="pane-toolbar">
           <span className="app-name">ImageQueue</span>
-          <div className="menu-anchor" ref={menuRef}>
-            <button className="hamburger-btn" onClick={() => setShowMenu((v) => !v)}>☰</button>
-            {showMenu && (
-              <div className="dropdown-menu">
-                <button onClick={() => { setShowMenu(false); void window.electronAPI.openOutputFolder() }}>Open Output Folder</button>
-                <button onClick={() => openOverlay('sessions')}>Sessions</button>
-                <button className="menu-check-item" onClick={toggleKeptImagesFromMenu}>
-                  <input type="checkbox" checked={showKeptImages} readOnly tabIndex={-1} />
-                  <span>Show Kept Images</span>
-                </button>
-                <button onClick={() => openOverlay('settings')}>Settings</button>
-                {window.electronAPI.platform === 'darwin' && (
-                  <button onClick={() => {
-                    setShowMenu(false)
-                    window.dispatchEvent(new CustomEvent('open-models-modal'))
-                  }}>
-                    Draw Things Models
-                  </button>
-                )}
-                <div className="menu-has-submenu">
-                  <button className="menu-submenu-parent" type="button">
-                    <span>Elaboration</span>
-                    <span className="menu-submenu-arrow" aria-hidden="true">▸</span>
-                  </button>
-                  <div className="menu-submenu" role="menu">
-                    <button onClick={() => openOverlay('elaborators')}>Elaborators</button>
-                    <button onClick={() => openOverlay('elaboration-settings')}>Elaboration Settings</button>
-                    <button onClick={() => openOverlay('elaborated-prompts')}>Elaborated Prompts</button>
-                  </div>
-                </div>
-                <button onClick={() => openOverlay('shortcuts')}>Keyboard Shortcuts</button>
-                <button onClick={() => openOverlay('about')}>About</button>
-              </div>
+          <Menu
+            label="Main menu"
+            trigger={(props) => (
+              <button className="hamburger-btn" {...props}>☰</button>
             )}
-          </div>
+          >
+            <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder() }}>Open Output Folder</MenuItem>
+            <MenuItem onSelect={() => setOverlay('sessions')}>Sessions</MenuItem>
+            <MenuCheckboxItem checked={showKeptImages} onToggle={toggleShowKeptImages}>
+              Show Kept Images
+            </MenuCheckboxItem>
+            <MenuItem onSelect={() => setOverlay('settings')}>Settings</MenuItem>
+            {window.electronAPI.platform === 'darwin' && (
+              <MenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-models-modal'))}>
+                Draw Things Models
+              </MenuItem>
+            )}
+            <Submenu label="Elaboration">
+              <MenuItem onSelect={() => setOverlay('elaborators')}>Elaborators</MenuItem>
+              <MenuItem onSelect={() => setOverlay('elaboration-settings')}>Elaboration Settings</MenuItem>
+              <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>Elaborated Prompts</MenuItem>
+            </Submenu>
+            <MenuItem onSelect={() => setOverlay('shortcuts')}>Keyboard Shortcuts</MenuItem>
+            <MenuItem onSelect={() => setOverlay('about')}>About</MenuItem>
+          </Menu>
         </div>
         <PromptPane
             selectedTask={selectedTask}

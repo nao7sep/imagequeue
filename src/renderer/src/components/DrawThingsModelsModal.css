@@ -112,6 +112,19 @@
   border: 1px solid var(--border);
 }
 
+/* Persistent selected mark: bordered item, emphasized via its own border/ring. */
+.dt-model-row.selected {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, var(--border)) inset;
+}
+
+/* Keyboard cursor (roving focus): a clip-safe inset ring inside the scroll
+   container, kept distinct from the persistent `.selected` mark above. */
+.dt-model-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
 .dt-model-info {
   flex: 1;
   min-width: 0;

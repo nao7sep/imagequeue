@@ -264,14 +264,16 @@ The hamburger menu (☰) gives access to:
 |---|---|
 | Open Output Folder | Open the directory that stores session outputs |
 | Sessions | Browse saved sessions, resume one, or delete one |
-| Show Kept Images | Show or hide completed images marked as kept |
+| Show Kept Images | A checkable item — toggles whether completed images marked as kept are shown. Toggling it leaves the menu open so you can flip it and keep working |
 | Settings | Open Settings |
 | Draw Things Models (macOS) | Open the Draw Things model browser and importer |
-| Elaboration ▸ | Hover to reveal the elaboration submenu (see below) |
+| Elaboration ▸ | Open the elaboration submenu (see below) |
 | Keyboard Shortcuts | Open the shortcut reference |
 | About | Show version and links |
 
-The **Elaboration** submenu flies out to the right on hover:
+The menu is a single keyboard control. The ☰ button is the one tab stop; opening it moves focus to the first item. **Up / Down** move between items, **Home / End** jump to the ends, and typing the start of an item's label jumps to it (type-ahead). **Enter / Space** activate an item and close the menu (except **Show Kept Images**, which toggles in place). **Esc**, **Tab**, or a click outside close the menu and return focus to the ☰ button.
+
+The **Elaboration** submenu opens to the right. With the **Elaboration** item focused, press **Right** (or Enter) to open it and move focus inside; press **Left** or **Esc** to close it and return to the parent item.
 
 | Submenu item | Description |
 |---|---|
@@ -281,6 +283,19 @@ The **Elaboration** submenu flies out to the right on hover:
 
 ## Keyboard shortcuts
 
+### The queue keyboard model
+
+The queue columns form a single keyboard control — a board of task lists. **Tab** enters the queue and leaves it: each column is one tab stop, landing on its selected task (or its first task), so Tab steps from column to column rather than from task to task. While the queue has focus:
+
+- **Up / Down** move the selection within the focused column.
+- **Left / Right** switch to the *nearest* task in the adjacent column, matched by vertical position — so moving sideways keeps you next to where you were. Focus follows into that column.
+- **Home / End** jump to the first / last task in the focused column.
+- **Backspace** removes the selected task, marks a selected completed image as kept, or restores a selected kept image. **Delete** (or Cmd/Ctrl+Backspace) deletes the selected task and its files. **Space** opens (or closes) the fullscreen viewer for a completed or kept image. These act on the selection only while the queue is focused.
+
+Selecting a task immediately updates the prompt/preview pane (selection follows focus). The per-row action buttons (keep/remove, delete, retry, export, restore) are pointer-only — reach the same actions from the keyboard with the keys above. The same **Up / Down / Left / Right** keys and **Backspace / Delete** also work inside the fullscreen viewer, which forwards them to the queue.
+
+### Shortcut reference
+
 | Action | macOS | Windows/Linux |
 |---|---|---|
 | Replace prompt with clipboard text | Cmd+P | Ctrl+P |
@@ -289,8 +304,10 @@ The **Elaboration** submenu flies out to the right on hover:
 | Open Settings | Cmd+Comma | Ctrl+Comma |
 | Open keyboard shortcuts | Cmd+/ | Ctrl+/ |
 | Show / hide kept images | Cmd+Shift+K | Ctrl+Shift+K |
-| Move selection within a column (also navigates in fullscreen viewer) | Up / Down | Up / Down |
-| Move selection across columns (also navigates in fullscreen viewer) | Left / Right | Left / Right |
+| Enter / leave the queue; step between columns | Tab / Shift+Tab | Tab / Shift+Tab |
+| Move selection within the focused column (also navigates in fullscreen viewer) | Up / Down | Up / Down |
+| Move to the nearest task in the adjacent column (also navigates in fullscreen viewer) | Left / Right | Left / Right |
+| First / last task in the focused column | Home / End | Home / End |
 | Open fullscreen image viewer | Space | Space |
 | Close fullscreen image viewer | Space or Esc | Space or Esc |
 | Remove selected task, keep the selected completed image, or restore a selected kept image (also works in fullscreen viewer) | Backspace | Backspace |

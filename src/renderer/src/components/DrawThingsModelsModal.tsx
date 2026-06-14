@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
 import { useCliJobs } from '../context/CliJobsContext'
+import { useListbox } from '../hooks/useListbox'
 import type { CustomJsonStatus } from '../../../shared/types'
 import { Modal } from './Modal'
 import './DrawThingsModelsModal.css'
@@ -56,6 +57,18 @@ function sourceLabel(model: LocalModelInfo): string {
   const source = model.source.trim()
   if (!source || source.toLowerCase() === 'unknown') return 'Catalog'
   return source.replace(/[_-]/g, ' ')
+}
+
+function hfUrl(hf: string): string {
+  return hf.startsWith('http') ? hf : `https://huggingface.co/${hf}`
+}
+
+function googleSearchUrl(model: LocalModelInfo): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(modelName(model))}`
+}
+
+function isDownloadable(model: LocalModelInfo, kind: 'catalog' | 'local'): boolean {
+  return kind !== 'local' && !model.downloaded
 }
 
 function mergeModelInfo(primary: LocalModelInfo, secondary: LocalModelInfo): LocalModelInfo {
@@ -167,12 +180,6 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     setImportPath('')
   }
 
-  const hfUrl = (hf: string): string =>
-    hf.startsWith('http') ? hf : `https://huggingface.co/${hf}`
-
-  const googleSearchUrl = (model: LocalModelInfo): string =>
-    `https://www.google.com/search?q=${encodeURIComponent(modelName(model))}`
-
   const loadingModels = loadingDownloaded || loadingAvailable
   const allModels = mergeModels(availableModels, downloadedModels)
 
@@ -208,58 +215,21 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const filteredLocalImportModels = localImportModels.filter((model) => matchesFilter(model, communityFilter))
   const filteredCommunityCatalogModels = communityCatalogModels.filter((model) => matchesFilter(model, communityFilter))
 
-  const renderModelMeta = (model: LocalModelInfo, kind: 'catalog' | 'local'): React.JSX.Element => (
-    <div className="dt-model-meta">
-      <span className="dt-source-badge">{kind === 'local' ? 'local import' : sourceLabel(model)}</span>
-      {model.huggingFace && (
-        <button
-          className="dt-text-link"
-          title={`Open on Hugging Face: ${model.huggingFace}`}
-          onClick={() => window.electronAPI.openExternal(hfUrl(model.huggingFace!))}
-        >
-          Hugging Face
-        </button>
-      )}
-      <button
-        className="dt-text-link dt-text-link-google"
-        title={`Search Google for ${modelName(model)}`}
-        onClick={() => window.electronAPI.openExternal(googleSearchUrl(model))}
-      >
-        Google
-      </button>
-    </div>
-  )
-
-  const renderModelRow = (model: LocalModelInfo, kind: 'catalog' | 'local'): React.JSX.Element => (
-    <li key={`${kind}-${model.file}`} className="dt-model-row">
-      <div className="dt-model-info">
-        <span className="dt-model-name" title={model.file}>{modelName(model)}</span>
-        {renderModelMeta(model, kind)}
-      </div>
-      {kind === 'local' || model.downloaded ? (
-        <span className="dt-status-badge">Installed</span>
-      ) : (
-        <button
-          className="dt-action-btn dt-download-btn"
-          onClick={() => { void handleStartDownload(model.file) }}
-        >
-          Download
-        </button>
-      )}
-    </li>
-  )
-
   const renderModelList = (
     models: LocalModelInfo[],
     kind: 'catalog' | 'local',
+    label: string,
     emptyText: string
   ): React.JSX.Element => {
     if (loadingModels) return <p className="dt-hint">Loading models...</p>
     if (models.length === 0) return <p className="dt-hint">{emptyText}</p>
     return (
-      <ul className="dt-model-list">
-        {models.map((model) => renderModelRow(model, kind))}
-      </ul>
+      <DtModelList
+        models={models}
+        kind={kind}
+        label={label}
+        onDownload={(file) => { void handleStartDownload(file) }}
+      />
     )
   }
 
@@ -283,7 +253,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
               />
             </div>
             <div className="dt-column-scroll">
-              {renderModelList(filteredOfficialModels, 'catalog', 'No official models found.')}
+              {renderModelList(filteredOfficialModels, 'catalog', 'Official models', 'No official models found.')}
             </div>
           </section>
 
@@ -329,17 +299,95 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
                     Couldn&apos;t read <code>custom.json</code> ({customJsonStatus.reason}). Any imported models may currently be listed under Official Models until this file can be parsed.
                   </p>
                 )}
-                {renderModelList(filteredLocalImportModels, 'local', 'No local imports detected.')}
+                {renderModelList(filteredLocalImportModels, 'local', 'Local imports', 'No local imports detected.')}
               </section>
 
               <section className="dt-section">
                 <h4 className="dt-section-title">Community Catalog</h4>
-                {renderModelList(filteredCommunityCatalogModels, 'catalog', 'No community models found.')}
+                {renderModelList(filteredCommunityCatalogModels, 'catalog', 'Community catalog', 'No community models found.')}
               </section>
             </div>
           </section>
         </div>
       </div>
     </Modal>
+  )
+}
+
+// One model list as a composite listbox. Manual activation: arrowing moves the
+// active row; Enter downloads a downloadable row (Download is a network action,
+// so it never fires merely on focus). Type-ahead is ceded — the column's search
+// input owns the letter keys. The Download button and the Hugging Face / Google
+// links are pointer-only (tabIndex -1), never tab stops inside the listbox.
+function DtModelList({
+  models,
+  kind,
+  label,
+  onDownload,
+}: {
+  models: LocalModelInfo[]
+  kind: 'catalog' | 'local'
+  label: string
+  onDownload: (file: string) => void
+}): React.JSX.Element {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { listboxProps, getOptionProps } = useListbox<HTMLUListElement>({
+    ids: models.map((m) => m.file),
+    selectedId,
+    onSelect: setSelectedId,
+    activation: 'manual',
+    onPrimary: (file) => {
+      const model = models.find((m) => m.file === file)
+      if (model && isDownloadable(model, kind)) onDownload(file)
+    },
+    typeAhead: false,
+  })
+
+  return (
+    <ul className="dt-model-list" aria-label={label} {...listboxProps}>
+      {models.map((model) => (
+        <li
+          key={`${kind}-${model.file}`}
+          className={`dt-model-row${selectedId === model.file ? ' selected' : ''}`}
+          {...getOptionProps(model.file)}
+        >
+          <div className="dt-model-info">
+            <span className="dt-model-name" title={model.file}>{modelName(model)}</span>
+            <div className="dt-model-meta">
+              <span className="dt-source-badge">{kind === 'local' ? 'local import' : sourceLabel(model)}</span>
+              {model.huggingFace && (
+                <button
+                  tabIndex={-1}
+                  className="dt-text-link"
+                  title={`Open on Hugging Face: ${model.huggingFace}`}
+                  onClick={() => window.electronAPI.openExternal(hfUrl(model.huggingFace!))}
+                >
+                  Hugging Face
+                </button>
+              )}
+              <button
+                tabIndex={-1}
+                className="dt-text-link dt-text-link-google"
+                title={`Search Google for ${modelName(model)}`}
+                onClick={() => window.electronAPI.openExternal(googleSearchUrl(model))}
+              >
+                Google
+              </button>
+            </div>
+          </div>
+          {isDownloadable(model, kind) ? (
+            <button
+              tabIndex={-1}
+              className="dt-action-btn dt-download-btn"
+              onClick={() => onDownload(model.file)}
+            >
+              Download
+            </button>
+          ) : (
+            <span className="dt-status-badge">Installed</span>
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }

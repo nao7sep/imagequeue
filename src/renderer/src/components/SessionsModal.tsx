@@ -3,6 +3,8 @@ import { Modal } from './Modal'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useSettings } from '../context/SettingsContext'
+import { useListbox } from '../hooks/useListbox'
+import { useImeGuard } from '../utils/imeGuard'
 import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from '../../../shared'
 import { formatUiDateTime } from '../utils/formatDateTime'
 import './SessionsModal.css'
@@ -79,6 +81,10 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
   const [creatingSession, setCreatingSession] = useState(false)
   const [message, setMessage] = useState('')
+  // The active row of the sessions listbox (single source of truth). Manual
+  // activation: arrowing only moves this; Enter resumes the active session.
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const isComposing = useImeGuard()
 
   const currentTaskCount = useMemo(
     () => Object.values(tasks).reduce((total, list) => total + list.length, 0),
@@ -109,6 +115,14 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   useEffect(() => {
     void refreshSessions()
   }, [refreshSessions])
+
+  // Keep the active row pointing at a live session: default to the first, and
+  // recover to the first when the selected session disappears (after a delete).
+  useEffect(() => {
+    setSelectedSessionId((prev) =>
+      prev && sessions.some((s) => s.sessionId === prev) ? prev : sessions[0]?.sessionId ?? null
+    )
+  }, [sessions])
 
   const handleResume = useCallback(async (session: SessionSummary): Promise<void> => {
     if (session.isCurrent || hasGeneratingTasks || creatingSession) return
@@ -192,6 +206,20 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     }
   }, [])
 
+  // Manual activation: arrowing moves the active card; Enter resumes it. Resume
+  // is a destructive queue replacement, so it never fires merely on focus.
+  const { listboxProps, getOptionProps } = useListbox({
+    ids: sessions.map((s) => s.sessionId),
+    selectedId: selectedSessionId,
+    onSelect: setSelectedSessionId,
+    activation: 'manual',
+    onPrimary: (id) => {
+      const session = sessions.find((s) => s.sessionId === id)
+      if (session) void handleResume(session)
+    },
+    isComposing,
+  })
+
   return (
     <Modal title="Sessions" className="sessions-modal-box" onClose={onClose}>
       <div className="sessions-modal-body">
@@ -218,11 +246,16 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
         ) : sessions.length === 0 ? (
           <div className="sessions-modal-empty">No saved sessions yet.</div>
         ) : (
-          <div className="sessions-list">
+          <div className="sessions-list" aria-label="Sessions" {...listboxProps}>
             {sessions.map((session) => {
               const busy = busySessionId === session.sessionId
+              const selected = selectedSessionId === session.sessionId
               return (
-                <div key={session.sessionId} className="session-card">
+                <div
+                  key={session.sessionId}
+                  className={`session-card${selected ? ' selected' : ''}`}
+                  {...getOptionProps(session.sessionId)}
+                >
                   <div className="session-card-header">
                     <div className="session-card-title-row">
                       <div className="session-card-title">{session.sessionId}</div>
@@ -236,8 +269,12 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                     {session.lastResumedAt && <span>Resumed {formatUiDateTime(session.lastResumedAt)}</span>}
                   </div>
                   <SessionPreviewStrip sessionId={session.sessionId} thumbnails={session.thumbnails} />
+                  {/* Per-row actions are pointer-only (tabIndex -1), never tab
+                      stops inside the listbox: the card is the one focusable
+                      option, and Enter on it runs the primary (Resume). */}
                   <div className="session-card-actions">
                     <button
+                      tabIndex={-1}
                       className="modal-btn"
                       onClick={() => void handleOpenFolder(session)}
                       disabled={busy || creatingSession}
@@ -245,6 +282,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                       Open Folder
                     </button>
                     <button
+                      tabIndex={-1}
                       className="modal-btn modal-btn-primary"
                       onClick={() => void handleResume(session)}
                       disabled={busy || session.isCurrent || hasGeneratingTasks || creatingSession}
@@ -252,6 +290,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                       Resume
                     </button>
                     <button
+                      tabIndex={-1}
                       className="modal-btn modal-btn-danger"
                       onClick={() => void handleDelete(session)}
                       disabled={busy || session.isCurrent || creatingSession}

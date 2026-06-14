@@ -66,67 +66,64 @@
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 200;
-  /* overflow not clipped — submenu flies out to the right. Buttons get
-     their own rounded corners at top/bottom so hover bgs respect the menu's
-     rounded border. */
+  padding: 4px 0;
+  /* overflow not clipped — submenu flies out to the right. Items take a flat
+     background highlight (not an outline) for both hover and the keyboard
+     cursor, so an overflow edge can never clip a focus ring into stray
+     fragments. */
 }
 
-.dropdown-menu > :first-child,
-.dropdown-menu > :first-child > button {
-  border-top-left-radius: 5px;
-  border-top-right-radius: 5px;
-}
-
-.dropdown-menu > :last-child,
-.dropdown-menu > :last-child > button {
-  border-bottom-left-radius: 5px;
-  border-bottom-right-radius: 5px;
-}
-
-.dropdown-menu button {
+/* A menu item: a flat command row. The arrow-focused item is the menu's cursor —
+   give it the app's background highlight and suppress the default focus ring,
+   which a rounded/overflow container otherwise clips. Hover shares the same
+   highlight so pointer and keyboard read identically. */
+.menu-item {
   display: block;
   width: 100%;
   padding: 8px 14px;
   text-align: left;
   background: none;
   border: none;
+  outline: none;
   color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.dropdown-menu button:hover {
+.menu-item:hover,
+.menu-item:focus,
+.menu-item:focus-visible {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.dropdown-menu .menu-check-item {
+.menu-checkbox-item {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
-.menu-check-item input[type="checkbox"] {
-  margin: 0;
-  cursor: pointer;
-  accent-color: var(--accent);
-  pointer-events: none;
+.menu-check-mark {
+  display: inline-block;
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--accent);
+  text-align: center;
 }
 
 /* Submenu (Elaboration → Elaborators / Elaboration Settings / Elaborated Prompts).
-   Pure-CSS hover flyout. The submenu lives inside .menu-has-submenu so hovering
-   the submenu still satisfies the parent's :hover, keeping it open as the cursor
-   moves into it. */
-.menu-has-submenu {
+   The popup is rendered only when the submenu is open (driven by keyboard Right /
+   pointer click), not a CSS hover flyout, and the parent item carries
+   aria-expanded. */
+.menu-submenu-anchor {
   position: relative;
 }
 
-.dropdown-menu .menu-submenu-parent {
+.menu-submenu-parent {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
 }
 
 .menu-submenu-arrow {
@@ -137,52 +134,15 @@
 
 .menu-submenu {
   position: absolute;
-  top: -1px;
+  top: -5px;
   left: 100%;
   min-width: 200px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  display: none;
-  padding-left: 4px;
-  margin-left: -4px;
+  padding: 4px 0;
   z-index: 201;
-}
-
-.menu-has-submenu:hover > .menu-submenu {
-  display: block;
-}
-
-.menu-has-submenu:hover > .menu-submenu-parent {
-  background: var(--bg-hover);
-}
-
-.menu-submenu > button {
-  display: block;
-  width: 100%;
-  padding: 8px 14px;
-  text-align: left;
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.menu-submenu > button:hover {
-  background: var(--bg-hover);
-}
-
-.menu-submenu > button:first-child {
-  border-top-left-radius: 5px;
-  border-top-right-radius: 5px;
-}
-
-.menu-submenu > button:last-child {
-  border-bottom-left-radius: 5px;
-  border-bottom-right-radius: 5px;
 }
 
 /* Shared modal styles live in Modal.css */
