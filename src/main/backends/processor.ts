@@ -88,7 +88,7 @@ function processQueues(): void {
 
   for (const backend of backends) {
     const maxConcurrency = backend === 'drawthings' ? 1 :
-      (config.image_backends[backend] as { concurrency?: number }).concurrency || 3
+      ((config.image_backends[backend] as { concurrency?: number }).concurrency ?? 3)
     const tasks = queueManager.getActiveTasks(backend)
 
     for (let i = tasks.length - 1; i >= 0; i--) {

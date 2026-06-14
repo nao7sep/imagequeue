@@ -123,7 +123,9 @@ export function Modal({
         {title !== undefined && (
           <div className="modal-header">
             <span id={titleId}>{title}</span>
-            <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+            <button className="modal-close" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
           </div>
         )}
         {children}

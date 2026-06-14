@@ -265,7 +265,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         <div ref={detailsRef} className="metadata-section">
           {!detailsOpen ? (
             <button className="metadata-toggle" onClick={() => setDetailsOpen(true)}>
-              <span className="metadata-toggle-chevron">▸</span>
+              <span className="metadata-toggle-chevron" aria-hidden="true">▸</span>
               <span className="metadata-toggle-model">{selectedTask.model}</span>
               <span className="metadata-toggle-sep"> · </span>
               <span className="metadata-toggle-prompt">{selectedTask.prompt}</span>

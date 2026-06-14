@@ -18,6 +18,7 @@ import { applyDevDockIcon } from './dock-icon'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
+import { installContentSecurityPolicy } from './csp'
 
 let mainWin: BrowserWindow | null = null
 
@@ -129,6 +130,8 @@ app.whenReady().then(() => {
   // The app ships a single dark theme; force dark native chrome (title bar,
   // menus) so it doesn't follow a light OS appearance.
   nativeTheme.themeSource = 'dark'
+  // Set the renderer CSP before any window loads its content.
+  installContentSecurityPolicy(app.isPackaged)
   ensureDataDir()
   loadConfig()
   initSession()

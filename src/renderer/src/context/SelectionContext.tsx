@@ -351,6 +351,16 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // and focus dropped to the page body. Reclaim the column's tab stop by focusing
   // the recovered row — but only if focus is still nowhere useful (body), so we
   // never yank focus away from wherever the user has since moved it.
+  //
+  // Keyed on `tasks` ONLY, never `selection`: the remove gesture moves the
+  // selection to the recovered row *before* awaiting the IPC that actually drops
+  // the old row, so a `selection` dependency would run this on that intermediate
+  // render — while the old row is still mounted and focused (activeElement is not
+  // body) — and prematurely clear the pending focus. By the time the row truly
+  // unmounts and focus falls to body there would be nothing left to restore,
+  // stranding focus on body and silencing every list keyboard action. Reacting
+  // only to the removal re-render (the `tasks` change) lands focus on the
+  // recovered row.
   useEffect(() => {
     const targetId = pendingFocusIdRef.current
     if (targetId === null) return
@@ -364,7 +374,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       el.focus()
       pendingFocusIdRef.current = null
     }
-  }, [tasks, selection])
+  }, [tasks])
 
   // ---- Auto-select on completion ----------------------------------------
 

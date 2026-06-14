@@ -189,7 +189,22 @@ export function Layout(): React.JSX.Element {
           <Menu
             label="Main menu"
             trigger={(props) => (
-              <button className="hamburger-btn" {...props}>☰</button>
+              <button className="hamburger-btn" aria-label="Main menu" {...props}>
+                <svg
+                  width="1em"
+                  height="1em"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
             )}
           >
             <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder() }}>Open Output Folder</MenuItem>

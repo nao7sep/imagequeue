@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { currentCompositeIndex, nextIndex, removalFocusTargetId } from '../utils/compositeNav'
+import { currentCompositeIndex, nextIndex } from '../utils/compositeNav'
 
 // Roughly one viewport of rows for PageUp/PageDown. The listbox panels here are
 // short single-select lists, so a fixed page step is plenty and avoids measuring
@@ -23,9 +23,6 @@ interface UseListboxParams {
   // Optional primary action for manual lists: Enter/Space on the active row.
   // Distinct from onSelect so a manual list can move the cursor without acting.
   onPrimary?: (id: string) => void
-  // Optional removal (Delete/Backspace on the active row). Recovery focus moves
-  // to the neighbor that slides into place once `ids` drops the removed id.
-  onRemove?: (id: string) => void
   // Type-ahead is ceded when the surrounding UI owns the letter keys (Models'
   // search inputs). Defaults to enabled.
   typeAhead?: boolean
@@ -68,19 +65,19 @@ interface UseListboxResult<T extends HTMLElement> {
  * only tabbable option, so Tab enters the list at the active row and Tab leaves
  * it. Up/Down move the active row, Home/End and PageUp/PageDown jump, all stopping
  * at the ends. In 'follows-focus' mode moving the cursor selects; in 'manual' mode
- * Enter/Space on the active row runs the primary action. Delete/Backspace removes
- * the active row when `onRemove` is given, recovering to the neighbor. Type-ahead
- * jumps by visible label (IME-guarded), unless ceded.
+ * Enter/Space on the active row runs the primary action. Type-ahead jumps by
+ * visible label (IME-guarded), unless ceded.
  *
- * Programmatic focus from recovery is guarded: it only takes DOM focus when focus
- * already lives inside this list, per the never-steal-focus rule.
+ * Removal is intentionally NOT handled here: a component that deletes rows owns
+ * both the selection and the post-delete focus recovery itself (see
+ * ElaboratedPromptsModal), keeping a single source of truth instead of letting an
+ * internal cursor drift from the committed selection.
  */
 export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseListboxParams): UseListboxResult<T> {
-  const { ids, selectedId, onSelect, activation, onPrimary, onRemove, typeAhead = true, isComposing } = params
+  const { ids, selectedId, onSelect, activation, onPrimary, typeAhead = true, isComposing } = params
   const ref = useRef<T>(null)
   const activeIdRef = useRef<string | null>(selectedId && ids.includes(selectedId) ? selectedId : ids[0] ?? null)
   const [activeId, setActiveIdState] = useState<string | null>(activeIdRef.current)
-  const pendingRemovalRef = useRef<{ id: string; index: number } | null>(null)
   const typeAheadRef = useRef<{ buffer: string; at: number }>({ buffer: '', at: 0 })
 
   // The single tab stop: the selected option, or the first when nothing in the
@@ -93,28 +90,9 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
     setActiveIdState(id)
   }, [])
 
-  // Whether DOM focus currently sits on one of this list's options.
-  const focusWithinList = (): boolean => {
-    const active = document.activeElement
-    return active instanceof HTMLElement && typeof active.dataset.listboxOption === 'string'
-      ? ref.current?.contains(active) ?? false
-      : false
-  }
-
   const focusOption = (id: string): void => {
     (ref.current?.querySelector(`[data-listbox-option="${CSS.escape(id)}"]`) as HTMLElement | null)?.focus()
   }
-
-  // After a removal lands (the removed id leaves `ids`), move the cursor — and,
-  // only if focus already lived in the list, DOM focus — to the recovery target.
-  useEffect(() => {
-    const pending = pendingRemovalRef.current
-    if (!pending || ids.includes(pending.id)) return
-    pendingRemovalRef.current = null
-    const targetId = removalFocusTargetId(ids, pending.index)
-    setActiveId(targetId)
-    if (targetId && focusWithinList()) focusOption(targetId)
-  }, [ids, setActiveId])
 
   // Keep the active cursor pointing at a live row as the list changes.
   useEffect(() => {
@@ -191,16 +169,6 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
       // committed on move, so Enter re-commits/confirms the active row.
       if (activation === 'manual') onPrimary?.(targetId)
       else onSelect(targetId)
-      return
-    }
-
-    if ((e.key === 'Delete' || e.key === 'Backspace') && onRemove) {
-      const targetId = focusedId() ?? activeIdRef.current ?? selectedId
-      const targetIndex = targetId ? ids.indexOf(targetId) : -1
-      if (!targetId || targetIndex < 0) return
-      e.preventDefault()
-      pendingRemovalRef.current = { id: targetId, index: targetIndex }
-      onRemove(targetId)
       return
     }
 

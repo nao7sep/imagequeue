@@ -39,6 +39,20 @@
   background: var(--bg-surface);
 }
 
+/* Persistent selected mark: stays visible on click and as the arrow cursor moves,
+   even when focus moves to a button, matching SessionsModal. */
+.elaborated-prompts-row[aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, var(--border)) inset;
+}
+
+/* Keyboard cursor (roving focus): a clip-safe inset ring, matching the other
+   in-app listboxes (e.g. SessionsModal), kept distinct from the selected mark. */
+.elaborated-prompts-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
 .elaborated-prompts-number {
   min-width: 2.5em;
   font-size: 13px;

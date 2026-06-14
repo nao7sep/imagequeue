@@ -52,13 +52,3 @@ export function currentCompositeIndex({
   if (active >= 0) return active
   return indexOfId(ids, selectedId)
 }
-
-// After an item at `removedIndex` leaves the list, the id that should take focus:
-// the item that slid into that index (the next neighbor), else the previous
-// item, else null when the list is now empty. The general recovery policy.
-export function removalFocusTargetId(
-  remainingIds: readonly string[],
-  removedIndex: number,
-): string | null {
-  return remainingIds[removedIndex] ?? remainingIds[removedIndex - 1] ?? null
-}
