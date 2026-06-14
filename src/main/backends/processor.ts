@@ -6,7 +6,7 @@ import { allocateOutputTimestamp, persistActiveSession } from '../session'
 import { writeImageOutput, ImageExt } from '../utils/file-output'
 import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
-import { log, logGenerationStart, logGenerationComplete, logGenerationFailed } from '../logger'
+import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
 import { generateOpenAI } from './openai'
 import { generateImagen } from './imagen'
@@ -144,7 +144,21 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
     const fallback = getFallbackExt(backend, task.params)
     const ext = detectImageExt(imageBuffer, mimeType, fallback, { backend, model: task.model })
-    const baseName = writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)
+    let baseName: string
+    try {
+      baseName = writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)
+    } catch (writeErr) {
+      // Generation already succeeded (and, for cloud backends, was billed), so a
+      // write failure here is a distinct, more costly event than a generation
+      // failure — record it as such before the task is marked failed below.
+      log('error', 'Generated image could not be saved to disk', {
+        backend,
+        model: task.model,
+        estimatedCostUsd: task.estimatedCostUsd,
+        error: serializeError(writeErr),
+      })
+      throw writeErr
+    }
 
     task.status = 'completed'
     task.baseName = baseName

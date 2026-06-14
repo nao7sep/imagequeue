@@ -2,7 +2,7 @@ import { handle } from './ipc-boundary'
 import fs from 'fs'
 import path from 'path'
 import { getSessionDir, resolveSessionDir } from './session'
-import { ImageExt } from './utils/file-output'
+import { ImageExt, assertSafeBaseName } from './utils/file-output'
 
 function readImageFromDir(dir: string, baseName: string): { data: string; ext: ImageExt } | null {
   for (const ext of ['png', 'jpg', 'webp'] as const) {
@@ -20,16 +20,16 @@ function readImageFromDir(dir: string, baseName: string): { data: string; ext: I
 // actually found on disk, so the renderer can build a correctly-typed data URL.
 export function registerPreviewIpc(): void {
   handle('preview:getImage', (_event, baseName: string): { data: string; ext: ImageExt } | null => {
-    return readImageFromDir(getSessionDir(), baseName)
+    return readImageFromDir(getSessionDir(), assertSafeBaseName(baseName))
   })
 
   handle('preview:getSessionImage', (_event, sessionId: string, baseName: string): { data: string; ext: ImageExt } | null => {
-    return readImageFromDir(resolveSessionDir(sessionId), baseName)
+    return readImageFromDir(resolveSessionDir(sessionId), assertSafeBaseName(baseName))
   })
 
   handle('preview:getMetadata', (_event, baseName: string) => {
     const dir = getSessionDir()
-    const metaPath = path.join(dir, `${baseName}.json`)
+    const metaPath = path.join(dir, `${assertSafeBaseName(baseName)}.json`)
 
     if (!fs.existsSync(metaPath)) return null
 

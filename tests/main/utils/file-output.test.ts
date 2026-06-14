@@ -1,5 +1,25 @@
-import { describe, expect, it } from 'vitest'
-import { imageExtFromPath, outputBaseName } from '../../../src/main/utils/file-output'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import {
+  assertImageExt,
+  assertSafeBaseName,
+  imageExtFromPath,
+  outputBaseName,
+  writeImageOutput
+} from '../../../src/main/utils/file-output'
+import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
+
+// writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
+// test. The closure reads `sessionDir` only when getSessionDir() is called, by
+// which time beforeEach has set it.
+let sessionDir = ''
+vi.mock('../../../src/main/session', () => ({ getSessionDir: () => sessionDir }))
+
+beforeEach(() => {
+  sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-fileout-'))
+})
 
 describe('imageExtFromPath', () => {
   it('parses known extensions case-insensitively', () => {
@@ -41,5 +61,55 @@ describe('outputBaseName', () => {
     const name = outputBaseName('20260604-093015', 1, '2', 'openai')
     expect(name).toBe('20260604-093015-utc-2-openai-2')
     expect(/^\d{8}-\d{6}-utc(?:-|$)/.test(name)).toBe(true)
+  })
+})
+
+describe('writeImageOutput', () => {
+  const meta = {} as unknown as ImageMetadata
+  const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+
+  it('writes the image and JSON sidecar and returns the base name', () => {
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(base).toBe('20260604-093015-utc-cat-openai')
+    expect(fs.existsSync(path.join(sessionDir, `${base}.png`))).toBe(true)
+    expect(fs.existsSync(path.join(sessionDir, `${base}.json`))).toBe(true)
+  })
+
+  it('never overwrites: a collision advances to the next free ordinal instead of discarding the image', () => {
+    const first = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    // A second write that was handed the same ordinal (a file the allocator
+    // didn't know about) must neither clobber the first nor be thrown away.
+    const second = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(first).toBe('20260604-093015-utc-cat-openai')
+    expect(second).toBe('20260604-093015-utc-cat-openai-2')
+    expect(fs.existsSync(path.join(sessionDir, `${first}.png`))).toBe(true)
+    expect(fs.existsSync(path.join(sessionDir, `${second}.png`))).toBe(true)
+  })
+})
+
+describe('assertSafeBaseName', () => {
+  it('accepts a normal output base name', () => {
+    expect(assertSafeBaseName('20260604-093015-utc-cat-openai')).toBe('20260604-093015-utc-cat-openai')
+  })
+
+  it('rejects traversal, separators, and empty/non-string input', () => {
+    expect(() => assertSafeBaseName('../../config')).toThrow()
+    expect(() => assertSafeBaseName('a/b')).toThrow()
+    expect(() => assertSafeBaseName('a\\b')).toThrow()
+    expect(() => assertSafeBaseName('..')).toThrow()
+    expect(() => assertSafeBaseName('')).toThrow()
+    expect(() => assertSafeBaseName(null)).toThrow()
+    expect(() => assertSafeBaseName(42)).toThrow()
+  })
+})
+
+describe('assertImageExt', () => {
+  it('accepts the three image extensions and rejects anything else', () => {
+    expect(assertImageExt('png')).toBe('png')
+    expect(assertImageExt('jpg')).toBe('jpg')
+    expect(assertImageExt('webp')).toBe('webp')
+    expect(() => assertImageExt('json')).toThrow()
+    expect(() => assertImageExt('exe')).toThrow()
+    expect(() => assertImageExt('')).toThrow()
   })
 })

@@ -4,8 +4,36 @@ import { shell } from 'electron'
 import { getSessionDir } from '../session'
 import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
+import { log } from '../logger'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
+
+// Guards a renderer-supplied output base name before it is joined into a session
+// path. Output base names are always bare file stems (no directory part), so any
+// separator or `..` is a path-traversal attempt — reject it rather than read or
+// reveal a file outside the session dir. Mirrors the session-id guard in
+// session/state.ts.
+export function assertSafeBaseName(baseName: unknown): string {
+  if (
+    typeof baseName !== 'string' ||
+    baseName.length === 0 ||
+    baseName.includes('/') ||
+    baseName.includes('\\') ||
+    baseName.includes('..') ||
+    baseName.includes('\0') ||
+    path.basename(baseName) !== baseName
+  ) {
+    throw new Error(`Unsafe output base name: ${String(baseName)}`)
+  }
+  return baseName
+}
+
+// Guards a renderer-supplied extension so it can only ever be one of the three
+// image types the app writes — never an arbitrary suffix joined into a path.
+export function assertImageExt(ext: unknown): ImageExt {
+  if (ext === 'png' || ext === 'jpg' || ext === 'webp') return ext
+  throw new Error(`Unsupported image extension: ${String(ext)}`)
+}
 
 // Returns the ImageExt parsed from a stored image path (e.g. "foo.png" → "png"),
 // or null when the suffix is missing or unrecognized.
@@ -45,19 +73,34 @@ export function writeImageOutput(
   metadata: ImageMetadata,
   ext: ImageExt
 ): string {
-  const baseName = outputBaseName(timestamp, ordinal, slug, backend)
   const dir = getSessionDir()
   fs.mkdirSync(dir, { recursive: true })
 
-  const imagePath = path.join(dir, `${baseName}.${ext}`)
-  const metaPath = path.join(dir, `${baseName}.json`)
-
-  if (fs.existsSync(imagePath) || fs.existsSync(metaPath)) {
-    throw new Error(`Refusing to overwrite existing output files for ${baseName}`)
+  // The allocator already hands out a unique ordinal, so a collision here means
+  // a file the allocator didn't know about exists on disk. Rather than throw —
+  // which would discard an image that was already generated (and, for cloud
+  // backends, billed) — advance to the next free ordinal so the image is always
+  // saved. The bump is logged because it should not normally happen.
+  let attempt = ordinal
+  let baseName = outputBaseName(timestamp, attempt, slug, backend)
+  while (
+    fs.existsSync(path.join(dir, `${baseName}.${ext}`)) ||
+    fs.existsSync(path.join(dir, `${baseName}.json`))
+  ) {
+    attempt++
+    baseName = outputBaseName(timestamp, attempt, slug, backend)
+  }
+  if (attempt !== ordinal) {
+    log('warn', 'Output name collided with existing files; saved under the next free ordinal', {
+      timestamp,
+      backend,
+      requestedOrdinal: ordinal,
+      usedOrdinal: attempt,
+    })
   }
 
-  fs.writeFileSync(imagePath, imageBuffer)
-  fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf-8')
+  fs.writeFileSync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
+  fs.writeFileSync(path.join(dir, `${baseName}.json`), JSON.stringify(metadata, null, 2), 'utf-8')
 
   return baseName
 }

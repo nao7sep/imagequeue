@@ -16,6 +16,8 @@ import { killAllCliJobs } from './cli-jobs'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { applyDevDockIcon } from './dock-icon'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
+import { hardenWindow } from './utils/harden-window'
+import { queueManager } from './queue/queue-manager'
 
 let mainWin: BrowserWindow | null = null
 
@@ -61,11 +63,13 @@ function createWindow(): void {
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   })
 
   mainWin = win
+  hardenWindow(win)
 
   win.on('closed', () => {
     if (mainWin === win) mainWin = null
@@ -194,6 +198,17 @@ async function gracefulShutdown(reason: string): Promise<void> {
   }
   await guarded('drainPendingModelParamsWrites', () => drainPendingModelParamsWrites())
   await guarded('drainPendingDraftWrites', () => drainPendingDraftWrites())
+  // Any task still 'generating' is being abandoned by this quit (an in-flight
+  // cloud call cannot be reclaimed). Record it as 'interrupted' and persist, so
+  // the manifest is honest at rest and resume offers to re-queue it, rather than
+  // leaving a task frozen as 'generating'.
+  await guarded('interruptGeneratingTasks', () => {
+    const count = queueManager.interruptGeneratingTasks()
+    if (count > 0) {
+      persistActiveSession()
+      log('info', 'Marked in-flight tasks interrupted on shutdown', { count })
+    }
+  })
   await guarded('closeViewerWindow', () => closeViewerWindow())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
   await guarded('killAllCliJobs', () => killAllCliJobs())
@@ -209,11 +224,13 @@ async function gracefulShutdown(reason: string): Promise<void> {
 // app.exit(0), not a second app.quit(): on macOS, calling app.quit() after the
 // cleanup closes the windows but then stalls — once the last window closes the
 // app stays alive instead of proceeding to will-quit/quit, so the dock dot
-// lingers and the user has to quit a second time to actually terminate. All
-// cleanup is already done by the time the finally runs, so app.exit(0) ends the
-// process deterministically. The shutdownStarted guard still lets a second quit
-// during cleanup fall through without preventDefault, as a force-quit escape
-// hatch in case cleanup ever hangs.
+// lingers and the user has to quit a second time to actually terminate. The
+// gracefulShutdown steps above have all run by the time the finally fires, so
+// app.exit(0) ends the process deterministically. (Note: an in-flight image
+// generation is not awaited — it is abandoned and recorded as 'interrupted' for
+// resume; a cloud call already issued cannot be reclaimed.) The shutdownStarted
+// guard still lets a second quit during cleanup fall through without
+// preventDefault, as a force-quit escape hatch in case cleanup ever hangs.
 let shutdownStarted = false
 app.on('before-quit', (event) => {
   if (shutdownStarted) return

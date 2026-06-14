@@ -142,4 +142,27 @@ describe('QueueManager', () => {
     seed(qm, [makeTask('a', 'generating'), makeTask('c', 'completed')])
     expect(qm.hasQueuedTasks()).toBe(false)
   })
+
+  it('interrupts in-flight generating tasks on shutdown, clearing per-attempt fields', () => {
+    seed(qm, [
+      makeTask('g', 'generating'),
+      makeTask('q', 'queued'),
+      makeTask('c', 'completed', 'flux')
+    ])
+    expect(qm.interruptGeneratingTasks()).toBe(1)
+    const openai = qm.getAllStoredTasks().openai
+    const g = openai.find((t) => t.id === 'g')!
+    expect(g.status).toBe('interrupted')
+    expect(g.startedAt).toBeNull()
+    expect(g.completedAt).toBeNull()
+    expect(g.durationMs).toBeNull()
+    expect(g.imagePath).toBeNull()
+    expect(g.baseName).toBeNull()
+    expect(g.error).toBeNull()
+    // Non-generating tasks are untouched.
+    expect(openai.find((t) => t.id === 'q')!.status).toBe('queued')
+    expect(qm.getAllStoredTasks().flux.find((t) => t.id === 'c')!.status).toBe('completed')
+    // Idempotent: nothing left generating.
+    expect(qm.interruptGeneratingTasks()).toBe(0)
+  })
 })

@@ -7,8 +7,12 @@ import fs from 'fs'
 // This prevents the "process killed mid-write leaves a truncated/partial
 // JSON file" failure mode that would otherwise cause the next load to
 // throw on JSON.parse and silently fall back to defaults.
-export function writeJsonAtomic(filePath: string, value: unknown): void {
+export function writeFileAtomic(filePath: string, data: string | NodeJS.ArrayBufferView): void {
   const tempPath = `${filePath}.tmp`
-  fs.writeFileSync(tempPath, JSON.stringify(value, null, 2), 'utf-8')
+  fs.writeFileSync(tempPath, data)
   fs.renameSync(tempPath, filePath)
+}
+
+export function writeJsonAtomic(filePath: string, value: unknown): void {
+  writeFileAtomic(filePath, JSON.stringify(value, null, 2))
 }

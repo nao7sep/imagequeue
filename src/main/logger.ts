@@ -49,7 +49,9 @@ const REDACTED = '[redacted]'
 // match is exact: this app stores keys as `api_key`. Seeded with the obvious
 // secrets and extended as needed (no cross-app taxonomy).
 const DENIED_KEYS: ReadonlySet<string> = new Set(
-  ['apiKey', 'api_key', 'authorization', 'token', 'password', 'secret'].map((key) => key.toLowerCase())
+  ['apiKey', 'api_key', 'authorization', 'token', 'password', 'secret', 'x-key', 'x-api-key'].map(
+    (key) => key.toLowerCase()
+  )
 )
 
 // Enables or disables debug output for the whole process. Called once at

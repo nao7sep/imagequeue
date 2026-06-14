@@ -28,6 +28,18 @@ export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mime
     n: 1,
     stream: false,
   }).catch((err: unknown) => {
+    if (
+      err instanceof Error &&
+      (err.name === 'AbortError' ||
+        err.name === 'APITimeoutError' ||
+        err.name === 'APIConnectionTimeoutError')
+    ) {
+      log('error', 'OpenAI API timed out', {
+        model: task.model,
+        timeoutMs: config.image_backends.openai.timeout_ms
+      })
+      throw new Error(`OpenAI API timed out after ${config.image_backends.openai.timeout_ms / 1000}s`)
+    }
     log('error', 'OpenAI API call failed', {
       model: task.model,
       requestParams: params,

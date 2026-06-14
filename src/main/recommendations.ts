@@ -4,6 +4,7 @@ import os from 'os'
 import https from 'https'
 import { getDataDir, loadConfig } from './config'
 import { log, serializeError } from './logger'
+import { writeFileAtomic } from './utils/atomic-write'
 import {
   RecommendedParams,
   RecommendationOperationResult,
@@ -139,7 +140,7 @@ function writeRecommendationsIfChanged(
     }
   }
 
-  fs.writeFileSync(filePath, data)
+  writeFileAtomic(filePath, data)
   return {
     ...getRecommendationsStatus(),
     changed: true,
@@ -147,22 +148,53 @@ function writeRecommendationsIfChanged(
   }
 }
 
-function fetchBytes(url: string): Promise<Buffer> {
+const MAX_REDIRECTS = 5
+const MAX_DOWNLOAD_BYTES = 16 * 1024 * 1024 // configs.json is small; bound memory regardless
+
+function fetchBytes(url: string, redirectsLeft = MAX_REDIRECTS): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      reject(new Error(`Invalid download URL: ${url}`))
+      return
+    }
+    // Require https on the initial request and on every redirect hop, so a
+    // redirect can't downgrade to http or bounce to a non-web scheme.
+    if (parsed.protocol !== 'https:') {
+      reject(new Error(`Refusing non-https download URL: ${parsed.protocol}`))
+      return
+    }
+
     const request = https.get(url, { timeout: 10000 }, (response) => {
-      if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+      const status = response.statusCode ?? 0
+      if (status >= 300 && status < 400 && response.headers.location) {
         response.resume()
-        fetchBytes(response.headers.location).then(resolve, reject)
+        if (redirectsLeft <= 0) {
+          reject(new Error('Download failed: too many redirects'))
+          return
+        }
+        const next = new URL(response.headers.location, url).toString()
+        fetchBytes(next, redirectsLeft - 1).then(resolve, reject)
         return
       }
-      if (!response.statusCode || response.statusCode < 200 || response.statusCode > 299) {
+      if (status < 200 || status > 299) {
         response.resume()
         reject(new Error(`Download failed with HTTP ${response.statusCode ?? 'unknown'}`))
         return
       }
 
       const chunks: Buffer[] = []
-      response.on('data', (chunk: Buffer) => chunks.push(chunk))
+      let total = 0
+      response.on('data', (chunk: Buffer) => {
+        total += chunk.length
+        if (total > MAX_DOWNLOAD_BYTES) {
+          request.destroy(new Error('Download exceeded maximum size'))
+          return
+        }
+        chunks.push(chunk)
+      })
       response.on('end', () => resolve(Buffer.concat(chunks)))
     })
     request.on('timeout', () => {

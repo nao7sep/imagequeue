@@ -2,6 +2,7 @@ import { BrowserWindow, IpcMainInvokeEvent, screen } from 'electron'
 import path from 'path'
 import { handle } from './ipc-boundary'
 import { reassertDevDockIconAfterRepaint } from './dock-icon'
+import { hardenWindow } from './utils/harden-window'
 
 let viewerWin: BrowserWindow | null = null
 let hidePromise: Promise<void> | null = null
@@ -114,9 +115,12 @@ function createViewerWindow(display: Electron.Display): BrowserWindow {
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      sandbox: true
     }
   })
+
+  hardenWindow(win)
 
   win.on('close', (event) => {
     if (viewerClosing) return

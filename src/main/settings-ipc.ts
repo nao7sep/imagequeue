@@ -4,6 +4,7 @@ import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig, saveConfig, encodeApiKey, decodeApiKey, getDataDir } from './config'
 import { getSessionDir } from './session'
+import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
 import { checkModelExists } from './backends'
 import {
@@ -304,20 +305,24 @@ export function registerSettingsIpc(): void {
   })
 
   handle('shell:revealFile', (_event, baseName: string, ext: string) => {
-    const filePath = path.join(getSessionDir(), `${baseName}.${ext}`)
+    const safeBase = assertSafeBaseName(baseName)
+    const safeExt = assertImageExt(ext)
+    const filePath = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
     shell.showItemInFolder(filePath)
   })
 
   handle('shell:exportImage', async (_event, baseName: string, ext: string) => {
+    const safeBase = assertSafeBaseName(baseName)
+    const safeExt = assertImageExt(ext)
     const config = loadConfig()
     const exportDir = config.general.export_dir || app.getPath('desktop')
     fs.mkdirSync(exportDir, { recursive: true })
-    const src = path.join(getSessionDir(), `${baseName}.${ext}`)
-    let destName = `${baseName}.${ext}`
+    const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
+    let destName = `${safeBase}.${safeExt}`
     let destPath = path.join(exportDir, destName)
     let n = 2
     while (fs.existsSync(destPath)) {
-      destName = `${baseName}-${n}.${ext}`
+      destName = `${safeBase}-${n}.${safeExt}`
       destPath = path.join(exportDir, destName)
       n++
     }
@@ -326,13 +331,15 @@ export function registerSettingsIpc(): void {
   })
 
   handle('shell:exportImageAs', async (event, baseName: string, ext: string) => {
+    const safeBase = assertSafeBaseName(baseName)
+    const safeExt = assertImageExt(ext)
     const config = loadConfig()
     const exportDir = config.general.export_dir || app.getPath('desktop')
-    const src = path.join(getSessionDir(), `${baseName}.${ext}`)
+    const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
     const owner = BrowserWindow.fromWebContents(event.sender)
     const options = {
-      defaultPath: path.join(exportDir, `${baseName}.${ext}`),
-      filters: [{ name: 'Images', extensions: [ext, 'png', 'jpg', 'webp'] }]
+      defaultPath: path.join(exportDir, `${safeBase}.${safeExt}`),
+      filters: [{ name: 'Images', extensions: [safeExt, 'png', 'jpg', 'webp'] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
@@ -350,7 +357,7 @@ export function registerSettingsIpc(): void {
   })
 
   handle('clipboard:copyImage', (_event, baseName: string, ext: string) => {
-    const filePath = path.join(getSessionDir(), `${baseName}.${ext}`)
+    const filePath = path.join(getSessionDir(), `${assertSafeBaseName(baseName)}.${assertImageExt(ext)}`)
     const buffer = fs.readFileSync(filePath)
     clipboard.writeImage(nativeImage.createFromBuffer(buffer))
   })

@@ -189,6 +189,30 @@ export class QueueManager {
     return Object.values(this.queues).some((tasks) => tasks.some((task) => task.status === 'generating'))
   }
 
+  // Flips any in-flight 'generating' tasks to 'interrupted', clearing the
+  // per-attempt fields the same way a resumed session does (toInterruptedTask).
+  // Called at shutdown so the persisted manifest reflects that the process
+  // stopped mid-generation instead of freezing a task as 'generating' forever.
+  // Returns how many were affected.
+  interruptGeneratingTasks(): number {
+    let count = 0
+    for (const backend of Object.keys(this.queues) as BackendId[]) {
+      for (const task of this.queues[backend]) {
+        if (task.status === 'generating') {
+          task.status = 'interrupted'
+          task.startedAt = null
+          task.completedAt = null
+          task.durationMs = null
+          task.imagePath = null
+          task.baseName = null
+          task.error = null
+          count++
+        }
+      }
+    }
+    return count
+  }
+
   hasQueuedTasks(): boolean {
     return Object.values(this.queues).some((tasks) => tasks.some((task) => task.status === 'queued'))
   }

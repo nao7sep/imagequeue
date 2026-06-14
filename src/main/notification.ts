@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { log, serializeError } from './logger'
+import { hardenWindow } from './utils/harden-window'
 
 let notificationWin: BrowserWindow | null = null
 let dismissTimeout: ReturnType<typeof setTimeout> | null = null
@@ -86,9 +87,12 @@ export function initNotificationWindow(): void {
     show: false,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      sandbox: true
     }
   })
+
+  hardenWindow(win)
 
   win.on('closed', () => {
     clearDismissTimeout()
