@@ -15,6 +15,7 @@ import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useNotifications } from '../hooks/useNotifications'
+import { useImeGuard } from '../utils/imeGuard'
 
 const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
 
@@ -27,6 +28,7 @@ type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' |
 
 export function Layout(): React.JSX.Element {
   useNotifications()
+  const isImeComposing = useImeGuard()
   const { selectedTask, clear, navigate, removeSelected, restoreSelected, deleteSelected } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   // The main prompt lives in the session draft: persisted per session and
@@ -69,6 +71,9 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
+        // During an IME composition, Escape cancels the composition and belongs
+        // to the IME — it must not also clear the menu/selection here.
+        if (isImeComposing(e)) return
         if (showMenu) {
           setShowMenu(false)
         } else if (!overlay) {
@@ -100,7 +105,7 @@ export function Layout(): React.JSX.Element {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [overlay, showMenu, clear, toggleShowKeptImages])
+  }, [overlay, showMenu, clear, toggleShowKeptImages, isImeComposing])
 
   // Load image data when a completed task is selected
   useEffect(() => {
