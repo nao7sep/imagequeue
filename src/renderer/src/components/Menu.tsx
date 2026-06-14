@@ -177,6 +177,13 @@ export function MenuItem({
 
 // A checkable command: `menuitemcheckbox` with `aria-checked`. Toggling it runs
 // the action and leaves the menu open, so the user can flip it and keep working.
+//
+// The box is a real, display-only native checkbox — the same control the settings panel
+// uses — so it matches that style exactly (filled accent box + check when on, bordered box
+// when off) and follows the theme/OS accent for free. The button carries the real
+// aria-checked; the input is aria-hidden, unfocusable, and pointer-transparent so the click
+// always lands on the button (which calls onToggle). `readOnly` because it is driven by the
+// button, not by its own change event.
 export function MenuCheckboxItem({
   checked,
   onToggle,
@@ -195,7 +202,9 @@ export function MenuCheckboxItem({
       className="menu-item menu-checkbox-item"
       onClick={onToggle}
     >
-      <span className="menu-check-mark" aria-hidden="true">{checked ? '✓' : ''}</span>
+      <span className="menu-check-mark" aria-hidden="true">
+        <input type="checkbox" checked={checked} readOnly tabIndex={-1} />
+      </span>
       <span>{children}</span>
     </button>
   )

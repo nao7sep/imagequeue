@@ -108,11 +108,21 @@
 }
 
 .menu-check-mark {
-  display: inline-block;
-  width: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  color: var(--accent);
-  text-align: center;
+}
+
+/* A display-only native checkbox (see MenuCheckboxItem) so it matches the settings
+   panel's checkboxes — filled box + check when on, bordered box when off. Sized a touch
+   larger than the dense settings rows so the check reads clearly in the menu. Pointer
+   events pass through to the menu-item button, which owns the toggle. */
+.menu-check-mark input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  pointer-events: none;
 }
 
 /* Submenu (Elaboration → Elaborators / Elaboration Settings / Elaborated Prompts).
