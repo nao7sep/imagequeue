@@ -26,7 +26,11 @@ npm install
 npm run dev
 ```
 
-On macOS you can double-click `scripts/run.command`, and on Windows `scripts/run.ps1`, to launch the dev build from the file manager: each installs dependencies, makes sure the Electron binary is present, and starts `npm run dev`.
+The `scripts/` directory has double-clickable launchers, each a `<name>.command` (macOS) / `<name>.ps1` (Windows) pair:
+
+- **run-dev** — launches the dev build from the file manager: installs dependencies, makes sure the Electron binary is present, and starts `npm run dev`.
+- **run-built** — launches the existing build without rebuilding.
+- **rebuild** — cleans, builds fresh, then launches.
 
 ```sh
 npm run build

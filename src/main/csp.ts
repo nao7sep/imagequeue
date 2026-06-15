@@ -1,19 +1,21 @@
 import { session } from 'electron'
 
 // Content-Security-Policy for the app renderer, set as a response header so it
-// governs both the file:// document of a packaged build and the dev-server
-// document in development. The renderer makes no network requests of its own
-// (all I/O goes through IPC to main) and loads images as data: URLs, so the
-// packaged policy is strict: scripts only from the app bundle, no eval, no
-// remote connections. Development relaxes script/connect for Vite's inline
-// refresh preamble and its HMR websocket.
+// governs both the file:// document of a production build and the dev-server
+// document in development. Gated on the production-renderer signal (the dev
+// server being absent), NOT app.isPackaged — so an unpackaged production run via
+// electron-vite preview (run-built/rebuild) still gets the strict policy. The
+// renderer makes no network requests of its own (all I/O goes through IPC to
+// main) and loads images as data: URLs, so the production policy is strict:
+// scripts only from the app bundle, no eval, no remote connections. Development
+// relaxes script/connect for Vite's inline refresh preamble and its HMR websocket.
 //
 // Only http/https/file responses are touched. The viewer and notification
 // windows load their own data: documents and are left untouched, so their
 // app-injected markup is unaffected.
-export function installContentSecurityPolicy(isPackaged: boolean): void {
+export function installContentSecurityPolicy(isProductionRenderer: boolean): void {
   const policy = (
-    isPackaged
+    isProductionRenderer
       ? [
           "default-src 'self'",
           "script-src 'self'",

@@ -130,8 +130,11 @@ app.whenReady().then(() => {
   // The app ships a single dark theme; force dark native chrome (title bar,
   // menus) so it doesn't follow a light OS appearance.
   nativeTheme.themeSource = 'dark'
-  // Set the renderer CSP before any window loads its content.
-  installContentSecurityPolicy(app.isPackaged)
+  // Set the renderer CSP before any window loads its content. Gate the strict
+  // policy on the production-renderer signal (no dev-server URL), not
+  // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
+  // unpackaged) still exercise the strict production CSP.
+  installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
   ensureDataDir()
   loadConfig()
   initSession()
