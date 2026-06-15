@@ -12,19 +12,28 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
         <p className="about-version">Version {__APP_VERSION__}</p>
         <p className="about-desc">Multi-backend AI image generation queue.</p>
         <div className="about-links">
+          {/* Raw target="_blank" navigation is denied by the window-open handler
+              (harden-window.ts), so route external links through the OS browser
+              via the IPC bridge, like the rest of the app. */}
           <a
             href="https://github.com/nao7sep/imagequeue"
-            target="_blank"
             rel="noreferrer"
             className="about-link"
+            onClick={(e) => {
+              e.preventDefault()
+              window.electronAPI.openExternal(e.currentTarget.href)
+            }}
           >
             GitHub ↗
           </a>
           <a
             href="https://github.com/nao7sep/imagequeue/issues"
-            target="_blank"
             rel="noreferrer"
             className="about-link"
+            onClick={(e) => {
+              e.preventDefault()
+              window.electronAPI.openExternal(e.currentTarget.href)
+            }}
           >
             Report Issue ↗
           </a>
