@@ -75,27 +75,26 @@ export function registerQueueIpc(): void {
     const task = queueManager.getTask(backend, taskId)
     const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
     log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
-    let filesDeleted = false
+    // File removal is best-effort: whatever happens on disk, the user asked to delete
+    // the task, so the queue entry is always removed (and broadcast) afterwards — a
+    // failed/partial file removal must never leave the queue diverged from disk.
     if (task?.baseName) {
       const ext = imageExtFromPath(task.imagePath)
-      if (!ext) {
-        log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
-        return
-      }
-      try {
-        if (toTrash) {
-          await trashImageOutput(task.baseName, ext)
-        } else {
-          deleteImageOutput(task.baseName, ext)
+      if (ext) {
+        try {
+          if (toTrash) {
+            await trashImageOutput(task.baseName, ext)
+          } else {
+            deleteImageOutput(task.baseName, ext)
+          }
+        } catch (err) {
+          log('error', 'Failed to remove task files; removing the queue entry anyway', { taskId, toTrash, error: serializeError(err) })
         }
-        filesDeleted = true
-      } catch (err) {
-        log('error', 'Failed to remove task files', { taskId, toTrash, error: serializeError(err) })
-        return
+      } else {
+        log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
       }
     } else {
-      log('warn', 'Cannot delete files: task has no baseName', { taskId, backend })
-      return
+      log('warn', 'Task has no baseName; nothing to remove on disk', { taskId, backend })
     }
     queueManager.removeTask(backend, taskId)
     persistActiveSession()
