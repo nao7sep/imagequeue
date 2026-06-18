@@ -5,19 +5,17 @@ import { execFile, spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { loadConfig } from './config'
+import { loadConfig, getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { CliStatus, LocalModelInfo, CustomJsonStatus } from '../shared/types'
 
 export type { CliStatus, LocalModelInfo, CustomJsonStatus }
 
-const DEFAULT_MODELS_DIR = path.join(os.homedir(), '.imagequeue', 'models')
-
 /** Resolve the effective models directory. Empty config uses ImageQueue's private models dir. */
 export function resolveModelsDir(): string {
   const config = loadConfig()
   const dir = config.image_backends.drawthings.models_dir
-  if (!dir) return DEFAULT_MODELS_DIR
+  if (!dir) return getDefaultModelsDir()
   return dir.replace(/^~/, os.homedir())
 }
 
@@ -187,9 +185,13 @@ export async function ensureModel(modelFile: string): Promise<EnsureModelResult>
   })
 }
 
-/** Get the default models directory path (for display in UI/config). */
+/**
+ * ImageQueue's private models directory, under the storage root and so honoring
+ * IMAGEQUEUE_HOME. Used when no `drawthings.models_dir` is configured, and shown
+ * in the settings UI as the default.
+ */
 export function getDefaultModelsDir(): string {
-  return DEFAULT_MODELS_DIR
+  return path.join(getDataDir(), 'models')
 }
 
 /**
