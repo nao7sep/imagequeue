@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { decodeApiKey } from '../config/api-key'
+import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 
@@ -9,10 +9,10 @@ import { findModel } from '../../shared/models'
 // the first image part as a Buffer along with its MIME-type hint. The Gemini
 // API may return either PNG or JPEG bytes; callers should rely on the hint
 // (and magic-byte detection) rather than assuming a fixed format.
-// Uses image_backends.nanobanana.api_key (not the text_ai key).
+// Uses the 'image.nanobanana' secret (its own key, not the text_ai key).
 export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.nanobanana.api_key)
+  const apiKey = resolveApiKey('image.nanobanana')
 
   if (!apiKey) {
     throw new Error('Nano Banana API key not configured')

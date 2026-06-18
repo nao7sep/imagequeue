@@ -1,16 +1,16 @@
 import { GoogleGenAI } from '@google/genai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { decodeApiKey } from '../config/api-key'
+import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 
 // Calls Google Imagen API and returns the image bytes plus the MIME-type
 // hint reported by the SDK.
-// Uses image_backends.imagen.api_key (not the text_ai key).
+// Uses the 'image.imagen' secret (its own key, not the text_ai key).
 export async function generateImagen(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.imagen.api_key)
+  const apiKey = resolveApiKey('image.imagen')
 
   if (!apiKey) {
     throw new Error('Imagen API key not configured')

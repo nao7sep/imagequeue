@@ -1,26 +1,29 @@
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
 import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
-
-const DATA_DIR = path.join(os.homedir(), '.imagequeue')
-const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
+import { resolveStorageRoot } from './storage-root'
 
 let cachedConfig: AppConfig | null = null
 
+// The storage root is resolved lazily (honoring IMAGEQUEUE_HOME) rather than
+// frozen into a module-level constant at import time, so the override is read
+// once the environment is fully known. resolveStorageRoot mkdir -p's the root.
 export function getDataDir(): string {
-  return DATA_DIR
+  return resolveStorageRoot()
 }
 
 export function getConfigPath(): string {
-  return CONFIG_PATH
+  return path.join(getDataDir(), 'config.json')
 }
 
 export function ensureDataDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true })
+  // resolveStorageRoot already creates the root (and throws on an unusable
+  // override); calling it here keeps ensureDataDir an idempotent startup
+  // checkpoint that fails loudly on an unusable IMAGEQUEUE_HOME.
+  resolveStorageRoot()
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -52,13 +55,14 @@ export function loadConfig(): AppConfig {
 
   ensureDataDir()
 
-  if (!fs.existsSync(CONFIG_PATH)) {
+  const configPath = getConfigPath()
+  if (!fs.existsSync(configPath)) {
     const defaults = createDefaultConfig()
     saveConfig(defaults)
     return defaults
   }
 
-  const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
+  const raw = fs.readFileSync(configPath, 'utf-8')
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -69,8 +73,8 @@ export function loadConfig(): AppConfig {
     // settings, and the next saveConfig would overwrite the still-recoverable
     // file. The caller — app startup, or an IPC handler via the boundary
     // wrapper — surfaces the clear error.
-    log('error', 'Failed to parse config file', { path: CONFIG_PATH, error: serializeError(err) })
-    throw new Error(`Config file is not valid JSON: ${CONFIG_PATH}`, { cause: err })
+    log('error', 'Failed to parse config file', { path: configPath, error: serializeError(err) })
+    throw new Error(`Config file is not valid JSON: ${configPath}`, { cause: err })
   }
   const merged = deepMergeDefaults(parsed, createDefaultConfig())
   // If the merge filled in any new keys (e.g., a setting added since this
@@ -84,9 +88,25 @@ export function loadConfig(): AppConfig {
   return merged
 }
 
+// API keys live in the separate 0600 api-keys.json (config/api-keys-store.ts),
+// never in config.json. This blanks any api_key field — including a stale one
+// read from an older config.json — so the persisted settings file is always
+// key-free. Mutates in place; callers pass a config they own (a fresh default,
+// or the cache which is then re-cached key-free).
+function scrubApiKeys(config: AppConfig): void {
+  if (config.text_ai?.gemini) config.text_ai.gemini.api_key = ''
+  if (config.text_ai?.openai) config.text_ai.openai.api_key = ''
+  const backends = config.image_backends as unknown as Record<string, { api_key?: string }>
+  for (const backend of Object.values(backends ?? {})) {
+    if (backend && typeof backend === 'object' && 'api_key' in backend) backend.api_key = ''
+  }
+}
+
 export function saveConfig(config: AppConfig): void {
   ensureDataDir()
-  writeJsonAtomic(CONFIG_PATH, config)
+  scrubApiKeys(config)
+  const configPath = getConfigPath()
+  writeJsonAtomic(configPath, config)
   cachedConfig = config
-  log('info', 'Config saved', { path: CONFIG_PATH })
+  log('info', 'Config saved', { path: configPath })
 }

@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import type { Elaborator, ElaboratorKind } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
+import { writeJsonAtomic } from './utils/atomic-write'
 
 function getElaboratorsFilePath(): string {
   ensureDataDir()
@@ -372,7 +373,10 @@ function readFile(): Elaborator[] | null {
 }
 
 function writeFile(items: Elaborator[]): void {
-  fs.writeFileSync(getElaboratorsFilePath(), JSON.stringify(items, null, 2), 'utf-8')
+  // elaborators.json is a persisted store under the storage root; write it
+  // atomically (temp + rename) so a crash mid-write can't leave a truncated
+  // file that the next load would reject as malformed. Mirrors config.json.
+  writeJsonAtomic(getElaboratorsFilePath(), items)
 }
 
 export function listElaborators(): Elaborator[] {

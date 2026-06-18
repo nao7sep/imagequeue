@@ -1,6 +1,6 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { decodeApiKey } from '../config/api-key'
+import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
@@ -10,7 +10,7 @@ const POLL_INTERVAL_MS = 2000
 // plus the Content-Type reported by the signed-URL download.
 export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.flux.api_key)
+  const apiKey = resolveApiKey('image.flux')
 
   if (!apiKey) {
     throw new Error('FLUX API key not configured')

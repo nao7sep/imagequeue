@@ -1,5 +1,5 @@
 import { loadConfig } from '../config'
-import { decodeApiKey } from '../config/api-key'
+import { resolveApiKey } from '../config/api-keys-store'
 import { GeminiProvider } from './gemini'
 import { OpenAIProvider } from './openai'
 import type { TextAIProvider } from './types'
@@ -33,8 +33,8 @@ function buildProviderHandle(tier: Tier): ProviderHandle | null {
   const backend = text_ai.backend
 
   if (backend === 'gemini') {
-    const { api_key, timeout_ms, light_model, main_model } = text_ai.gemini
-    const apiKey = decodeApiKey(api_key)
+    const { timeout_ms, light_model, main_model } = text_ai.gemini
+    const apiKey = resolveApiKey('text_ai.gemini')
     if (!apiKey) return null
     const modelId = tier === 'light' ? light_model : main_model
     return {
@@ -46,8 +46,8 @@ function buildProviderHandle(tier: Tier): ProviderHandle | null {
   }
 
   if (backend === 'openai') {
-    const { api_key, endpoint, timeout_ms, light_model, main_model } = text_ai.openai
-    const apiKey = decodeApiKey(api_key)
+    const { endpoint, timeout_ms, light_model, main_model } = text_ai.openai
+    const apiKey = resolveApiKey('text_ai.openai')
     if (!apiKey) return null
     const modelId = tier === 'light' ? light_model : main_model
     return {

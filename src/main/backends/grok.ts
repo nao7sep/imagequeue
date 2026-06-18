@@ -1,6 +1,6 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { decodeApiKey } from '../config/api-key'
+import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 
 // Calls the xAI Grok Imagine image generation API and returns the image bytes
@@ -8,7 +8,7 @@ import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 // selection is available.
 export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.grok.api_key)
+  const apiKey = resolveApiKey('image.grok')
 
   if (!apiKey) {
     throw new Error('Grok Imagine API key not configured')

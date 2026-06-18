@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { decodeApiKey } from '../config/api-key'
+import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { buildOpenAIImageParams } from './openai-request'
 
@@ -9,7 +9,7 @@ import { buildOpenAIImageParams } from './openai-request'
 // MIME-type hint derived from the user-selected output_format.
 export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = decodeApiKey(config.image_backends.openai.api_key)
+  const apiKey = resolveApiKey('image.openai')
 
   if (!apiKey) {
     throw new Error('OpenAI API key not configured')

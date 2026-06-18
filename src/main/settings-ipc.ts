@@ -2,7 +2,8 @@ import { BrowserWindow, shell, dialog, app, clipboard, nativeImage } from 'elect
 import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
-import { loadConfig, saveConfig, encodeApiKey, decodeApiKey, getDataDir } from './config'
+import { loadConfig, saveConfig, getDataDir } from './config'
+import { getStoredApiKey, setStoredApiKey, type SecretId } from './config/api-keys-store'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
@@ -52,10 +53,17 @@ const settingsRootFields = new Set<string>([
   'notifications',
   'prompts',
 ])
-const encodedApiKeyPaths = new Set<string>([
-  'text_ai.gemini.api_key',
-  'text_ai.openai.api_key',
-  ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => `image_backends.${backend}.api_key`),
+// API keys are NOT stored in config.json. Each config path that the UI binds to
+// an api_key field maps to a SecretId in the separate 0600 api-keys.json store
+// (see config/api-keys-store.ts). settings:get reads the stored value back into
+// these fields for editing; settings:saveChangedFields routes a changed value to
+// the store and never lets it reach config.json.
+const apiKeyConfigPathToSecret = new Map<string, SecretId>([
+  ['text_ai.gemini.api_key', 'text_ai.gemini'],
+  ['text_ai.openai.api_key', 'text_ai.openai'],
+  ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map(
+    (backend) => [`image_backends.${backend}.api_key`, `image.${backend}` as SecretId] as const
+  ),
 ])
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -66,12 +74,15 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-function valueForConfigPath(pathParts: string[], value: unknown): unknown {
-  return encodedApiKeyPaths.has(pathParts.join('.')) ? encodeApiKey(String(value ?? '')) : value
-}
-
 function setConfigPath(target: Record<string, unknown>, pathParts: string[], value: unknown): void {
   if (pathParts.length === 0) return
+  // API keys are diverted to the separate 0600 secrets file and never written
+  // into config.json. A blank value clears the stored key.
+  const secret = apiKeyConfigPathToSecret.get(pathParts.join('.'))
+  if (secret) {
+    setStoredApiKey(secret, String(value ?? ''))
+    return
+  }
   let cursor = target
   for (const part of pathParts.slice(0, -1)) {
     const next = cursor[part]
@@ -80,7 +91,7 @@ function setConfigPath(target: Record<string, unknown>, pathParts: string[], val
     }
     cursor = cursor[part] as Record<string, unknown>
   }
-  cursor[pathParts[pathParts.length - 1]] = valueForConfigPath(pathParts, value)
+  cursor[pathParts[pathParts.length - 1]] = value
 }
 
 function applyChangedFields(
@@ -117,14 +128,15 @@ function applyChangedFields(
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
   handle('settings:get', () => {
-    // Clone before mutating so the in-memory cache keeps encoded keys.
-    // (loadConfig returns a reference to its internal cache; mutating it directly
-    //  causes the next call to decode an already-decoded key, producing garbage.)
+    // Clone the cached config so we never mutate the in-memory instance, then
+    // overlay the api_key fields from the separate secrets store (the only place
+    // keys live). The stored — not the environment — value is surfaced so editing
+    // never silently overwrites an env-supplied key.
     const config = JSON.parse(JSON.stringify(loadConfig())) as AppConfig
-    config.text_ai.gemini.api_key = decodeApiKey(config.text_ai.gemini.api_key)
-    config.text_ai.openai.api_key = decodeApiKey(config.text_ai.openai.api_key)
+    config.text_ai.gemini.api_key = getStoredApiKey('text_ai.gemini')
+    config.text_ai.openai.api_key = getStoredApiKey('text_ai.openai')
     for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-      config.image_backends[backend].api_key = decodeApiKey(config.image_backends[backend].api_key)
+      config.image_backends[backend].api_key = getStoredApiKey(`image.${backend}` as SecretId)
     }
     return config
   })
