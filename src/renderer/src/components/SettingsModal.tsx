@@ -3,6 +3,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { formatUiDateTime } from '../utils/formatDateTime'
+import { multiline } from '../utils/textCleanup'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
 import type { FluxModelDef } from '../../../shared/models'
 import type { RecommendationStatus } from '../../../shared/types'
@@ -55,7 +56,14 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     if (!config || !baseConfig) return
     setErrorMessage(null)
     try {
-      await saveChangedSettings(baseConfig, config)
+      // Clean the slug template (a multiline body) at this commit point before
+      // diffing against base, so the stored and compared value is the tidy one.
+      const prompts = config.prompts as Record<string, string>
+      const cleaned =
+        typeof prompts?.slug === 'string'
+          ? { ...config, prompts: { ...prompts, slug: multiline(prompts.slug) } }
+          : config
+      await saveChangedSettings(baseConfig, cleaned)
       onClose()
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : String(e))

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
+import { singleLine, multiline } from '../utils/textCleanup'
 import {
   PROMPT_FORMATS,
   PROMPT_LENGTHS,
@@ -39,6 +40,17 @@ interface BrainstormConfig {
 
 function cloneDirectives(d: FormatDirectives): FormatDirectives {
   return { formats: { ...d.formats }, lengths: { ...d.lengths } }
+}
+
+// Single-line cleanup for every format/length directive — these are scalar
+// sentences, so flatten any pasted line break and trim, keeping interior
+// horizontal spacing. Applied at the Save commit point.
+function cleanDirectives(d: FormatDirectives): FormatDirectives {
+  const mapValues = <K extends string>(rec: Record<K, string>): Record<K, string> =>
+    Object.fromEntries(
+      (Object.entries(rec) as [K, string][]).map(([k, v]) => [k, singleLine(v)])
+    ) as Record<K, string>
+  return { formats: mapValues(d.formats), lengths: mapValues(d.lengths) }
 }
 
 function fromConfig(cfg: BrainstormConfig): BrainstormForm {
@@ -185,12 +197,20 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     setBusy(true)
     setMessage('')
     try {
+      // Clean at this commit point: templates are multiline bodies (tidy
+      // edges/trailing whitespace, keep interior structure); format and length
+      // directives are scalar sentences (single-line — flatten pasted line
+      // breaks, keep horizontal spacing).
       const next = {
         batch_size: form.batch_size,
         max_retries_per_turn: form.max_retries_per_turn,
         retry_backoff_ms: backoff.value,
-        templates: { ...form.templates },
-        format_directives: cloneDirectives(form.format_directives),
+        templates: {
+          first_no_previous: multiline(form.templates.first_no_previous),
+          first_with_previous: multiline(form.templates.first_with_previous),
+          continuation: multiline(form.templates.continuation),
+        },
+        format_directives: cleanDirectives(form.format_directives),
       }
       // Main logs `Config saved` whenever the config file is rewritten, so
       // there's nothing extra to record from the renderer side here.

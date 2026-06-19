@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
 import { useImeGuard } from '../utils/imeGuard'
+import { singleLine, multiline } from '../utils/textCleanup'
 import type { Elaborator, ElaboratorKind } from '../../../shared/types'
 import { ELABORATOR_KIND_LABELS } from '../../../shared/types'
 import './ElaboratorsModal.css'
@@ -128,20 +129,29 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     setBusy(true)
     setMessage('')
     try {
+      // Clean at this commit point: name/description are scalar single-line
+      // fields (flatten pasted line breaks, keep horizontal spacing); the
+      // template is a multiline body (tidy edges/trailing whitespace, keep
+      // interior structure). The empty-name guard above already ran on the raw
+      // value, and singleLine only normalizes, so the cleaned name stays
+      // non-empty here.
+      const name = singleLine(draft.name)
+      const description = singleLine(draft.description)
+      const template = multiline(draft.template)
       let savedId: string | null = null
       if (draftTarget.mode === 'edit' && draftTarget.id) {
         const updated = await window.electronAPI.updateElaborator(draftTarget.id, {
-          name: draft.name,
-          description: draft.description,
-          template: draft.template,
+          name,
+          description,
+          template,
         })
         savedId = updated?.id ?? draftTarget.id
       } else {
         const created = await window.electronAPI.createElaborator({
           kind: draftTarget.kind,
-          name: draft.name,
-          description: draft.description || undefined,
-          template: draft.template,
+          name,
+          description: description || undefined,
+          template,
         })
         savedId = created.id
       }

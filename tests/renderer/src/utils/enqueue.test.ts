@@ -49,9 +49,11 @@ describe('buildEnqueueRequest', () => {
     expect(buildEnqueueRequest('openai', 'a cat', readySnapshot({ ready: false }))).toBeNull()
   })
 
-  it('builds a trimmed, count-1 request carrying the snapshot model and params', () => {
+  it('builds a multiline-cleaned, count-1 request carrying the snapshot model and params', () => {
     const snapshot = readySnapshot()
-    expect(buildEnqueueRequest('openai', '  a cat  ', snapshot)).toEqual({
+    // Multiline cleanup: edge blank lines drop, trailing whitespace trims, and
+    // interior line structure (and leading indentation) is preserved.
+    expect(buildEnqueueRequest('openai', '\n\na cat  \n\n', snapshot)).toEqual({
       prompt: 'a cat',
       backend: 'openai',
       model: snapshot.model,

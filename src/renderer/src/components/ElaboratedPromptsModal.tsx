@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
+import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
 import './ElaboratedPromptsModal.css'
 
 interface Props {
@@ -134,7 +135,11 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
               return (
                 <li key={row.id} className="elaborated-prompts-row" {...getOptionProps(row.id)}>
                   <div className="elaborated-prompts-number" aria-hidden="true">{displayNumber}.</div>
-                  <div className="elaborated-prompts-text">{row.prompt}</div>
+                  {/* One-line preview: flatten + cap to a generous budget; CSS
+                      clamps visually, the full prompt lives in the title tooltip. */}
+                  <div className="elaborated-prompts-text" title={row.prompt}>
+                    {truncate(row.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
+                  </div>
                   <button
                     type="button"
                     tabIndex={-1}

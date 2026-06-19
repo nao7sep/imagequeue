@@ -1,4 +1,5 @@
 import type { BackendId, EnqueueRequest } from '../../../shared/types'
+import { multiline } from './textCleanup'
 
 export interface EnqueueConfigSnapshot {
   model: string
@@ -33,8 +34,10 @@ export function buildEnqueueRequest(
   prompt: string,
   snapshot: EnqueueConfigSnapshot | undefined
 ): EnqueueRequest | null {
-  const text = prompt.trim()
-  if (!text) return null
+  // Image prompts are multiline bodies; clean at this commit point (keep line
+  // structure, just tidy edges and trailing whitespace), then guard on empty.
+  const text = multiline(prompt)
+  if (!text.trim()) return null
   if (!snapshot || !snapshot.ready) return null
   return { prompt: text, backend, model: snapshot.model, params: snapshot.params, count: 1 }
 }

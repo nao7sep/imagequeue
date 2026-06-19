@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { getVisibleBackends } from '../utils/visibleBackends'
 import { useImeGuard } from '../utils/imeGuard'
+import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
 import { isAnyModalOpen } from './modalStack'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import './PromptPane.css'
@@ -268,7 +269,11 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
               <span className="metadata-toggle-chevron" aria-hidden="true">▸</span>
               <span className="metadata-toggle-model">{selectedTask.model}</span>
               <span className="metadata-toggle-sep"> · </span>
-              <span className="metadata-toggle-prompt">{selectedTask.prompt}</span>
+              {/* One-line prompt preview: flatten + cap to a generous budget; CSS
+                  clamps visually, the full prompt lives in the title tooltip. */}
+              <span className="metadata-toggle-prompt" title={selectedTask.prompt}>
+                {truncate(selectedTask.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
+              </span>
             </button>
           ) : (
             <div className="preview-metadata" onClick={() => setDetailsOpen(false)}>

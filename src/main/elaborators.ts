@@ -394,11 +394,13 @@ export function createElaborator(input: {
   template: string
 }): Elaborator {
   const items = listElaborators()
+  // The renderer commit path (ElaboratorsModal.saveDraft) already cleans these
+  // via textCleanup; here we only guard the no-content edge cases.
   const created: Elaborator = {
     id: `elab-${nanoid(10)}`,
     kind: input.kind,
-    name: input.name.trim() || 'Untitled',
-    description: input.description?.trim() || undefined,
+    name: input.name || 'Untitled',
+    description: input.description || undefined,
     template: input.template,
   }
   const firstIndexOfKind = items.findIndex((item) => item.kind === input.kind)
@@ -419,10 +421,12 @@ export function updateElaborator(
   const index = items.findIndex((item) => item.id === id)
   if (index < 0) return null
   const current = items[index]
+  // Patch values arrive already cleaned from the renderer commit path; guard
+  // only the no-content edge cases (empty name falls back to the current one).
   const next: Elaborator = {
     ...current,
-    name: patch.name !== undefined ? patch.name.trim() || current.name : current.name,
-    description: patch.description !== undefined ? (patch.description.trim() || undefined) : current.description,
+    name: patch.name !== undefined ? patch.name || current.name : current.name,
+    description: patch.description !== undefined ? (patch.description || undefined) : current.description,
     template: patch.template !== undefined ? patch.template : current.template,
   }
   items[index] = next

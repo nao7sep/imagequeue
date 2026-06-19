@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
+import { multiline } from '../utils/textCleanup'
 import {
   MAX_DRAFT_ITERATIONS,
   normalizeCount,
@@ -371,9 +372,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       const brainstormed = isBrainstormMode(promptMode)
       let prompts: string[] = []
       if (promptMode === 'as-is') {
-        prompts = [seed.trim()]
+        // Reused prompt bodies — clean as multiline at this commit point.
+        prompts = [multiline(seed)]
       } else if (promptMode === 'elaborated') {
-        prompts = [elaborated.trim()]
+        prompts = [multiline(elaborated)]
       } else if (promptMode === 'fresh-iteration') {
         prompts = await runBrainstorm(copies)
       } else {

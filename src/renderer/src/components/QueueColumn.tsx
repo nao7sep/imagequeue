@@ -27,6 +27,7 @@ import {
   type GrokResolution
 } from '../../../shared/models'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
+import { singleLine, truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
 import { useAutosavedImageBackendDefaults } from '../hooks/useAutosavedImageBackendDefaults'
 import {
   normalizeOpenAiDimension,
@@ -526,7 +527,11 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       }
       const parsedSeed = localSeed ? Number.parseInt(localSeed, 10) : NaN
       if (!Number.isNaN(parsedSeed)) params.seed = parsedSeed
-      if (negativePrompt) params.negativePrompt = negativePrompt
+      // The negative prompt is a scalar field; clean it (flatten any pasted line
+      // break, keep horizontal spacing) at this snapshot/commit point, then guard
+      // emptiness on the cleaned value so an all-whitespace entry is dropped.
+      const cleanedNegativePrompt = singleLine(negativePrompt)
+      if (cleanedNegativePrompt) params.negativePrompt = cleanedNegativePrompt
       return params
     }
     if (backendId === 'grok') {
@@ -1120,6 +1125,11 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const removeTitle = task.status === 'completed' ? 'Mark as kept and remove from active list' : 'Remove from queue'
   const statusLabel = task.status === 'kept' ? 'kept' : task.status
 
+  // One-line prompt preview: flatten the (possibly multiline) prompt to a single
+  // line and cap the carried text at a generous grapheme budget. CSS still does
+  // the visual ellipsis; the full prompt stays in the title tooltip.
+  const promptPreview = truncate(task.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text
+
   return (
     <div
       className={[
@@ -1155,7 +1165,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
       )}
       <div className="task-info">
         <div className="task-prompt" title={task.prompt}>
-          {task.prompt}
+          {promptPreview}
         </div>
         <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
           <span
