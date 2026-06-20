@@ -6,7 +6,11 @@
 
 .left-pane {
   flex: 1;
-  min-width: 0;
+  /* Real content minimum (mirrors LEFT_PANE_MIN_PX in shared/layout-metrics.ts —
+     keep in sync; the window minimum is derived from it). Overrides the flex
+     default that lets a flex item shrink below its content so the prompt/preview
+     pane can never be squeezed out. */
+  min-width: 360px;
   display: flex;
   flex-direction: column;
   background: var(--pane-bg);

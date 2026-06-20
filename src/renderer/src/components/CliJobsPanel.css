@@ -97,24 +97,8 @@
   padding-top: 5px;
   max-height: calc(1.5em * 3 + 5px);
   overflow-y: auto;
-}
-
-/* Always-visible thin scrollbar (WebKit/Electron) */
-.cli-job-log-tail::-webkit-scrollbar {
-  width: 4px;
-}
-
-.cli-job-log-tail::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.cli-job-log-tail::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
-}
-
-.cli-job-log-tail::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  /* Scroll-bar styling is global (styles.css), per window-chrome-conventions —
+     no per-component scroll-bar rule here. */
 }
 
 .cli-job-tail-line {

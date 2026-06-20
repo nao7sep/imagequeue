@@ -1,5 +1,10 @@
 .queue-column {
   width: 220px;
+  /* Per-column floor (mirrors COLUMN_MIN_PX in shared/layout-metrics.ts — keep
+     in sync; the window minimum reserves one of these per visible backend). The
+     small-screen width below equals this floor, so a column never shrinks below
+     the point where its model row + enqueue button stop being usable. */
+  min-width: 160px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

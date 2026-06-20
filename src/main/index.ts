@@ -19,6 +19,7 @@ import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
+import { buildMainWindowOptions } from './window-options'
 
 let mainWin: BrowserWindow | null = null
 
@@ -55,12 +56,14 @@ process.on('unhandledRejection', (reason) => {
 })
 
 function createWindow(): void {
+  // Chrome + sizing come from the pure buildMainWindowOptions: the window
+  // minimum is DERIVED from the shared pane minimums plus the platform-dependent
+  // visible-column count (see shared/layout-metrics), never a magic literal, so
+  // the window can't be shrunk small enough to truncate a pane. themeSource is
+  // applied to nativeTheme in app.whenReady() from the same source.
+  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(process.platform)
   const win = new BrowserWindow({
-    width: 1280,
-    height: 720,
-    minWidth: 1200,
-    minHeight: 600,
-    backgroundColor: '#1a1a2e',
+    ...windowOptions,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -128,8 +131,10 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   // The app ships a single dark theme; force dark native chrome (title bar,
-  // menus) so it doesn't follow a light OS appearance.
-  nativeTheme.themeSource = 'dark'
+  // menus) so it doesn't follow a light OS appearance. The value comes from the
+  // same window-options source createWindow uses, so chrome theme and window
+  // sizing stay defined in one place.
+  nativeTheme.themeSource = buildMainWindowOptions(process.platform).themeSource
   // Set the renderer CSP before any window loads its content. Gate the strict
   // policy on the production-renderer signal (no dev-server URL), not
   // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
