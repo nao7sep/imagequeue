@@ -21,10 +21,6 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 - **Cost estimates** — rough pre-run cost for the proprietary backends
 - **Stays awake during long runs**, with optional toast and sound notifications on completion
 
-## Window chrome & sizing
-
-The app is dark throughout, including the native title bar, on every platform — it never follows a light OS appearance. The window opens at its default size on each launch (size is not remembered) and cannot be shrunk small enough to hide or truncate any pane: its minimum size is **derived** from the prompt/preview pane and backend columns' own minimums plus the inter-pane chrome, so the minimum and the layout can never disagree. Because Draw Things is macOS-only, the minimum width is one column narrower off macOS. The derivation lives in `src/shared/layout-metrics.ts`; the CSS pane minimums mirror those constants and a test keeps them in sync.
-
 ## Requirements
 
 - Node.js 20+
