@@ -3,7 +3,6 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   width: min(1120px, 92vw);
-  height: min(760px, 84vh);
   max-width: 92vw;
   max-height: 84vh;
   display: flex;

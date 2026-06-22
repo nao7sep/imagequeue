@@ -1,8 +1,7 @@
 .advanced-modal-box {
   width: 95vw;
   max-width: 1500px;
-  height: 88vh;
-  max-height: 850px;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
 }
