@@ -31,9 +31,20 @@ npmRebuild: false
 asarUnpack:
   - '**/node_modules/node-pty/**'
 
+# Tahoe "Liquid Glass" icon: ship the pre-compiled asset catalog (committed in
+# company/assets, deployed here by the liquid-glass-icon tool) into Contents/Resources.
+# macOS 26 reads CFBundleIconName below → this catalog; older macOS falls back to
+# CFBundleIconFile → build/icon.icns (mac.icon). Building does NOT need Xcode — the
+# Assets.car is prebuilt; only re-generating the icon does.
+extraResources:
+  - from: build/Assets.car
+    to: Assets.car
+
 mac:
   category: public.app-category.graphics-design
   icon: build/icon.icns
+  extendInfo:
+    CFBundleIconName: image-grid-charcoal
   target:
     - dmg
   # No Apple Developer certificate available. Do NOT set identity:null — that
