@@ -1,7 +1,6 @@
 import { BrowserWindow, IpcMainInvokeEvent, screen } from 'electron'
 import path from 'path'
 import { handle } from './ipc-boundary'
-import { reassertDevDockIconAfterRepaint } from './dock-icon'
 import { hardenWindow } from './utils/harden-window'
 
 let viewerWin: BrowserWindow | null = null
@@ -195,11 +194,6 @@ async function hideViewer(): Promise<void> {
 
   await hidePromise
   if (wasVisible) {
-    // Leaving the viewer's kiosk mode lets the Dock reappear, which makes macOS
-    // asynchronously rebuild the Dock tile and drop our dev icon overlay. A
-    // single re-assert here loses the race, so schedule deferred ones that land
-    // after the repaint. See dock-icon.ts for the full rationale.
-    reassertDevDockIconAfterRepaint()
     notifyMainWin('viewer:closed')
     focusMainWin()
   }

@@ -14,7 +14,6 @@ import { initLogger, log, setLoggerDebug, serializeError, shouldEnableDebugLoggi
 import { updateRecommendationsAtLaunch } from './recommendations'
 import { killAllCliJobs } from './cli-jobs'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
-import { applyDevDockIcon } from './dock-icon'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
@@ -171,13 +170,11 @@ app.whenReady().then(() => {
   startWakeLockMonitor()
 
   createWindow()
-  applyDevDockIcon()
 
   app.on('activate', () => {
     if (!mainWin || mainWin.isDestroyed()) {
       createWindow()
     }
-    applyDevDockIcon()
   })
 })
 
