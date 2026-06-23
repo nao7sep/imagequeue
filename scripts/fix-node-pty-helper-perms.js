@@ -1,40 +1,40 @@
-const fs = require('fs')
-const path = require('path')
+const fs = require("node:fs");
+const path = require("node:path");
 
-// node-pty ships a prebuilt `spawn-helper` executable, but npm extraction can
-// drop its exec bit, which makes pty spawns fail with EACCES at runtime (the
-// Draw Things import jobs use a pty). Restore the bit here. macOS only —
-// Windows node-pty uses conpty/winpty and has no spawn-helper.
-if (process.platform !== 'darwin') process.exit(0)
+// node-pty spawns ptys through a `spawn-helper` executable (the Draw Things import
+// jobs use a pty). A copied or re-extracted node_modules can land it without its
+// exec bit, and node-pty then fails at runtime with an opaque EACCES. node-pty
+// resolves the helper from whichever of build/Release, build/Debug, or
+// prebuilds/<platform>-<arch>/ won the install — so chmod every spawn-helper it
+// ships rather than guessing the active one. Scanning the package tree (not a
+// hard-coded subdir) is what keeps this correct across node-pty layout changes.
+// macOS only — Windows uses conpty/winpty and has no spawn-helper.
+if (process.platform !== "darwin") process.exit(0);
 
-const prebuildsDir = path.join(__dirname, '..', 'node_modules', 'node-pty', 'prebuilds')
-if (!fs.existsSync(prebuildsDir)) process.exit(0) // node-pty not installed
+const ptyDir = path.join(__dirname, "..", "node_modules", "node-pty");
+if (!fs.existsSync(ptyDir)) process.exit(0); // node-pty not installed
 
-// Discover every spawn-helper under prebuilds/ rather than hardcoding the
-// per-arch paths, so an arch addition or layout change doesn't silently skip it.
-function findSpawnHelpers(dir) {
-  const found = []
+const helpers = [];
+(function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) found.push(...findSpawnHelpers(full))
-    else if (entry.name === 'spawn-helper') found.push(full)
+    if (entry.isDirectory()) {
+      if (entry.name !== "node_modules") walk(path.join(dir, entry.name));
+    } else if (entry.name === "spawn-helper") {
+      helpers.push(path.join(dir, entry.name));
+    }
   }
-  return found
-}
+})(ptyDir);
 
-const helpers = findSpawnHelpers(prebuildsDir)
 if (helpers.length === 0) {
-  // node-pty is installed but ships no spawn-helper where we look — its prebuild
-  // layout has likely changed. Warn loudly here rather than let pty spawns fail
-  // with an opaque EACCES at runtime; the path in this script needs revisiting.
-  console.warn(`[fix-node-pty-helper-perms] node-pty present but no spawn-helper found under ${prebuildsDir}`)
-  process.exit(0)
+  // node-pty is present but ships no spawn-helper anywhere we looked — its layout
+  // has changed enough that this guard no longer finds the file. Warn rather than
+  // let pty spawns fail with an opaque EACCES at runtime.
+  console.warn("[fix-node-pty-helper-perms] node-pty present but no spawn-helper found; this guard may need revisiting.");
+  process.exit(0);
 }
 
-for (const helperPath of helpers) {
-  const stat = fs.statSync(helperPath)
-  const nextMode = stat.mode | 0o111
-  if (nextMode !== stat.mode) {
-    fs.chmodSync(helperPath, nextMode)
-  }
+for (const helper of helpers) {
+  const { mode } = fs.statSync(helper);
+  const withExec = mode | 0o111;
+  if (withExec !== mode) fs.chmodSync(helper, withExec);
 }

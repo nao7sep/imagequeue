@@ -5,7 +5,7 @@ set -euo pipefail
 # and launch that bundle. Slow — run this after changing source. The build runs
 # the production type checks and re-bundles from clean, so type, import, CSP, and
 # packaged-layout errors that run-dev hides surface here; packaging then gives the
-# app its own bundle identity (correct dock/menu name and icon). run-built is the
+# app its own bundle identity (correct dock/menu name). run-built is the
 # fast, no-build launcher for everything after this.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -66,9 +66,9 @@ log_step "Building production bundle"
 node_modules/.bin/electron-vite build
 
 # Package the built output into a real .app bundle — the .app only, no dmg/zip
-# installer; electron-builder ad-hoc-signs on macOS by default. The bundle is what
-# gives the app its own identity, so the dock and menu show "ImageQueue" rather
-# than the generic "Electron".
+# installer; electron-builder ad-hoc-signs on macOS by default. The bundle gives
+# the app its own identity, so the dock and menu show "ImageQueue" rather than the
+# generic "Electron".
 log_step "Packaging the app bundle"
 node_modules/.bin/electron-builder --dir
 
