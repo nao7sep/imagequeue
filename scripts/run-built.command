@@ -10,6 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_NAME="ImageQueue"
+OUT_DIR="dist"
 
 log_step() {
   printf '\n==> %s\n' "$1"
@@ -30,9 +31,9 @@ cd "$REPO_DIR"
 
 # No build here: this launcher must start instantly. If there is no usable bundle
 # yet, stop and point at rebuild rather than launching something stale or empty.
-APP_BUNDLE="$(find dist -maxdepth 2 -name "$APP_NAME.app" -type d 2>/dev/null | head -1 || true)"
+APP_BUNDLE="$(find "$OUT_DIR" -maxdepth 2 -name "$APP_NAME.app" -type d 2>/dev/null | head -1 || true)"
 if [[ -z "$APP_BUNDLE" || ! -d "$APP_BUNDLE/Contents/MacOS" ]]; then
-  echo "No packaged app found (dist/mac*/$APP_NAME.app is missing) — run rebuild first."
+  echo "No packaged app found ($OUT_DIR/mac*/$APP_NAME.app is missing) — run rebuild first."
   exit 1
 fi
 

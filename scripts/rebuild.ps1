@@ -49,7 +49,8 @@ function Invoke-Native {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $appName = "ImageQueue"
-$exePath = Join-Path $repoDir "dist/win-unpacked/$appName.exe"
+$outDir = "dist"
+$exePath = Join-Path $repoDir "$outDir/win-unpacked/$appName.exe"
 
 try {
     Set-Utf8Console
@@ -72,7 +73,7 @@ try {
     # a leftover artifact from a previous run.
     Write-Step "Cleaning previous build"
     if (Test-Path "out") { Remove-Item -Recurse -Force "out" }
-    if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+    if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
 
     # The release build type-checks the shipped sources (main/preload + renderer);
     # the dev server skips this entirely. Tests are checked separately and are not
@@ -91,7 +92,7 @@ try {
     Invoke-Native -FilePath "node_modules/.bin/electron-builder.cmd" -ArgumentList @("--dir")
 
     if (-not (Test-Path $exePath)) {
-        throw "Packaging did not produce $appName.exe under dist/win-unpacked/."
+        throw "Packaging did not produce $appName.exe under $outDir/win-unpacked/."
     }
 
     # GUI app: launch non-blocking via Start-Process.

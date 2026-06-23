@@ -11,6 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_NAME="ImageQueue"
+OUT_DIR="dist"
 
 log_step() {
   printf '\n==> %s\n' "$1"
@@ -52,7 +53,7 @@ fi
 # Remove stale output so a build that fails to emit a file can't be masked by a
 # leftover artifact from a previous run.
 log_step "Cleaning previous build"
-rm -rf out dist
+rm -rf out "$OUT_DIR"
 
 # The release build type-checks the shipped sources (main/preload + renderer);
 # the dev server skips this entirely. Tests are checked separately and are not
@@ -71,9 +72,9 @@ node_modules/.bin/electron-vite build
 log_step "Packaging the app bundle"
 node_modules/.bin/electron-builder --dir
 
-APP_BUNDLE="$(find dist -maxdepth 2 -name "$APP_NAME.app" -type d 2>/dev/null | head -1 || true)"
+APP_BUNDLE="$(find "$OUT_DIR" -maxdepth 2 -name "$APP_NAME.app" -type d 2>/dev/null | head -1 || true)"
 if [[ -z "$APP_BUNDLE" ]]; then
-  echo "Packaging did not produce $APP_NAME.app under dist/." >&2
+  echo "Packaging did not produce $APP_NAME.app under $OUT_DIR/." >&2
   exit 1
 fi
 

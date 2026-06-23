@@ -27,7 +27,8 @@ function Write-Step {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $appName = "ImageQueue"
-$exePath = Join-Path $repoDir "dist/win-unpacked/$appName.exe"
+$outDir = "dist"
+$exePath = Join-Path $repoDir "$outDir/win-unpacked/$appName.exe"
 
 try {
     Set-Utf8Console
@@ -38,7 +39,7 @@ try {
     # bundle yet, stop and point at rebuild rather than launching something stale
     # or empty.
     if (-not (Test-Path $exePath)) {
-        throw "No packaged app found (dist/win-unpacked/$appName.exe is missing). Run rebuild first."
+        throw "No packaged app found ($outDir/win-unpacked/$appName.exe is missing). Run rebuild first."
     }
 
     $builtAt = (Get-Item $exePath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
