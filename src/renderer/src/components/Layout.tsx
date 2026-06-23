@@ -50,10 +50,11 @@ export function Layout(): React.JSX.Element {
   // shortcuts from stacking a second modal or firing under an open one.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      // While an IME candidate is pending, the keystroke belongs to the composition: Escape cancels
+      // the candidate, and the mod-chords below must not fire on it either (text-input-and-IME).
+      if (isImeComposing(e)) return
+
       if (e.key === 'Escape') {
-        // During an IME composition, Escape cancels the composition and belongs
-        // to the IME — it must not also clear the selection here.
-        if (isImeComposing(e)) return
         if (!overlay) clear()
         return
       }
