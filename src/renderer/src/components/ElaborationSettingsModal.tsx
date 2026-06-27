@@ -238,7 +238,16 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
   if (!form) {
     return (
-      <Modal title="Elaboration Settings" className="elaboration-settings-modal-box" onClose={onClose}>
+      <Modal
+        title="Elaboration Settings"
+        className="elaboration-settings-modal-box"
+        onClose={onClose}
+        footer={
+          <button className="modal-btn" onClick={onClose}>
+            Close
+          </button>
+        }
+      >
         <div className="elaboration-settings-body">
           <div className="elaboration-settings-empty">Loading…</div>
         </div>
@@ -247,7 +256,19 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   }
 
   return (
-    <Modal title="Elaboration Settings" className="elaboration-settings-modal-box" onClose={handleCancel}>
+    <Modal
+      title="Elaboration Settings"
+      className="elaboration-settings-modal-box"
+      onClose={handleCancel}
+      footer={
+        <>
+          <button className="modal-btn" onClick={handleCancel} disabled={busy}>Cancel</button>
+          <button className="modal-btn modal-btn-primary" onClick={() => void handleSave()} disabled={busy || !dirty}>
+            Save
+          </button>
+        </>
+      }
+    >
       <div className="elaboration-settings-body">
         <div className="elaboration-settings-section">
           <div className="elaboration-settings-row">
@@ -353,15 +374,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             Reset to Defaults
           </button>
         </div>
-      </div>
-      <div className="elaboration-settings-footer">
         {message && <div className="elaboration-settings-message">{message}</div>}
-        <div className="elaboration-settings-footer-actions">
-          <button className="modal-btn" onClick={handleCancel} disabled={busy}>Cancel</button>
-          <button className="modal-btn modal-btn-primary" onClick={() => void handleSave()} disabled={busy || !dirty}>
-            Save
-          </button>
-        </div>
       </div>
     </Modal>
   )

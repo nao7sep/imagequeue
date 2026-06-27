@@ -7,10 +7,13 @@
 }
 
 .sessions-modal-body {
+  flex: 1;
+  min-height: 0;
   padding: 16px;
   overflow-y: auto;
   display: grid;
   gap: 12px;
+  align-content: start;
 }
 
 .sessions-modal-topbar {

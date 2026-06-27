@@ -4,6 +4,7 @@ import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig, saveConfig, getDataDir } from './config'
 import { getStoredApiKey, setStoredApiKey, type SecretId } from './config/api-keys-store'
+import { applyChangedFields } from './settings-changes'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
@@ -46,84 +47,6 @@ const notificationFields = new Set<string>([
   'success_file',
   'failure_file',
 ])
-const settingsRootFields = new Set<string>([
-  'text_ai',
-  'general',
-  'image_backends',
-  'notifications',
-  'prompts',
-])
-// API keys are NOT stored in config.json. Each config path that the UI binds to
-// an api_key field maps to a SecretId in the separate 0600 api-keys.json store
-// (see config/api-keys-store.ts). settings:get reads the stored value back into
-// these fields for editing; settings:saveChangedFields routes a changed value to
-// the store and never lets it reach config.json.
-const apiKeyConfigPathToSecret = new Map<string, SecretId>([
-  ['text_ai.gemini.api_key', 'text_ai.gemini'],
-  ['text_ai.openai.api_key', 'text_ai.openai'],
-  ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map(
-    (backend) => [`image_backends.${backend}.api_key`, `image.${backend}` as SecretId] as const
-  ),
-])
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function valuesEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
-}
-
-function setConfigPath(target: Record<string, unknown>, pathParts: string[], value: unknown): void {
-  if (pathParts.length === 0) return
-  // API keys are diverted to the separate 0600 secrets file and never written
-  // into config.json. A blank value clears the stored key.
-  const secret = apiKeyConfigPathToSecret.get(pathParts.join('.'))
-  if (secret) {
-    setStoredApiKey(secret, String(value ?? ''))
-    return
-  }
-  let cursor = target
-  for (const part of pathParts.slice(0, -1)) {
-    const next = cursor[part]
-    if (!isPlainObject(next)) {
-      cursor[part] = {}
-    }
-    cursor = cursor[part] as Record<string, unknown>
-  }
-  cursor[pathParts[pathParts.length - 1]] = value
-}
-
-function applyChangedFields(
-  target: Record<string, unknown>,
-  base: unknown,
-  next: unknown,
-  pathParts: string[] = []
-): void {
-  if (valuesEqual(base, next)) return
-
-  if (pathParts.length === 0) {
-    if (!isPlainObject(next)) throw new Error('Settings changes must be an object')
-    for (const key of Object.keys(next)) {
-      const baseValue = isPlainObject(base) ? base[key] : undefined
-      if (!settingsRootFields.has(key)) {
-        if (valuesEqual(baseValue, next[key])) continue
-        throw new Error(`Cannot save unsupported settings section: ${key}`)
-      }
-      applyChangedFields(target, baseValue, next[key], [key])
-    }
-    return
-  }
-
-  if (isPlainObject(next)) {
-    for (const key of Object.keys(next)) {
-      applyChangedFields(target, isPlainObject(base) ? base[key] : undefined, next[key], [...pathParts, key])
-    }
-    return
-  }
-
-  setConfigPath(target, pathParts, next)
-}
 
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
@@ -143,7 +66,10 @@ export function registerSettingsIpc(): void {
 
   handle('settings:saveChangedFields', (_event, base: AppConfig, next: AppConfig) => {
     const config = loadConfig()
-    applyChangedFields(config as unknown as Record<string, unknown>, base, next)
+    const secretWrites = applyChangedFields(config as unknown as Record<string, unknown>, base, next)
+    for (const { secret, value } of secretWrites) {
+      setStoredApiKey(secret, value)
+    }
     saveConfig(config)
     return { success: true }
   })
@@ -228,6 +154,10 @@ export function registerSettingsIpc(): void {
     return getDefaultModelsDir()
   })
 
+  // Opening the models directory doubles as the way to remove an imported model: the Draw Things
+  // CLI has no models-delete verb (only `list`/`ensure`/`import`), so deletion is a manual file
+  // removal here — and an import can drop companion files beside the checkpoint, so removing one
+  // means deleting the whole artifact set, not just the .ckpt.
   handle('local:openModelsDir', () => {
     const dir = resolveModelsDir()
     fs.mkdirSync(dir, { recursive: true })

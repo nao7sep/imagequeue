@@ -550,6 +550,11 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       className="advanced-modal-box"
       closeOnBackdropClick={false}
       onClose={() => void handleRequestClose()}
+      footer={
+        <button className="modal-btn" onClick={() => void handleRequestClose()}>
+          Cancel
+        </button>
+      }
     >
       <div className={`advanced-body${isMacPlatform ? '' : ' advanced-body-no-dt'}`}>
         <div className="advanced-pane">

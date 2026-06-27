@@ -211,7 +211,7 @@
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--font-mono);
   white-space: nowrap;
   flex-shrink: 0;
 }

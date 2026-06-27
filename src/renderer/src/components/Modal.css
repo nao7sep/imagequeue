@@ -70,12 +70,24 @@
   white-space: pre-wrap;
 }
 
-.confirm-actions {
+/* Shared footer action row, owned by the Modal shell (passed via its `footer`
+   prop). Stays fixed at the bottom; right-aligned so the dismiss button sits
+   next to the primary action with minimal cursor travel. */
+.modal-footer {
+  flex-shrink: 0;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+/* A leading footer item — a status message or a destructive action — pushed to
+   the left so the dismiss/commit buttons stay right-aligned beside each other. */
+.modal-footer > .modal-footer-lead {
+  margin-right: auto;
 }
 
 /* Unified action button used inside modal bodies. Three variants. */

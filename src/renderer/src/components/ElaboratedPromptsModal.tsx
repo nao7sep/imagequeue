@@ -116,7 +116,24 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   }, [confirm, clearElaboratedPrompts, elaboratedPrompts.length])
 
   return (
-    <Modal title="Elaborated Prompts" className="elaborated-prompts-modal-box" onClose={onClose}>
+    <Modal
+      title="Elaborated Prompts"
+      className="elaborated-prompts-modal-box"
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            className="modal-btn modal-btn-danger modal-footer-lead"
+            onClick={() => void handleClearAll()}
+            disabled={elaboratedPrompts.length === 0}
+          >
+            Delete All
+          </button>
+          <button type="button" className="modal-btn" onClick={onClose}>Close</button>
+        </>
+      }
+    >
       <div className="elaborated-prompts-body">
         {elaboratedPrompts.length === 0 ? (
           <div className="elaborated-prompts-empty">
@@ -154,17 +171,6 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
             })}
           </ol>
         )}
-      </div>
-      <div className="elaborated-prompts-footer">
-        <button
-          type="button"
-          className="modal-btn modal-btn-danger"
-          onClick={() => void handleClearAll()}
-          disabled={elaboratedPrompts.length === 0}
-        >
-          Delete All
-        </button>
-        <button type="button" className="modal-btn" onClick={onClose}>Close</button>
       </div>
     </Modal>
   )

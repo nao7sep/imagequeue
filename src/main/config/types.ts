@@ -136,6 +136,9 @@ export interface BrainstormConfig {
 }
 
 export interface GeneralConfig {
+  // The app's UI (chrome) font family. Family only; blank means the built-in default stack (the
+  // renderer's `--font-ui` variable). Applied app-wide via that variable.
+  ui_font_family: string
   auto_preview_idle_seconds: number
   export_dir: string
   confirm_remove: boolean

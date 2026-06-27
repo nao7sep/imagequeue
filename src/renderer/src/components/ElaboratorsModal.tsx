@@ -332,7 +332,16 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   }
 
   return (
-    <Modal title="Elaborators" className="elaborators-modal-box" onClose={() => void handleRequestClose()}>
+    <Modal
+      title="Elaborators"
+      className="elaborators-modal-box"
+      onClose={() => void handleRequestClose()}
+      footer={
+        <button className="modal-btn" onClick={() => void handleRequestClose()}>
+          Close
+        </button>
+      }
+    >
       <div className="elaborators-body">
         {message && <div className="elaborators-message">{message}</div>}
         <div className="elaborators-grid">

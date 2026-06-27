@@ -95,7 +95,16 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   }, [refreshRecommendationStatus])
 
   if (!config) return (
-    <Modal title="Settings" className="settings-modal-box" onClose={handleClose}>
+    <Modal
+      title="Settings"
+      className="settings-modal-box"
+      onClose={handleClose}
+      footer={
+        <button className="modal-btn" onClick={() => void handleClose()}>
+          Close
+        </button>
+      }
+    >
       <div className="settings-overlay">Loading…</div>
     </Modal>
   )
@@ -202,10 +211,31 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   }
 
   return (
-    <Modal title="Settings" className="settings-modal-box" onClose={handleClose}>
+    <Modal
+      title="Settings"
+      className="settings-modal-box"
+      onClose={handleClose}
+      footer={
+        <>
+          {errorMessage && <span className="modal-footer-lead settings-error">{errorMessage}</span>}
+          <button className="modal-btn" onClick={() => void handleClose()}>Cancel</button>
+          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>Save</button>
+        </>
+      }
+    >
       <div className="settings-overlay">
       <div className="settings-section">
         <h3>General</h3>
+        <div className="settings-field">
+          <label>UI font</label>
+          <input
+            type="text"
+            placeholder="Default"
+            value={(general.ui_font_family as string) ?? ''}
+            onChange={(e) => updateGeneral('ui_font_family', e.target.value)}
+          />
+          <p className="settings-hint">The app interface font. Comma-separated families; the first one your system has is used. Blank uses the built-in default.</p>
+        </div>
         <div className="settings-field">
           <label>Auto-preview (s)</label>
           <input
@@ -719,12 +749,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
-      </div>
-
-      <div className="settings-footer">
-        {errorMessage && <span className="settings-status settings-error">{errorMessage}</span>}
-        <button className="modal-btn" onClick={() => void handleClose()}>Cancel</button>
-        <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>Save</button>
       </div>
     </Modal>
   )

@@ -15,21 +15,6 @@
   min-height: 0;
 }
 
-.elaboration-settings-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--bg-hover);
-  background: var(--bg-surface);
-  flex-shrink: 0;
-}
-
-.elaboration-settings-footer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
 
 .elaboration-settings-empty {
   font-size: 13px;
@@ -64,7 +49,7 @@
   background: var(--bg-surface);
   padding: 1px 5px;
   border-radius: 3px;
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--font-mono);
 }
 
 .elaboration-settings-row {
@@ -107,7 +92,7 @@
 .elaboration-settings-tags {
   font-size: 11px;
   color: var(--text-muted);
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--font-mono);
 }
 
 .elaboration-settings-template textarea {

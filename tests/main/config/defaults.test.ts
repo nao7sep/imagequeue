@@ -25,6 +25,14 @@ describe('createDefaultConfig', () => {
     const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
     expect(legacy.general.keep_awake_during_work).toBe(true)
   })
+
+  // The UI font defaults to blank (meaning the built-in --font-ui stack), and a pre-existing config
+  // without the key inherits that blank via deepMergeDefaults rather than breaking the load.
+  it('defaults the UI font to blank and backfills it for an older config', () => {
+    expect(createDefaultConfig().general.ui_font_family).toBe('')
+    const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
+    expect(legacy.general.ui_font_family).toBe('')
+  })
 })
 
 // The {{FORMAT}} directive lives in config now (not code), so its contract is

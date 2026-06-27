@@ -6,7 +6,15 @@ interface Props {
 
 export function AboutModal({ onClose }: Props): React.JSX.Element {
   return (
-    <Modal title="About" onClose={onClose}>
+    <Modal
+      title="About"
+      onClose={onClose}
+      footer={
+        <button className="modal-btn" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
       <div className="about-content">
         <div className="about-name">ImageQueue</div>
         <p className="about-version">Version {__APP_VERSION__}</p>

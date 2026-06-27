@@ -10,20 +10,16 @@ import {
   RecommendationOperationResult,
   RecommendationStatus
 } from '../shared/types'
+import {
+  RecommendationSpec,
+  findRecommendedSettings,
+  parseRecommendationBytes,
+  recommendedParamsFromMatch
+} from './recommendation-match'
 
 const RECOMMENDATIONS_URL = 'https://models.drawthings.ai/configs.json'
 const DATA_DIR = 'data'
 const RECOMMENDATIONS_FILE = 'configs.json'
-const QUANT_SUFFIXES = new Set(['f16', 'svd', 'q5p', 'q6p', 'q8p', 'i8x'])
-
-interface RecommendationSpec {
-  name: string
-  version?: string
-  negative?: string
-  configuration: Record<string, unknown>
-}
-
-type MatchPredicate = (spec: RecommendationSpec) => boolean
 
 export function getRecommendationsDir(): string {
   return path.join(getDataDir(), DATA_DIR)
@@ -100,20 +96,7 @@ export function resolveRecommendedParams(model: string): RecommendedParams | nul
   if (parsed.error !== null || parsed.specs.length === 0) return null
   const match = findRecommendedSettings(model, parsed.specs)
   if (!match) return null
-
-  const configuration = match.spec.configuration
-  return {
-    width: numberValue(configuration.width),
-    height: numberValue(configuration.height),
-    steps: numberValue(configuration.steps),
-    guidance: numberValue(configuration.guidanceScale),
-    negativePrompt: typeof match.spec.negative === 'string'
-      ? match.spec.negative.trim()
-      : null,
-    matchName: match.spec.name,
-    matchModel: typeof configuration.model === 'string' ? configuration.model : null,
-    matchType: match.type
-  }
+  return recommendedParamsFromMatch(match)
 }
 
 function writeRecommendationsIfChanged(
@@ -211,125 +194,6 @@ function parseRecommendationFile(filePath: string): { specs: RecommendationSpec[
   } catch (err) {
     return { specs: [], error: (err as Error).message }
   }
-}
-
-function parseRecommendationBytes(data: Buffer): RecommendationSpec[] {
-  const parsed = JSON.parse(data.toString('utf-8')) as unknown
-  if (!Array.isArray(parsed)) return []
-  return parsed.filter(isRecommendationSpec)
-}
-
-function isRecommendationSpec(value: unknown): value is RecommendationSpec {
-  if (value === null || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
-  return typeof record.name === 'string' &&
-    record.configuration !== null &&
-    typeof record.configuration === 'object' &&
-    !Array.isArray(record.configuration)
-}
-
-function findRecommendedSettings(
-  model: string,
-  configurations: RecommendationSpec[]
-): { spec: RecommendationSpec; type: RecommendedParams['matchType'] } | null {
-  const version = versionForModel(model)
-  const modelPrefix = prefixFor(model)
-
-  const exactOrPrefix = matchWithLoRAs(
-    configurations,
-    new Set<string>(),
-    (spec) => spec.configuration.model === model,
-    (spec) => {
-      const configModel = spec.configuration.model
-      return typeof configModel === 'string' &&
-        modelPrefix.length > 0 &&
-        prefixFor(configModel) === modelPrefix
-    }
-  )
-  if (exactOrPrefix) {
-    return {
-      spec: exactOrPrefix,
-      type: exactOrPrefix.configuration.model === model ? 'exact' : 'prefix'
-    }
-  }
-
-  const parent = matchWithLoRAs(configurations, new Set<string>(), (spec) => {
-    const configModel = spec.configuration.model
-    if (typeof configModel !== 'string' || modelPrefix.length === 0) return false
-    const configPrefix = prefixFor(configModel)
-    return configPrefix.length > 0 && modelPrefix.startsWith(`${configPrefix}_`)
-  })
-  if (parent) return { spec: parent, type: 'prefix-parent' }
-
-  if (version) {
-    const versionMatch = matchWithLoRAs(configurations, new Set<string>(), (spec) => spec.version === version)
-    if (versionMatch) return { spec: versionMatch, type: 'version' }
-  }
-
-  return null
-}
-
-function matchWithLoRAs(
-  configurations: RecommendationSpec[],
-  loras: Set<string>,
-  first: MatchPredicate,
-  second?: MatchPredicate
-): RecommendationSpec | null {
-  if (loras.size === 0) {
-    return configurations.find(first) ?? (second ? configurations.find(second) : undefined) ?? null
-  }
-
-  const withMatchingLoRAs = (predicate: MatchPredicate): RecommendationSpec | undefined =>
-    configurations.find((spec) => {
-      if (!predicate(spec)) return false
-      const configLoras = spec.configuration.loras
-      if (!Array.isArray(configLoras)) return false
-      const files = new Set(
-        configLoras
-          .map((entry) => entry && typeof entry === 'object' ? (entry as Record<string, unknown>).file : null)
-          .filter((file): file is string => typeof file === 'string')
-      )
-      return [...loras].every((file) => files.has(file))
-    })
-
-  return withMatchingLoRAs(first) ??
-    (second ? withMatchingLoRAs(second) : undefined) ??
-    configurations.find(first) ??
-    (second ? configurations.find(second) : undefined) ??
-    null
-}
-
-function prefixFor(file: string): string {
-  const stem = path.basename(file, path.extname(file))
-  if (!stem) return ''
-  const components = stem.split('_')
-  while (components.length > 0 && QUANT_SUFFIXES.has(components[components.length - 1])) {
-    components.pop()
-  }
-  return components.join('_')
-}
-
-function versionForModel(model: string): string | null {
-  const prefix = prefixFor(model).toLowerCase()
-  if (prefix.includes('flux_2_klein_4b')) return 'flux2_4b'
-  if (prefix.includes('flux_2_klein_9b')) return 'flux2_9b'
-  if (prefix.includes('flux_2')) return 'flux2'
-  if (prefix.includes('flux_1') || prefix.includes('flux1')) return 'flux1'
-  if (prefix.includes('qwen_image') || prefix.startsWith('qwen')) return 'qwen_image'
-  if (prefix.includes('z_image') || prefix.startsWith('z_')) return 'z_image'
-  if (prefix.includes('hidream')) return 'hidream_i1'
-  if (prefix.includes('hunyuan')) return 'hunyuan_video'
-  if (prefix.includes('wan_v2.1_14b') || prefix.includes('wan_2.1_14b')) return 'wan_v2.1_14b'
-  if (prefix.includes('ltx_2') || prefix.includes('ltx2')) return 'ltx2'
-  if (prefix.includes('sdxl')) return 'sdxl_base_v0.9'
-  if (prefix.includes('ernie_image')) return 'ernie_image'
-  if (prefix.includes('cosmos') || prefix.includes('anima')) return 'cosmos2.5_2b'
-  if (prefix.startsWith('sd_') || prefix.startsWith('v1_')) return 'v1'
-  return null
-}
-
-function numberValue(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 export function expandHome(value: string): string {

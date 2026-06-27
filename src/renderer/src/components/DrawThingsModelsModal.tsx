@@ -238,6 +238,11 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       title="Draw Things Models"
       className="dt-modal-box"
       onClose={() => { void handleRequestClose() }}
+      footer={
+        <button className="modal-btn" onClick={() => { void handleRequestClose() }}>
+          Close
+        </button>
+      }
     >
       <div className="dt-modal-body">
         <div className="dt-model-columns">

@@ -13,6 +13,7 @@ import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 import { getVisibleBackends } from '../utils/visibleBackends'
+import { nextSelectionAfterRemoval } from '../utils/selection-recovery'
 
 export interface Selection {
   backend: BackendId
@@ -101,65 +102,17 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     setSelectionInternal(null, { userInitiated: true })
   }, [setSelectionInternal])
 
-  // For fallback after removal: compute next selection BEFORE removing.
-  // General recovery: next in column, then previous in column, then the nearest
-  // task in the adjacent column (rightward, then leftward) by visual nearness.
-  const computeNextAfterRemoval = (target: Selection): Selection | null => {
-    const map = tasksRef.current
-    const list = map[target.backend]
-    const idx = list.findIndex((t) => t.id === target.taskId)
-
-    // 1. Same column, downward
-    if (idx >= 0 && idx + 1 < list.length) {
-      return { backend: target.backend, taskId: list[idx + 1].id }
-    }
-    // 2. Same column, upward
-    if (idx > 0) {
-      return { backend: target.backend, taskId: list[idx - 1].id }
-    }
-
-    // 3 & 4. Adjacent columns by visual nearness
-    const removedEl = getTaskElement(target.taskId)
-    const removedRect = removedEl?.getBoundingClientRect()
-    const removedCy = removedRect ? removedRect.top + removedRect.height / 2 : null
-
-    const colIdx = visibleBackends.indexOf(target.backend)
-    if (colIdx < 0) return null
-
-    const findNearestInCol = (b: BackendId): Selection | null => {
-      const colTasks = map[b]
-      if (!colTasks || colTasks.length === 0) return null
-      if (removedCy === null) {
-        return { backend: b, taskId: colTasks[0].id }
-      }
-      let bestId: string | null = null
-      let bestDist = Infinity
-      for (const t of colTasks) {
-        const el = getTaskElement(t.id)
-        if (!el) continue
-        const r = el.getBoundingClientRect()
-        const cy = r.top + r.height / 2
-        const d = Math.abs(cy - removedCy)
-        if (d < bestDist) {
-          bestDist = d
-          bestId = t.id
-        }
-      }
-      return { backend: b, taskId: bestId ?? colTasks[0].id }
-    }
-
-    // 3. Rightward
-    for (let i = colIdx + 1; i < visibleBackends.length; i++) {
-      const next = findNearestInCol(visibleBackends[i])
-      if (next) return next
-    }
-    // 4. Leftward
-    for (let i = colIdx - 1; i >= 0; i--) {
-      const next = findNearestInCol(visibleBackends[i])
-      if (next) return next
-    }
-    return null
-  }
+  // For fallback after removal: compute next selection BEFORE removing. The pure
+  // recovery algorithm (same-column next/prev, then nearest in an adjacent column)
+  // lives in selection-recovery.ts; this wrapper supplies the live task lists and
+  // the DOM geometry — a row's vertical center, measured before the row is gone.
+  const computeNextAfterRemoval = (target: Selection): Selection | null =>
+    nextSelectionAfterRemoval(target, tasksRef.current, visibleBackends, (taskId) => {
+      const el = getTaskElement(taskId)
+      if (!el) return null
+      const rect = el.getBoundingClientRect()
+      return rect.top + rect.height / 2
+    })
 
   // If the task being removed is the currently selected one, the fallback
   // picks the next one. Otherwise selection is left alone. When the gesture came

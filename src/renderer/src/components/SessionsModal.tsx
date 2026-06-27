@@ -221,7 +221,16 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   })
 
   return (
-    <Modal title="Sessions" className="sessions-modal-box" onClose={onClose}>
+    <Modal
+      title="Sessions"
+      className="sessions-modal-box"
+      onClose={onClose}
+      footer={
+        <button className="modal-btn" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
       <div className="sessions-modal-body">
         <div className="sessions-modal-topbar">
           <p className="sessions-modal-note">

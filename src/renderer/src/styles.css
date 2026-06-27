@@ -1,4 +1,10 @@
 :root {
+  /* Central fonts. --font-ui is the UI (chrome) font: the Settings → General "UI font" field
+     overrides it at runtime with a verbatim, engine-resolved family string; blank reverts to this
+     default. Family only — no UI font-size knob. --font-mono is the one canonical fixed-width stack,
+     replacing the divergent per-component mono chains (CLI log, code areas, keycaps). */
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
   --bg-primary: #1a1a2e;
   --bg-secondary: #16213e;
   --bg-surface: #0f3460;
@@ -76,7 +82,7 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   background: transparent;
   color: var(--text-primary);

@@ -14,7 +14,16 @@ export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
   const mod = isMac ? 'Cmd+' : 'Ctrl+'
 
   return (
-    <Modal title="Keyboard Shortcuts" className="shortcuts-modal-box" onClose={onClose}>
+    <Modal
+      title="Keyboard Shortcuts"
+      className="shortcuts-modal-box"
+      onClose={onClose}
+      footer={
+        <button className="modal-btn" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
       <div className="shortcuts-body">
         <div className="shortcut-group">
           <p className="shortcut-group-name">Sending</p>
@@ -36,7 +45,7 @@ export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
             <div className="shortcut-item"><span>Move up / down within the focused column (also in fullscreen viewer)</span><kbd>Up / Down</kbd></div>
             <div className="shortcut-item"><span>Switch to nearest task in adjacent column (also in fullscreen viewer)</span><kbd>Left / Right</kbd></div>
             <div className="shortcut-item"><span>First / last task in the focused column</span><kbd>Home / End</kbd></div>
-            <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Esc to close)</span><kbd>Space</kbd></div>
+            <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Escape to close)</span><kbd>Space</kbd></div>
             <div className="shortcut-item"><span>Remove task, keep selected completed image, or restore selected kept image</span><kbd>Backspace</kbd></div>
             <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete / {mod}Backspace</kbd></div>
           </div>
@@ -45,9 +54,9 @@ export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
           <p className="shortcut-group-name">App</p>
           <div className="shortcut-list">
             <div className="shortcut-item"><span>Settings</span><kbd>{mod}Comma</kbd></div>
-            <div className="shortcut-item"><span>Keyboard shortcuts</span><kbd>{mod}/</kbd></div>
+            <div className="shortcut-item"><span>Keyboard shortcuts</span><kbd>{mod}Slash</kbd></div>
             <div className="shortcut-item"><span>Show / hide kept images</span><kbd>{mod}Shift+K</kbd></div>
-            <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Esc</kbd></div>
+            <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Escape</kbd></div>
           </div>
         </div>
       </div>

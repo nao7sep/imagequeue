@@ -18,6 +18,17 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     window.electronAPI.getSettings().then((cfg) => setSettings(cfg as Record<string, unknown>))
   }, [])
 
+  // Apply the configured UI font by overriding the `--font-ui` CSS variable on :root; blank reverts
+  // to the styles.css default. The string is handed to CSS verbatim (engine-resolved, graceful
+  // fallback) per the app-chrome-conventions; the mono surfaces (--font-mono) are unaffected.
+  const uiFontFamily = (((settings?.general as Record<string, unknown> | undefined)?.ui_font_family) as string | undefined) ?? ''
+  useEffect(() => {
+    const family = uiFontFamily.trim()
+    const root = document.documentElement
+    if (family) root.style.setProperty('--font-ui', family)
+    else root.style.removeProperty('--font-ui')
+  }, [uiFontFamily])
+
   const refreshSettings = useCallback(async (): Promise<Record<string, unknown>> => {
     const fresh = await window.electronAPI.getSettings()
     const next = fresh as Record<string, unknown>

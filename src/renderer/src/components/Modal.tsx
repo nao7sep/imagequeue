@@ -8,6 +8,12 @@ interface ModalProps {
   onClose: () => void
   className?: string
   children: ReactNode
+  /**
+   * Footer action row. The shell renders it as a fixed band below the body, so
+   * a long scrolling body never pushes the Close/Cancel path out of reach. Pass
+   * the buttons (and any leading status) directly; the shell owns the band.
+   */
+  footer?: ReactNode
   closeOnBackdropClick?: boolean
 }
 
@@ -29,6 +35,7 @@ export function Modal({
   onClose,
   className,
   children,
+  footer,
   closeOnBackdropClick = true
 }: ModalProps): React.JSX.Element {
   const modalId = useId()
@@ -129,6 +136,7 @@ export function Modal({
           </div>
         )}
         {children}
+        {footer !== undefined && <div className="modal-footer">{footer}</div>}
       </div>
     </div>
   )

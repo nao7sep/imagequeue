@@ -2,6 +2,7 @@ import { BrowserWindow, screen } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
+import { loadConfig } from './config'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
 
@@ -117,15 +118,23 @@ function showNotification(type: 'success' | 'failure', _mainWin: BrowserWindow |
   // Lock immediately so a second rapid call is rejected while executeJavaScript is in-flight.
   isShowing = true
 
+  // The toast lives in its own window, so it can't read the renderer's --font-ui variable; apply the
+  // configured UI font here (read fresh each show, so it tracks settings changes). Blank keeps the
+  // window's baked-in default stack. The measure clone takes the same font so width stays accurate.
+  const uiFont = loadConfig().general.ui_font_family?.trim() ?? ''
+
   void win.webContents.executeJavaScript(
     `(function(){
       var t = document.getElementById('toast');
       var m = document.getElementById('toast-message');
       t.className = ${JSON.stringify(cssClass)};
       m.textContent = ${JSON.stringify(label)};
+      var font = ${JSON.stringify(uiFont)};
+      if (font) { t.style.fontFamily = font; }
 
       var measure = document.createElement('div');
       measure.className = ${JSON.stringify(cssClass)};
+      if (font) { measure.style.fontFamily = font; }
       measure.style.position = 'absolute';
       measure.style.left = '-10000px';
       measure.style.top = '-10000px';
