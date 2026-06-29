@@ -9,7 +9,7 @@ import { findModel } from '../../shared/models'
 // the first image part as a Buffer along with its MIME-type hint. The Gemini
 // API may return either PNG or JPEG bytes; callers should rely on the hint
 // (and magic-byte detection) rather than assuming a fixed format.
-// Uses the 'image.nanobanana' secret (its own key, not the text_ai key).
+// Uses the 'gemini.nanobanana' secret (its own key, not the text_ai key).
 export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('gemini.nanobanana')

@@ -7,7 +7,7 @@ import { findModel } from '../../shared/models'
 
 // Calls Google Imagen API and returns the image bytes plus the MIME-type
 // hint reported by the SDK.
-// Uses the 'image.imagen' secret (its own key, not the text_ai key).
+// Uses the 'gemini.imagen' secret (its own key, not the text_ai key).
 export async function generateImagen(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('gemini.imagen')
