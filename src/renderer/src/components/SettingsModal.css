@@ -254,16 +254,3 @@
 .recommendation-actions button:disabled {
   opacity: 0.5;
 }
-
-.recommendation-auto-update {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: auto;
-  font-size: 12px;
-  color: var(--text-primary);
-}
-
-.recommendation-auto-update input[type='checkbox'] {
-  margin: 0;
-}

@@ -79,6 +79,7 @@ export interface DrawThingsBackendConfig {
   }
   models_dir: string
   auto_update_recommendations: boolean
+  check_cli_updates: boolean
 }
 
 export interface NanoBananaBackendConfig {

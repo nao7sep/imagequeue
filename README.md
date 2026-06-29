@@ -23,9 +23,9 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20+ (to run from source)
 - macOS, Windows, or Linux (Draw Things support is macOS-only)
-- An API key for each cloud backend you use; Draw Things needs none
+- An API key for each cloud backend you use. Draw Things needs no API key, but requires Draw Things' `draw-things-cli` installed on macOS — the backend stays disabled until it's detected
 
 ## Getting started
 

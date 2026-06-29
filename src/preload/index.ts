@@ -8,6 +8,7 @@ import {
   EnqueueRequest,
   Task,
   CliStatus,
+  CliUpdateStatus,
   CustomJsonStatus,
   LocalModelInfo,
   RecommendedParams,
@@ -203,6 +204,9 @@ const api = {
   // Draw Things CLI operations (macOS only)
   localCheckCli: (): Promise<CliStatus> =>
     ipcRenderer.invoke('local:checkCli'),
+
+  localCheckCliUpdate: (): Promise<CliUpdateStatus> =>
+    ipcRenderer.invoke('local:checkCliUpdate'),
 
   localListDownloadedModels: (): Promise<LocalModelInfo[]> =>
     ipcRenderer.invoke('local:listDownloadedModels'),

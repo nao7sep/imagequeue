@@ -9,6 +9,7 @@ import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
 import { checkModelExists } from './backends'
+import { checkCliUpdate } from './cli-update'
 import {
   checkCli,
   listDownloadedModels,
@@ -128,6 +129,10 @@ export function registerSettingsIpc(): void {
 
   handle('local:checkCli', async () => {
     return checkCli()
+  })
+
+  handle('local:checkCliUpdate', async () => {
+    return checkCliUpdate()
   })
 
   handle('local:listDownloadedModels', async () => {

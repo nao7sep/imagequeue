@@ -7,6 +7,7 @@ import {
   EnqueueRequest,
   Task,
   CliStatus,
+  CliUpdateStatus,
   CustomJsonStatus,
   LocalModelInfo,
   RecommendedParams,
@@ -124,6 +125,7 @@ export interface ElectronAPI {
 
   // Draw Things CLI operations (macOS only)
   localCheckCli: () => Promise<CliStatus>
+  localCheckCliUpdate: () => Promise<CliUpdateStatus>
   localListDownloadedModels: () => Promise<LocalModelInfo[]>
   localListAvailableModels: () => Promise<LocalModelInfo[]>
   localReadCustomJsonImportedFiles: () => Promise<CustomJsonStatus>

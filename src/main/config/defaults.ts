@@ -100,7 +100,8 @@ export function createDefaultConfig(): AppConfig {
           seed: null,
         },
         models_dir: '',
-        auto_update_recommendations: true
+        auto_update_recommendations: true,
+        check_cli_updates: true
       }
     },
     notifications: {

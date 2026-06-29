@@ -223,17 +223,6 @@
   align-items: flex-start;
 }
 
-.model-warning code.install-hint {
-  display: block;
-  margin-top: 4px;
-  padding: 4px 6px;
-  background: var(--bg-surface);
-  border-radius: 3px;
-  font-size: 11px;
-  word-break: break-all;
-  color: var(--text-secondary);
-}
-
 .open-models-btn {
   padding: 2px 8px;
   border: 1px solid var(--border);

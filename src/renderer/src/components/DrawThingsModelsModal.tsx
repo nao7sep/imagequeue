@@ -2,17 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
 import { useCliJobs } from '../context/CliJobsContext'
 import { useListbox } from '../hooks/useListbox'
-import type { CustomJsonStatus } from '../../../shared/types'
+import type { CustomJsonStatus, LocalModelInfo } from '../../../shared/types'
 import { Modal } from './Modal'
+import { partitionDrawThingsModels } from '../utils/localModels'
 import './DrawThingsModelsModal.css'
-
-interface LocalModelInfo {
-  file: string
-  name: string
-  source: string
-  downloaded: boolean
-  huggingFace: string | null
-}
 
 interface Props {
   onClose: () => void
@@ -183,34 +176,19 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const loadingModels = loadingDownloaded || loadingAvailable
   const allModels = mergeModels(availableModels, downloadedModels)
 
-  // `custom.json` is the only fully trustworthy signal here: draw-things-cli
-  // reports `source: official` for every entry in custom.json, so its source
-  // column on its own cannot distinguish a downloaded import from a real
-  // official catalog download.
-  //
-  // - present: use the file set as ground truth.
-  // - absent: no imports exist yet (fresh install, or no imports ever made),
-  //   so the CLI's source column is safe to trust.
-  // - unreadable: custom.json is there but we can't parse it. We still
-  //   trust the CLI rather than flooding Local Imports with downloaded
-  //   official models, but we surface a warning so the user knows imports
-  //   in this state may be misclassified.
+  // custom.json is the import ground truth (the CLI mislabels every import as
+  // source:official). partitionDrawThingsModels splits on it; a custom.json model
+  // whose file was deleted is silently dropped rather than shown as a broken
+  // official download, and stays re-installable via the Import section below. When
+  // custom.json is unreadable we have no ground truth and surface a warning, since a
+  // downloaded import may then be misclassified as official.
   const customJsonFiles = customJsonStatus.kind === 'present'
     ? new Set(customJsonStatus.files)
     : null
-  const localImportFiles = new Set(
-    allModels
-      .filter((model) => {
-        if (!model.downloaded) return false
-        if (customJsonFiles === null) return false
-        return customJsonFiles.has(model.file)
-      })
-      .map((model) => model.file)
-  )
-  const catalogModels = allModels.filter((model) => !localImportFiles.has(model.file))
-  const localImportModels = sortModels(allModels.filter((model) => localImportFiles.has(model.file)))
-  const officialModels = sortCatalogModels(catalogModels.filter(isOfficialModel))
-  const communityCatalogModels = sortCatalogModels(catalogModels.filter((model) => !isOfficialModel(model)))
+  const { localImports, catalog } = partitionDrawThingsModels(allModels, customJsonFiles)
+  const localImportModels = sortModels(localImports)
+  const officialModels = sortCatalogModels(catalog.filter(isOfficialModel))
+  const communityCatalogModels = sortCatalogModels(catalog.filter((model) => !isOfficialModel(model)))
   const filteredOfficialModels = officialModels.filter((model) => matchesFilter(model, officialFilter))
   const filteredLocalImportModels = localImportModels.filter((model) => matchesFilter(model, communityFilter))
   const filteredCommunityCatalogModels = communityCatalogModels.filter((model) => matchesFilter(model, communityFilter))

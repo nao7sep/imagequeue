@@ -3,7 +3,7 @@ import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
-import type { BackendId, CloudBackendId, Task, CliStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
+import type { BackendId, CloudBackendId, Task, CliStatus, CliUpdateStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
 import { serializeError } from '../../../shared/serialize-error'
 import {
   getModelsForBackend,
@@ -171,6 +171,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
+  const [cliUpdate, setCliUpdate] = useState<CliUpdateStatus | null>(null)
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
@@ -280,8 +281,10 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       setCliStatus(status)
       if (!status.installed) {
         setDownloadedModels([])
+        setCliUpdate(null)
         return
       }
+      void window.electronAPI.localCheckCliUpdate().then(setCliUpdate)
       window.electronAPI.localListDownloadedModels().then((list) => {
         const sortedList = sortLocalModels(list)
         setDownloadedModels((prev) => {
@@ -936,9 +939,13 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
               <div className="setting-row model-warning">Checking CLI…</div>
             )}
             {cliStatus && !cliStatus.installed && cliStatus.platform === 'darwin' && (
-              <div className="setting-row model-warning">
-                Draw Things CLI not installed.
-                <code className="install-hint">brew install drawthingsai/draw-things/draw-things-cli</code>
+              <div className="setting-row model-warning" title="Install via Homebrew: brew install drawthingsai/draw-things/draw-things-cli">
+                Draw Things CLI not installed
+              </div>
+            )}
+            {cliStatus && cliStatus.installed && cliUpdate?.status === 'update-available' && (
+              <div className="setting-row model-warning" title="Update via Homebrew: brew upgrade draw-things-cli">
+                Draw Things CLI update available ({cliUpdate.installedVersion} → {cliUpdate.latestVersion})
               </div>
             )}
             {cliStatus && cliStatus.installed && (

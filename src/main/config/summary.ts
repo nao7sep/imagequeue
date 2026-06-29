@@ -45,6 +45,7 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
         cliPathSet: Boolean(drawthings?.cli_path),
         modelsDir: drawthings?.models_dir,
         autoUpdateRecommendations: drawthings?.auto_update_recommendations,
+        checkCliUpdates: drawthings?.check_cli_updates,
       },
     },
     general: {

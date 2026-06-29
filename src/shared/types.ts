@@ -34,6 +34,16 @@ export interface CliStatus {
   platform: 'darwin' | 'unsupported'
 }
 
+// Whether a newer Draw Things CLI release exists. The CLI is user-installed (we
+// don't deliver it), so this only detects and prompts — it never updates.
+// `unknown` covers offline, the check being disabled, and a `dev`/source build
+// whose version can't be compared to a release tag.
+export interface CliUpdateStatus {
+  installedVersion: string | null
+  latestVersion: string | null
+  status: 'up-to-date' | 'update-available' | 'unknown'
+}
+
 export interface LocalModelInfo {
   file: string
   name: string

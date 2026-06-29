@@ -660,6 +660,16 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <label>CLI Path</label>
           <input value={backends.drawthings.cli_path as string} onChange={(e) => updateBackend('drawthings', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />
         </div>
+        <div className="settings-field settings-field-full">
+          <label className="settings-panel-check">
+            <input
+              type="checkbox"
+              checked={(backends.drawthings.check_cli_updates as boolean) ?? false}
+              onChange={(e) => updateBackend('drawthings', 'check_cli_updates', e.target.checked)}
+            />
+            Check for Draw Things CLI updates
+          </label>
+        </div>
         <div className="settings-field">
           <label>Models Directory</label>
           <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use ~/.imagequeue/models" />
@@ -689,7 +699,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 Import
               </button>
             </div>
-            <label className="recommendation-auto-update">
+            <label className="settings-panel-check">
               <input
                 type="checkbox"
                 checked={(backends.drawthings.auto_update_recommendations as boolean) ?? false}
