@@ -1,6 +1,6 @@
 import { AppConfig } from './types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../shared/types'
-import { hasApiKey, type SecretId } from './api-keys-store'
+import { hasApiKey, IMAGE_BACKEND_SECRET } from './api-keys-store'
 
 // A secret-free summary of the effective configuration for the startup log
 // line. API keys are reduced to presence booleans and never logged — the raw
@@ -20,7 +20,7 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
     const backend = config.image_backends?.[id]
     cloudBackends[id] = {
       // Keys live in the separate secrets store (env-first), not config.json.
-      apiKeyPresent: hasApiKey(`image.${id}` as SecretId),
+      apiKeyPresent: hasApiKey(IMAGE_BACKEND_SECRET[id]),
       model: backend?.model,
       concurrency: backend?.concurrency,
       timeoutMs: backend?.timeout_ms,
@@ -33,9 +33,9 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
   return {
     textAi: {
       backend: textAi?.backend,
-      geminiApiKeyPresent: hasApiKey('text_ai.gemini'),
+      geminiApiKeyPresent: hasApiKey('gemini.text'),
       geminiMainModel: textAi?.gemini?.main_model,
-      openaiApiKeyPresent: hasApiKey('text_ai.openai'),
+      openaiApiKeyPresent: hasApiKey('openai.text'),
       openaiMainModel: textAi?.openai?.main_model,
       openaiEndpointOverride: Boolean(textAi?.openai?.endpoint),
     },

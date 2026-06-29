@@ -1,5 +1,5 @@
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../shared/types'
-import type { SecretId } from './config/api-keys-store'
+import { IMAGE_BACKEND_SECRET, type SecretId } from './config/api-keys-store'
 
 // The pure changed-field diff and secret routing behind settings:saveChangedFields,
 // split out of the Electron IPC shell so it can be tested against plain objects.
@@ -20,10 +20,10 @@ const settingsRootFields = new Set<string>([
 // api_key field maps to a SecretId in the separate store; a changed value is
 // routed there and never allowed to reach config.json.
 const apiKeyConfigPathToSecret = new Map<string, SecretId>([
-  ['text_ai.gemini.api_key', 'text_ai.gemini'],
-  ['text_ai.openai.api_key', 'text_ai.openai'],
+  ['text_ai.gemini.api_key', 'gemini.text'],
+  ['text_ai.openai.api_key', 'openai.text'],
   ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map(
-    (backend) => [`image_backends.${backend}.api_key`, `image.${backend}` as SecretId] as const
+    (backend) => [`image_backends.${backend}.api_key`, IMAGE_BACKEND_SECRET[backend]] as const
   ),
 ])
 

@@ -10,7 +10,7 @@ const POLL_INTERVAL_MS = 2000
 // plus the Content-Type reported by the signed-URL download.
 export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = resolveApiKey('image.flux')
+  const apiKey = resolveApiKey('bfl')
 
   if (!apiKey) {
     throw new Error('FLUX API key not configured')

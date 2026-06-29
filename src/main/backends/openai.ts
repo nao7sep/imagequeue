@@ -9,7 +9,7 @@ import { buildOpenAIImageParams } from './openai-request'
 // MIME-type hint derived from the user-selected output_format.
 export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = resolveApiKey('image.openai')
+  const apiKey = resolveApiKey('openai.image')
 
   if (!apiKey) {
     throw new Error('OpenAI API key not configured')

@@ -15,9 +15,9 @@ describe('summarizeConfig', () => {
   const originalHome = process.env[ENV_VAR]
   // Image-backend env overrides could otherwise mask the stored-key assertions.
   const maskedEnv = [
-    'IMAGEQUEUE_OPENAI_IMAGE_API_KEY',
+    'OPENAI_IMAGE_API_KEY',
     'OPENAI_API_KEY',
-    'IMAGEQUEUE_GEMINI_API_KEY',
+    'GEMINI_TEXT_API_KEY',
     'GEMINI_API_KEY',
   ]
   const savedEnv = new Map<string, string | undefined>()
@@ -45,7 +45,7 @@ describe('summarizeConfig', () => {
   it('includes every cloud backend and never leaks a raw api key', () => {
     const config = createDefaultConfig()
     // Keys live in the separate secrets store now, not config.json.
-    setStoredApiKey('image.openai', 'sk-super-secret')
+    setStoredApiKey('openai.image', 'sk-super-secret')
 
     const summary = summarizeConfig(config) as {
       imageBackends: Record<string, { apiKeyPresent: boolean }>

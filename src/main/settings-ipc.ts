@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig, saveConfig, getDataDir } from './config'
-import { getStoredApiKey, setStoredApiKey, type SecretId } from './config/api-keys-store'
+import { getStoredApiKey, setStoredApiKey, IMAGE_BACKEND_SECRET } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
@@ -57,10 +57,10 @@ export function registerSettingsIpc(): void {
     // keys live). The stored — not the environment — value is surfaced so editing
     // never silently overwrites an env-supplied key.
     const config = JSON.parse(JSON.stringify(loadConfig())) as AppConfig
-    config.text_ai.gemini.api_key = getStoredApiKey('text_ai.gemini')
-    config.text_ai.openai.api_key = getStoredApiKey('text_ai.openai')
+    config.text_ai.gemini.api_key = getStoredApiKey('gemini.text')
+    config.text_ai.openai.api_key = getStoredApiKey('openai.text')
     for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-      config.image_backends[backend].api_key = getStoredApiKey(`image.${backend}` as SecretId)
+      config.image_backends[backend].api_key = getStoredApiKey(IMAGE_BACKEND_SECRET[backend])
     }
     return config
   })

@@ -44,7 +44,7 @@ describe('applyChangedFields', () => {
       { text_ai: { gemini: { api_key: 'old', model: 'g' } } },
       { text_ai: { gemini: { api_key: 'new-key', model: 'g' } } }
     )
-    expect(secrets).toEqual([{ secret: 'text_ai.gemini', value: 'new-key' }])
+    expect(secrets).toEqual([{ secret: 'gemini.text', value: 'new-key' }])
     // The key must never be written into config (target) — only routed out.
     expect(target.text_ai.gemini.api_key).toBe('PLACEHOLDER')
   })

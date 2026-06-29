@@ -4,57 +4,79 @@ import { getDataDir } from './config-store'
 import { encodeApiKey, decodeApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 
-// Secrets live in their own file under the storage root, separate from
-// config.json, per the storage-path conventions. The file is 0600 on POSIX, an
-// environment value takes precedence over the stored value, and a
-// group/world-readable file is warned about (and tightened) on read.
+// The secret store, realized per the fleet api-key-storage-conventions. Secrets
+// live in their own file under the storage root (`~/.imagequeue/api-keys.json`),
+// separate from config.json. The file is 0600 on POSIX, an environment value
+// takes precedence over the stored value, and a corrupt/group-readable file is
+// handled defensively on read.
 //
-// The on-disk value is still base64-and-reversed (encodeApiKey) — that is not a
-// security measure, just a guard against casual grep discovery; the 0600 mode is
-// the actual access control. The separate-file + 0600 + env-first behavior is
-// the conformance the convention requires.
+// A key id is a dotted path of `[a-z0-9]` segments. Segment 0 is the conventional
+// vendor/env name, so the environment variable derives from the segments with no
+// mapping table: `gemini.text` → GEMINI_TEXT_API_KEY (falling back to
+// GEMINI_API_KEY). The on-disk value is `obf:` + base64 of the reversed UTF-8
+// bytes (encodeApiKey) — not encryption, just a guard against casual grep.
 
 const SECRETS_FILE_MODE = 0o600
 const ENFORCE_FILE_MODE = process.platform !== 'win32'
+const KEY_ID_RE = /^[a-z0-9]+(\.[a-z0-9]+)*$/
 
-// The set of API keys the app stores. Each id maps to the env var(s) that
-// override the stored value (checked in order; the first non-empty wins).
+// The api keys the app stores. The id is the vendor segment + an optional purpose
+// segment; the environment name and stored key derive from it directly. Image
+// backends keyed by product (grok/flux) map to their vendor key id below — the
+// backend keeps its product identity; only the key is vendor-conventional.
 export type SecretId =
-  | 'text_ai.gemini'
-  | 'text_ai.openai'
-  | 'image.openai'
-  | 'image.imagen'
-  | 'image.nanobanana'
-  | 'image.grok'
-  | 'image.flux'
+  | 'gemini.text'
+  | 'openai.text'
+  | 'openai.image'
+  | 'gemini.imagen'
+  | 'gemini.nanobanana'
+  | 'xai'
+  | 'bfl'
 
-// Env-first resolution. The first var listed is the app-specific designated
-// name; the second (where present) is the provider's conventional name, so a
-// user who already exports e.g. OPENAI_API_KEY is honored without extra config.
-const SECRET_ENV_VARS: Record<SecretId, readonly string[]> = {
-  'text_ai.gemini': ['IMAGEQUEUE_GEMINI_API_KEY', 'GEMINI_API_KEY'],
-  'text_ai.openai': ['IMAGEQUEUE_OPENAI_API_KEY', 'OPENAI_API_KEY'],
-  'image.openai': ['IMAGEQUEUE_OPENAI_IMAGE_API_KEY', 'OPENAI_API_KEY'],
-  'image.imagen': ['IMAGEQUEUE_IMAGEN_API_KEY', 'GEMINI_API_KEY'],
-  'image.nanobanana': ['IMAGEQUEUE_NANOBANANA_API_KEY', 'GEMINI_API_KEY'],
-  'image.grok': ['IMAGEQUEUE_GROK_API_KEY', 'XAI_API_KEY'],
-  'image.flux': ['IMAGEQUEUE_FLUX_API_KEY', 'BFL_API_KEY']
+export const SECRET_IDS: SecretId[] = [
+  'gemini.text',
+  'openai.text',
+  'openai.image',
+  'gemini.imagen',
+  'gemini.nanobanana',
+  'xai',
+  'bfl'
+]
+
+// Image backend id (product) → the vendor key id its key is stored/resolved under.
+// `grok` is xAI's product, `flux` is Black Forest Labs' — the backend keeps its
+// product name everywhere; only the API key is the conventional vendor segment.
+export const IMAGE_BACKEND_SECRET: Record<string, SecretId> = {
+  openai: 'openai.image',
+  imagen: 'gemini.imagen',
+  nanobanana: 'gemini.nanobanana',
+  grok: 'xai',
+  flux: 'bfl'
 }
 
-export const SECRET_IDS = Object.keys(SECRET_ENV_VARS) as SecretId[]
-
-type SecretsFile = Partial<Record<SecretId, string>>
+interface SecretsFile {
+  keys: Record<string, string>
+}
 
 function getSecretsPath(): string {
   return path.join(getDataDir(), 'api-keys.json')
 }
 
-function envValueFor(id: SecretId): string | null {
-  for (const name of SECRET_ENV_VARS[id]) {
-    const value = process.env[name]
-    if (typeof value === 'string' && value.trim().length > 0) return value.trim()
-  }
-  return null
+// Env var name from segments: uppercased, joined by '_', suffixed '_API_KEY'.
+function apiKeyEnvVar(segments: string[]): string {
+  return `${segments.map((s) => s.toUpperCase()).join('_')}_API_KEY`
+}
+
+// Prefixes of a segment list, most specific first: [a,b] → [[a,b],[a]].
+function prefixes(segments: string[]): string[][] {
+  const out: string[][] = []
+  for (let n = segments.length; n >= 1; n--) out.push(segments.slice(0, n))
+  return out
+}
+
+function envValue(segments: string[]): string {
+  const value = process.env[apiKeyEnvVar(segments)]?.trim()
+  return value ? value : ''
 }
 
 let modeWarned = false
@@ -78,40 +100,71 @@ function warnIfInsecureMode(filePath: string): void {
       }
     }
   } catch {
-    // No file yet, or stat failed — nothing to warn about.
+    // No file yet, or stat failed — nothing to tighten.
   }
+}
+
+function utcStampForFilename(): string {
+  const d = new Date()
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return (
+    `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
+    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-utc`
+  )
+}
+
+// Move the unreadable file aside to a timestamped neighbour (handled once, not
+// re-flagged on every read), returning the new path or null on failure.
+function moveAsideInvalid(filePath: string): string | null {
+  const movedTo = `${filePath}.${utcStampForFilename()}.invalid`
+  try {
+    fs.renameSync(filePath, movedTo)
+    return movedTo
+  } catch {
+    return null
+  }
+}
+
+// Canonicalize the on-disk shape `{ keys: { id: value } }`: ids lowercased and
+// matched against the id grammar, values kept only when strings.
+function normalize(raw: unknown): SecretsFile {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { keys: {} }
+  const rawKeys = (raw as { keys?: unknown }).keys
+  if (!rawKeys || typeof rawKeys !== 'object' || Array.isArray(rawKeys)) return { keys: {} }
+  const keys: Record<string, string> = {}
+  for (const [id, value] of Object.entries(rawKeys as Record<string, unknown>)) {
+    const canonical = id.toLowerCase()
+    if (typeof value === 'string' && KEY_ID_RE.test(canonical)) keys[canonical] = value
+  }
+  return { keys }
 }
 
 function readSecretsFile(): SecretsFile {
   const filePath = getSecretsPath()
   warnIfInsecureMode(filePath)
-  let raw: string
+  let text: string
   try {
-    raw = fs.readFileSync(filePath, 'utf-8')
+    text = fs.readFileSync(filePath, 'utf-8')
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      log('warn', 'Failed to read API keys file; treating as empty', {
-        path: filePath,
-        error: serializeError(err)
-      })
-    }
-    return {}
-  }
-  try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    const result: SecretsFile = {}
-    for (const id of SECRET_IDS) {
-      const value = (parsed as Record<string, unknown>)[id]
-      if (typeof value === 'string') result[id] = value
-    }
-    return result
-  } catch (err) {
-    log('warn', 'API keys file is not valid JSON; treating as empty', {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { keys: {} }
+    const movedTo = moveAsideInvalid(filePath)
+    log('warn', 'API keys file was unreadable; set aside and treating as empty', {
       path: filePath,
+      movedTo,
       error: serializeError(err)
     })
-    return {}
+    return { keys: {} }
+  }
+  try {
+    return normalize(JSON.parse(text))
+  } catch (err) {
+    const movedTo = moveAsideInvalid(filePath)
+    log('warn', 'API keys file is not valid JSON; set aside and treating as empty', {
+      path: filePath,
+      movedTo,
+      error: serializeError(err)
+    })
+    return { keys: {} }
   }
 }
 
@@ -127,13 +180,23 @@ function writeSecretsFile(file: SecretsFile): void {
   fs.renameSync(tempPath, filePath)
 }
 
-// Resolve the plaintext key for a secret id: an environment value wins, else the
-// decoded stored value, else empty string ('' meaning "not configured").
+// Resolve the plaintext key for a secret id, source-first (environment then
+// stored, most→least specific), trimmed, or '' ('' meaning "not configured").
 export function resolveApiKey(id: SecretId): string {
-  const env = envValueFor(id)
-  if (env) return env
-  const stored = readSecretsFile()[id]
-  return stored ? decodeApiKey(stored) : ''
+  const levels = prefixes(id.split('.'))
+  for (const level of levels) {
+    const fromEnv = envValue(level)
+    if (fromEnv) return fromEnv
+  }
+  const file = readSecretsFile()
+  for (const level of levels) {
+    const stored = file.keys[level.join('.')]
+    if (typeof stored === 'string') {
+      const key = decodeApiKey(stored).trim()
+      if (key) return key
+    }
+  }
+  return ''
 }
 
 // True when a usable key resolves from the environment or the stored file.
@@ -141,21 +204,22 @@ export function hasApiKey(id: SecretId): boolean {
   return resolveApiKey(id).length > 0
 }
 
-// Returns the stored (non-environment) plaintext key, for the settings UI to
-// display/edit. The environment override is deliberately NOT surfaced here so
-// editing the stored value never silently overwrites an env-supplied key.
+// The stored (non-environment) plaintext key for the exact id, for the settings
+// UI to display/edit. The environment override is deliberately NOT surfaced here,
+// and there is no fallback — editing is per exact id.
 export function getStoredApiKey(id: SecretId): string {
-  const stored = readSecretsFile()[id]
-  return stored ? decodeApiKey(stored) : ''
+  const stored = readSecretsFile().keys[id]
+  return stored ? decodeApiKey(stored).trim() : ''
 }
 
-// Persist (or clear, when value is empty) the stored key for a secret id.
+// Persist (or clear, when value is blank) the stored key for a secret id.
 export function setStoredApiKey(id: SecretId, value: string): void {
   const file = readSecretsFile()
-  if (value && value.length > 0) {
-    file[id] = encodeApiKey(value)
+  const trimmed = value.trim()
+  if (trimmed.length > 0) {
+    file.keys[id] = encodeApiKey(trimmed)
   } else {
-    delete file[id]
+    delete file.keys[id]
   }
   writeSecretsFile(file)
 }

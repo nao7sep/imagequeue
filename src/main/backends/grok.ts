@@ -8,7 +8,7 @@ import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 // selection is available.
 export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = resolveApiKey('image.grok')
+  const apiKey = resolveApiKey('xai')
 
   if (!apiKey) {
     throw new Error('Grok Imagine API key not configured')

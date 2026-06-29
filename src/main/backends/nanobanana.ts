@@ -12,7 +12,7 @@ import { findModel } from '../../shared/models'
 // Uses the 'image.nanobanana' secret (its own key, not the text_ai key).
 export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = resolveApiKey('image.nanobanana')
+  const apiKey = resolveApiKey('gemini.nanobanana')
 
   if (!apiKey) {
     throw new Error('Nano Banana API key not configured')

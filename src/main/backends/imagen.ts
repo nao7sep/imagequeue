@@ -10,7 +10,7 @@ import { findModel } from '../../shared/models'
 // Uses the 'image.imagen' secret (its own key, not the text_ai key).
 export async function generateImagen(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
-  const apiKey = resolveApiKey('image.imagen')
+  const apiKey = resolveApiKey('gemini.imagen')
 
   if (!apiKey) {
     throw new Error('Imagen API key not configured')

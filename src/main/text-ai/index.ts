@@ -34,7 +34,7 @@ function buildProviderHandle(tier: Tier): ProviderHandle | null {
 
   if (backend === 'gemini') {
     const { timeout_ms, light_model, main_model } = text_ai.gemini
-    const apiKey = resolveApiKey('text_ai.gemini')
+    const apiKey = resolveApiKey('gemini.text')
     if (!apiKey) return null
     const modelId = tier === 'light' ? light_model : main_model
     return {
@@ -47,7 +47,7 @@ function buildProviderHandle(tier: Tier): ProviderHandle | null {
 
   if (backend === 'openai') {
     const { endpoint, timeout_ms, light_model, main_model } = text_ai.openai
-    const apiKey = resolveApiKey('text_ai.openai')
+    const apiKey = resolveApiKey('openai.text')
     if (!apiKey) return null
     const modelId = tier === 'light' ? light_model : main_model
     return {
