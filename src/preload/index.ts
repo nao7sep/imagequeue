@@ -8,12 +8,11 @@ import {
   EnqueueRequest,
   Task,
   CliStatus,
-  CliUpdateStatus,
   CustomJsonStatus,
   LocalModelInfo,
   RecommendedParams,
-  RecommendationOperationResult,
-  RecommendationStatus,
+  DependenciesState,
+  DependencyProgress,
   DrawThingsModelParams,
   SessionSummary,
 } from '../shared/types'
@@ -205,9 +204,6 @@ const api = {
   localCheckCli: (): Promise<CliStatus> =>
     ipcRenderer.invoke('local:checkCli'),
 
-  localCheckCliUpdate: (): Promise<CliUpdateStatus> =>
-    ipcRenderer.invoke('local:checkCliUpdate'),
-
   localListDownloadedModels: (): Promise<LocalModelInfo[]> =>
     ipcRenderer.invoke('local:listDownloadedModels'),
 
@@ -259,14 +255,29 @@ const api = {
     return () => { ipcRenderer.removeListener('cli-job:status', handler) }
   },
 
-  getRecommendationsStatus: (): Promise<RecommendationStatus> =>
-    ipcRenderer.invoke('recommendations:getStatus'),
+  getDependenciesState: (): Promise<DependenciesState> =>
+    ipcRenderer.invoke('dependencies:getState'),
 
-  downloadRecommendations: (): Promise<RecommendationOperationResult> =>
-    ipcRenderer.invoke('recommendations:downloadLatest'),
+  checkDependencies: (): Promise<DependenciesState> =>
+    ipcRenderer.invoke('dependencies:check'),
 
-  importRecommendations: (filePath: string): Promise<RecommendationOperationResult> =>
-    ipcRenderer.invoke('recommendations:import', filePath),
+  installCli: (): Promise<DependenciesState> =>
+    ipcRenderer.invoke('dependencies:installCli'),
+
+  downloadRecommendations: (): Promise<DependenciesState> =>
+    ipcRenderer.invoke('dependencies:downloadRecommendations'),
+
+  applyRecommendationsUpdate: (): Promise<DependenciesState> =>
+    ipcRenderer.invoke('dependencies:updateRecommendations'),
+
+  setCheckUpdatesAtLaunch: (value: boolean): Promise<DependenciesState> =>
+    ipcRenderer.invoke('dependencies:setCheckAtLaunch', value),
+
+  onDependencyProgress: (callback: (progress: DependencyProgress) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: DependencyProgress): void => callback(progress)
+    ipcRenderer.on('dependencies:progress', handler)
+    return () => { ipcRenderer.removeListener('dependencies:progress', handler) }
+  },
 
   resolveRecommendation: (modelFile: string): Promise<RecommendedParams | null> =>
     ipcRenderer.invoke('recommendations:resolve', modelFile),

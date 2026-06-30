@@ -8,6 +8,7 @@ import { ElaborationSettingsModal } from './ElaborationSettingsModal'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import { ShortcutsModal } from './ShortcutsModal'
 import { AboutModal } from './AboutModal'
+import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
@@ -25,7 +26,7 @@ const BACKENDS = window.electronAPI.platform === 'darwin'
   ? ALL_BACKENDS
   : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
 
-type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | null
+type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'dependencies' | null
 
 export function Layout(): React.JSX.Element {
   useNotifications()
@@ -80,6 +81,14 @@ export function Layout(): React.JSX.Element {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [overlay, clear, toggleShowKeptImages, isImeComposing])
+
+  // The Draw Things pane pointer leads here by dispatching this event, so the
+  // single management surface (this modal) opens from the pane as well as the menu.
+  useEffect(() => {
+    const handler = (): void => setOverlay('dependencies')
+    window.addEventListener('open-dependencies-modal', handler)
+    return () => window.removeEventListener('open-dependencies-modal', handler)
+  }, [])
 
   // Load image data when a completed task is selected
   useEffect(() => {
@@ -184,6 +193,9 @@ export function Layout(): React.JSX.Element {
       {overlay === 'about' && (
         <AboutModal onClose={() => setOverlay(null)} />
       )}
+      {overlay === 'dependencies' && (
+        <DependenciesModal onClose={() => setOverlay(null)} />
+      )}
       <div className="left-pane">
         <div className="pane-toolbar">
           <span className="app-name">ImageQueue</span>
@@ -217,6 +229,11 @@ export function Layout(): React.JSX.Element {
             {window.electronAPI.platform === 'darwin' && (
               <MenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-models-modal'))}>
                 Draw Things Models
+              </MenuItem>
+            )}
+            {window.electronAPI.platform === 'darwin' && (
+              <MenuItem onSelect={() => setOverlay('dependencies')}>
+                Dependencies
               </MenuItem>
             )}
             <Submenu label="Elaboration">

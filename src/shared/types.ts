@@ -34,14 +34,53 @@ export interface CliStatus {
   platform: 'darwin' | 'unsupported'
 }
 
-// Whether a newer Draw Things CLI release exists. The CLI is user-installed (we
-// don't deliver it), so this only detects and prompts — it never updates.
-// `unknown` covers offline, the check being disabled, and a `dev`/source build
-// whose version can't be compared to a release tag.
-export interface CliUpdateStatus {
-  installedVersion: string | null
-  latestVersion: string | null
-  status: 'up-to-date' | 'update-available' | 'unknown'
+// The two managed runtime dependencies the app delivers and tracks for the
+// Draw Things backend: the CLI binary it downloads itself, and the recommended-
+// parameters file (configs.json). Both follow the managed-runtime-dependencies
+// convention — app-owned acquisition, verify-once-at-download, check-not-apply.
+export type DependencyId = 'cli' | 'recommendations'
+
+// The four lifecycle states a managed dependency can be in. "installed-unchecked"
+// is present-but-never-successfully-compared-to-latest (offline, or the launch
+// check is disabled and none has been run) — distinct from a confirmed up-to-date.
+export type DependencyState =
+  | 'not-installed'
+  | 'up-to-date'
+  | 'update-available'
+  | 'installed-unchecked'
+
+// One dependency's surface state for the modal and the pane pointer. The labels
+// are presentation-ready strings derived in main: for the CLI they are release
+// tags; for configs.json the installed label summarizes the file (entry count +
+// date) and there is no latest label (it is versionless — "update available"
+// means a fetched copy differed byte-for-byte).
+export interface DependencyInfo {
+  id: DependencyId
+  state: DependencyState
+  installedLabel: string | null
+  latestLabel: string | null
+  // When the installed artifact was last written (configs.json's mtime); null for
+  // the CLI, whose identity is its tag. ISO-8601 UTC; the renderer formats it.
+  updatedAtUtc: string | null
+  lastCheckedAtUtc: string | null
+}
+
+export interface DependenciesState {
+  cli: DependencyInfo
+  recommendations: DependencyInfo
+  // The single launch-time check toggle gating both dependencies (default on).
+  checkUpdatesAtLaunch: boolean
+  // False off macOS, where the Draw Things backend (and so these dependencies)
+  // does not exist; the renderer hides the whole surface.
+  platformSupported: boolean
+}
+
+// Progress for the CLI binary download (the only long-running dependency op).
+// Streamed over 'dependencies:progress' while installCli/updateCli runs.
+export interface DependencyProgress {
+  phase: 'downloading' | 'verifying' | 'installing'
+  downloadedBytes: number
+  totalBytes: number | null
 }
 
 export interface LocalModelInfo {

@@ -5,7 +5,7 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
-import { modelsDirArgs, ensureModelsDir, resolveModelsDir } from '../local-cli'
+import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
 export async function generateDrawThings(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   return generateDrawThingsCli(task)
@@ -14,7 +14,7 @@ export async function generateDrawThings(task: Task): Promise<{ buffer: Buffer; 
 async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const defaults = config.image_backends.drawthings.default_params
-  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+  const cliPath = resolveCliPath()
 
   ensureModelsDir()
 

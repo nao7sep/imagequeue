@@ -6,12 +6,14 @@ import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
+import { registerDependenciesIpc } from './dependencies-ipc'
+import { checkDependenciesAtLaunch } from './dependencies/service'
+import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { initLogger, log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
-import { updateRecommendationsAtLaunch } from './recommendations'
 import { killAllCliJobs } from './cli-jobs'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
@@ -140,6 +142,7 @@ app.whenReady().then(() => {
   // unpackaged) still exercise the strict production CSP.
   installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
   ensureDataDir()
+  clearTempDir()
   loadConfig()
   initSession()
   resetOutputTimestampAllocators()
@@ -156,18 +159,19 @@ app.whenReady().then(() => {
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc()
+  registerDependenciesIpc()
   registerElaboratorsIpc()
   registerAppLogIpc()
   registerViewerIpc(() => mainWin)
   registerNotificationIpc(() => mainWin)
   initNotificationWindow()
-  void updateRecommendationsAtLaunch().catch((err) => {
-    log('warn', 'Recommendations launch update rejected unexpectedly', {
-      error: serializeError(err)
-    })
-  })
   startProcessor()
   startWakeLockMonitor()
+
+  // Re-check the managed dependencies if the launch toggle is on and the last
+  // check is past the staleness cap. Fire-and-forget: never blocks startup, and
+  // its result is surfaced passively (pane pointer / modal), never as a prompt.
+  void checkDependenciesAtLaunch()
 
   createWindow()
 

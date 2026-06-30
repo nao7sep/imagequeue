@@ -1,10 +1,22 @@
+// The recommended-parameters file (configs.json) — one of the two managed Draw
+// Things dependencies. It is app-owned and user-triggered: never fetched
+// silently. Lifecycle here follows the managed-runtime-dependencies convention:
+//
+//   download  acquire when absent (or force a refresh) — writes configs.json.
+//   check     fetch the latest to compare; if it differs, stage it as a pending
+//             update and record that — check-not-apply, so nothing changes on disk.
+//   apply     promote the staged pending update to configs.json.
+//
+// The file is versionless, so "update available" means a fetched copy differed
+// byte-for-byte from the installed one. The generation path reads it via
+// resolveRecommendedParams; everything else is dependency management.
+
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
 import https from 'https'
-import { getDataDir, loadConfig } from './config'
-import { log, serializeError } from './logger'
+import { getDataDir } from './config'
 import { writeFileAtomic } from './utils/atomic-write'
+import { updateDependenciesCache } from './dependencies/store'
 import {
   RecommendedParams,
   RecommendationOperationResult,
@@ -20,6 +32,7 @@ import {
 const RECOMMENDATIONS_URL = 'https://models.drawthings.ai/configs.json'
 const DATA_DIR = 'data'
 const RECOMMENDATIONS_FILE = 'configs.json'
+const RECOMMENDATIONS_PENDING_FILE = 'configs.pending.json'
 
 export function getRecommendationsDir(): string {
   return path.join(getDataDir(), DATA_DIR)
@@ -27,6 +40,10 @@ export function getRecommendationsDir(): string {
 
 export function getRecommendationsPath(): string {
   return path.join(getRecommendationsDir(), RECOMMENDATIONS_FILE)
+}
+
+function getRecommendationsPendingPath(): string {
+  return path.join(getRecommendationsDir(), RECOMMENDATIONS_PENDING_FILE)
 }
 
 export function getRecommendationsStatus(): RecommendationStatus {
@@ -59,36 +76,74 @@ export function getRecommendationsStatus(): RecommendationStatus {
   }
 }
 
+/** Acquire (or force-refresh) configs.json from the server. Writes it directly,
+ * which makes any staged pending update moot, so it is cleared. */
 export async function downloadLatestRecommendations(): Promise<RecommendationOperationResult> {
   const data = await fetchBytes(RECOMMENDATIONS_URL)
-  return writeRecommendationsIfChanged(data, 'Downloaded latest recommendations', 'Recommendations already up to date')
-}
+  validateRecommendationBytes(data)
 
-export function importRecommendations(sourcePath: string): RecommendationOperationResult {
-  const data = fs.readFileSync(sourcePath)
-  return writeRecommendationsIfChanged(data, 'Imported recommendations', 'Imported file matches current recommendations')
-}
+  const filePath = getRecommendationsPath()
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
 
-export async function updateRecommendationsAtLaunch(): Promise<void> {
-  try {
-    const config = loadConfig()
-    if (!config.image_backends.drawthings.auto_update_recommendations) {
-      log('info', 'Recommendations launch update skipped', { reason: 'disabled' })
-      return
-    }
-    log('info', 'Recommendations launch update started', { url: RECOMMENDATIONS_URL })
-    const result = await downloadLatestRecommendations()
-    log('info', 'Recommendations launch update finished', {
-      changed: result.changed,
-      detail: result.message,
-      entryCount: result.entryCount,
-      updatedAt: result.updatedAt
-    })
-  } catch (err) {
-    log('warn', 'Recommendations launch update failed', {
-      error: serializeError(err)
-    })
+  const changed = !(fs.existsSync(filePath) && fs.readFileSync(filePath).equals(data))
+  if (changed) writeFileAtomic(filePath, data)
+  clearPendingUpdate()
+  updateDependenciesCache((cache) => {
+    cache.recommendations.lastCheckedAtUtc = new Date().toISOString()
+    cache.recommendations.pending = false
+  })
+
+  return {
+    ...getRecommendationsStatus(),
+    changed,
+    message: changed ? 'Downloaded latest recommendations' : 'Recommendations already up to date'
   }
+}
+
+/** Fetch the latest and compare to the installed file without changing it. If it
+ * differs, stage it as a pending update and record that a check found one. Does
+ * nothing destructive when configs.json is absent (that is the download path). */
+export async function checkRecommendations(): Promise<RecommendationStatus> {
+  const filePath = getRecommendationsPath()
+  const checkedAt = new Date().toISOString()
+
+  if (!fs.existsSync(filePath)) {
+    clearPendingUpdate()
+    updateDependenciesCache((cache) => {
+      cache.recommendations.lastCheckedAtUtc = checkedAt
+      cache.recommendations.pending = false
+    })
+    return getRecommendationsStatus()
+  }
+
+  const latest = await fetchBytes(RECOMMENDATIONS_URL)
+  validateRecommendationBytes(latest)
+  const differs = !fs.readFileSync(filePath).equals(latest)
+
+  if (differs) {
+    fs.mkdirSync(getRecommendationsDir(), { recursive: true })
+    writeFileAtomic(getRecommendationsPendingPath(), latest)
+  } else {
+    clearPendingUpdate()
+  }
+  updateDependenciesCache((cache) => {
+    cache.recommendations.lastCheckedAtUtc = checkedAt
+    cache.recommendations.pending = differs
+  })
+  return getRecommendationsStatus()
+}
+
+/** Promote a staged pending update to configs.json. A no-op (returns current
+ * status) when nothing is pending. */
+export function applyPendingRecommendations(): RecommendationStatus {
+  const pendingPath = getRecommendationsPendingPath()
+  if (fs.existsSync(pendingPath)) {
+    fs.renameSync(pendingPath, getRecommendationsPath())
+  }
+  updateDependenciesCache((cache) => {
+    cache.recommendations.pending = false
+  })
+  return getRecommendationsStatus()
 }
 
 export function resolveRecommendedParams(model: string): RecommendedParams | null {
@@ -99,35 +154,17 @@ export function resolveRecommendedParams(model: string): RecommendedParams | nul
   return recommendedParamsFromMatch(match)
 }
 
-function writeRecommendationsIfChanged(
-  data: Buffer,
-  changedMessage: string,
-  unchangedMessage: string
-): RecommendationOperationResult {
-  const specs = parseRecommendationBytes(data)
-  if (specs.length === 0) {
+function clearPendingUpdate(): void {
+  try {
+    fs.rmSync(getRecommendationsPendingPath(), { force: true })
+  } catch {
+    /* pending file lives under the rebuildable data dir */
+  }
+}
+
+function validateRecommendationBytes(data: Buffer): void {
+  if (parseRecommendationBytes(data).length === 0) {
     throw new Error('Recommendation file is not valid configs.json')
-  }
-
-  const filePath = getRecommendationsPath()
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-
-  if (fs.existsSync(filePath)) {
-    const current = fs.readFileSync(filePath)
-    if (current.equals(data)) {
-      return {
-        ...getRecommendationsStatus(),
-        changed: false,
-        message: unchangedMessage
-      }
-    }
-  }
-
-  writeFileAtomic(filePath, data)
-  return {
-    ...getRecommendationsStatus(),
-    changed: true,
-    message: changedMessage
   }
 }
 
@@ -194,8 +231,4 @@ function parseRecommendationFile(filePath: string): { specs: RecommendationSpec[
   } catch (err) {
     return { specs: [], error: (err as Error).message }
   }
-}
-
-export function expandHome(value: string): string {
-  return value.replace(/^~(?=$|\/|\\)/, os.homedir())
 }

@@ -1,0 +1,147 @@
+.dependencies-modal-box {
+  width: min(560px, 92vw);
+}
+
+.dependencies-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dependencies-intro {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dependencies-error {
+  font-size: 12px;
+  color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.dependency-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.dependency-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.dependency-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dependency-title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.dependency-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-secondary);
+}
+
+.dependency-badge-up-to-date {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+
+.dependency-badge-update-available {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--warning);
+}
+
+.dependency-badge-not-installed {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+
+.dependency-desc {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dependency-meta {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.dependency-progress {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dependency-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.dependency-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.dependency-progress-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.dependency-action {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.dependency-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+
+.dependency-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dependencies-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dependencies-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

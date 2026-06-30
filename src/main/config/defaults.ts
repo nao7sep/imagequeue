@@ -90,7 +90,6 @@ export function createDefaultConfig(): AppConfig {
         timeout_ms: 180000
       },
       drawthings: {
-        cli_path: '',
         default_params: {
           fallback_width: 1024,
           fallback_height: 1024,
@@ -100,8 +99,7 @@ export function createDefaultConfig(): AppConfig {
           seed: null,
         },
         models_dir: '',
-        auto_update_recommendations: true,
-        check_cli_updates: true
+        check_updates_at_launch: true
       }
     },
     notifications: {

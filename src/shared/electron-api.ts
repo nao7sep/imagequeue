@@ -7,12 +7,11 @@ import {
   EnqueueRequest,
   Task,
   CliStatus,
-  CliUpdateStatus,
   CustomJsonStatus,
   LocalModelInfo,
   RecommendedParams,
-  RecommendationOperationResult,
-  RecommendationStatus,
+  DependenciesState,
+  DependencyProgress,
   DrawThingsModelParams,
   SessionSummary,
 } from './types'
@@ -125,7 +124,6 @@ export interface ElectronAPI {
 
   // Draw Things CLI operations (macOS only)
   localCheckCli: () => Promise<CliStatus>
-  localCheckCliUpdate: () => Promise<CliUpdateStatus>
   localListDownloadedModels: () => Promise<LocalModelInfo[]>
   localListAvailableModels: () => Promise<LocalModelInfo[]>
   localReadCustomJsonImportedFiles: () => Promise<CustomJsonStatus>
@@ -142,9 +140,16 @@ export interface ElectronAPI {
   onCliJobChunk: (callback: (e: CliChunkEvent) => void) => (() => void)
   onCliJobStatus: (callback: (e: CliStatusEvent) => void) => (() => void)
 
-  getRecommendationsStatus: () => Promise<RecommendationStatus>
-  downloadRecommendations: () => Promise<RecommendationOperationResult>
-  importRecommendations: (filePath: string) => Promise<RecommendationOperationResult>
+  // Managed dependencies surface (the modal + pane pointer). Every mutating call
+  // returns the full DependenciesState so the renderer re-renders from one snapshot.
+  getDependenciesState: () => Promise<DependenciesState>
+  checkDependencies: () => Promise<DependenciesState>
+  installCli: () => Promise<DependenciesState>
+  downloadRecommendations: () => Promise<DependenciesState>
+  applyRecommendationsUpdate: () => Promise<DependenciesState>
+  setCheckUpdatesAtLaunch: (value: boolean) => Promise<DependenciesState>
+  onDependencyProgress: (callback: (progress: DependencyProgress) => void) => (() => void)
+
   resolveRecommendation: (modelFile: string) => Promise<RecommendedParams | null>
   dtGetModelParams: (modelFile: string) => Promise<DrawThingsModelParams | null>
   dtGetAllModelParams: () => Promise<Record<string, DrawThingsModelParams>>

@@ -68,7 +68,6 @@ export interface FluxBackendConfig {
 }
 
 export interface DrawThingsBackendConfig {
-  cli_path: string
   default_params: {
     fallback_width: number
     fallback_height: number
@@ -77,9 +76,12 @@ export interface DrawThingsBackendConfig {
     fallback_negative_prompt: string
     seed: number | null
   }
+  // Where the app-owned CLI looks for models. Empty uses the app's private dir;
+  // a Draw Things user can point it at the GUI app's models to reuse downloads.
   models_dir: string
-  auto_update_recommendations: boolean
-  check_cli_updates: boolean
+  // The single launch-time check toggle for both managed dependencies (the CLI
+  // binary and configs.json). On by default; nothing auto-downloads or installs.
+  check_updates_at_launch: boolean
 }
 
 export interface NanoBananaBackendConfig {

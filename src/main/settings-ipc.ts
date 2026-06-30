@@ -9,13 +9,13 @@ import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
 import { checkModelExists } from './backends'
-import { checkCliUpdate } from './cli-update'
 import {
   checkCli,
   listDownloadedModels,
   listAvailableModels,
   ensureModel,
   resolveModelsDir,
+  resolveCliPath,
   getDefaultModelsDir,
   readCustomJsonImportedFiles,
   ensureModelsDir,
@@ -27,12 +27,7 @@ import {
   killCliJob,
   getCliJobSnapshot,
 } from './cli-jobs'
-import {
-  downloadLatestRecommendations,
-  getRecommendationsStatus,
-  importRecommendations,
-  resolveRecommendedParams
-} from './recommendations'
+import { resolveRecommendedParams } from './recommendations'
 import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type CloudBackendId, type DrawThingsModelParams } from '../shared/types'
 
@@ -131,10 +126,6 @@ export function registerSettingsIpc(): void {
     return checkCli()
   })
 
-  handle('local:checkCliUpdate', async () => {
-    return checkCliUpdate()
-  })
-
   handle('local:listDownloadedModels', async () => {
     return listDownloadedModels()
   })
@@ -170,8 +161,7 @@ export function registerSettingsIpc(): void {
   })
 
   handle('cli-job:startImport', (event, artifactPath: string) => {
-    const config = loadConfig()
-    const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+    const cliPath = resolveCliPath()
     const dir = ensureModelsDir()
     const jobId = startCliJob({
       kind: 'import',
@@ -185,8 +175,7 @@ export function registerSettingsIpc(): void {
   })
 
   handle('cli-job:startDownload', (event, modelFile: string) => {
-    const config = loadConfig()
-    const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+    const cliPath = resolveCliPath()
     const dir = ensureModelsDir()
     const jobId = startCliJob({
       kind: 'download',
@@ -213,18 +202,6 @@ export function registerSettingsIpc(): void {
 
   handle('cli-job:getSnapshot', (_event, jobId: string) => {
     return getCliJobSnapshot(jobId)
-  })
-
-  handle('recommendations:getStatus', () => {
-    return getRecommendationsStatus()
-  })
-
-  handle('recommendations:downloadLatest', async () => {
-    return downloadLatestRecommendations()
-  })
-
-  handle('recommendations:import', (_event, filePath: string) => {
-    return importRecommendations(filePath)
   })
 
   handle('recommendations:resolve', (_event, modelFile: string) => {

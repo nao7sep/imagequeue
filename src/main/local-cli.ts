@@ -7,9 +7,16 @@ import path from 'path'
 import os from 'os'
 import { loadConfig, getDataDir } from './config'
 import { log, serializeError } from './logger'
+import { getCliBinaryPath } from './dependencies/paths'
 import { CliStatus, LocalModelInfo, CustomJsonStatus } from '../shared/types'
 
 export type { CliStatus, LocalModelInfo, CustomJsonStatus }
+
+/** The app-owned CLI binary path. The app downloads and manages it (see the
+ * dependencies layer); it is not resolved from PATH or a user setting. */
+export function resolveCliPath(): string {
+  return getCliBinaryPath()
+}
 
 /** Resolve the effective models directory. Empty config uses ImageQueue's private models dir. */
 export function resolveModelsDir(): string {
@@ -40,8 +47,7 @@ export async function checkCli(): Promise<CliStatus> {
     return { installed: false, version: null, path: null, platform: 'unsupported' }
   }
 
-  const config = loadConfig()
-  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+  const cliPath = resolveCliPath()
 
   return new Promise((resolve) => {
     execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout, stderr) => {
@@ -111,8 +117,7 @@ function parseModelList(output: string): LocalModelInfo[] {
 
 /** List downloaded models via CLI. */
 export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
-  const config = loadConfig()
-  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+  const cliPath = resolveCliPath()
   const args = ['models', 'list', '--downloaded-only', ...modelsDirArgs()]
 
   return new Promise((resolve) => {
@@ -129,8 +134,7 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
 
 /** List all available models via CLI. */
 export async function listAvailableModels(): Promise<LocalModelInfo[]> {
-  const config = loadConfig()
-  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+  const cliPath = resolveCliPath()
   const args = ['models', 'list', ...modelsDirArgs()]
 
   return new Promise((resolve) => {
@@ -152,8 +156,7 @@ export interface EnsureModelResult {
 
 /** Download/ensure a model via CLI. Returns a promise that resolves when complete. */
 export async function ensureModel(modelFile: string): Promise<EnsureModelResult> {
-  const config = loadConfig()
-  const cliPath = config.image_backends.drawthings.cli_path || 'draw-things-cli'
+  const cliPath = resolveCliPath()
 
   // Ensure models dir exists before downloading
   ensureModelsDir()

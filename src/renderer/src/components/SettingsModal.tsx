@@ -2,11 +2,9 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
-import { formatUiDateTime } from '../utils/formatDateTime'
 import { multiline } from '../utils/textCleanup'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
 import type { FluxModelDef } from '../../../shared/models'
-import type { RecommendationStatus } from '../../../shared/types'
 import './SettingsModal.css'
 
 interface Props {
@@ -37,9 +35,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     const v = (((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7
     setSettingsVolume(v)
   }, [settings])
-  const [recommendationStatus, setRecommendationStatus] = useState<RecommendationStatus | null>(null)
-  const [recommendationMessage, setRecommendationMessage] = useState('')
-  const [recommendationBusy, setRecommendationBusy] = useState(false)
   useEffect(() => {
     if (config || !settings) return
     const next = cloneSettings(settings)
@@ -83,16 +78,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     }
     onClose()
   }, [dirty, confirm, onClose])
-
-  const refreshRecommendationStatus = useCallback(async (): Promise<void> => {
-    if (window.electronAPI.platform !== 'darwin') return
-    const next = await window.electronAPI.getRecommendationsStatus()
-    setRecommendationStatus(next)
-  }, [])
-
-  useEffect(() => {
-    void refreshRecommendationStatus()
-  }, [refreshRecommendationStatus])
 
   if (!config) return (
     <Modal
@@ -170,44 +155,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const updateBackendParam = (backend: string, key: string, value: unknown): void => {
     const params = backends[backend].default_params as Record<string, unknown>
     updateBackend(backend, 'default_params', { ...params, [key]: value })
-  }
-
-  const handleDownloadRecommendations = async (): Promise<void> => {
-    setRecommendationBusy(true)
-    setRecommendationMessage('')
-    try {
-      const result = await window.electronAPI.downloadRecommendations()
-      setRecommendationStatus(result)
-      setRecommendationMessage(result.message)
-      window.dispatchEvent(new CustomEvent('recommendations-updated'))
-    } catch (err) {
-      setRecommendationMessage((err as Error).message)
-      await refreshRecommendationStatus()
-    } finally {
-      setRecommendationBusy(false)
-    }
-  }
-
-  const handleImportRecommendations = async (): Promise<void> => {
-    const filePath = await window.electronAPI.openFileDialog([{ name: 'JSON', extensions: ['json'] }])
-    if (!filePath) return
-    setRecommendationBusy(true)
-    setRecommendationMessage('')
-    try {
-      const result = await window.electronAPI.importRecommendations(filePath)
-      setRecommendationStatus(result)
-      setRecommendationMessage(result.message)
-      window.dispatchEvent(new CustomEvent('recommendations-updated'))
-    } catch (err) {
-      setRecommendationMessage((err as Error).message)
-      await refreshRecommendationStatus()
-    } finally {
-      setRecommendationBusy(false)
-    }
-  }
-
-  const formatRecommendationTimestamp = (value: string | null): string => {
-    return formatUiDateTime(value)
   }
 
   return (
@@ -657,58 +604,12 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       <div className="settings-section">
         <h3>Draw Things</h3>
         <div className="settings-field">
-          <label>CLI Path</label>
-          <input value={backends.drawthings.cli_path as string} onChange={(e) => updateBackend('drawthings', 'cli_path', e.target.value)} placeholder="leave empty to use PATH" />
-        </div>
-        <div className="settings-field settings-field-full">
-          <label className="settings-panel-check">
-            <input
-              type="checkbox"
-              checked={(backends.drawthings.check_cli_updates as boolean) ?? false}
-              onChange={(e) => updateBackend('drawthings', 'check_cli_updates', e.target.checked)}
-            />
-            Check for Draw Things CLI updates
-          </label>
-        </div>
-        <div className="settings-field">
           <label>Models Directory</label>
           <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use ~/.imagequeue/models" />
         </div>
-        <div className="settings-field settings-field-full">
-          <div className="recommendation-panel">
-            <div className="recommendation-title">Recommendations</div>
-            <div className="recommendation-panel-top">
-              <div className="recommendation-panel-main">
-                {recommendationStatus?.exists ? (
-                  recommendationStatus.valid ? (
-                    <span>{recommendationStatus.entryCount} entries, updated {formatRecommendationTimestamp(recommendationStatus.updatedAt)}</span>
-                  ) : (
-                    <span>Found but not readable: {recommendationStatus.error}</span>
-                  )
-                ) : (
-                  <span>No recommendation file found.</span>
-                )}
-                {recommendationMessage && <span className="recommendation-message">{recommendationMessage}</span>}
-              </div>
-            </div>
-            <div className="recommendation-actions">
-              <button type="button" onClick={() => void handleDownloadRecommendations()} disabled={recommendationBusy}>
-                Download Latest
-              </button>
-              <button type="button" onClick={() => void handleImportRecommendations()} disabled={recommendationBusy}>
-                Import
-              </button>
-            </div>
-            <label className="settings-panel-check">
-              <input
-                type="checkbox"
-                checked={(backends.drawthings.auto_update_recommendations as boolean) ?? false}
-                onChange={(e) => updateBackend('drawthings', 'auto_update_recommendations', e.target.checked)}
-              />
-              Update recommendations at app launch
-            </label>
-          </div>
-        </div>
+        <p className="settings-hint settings-field-full">
+          The Draw Things CLI and its recommended parameters are managed from the Dependencies window (main menu → Dependencies).
+        </p>
         <div className="settings-field">
           <label>Fallback Width</label>
           <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />

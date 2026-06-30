@@ -42,10 +42,8 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
     imageBackends: {
       ...cloudBackends,
       drawthings: {
-        cliPathSet: Boolean(drawthings?.cli_path),
         modelsDir: drawthings?.models_dir,
-        autoUpdateRecommendations: drawthings?.auto_update_recommendations,
-        checkCliUpdates: drawthings?.check_cli_updates,
+        checkUpdatesAtLaunch: drawthings?.check_updates_at_launch,
       },
     },
     general: {

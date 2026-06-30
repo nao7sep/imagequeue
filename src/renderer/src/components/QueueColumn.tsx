@@ -3,8 +3,9 @@ import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
-import type { BackendId, CloudBackendId, Task, CliStatus, CliUpdateStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
+import type { BackendId, CloudBackendId, Task, CliStatus, LocalModelInfo, RecommendedParams, DrawThingsModelParams } from '../../../shared/types'
 import { serializeError } from '../../../shared/serialize-error'
+import { DependencyPanePointer } from './DependencyPanePointer'
 import {
   getModelsForBackend,
   findModel,
@@ -171,7 +172,6 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
-  const [cliUpdate, setCliUpdate] = useState<CliUpdateStatus | null>(null)
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
@@ -281,10 +281,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       setCliStatus(status)
       if (!status.installed) {
         setDownloadedModels([])
-        setCliUpdate(null)
         return
       }
-      void window.electronAPI.localCheckCliUpdate().then(setCliUpdate)
       window.electronAPI.localListDownloadedModels().then((list) => {
         const sortedList = sortLocalModels(list)
         setDownloadedModels((prev) => {
@@ -429,17 +427,24 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     })
   }, [backendId, refreshDrawThingsModels])
 
+  // A managed-dependency change (CLI installed/updated, or configs.json
+  // downloaded/updated from the Dependencies modal) re-resolves this column: the
+  // model list and CLI availability may have changed, and a new configs.json
+  // changes the per-model recommended parameters.
   useEffect(() => {
     if (backendId !== 'drawthings') return
-    const handler = (): void => setShowModelsModal(true)
-    const recommendationHandler = (): void => setRecommendationRevision((value) => value + 1)
-    window.addEventListener('open-models-modal', handler)
-    window.addEventListener('recommendations-updated', recommendationHandler)
-    return () => {
-      window.removeEventListener('open-models-modal', handler)
-      window.removeEventListener('recommendations-updated', recommendationHandler)
+    const openModels = (): void => setShowModelsModal(true)
+    const dependenciesChanged = (): void => {
+      setRecommendationRevision((value) => value + 1)
+      refreshDrawThingsModels(false)
     }
-  }, [backendId])
+    window.addEventListener('open-models-modal', openModels)
+    window.addEventListener('dependencies-changed', dependenciesChanged)
+    return () => {
+      window.removeEventListener('open-models-modal', openModels)
+      window.removeEventListener('dependencies-changed', dependenciesChanged)
+    }
+  }, [backendId, refreshDrawThingsModels])
 
   // Autosave Draw Things params on every change. The main process coalesces
   // rapid writes and drains pending writes on `before-quit`, so we don't
@@ -935,19 +940,10 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         {/* Draw Things parameters */}
         {backendId === 'drawthings' && (
           <>
-            {cliStatus === null && (
-              <div className="setting-row model-warning">Checking CLI…</div>
-            )}
-            {cliStatus && !cliStatus.installed && cliStatus.platform === 'darwin' && (
-              <div className="setting-row model-warning" title="Install via Homebrew: brew install drawthingsai/draw-things/draw-things-cli">
-                Draw Things CLI not installed
-              </div>
-            )}
-            {cliStatus && cliStatus.installed && cliUpdate?.status === 'update-available' && (
-              <div className="setting-row model-warning" title="Update via Homebrew: brew upgrade draw-things-cli">
-                Draw Things CLI update available ({cliUpdate.installedVersion} → {cliUpdate.latestVersion})
-              </div>
-            )}
+            {/* The single pointer to the Dependencies modal — the only attention
+                surface for the CLI and configs.json. It decides its own
+                visibility (silent when both are fine). */}
+            <DependencyPanePointer />
             {cliStatus && cliStatus.installed && (
               <>
                 {downloadedModels.length > 0 ? (
