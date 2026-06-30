@@ -77,9 +77,13 @@ export function getDependenciesState(): DependenciesState {
  * in the cache. `force` re-fetches past the per-process cache. */
 async function checkCliForUpdate(force: boolean): Promise<void> {
   const release = await resolveLatestCliRelease(force)
+  // A failed lookup (offline, rate-limited, non-200) resolves null and must write
+  // NO persisted fact (invariant I3): advancing the timestamp here would read as
+  // "checked just now" having learned nothing, and suppress re-checks for 24h.
+  if (!release) return
   updateDependenciesCache((cache) => {
     cache.cli.lastCheckedAtUtc = new Date().toISOString()
-    if (release) cache.cli.lastKnownLatest = release.tag
+    cache.cli.lastKnownLatest = release.tag
   })
 }
 

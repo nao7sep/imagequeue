@@ -25,10 +25,10 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 
 - Node.js 20+ (to run from source)
 - macOS, Windows, or Linux (Draw Things support is macOS-only)
-- An API key for each cloud backend you use. Draw Things needs no API key. On macOS it uses two managed dependencies the app owns, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
-  - The **Draw Things CLI** — the app downloads it directly from the official GitHub release (no Homebrew), verifies it against the release's published SHA-256, and confirms it runs native arm64. The backend stays disabled until it's installed.
-  - **Recommended per-model parameters** (`configs.json` from `https://models.drawthings.ai/configs.json`) — optional; without them the app falls back to your default parameters.
-- Both are fetched only when you ask. A single launch-time check (on by default, toggled in the Dependencies window) compares your installed versions against the latest and surfaces an **Update** when one exists — nothing is ever downloaded, installed, or updated silently. A check runs at most once a day.
+- An API key for each cloud backend you use. Draw Things needs no API key. On macOS it uses two app-managed dependencies, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
+  - The **Draw Things CLI** — downloaded directly from its official GitHub release (no Homebrew) and verified before use; the backend stays disabled until it's installed.
+  - **Recommended per-model parameters** (`configs.json`, fetched from `models.drawthings.ai`) — optional; without them the app falls back to your default parameters.
+- Both are fetched only when you ask. A single **check for updates at launch** toggle (on by default, in the Dependencies window) looks for newer versions and offers an **Update** — nothing is ever downloaded, installed, or updated silently.
 
 ## Getting started
 

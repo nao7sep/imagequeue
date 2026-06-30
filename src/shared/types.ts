@@ -102,20 +102,14 @@ export type CustomJsonStatus =
   | { kind: 'absent' }
   | { kind: 'unreadable'; reason: string }
 
+// Only the fields the dependency surface actually reads. The recommendations
+// file (configs.json) is otherwise versionless; "update available" is decided by
+// a byte-compare, not by anything in this status.
 export interface RecommendationStatus {
-  path: string
-  directory: string
   exists: boolean
   valid: boolean
   entryCount: number
-  fileSize: number | null
   updatedAt: string | null
-  error: string | null
-}
-
-export interface RecommendationOperationResult extends RecommendationStatus {
-  changed: boolean
-  message: string
 }
 
 export interface RecommendedParams {

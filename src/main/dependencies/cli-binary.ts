@@ -96,11 +96,15 @@ export async function installCliRelease(
     await stripQuarantine(tempPath)
 
     fs.mkdirSync(getBinDir(), { recursive: true })
-    // Same filesystem (both under the storage root) → atomic replace.
-    fs.renameSync(tempPath, getCliBinaryPath())
-
+    // Write the sidecar first, then publish the binary by atomic rename. The
+    // binary is the presence gate (isCliInstalled scans for it), so making it the
+    // last commit guarantees a present binary always has its tag recorded — never
+    // an untagged binary that reads as "installed-unchecked". A sidecar left
+    // without a binary (if the rename then failed) reads as not-installed and is
+    // harmless, overwritten on the next install. Same filesystem → atomic replace.
     const meta: CliMeta = { tag: release.tag, sha256: release.sha256, installedAt: new Date().toISOString() }
     writeJsonAtomic(getCliMetaPath(), meta)
+    fs.renameSync(tempPath, getCliBinaryPath())
     log('info', 'draw-things-cli installed', { tag: release.tag })
   } catch (err) {
     discardTempPath(tempPath)

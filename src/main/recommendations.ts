@@ -19,7 +19,6 @@ import { resolveModelsDir, ensureModelsDir } from './local-cli'
 import { updateDependenciesCache } from './dependencies/store'
 import {
   RecommendedParams,
-  RecommendationOperationResult,
   RecommendationStatus
 } from '../shared/types'
 import {
@@ -46,37 +45,23 @@ function getRecommendationsPendingPath(): string {
 
 export function getRecommendationsStatus(): RecommendationStatus {
   const filePath = getRecommendationsPath()
-  const directory = path.dirname(filePath)
   if (!fs.existsSync(filePath)) {
-    return {
-      path: filePath,
-      directory,
-      exists: false,
-      valid: false,
-      entryCount: 0,
-      fileSize: null,
-      updatedAt: null,
-      error: null
-    }
+    return { exists: false, valid: false, entryCount: 0, updatedAt: null }
   }
 
   const stat = fs.statSync(filePath)
   const parsed = parseRecommendationFile(filePath)
   return {
-    path: filePath,
-    directory,
     exists: true,
     valid: parsed.error === null,
     entryCount: parsed.specs.length,
-    fileSize: stat.size,
-    updatedAt: stat.mtime.toISOString(),
-    error: parsed.error
+    updatedAt: stat.mtime.toISOString()
   }
 }
 
 /** Acquire (or force-refresh) configs.json from the server. Writes it directly,
  * which makes any staged pending update moot, so it is cleared. */
-export async function downloadLatestRecommendations(): Promise<RecommendationOperationResult> {
+export async function downloadLatestRecommendations(): Promise<RecommendationStatus> {
   const data = await fetchBytes(RECOMMENDATIONS_URL)
   validateRecommendationBytes(data)
 
@@ -90,11 +75,7 @@ export async function downloadLatestRecommendations(): Promise<RecommendationOpe
     cache.recommendations.pending = false
   })
 
-  return {
-    ...getRecommendationsStatus(),
-    changed,
-    message: changed ? 'Downloaded latest recommendations' : 'Recommendations already up to date'
-  }
+  return getRecommendationsStatus()
 }
 
 /** Fetch the latest and compare to the installed file without changing it. If it

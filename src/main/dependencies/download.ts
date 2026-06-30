@@ -44,6 +44,27 @@ export function downloadToFile(
       return
     }
 
+    // One settle path for every failure — including a request/socket error that
+    // fires after the write stream has opened — so the partial file is always
+    // removed and the fd closed, never leaked.
+    let file: fs.WriteStream | null = null
+    let settled = false
+    const fail = (err: Error): void => {
+      if (settled) return
+      settled = true
+      if (file) {
+        file.destroy()
+        fs.rm(destPath, { force: true }, () => reject(err))
+      } else {
+        reject(err)
+      }
+    }
+    const succeed = (): void => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+
     const request = https.get(
       url,
       { timeout: 30_000, headers: { 'User-Agent': 'ImageQueue' } },
@@ -53,17 +74,17 @@ export function downloadToFile(
         if (status >= 300 && status < 400 && response.headers.location) {
           response.resume()
           if (redirectsLeft <= 0) {
-            reject(new Error('Download failed: too many redirects'))
+            fail(new Error('Download failed: too many redirects'))
             return
           }
           const next = new URL(response.headers.location, url).toString()
-          downloadToFile(next, destPath, onProgress, redirectsLeft - 1).then(resolve, reject)
+          downloadToFile(next, destPath, onProgress, redirectsLeft - 1).then(succeed, fail)
           return
         }
 
         if (status < 200 || status > 299) {
           response.resume()
-          reject(new Error(`Download failed with HTTP ${response.statusCode ?? 'unknown'}`))
+          fail(new Error(`Download failed with HTTP ${response.statusCode ?? 'unknown'}`))
           return
         }
 
@@ -71,11 +92,8 @@ export function downloadToFile(
         const totalBytes = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : null
         let downloadedBytes = 0
 
-        const file = fs.createWriteStream(destPath)
-        const fail = (err: Error): void => {
-          file.destroy()
-          fs.rm(destPath, { force: true }, () => reject(err))
-        }
+        const f = fs.createWriteStream(destPath)
+        file = f
 
         response.on('data', (chunk: Buffer) => {
           downloadedBytes += chunk.length
@@ -87,15 +105,15 @@ export function downloadToFile(
           onProgress?.({ downloadedBytes, totalBytes })
         })
 
-        response.pipe(file)
-        file.on('error', fail)
+        response.pipe(f)
+        f.on('error', fail)
         response.on('error', fail)
-        file.on('finish', () => file.close((err) => (err ? fail(err) : resolve())))
+        f.on('finish', () => f.close((err) => (err ? fail(err) : succeed())))
       }
     )
 
     request.on('timeout', () => request.destroy(new Error('Download timed out')))
-    request.on('error', reject)
+    request.on('error', fail)
   })
 }
 

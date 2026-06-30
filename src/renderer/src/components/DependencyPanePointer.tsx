@@ -6,24 +6,25 @@ import type { DependenciesState, DependencyInfo } from '../../../shared/types'
 // own. It decides its own visibility from the dependency state, following the
 // convention's display models:
 //   - everything fine            → silent (renders nothing)
-//   - something needs action     → WARN, shown persistently until resolved
+//   - an update is available     → WARN, shown persistently until resolved
 //   - optional setup / unchecked → INFO, shown temporarily then auto-hidden
 //
-// The CLI is required for the backend, so an absent or outdated CLI is a WARN;
-// configs.json is optional (params fall back), so its absence is an INFO.
+// Draw Things is one optional backend among several, so its dependencies are
+// OPTIONAL: an absent CLI or configs.json is informational (the convention's
+// optional-absent), never a warning and never a blocking first-run. The
+// always-present Dependencies menu item is the permanent way in; this pointer is
+// the temporary nudge. Only an available update — "you're behind" — is a WARN.
 
 const TEMPORARY_VISIBLE_MS = 30_000
 
 type Severity = 'warn' | 'info'
 
 function isWarn(dep: DependencyInfo): boolean {
-  if (dep.state === 'update-available') return true
-  return dep.id === 'cli' && dep.state === 'not-installed'
+  return dep.state === 'update-available'
 }
 
 function isInfo(dep: DependencyInfo): boolean {
-  if (dep.state === 'installed-unchecked') return true
-  return dep.id === 'recommendations' && dep.state === 'not-installed'
+  return dep.state === 'not-installed' || dep.state === 'installed-unchecked'
 }
 
 function severityFor(state: DependenciesState): Severity | null {
