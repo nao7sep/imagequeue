@@ -227,13 +227,13 @@ export function Layout(): React.JSX.Element {
             </MenuCheckboxItem>
             <MenuItem onSelect={() => setOverlay('settings')}>Settings</MenuItem>
             {window.electronAPI.platform === 'darwin' && (
-              <MenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-models-modal'))}>
-                Draw Things Models
+              <MenuItem onSelect={() => setOverlay('dependencies')}>
+                Dependencies
               </MenuItem>
             )}
             {window.electronAPI.platform === 'darwin' && (
-              <MenuItem onSelect={() => setOverlay('dependencies')}>
-                Dependencies
+              <MenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-models-modal'))}>
+                Draw Things Models
               </MenuItem>
             )}
             <Submenu label="Elaboration">

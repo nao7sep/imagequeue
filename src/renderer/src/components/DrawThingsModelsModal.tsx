@@ -99,6 +99,10 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const [importPath, setImportPath] = useState('')
   const [officialFilter, setOfficialFilter] = useState('')
   const [communityFilter, setCommunityFilter] = useState('')
+  // null while the check is in flight. Every operation in this modal runs the
+  // CLI (list/import/download all shell out), so without it the modal can do
+  // nothing — it shows a pointer to the Dependencies window instead of empty lists.
+  const [cliInstalled, setCliInstalled] = useState<boolean | null>(null)
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
     if (importPath.trim() === '') {
@@ -130,12 +134,17 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    window.electronAPI.localCheckCli().then((status) => setCliInstalled(status.installed))
+  }, [])
+
+  useEffect(() => {
+    if (cliInstalled !== true) return
     void loadDownloaded()
     window.electronAPI.localListAvailableModels().then((list) => {
       setAvailableModels(list)
       setLoadingAvailable(false)
     })
-  }, [loadDownloaded])
+  }, [cliInstalled, loadDownloaded])
 
   // Keep the downloaded list fresh while jobs finish in the background.
   useEffect(() => {
@@ -214,7 +223,10 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   return (
     <Modal
       title="Draw Things Models"
-      className="dt-modal-box"
+      // The wide fixed width is for the two model columns. The CLI-required
+      // blocked state is just a sentence and a button, so it drops that class and
+      // takes the shell's natural (narrower) modal sizing.
+      className={cliInstalled === false ? undefined : 'dt-modal-box'}
       onClose={() => { void handleRequestClose() }}
       footer={
         <button className="modal-btn" onClick={() => { void handleRequestClose() }}>
@@ -222,6 +234,23 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         </button>
       }
     >
+      {cliInstalled === false ? (
+        <div className="dt-modal-body dt-cli-required">
+          <p className="dt-hint">
+            The Draw Things CLI is required to list, download, or import models, and it isn&apos;t
+            installed yet.
+          </p>
+          <button
+            className="dt-action-btn"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('open-dependencies-modal'))
+              onClose()
+            }}
+          >
+            Open Dependencies
+          </button>
+        </div>
+      ) : (
       <div className="dt-modal-body">
         <div className="dt-model-columns">
           <section className="dt-model-column">
@@ -293,6 +322,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
           </section>
         </div>
       </div>
+      )}
     </Modal>
   )
 }

@@ -52,9 +52,15 @@ function progressLabel(progress: DependencyProgress): string {
 
 export function DependenciesModal({ onClose }: Props): React.JSX.Element {
   const [state, setState] = useState<DependenciesState | null>(null)
-  const [busy, setBusy] = useState<DependencyId | 'check' | null>(null)
+  // Operations in flight, by id. A set (not a single value) so the two downloads —
+  // the CLI and configs.json — can run at the same time; they touch different
+  // files and independent cache sections. 'check' is set-wide (re-reads both), so
+  // it's kept exclusive with the per-row actions; 'toggle' is the launch checkbox.
+  const [busy, setBusy] = useState<ReadonlySet<DependencyId | 'check' | 'toggle'>>(() => new Set())
   const [progress, setProgress] = useState<DependencyProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const anyBusy = busy.size > 0
 
   useEffect(() => {
     void window.electronAPI.getDependenciesState().then(setState)
@@ -64,17 +70,28 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
     return window.electronAPI.onDependencyProgress(setProgress)
   }, [])
 
+  // An in-flight operation must not be abandoned mid-stream — closing during the
+  // CLI download orphans the install and its progress view. So while any op runs,
+  // every close path (Escape, backdrop, ✕, the Close button) is blocked through
+  // this one guard, per the modal convention's Busy and Non-Interruptible States.
+  const requestClose = useCallback((): void => {
+    if (busy.size > 0) return
+    onClose()
+  }, [busy, onClose])
+
   // After any mutation, the column and pane pointer re-read from main.
   const broadcastChange = useCallback((): void => {
     window.dispatchEvent(new CustomEvent('dependencies-changed'))
   }, [])
 
-  // Run one operation: track which row is busy, apply the returned snapshot, and
-  // surface a clean error. Operations never partially apply (the main side leaves
-  // no half-state), so the snapshot is always authoritative.
+  // Run one operation: mark its id busy, apply the returned snapshot, and surface
+  // a clean error. Functional set updates so concurrent ops don't clobber each
+  // other's busy entry. Operations never partially apply (the main side leaves no
+  // half-state), so each returned snapshot is authoritative; the later of two
+  // concurrent ops reflects both effects.
   const run = useCallback(
-    async (id: DependencyId | 'check', op: () => Promise<DependenciesState>): Promise<void> => {
-      setBusy(id)
+    async (id: DependencyId | 'check' | 'toggle', op: () => Promise<DependenciesState>): Promise<void> => {
+      setBusy((prev) => new Set(prev).add(id))
       setError(null)
       try {
         setState(await op())
@@ -82,8 +99,14 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
-        setBusy(null)
-        setProgress(null)
+        setBusy((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        // Only the CLI install drives the progress bar; don't clear it when a
+        // concurrent configs.json download finishes first.
+        if (id === 'cli') setProgress(null)
       }
     },
     [broadcastChange]
@@ -103,25 +126,33 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
     )
 
   const handleToggleCheckAtLaunch = (value: boolean): Promise<void> =>
-    run('check', () => window.electronAPI.setCheckUpdatesAtLaunch(value))
+    run('toggle', () => window.electronAPI.setCheckUpdatesAtLaunch(value))
 
   return (
     <Modal
       title="Dependencies"
       className="dependencies-modal-box"
-      onClose={onClose}
+      onClose={requestClose}
+      closeOnBackdropClick={!anyBusy}
       footer={
-        <div className="dependencies-footer">
+        <>
+          <button
+            type="button"
+            className="modal-btn modal-footer-lead"
+            disabled={anyBusy}
+            onClick={() => { void handleCheck() }}
+          >
+            {busy.has('check') ? 'Checking…' : 'Check for updates'}
+          </button>
           <button
             type="button"
             className="modal-btn"
-            disabled={busy !== null}
-            onClick={() => { void handleCheck() }}
+            disabled={anyBusy}
+            onClick={requestClose}
           >
-            {busy === 'check' ? 'Checking…' : 'Check for updates'}
+            Close
           </button>
-          <button type="button" className="modal-btn" onClick={onClose}>Close</button>
-        </div>
+        </>
       }
     >
       <div className="dependencies-body">
@@ -138,17 +169,17 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               title="Draw Things CLI"
               description="The image-generation engine. Downloaded from the official release and verified against its published checksum."
               info={state.cli}
-              busy={busy === 'cli'}
-              disabled={busy !== null}
-              progress={busy === 'cli' ? progress : null}
+              busy={busy.has('cli')}
+              disabled={busy.has('cli') || busy.has('check')}
+              progress={busy.has('cli') ? progress : null}
               onAction={() => { void handleCliAction() }}
             />
             <DependencyRow
               title="Recommended parameters"
               description="Per-model defaults (configs.json) from Draw Things. Optional — generation falls back to your defaults without it."
               info={state.recommendations}
-              busy={busy === 'recommendations'}
-              disabled={busy !== null}
+              busy={busy.has('recommendations')}
+              disabled={busy.has('recommendations') || busy.has('check')}
               progress={null}
               onAction={() => { void handleRecommendationsAction(state.recommendations) }}
             />
@@ -157,7 +188,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               <input
                 type="checkbox"
                 checked={state.checkUpdatesAtLaunch}
-                disabled={busy !== null}
+                disabled={busy.has('toggle') || busy.has('check')}
                 onChange={(e) => { void handleToggleCheckAtLaunch(e.target.checked) }}
               />
               Check for updates at launch

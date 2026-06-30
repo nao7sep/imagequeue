@@ -14,8 +14,8 @@
 import fs from 'fs'
 import path from 'path'
 import https from 'https'
-import { getDataDir } from './config'
 import { writeFileAtomic } from './utils/atomic-write'
+import { resolveModelsDir, ensureModelsDir } from './local-cli'
 import { updateDependenciesCache } from './dependencies/store'
 import {
   RecommendedParams,
@@ -30,20 +30,18 @@ import {
 } from './recommendation-match'
 
 const RECOMMENDATIONS_URL = 'https://models.drawthings.ai/configs.json'
-const DATA_DIR = 'data'
 const RECOMMENDATIONS_FILE = 'configs.json'
 const RECOMMENDATIONS_PENDING_FILE = 'configs.pending.json'
 
-export function getRecommendationsDir(): string {
-  return path.join(getDataDir(), DATA_DIR)
-}
-
+// configs.json lives in the effective models dir, alongside Draw Things' own
+// custom.json — its natural home, and shared with the GUI app's models when the
+// user points models_dir there.
 export function getRecommendationsPath(): string {
-  return path.join(getRecommendationsDir(), RECOMMENDATIONS_FILE)
+  return path.join(resolveModelsDir(), RECOMMENDATIONS_FILE)
 }
 
 function getRecommendationsPendingPath(): string {
-  return path.join(getRecommendationsDir(), RECOMMENDATIONS_PENDING_FILE)
+  return path.join(resolveModelsDir(), RECOMMENDATIONS_PENDING_FILE)
 }
 
 export function getRecommendationsStatus(): RecommendationStatus {
@@ -82,9 +80,8 @@ export async function downloadLatestRecommendations(): Promise<RecommendationOpe
   const data = await fetchBytes(RECOMMENDATIONS_URL)
   validateRecommendationBytes(data)
 
+  ensureModelsDir()
   const filePath = getRecommendationsPath()
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-
   const changed = !(fs.existsSync(filePath) && fs.readFileSync(filePath).equals(data))
   if (changed) writeFileAtomic(filePath, data)
   clearPendingUpdate()
@@ -121,7 +118,7 @@ export async function checkRecommendations(): Promise<RecommendationStatus> {
   const differs = !fs.readFileSync(filePath).equals(latest)
 
   if (differs) {
-    fs.mkdirSync(getRecommendationsDir(), { recursive: true })
+    ensureModelsDir()
     writeFileAtomic(getRecommendationsPendingPath(), latest)
   } else {
     clearPendingUpdate()

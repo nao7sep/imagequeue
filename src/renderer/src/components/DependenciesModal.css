@@ -1,11 +1,16 @@
 .dependencies-modal-box {
   width: min(560px, 92vw);
+  /* Override .modal-box's max-width: 480px, which would otherwise clamp the
+     intended width back down to 480. */
+  max-width: 92vw;
 }
 
 .dependencies-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* The Modal shell renders the body un-padded; each modal pads its own. */
+  padding: 16px;
 }
 
 .dependencies-intro {
@@ -138,10 +143,4 @@
   gap: 8px;
   font-size: 12px;
   color: var(--text-secondary);
-}
-
-.dependencies-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
 }

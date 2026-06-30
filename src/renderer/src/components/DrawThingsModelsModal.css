@@ -18,6 +18,15 @@
   display: flex;
 }
 
+/* CLI-required blocked state: the modal can't function without the CLI, so it
+   leads to the Dependencies window instead of showing empty model lists. */
+.dt-cli-required {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  overflow: auto;
+}
+
 .dt-model-columns {
   flex: 1;
   min-height: 0;
