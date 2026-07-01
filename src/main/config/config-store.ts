@@ -76,15 +76,12 @@ export function loadConfig(): AppConfig {
     log('error', 'Failed to parse config file', { path: configPath, error: serializeError(err) })
     throw new Error(`Config file is not valid JSON: ${configPath}`, { cause: err })
   }
+  // Fill any missing keys from the defaults in memory only. An existing config is never rewritten to
+  // sync the schema (write-if-missing, storage-path conventions): a good or hand-edited file is never
+  // exposed to an overwrite bug, and it picks up newly added keys on the next real save — the in-code
+  // default for any absent key already drives behavior in the meantime.
   const merged = deepMergeDefaults(parsed, createDefaultConfig())
-  // If the merge filled in any new keys (e.g., a setting added since this
-  // file was last written), persist the canonical form so the on-disk file
-  // stays in sync with the schema.
-  if (JSON.stringify(parsed) !== JSON.stringify(merged)) {
-    saveConfig(merged)
-  } else {
-    cachedConfig = merged
-  }
+  cachedConfig = merged
   return merged
 }
 

@@ -352,22 +352,53 @@ function isElaborator(value: unknown): value is Elaborator {
   return true
 }
 
+// yyyymmdd-hhmmss-utc stamp for the quarantine filename (mirrors api-keys-store's helper).
+function utcStampForFilename(): string {
+  const d = new Date()
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return (
+    `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
+    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-utc`
+  )
+}
+
+// Move a corrupt elaborators file aside to a timestamped `.invalid` neighbour before defaults are
+// reseeded over it, so the reset never silently discards the user's (possibly hand-edited) data —
+// the storage-path conventions' quarantine-then-reset rule. Best-effort: a rename failure is logged,
+// not fatal (the caller still reseeds). Renaming also means the bad file is handled once, not
+// re-flagged on every read, since the reseeded file then parses cleanly.
+function quarantineCorruptFile(file: string, reason: string, err?: unknown): void {
+  const movedTo = `${file}.${utcStampForFilename()}.invalid`
+  try {
+    fs.renameSync(file, movedTo)
+    log('warn', `Quarantined ${reason} elaborators file; reseeding defaults`, {
+      from: file,
+      to: movedTo,
+      ...(err ? { error: serializeError(err) } : {}),
+    })
+  } catch (renameErr) {
+    log('error', 'Failed to quarantine corrupt elaborators file; reseeding defaults', {
+      path: file,
+      error: serializeError(renameErr),
+    })
+  }
+}
+
 function readFile(): Elaborator[] | null {
   const file = getElaboratorsFilePath()
-  // A missing file is the expected first-run case — probe silently and let the
-  // caller seed defaults. A file that exists but is unparseable or malformed is
-  // unexpected (corrupt or hand-edited), and the caller will overwrite it with
-  // defaults, so warn before that happens rather than swallowing it.
+  // A missing file is the expected first-run case — probe silently and let the caller seed defaults.
+  // A file that exists but is unparseable or malformed is unexpected (corrupt or hand-edited); the
+  // caller will reseed defaults over it, so quarantine the bad bytes aside first.
   if (!fs.existsSync(file)) return null
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
     if (!Array.isArray(parsed) || !parsed.every(isElaborator)) {
-      log('warn', 'Ignoring malformed elaborators file; reseeding defaults', { path: file })
+      quarantineCorruptFile(file, 'malformed')
       return null
     }
     return parsed
   } catch (err) {
-    log('warn', 'Ignoring unreadable elaborators file; reseeding defaults', { path: file, error: serializeError(err) })
+    quarantineCorruptFile(file, 'unreadable', err)
     return null
   }
 }

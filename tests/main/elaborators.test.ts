@@ -46,6 +46,25 @@ describe('elaborators store (atomic write of elaborators.json)', () => {
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
+  it('quarantines a corrupt elaborators.json before reseeding defaults', () => {
+    const filePath = path.join(tmpRoot, 'elaborators.json')
+    fs.writeFileSync(filePath, '{ not valid json', 'utf-8')
+
+    const seeded = listElaborators()
+
+    // The store recovers with defaults...
+    expect(seeded.length).toBeGreaterThan(0)
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Elaborator[]
+    expect(parsed).toEqual(seeded)
+
+    // ...but the corrupt bytes are preserved aside as a `.invalid` neighbour, never silently discarded.
+    const quarantined = fs
+      .readdirSync(tmpRoot)
+      .filter((name) => name.startsWith('elaborators.json.') && name.endsWith('.invalid'))
+    expect(quarantined).toHaveLength(1)
+    expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf-8')).toBe('{ not valid json')
+  })
+
   it('leaves no orphaned temp file after a mutating write', () => {
     const filePath = path.join(tmpRoot, 'elaborators.json')
 
