@@ -21,6 +21,7 @@ import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
+import { runBackupInBackground } from './backup/backup-service'
 
 let mainWin: BrowserWindow | null = null
 
@@ -172,6 +173,13 @@ app.whenReady().then(() => {
   // check is past the staleness cap. Fire-and-forget: never blocks startup, and
   // its result is surfaced passively (pane pointer / modal), never as a prompt.
   void checkDependenciesAtLaunch()
+
+  // Just-in-case data backup (data-backup conventions): a best-effort, silent,
+  // incremental snapshot of the home root taken at startup. Fire-and-forget —
+  // it never blocks the window, shows an error, or crashes the app; the pass
+  // logs its own outcome. Config has been materialized above (loadConfig
+  // writes config.json on first run), so the backup sees a complete home root.
+  runBackupInBackground()
 
   createWindow()
 
