@@ -101,11 +101,12 @@ describe('selectChanged (pure change decision)', () => {
 })
 
 describe('home-root exclusions', () => {
-  it('backs up the four managed files', () => {
+  it('backs up the durable managed files but not the secrets file', () => {
     expect(isExcludedFile('config.json')).toBe(false)
-    expect(isExcludedFile('api-keys.json')).toBe(false)
     expect(isExcludedFile('elaborators.json')).toBe(false)
     expect(isExcludedFile('params.json')).toBe(false)
+    // api-keys.json is a secret and is excluded.
+    expect(isExcludedFile('api-keys.json')).toBe(true)
   })
 
   it('excludes the entire output/ directory and everything under it', () => {
@@ -131,6 +132,11 @@ describe('home-root exclusions', () => {
   it('excludes *.tmp atomic-write temporaries', () => {
     expect(isExcludedFile('config.json.tmp')).toBe(true)
     expect(isExcludedFile('foo/bar.TMP')).toBe(true)
+  })
+
+  it('excludes *.invalid quarantined-aside files case-insensitively', () => {
+    expect(isExcludedFile('api-keys.json.20260701-000000-utc.invalid')).toBe(true)
+    expect(isExcludedFile('foo/bar.INVALID')).toBe(true)
   })
 
   it('excludes OS/file-manager noise case-insensitively at any depth', () => {

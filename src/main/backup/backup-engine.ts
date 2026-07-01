@@ -51,11 +51,9 @@ async function runCore(now: Date): Promise<BackupReport> {
       lastWriteUtc: toIsoSeconds(item.mtimeMs),
     })
   }
-  // Index second: the archive is already in place, so a crash here just re-captures next run. It lives in
-  // the 0700 backups dir; give the file owner-only bits too on POSIX (an archive may hold api-keys.json).
+  // Index second: the archive is already in place, so a crash here just re-captures next run.
   const indexPath = getBackupIndexPath()
   writeFileAtomic(indexPath, `${JSON.stringify(index, null, 2)}\n`)
-  await chmodOwnerOnly(indexPath, 0o600)
 
   return { nothingChanged: false, archiveFileName, filesArchived: archived.length, skips, indexWasReset }
 }
@@ -113,7 +111,7 @@ async function writeArchive(
 
   zip.end()
   try {
-    await pipeline(zip.outputStream, createWriteStream(tempPath, { mode: 0o600 }))
+    await pipeline(zip.outputStream, createWriteStream(tempPath))
     await fs.promises.rename(tempPath, finalPath)
   } catch (err) {
     await tryDelete(tempPath)
@@ -125,19 +123,7 @@ async function writeArchive(
 async function ensureBackupsDir(): Promise<string> {
   const dir = getBackupsDir()
   await fs.promises.mkdir(dir, { recursive: true })
-  // Owner-only: a backup may contain a secrets file (api-keys.json), so the archives must not be readable
-  // by other users even though the zip itself carries the umask default (data-backup conventions).
-  await chmodOwnerOnly(dir, 0o700)
   return dir
-}
-
-async function chmodOwnerOnly(target: string, mode: number): Promise<void> {
-  if (process.platform === 'win32') return
-  try {
-    await fs.promises.chmod(target, mode)
-  } catch {
-    // best effort: the 0700 dir already restricts access; a failed chmod must not fail the run
-  }
 }
 
 async function tryDelete(target: string): Promise<void> {

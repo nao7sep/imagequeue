@@ -58,7 +58,7 @@ function archiveEntryNames(zipPath: string): string[] {
 }
 
 describe('runBackup (engine over a temp home)', () => {
-  it('first run captures the managed files and writes an index object', async () => {
+  it('first run captures the durable managed files and writes an index object', async () => {
     write('config.json', '{"a":1}')
     write('api-keys.json', 'secret')
     write('elaborators.json', '[]')
@@ -69,25 +69,27 @@ describe('runBackup (engine over a temp home)', () => {
     expect(report.fatal).toBeUndefined()
     expect(report.nothingChanged).toBe(false)
     expect(report.indexWasReset).toBe(false)
-    expect(report.filesArchived).toBe(4)
+    expect(report.filesArchived).toBe(3)
 
     const archives = listArchives()
     expect(archives).toEqual(['backup-20260701-010000-utc.zip'])
 
     const names = archiveEntryNames(path.join(backupsDir(), archives[0]))
-    expect(names.sort()).toEqual(['api-keys.json', 'config.json', 'elaborators.json', 'params.json'])
+    // api-keys.json (a secret) is excluded; only the durable managed files are captured.
+    expect(names.sort()).toEqual(['config.json', 'elaborators.json', 'params.json'])
+    expect(names).not.toContain('api-keys.json')
 
     // The index is the { entries: [...] } object shape, not a bare array.
     const idx = readIndex()
     expect(Array.isArray(idx)).toBe(false)
     expect(Array.isArray(idx.entries)).toBe(true)
-    expect(idx.entries).toHaveLength(4)
+    expect(idx.entries).toHaveLength(3)
     const entry = idx.entries.find((e) => e.archivePath === 'config.json')!
     expect(Object.keys(entry)).toEqual(['archivedAt', 'archivePath', 'sizeBytes', 'lastWriteUtc'])
     expect(entry.archivedAt).toBe('20260701-010000-utc')
   })
 
-  it('excludes output/, bin/, models/, temp/, and dependencies.json from the archive', async () => {
+  it('excludes output/, bin/, models/, temp/, dependencies.json, api-keys.json, and *.invalid', async () => {
     write('config.json', '{"a":1}')
     write('output/20260701-000000-utc/session.json', '{}')
     write('output/20260701-000000-utc/image-1.png', 'PNGDATA')
@@ -96,6 +98,8 @@ describe('runBackup (engine over a temp home)', () => {
     write('models/weights.bin', 'WEIGHTS')
     write('temp/scratch.dat', 'scratch')
     write('dependencies.json', '{"cache":true}')
+    write('api-keys.json', 'secret')
+    write('api-keys.json.20260701-000000-utc.invalid', 'quarantined')
 
     const report = await runBackup(new Date(Date.UTC(2026, 6, 1, 1, 0, 0)))
     expect(report.filesArchived).toBe(1)
@@ -108,6 +112,9 @@ describe('runBackup (engine over a temp home)', () => {
     expect(names).not.toContain('models/weights.bin')
     expect(names).not.toContain('temp/scratch.dat')
     expect(names).not.toContain('dependencies.json')
+    // Secrets and quarantined-aside files are excluded too.
+    expect(names).not.toContain('api-keys.json')
+    expect(names).not.toContain('api-keys.json.20260701-000000-utc.invalid')
 
     // The index never records an excluded path either.
     expect(readIndex().entries.map((e) => e.archivePath)).toEqual(['config.json'])
