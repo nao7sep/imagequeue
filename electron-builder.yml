@@ -3,11 +3,11 @@ productName: ImageQueue
 copyright: Copyright © 2026 Yoshinao Inoguchi
 
 # No `publish` block: electron-builder always runs with `--publish never`. The
-# release workflow attaches only the .dmg and .exe to the GitHub Release itself
-# (via the gh CLI), so electron-builder's auto-update artifacts (latest*.yml,
-# *.blockmap, the mac update .zip) are never uploaded — keeping releases to the
-# two essentials. Add a `publish` block + electron-updater if/when you want
-# in-app auto-updates.
+# release workflow (release.yml) attaches the installer + portable zip per OS to a
+# draft GitHub Release via softprops/action-gh-release, whose globs omit
+# electron-builder's auto-update byproducts (latest*.yml, *.blockmap, the mac
+# update metadata), so those are never uploaded. Add a `publish` block +
+# electron-updater if/when you want in-app auto-updates.
 
 directories:
   buildResources: build
@@ -51,6 +51,9 @@ mac:
     - target: dmg
       arch:
         - arm64
+    - target: zip
+      arch:
+        - arm64
   # No Apple Developer certificate available. Do NOT set identity:null — that
   # skips signing entirely and leaves the arm64 bundle's seal broken so it won't
   # launch cleanly. Instead we ad-hoc sign the whole bundle (electron-builder's
@@ -63,6 +66,7 @@ win:
   icon: build/icon.ico
   target:
     - nsis
+    - zip
 
 nsis:
   oneClick: false

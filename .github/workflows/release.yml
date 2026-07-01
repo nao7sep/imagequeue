@@ -1,96 +1,73 @@
 name: Release
 
-# ImageQueue is built for macOS and Windows in CI: macOS on a macos-latest
-# runner, Windows on a windows-latest one (Windows can't be built from a Mac).
+# Per the app-release-conventions: test → package → attach to a DRAFT release.
+# CI stays minimal — the packaging complexity lives in electron-builder.yml and
+# the `dist` npm script. Nothing is published automatically; a draft is created
+# for the pushed tag, verified, then published by hand (gh release edit --draft=false).
 #
-# fail-fast is disabled so a Windows build failure never blocks the macOS one.
-#
-# Two ways to trigger:
-#   - Push a tag like v0.1.0  -> builds both platforms and attaches ONLY the two
-#     installers (macOS .dmg + Windows .exe) to a single DRAFT GitHub Release for
-#     that tag (test it, then publish the draft).
-#   - Run manually from the Actions tab ("Run workflow") -> builds both and
-#     uploads the installers as run artifacts, without creating a release.
-#
-# We build with `electron-builder --publish never` and attach the installers via
-# the gh CLI, so electron-builder's auto-update extras (latest*.yml, *.blockmap,
-# the mac update .zip) are never uploaded — releases stay to the essentials.
+# Two triggers:
+#   - push a tag `v*` -> build every platform, attach installers + portables to a
+#     single draft release for that tag.
+#   - manual dispatch -> build only (no release), for a smoke check.
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
-# Needed for the gh CLI to create/upload the draft release.
 permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            platform: mac
-            artifact-name: imagequeue-macos
-          - os: windows-latest
-            platform: win
-            artifact-name: imagequeue-windows
-    runs-on: ${{ matrix.os }}
+  # Gate: a failing test suite means no release is built.
+  test:
+    runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: lts/*
           cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
 
-      # Installs exactly from package-lock.json. The darwin-only postinstall
-      # (spawn-helper perms) no-ops on Windows.
-      - name: Install dependencies
-        run: npm ci
+  build:
+    needs: test
+    strategy:
+      fail-fast: false # a Windows failure never cancels the macOS build
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
 
-      # electron-vite -> out/
-      - name: Build renderer/main/preload
-        run: npm run build
-
-      # Package the installer only. node-pty is N-API + prebuilt (npmRebuild:false),
-      # so no native toolchain is needed. On macOS, CSC_IDENTITY_AUTO_DISCOVERY=false
-      # makes electron-builder fall back to an ad-hoc signature (no Developer ID).
-      - name: Package ${{ matrix.platform }}
-        run: npx --no-install electron-builder --${{ matrix.platform }} --publish never
+      # One command: electron-vite build + electron-builder for the host OS.
+      # electron-builder targets the current platform, so macOS makes the .dmg +
+      # portable .zip, and Windows the setup.exe + portable .zip.
+      # --publish never (in the script) means it builds but uploads nothing here.
+      # CSC_IDENTITY_AUTO_DISCOVERY=false gives the ad-hoc (unsigned) macOS bundle.
+      - name: Package (host OS)
+        run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      # Tag pushes: attach this platform's installer to the shared draft release.
-      # The first matrix job to finish creates the draft; the other's create is a
-      # no-op (|| true). --clobber makes re-running the same tag idempotent.
-      - name: Attach installer to the draft release (tag pushes)
+      # Attach only the real artifacts to the draft. The globs deliberately omit
+      # electron-builder's auto-update byproducts (latest*.yml, *.blockmap), so
+      # the release stays to the installers + portables until auto-update exists.
+      - name: Attach to draft release
         if: github.ref_type == 'tag'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          shopt -s nullglob
-          files=(dist/*.dmg dist/*-setup.exe)
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
-            --title "ImageQueue $TAG" \
-            --notes "ImageQueue $TAG — unsigned macOS (.dmg) and Windows (.exe) installers." \
-            2>/dev/null || true
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "${files[@]}" --clobber
-
-      # Manual runs: no release, just the installers as downloadable artifacts.
-      - name: Upload installers as run artifacts (manual runs)
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v7
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
-          name: ${{ matrix.artifact-name }}
-          if-no-files-found: error
-          path: |
+          draft: true
+          prerelease: true # 0.x is pre-release
+          files: |
             dist/*.dmg
-            dist/*-setup.exe
+            dist/*.exe
+            dist/*.zip
