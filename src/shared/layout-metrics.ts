@@ -20,10 +20,11 @@
 import { BACKEND_IDS_IN_UI_ORDER, type BackendId } from './types'
 import type { Platform } from './electron-api'
 
-/** The smallest useful width of one backend column, in CSS px. This equals the
- *  responsive small-screen column width (.queue-column @media max-width:1599px),
- *  i.e. the per-column floor below which the model row + enqueue button stop
- *  being usable. */
+/** The fixed width of one backend column, in CSS px — also its content floor:
+ *  the per-column width below which the model row + enqueue button stop being
+ *  usable. Columns are a fixed width, not responsive (.queue-column width ===
+ *  min-width === this), so this is both the rendered column width and the amount
+ *  the window minimum reserves per visible backend. */
 export const COLUMN_MIN_PX = 160
 
 /** A real minimum for the left prompt/preview pane, in CSS px — wide enough to

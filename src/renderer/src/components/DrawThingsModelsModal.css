@@ -268,17 +268,3 @@
   font-size: 12px;
   box-sizing: border-box;
 }
-
-@media (max-width: 760px) {
-  .dt-model-columns {
-    grid-template-columns: 1fr;
-  }
-
-  .dt-import-row {
-    grid-template-columns: 1fr;
-  }
-
-  .dt-import-row .dt-action-btn {
-    width: 100%;
-  }
-}

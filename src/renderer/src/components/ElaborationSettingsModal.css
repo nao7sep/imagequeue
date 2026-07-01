@@ -120,9 +120,3 @@
   justify-content: flex-end;
   margin-top: 4px;
 }
-
-@media (max-width: 760px) {
-  .elaboration-settings-row {
-    grid-template-columns: 1fr;
-  }
-}

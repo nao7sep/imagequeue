@@ -303,35 +303,3 @@
   font-weight: 700;
   padding: 9px 14px;
 }
-
-@media (max-height: 760px) {
-  .advanced-elaborator-columns {
-    flex-basis: 180px;
-    min-height: 92px;
-  }
-
-  .advanced-elaborator-column-list {
-    max-height: 190px;
-  }
-
-  .advanced-seed {
-    flex-basis: 58px;
-    min-height: 38px;
-  }
-
-  .advanced-elaborated {
-    flex-basis: 86px;
-    min-height: 58px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .advanced-body {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-
-  .advanced-elaborator-columns {
-    grid-template-columns: 1fr;
-  }
-}
