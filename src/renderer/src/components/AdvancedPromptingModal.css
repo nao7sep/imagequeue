@@ -223,7 +223,7 @@
 
 .advanced-target-row.disabled {
   color: var(--text-muted);
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .advanced-target-row span:first-of-type {
@@ -265,7 +265,7 @@
 
 .advanced-radio.disabled {
   color: var(--text-muted);
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .advanced-count {
