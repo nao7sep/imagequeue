@@ -124,6 +124,12 @@ button {
   font-size: inherit;
 }
 
+/* A disabled button shows the plain arrow, never the hand — a dead button must
+   not invite a click. Overrides the global button pointer above. */
+button:disabled {
+  cursor: default;
+}
+
 button:active:not(:disabled) {
   opacity: 0.6;
   transform: scale(0.95);
