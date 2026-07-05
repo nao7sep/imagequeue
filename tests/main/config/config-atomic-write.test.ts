@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadConfig, saveConfig, getConfigPath } from '../../../src/main/config'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 
@@ -41,8 +41,8 @@ describe('config store (atomic write of config.json)', () => {
     expect(parsed).toEqual(seeded)
     expect(parsed).toEqual(createDefaultConfig())
 
-    // writeJsonAtomic writes "<file>.tmp" then renames; after a clean write the
-    // temp artifact must be gone so no truncated/partial file is left behind.
+    // writeJsonAtomic writes "<stem>-<nanoid>.tmp" (never a dot-appended "<file>.tmp") then renames;
+    // after a clean write the temp artifact must be gone so no truncated/partial file is left behind.
     expect(fs.existsSync(`${configPath}.tmp`)).toBe(false)
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
@@ -59,5 +59,20 @@ describe('config store (atomic write of config.json)', () => {
 
     expect(fs.existsSync(`${configPath}.tmp`)).toBe(false)
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as config.json', () => {
+    const spy = vi.spyOn(fs, 'writeFileSync')
+    const config = createDefaultConfig()
+    saveConfig(config)
+
+    const tempCall = spy.mock.calls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('config-')
+    )
+    expect(tempCall).toBeDefined()
+    const tempPath = tempCall![0] as string
+    expect(path.dirname(tempPath)).toBe(tmpRoot)
+    expect(path.basename(tempPath)).toMatch(/^config-[A-Za-z0-9_-]+\.tmp$/)
+    spy.mockRestore()
   })
 })

@@ -73,7 +73,7 @@ export async function installCliRelease(
     throw new Error('Release asset has no published checksum; refusing to install unverified binary')
   }
 
-  const tempPath = allocateTempPath()
+  const tempPath = allocateTempPath(getCliBinaryPath())
   try {
     await downloadToFile(release.assetUrl, tempPath, (p: DownloadProgress) =>
       onProgress?.({ phase: 'downloading', downloadedBytes: p.downloadedBytes, totalBytes: p.totalBytes })

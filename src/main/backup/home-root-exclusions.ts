@@ -18,7 +18,7 @@
  * - `api-keys.json` — the secrets file; secrets are not backed up.
  * - `dependencies.json` — a re-derivable dependency cache, not durable user data.
  * - `*.tmp` — atomic-write temporaries (fleet floor).
- * - `*.invalid` — quarantined-aside corrupt files (e.g. a set-aside `api-keys.json.<stamp>.invalid`),
+ * - `*.invalid` — quarantined-aside corrupt files (e.g. a set-aside `api-keys-<stamp>.invalid`),
  *   matched case-insensitively; throwaway, not durable data.
  * - `.DS_Store` / `Thumbs.db` / `desktop.ini` — OS/file-manager folder-metadata litter, matched
  *   case-insensitively by base name at any depth (fleet floor).

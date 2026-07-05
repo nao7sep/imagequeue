@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElaborator, listElaborators } from '../../src/main/elaborators'
 import type { Elaborator } from '../../src/shared/types'
 
@@ -39,11 +39,25 @@ describe('elaborators store (atomic write of elaborators.json)', () => {
     expect(Array.isArray(parsed)).toBe(true)
     expect(parsed).toEqual(seeded)
 
-    // The atomic helper writes to "<file>.tmp" then renames; after a clean
-    // write the temp artifact must be gone (a truncated/partial file can't be
-    // left where the next load would see it).
+    // The atomic helper writes to "<stem>-<nanoid>.tmp" (never a dot-appended
+    // "<file>.tmp") then renames; after a clean write the temp artifact must be
+    // gone (a truncated/partial file can't be left where the next load would see it).
     expect(fs.existsSync(`${filePath}.tmp`)).toBe(false)
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', () => {
+    const spy = vi.spyOn(fs, 'writeFileSync')
+    listElaborators()
+
+    const tempCall = spy.mock.calls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('elaborators-')
+    )
+    expect(tempCall).toBeDefined()
+    const tempPath = tempCall![0] as string
+    expect(path.dirname(tempPath)).toBe(tmpRoot)
+    expect(path.basename(tempPath)).toMatch(/^elaborators-[A-Za-z0-9_-]+\.tmp$/)
+    spy.mockRestore()
   })
 
   it('quarantines a corrupt elaborators.json before reseeding defaults', () => {
@@ -58,10 +72,13 @@ describe('elaborators store (atomic write of elaborators.json)', () => {
     expect(parsed).toEqual(seeded)
 
     // ...but the corrupt bytes are preserved aside as a `.invalid` neighbour, never silently discarded.
+    // The name is `<stem>-<stamp>.invalid` (hyphen-joined into the target's stem, never a dot-appended
+    // `elaborators.json.<stamp>.invalid`), stamped at millisecond precision.
     const quarantined = fs
       .readdirSync(tmpRoot)
-      .filter((name) => name.startsWith('elaborators.json.') && name.endsWith('.invalid'))
+      .filter((name) => name.startsWith('elaborators-') && name.endsWith('.invalid'))
     expect(quarantined).toHaveLength(1)
+    expect(quarantined[0]).toMatch(/^elaborators-\d{8}-\d{6}-\d{3}-utc\.invalid$/)
     expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf-8')).toBe('{ not valid json')
   })
 

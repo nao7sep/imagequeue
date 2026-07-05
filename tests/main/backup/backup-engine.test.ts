@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runBackup } from '../../../src/main/backup/backup-engine'
 import type { BackupIndex } from '../../../src/main/backup/backup-types'
 
@@ -72,7 +72,8 @@ describe('runBackup (engine over a temp home)', () => {
     expect(report.filesArchived).toBe(3)
 
     const archives = listArchives()
-    expect(archives).toEqual(['backup-20260701-010000-utc.zip'])
+    // archivedAt (and so the archive stem) is millisecond-precision: yyyymmdd-hhmmss-fff-utc.
+    expect(archives).toEqual(['backup-20260701-010000-000-utc.zip'])
 
     const names = archiveEntryNames(path.join(backupsDir(), archives[0]))
     // api-keys.json (a secret) is excluded; only the durable managed files are captured.
@@ -86,7 +87,7 @@ describe('runBackup (engine over a temp home)', () => {
     expect(idx.entries).toHaveLength(3)
     const entry = idx.entries.find((e) => e.archivePath === 'config.json')!
     expect(Object.keys(entry)).toEqual(['archivedAt', 'archivePath', 'sizeBytes', 'lastWriteUtc'])
-    expect(entry.archivedAt).toBe('20260701-010000-utc')
+    expect(entry.archivedAt).toBe('20260701-010000-000-utc')
   })
 
   it('excludes output/, bin/, models/, temp/, dependencies.json, api-keys.json, and *.invalid', async () => {
@@ -99,7 +100,9 @@ describe('runBackup (engine over a temp home)', () => {
     write('temp/scratch.dat', 'scratch')
     write('dependencies.json', '{"cache":true}')
     write('api-keys.json', 'secret')
-    write('api-keys.json.20260701-000000-utc.invalid', 'quarantined')
+    // Quarantine name is `<stem>-<stamp>.invalid` (hyphen-joined, never a dot-appended
+    // `api-keys.json.<stamp>.invalid`), stamped at millisecond precision.
+    write('api-keys-20260701-000000-123-utc.invalid', 'quarantined')
 
     const report = await runBackup(new Date(Date.UTC(2026, 6, 1, 1, 0, 0)))
     expect(report.filesArchived).toBe(1)
@@ -114,7 +117,7 @@ describe('runBackup (engine over a temp home)', () => {
     expect(names).not.toContain('dependencies.json')
     // Secrets and quarantined-aside files are excluded too.
     expect(names).not.toContain('api-keys.json')
-    expect(names).not.toContain('api-keys.json.20260701-000000-utc.invalid')
+    expect(names).not.toContain('api-keys-20260701-000000-123-utc.invalid')
 
     // The index never records an excluded path either.
     expect(readIndex().entries.map((e) => e.archivePath)).toEqual(['config.json'])
@@ -146,7 +149,7 @@ describe('runBackup (engine over a temp home)', () => {
     expect(report.nothingChanged).toBe(false)
     expect(report.filesArchived).toBe(1)
 
-    const names = archiveEntryNames(path.join(backupsDir(), 'backup-20260703-000000-utc.zip'))
+    const names = archiveEntryNames(path.join(backupsDir(), 'backup-20260703-000000-000-utc.zip'))
     expect(names).toEqual(['params.json'])
     // The index now has two records for params.json (both runs) and one for config.json.
     const entries = readIndex().entries
@@ -187,4 +190,64 @@ describe('runBackup (engine over a temp home)', () => {
       expect(names).toEqual(['config.json'])
     }
   )
+
+  it('advances the stamp to the next free millisecond when the target archive name already exists (no-clobber)', async () => {
+    write('config.json', '{"a":1}')
+    const dir = backupsDir()
+    fs.mkdirSync(dir, { recursive: true })
+    // Pre-create an archive at the stamp this run would otherwise use — simulating a second instance
+    // (or a leftover file) that already claimed this exact millisecond.
+    fs.writeFileSync(path.join(dir, 'backup-20260701-010000-000-utc.zip'), 'pre-existing archive bytes')
+
+    const report = await runBackup(new Date(Date.UTC(2026, 6, 1, 1, 0, 0, 0)))
+
+    expect(report.fatal).toBeUndefined()
+    expect(report.nothingChanged).toBe(false)
+    expect(report.filesArchived).toBe(1)
+    // The colliding name is untouched — never overwritten.
+    expect(fs.readFileSync(path.join(dir, 'backup-20260701-010000-000-utc.zip'), 'utf-8')).toBe(
+      'pre-existing archive bytes'
+    )
+    // This run's own archive lands on the next free millisecond.
+    expect(report.archiveFileName).toBe('backup-20260701-010000-001-utc.zip')
+    expect(listArchives().sort()).toEqual([
+      'backup-20260701-010000-000-utc.zip',
+      'backup-20260701-010000-001-utc.zip',
+    ])
+    // The index records carry the winning (advanced) stamp, not the original.
+    const idx = readIndex()
+    expect(idx.entries).toHaveLength(1)
+    expect(idx.entries[0].archivedAt).toBe('20260701-010000-001-utc')
+  })
+
+  it('keeps advancing past multiple consecutive collisions to find a free millisecond', async () => {
+    write('config.json', '{"a":1}')
+    const dir = backupsDir()
+    fs.mkdirSync(dir, { recursive: true })
+    // Claim the initial stamp and the next one, so the run must advance twice.
+    fs.writeFileSync(path.join(dir, 'backup-20260701-010000-000-utc.zip'), 'first')
+    fs.writeFileSync(path.join(dir, 'backup-20260701-010000-001-utc.zip'), 'second')
+
+    const report = await runBackup(new Date(Date.UTC(2026, 6, 1, 1, 0, 0, 0)))
+
+    expect(report.archiveFileName).toBe('backup-20260701-010000-002-utc.zip')
+    expect(readIndex().entries[0].archivedAt).toBe('20260701-010000-002-utc')
+    // Both pre-existing archives are untouched.
+    expect(fs.readFileSync(path.join(dir, 'backup-20260701-010000-000-utc.zip'), 'utf-8')).toBe('first')
+    expect(fs.readFileSync(path.join(dir, 'backup-20260701-010000-001-utc.zip'), 'utf-8')).toBe('second')
+  })
+
+  it('writes the archive through a temp file named `<stem>-<nanoid>.tmp` in the backups directory', async () => {
+    write('config.json', '{"a":1}')
+    const spy = vi.spyOn(fs.promises, 'rename')
+
+    await runBackup(new Date(Date.UTC(2026, 6, 1, 1, 0, 0)))
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    const [tempPath, finalPath] = spy.mock.calls[0] as [string, string]
+    expect(path.dirname(tempPath)).toBe(backupsDir())
+    expect(finalPath).toBe(path.join(backupsDir(), 'backup-20260701-010000-000-utc.zip'))
+    expect(path.basename(tempPath)).toMatch(/^backup-20260701-010000-000-utc-[A-Za-z0-9_-]+\.tmp$/)
+    spy.mockRestore()
+  })
 })

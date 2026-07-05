@@ -18,7 +18,7 @@ function configsPath(): string {
   return path.join(modelsDir, 'configs.json')
 }
 function pendingPath(): string {
-  return path.join(modelsDir, 'configs.pending.json')
+  return path.join(modelsDir, 'configs-pending.json')
 }
 function writeConfigs(file: string, specs: unknown[]): void {
   fs.mkdirSync(modelsDir, { recursive: true })

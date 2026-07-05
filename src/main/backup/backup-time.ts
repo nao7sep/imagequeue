@@ -14,8 +14,10 @@ export function truncateToSecondMs(msSinceEpoch: number): number {
   return Math.floor(msSinceEpoch / 1000) * 1000
 }
 
-/** The archive/index run stamp (`yyyymmdd-hhmmss-utc`) for a run at `now`; also the zip stem
- *  (`backup-<archivedAt>.zip`) and each new index entry's `archivedAt`. */
+/** The archive/index run stamp (`yyyymmdd-hhmmss-fff-utc`, machine-paced per the timestamp-conventions)
+ *  for a run at `now`; also the zip stem (`backup-<archivedAt>.zip`) and each new index entry's
+ *  `archivedAt`. Records written before milliseconds were adopted carry the second-precision
+ *  `yyyymmdd-hhmmss-utc` form and stay valid as-is — nothing migrates them. */
 export function formatArchivedAt(now: Date): string {
   const y = now.getUTCFullYear()
   const mo = String(now.getUTCMonth() + 1).padStart(2, '0')
@@ -23,5 +25,6 @@ export function formatArchivedAt(now: Date): string {
   const h = String(now.getUTCHours()).padStart(2, '0')
   const mi = String(now.getUTCMinutes()).padStart(2, '0')
   const s = String(now.getUTCSeconds()).padStart(2, '0')
-  return `${y}${mo}${d}-${h}${mi}${s}-utc`
+  const ms = String(now.getUTCMilliseconds()).padStart(3, '0')
+  return `${y}${mo}${d}-${h}${mi}${s}-${ms}-utc`
 }

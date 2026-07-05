@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { nanoid } from 'nanoid'
 import { getDataDir } from './config-store'
 import { encodeApiKey, decodeApiKey } from './api-key'
 import { log, serializeError } from '../logger'
@@ -104,19 +105,25 @@ function warnIfInsecureMode(filePath: string): void {
   }
 }
 
+// Machine-paced UTC stamp (yyyymmdd-hhmmss-fff-utc) for the quarantine filename.
 function utcStampForFilename(): string {
   const d = new Date()
-  const p = (n: number): string => String(n).padStart(2, '0')
+  const p = (n: number, len = 2): string => String(n).padStart(len, '0')
   return (
     `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
-    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-utc`
+    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}` +
+    `-${p(d.getUTCMilliseconds(), 3)}-utc`
   )
 }
 
 // Move the unreadable file aside to a timestamped neighbour (handled once, not
-// re-flagged on every read), returning the new path or null on failure.
+// re-flagged on every read), returning the new path or null on failure. The
+// discriminator is hyphen-joined into the target's stem — `<stem>-<stamp>.invalid`
+// — never a dot-appended `<file>.<stamp>.invalid`.
 function moveAsideInvalid(filePath: string): string | null {
-  const movedTo = `${filePath}.${utcStampForFilename()}.invalid`
+  const dir = path.dirname(filePath)
+  const stem = path.basename(filePath, path.extname(filePath))
+  const movedTo = path.join(dir, `${stem}-${utcStampForFilename()}.invalid`)
   try {
     fs.renameSync(filePath, movedTo)
     return movedTo
@@ -170,11 +177,14 @@ function readSecretsFile(): SecretsFile {
 
 function writeSecretsFile(file: SecretsFile): void {
   const filePath = getSecretsPath()
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  const dir = path.dirname(filePath)
+  fs.mkdirSync(dir, { recursive: true })
   // Write to a temp file at 0600 then atomically rename over the target, so a
   // crash mid-write cannot corrupt the secrets file and the target never exists
-  // with broader permissions.
-  const tempPath = `${filePath}.tmp`
+  // with broader permissions. The temp name is `<stem>-<nanoid>.tmp`, in the
+  // same directory as the target.
+  const stem = path.basename(filePath, path.extname(filePath))
+  const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
   fs.writeFileSync(tempPath, `${JSON.stringify(file, null, 2)}\n`, { mode: SECRETS_FILE_MODE })
   if (ENFORCE_FILE_MODE) fs.chmodSync(tempPath, SECRETS_FILE_MODE)
   fs.renameSync(tempPath, filePath)

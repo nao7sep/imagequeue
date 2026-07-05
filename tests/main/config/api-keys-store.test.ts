@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveApiKey,
   hasApiKey,
@@ -121,7 +121,11 @@ describe('api-keys-store', () => {
 
     expect(resolveApiKey('xai')).toBe('')
     const entries = fs.readdirSync(tmpRoot)
-    expect(entries.some((e) => e.startsWith('api-keys.json.') && e.endsWith('.invalid'))).toBe(true)
+    // Quarantine name is `<stem>-<stamp>.invalid` (hyphen-joined into the target's stem, never a
+    // dot-appended `api-keys.json.<stamp>.invalid`), stamped at millisecond precision.
+    const quarantined = entries.filter((e) => e.startsWith('api-keys-') && e.endsWith('.invalid'))
+    expect(quarantined).toHaveLength(1)
+    expect(quarantined[0]).toMatch(/^api-keys-\d{8}-\d{6}-\d{3}-utc\.invalid$/)
     expect(entries).not.toContain('api-keys.json')
   })
 
@@ -129,5 +133,19 @@ describe('api-keys-store', () => {
     setStoredApiKey('openai.image', 'sk-stored')
     const mode = fs.statSync(path.join(tmpRoot, 'api-keys.json')).mode & 0o777
     expect(mode).toBe(0o600)
+  })
+
+  it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', () => {
+    const spy = vi.spyOn(fs, 'writeFileSync')
+    setStoredApiKey('openai.image', 'sk-stored')
+
+    const tempCall = spy.mock.calls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('api-keys-')
+    )
+    expect(tempCall).toBeDefined()
+    const tempPath = tempCall![0] as string
+    expect(path.dirname(tempPath)).toBe(tmpRoot)
+    expect(path.basename(tempPath)).toMatch(/^api-keys-[A-Za-z0-9_-]+\.tmp$/)
+    spy.mockRestore()
   })
 })

@@ -2,7 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { getDataDir } from '../config'
 
-// Formats a Date as yyyymmdd-hhmmss in UTC.
+// Formats a Date as yyyymmdd-hhmmss in UTC. Second precision: used for the per-image output
+// timestamp allocator, which paces uniqueness with its own same-second ordinal, not milliseconds.
 export function formatTimestamp(date: Date): string {
   const y = date.getUTCFullYear()
   const mo = String(date.getUTCMonth() + 1).padStart(2, '0')
@@ -11,6 +12,14 @@ export function formatTimestamp(date: Date): string {
   const mi = String(date.getUTCMinutes()).padStart(2, '0')
   const s = String(date.getUTCSeconds()).padStart(2, '0')
   return `${y}${mo}${d}-${h}${mi}${s}`
+}
+
+// Formats a Date as yyyymmdd-hhmmss-fff in UTC (millisecond precision), extending formatTimestamp
+// with the fractional-second part. Used for the session directory name — a machine-paced name per
+// the timestamp-conventions, like a session log or a backup archive.
+export function formatTimestampMs(date: Date): string {
+  const ms = String(date.getUTCMilliseconds()).padStart(3, '0')
+  return `${formatTimestamp(date)}-${ms}`
 }
 
 let sessionDir: string | null = null
@@ -24,7 +33,7 @@ export function getOutputDir(): string {
 export function createSessionDir(baseDate = new Date()): string {
   let candidate = new Date(baseDate)
   while (true) {
-    const nextDir = path.join(getOutputDir(), `${formatTimestamp(candidate)}-utc`)
+    const nextDir = path.join(getOutputDir(), `${formatTimestampMs(candidate)}-utc`)
     if (!fs.existsSync(nextDir)) {
       fs.mkdirSync(nextDir, { recursive: true })
       return nextDir

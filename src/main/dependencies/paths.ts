@@ -3,7 +3,7 @@
 //
 //   bin/draw-things-cli        the persisted CLI binary
 //   bin/draw-things-cli.json   sidecar: the release tag + hash recorded at install
-//   temp/<nanoid>              deletable staging for in-flight downloads
+//   temp/<stem>-<nanoid>.tmp   deletable staging for in-flight downloads
 //   dependencies.json          ephemeral check cache (last-known-latest, timestamps)
 //
 // configs.json (the recommendations file) lives in the effective models dir
@@ -36,13 +36,18 @@ export function getDependenciesStatePath(): string {
   return path.join(getDataDir(), 'dependencies.json')
 }
 
-/** Allocate a fresh staging path under temp/, creating the directory. The caller
- * verifies the download there and atomically renames it into its kept home, or
- * deletes it on failure — nothing under temp/ is ever loaded directly. */
-export function allocateTempPath(): string {
+/** Allocate a fresh staging path under temp/, creating the directory. The name is
+ * `<stem>-<nanoid>.tmp`, where stem is destPath's filename minus its extension
+ * (e.g. installing to bin/draw-things-cli stages at temp/draw-things-cli-<nanoid>.tmp)
+ * — the filename-conventions' derived-filename grammar, never a bare nanoid. The
+ * caller verifies the download there and atomically renames it into its kept
+ * home (destPath), or deletes it on failure — nothing under temp/ is ever
+ * loaded directly. */
+export function allocateTempPath(destPath: string): string {
   const dir = getTempDir()
   fs.mkdirSync(dir, { recursive: true })
-  return path.join(dir, nanoid())
+  const stem = path.basename(destPath, path.extname(destPath))
+  return path.join(dir, `${stem}-${nanoid()}.tmp`)
 }
 
 /** Best-effort removal of a staging file. Used on the failure path, where the

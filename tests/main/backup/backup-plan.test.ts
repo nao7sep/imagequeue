@@ -130,12 +130,15 @@ describe('home-root exclusions', () => {
   })
 
   it('excludes *.tmp atomic-write temporaries', () => {
-    expect(isExcludedFile('config.json.tmp')).toBe(true)
+    // Real temp names are `<stem>-<nanoid>.tmp` (hyphen-joined, never a dot-appended `config.json.tmp`).
+    expect(isExcludedFile('config-V1StGXR8_Z5jdHi6B-myT.tmp')).toBe(true)
     expect(isExcludedFile('foo/bar.TMP')).toBe(true)
   })
 
   it('excludes *.invalid quarantined-aside files case-insensitively', () => {
-    expect(isExcludedFile('api-keys.json.20260701-000000-utc.invalid')).toBe(true)
+    // Real quarantine names are `<stem>-<stamp>.invalid` (hyphen-joined, never a dot-appended
+    // `api-keys.json.<stamp>.invalid`), stamped at millisecond precision.
+    expect(isExcludedFile('api-keys-20260701-000000-123-utc.invalid')).toBe(true)
     expect(isExcludedFile('foo/bar.INVALID')).toBe(true)
   })
 
@@ -166,7 +169,8 @@ describe('backup time helpers', () => {
     expect(truncateToSecondMs(1751336540999)).toBe(1751336540000)
   })
 
-  it('formats the archivedAt run stamp as yyyymmdd-hhmmss-utc', () => {
-    expect(formatArchivedAt(new Date(Date.UTC(2026, 6, 1, 2, 22, 20)))).toBe('20260701-022220-utc')
+  it('formats the archivedAt run stamp as yyyymmdd-hhmmss-fff-utc (millisecond precision)', () => {
+    expect(formatArchivedAt(new Date(Date.UTC(2026, 6, 1, 2, 22, 20, 0)))).toBe('20260701-022220-000-utc')
+    expect(formatArchivedAt(new Date(Date.UTC(2026, 6, 1, 2, 22, 20, 123)))).toBe('20260701-022220-123-utc')
   })
 })

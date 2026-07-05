@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import { nanoid } from 'nanoid'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getSessionDir } from '../session'
@@ -18,7 +19,7 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
 
   ensureModelsDir()
 
-  const outputPath = path.join(getSessionDir(), `_local_temp_${Date.now()}.png`)
+  const outputPath = path.join(getSessionDir(), `drawthings-${nanoid()}.png`)
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
 
   const width = task.params.width as number | undefined

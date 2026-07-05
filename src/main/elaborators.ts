@@ -352,13 +352,14 @@ function isElaborator(value: unknown): value is Elaborator {
   return true
 }
 
-// yyyymmdd-hhmmss-utc stamp for the quarantine filename (mirrors api-keys-store's helper).
+// yyyymmdd-hhmmss-fff-utc stamp for the quarantine filename (mirrors api-keys-store's helper).
 function utcStampForFilename(): string {
   const d = new Date()
-  const p = (n: number): string => String(n).padStart(2, '0')
+  const p = (n: number, len = 2): string => String(n).padStart(len, '0')
   return (
     `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
-    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-utc`
+    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}` +
+    `-${p(d.getUTCMilliseconds(), 3)}-utc`
   )
 }
 
@@ -366,9 +367,12 @@ function utcStampForFilename(): string {
 // reseeded over it, so the reset never silently discards the user's (possibly hand-edited) data —
 // the storage-path conventions' quarantine-then-reset rule. Best-effort: a rename failure is logged,
 // not fatal (the caller still reseeds). Renaming also means the bad file is handled once, not
-// re-flagged on every read, since the reseeded file then parses cleanly.
+// re-flagged on every read, since the reseeded file then parses cleanly. The discriminator is
+// hyphen-joined into the target's stem — `<stem>-<stamp>.invalid` — never a dot-appended suffix.
 function quarantineCorruptFile(file: string, reason: string, err?: unknown): void {
-  const movedTo = `${file}.${utcStampForFilename()}.invalid`
+  const dir = path.dirname(file)
+  const stem = path.basename(file, path.extname(file))
+  const movedTo = path.join(dir, `${stem}-${utcStampForFilename()}.invalid`)
   try {
     fs.renameSync(file, movedTo)
     log('warn', `Quarantined ${reason} elaborators file; reseeding defaults`, {

@@ -30,7 +30,7 @@ import {
 
 const RECOMMENDATIONS_URL = 'https://models.drawthings.ai/configs.json'
 const RECOMMENDATIONS_FILE = 'configs.json'
-const RECOMMENDATIONS_PENDING_FILE = 'configs.pending.json'
+const RECOMMENDATIONS_PENDING_FILE = 'configs-pending.json'
 
 // configs.json lives in the effective models dir, alongside Draw Things' own
 // custom.json — its natural home, and shared with the GUI app's models when the
