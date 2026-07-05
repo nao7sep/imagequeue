@@ -85,16 +85,51 @@ describe('resolveStorageRoot (IMAGEQUEUE_HOME)', () => {
       }
     )
 
-    it('leaves an unknown reference untouched (no expansion to empty)', () => {
+    it('still resolves (no hard error) when an unset reference is only PART of the override', () => {
+      // The reference itself expands to '', but surrounding literal text keeps
+      // the overall expansion non-empty, so this must resolve normally rather
+      // than trip the empty-expansion guard below.
       delete process.env[REF_VAR]
-      // An undefined reference stays literal rather than expanding to empty
-      // (which would silently collapse the path). Embed it in an absolute path
-      // under tmpBase so the literal token survives into the resolved root.
-      const target = path.join(tmpBase, '$' + REF_VAR)
-      process.env[ENV_VAR] = target
+      process.env[ENV_VAR] = 'imagequeue-root-prefix-$' + REF_VAR + '-suffix'
       const root = resolveStorageRoot()
-      expect(root).toBe(path.resolve(target))
-      expect(root).toContain('$' + REF_VAR)
+      expect(root).toBe(path.resolve(os.homedir(), 'imagequeue-root-prefix--suffix'))
+      fs.rmSync(root, { recursive: true, force: true })
+    })
+  })
+
+  // An override that is set but expands to an empty string is a
+  // misconfiguration, not a usable path: resolve(homeDir, '') collapses onto
+  // the bare home directory, which would silently point the storage root (and
+  // therefore the backup root) at $HOME itself. Both ways an override can end
+  // up empty — an unset reference and one explicitly set to '' — must hard-
+  // error identically rather than falling back to $HOME or to the default
+  // root. Mirrors mumbler/tapebox's reference resolveStorageRoot.
+  describe('hard-errors when the override expands to an empty path', () => {
+    it('rejects an override that is only a reference to an UNSET variable', () => {
+      const REF_VAR = 'IMAGEQUEUE_TEST_ROOT_UNSET_XYZ'
+      delete process.env[REF_VAR]
+      process.env[ENV_VAR] = '$' + REF_VAR
+
+      expect(() => resolveStorageRoot()).toThrow(/IMAGEQUEUE_HOME/)
+      expect(() => resolveStorageRoot()).toThrow(/expands to an empty path/)
+    })
+
+    it('rejects an override that references a variable explicitly SET TO EMPTY', () => {
+      const REF_VAR = 'IMAGEQUEUE_TEST_ROOT_EMPTYSET_XYZ'
+      process.env[REF_VAR] = ''
+      process.env[ENV_VAR] = '${' + REF_VAR + '}'
+
+      expect(() => resolveStorageRoot()).toThrow(/expands to an empty path/)
+
+      delete process.env[REF_VAR]
+    })
+
+    it('rejects a %VAR%-form override left empty by an unset Windows-style reference', () => {
+      const REF_VAR = 'IMAGEQUEUE_TEST_ROOT_WIN_XYZ'
+      delete process.env[REF_VAR]
+      process.env[ENV_VAR] = '%' + REF_VAR + '%'
+
+      expect(() => resolveStorageRoot()).toThrow(/expands to an empty path/)
     })
   })
 })

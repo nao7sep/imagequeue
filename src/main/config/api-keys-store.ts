@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 import { getDataDir } from './config-store'
-import { encodeApiKey, decodeApiKey } from './api-key'
+import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 
 // The secret store, realized per the fleet api-key-storage-conventions. Secrets
@@ -82,22 +82,29 @@ function envValue(segments: string[]): string {
 
 let modeWarned = false
 
-// POSIX-only: warn once if the secrets file is readable beyond the owner, and
-// tighten it. We warn rather than refuse so an existing key stays usable.
+// POSIX-only: tighten the secrets file back to 0600 every time it is found
+// readable beyond the owner — a file widened mid-session (another process, a
+// careless `chmod`) is re-tightened on its very next access, not left loose
+// until restart. The warning is the once-per-session part: it is only ever
+// noise after the first time, so only it is gated behind modeWarned; the
+// chmod itself is unconditional. We warn rather than refuse so an existing key
+// stays usable.
 function warnIfInsecureMode(filePath: string): void {
-  if (!ENFORCE_FILE_MODE || modeWarned) return
+  if (!ENFORCE_FILE_MODE) return
   try {
     const mode = fs.statSync(filePath).mode
     if ((mode & 0o077) !== 0) {
-      modeWarned = true
-      log('warn', 'API keys file is readable beyond the owner; tightening to 0600', {
-        path: filePath,
-        mode: (mode & 0o777).toString(8).padStart(3, '0')
-      })
+      if (!modeWarned) {
+        modeWarned = true
+        log('warn', 'API keys file is readable beyond the owner; tightening to 0600', {
+          path: filePath,
+          mode: (mode & 0o777).toString(8).padStart(3, '0')
+        })
+      }
       try {
         fs.chmodSync(filePath, SECRETS_FILE_MODE)
       } catch {
-        // best-effort; the next write re-applies 0600
+        // best-effort; the next access retries the tightening
       }
     }
   } catch {
@@ -190,6 +197,15 @@ function writeSecretsFile(file: SecretsFile): void {
   fs.renameSync(tempPath, filePath)
 }
 
+// A stored value that fails the canonical `obf:` shape check is malformed —
+// Node's lenient base64 decoder would otherwise turn it into non-empty garbage
+// sent to the provider as a key. Treated as absent (never thrown), with one
+// warn naming the key id so a hand-edit gone wrong is visible in the log
+// instead of silently degrading to a garbage key.
+function warnMalformedStoredKey(keyId: string): void {
+  log('warn', 'Stored API key value is malformed; treating as absent', { keyId })
+}
+
 // Resolve the plaintext key for a secret id, source-first (environment then
 // stored, most→least specific), trimmed, or '' ('' meaning "not configured").
 export function resolveApiKey(id: SecretId): string {
@@ -200,11 +216,15 @@ export function resolveApiKey(id: SecretId): string {
   }
   const file = readSecretsFile()
   for (const level of levels) {
-    const stored = file.keys[level.join('.')]
-    if (typeof stored === 'string') {
-      const key = decodeApiKey(stored).trim()
-      if (key) return key
+    const levelId = level.join('.')
+    const stored = file.keys[levelId]
+    if (typeof stored !== 'string' || !stored) continue
+    if (!isValidStoredApiKey(stored)) {
+      warnMalformedStoredKey(levelId)
+      continue
     }
+    const key = decodeApiKey(stored).trim()
+    if (key) return key
   }
   return ''
 }
@@ -219,7 +239,12 @@ export function hasApiKey(id: SecretId): boolean {
 // and there is no fallback — editing is per exact id.
 export function getStoredApiKey(id: SecretId): string {
   const stored = readSecretsFile().keys[id]
-  return stored ? decodeApiKey(stored).trim() : ''
+  if (!stored) return ''
+  if (!isValidStoredApiKey(stored)) {
+    warnMalformedStoredKey(id)
+    return ''
+  }
+  return decodeApiKey(stored).trim()
 }
 
 // Persist (or clear, when value is blank) the stored key for a secret id.

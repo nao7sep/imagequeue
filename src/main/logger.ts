@@ -122,15 +122,26 @@ export function redact(value: unknown): unknown {
 // The envelope keys the logger owns; a caller field may not overwrite them.
 const RESERVED_KEYS: ReadonlySet<string> = new Set(['time', 'level', 'message'])
 
+// Best-effort console fallback shared by both "no session target yet" and
+// "write to the session file failed" below. Mirrors the fotoready/bigmouth
+// loggers' fallback split: warn/error go to stderr, info/debug to stdout. The
+// argument is the already-rendered JSON line, never a re-derived summary, so
+// the event's actual content — not just a generic notice that something was
+// dropped — reaches the console.
+function consoleFallback(level: LogLevel, line: string): void {
+  const sink = level === 'error' || level === 'warn' ? console.error : console.log
+  sink(line.trimEnd())
+}
+
 // Appends one JSON Lines event to the active session log. Takes a structured
 // event — a short, stable message plus arbitrary fields — and builds the
 // envelope { time, level, message, ...redactedFields }. debug lines are written
 // only when debug is enabled. Logging never throws and never crashes the app: a
-// field that cannot be serialized falls back to a minimal envelope, and a
-// failed write degrades to the console (best-effort, no new dependencies).
+// field that cannot be serialized falls back to a minimal envelope, and both a
+// missing session target and a failed write degrade to the console
+// (best-effort, no new dependencies) rather than dropping the event.
 export function log(level: LogLevel, message: string, fields?: LogFields): void {
   if (level === 'debug' && !debugEnabled) return
-  if (!logFilePath) return
 
   const time = new Date().toISOString()
   const entry: Record<string, unknown> = { time, level, message }
@@ -154,13 +165,25 @@ export function log(level: LogLevel, message: string, fields?: LogFields): void 
     line = JSON.stringify({ time, level, message, logSerializeError: 'fields not serializable' }) + '\n'
   }
 
+  if (!logFilePath) {
+    // Nothing has pointed the logger at a session yet (a line logged before
+    // initLogger/retargetLogger runs — e.g. while the storage root is still
+    // being resolved during early startup). There is no buffer to append this
+    // into and no session file to flush it to later, so — same as a write
+    // failure below — echo the real rendered line to the console rather than
+    // silently dropping the event.
+    consoleFallback(level, line)
+    return
+  }
+
   try {
     fs.appendFileSync(logFilePath, line, 'utf-8')
   } catch (err) {
     // The log file may be unwritable (disk full, permissions). Degrade to the
-    // console and keep running — never crash because logging failed, but never
-    // swallow the failure silently either.
-    console.error('[logger] failed to write log line', err)
+    // console and keep running — never crash because logging failed, and never
+    // let the event's actual content be lost behind a generic failure notice.
+    console.error('[logger] failed to write log line; echoing to console instead', err)
+    consoleFallback(level, line)
   }
 }
 

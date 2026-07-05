@@ -114,6 +114,36 @@ describe('api-keys-store', () => {
     expect(getStoredApiKey('gemini.imagen')).toBe('')
   })
 
+  it('treats a malformed obf: stored value as absent and warns once, naming the key id', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    fs.mkdirSync(tmpRoot, { recursive: true })
+    // Node's lenient base64 decoder would otherwise turn a payload like this
+    // (invalid characters, non-canonical shape) into non-empty garbage that
+    // gets sent to the provider as an API key.
+    fs.writeFileSync(secretsPath, JSON.stringify({ keys: { xai: 'obf:not-valid-base64!!' } }))
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(resolveApiKey('xai')).toBe('')
+      expect(hasApiKey('xai')).toBe(false)
+      expect(getStoredApiKey('xai')).toBe('')
+
+      const warnedAboutXai = errorSpy.mock.calls.some(
+        (call) =>
+          typeof call[0] === 'string' && call[0].includes('"keyId":"xai"') && call[0].includes('malformed')
+      )
+      expect(warnedAboutXai).toBe(true)
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('resolves a validly-encoded stored key (round trip through encode/decode)', () => {
+    setStoredApiKey('xai', 'sk-round-trip-value')
+    expect(getStoredApiKey('xai')).toBe('sk-round-trip-value')
+    expect(resolveApiKey('xai')).toBe('sk-round-trip-value')
+  })
+
   it('moves a corrupt secrets file aside and resolves to empty instead of throwing', () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
     fs.mkdirSync(tmpRoot, { recursive: true })
@@ -133,6 +163,25 @@ describe('api-keys-store', () => {
     setStoredApiKey('openai.image', 'sk-stored')
     const mode = fs.statSync(path.join(tmpRoot, 'api-keys.json')).mode & 0o777
     expect(mode).toBe(0o600)
+  })
+
+  it.runIf(isPosix)('re-tightens a secrets file widened mid-session, not only once per session', () => {
+    setStoredApiKey('openai.image', 'sk-stored')
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+
+    // Widen it (another process, a careless chmod) and access again — the
+    // chmod must fire on THIS access rather than being deferred to restart.
+    fs.chmodSync(secretsPath, 0o644)
+    expect(fs.statSync(secretsPath).mode & 0o777).toBe(0o644)
+    expect(hasApiKey('openai.image')).toBe(true)
+    expect(fs.statSync(secretsPath).mode & 0o777).toBe(0o600)
+
+    // Widen it a SECOND time in the same process/session. If the chmod were
+    // still gated behind the once-per-session warned flag, this access would
+    // leave it loose; it must not.
+    fs.chmodSync(secretsPath, 0o644)
+    expect(hasApiKey('openai.image')).toBe(true)
+    expect(fs.statSync(secretsPath).mode & 0o777).toBe(0o600)
   })
 
   it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', () => {

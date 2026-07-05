@@ -15,21 +15,18 @@ import path from 'path'
 const HOME_ENV_VAR = 'IMAGEQUEUE_HOME'
 const DEFAULT_DIR_NAME = '.imagequeue'
 
-// Expand a leading `~`/`~/` against the home directory and any `$VAR` / `%VAR%`
-// environment references. Applied to the override value only.
-function expandHome(value: string, homeDir: string): string {
-  let expanded = value
-  if (expanded === '~') {
-    expanded = homeDir
-  } else if (expanded.startsWith('~/') || expanded.startsWith('~\\')) {
-    expanded = path.join(homeDir, expanded.slice(2))
-  }
-  expanded = expanded.replace(/\$(\w+)|\$\{(\w+)\}|%(\w+)%/g, (match, a, b, c) => {
+// Expand `$VAR` / `${VAR}` (POSIX) and `%VAR%` (Windows) references against the
+// current environment. An undefined reference expands to empty, matching shell
+// behavior, rather than being left as a literal that would become a directory
+// name — this is what lets the empty-after-expansion check below catch BOTH an
+// unset reference and one a caller set to "" explicitly, uniformly, instead of
+// only catching the latter. Mirrors the reference implementation in
+// mumbler/tapebox.
+function expandEnvReferences(value: string): string {
+  return value.replace(/\$(\w+)|\$\{(\w+)\}|%(\w+)%/g, (_match, a, b, c) => {
     const name = a ?? b ?? c
-    const env = process.env[name]
-    return env === undefined ? match : env
+    return process.env[name] ?? ''
   })
-  return expanded
 }
 
 // Resolve the storage root, honoring IMAGEQUEUE_HOME. A relative override is
@@ -46,7 +43,28 @@ export function resolveStorageRoot(): string {
   let fromOverride = false
   if (trimmed.length > 0) {
     fromOverride = true
-    const expanded = expandHome(trimmed, homeDir)
+    let expanded = expandEnvReferences(trimmed).trim()
+
+    // An override that is set but expands to nothing — an unset $VAR/%VAR%, or
+    // one explicitly set to "" — is a misconfiguration, not a usable path.
+    // resolve(homeDir, "") collapses onto the bare home directory, which would
+    // silently materialize the app's files directly in $HOME and walk $HOME as
+    // its own backup root. Reject it as a startup error instead of falling
+    // back to that (or to the default root) silently.
+    if (expanded.length === 0) {
+      throw new Error(
+        `${HOME_ENV_VAR} is set to "${override}" but expands to an empty path ` +
+          `(an unset $VAR/%VAR%?). Set it to a usable directory, or unset it to use ~/${DEFAULT_DIR_NAME}.`
+      )
+    }
+
+    // Expand a leading `~` / `~/` (and `~\` on Windows) to the home directory.
+    if (expanded === '~') {
+      expanded = homeDir
+    } else if (expanded.startsWith('~/') || expanded.startsWith('~\\')) {
+      expanded = path.join(homeDir, expanded.slice(2))
+    }
+
     root = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(homeDir, expanded)
   } else {
     root = path.join(homeDir, DEFAULT_DIR_NAME)
