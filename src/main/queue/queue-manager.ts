@@ -1,4 +1,4 @@
-import crypto from 'crypto'
+import { nanoid } from 'nanoid'
 import { BackendId, Task, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 import { estimateCostFromRegistry } from '../../shared/models'
 
@@ -34,7 +34,7 @@ export class QueueManager {
 
   private createTask(request: EnqueueBatchUnit): Task {
     return {
-      id: crypto.randomUUID(),
+      id: nanoid(),
       prompt: request.prompt,
       backend: request.backend,
       model: request.model,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { nanoid } from 'nanoid'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -248,9 +249,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     }
     if (!seed.trim()) throw new Error('Seed prompt is empty.')
 
-    const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random()}`
+    const requestId = nanoid()
     activeRequestIdRef.current = requestId
 
     const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
