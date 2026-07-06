@@ -10,6 +10,7 @@ import { registerDependenciesIpc } from './dependencies-ipc'
 import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
+import { materializeElaborators } from './elaborators'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
@@ -145,6 +146,14 @@ app.whenReady().then(() => {
   ensureDataDir()
   clearTempDir()
   loadConfig()
+  // Materialize the shipped elaborators the same way loadConfig materializes
+  // config.json: write elaborators.json from the in-code defaults on first run,
+  // only when absent, at this populated-but-not-yet-used point before any
+  // consumer (the renderer's elaborators:list, the backup pass) reads it. A
+  // launch-then-quit then leaves a real, editable elaborators.json on disk and
+  // in the first-run backup, instead of a phantom that materialized only when
+  // the renderer first asked for the list. (storage-path conventions)
+  materializeElaborators()
   initSession()
   resetOutputTimestampAllocators()
   initLogger(getSessionDir())
@@ -233,8 +242,17 @@ async function gracefulShutdown(reason: string): Promise<void> {
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
   await guarded('killAllCliJobs', () => killAllCliJobs())
   await guarded('releaseWakeLock', () => releaseWakeLock())
-  await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
+  // Write the "Session ended" line BEFORE dropping the session, not after. The
+  // logger appends to the active session's session.log inside the session dir;
+  // dropCurrentSessionIfEmpty trashes that whole directory for an empty session,
+  // so logging afterward would fail with ENOENT and spill the line to stderr on
+  // every clean quit of an empty session. Ordered this way, a kept session gets
+  // the line in-file, and a dropped session writes-then-discards it with the
+  // directory — no failed append either way. This is the last shutdown line;
+  // every earlier step logs only on failure (guarded's catch) and runs before
+  // the drop, so none shares this hazard.
   log('info', 'Session ended', { reason })
+  await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
 }
 
 // before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and

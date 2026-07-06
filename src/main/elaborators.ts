@@ -388,22 +388,41 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): voi
   }
 }
 
+// Quarantine a corrupt elaborators.json aside, then recreate defaults on disk —
+// the storage-path conventions' quarantine-then-reset branch, kept self-contained
+// so listElaborators can stay a pure read. Returns the reseeded defaults. The
+// corrupt file was renamed to its `.invalid` neighbour above, so this write
+// creates a fresh, valid elaborators.json (never an overwrite of the corrupt
+// bytes, which are preserved for recovery).
+function reseedAfterQuarantine(): Elaborator[] {
+  const seeded = defaultElaborators()
+  writeFile(seeded)
+  return seeded
+}
+
+// Reads the persisted elaborators, or null when the file is genuinely absent
+// (the first-run case, before materializeElaborators has run, or after a user
+// deletes the file). A present-but-corrupt file is not "absent": it is
+// quarantined aside and defaults are recreated on disk in place — this function
+// resolves that recovery itself and returns the reseeded items, so a null return
+// means only "no file", never "unreadable file".
 function readFile(): Elaborator[] | null {
   const file = getElaboratorsFilePath()
-  // A missing file is the expected first-run case — probe silently and let the caller seed defaults.
-  // A file that exists but is unparseable or malformed is unexpected (corrupt or hand-edited); the
-  // caller will reseed defaults over it, so quarantine the bad bytes aside first.
+  // A missing file is the expected pre-materialization / deleted-file case — probe
+  // silently and let the caller fall back to in-memory defaults without writing.
+  // A file that EXISTS but is unparseable or malformed is unexpected (corrupt or
+  // hand-edited); quarantine the bad bytes aside and recreate valid defaults.
   if (!fs.existsSync(file)) return null
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
     if (!Array.isArray(parsed) || !parsed.every(isElaborator)) {
       quarantineCorruptFile(file, 'malformed')
-      return null
+      return reseedAfterQuarantine()
     }
     return parsed
   } catch (err) {
     quarantineCorruptFile(file, 'unreadable', err)
-    return null
+    return reseedAfterQuarantine()
   }
 }
 
@@ -414,12 +433,39 @@ function writeFile(items: Elaborator[]): void {
   writeJsonAtomic(getElaboratorsFilePath(), items)
 }
 
+// Write elaborators.json from the shipped defaults on first run, only when the
+// file is absent — the storage-path conventions' "materialize built-in
+// defaultable files on first run" rule, the same shape config-store.loadConfig
+// uses for config.json. Absence is the single trigger: a present file (even a
+// corrupt one) is left exactly as the user left it and never inspected here, so
+// the create-if-absent path can only ever fill a gap, never overwrite. A
+// corrupt file is resolved on the load path instead (readFile quarantines it
+// aside then reseeds), which is the convention's other allowed branch.
+//
+// Called from app.whenReady at the populated-but-not-yet-used startup point,
+// alongside the config seed, so a launch-then-quit leaves a real, editable
+// elaborators.json on disk — inspectable and captured by the first-run backup —
+// rather than a phantom the app carried in memory until the renderer first
+// asked for the list. The defaults come from one in-code source of truth
+// (shippedElaborators, via defaultElaborators) serialized through the app's own
+// save path (writeFile → writeJsonAtomic), never a hand-built JSON literal.
+export function materializeElaborators(): void {
+  const file = getElaboratorsFilePath()
+  if (fs.existsSync(file)) return
+  writeFile(defaultElaborators())
+}
+
 export function listElaborators(): Elaborator[] {
-  const stored = readFile()
-  if (stored !== null) return stored
-  const seeded = defaultElaborators()
-  writeFile(seeded)
-  return seeded
+  // A pure read of the now-present file. elaborators.json is materialized at
+  // startup (materializeElaborators, called from app.whenReady before any
+  // consumer reads the store), so on every production path the file already
+  // exists and readFile returns its contents. If the file is genuinely absent —
+  // a test or tool driving the store without the startup seed, or a user
+  // deleting it at runtime — we return the in-memory defaults but do NOT write
+  // here: materialization is the single first-run writer, and every mutating
+  // caller (create/update/delete/reset) persists through its own writeFile, so
+  // this read stays free of a side-effecting first-write.
+  return readFile() ?? defaultElaborators()
 }
 
 export function createElaborator(input: {

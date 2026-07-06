@@ -247,4 +247,41 @@ describe('log', () => {
     expect(entry.logSerializeError).toBe('fields not serializable')
     expect('n' in entry).toBe(false)
   })
+
+  // FINDING #5 (shutdown log ordering): the logger appends to session.log inside
+  // the active session's directory. If that directory has already been removed —
+  // which is exactly what dropCurrentSessionIfEmpty does to an empty session on
+  // quit — the append fails with ENOENT and the line spills to stderr. This test
+  // pins that hazard, which is why gracefulShutdown must write "Session ended"
+  // BEFORE dropping the session, not after: a kept session gets the line in-file,
+  // a dropped session writes-then-discards it, and neither path fails the append.
+  it('degrades to the console (never crashes) when the session directory is gone', () => {
+    const dir = freshSessionDir()
+    initLogger(dir)
+    // Simulate dropCurrentSessionIfEmpty having trashed the session directory:
+    // the logger still points at <dir>/session.log, but the directory is gone.
+    fs.rmSync(dir, { recursive: true, force: true })
+
+    // The write failure spills a notice to console.error and echoes the rendered
+    // line via consoleFallback (info -> console.log). Spy on both so the test
+    // captures the full degraded output.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    // Logging must not throw even though appendFileSync will ENOENT...
+    expect(() => log('info', 'Session ended', { reason: 'quit' })).not.toThrow()
+    // ...and the failed append degrades to the console (the notice on stderr)
+    // rather than crashing. This spill is the noise the ordering fix removes on
+    // every clean quit of an empty session.
+    expect(consoleError).toHaveBeenCalled()
+    // The event's actual content — not just a generic "write failed" notice —
+    // still reaches the console via consoleFallback's echoed JSON line, so the
+    // "Session ended" line is degraded, never lost.
+    const printed = [...consoleError.mock.calls, ...consoleLog.mock.calls]
+      .flat()
+      .map(String)
+      .join('\n')
+    expect(printed).toContain('Session ended')
+    consoleError.mockRestore()
+    consoleLog.mockRestore()
+  })
 })
