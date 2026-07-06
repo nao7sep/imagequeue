@@ -4,6 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadConfig, saveConfig, getConfigPath } from '../../../src/main/config'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { closeBackupStore } from '../../../src/main/backup/backup-store'
 
 const ENV_VAR = 'IMAGEQUEUE_HOME'
 
@@ -21,6 +22,9 @@ describe('config store (atomic write of config.json)', () => {
   })
 
   afterEach(() => {
+    // config.json is a recorded managed-text write; close the store singleton so the next test re-opens
+    // it against its own fresh IMAGEQUEUE_HOME rather than the previous, now-deleted throwaway root.
+    closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })

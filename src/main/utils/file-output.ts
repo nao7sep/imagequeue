@@ -99,6 +99,13 @@ export function writeImageOutput(
     })
   }
 
+  // not recorded: this is generator OUTPUT under output/<session>/ — the produced image (a binary the
+  // app hands to the user) and its metadata sidecar. imagequeue is an image GENERATOR: output/ is a
+  // harvest-then-discard drop the user picks over and exports from, not the app's reloaded state, and
+  // the sidecar is meaningless without the image it describes. Written directly (not through the
+  // managed-text hook) — the binary can't be recorded and the sidecar rides along into exclusion as
+  // colocated with a binary (data-backup conventions: "Harvest-then-discard output"; "Binaries";
+  // "Anything colocated in a binary-bearing directory").
   fs.writeFileSync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
   fs.writeFileSync(path.join(dir, `${baseName}.json`), JSON.stringify(metadata, null, 2), 'utf-8')
 

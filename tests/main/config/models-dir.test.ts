@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDefaultModelsDir, resolveModelsDir } from '../../../src/main/local-cli'
+import { closeBackupStore } from '../../../src/main/backup/backup-store'
 
 const ENV_VAR = 'IMAGEQUEUE_HOME'
 
@@ -20,6 +21,10 @@ describe('models directory follows IMAGEQUEUE_HOME', () => {
   })
 
   afterEach(() => {
+    // resolveModelsDir()'s fallback path calls loadConfig(), which seeds config.json on a fresh root —
+    // a recorded managed-text write. Close the store singleton so the next test re-opens it against its
+    // own throwaway root rather than the previous, now-deleted one.
+    closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })

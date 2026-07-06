@@ -430,7 +430,9 @@ function writeFile(items: Elaborator[]): void {
   // elaborators.json is a persisted store under the storage root; write it
   // atomically (temp + rename) so a crash mid-write can't leave a truncated
   // file that the next load would reject as malformed. Mirrors config.json.
-  writeJsonAtomic(getElaboratorsFilePath(), items)
+  // recorded: elaborators.json is durable, user-authored managed text — the
+  // prompt-elaboration registry the user builds up (data-backup conventions).
+  writeJsonAtomic(getElaboratorsFilePath(), items, true)
 }
 
 // Write elaborators.json from the shipped defaults on first run, only when the

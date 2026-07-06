@@ -22,7 +22,6 @@ import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
-import { runBackupInBackground } from './backup/backup-service'
 
 let mainWin: BrowserWindow | null = null
 
@@ -183,12 +182,11 @@ app.whenReady().then(() => {
   // its result is surfaced passively (pane pointer / modal), never as a prompt.
   void checkDependenciesAtLaunch()
 
-  // Just-in-case data backup (data-backup conventions): a best-effort, silent,
-  // incremental snapshot of the home root taken at startup. Fire-and-forget —
-  // it never blocks the window, shows an error, or crashes the app; the pass
-  // logs its own outcome. Config has been materialized above (loadConfig
-  // writes config.json on first run), so the backup sees a complete home root.
-  runBackupInBackground()
+  // The just-in-case data backup is no longer a startup pass (data-backup
+  // conventions). It is write-through: every managed-text save records the bytes
+  // it just wrote into ~/.imagequeue/backups.sqlite3 strictly after its atomic
+  // rename lands (see utils/atomic-write.ts → backup/backup-store.ts). There is
+  // nothing to run here — the history is always as current as the last save.
 
   createWindow()
 

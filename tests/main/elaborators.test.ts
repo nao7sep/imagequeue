@@ -8,6 +8,7 @@ import {
   materializeElaborators,
 } from '../../src/main/elaborators'
 import type { Elaborator } from '../../src/shared/types'
+import { closeBackupStore } from '../../src/main/backup/backup-store'
 
 const ENV_VAR = 'IMAGEQUEUE_HOME'
 
@@ -27,6 +28,10 @@ describe('elaborators store', () => {
   })
 
   afterEach(() => {
+    // Close the write-through backup store's singleton so the next test re-opens it against its own
+    // fresh IMAGEQUEUE_HOME (elaborators.json is a recorded managed-text write; without this the store
+    // would stay open on the previous, now-deleted throwaway root). See backup/backup-store.ts.
+    closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })

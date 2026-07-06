@@ -54,7 +54,10 @@ function writeNow(): void {
   // should be unreachable. Kept so drainPendingWrites on quit can't slip
   // through and clobber a corrupted file.
   if (loadFailed) return
-  writeJsonAtomic(getParamsFilePath(), store)
+  // recorded: params.json is durable, user-authored managed text — the
+  // per-model Draw Things generation parameters the user tunes and reloads as
+  // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
+  writeJsonAtomic(getParamsFilePath(), store, true)
 }
 
 const writer = createCoalescedWriter({

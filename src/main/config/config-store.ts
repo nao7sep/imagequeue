@@ -103,7 +103,9 @@ export function saveConfig(config: AppConfig): void {
   ensureDataDir()
   scrubApiKeys(config)
   const configPath = getConfigPath()
-  writeJsonAtomic(configPath, config)
+  // recorded: config.json is the durable user-settings store — the canonical
+  // managed durable text this net exists to protect (data-backup conventions).
+  writeJsonAtomic(configPath, config, true)
   cachedConfig = config
   log('info', 'Config saved', { path: configPath })
 }

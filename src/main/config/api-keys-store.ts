@@ -186,10 +186,12 @@ function writeSecretsFile(file: SecretsFile): void {
   const filePath = getSecretsPath()
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
-  // Write to a temp file at 0600 then atomically rename over the target, so a
-  // crash mid-write cannot corrupt the secrets file and the target never exists
-  // with broader permissions. The temp name is `<stem>-<nanoid>.tmp`, in the
-  // same directory as the target.
+  // not recorded: api-keys.json is a SECRET and is never written through the managed-text hook. Secrets
+  // are never recorded (data-backup conventions): a history containing a credential would become
+  // sensitive-at-rest in its entirety and would have to be guarded as the secret is; keeping it out is
+  // what keeps backups.sqlite3 no more sensitive than ordinary user text. A key lost to a wipe is
+  // re-entered by the user. This write deliberately does its own 0600 temp+rename rather than routing
+  // through writeFileAtomic — the separate path is itself the exclusion, by construction.
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
   fs.writeFileSync(tempPath, `${JSON.stringify(file, null, 2)}\n`, { mode: SECRETS_FILE_MODE })

@@ -68,7 +68,11 @@ export async function downloadLatestRecommendations(): Promise<RecommendationSta
   ensureModelsDir()
   const filePath = getRecommendationsPath()
   const changed = !(fs.existsSync(filePath) && fs.readFileSync(filePath).equals(data))
-  if (changed) writeFileAtomic(filePath, data)
+  // not recorded: configs.json is a re-fetchable managed dependency downloaded verbatim from
+  // models.drawthings.ai, living in the effective models dir alongside Draw Things' own model data
+  // (not under ~/.imagequeue/) — re-acquirable content the app reads, not durable user-authored text
+  // (data-backup conventions: re-fetchable dependencies are not recorded).
+  if (changed) writeFileAtomic(filePath, data, false)
   clearPendingUpdate()
   updateDependenciesCache((cache) => {
     cache.recommendations.lastCheckedAtUtc = new Date().toISOString()
@@ -100,7 +104,10 @@ export async function checkRecommendations(): Promise<RecommendationStatus> {
 
   if (differs) {
     ensureModelsDir()
-    writeFileAtomic(getRecommendationsPendingPath(), latest)
+    // not recorded: configs-pending.json is a transient staging copy of a re-fetchable dependency
+    // (a freshly fetched configs.json held for apply), in the models dir — re-acquirable, and cleared
+    // once applied or superseded (data-backup conventions: re-fetchable/transient is not recorded).
+    writeFileAtomic(getRecommendationsPendingPath(), latest, false)
   } else {
     clearPendingUpdate()
   }
@@ -116,6 +123,9 @@ export async function checkRecommendations(): Promise<RecommendationStatus> {
 export function applyPendingRecommendations(): RecommendationStatus {
   const pendingPath = getRecommendationsPendingPath()
   if (fs.existsSync(pendingPath)) {
+    // not recorded: this promotes the already-written pending copy of a re-fetchable dependency
+    // (configs.json, in the models dir) into place by rename — it produces no new managed-text bytes,
+    // and configs.json is not recorded either way (see downloadLatestRecommendations).
     fs.renameSync(pendingPath, getRecommendationsPath())
   }
   updateDependenciesCache((cache) => {

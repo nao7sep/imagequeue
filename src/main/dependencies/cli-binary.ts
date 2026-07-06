@@ -103,7 +103,12 @@ export async function installCliRelease(
     // without a binary (if the rename then failed) reads as not-installed and is
     // harmless, overwritten on the next install. Same filesystem → atomic replace.
     const meta: CliMeta = { tag: release.tag, sha256: release.sha256, installedAt: new Date().toISOString() }
-    writeJsonAtomic(getCliMetaPath(), meta)
+    // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
+    // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
+    // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
+    // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
+    // colocated in a binary-bearing directory").
+    writeJsonAtomic(getCliMetaPath(), meta, false)
     fs.renameSync(tempPath, getCliBinaryPath())
     log('info', 'draw-things-cli installed', { tag: release.tag })
   } catch (err) {
