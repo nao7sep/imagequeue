@@ -23,12 +23,12 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 
 ## Requirements
 
-- Node.js 20+ (to run from source)
 - macOS or Windows (Draw Things support is macOS-only)
 - An API key for each cloud backend you use. Draw Things needs no API key. On macOS it uses two app-managed dependencies, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
   - The **Draw Things CLI** — downloaded directly from its official GitHub release (no Homebrew) and verified before use; the backend stays disabled until it's installed.
   - **Recommended per-model parameters** (`configs.json`, fetched from `models.drawthings.ai`) — optional; without them the app falls back to your default parameters.
 - Both are fetched only when you ask. A single **check for updates at launch** toggle (on by default, in the Dependencies window) looks for newer versions and offers an **Update** — nothing is ever downloaded, installed, or updated silently.
+- Node.js 20+ — only to build or run from source
 
 ## Download
 
@@ -37,9 +37,9 @@ Prebuilt installers and portable builds for macOS (Apple Silicon) and Windows ar
 - **macOS** — right-click the app and choose **Open** (or run `xattr -dr com.apple.quarantine /Applications/ImageQueue.app`).
 - **Windows** — on the SmartScreen prompt, click **More info → Run anyway**.
 
-## Getting started
+## Run from source
 
-Double-click the launcher for your platform (`scripts/run-dev.command` on macOS, `scripts/run-dev.ps1` on Windows), or run from source:
+Double-click the launcher for your platform (`scripts/run-dev.command` on macOS, `scripts/run-dev.ps1` on Windows), or run it by hand:
 
 ```sh
 npm install
