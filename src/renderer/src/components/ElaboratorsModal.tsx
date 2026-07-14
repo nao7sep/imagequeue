@@ -324,7 +324,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
             onClick={() => void handleReset(kind)}
             disabled={busy || draftTarget !== null}
           >
-            Reset Defaults
+            Reset to latest defaults
           </button>
         </div>
       </section>

@@ -371,7 +371,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
         <div className="elaboration-settings-reset-row">
           <button className="modal-btn modal-btn-danger" onClick={() => void handleReset()} disabled={busy}>
-            Reset to Defaults
+            Reset to latest defaults
           </button>
         </div>
         {message && <div className="elaboration-settings-message">{message}</div>}

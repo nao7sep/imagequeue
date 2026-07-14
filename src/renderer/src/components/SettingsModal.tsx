@@ -646,7 +646,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             onClick={async () => {
               const ok = await confirm({
                 title: 'Reset slug template',
-                message: 'Replace the slug template with the shipped default? Your current text will be lost.',
+                message: 'Replace the slug template with the shipped default? You can still cancel before saving.',
                 confirmLabel: 'Reset',
                 danger: true,
               })
@@ -655,7 +655,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               setConfig({ ...config, prompts: { ...prompts, slug: def } })
             }}
           >
-            Reset to Default
+            Reset to latest defaults
           </button>
         </div>
       </div>
