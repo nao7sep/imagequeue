@@ -9,15 +9,12 @@ import { DependencyPanePointer } from './DependencyPanePointer'
 import {
   getModelsForBackend,
   findModel,
-  IMAGEN_ASPECT_RATIOS,
-  IMAGEN_IMAGE_SIZES,
-  GROK_ASPECT_RATIOS,
-  GROK_RESOLUTIONS,
-  FLUX_SIZES,
-  OPENAI_SIZES_GPT2,
+  STANDARD_SIZE_PRESETS,
   OPENAI_GPT2_MAX_EDGE,
   OPENAI_GPT2_MIN_EDGE,
   OPENAI_GPT2_SIZE_STEP,
+  OPENAI_OUTPUT_FORMAT_LABELS,
+  IMAGEN_PERSON_GENERATION_LABELS,
   type SizePreset,
   type OpenAIModeration,
   type OpenAIQuality,
@@ -59,7 +56,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
 const CUSTOM_OPENAI_SIZE = 'custom'
-const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = OPENAI_SIZES_GPT2
+const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = STANDARD_SIZE_PRESETS
 
 // Sends a save error to the session log. Used by the fire-and-forget autosave
 // paths so a halted main-side write (e.g., when params.json is unreadable) is
@@ -128,6 +125,11 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
   const fluxModelDef = useMemo(
     () => (backendId === 'flux' ? findModel('flux', model) ?? getModelsForBackend('flux')[0] : null),
+    [backendId, model]
+  )
+
+  const grokModelDef = useMemo(
+    () => (backendId === 'grok' ? findModel('grok', model) ?? getModelsForBackend('grok')[0] : null),
     [backendId, model]
   )
 
@@ -470,8 +472,12 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       if (nextSize.width !== openaiWidth) setOpenaiWidth(nextSize.width)
       if (nextSize.height !== openaiHeight) setOpenaiHeight(nextSize.height)
     } else if (backendId === 'imagen' && imagenModelDef) {
-      setAspectRatio((prev) => IMAGEN_ASPECT_RATIOS.some((ar) => ar.value === prev) ? prev : '1:1')
-      setImageSize((prev) => imagenModelDef.imageSizes.some((size) => size.value === prev) ? prev : '1K')
+      setAspectRatio((prev) =>
+        imagenModelDef.aspectRatios.some((ar) => ar.value === prev) ? prev : (imagenModelDef.aspectRatios[0]?.value ?? '1:1')
+      )
+      setImageSize((prev) =>
+        imagenModelDef.imageSizes.some((size) => size.value === prev) ? prev : (imagenModelDef.imageSizes[0]?.value ?? '1K')
+      )
       setPersonGeneration((prev) =>
         imagenModelDef.personGeneration.includes(prev) ? prev : (imagenModelDef.personGeneration.find((value) => value === 'allow_all') ?? imagenModelDef.personGeneration[0])
       )
@@ -517,11 +523,13 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     if (backendId === 'imagen') {
       return { aspectRatio, imageSize, personGeneration }
     }
-    if (backendId === 'flux') {
-      const size = FLUX_SIZES[fluxSizeIdx]
+    if (backendId === 'flux' && fluxModelDef) {
+      // The ladder is the model's own, so an index carried over from a model with a
+      // longer list can fall off the end; the first size is the safe floor.
+      const size = fluxModelDef.sizes[fluxSizeIdx] ?? fluxModelDef.sizes[0]
       const params: Record<string, unknown> = { width: size.width, height: size.height }
-      if (fluxModelDef?.stepsRange) params.steps = fluxSteps
-      if (fluxModelDef?.guidanceRange) params.guidance = fluxGuidance
+      if (fluxModelDef.stepsRange) params.steps = fluxSteps
+      if (fluxModelDef.guidanceRange) params.guidance = fluxGuidance
       const parsedSeed = fluxSeed ? Number.parseInt(fluxSeed, 10) : NaN
       params.seed = Number.isNaN(parsedSeed) ? null : parsedSeed
       return params
@@ -803,9 +811,9 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
             <div className="setting-row">
               <label>format</label>
               <select value={outputFormat} onChange={(e) => setOutputFormat(e.target.value as OpenAIOutputFormat)}>
-                <option value="png">PNG</option>
-                <option value="jpeg">JPEG</option>
-                <option value="webp">WebP</option>
+                {openaiModelDef.outputFormats.map((fmt) => (
+                  <option key={fmt} value={fmt}>{OPENAI_OUTPUT_FORMAT_LABELS[fmt]}</option>
+                ))}
               </select>
             </div>
             <div className="setting-row">
@@ -820,21 +828,21 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         )}
 
         {/* Imagen parameters */}
-        {backendId === 'imagen' && (
+        {backendId === 'imagen' && imagenModelDef && (
           <>
             <div className="setting-row">
               <label>aspect</label>
               <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
-                {IMAGEN_ASPECT_RATIOS.map((ar) => (
+                {imagenModelDef.aspectRatios.map((ar) => (
                   <option key={ar.value} value={ar.value}>{ar.label}</option>
                 ))}
               </select>
             </div>
-            {imagenModelDef?.supportsImageSize && (
+            {imagenModelDef.supportsImageSize && (
               <div className="setting-row">
                 <label>size</label>
                 <select value={imageSize} onChange={(e) => setImageSize(e.target.value)}>
-                  {IMAGEN_IMAGE_SIZES.map((s) => (
+                  {imagenModelDef.imageSizes.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
@@ -843,18 +851,18 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
             <div className="setting-row">
               <label>persons</label>
               <select value={personGeneration} onChange={(e) => setPersonGeneration(e.target.value as ImagenPersonGeneration)}>
-                <option value="dont_allow">Don't allow</option>
-                <option value="allow_adult">Allow adult</option>
-                <option value="allow_all">Allow all</option>
+                {imagenModelDef.personGeneration.map((value) => (
+                  <option key={value} value={value}>{IMAGEN_PERSON_GENERATION_LABELS[value]}</option>
+                ))}
               </select>
             </div>
           </>
         )}
 
         {/* FLUX parameters */}
-        {backendId === 'flux' && (
+        {backendId === 'flux' && fluxModelDef && (
           <>
-            {renderSizeSelect(FLUX_SIZES, fluxSizeIdx, setFluxSizeIdx)}
+            {renderSizeSelect(fluxModelDef.sizes, fluxSizeIdx, setFluxSizeIdx)}
             {fluxModelDef?.stepsRange && (
               <div className="setting-row">
                 <label>steps</label>
@@ -916,12 +924,12 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         )}
 
         {/* Grok Imagine parameters */}
-        {backendId === 'grok' && (
+        {backendId === 'grok' && grokModelDef && (
           <>
             <div className="setting-row">
               <label>aspect</label>
               <select value={grokAspectRatio} onChange={(e) => setGrokAspectRatio(e.target.value as GrokAspectRatio)}>
-                {GROK_ASPECT_RATIOS.map((ar) => (
+                {grokModelDef.aspectRatios.map((ar) => (
                   <option key={ar.value} value={ar.value}>{ar.label}</option>
                 ))}
               </select>
@@ -929,7 +937,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
             <div className="setting-row">
               <label>size</label>
               <select value={grokResolution} onChange={(e) => setGrokResolution(e.target.value as GrokResolution)}>
-                {GROK_RESOLUTIONS.map((r) => (
+                {grokModelDef.resolutions.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>

@@ -89,4 +89,35 @@ describe('resolveSavedImageBackendDefaults', () => {
     )!
     expect(result.params.steps).toBe(flex.stepsRange!.max)
   })
+
+  // Nothing seeds steps/guidance into config: the model that declares the range is
+  // the only source of the number, so an unset value resolves to that model's own
+  // default rather than to a copy of it stored elsewhere.
+  it('falls back to the model range default when nothing is saved', () => {
+    const flex = findModel('flux', 'flux-2-flex')!
+    const result = resolveSavedImageBackendDefaults(
+      'flux',
+      { model: 'flux-2-flex', default_params: {} },
+      FLUX_MODELS,
+      flex
+    )!
+    expect(result.params.steps).toBe(flex.stepsRange!.default)
+    expect(result.params.guidance).toBe(flex.guidanceRange!.default)
+  })
+
+  // A model without the ranges does not merely default them — the params do not
+  // apply to it, so they must not reach the request at all, even when a stale
+  // config still carries values from a model that did expose them.
+  it('omits steps and guidance for a model that exposes neither', () => {
+    const pro = findModel('flux', 'flux-2-pro')!
+    expect(pro.stepsRange).toBeUndefined()
+    const result = resolveSavedImageBackendDefaults(
+      'flux',
+      { model: 'flux-2-pro', default_params: { steps: 40, guidance: 3 } },
+      FLUX_MODELS,
+      pro
+    )!
+    expect(result.params).not.toHaveProperty('steps')
+    expect(result.params).not.toHaveProperty('guidance')
+  })
 })

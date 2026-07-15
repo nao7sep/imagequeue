@@ -100,13 +100,19 @@ function buildContinuationMessage(template: string, formatDirective: string, cou
   return fillTemplate(template, { FORMAT: formatDirective, N: String(countToAskFor) })
 }
 
+// Scaffolding for the combined elaborator message: app-owned prompt text the user
+// never edits (the elaborators themselves are theirs), named here beside
+// STRICT_JSON_NUDGE rather than buried in the array that assembles the message.
+const ELABORATOR_COMBINE_PREAMBLE =
+  'Apply the following elaborator instruction sets in order. Preserve explicit user intent throughout.'
+
 function buildCombinedElaboratorInstructions(parts: {
   content: string
   composition: string
   style: string
 }): string {
   return [
-    'Apply the following elaborator instruction sets in order. Preserve explicit user intent throughout.',
+    ELABORATOR_COMBINE_PREAMBLE,
     '',
     '<content_elaborator>',
     parts.content,

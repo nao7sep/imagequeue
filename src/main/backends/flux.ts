@@ -1,4 +1,5 @@
 import { Task } from '../../shared/types'
+import { FLUX_MAX_PIXELS, FLUX_SIZE_STEP } from '../../shared/models'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
@@ -19,11 +20,11 @@ export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeTy
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
 
-  // Validate: dimensions must be multiples of 16 and ≤4MP
-  if (width % 16 !== 0 || height % 16 !== 0) {
-    throw new Error('FLUX dimensions must be multiples of 16')
+  // The same limits the size ladder is built from, so a preset can never fail here.
+  if (width % FLUX_SIZE_STEP !== 0 || height % FLUX_SIZE_STEP !== 0) {
+    throw new Error(`FLUX dimensions must be multiples of ${FLUX_SIZE_STEP}`)
   }
-  if (width * height > 4_194_304) {
+  if (width * height > FLUX_MAX_PIXELS) {
     throw new Error('FLUX dimensions exceed 4MP limit')
   }
 

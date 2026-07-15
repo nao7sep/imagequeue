@@ -55,7 +55,6 @@ export interface ImagenBackendConfig {
     aspectRatio: string
     imageSize: string
     personGeneration: string
-    numberOfImages: number
   }
   concurrency: number
   timeout_ms: number
@@ -67,8 +66,9 @@ export interface FluxBackendConfig {
   default_params: {
     width: number
     height: number
-    steps: number
-    guidance: number
+    // Present only once the user has used a model that exposes them (FLUX Flex).
+    steps?: number
+    guidance?: number
     seed: number | null
   }
   concurrency: number

@@ -4,8 +4,7 @@ import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { multiline } from '../utils/textCleanup'
 import { useImeGuard } from '../utils/imeGuard'
-import { TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
-import type { FluxModelDef } from '../../../shared/models'
+import { TEXT_AI_BACKEND_OPTIONS } from '../../../shared/models'
 import './SettingsModal.css'
 
 interface Props {
@@ -108,18 +107,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const geminiModels = (gemini.models as string[] | undefined) ?? []
   const geminiLightModel = (gemini.light_model as string | undefined) ?? ''
   const geminiMainModel = (gemini.main_model as string | undefined) ?? ''
-  const openAiModels = getModelsForBackend('openai')
-  const openAiModelDef = openAiModels.find((model) => model.id === (backends.openai.model as string)) ?? openAiModels[0]
-  const fluxModels = getModelsForBackend('flux') as FluxModelDef[]
-  const fluxModelDef = fluxModels.find((model) => model.id === (backends.flux.model as string)) ?? fluxModels[0]
-  const fluxDefaultParams = backends.flux.default_params as Record<string, unknown>
-  const fluxStepsValue = fluxModelDef?.stepsRange && typeof fluxDefaultParams.steps === 'number'
-    ? Math.max(fluxModelDef.stepsRange.min, Math.min(fluxModelDef.stepsRange.max, fluxDefaultParams.steps))
-    : (fluxModelDef?.stepsRange?.default ?? 50)
-  const fluxGuidanceValue = fluxModelDef?.guidanceRange && typeof fluxDefaultParams.guidance === 'number'
-    ? Math.max(fluxModelDef.guidanceRange.min, Math.min(fluxModelDef.guidanceRange.max, fluxDefaultParams.guidance))
-    : (fluxModelDef?.guidanceRange?.default ?? 5)
-
   const updateTextAi = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
   }
@@ -172,6 +159,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     setBaseConfig((prev) => withNotificationField(prev, key, value))
   }, [saveNotificationField])
 
+  // A cloud backend's credentials and transport knobs only. Its model and generation
+  // parameters belong to the queue column: that is the live surface, and it autosaves
+  // them into these same keys, so editing them here too would put two writers on one
+  // value. Draw Things is the exception below — no column autosaves it.
   const updateBackend = (backend: string, key: string, value: unknown): void => {
     setConfig({
       ...config,
@@ -182,6 +173,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     })
   }
 
+  // Draw Things' fallbacks, used when a local model ships no recommended params.
+  // Single-writer: the column's autosave covers cloud backends only.
   const updateBackendParam = (backend: string, key: string, value: unknown): void => {
     const params = backends[backend].default_params as Record<string, unknown>
     updateBackend(backend, 'default_params', { ...params, [key]: value })
@@ -492,30 +485,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <input type="password" value={backends.openai.api_key as string} onChange={(e) => updateBackend('openai', 'api_key', e.target.value)} />
         </div>
         <div className="settings-field">
-          <label>Model</label>
-          <select value={backends.openai.model as string} onChange={(e) => updateBackend('openai', 'model', e.target.value)}>
-            {getModelsForBackend('openai').map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="settings-field">
-          <label>Moderation</label>
-          <select value={(backends.openai.default_params as Record<string, unknown>).moderation as string} onChange={(e) => updateBackendParam('openai', 'moderation', e.target.value)}>
-            {openAiModelDef.moderations.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </div>
-        <div className="settings-field">
-          <label>Quality</label>
-          <select value={(backends.openai.default_params as Record<string, unknown>).quality as string} onChange={(e) => updateBackendParam('openai', 'quality', e.target.value)}>
-            {openAiModelDef.qualities.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </div>
-        <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.openai.concurrency as number} onChange={(e) => updateBackend('openai', 'concurrency', parseInt(e.target.value) || 1)} />
         </div>
@@ -530,14 +499,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>API Key</label>
           <input type="password" value={backends.imagen.api_key as string} onChange={(e) => updateBackend('imagen', 'api_key', e.target.value)} />
-        </div>
-        <div className="settings-field">
-          <label>Model</label>
-          <select value={backends.imagen.model as string} onChange={(e) => updateBackend('imagen', 'model', e.target.value)}>
-            {getModelsForBackend('imagen').map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
         </div>
         <div className="settings-field">
           <label>Concurrency</label>
@@ -556,14 +517,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <input type="password" value={backends.nanobanana.api_key as string} onChange={(e) => updateBackend('nanobanana', 'api_key', e.target.value)} />
         </div>
         <div className="settings-field">
-          <label>Model</label>
-          <select value={backends.nanobanana.model as string} onChange={(e) => updateBackend('nanobanana', 'model', e.target.value)}>
-            {getModelsForBackend('nanobanana').map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
         </div>
@@ -578,14 +531,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-field">
           <label>API Key</label>
           <input type="password" value={backends.grok.api_key as string} onChange={(e) => updateBackend('grok', 'api_key', e.target.value)} />
-        </div>
-        <div className="settings-field">
-          <label>Model</label>
-          <select value={backends.grok.model as string} onChange={(e) => updateBackend('grok', 'model', e.target.value)}>
-            {getModelsForBackend('grok').map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
         </div>
         <div className="settings-field">
           <label>Concurrency</label>
@@ -603,45 +548,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <label>API Key</label>
           <input type="password" value={backends.flux.api_key as string} onChange={(e) => updateBackend('flux', 'api_key', e.target.value)} />
         </div>
-        <div className="settings-field">
-          <label>Model</label>
-          <select value={backends.flux.model as string} onChange={(e) => updateBackend('flux', 'model', e.target.value)}>
-            {fluxModels.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-        {fluxModelDef?.stepsRange && (
-          <div className="settings-field">
-            <label>Steps</label>
-            <input
-              type="number"
-              min={fluxModelDef.stepsRange.min}
-              max={fluxModelDef.stepsRange.max}
-              value={fluxStepsValue}
-              onChange={(e) => {
-                const next = parseInt(e.target.value) || fluxModelDef.stepsRange!.default
-                updateBackendParam('flux', 'steps', Math.max(fluxModelDef.stepsRange!.min, Math.min(fluxModelDef.stepsRange!.max, next)))
-              }}
-            />
-          </div>
-        )}
-        {fluxModelDef?.guidanceRange && (
-          <div className="settings-field">
-            <label>Guidance</label>
-            <input
-              type="number"
-              min={fluxModelDef.guidanceRange.min}
-              max={fluxModelDef.guidanceRange.max}
-              step={0.5}
-              value={fluxGuidanceValue}
-              onChange={(e) => {
-                const next = parseFloat(e.target.value) || fluxModelDef.guidanceRange!.default
-                updateBackendParam('flux', 'guidance', Math.max(fluxModelDef.guidanceRange!.min, Math.min(fluxModelDef.guidanceRange!.max, next)))
-              }}
-            />
-          </div>
-        )}
         <div className="settings-field">
           <label>Concurrency</label>
           <input type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />

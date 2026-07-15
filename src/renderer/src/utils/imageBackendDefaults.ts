@@ -1,14 +1,11 @@
 import type { CloudBackendId } from '../../../shared/types'
 import {
-  FLUX_SIZES,
-  GROK_ASPECT_RATIOS,
-  GROK_RESOLUTIONS,
-  IMAGEN_ASPECT_RATIOS,
   OPENAI_GPT2_MAX_EDGE,
   OPENAI_GPT2_MIN_EDGE,
   OPENAI_GPT2_SIZE_STEP,
   type FluxModelDef,
   type GrokAspectRatio,
+  type GrokModelDef,
   type GrokResolution,
   type ImagenModelDef,
   type ImagenPersonGeneration,
@@ -29,6 +26,20 @@ export interface SavedImageBackendDefaults {
 
 export function serializeImageBackendDefaults(model: string, params: Record<string, unknown>): string {
   return JSON.stringify({ model, params })
+}
+
+// A range-bounded param (FLUX steps, guidance) exists only for models that declare
+// the range — Flex alone today. No range means the param does not apply to this
+// model, which is why an absent one resolves to undefined rather than to a number:
+// nothing outside the registry knows a sane value, and inventing one here is what
+// let a stale app-level default sit in config pretending to be authoritative.
+function resolveRangedParam(
+  range: { min: number; max: number; default: number } | undefined,
+  saved: unknown
+): number | undefined {
+  if (!range) return undefined
+  if (typeof saved !== 'number') return range.default
+  return Math.max(range.min, Math.min(range.max, saved))
 }
 
 export function normalizeOpenAiDimension(value: number): number {
@@ -105,12 +116,12 @@ export function resolveSavedImageBackendDefaults(
   if (backend === 'imagen') {
     const modelDef = (models.find((m) => m.id === model) ?? defaultModel) as ImagenModelDef | undefined
     if (!modelDef) return null
-    const aspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && IMAGEN_ASPECT_RATIOS.some((item) => item.value === savedDefaultParams.aspectRatio)
+    const aspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && modelDef.aspectRatios.some((item) => item.value === savedDefaultParams.aspectRatio)
       ? savedDefaultParams.aspectRatio
-      : '1:1'
+      : (modelDef.aspectRatios[0]?.value ?? '1:1')
     const imageSize = typeof savedDefaultParams.imageSize === 'string' && modelDef.imageSizes.some((item) => item.value === savedDefaultParams.imageSize)
       ? savedDefaultParams.imageSize
-      : '1K'
+      : (modelDef.imageSizes[0]?.value ?? '1K')
     const personGeneration = typeof savedDefaultParams.personGeneration === 'string' && modelDef.personGeneration.includes(savedDefaultParams.personGeneration as ImagenPersonGeneration)
       ? savedDefaultParams.personGeneration as ImagenPersonGeneration
       : (modelDef.personGeneration.find((value) => value === 'allow_all') ?? modelDef.personGeneration[0])
@@ -132,32 +143,30 @@ export function resolveSavedImageBackendDefaults(
   }
 
   if (backend === 'grok') {
-    const aspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && GROK_ASPECT_RATIOS.some((item) => item.value === savedDefaultParams.aspectRatio)
+    const modelDef = (models.find((m) => m.id === model) ?? defaultModel) as GrokModelDef | undefined
+    if (!modelDef) return null
+    const aspectRatio = typeof savedDefaultParams.aspectRatio === 'string' && modelDef.aspectRatios.some((item) => item.value === savedDefaultParams.aspectRatio)
       ? savedDefaultParams.aspectRatio as GrokAspectRatio
-      : '1:1'
-    const resolution = typeof savedDefaultParams.resolution === 'string' && GROK_RESOLUTIONS.some((item) => item.value === savedDefaultParams.resolution)
+      : (modelDef.aspectRatios[0]?.value ?? '1:1')
+    const resolution = typeof savedDefaultParams.resolution === 'string' && modelDef.resolutions.some((item) => item.value === savedDefaultParams.resolution)
       ? savedDefaultParams.resolution as GrokResolution
-      : '1k'
+      : (modelDef.resolutions[0]?.value ?? '1k')
     const params = { aspectRatio, resolution }
     return { model, params, ui: params }
   }
 
   const modelDef = (models.find((m) => m.id === model) ?? defaultModel) as FluxModelDef | undefined
   if (!modelDef) return null
-  const sizeIdx = FLUX_SIZES.findIndex(
+  const sizeIdx = modelDef.sizes.findIndex(
     (size) => size.width === savedDefaultParams.width && size.height === savedDefaultParams.height
   )
-  const size = FLUX_SIZES[sizeIdx >= 0 ? sizeIdx : 0]
-  const steps = modelDef.stepsRange && typeof savedDefaultParams.steps === 'number'
-    ? Math.max(modelDef.stepsRange.min, Math.min(modelDef.stepsRange.max, savedDefaultParams.steps))
-    : (modelDef.stepsRange?.default ?? 50)
-  const guidance = modelDef.guidanceRange && typeof savedDefaultParams.guidance === 'number'
-    ? Math.max(modelDef.guidanceRange.min, Math.min(modelDef.guidanceRange.max, savedDefaultParams.guidance))
-    : (modelDef.guidanceRange?.default ?? 5)
+  const size = modelDef.sizes[sizeIdx >= 0 ? sizeIdx : 0]
+  const steps = resolveRangedParam(modelDef.stepsRange, savedDefaultParams.steps)
+  const guidance = resolveRangedParam(modelDef.guidanceRange, savedDefaultParams.guidance)
   const seed = savedDefaultParams.seed == null ? '' : String(savedDefaultParams.seed)
   const params: Record<string, unknown> = { width: size.width, height: size.height, seed: seed ? Number.parseInt(seed, 10) : null }
-  if (modelDef.stepsRange) params.steps = steps
-  if (modelDef.guidanceRange) params.guidance = guidance
+  if (steps !== undefined) params.steps = steps
+  if (guidance !== undefined) params.guidance = guidance
   return {
     model,
     params,

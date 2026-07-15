@@ -17,14 +17,18 @@ export const OPENAI_GPT2_MAX_ASPECT_RATIO = 3
 export const OPENAI_GPT2_MAX_PIXELS = 8_294_400
 
 // Sizes for GPT Image 1.x models (exactly these three)
-export const OPENAI_SIZES: SizePreset[] = [
+const OPENAI_SIZES: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
   { label: '1536×1024 (3:2)', width: 1536, height: 1024 },
   { label: '1024×1536 (2:3)', width: 1024, height: 1536 }
 ]
 
-// Useful presets for gpt-image-2 custom sizing.
-export const OPENAI_SIZES_GPT2: SizePreset[] = [
+// The app's general-purpose size ladder, shared by every surface that offers free
+// choice of dimensions rather than a model-dictated list: gpt-image-2's custom
+// sizing, FLUX (filtered to its 4MP ceiling), and Draw Things. Shared deliberately
+// — editing an entry moves all three, which is the intent; a backend needing its
+// own ladder gets its own constant rather than a divergent copy of this one.
+export const STANDARD_SIZE_PRESETS: SizePreset[] = [
   { label: '1024×1024 (Square)', width: 1024, height: 1024 },
   { label: '2048×2048 (Square Large)', width: 2048, height: 2048 },
   { label: '2048×1024 (2:1)', width: 2048, height: 1024 },
@@ -49,7 +53,7 @@ export const OPENAI_SIZES_GPT2: SizePreset[] = [
 export type ImagenAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
 export type ImagenImageSize = '1K' | '2K'
 
-export const IMAGEN_ASPECT_RATIOS: { label: string; value: ImagenAspectRatio }[] = [
+const IMAGEN_ASPECT_RATIOS: { label: string; value: ImagenAspectRatio }[] = [
   { label: '1:1', value: '1:1' },
   { label: '3:4', value: '3:4' },
   { label: '4:3', value: '4:3' },
@@ -57,15 +61,21 @@ export const IMAGEN_ASPECT_RATIOS: { label: string; value: ImagenAspectRatio }[]
   { label: '16:9', value: '16:9' }
 ]
 
-export const IMAGEN_IMAGE_SIZES: { label: string; value: ImagenImageSize }[] = [
+const IMAGEN_IMAGE_SIZES: { label: string; value: ImagenImageSize }[] = [
   { label: '1K', value: '1K' },
   { label: '2K', value: '2K' }
 ]
 
-// FLUX.2 allows flexible sizes up to 4MP. Reuse the GPT-style preset ordering and
-// labels, but keep only the entries that fit within FLUX's 4MP limit.
-export const FLUX_SIZES: SizePreset[] = OPENAI_SIZES_GPT2.filter(
-  ({ width, height }) => width * height <= 4_194_304
+// FLUX.2's dimension limits, named here beside the OpenAI equivalents above and
+// exported for the FLUX backend to validate against — the ladder below and that
+// check must agree, so they read the same constants.
+export const FLUX_MAX_PIXELS = 4_194_304
+export const FLUX_SIZE_STEP = 16
+
+// FLUX.2 allows flexible sizes up to its ceiling: the standard ladder, minus what
+// does not fit.
+const FLUX_SIZES: SizePreset[] = STANDARD_SIZE_PRESETS.filter(
+  ({ width, height }) => width * height <= FLUX_MAX_PIXELS
 )
 
 // --- Model definitions ---
@@ -75,6 +85,22 @@ export type OpenAIModeration = 'low' | 'auto'
 export type OpenAIOutputFormat = 'png' | 'jpeg' | 'webp'
 export type OpenAIBackground = 'opaque' | 'transparent' | 'auto'
 export type ImagenPersonGeneration = 'dont_allow' | 'allow_adult' | 'allow_all'
+
+// Display names for the two option sets whose wire values do not survive a
+// mechanical prettify ('webp' → 'WebP', 'dont_allow' → "Don't allow"). Each model
+// declares which values it supports; these name them. Quality, moderation, and
+// background are single lowercase words and are capitalized at the call site.
+export const OPENAI_OUTPUT_FORMAT_LABELS: Record<OpenAIOutputFormat, string> = {
+  png: 'PNG',
+  jpeg: 'JPEG',
+  webp: 'WebP'
+}
+
+export const IMAGEN_PERSON_GENERATION_LABELS: Record<ImagenPersonGeneration, string> = {
+  dont_allow: "Don't allow",
+  allow_adult: 'Allow adult',
+  allow_all: 'Allow all'
+}
 
 export interface ModelDef {
   id: string
@@ -179,7 +205,7 @@ export type GrokAspectRatio =
   '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
   '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
 
-export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
+const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
   { label: '1:1',    value: '1:1' },
   { label: '1:2',    value: '1:2' },
   { label: '2:1',    value: '2:1' },
@@ -197,13 +223,15 @@ export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
 
 export type GrokResolution = '1k' | '2k'
 
-export const GROK_RESOLUTIONS: { label: string; value: GrokResolution }[] = [
+const GROK_RESOLUTIONS: { label: string; value: GrokResolution }[] = [
   { label: '1K', value: '1k' },
   { label: '2K', value: '2k' }
 ]
 
 export interface GrokModelDef extends ModelDef {
   backend: 'grok'
+  aspectRatios: { label: string; value: GrokAspectRatio }[]
+  resolutions: { label: string; value: GrokResolution }[]
   pricing: number  // per image, flat rate
 }
 
@@ -217,7 +245,7 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     isDefault: true,
     qualities: ['auto', 'low', 'medium', 'high'],
     moderations: ['auto', 'low'],
-    sizes: OPENAI_SIZES_GPT2,
+    sizes: STANDARD_SIZE_PRESETS,
     supportsCustomSizes: true,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'auto'],
@@ -403,6 +431,8 @@ export const GROK_MODELS: GrokModelDef[] = [
     id: 'grok-imagine-image-quality',
     label: 'Grok Imagine Quality',
     backend: 'grok',
+    aspectRatios: GROK_ASPECT_RATIOS,
+    resolutions: GROK_RESOLUTIONS,
     pricing: 0.07
   },
   {
@@ -410,6 +440,8 @@ export const GROK_MODELS: GrokModelDef[] = [
     label: 'Grok Imagine',
     backend: 'grok',
     isDefault: true,
+    aspectRatios: GROK_ASPECT_RATIOS,
+    resolutions: GROK_RESOLUTIONS,
     pricing: 0.02
   }
 ]
@@ -462,6 +494,22 @@ export function getModelsForBackend(backend: BackendId): ModelDef[] {
     case 'flux': return FLUX_MODELS
     default: return []
   }
+}
+
+// The model a backend starts on: the registry entry marked isDefault. This is the
+// only place that answer is derived, so config seeding and the renderer's fallback
+// cannot drift apart from the registry or from each other. A backend whose registry
+// marks no default (or has no registry, like Draw Things) falls back to its first
+// entry, and returns undefined only when it has no models at all.
+export function getDefaultModelForBackend(backend: 'openai'): OpenAIModelDef
+export function getDefaultModelForBackend(backend: 'imagen'): ImagenModelDef
+export function getDefaultModelForBackend(backend: 'nanobanana'): NanoBananaModelDef
+export function getDefaultModelForBackend(backend: 'grok'): GrokModelDef
+export function getDefaultModelForBackend(backend: 'flux'): FluxModelDef
+export function getDefaultModelForBackend(backend: BackendId): ModelDef | undefined
+export function getDefaultModelForBackend(backend: BackendId): ModelDef | undefined {
+  const models = getModelsForBackend(backend)
+  return models.find((model) => model.isDefault) ?? models[0]
 }
 
 export function findModel(backend: 'openai', modelId: string): OpenAIModelDef | undefined

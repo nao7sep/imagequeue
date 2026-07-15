@@ -1,5 +1,5 @@
 import { AppConfig } from './types'
-import { DEFAULT_GEMINI_TEXT_MODELS } from '../../shared/models'
+import { DEFAULT_GEMINI_TEXT_MODELS, getDefaultModelForBackend } from '../../shared/models'
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -36,7 +36,9 @@ export function createDefaultConfig(): AppConfig {
     image_backends: {
       openai: {
         api_key: '',
-        model: 'gpt-image-2',
+        // Seeded from the registry's isDefault entry rather than restated here, so a
+        // registry change reaches a fresh install without a second edit.
+        model: getDefaultModelForBackend('openai').id,
         default_params: {
           width: 1024,
           height: 1024,
@@ -50,19 +52,18 @@ export function createDefaultConfig(): AppConfig {
       },
       imagen: {
         api_key: '',
-        model: 'imagen-4.0-generate-001',
+        model: getDefaultModelForBackend('imagen').id,
         default_params: {
           aspectRatio: '1:1',
           imageSize: '1K',
-          personGeneration: 'allow_all',
-          numberOfImages: 1
+          personGeneration: 'allow_all'
         },
         concurrency: 3,
         timeout_ms: 180000
       },
       nanobanana: {
         api_key: '',
-        model: 'gemini-3.1-flash-image-preview',
+        model: getDefaultModelForBackend('nanobanana').id,
         default_params: {
           aspectRatio: '1:1',
           imageSize: '1K'
@@ -72,7 +73,7 @@ export function createDefaultConfig(): AppConfig {
       },
       grok: {
         api_key: '',
-        model: 'grok-imagine-image',
+        model: getDefaultModelForBackend('grok').id,
         default_params: {
           aspectRatio: '1:1',
           resolution: '1k'
@@ -82,12 +83,13 @@ export function createDefaultConfig(): AppConfig {
       },
       flux: {
         api_key: '',
-        model: 'flux-2-pro',
+        model: getDefaultModelForBackend('flux').id,
+        // No steps/guidance: they apply only to a model that declares their ranges,
+        // and that model's own defaults are the source. Seeding numbers here made a
+        // copy of FLUX Flex's defaults that would quietly go stale against them.
         default_params: {
           width: 1024,
           height: 1024,
-          steps: 50,
-          guidance: 5,
           seed: null
         },
         concurrency: 3,

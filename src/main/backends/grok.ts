@@ -3,6 +3,8 @@ import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 
+const BASE_URL = 'https://api.x.ai/v1'
+
 // Calls the xAI Grok Imagine image generation API and returns the image bytes
 // with an `image/jpeg` MIME hint. The API always returns JPEG — no format
 // selection is available.
@@ -34,7 +36,7 @@ export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeTy
   const startTime = Date.now()
 
   try {
-    const response = await fetch('https://api.x.ai/v1/images/generations', {
+    const response = await fetch(`${BASE_URL}/images/generations`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
