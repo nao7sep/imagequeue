@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
+import { DEFAULT_GEMINI_TEXT_MODELS } from '../../shared/models'
 import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { resolveStorageRoot } from './storage-root'
@@ -50,6 +51,38 @@ export function deepMergeDefaults<T>(loaded: unknown, defaults: T): T {
   return result as T
 }
 
+// text_ai.gemini.models is a user-owned, user-edited list, so it reaches the
+// store dirty from two directions: a hand-edited config.json on load, and the
+// renderer's draft on save. Trim, drop empties, and de-duplicate so every reader
+// gets a list it can render and select from; a non-array (or a list with nothing
+// usable left) falls back to the built-ins rather than leaving the editor and
+// both selects empty.
+//
+// It deliberately does NOT check that light_model/main_model are members of the
+// list: the store never judges a selection (the validity boundary). A retired or
+// unsupported id is reported by the feature that uses it — fast, at the API call
+// — so this stays a dumb, version-unaware normalizer.
+export function normalizeGeminiTextModels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [...DEFAULT_GEMINI_TEXT_MODELS]
+  const cleaned = [
+    ...new Set(
+      value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    )
+  ]
+  return cleaned.length > 0 ? cleaned : [...DEFAULT_GEMINI_TEXT_MODELS]
+}
+
+// Mutates in place, mirroring scrubApiKeys: callers pass a config they own (the
+// merged load result, or the cache being saved). Guarded like scrubApiKeys so a
+// structurally broken text_ai in a hand-edited file can't throw here.
+function normalizeGeminiModels(config: AppConfig): void {
+  if (!config.text_ai?.gemini) return
+  config.text_ai.gemini.models = normalizeGeminiTextModels(config.text_ai.gemini.models)
+}
+
 export function loadConfig(): AppConfig {
   if (cachedConfig) return cachedConfig
 
@@ -81,6 +114,9 @@ export function loadConfig(): AppConfig {
   // exposed to an overwrite bug, and it picks up newly added keys on the next real save — the in-code
   // default for any absent key already drives behavior in the meantime.
   const merged = deepMergeDefaults(parsed, createDefaultConfig())
+  // deepMergeDefaults keeps a loaded array verbatim, so the user's list arrives
+  // exactly as the file has it — clean it before anything reads it.
+  normalizeGeminiModels(merged)
   cachedConfig = merged
   return merged
 }
@@ -102,6 +138,7 @@ function scrubApiKeys(config: AppConfig): void {
 export function saveConfig(config: AppConfig): void {
   ensureDataDir()
   scrubApiKeys(config)
+  normalizeGeminiModels(config)
   const configPath = getConfigPath()
   // recorded: config.json is the durable user-settings store — the canonical
   // managed durable text this net exists to protect (data-backup conventions).

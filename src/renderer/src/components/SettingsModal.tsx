@@ -3,7 +3,8 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { multiline } from '../utils/textCleanup'
-import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
+import { useImeGuard } from '../utils/imeGuard'
+import { TEXT_AI_BACKEND_OPTIONS, getModelsForBackend } from '../../../shared/models'
 import type { FluxModelDef } from '../../../shared/models'
 import './SettingsModal.css'
 
@@ -101,6 +102,12 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const prompts = config.prompts as Record<string, string>
   const general = (config.general ?? {}) as Record<string, unknown>
   const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
+  // The user-owned Gemini text model list and the two selections into it. The
+  // store normalizes the list to a non-empty array, but this reads the untyped
+  // draft config, so it defends against a missing key.
+  const geminiModels = (gemini.models as string[] | undefined) ?? []
+  const geminiLightModel = (gemini.light_model as string | undefined) ?? ''
+  const geminiMainModel = (gemini.main_model as string | undefined) ?? ''
   const openAiModels = getModelsForBackend('openai')
   const openAiModelDef = openAiModels.find((model) => model.id === (backends.openai.model as string)) ?? openAiModels[0]
   const fluxModels = getModelsForBackend('flux') as FluxModelDef[]
@@ -119,6 +126,29 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
 
   const updateGemini = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, gemini: { ...gemini, [key]: value } } })
+  }
+
+  // Restores the user-owned Gemini model list AND both selections into it to the
+  // shipped built-ins, in one write: the set and its pointers are owned together,
+  // so refreshing the list alone could strand a selection on a retired id. The
+  // built-ins come from main (createDefaultConfig) so a reset lands on exactly
+  // what a fresh install seeds. This modal is a draft applied on Save, so no
+  // blocking confirm — the label is the whole warning, and closing dirty still
+  // offers to discard.
+  const resetGeminiModelsToDefaults = async (): Promise<void> => {
+    const defaults = await window.electronAPI.getGeminiModelDefaults()
+    setConfig({
+      ...config,
+      text_ai: {
+        ...textAi,
+        gemini: {
+          ...gemini,
+          models: defaults.models,
+          light_model: defaults.light_model,
+          main_model: defaults.main_model,
+        },
+      },
+    })
   }
 
   const updateOpenai = (key: string, value: unknown): void => {
@@ -386,20 +416,42 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             <input type="password" value={gemini.api_key as string} onChange={(e) => updateGemini('api_key', e.target.value)} />
           </div>
           <div className="settings-field">
+            <label>Models</label>
+            <GeminiModelListEditor models={geminiModels} onChange={(models) => updateGemini('models', models)} />
+          </div>
+          <div className="settings-field">
             <label>Light model</label>
-            <select value={gemini.light_model as string} onChange={(e) => updateGemini('light_model', e.target.value)}>
-              {GEMINI_TEXT_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
+            <select value={geminiLightModel} onChange={(e) => updateGemini('light_model', e.target.value)}>
+              {geminiModels.map((id) => (
+                <option key={id} value={id}>{id}</option>
               ))}
+              {/* A selection the user has since removed from the list — or one an
+                  older config carries — stays visible and selected rather than
+                  silently snapping to the first entry. */}
+              {geminiLightModel && !geminiModels.includes(geminiLightModel) ? (
+                <option value={geminiLightModel}>{geminiLightModel} (not in list)</option>
+              ) : null}
             </select>
           </div>
           <div className="settings-field">
             <label>Main model</label>
-            <select value={gemini.main_model as string} onChange={(e) => updateGemini('main_model', e.target.value)}>
-              {GEMINI_TEXT_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
+            <select value={geminiMainModel} onChange={(e) => updateGemini('main_model', e.target.value)}>
+              {geminiModels.map((id) => (
+                <option key={id} value={id}>{id}</option>
               ))}
+              {geminiMainModel && !geminiModels.includes(geminiMainModel) ? (
+                <option value={geminiMainModel}>{geminiMainModel} (not in list)</option>
+              ) : null}
             </select>
+          </div>
+          <div className="settings-field-reset">
+            <button
+              type="button"
+              className="modal-btn modal-btn-danger"
+              onClick={() => void resetGeminiModelsToDefaults()}
+            >
+              Reset Gemini models
+            </button>
           </div>
           <div className="settings-field">
             <label>Timeout (s)</label>
@@ -646,7 +698,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             onClick={async () => {
               const ok = await confirm({
                 title: 'Reset slug template',
-                message: 'Replace the slug template with the shipped default? You can still cancel before saving.',
+                message: 'Replace the slug template with the shipped default?',
                 confirmLabel: 'Reset',
                 danger: true,
               })
@@ -655,12 +707,86 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               setConfig({ ...config, prompts: { ...prompts, slug: def } })
             }}
           >
-            Reset to latest defaults
+            Reset slug template
           </button>
         </div>
       </div>
 
       </div>
     </Modal>
+  )
+}
+
+// The editor for the user-owned Gemini text model list. Free-text entry lives
+// HERE, on the list — not on the selects: the user adds an id to the list, then
+// picks it above, which keeps each selection a member of the set it points into.
+// Entries render as raw ids because the list is user-extensible and a
+// user-added id has no label. A wrong id is not rejected here; it surfaces as a
+// clear error at the API call (the validity boundary).
+function GeminiModelListEditor({
+  models,
+  onChange,
+}: {
+  models: string[]
+  onChange: (models: string[]) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState('')
+  const isComposing = useImeGuard()
+
+  const addModel = (): void => {
+    const id = draft.trim()
+    // Ignore blanks and duplicates; either way clear the field so it is ready
+    // for the next id.
+    if (id.length > 0 && !models.includes(id)) onChange([...models, id])
+    setDraft('')
+  }
+
+  return (
+    <div className="settings-model-list">
+      {models.length > 0 ? (
+        <ul className="settings-model-list-items">
+          {models.map((id) => (
+            <li className="settings-model-list-item" key={id}>
+              <span className="settings-model-list-id">{id}</span>
+              <button
+                type="button"
+                className="settings-browse-btn"
+                onClick={() => onChange(models.filter((entry) => entry !== id))}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="settings-model-list-empty">
+          No models in the list. Add one below, or use Reset Gemini models.
+        </p>
+      )}
+      <div className="settings-browse">
+        <input
+          type="text"
+          placeholder="Add a model id, e.g. gemini-3.5-flash"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter adds, but never while an IME is composing — otherwise the
+            // Enter that commits a conversion would also submit the field.
+            if (e.key === 'Enter' && !isComposing(e)) {
+              e.preventDefault()
+              addModel()
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="settings-browse-btn"
+          onClick={addModel}
+          disabled={draft.trim().length === 0}
+        >
+          Add
+        </button>
+      </div>
+    </div>
   )
 }

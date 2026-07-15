@@ -152,7 +152,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   const handleReset = useCallback(async (): Promise<void> => {
     const ok = await confirm({
       title: 'Reset Elaboration Settings',
-      message: 'Replace the current values with the shipped defaults? Templates, format directives, and numeric settings will all be reset. You can still cancel before saving.',
+      message: 'Replace templates, format directives, and numeric settings with the shipped defaults?',
       confirmLabel: 'Reset',
       danger: true,
     })
@@ -371,7 +371,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
         <div className="elaboration-settings-reset-row">
           <button className="modal-btn modal-btn-danger" onClick={() => void handleReset()} disabled={busy}>
-            Reset to latest defaults
+            Reset elaboration settings
           </button>
         </div>
         {message && <div className="elaboration-settings-message">{message}</div>}

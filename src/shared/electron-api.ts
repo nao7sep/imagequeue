@@ -120,6 +120,13 @@ export interface ElectronAPI {
   saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<{ success: boolean }>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
+  // The shipped Gemini text-model list and the two selections into it, for
+  // Settings' "Reset Gemini models" button.
+  getGeminiModelDefaults: () => Promise<{
+    models: string[]
+    light_model: string
+    main_model: string
+  }>
   checkLocalModel: (filename: string) => Promise<boolean>
 
   // Draw Things CLI operations (macOS only)

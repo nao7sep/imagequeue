@@ -187,6 +187,13 @@ const api = {
   saveBrainstormSettings: (brainstorm: Record<string, unknown>): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
 
+  getGeminiModelDefaults: (): Promise<{
+    models: string[]
+    light_model: string
+    main_model: string
+  }> =>
+    ipcRenderer.invoke('settings:getGeminiModelDefaults'),
+
   saveImageBackendDefaults: (
     backend: CloudBackendId,
     model: string,

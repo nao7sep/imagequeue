@@ -416,17 +416,21 @@ export const GROK_MODELS: GrokModelDef[] = [
 
 // --- Text AI backends and models ---
 
-export interface GeminiTextModelDef {
-  id: string
-  label: string
-}
-
-// Keep aligned with the currently documented Gemini text model IDs.
-export const GEMINI_TEXT_MODELS: GeminiTextModelDef[] = [
-  { id: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro (Preview)' },
-  { id: 'gemini-3.5-flash',              label: 'Gemini 3.5 Flash' },
-  { id: 'gemini-3-flash-preview',        label: 'Gemini 3 Flash (Preview)' },
-  { id: 'gemini-3.1-flash-lite',         label: 'Gemini 3.1 Flash Lite' }
+// Built-in Gemini text model ids, seeded into the user-owned, editable list
+// (config.text_ai.gemini.models) at first run and restored by "Reset Gemini
+// models". Unlike the image models above — which stay app-owned because their
+// request parameters are coupled to the model — nothing here is coupled to the
+// id, so the user owns this list and tracks Google's releases themselves.
+//
+// Ids only, deliberately: the list is user-extensible, and a user-added id has
+// no label to show, so the UI renders raw ids for every entry rather than
+// labelling the built-ins and leaving the user's own additions bare. A wrong or
+// retired id surfaces at call time (the validity boundary), never from here.
+export const DEFAULT_GEMINI_TEXT_MODELS: string[] = [
+  'gemini-3.1-pro-preview',
+  'gemini-3.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite'
 ]
 
 export interface TextAIBackendOption {

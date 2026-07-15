@@ -6,6 +6,14 @@ import type { FormatDirectives } from '../../shared/session-draft'
 export interface GeminiTextAIConfig {
   api_key: string
   timeout_ms: number
+  // The user-owned Gemini text model list (config-seeding conventions, shape 1:
+  // a value-keyed list plus selections). Seeded from DEFAULT_GEMINI_TEXT_MODELS
+  // at first run, then the user's to add to and remove from. light_model and
+  // main_model are the two selections *into* this list; they live in the same
+  // store so a selection never points at a set the app could redefine underneath
+  // it. Neither selection is validated against the list — a bad id fails fast at
+  // the API call, not here.
+  models: string[]
   light_model: string
   main_model: string
 }

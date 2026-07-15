@@ -2,7 +2,7 @@ import { BrowserWindow, shell, dialog, app, clipboard, nativeImage } from 'elect
 import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
-import { loadConfig, saveConfig, getDataDir } from './config'
+import { loadConfig, saveConfig, getDataDir, createDefaultConfig } from './config'
 import { getStoredApiKey, setStoredApiKey, IMAGE_BACKEND_SECRET } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { getSessionDir } from './session'
@@ -114,6 +114,16 @@ export function registerSettingsIpc(): void {
     notifications[field] = value
     saveConfig(config)
     return { success: true }
+  })
+
+  // Returns the shipped Gemini text-model defaults — the list and both
+  // selections that point into it — used by Settings' "Reset Gemini models"
+  // button. Reads from the same createDefaultConfig() that seeds new installs,
+  // so a reset lands on exactly what a fresh install would get. The set and its
+  // pointers are returned together because a reset replaces them as one unit.
+  handle('settings:getGeminiModelDefaults', () => {
+    const { models, light_model, main_model } = createDefaultConfig().text_ai.gemini
+    return { models, light_model, main_model }
   })
 
   handle('settings:checkLocalModel', (_event, filename: string) => {

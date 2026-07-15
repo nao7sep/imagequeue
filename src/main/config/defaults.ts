@@ -1,4 +1,5 @@
 import { AppConfig } from './types'
+import { DEFAULT_GEMINI_TEXT_MODELS } from '../../shared/models'
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -7,6 +8,9 @@ export function createDefaultConfig(): AppConfig {
       gemini: {
         api_key: '',
         timeout_ms: 30000,
+        // Copied, not referenced: every call returns a fresh config the caller
+        // may mutate, so the shared built-in array is never handed out.
+        models: [...DEFAULT_GEMINI_TEXT_MODELS],
         light_model: 'gemini-3.1-flash-lite',
         main_model: 'gemini-3-flash-preview'
       },
