@@ -117,7 +117,6 @@ export interface OpenAIModelDef extends ModelDef {
   supportsCustomSizes?: boolean
   outputFormats: OpenAIOutputFormat[]
   backgrounds: OpenAIBackground[]
-  pricing: Record<'low' | 'medium' | 'high', { square: number; rect: number }>
 }
 
 export interface ImagenModelDef extends ModelDef {
@@ -126,7 +125,6 @@ export interface ImagenModelDef extends ModelDef {
   imageSizes: typeof IMAGEN_IMAGE_SIZES
   supportsImageSize: boolean
   personGeneration: ImagenPersonGeneration[]
-  pricing: number
 }
 
 export interface FluxModelDef extends ModelDef {
@@ -135,7 +133,6 @@ export interface FluxModelDef extends ModelDef {
   // Only FLUX.2 Flex exposes steps and guidance in the public API.
   stepsRange?: { min: number; max: number; default: number }
   guidanceRange?: { min: number; max: number; default: number }
-  pricing: { firstMp: number; additionalMp: number }
 }
 
 // Nano Banana (Gemini native image generation) aspect ratios and sizes.
@@ -196,9 +193,6 @@ export interface NanoBananaModelDef extends ModelDef {
   supportsImageConfig: boolean
   aspectRatios: { label: string; value: string }[]
   imageSizes: { label: string; value: string }[]
-  // Pricing by imageSize value (e.g. '1K', '2K'). Flat-price models may repeat the
-  // same value across all supported sizes.
-  pricing: Record<string, number>
 }
 
 export type GrokAspectRatio =
@@ -232,7 +226,6 @@ export interface GrokModelDef extends ModelDef {
   backend: 'grok'
   aspectRatios: { label: string; value: GrokAspectRatio }[]
   resolutions: { label: string; value: GrokResolution }[]
-  pricing: number  // per image, flat rate
 }
 
 // --- OpenAI models ---
@@ -249,11 +242,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     supportsCustomSizes: true,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'auto'],
-    pricing: {
-      low: { square: 0.006, rect: 0.005 },
-      medium: { square: 0.053, rect: 0.041 },
-      high: { square: 0.211, rect: 0.165 }
-    }
   },
   {
     id: 'gpt-image-1.5',
@@ -264,11 +252,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'transparent'],
-    pricing: {
-      low: { square: 0.009, rect: 0.013 },
-      medium: { square: 0.034, rect: 0.05 },
-      high: { square: 0.133, rect: 0.20 }
-    }
   },
   {
     id: 'gpt-image-1',
@@ -279,11 +262,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'transparent'],
-    pricing: {
-      low: { square: 0.011, rect: 0.016 },
-      medium: { square: 0.042, rect: 0.063 },
-      high: { square: 0.167, rect: 0.25 }
-    }
   },
   {
     id: 'gpt-image-1-mini',
@@ -294,11 +272,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
     backgrounds: ['opaque', 'transparent'],
-    pricing: {
-      low: { square: 0.005, rect: 0.006 },
-      medium: { square: 0.011, rect: 0.015 },
-      high: { square: 0.036, rect: 0.052 }
-    }
   }
 ]
 
@@ -313,7 +286,6 @@ export const IMAGEN_MODELS: ImagenModelDef[] = [
     imageSizes: IMAGEN_IMAGE_SIZES,
     supportsImageSize: true,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-    pricing: 0.06
   },
   {
     id: 'imagen-4.0-generate-001',
@@ -324,7 +296,6 @@ export const IMAGEN_MODELS: ImagenModelDef[] = [
     imageSizes: IMAGEN_IMAGE_SIZES,
     supportsImageSize: true,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-    pricing: 0.04
   },
   {
     id: 'imagen-4.0-fast-generate-001',
@@ -334,7 +305,6 @@ export const IMAGEN_MODELS: ImagenModelDef[] = [
     imageSizes: IMAGEN_IMAGE_SIZES,
     supportsImageSize: false,
     personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-    pricing: 0.02
   }
 ]
 
@@ -346,7 +316,6 @@ export const FLUX_MODELS: FluxModelDef[] = [
     label: 'FLUX.2 Max',
     backend: 'flux',
     sizes: FLUX_SIZES,
-    pricing: { firstMp: 0.07, additionalMp: 0.03 }
   },
   {
     id: 'flux-2-pro',
@@ -354,7 +323,6 @@ export const FLUX_MODELS: FluxModelDef[] = [
     backend: 'flux',
     isDefault: true,
     sizes: FLUX_SIZES,
-    pricing: { firstMp: 0.03, additionalMp: 0.015 }
   },
   {
     id: 'flux-2-flex',
@@ -364,22 +332,18 @@ export const FLUX_MODELS: FluxModelDef[] = [
     // Source: https://api.bfl.ai/openapi.json — Flux2FlexInputs
     stepsRange: { min: 1, max: 50, default: 50 },
     guidanceRange: { min: 1.5, max: 10, default: 5 },
-    // Source: https://bfl.ai/pricing?category=flux.2
-    pricing: { firstMp: 0.05, additionalMp: 0.05 }
   },
   {
     id: 'flux-2-klein-9b',
     label: 'FLUX.2 Klein 9B',
     backend: 'flux',
     sizes: FLUX_SIZES,
-    pricing: { firstMp: 0.015, additionalMp: 0.002 }
   },
   {
     id: 'flux-2-klein-4b',
     label: 'FLUX.2 Klein 4B',
     backend: 'flux',
     sizes: FLUX_SIZES,
-    pricing: { firstMp: 0.014, additionalMp: 0.001 }
   }
 ]
 
@@ -394,10 +358,6 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
     imageSizes: NANO_BANANA_SIZES_FLASH2,
-    // Per-image pricing from documented token counts × $60/1M tokens
-    // 512→747 tokens, 1K→1120, 2K→1680, 4K→2520
-    // Source: https://ai.google.dev/gemini-api/docs/pricing
-    pricing: { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 }
   },
   {
     id: 'gemini-3-pro-image-preview',
@@ -406,10 +366,6 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
     imageSizes: NANO_BANANA_SIZES_PRO,
-    // Rough per-image estimate from documented output token counts.
-    // 1K and 2K both use 1120 tokens at $120/1M; 4K uses 2000 tokens
-    // Source: https://ai.google.dev/gemini-api/docs/pricing
-    pricing: { '1K': 0.134, '2K': 0.134, '4K': 0.24 }
   },
   {
     id: 'gemini-2.5-flash-image',
@@ -418,9 +374,6 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
     imageSizes: NANO_BANANA_SIZES,
-    // Flat per-image pricing from the current Gemini API pricing page.
-    // Source: https://ai.google.dev/gemini-api/docs/pricing
-    pricing: { '1K': 0.039, '2K': 0.039, '4K': 0.039 }
   }
 ]
 
@@ -433,7 +386,6 @@ export const GROK_MODELS: GrokModelDef[] = [
     backend: 'grok',
     aspectRatios: GROK_ASPECT_RATIOS,
     resolutions: GROK_RESOLUTIONS,
-    pricing: 0.07
   },
   {
     id: 'grok-imagine-image',
@@ -442,7 +394,6 @@ export const GROK_MODELS: GrokModelDef[] = [
     isDefault: true,
     aspectRatios: GROK_ASPECT_RATIOS,
     resolutions: GROK_RESOLUTIONS,
-    pricing: 0.02
   }
 ]
 
@@ -524,69 +475,3 @@ export function findModel(backend: BackendId, modelId: string): ModelDef | undef
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
 
-// Rough pre-run estimate based on the local registry. This intentionally does
-// not parse provider token usage or try to be a full billing calculator.
-export function estimateCostFromRegistry(
-  backend: BackendId,
-  modelId: string,
-  params: Record<string, unknown>
-): number | null {
-  switch (backend) {
-    case 'openai': {
-      const model = findModel('openai', modelId)
-      if (!model) return null
-      const quality = (params.quality as OpenAIQuality) || 'auto'
-      if (quality === 'auto') return null
-      const width = (params.width as number) || 1024
-      const height = (params.height as number) || 1024
-      const isSquare = width === height
-
-      if (modelId === 'gpt-image-2') {
-        // GPT Image 2 billing is more granular than this app tries to model.
-        // Use documented per-image anchor prices and extrapolate custom sizes
-        // with 512-pixel tiles:
-        //   tiles = ceil(W/512) × ceil(H/512)
-        //   anchor tiles: 1024×1024 (square) = 4, 1024×1536 (rect) = 6
-        //   cost ≈ (tiles / anchorTiles) × anchorPrice
-        // This reproduces the table prices for the 3 documented sizes.
-        // Source: https://platform.openai.com/docs/guides/image-generation
-        const tiles = Math.ceil(width / 512) * Math.ceil(height / 512)
-        const anchorTiles = isSquare ? 4 : 6
-        const anchorPrice = isSquare ? model.pricing[quality].square : model.pricing[quality].rect
-        return (tiles / anchorTiles) * anchorPrice
-      }
-
-      // Older GPT Image models support only the 3 fixed sizes in the UI; use
-      // the registry's table price for the selected quality and orientation.
-      return isSquare ? model.pricing[quality].square : model.pricing[quality].rect
-    }
-    case 'imagen': {
-      const model = findModel('imagen', modelId)
-      if (!model) return null
-      return model.pricing
-    }
-    case 'flux': {
-      const model = findModel('flux', modelId)
-      if (!model) return null
-      const width = (params.width as number) || 1024
-      const height = (params.height as number) || 1024
-      const mp = Math.max(1, Math.ceil((width * height) / (1024 * 1024)))
-      if (mp === 1) return model.pricing.firstMp
-      return model.pricing.firstMp + (mp - 1) * model.pricing.additionalMp
-    }
-    case 'nanobanana': {
-      const model = findModel('nanobanana', modelId)
-      if (!model) return null
-      // Look up price by the selected image size; fall back to 1K as default
-      const imageSize = (params.imageSize as string) || '1K'
-      return model.pricing[imageSize] ?? model.pricing['1K'] ?? null
-    }
-    case 'grok': {
-      const model = findModel('grok', modelId)
-      if (!model) return null
-      return model.pricing
-    }
-    case 'drawthings':
-      return null
-  }
-}

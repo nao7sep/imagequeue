@@ -211,10 +211,9 @@ export function logGenerationStart(taskId: string, backend: string, model: strin
 export function logGenerationComplete(
   taskId: string,
   durationMs: number,
-  baseName: string | null,
-  estimatedCostUsd: number | null
+  baseName: string | null
 ): void {
-  log('debug', 'Generation complete', { taskId, durationMs, baseName, estimatedCostUsd })
+  log('debug', 'Generation complete', { taskId, durationMs, baseName })
 }
 
 export function logGenerationFailed(taskId: string, err: unknown, context?: Record<string, unknown>): void {

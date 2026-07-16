@@ -137,7 +137,6 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       completed_at: task.completedAt,
       file_timestamp: new Date().toISOString(),
       duration_ms: task.durationMs,
-      estimated_cost_usd: task.estimatedCostUsd,
       seed: null,
       error: null
     }
@@ -154,7 +153,6 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       log('error', 'Generated image could not be saved to disk', {
         backend,
         model: task.model,
-        estimatedCostUsd: task.estimatedCostUsd,
         error: serializeError(writeErr),
       })
       throw writeErr
@@ -164,7 +162,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     task.baseName = baseName
     task.imagePath = `${baseName}.${ext}`
     drainTracker.recordOk()
-    logGenerationComplete(task.id, task.durationMs, task.baseName, task.estimatedCostUsd)
+    logGenerationComplete(task.id, task.durationMs, task.baseName)
   } catch (err) {
     task.status = 'failed'
     // task.error stays a short string for the UI and the persisted manifest;

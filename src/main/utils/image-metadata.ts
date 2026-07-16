@@ -12,7 +12,6 @@ export interface ImageMetadata {
   completed_at: string
   file_timestamp: string
   duration_ms: number
-  estimated_cost_usd: number | null
   seed: number | null
   error: null
 }

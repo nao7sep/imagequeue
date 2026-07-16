@@ -1189,9 +1189,6 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
                 ? 'interrupted'
                 : statusLabel}
           </span>
-          {task.estimatedCostUsd !== null && (
-            <span className="task-cost">${task.estimatedCostUsd.toFixed(2)}</span>
-          )}
         </div>
       </div>
       {/* Per-row actions are pointer-only affordances (tabIndex -1), never tab

@@ -1,6 +1,5 @@
 import { nanoid } from 'nanoid'
 import { BackendId, Task, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
-import { estimateCostFromRegistry } from '../../shared/models'
 
 export function createEmptyQueues(): Record<BackendId, Task[]> {
   return {
@@ -40,7 +39,6 @@ export class QueueManager {
       model: request.model,
       params: { ...request.params },
       status: 'queued',
-      estimatedCostUsd: estimateCostFromRegistry(request.backend, request.model, request.params),
       enqueuedAt: new Date().toISOString(),
       startedAt: null,
       completedAt: null,

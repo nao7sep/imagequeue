@@ -18,7 +18,6 @@ function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Ta
     model: 'm',
     params: {},
     status,
-    estimatedCostUsd: 0.01,
     enqueuedAt: '2026-01-01T00:00:00.000Z',
     startedAt: '2026-01-01T00:00:01.000Z',
     completedAt: '2026-01-01T00:00:02.000Z',

@@ -280,9 +280,6 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
               <div><strong>model:</strong> {selectedTask.model}</div>
               <div><strong>status:</strong> {selectedTask.status}</div>
               <div><strong>prompt:</strong> {selectedTask.prompt}</div>
-              {selectedTask.estimatedCostUsd !== null && (
-                <div><strong>cost:</strong> ${selectedTask.estimatedCostUsd.toFixed(2)}</div>
-              )}
               {selectedTask.durationMs !== null && (
                 <div><strong>time:</strong> {(selectedTask.durationMs / 1000).toFixed(1)}s</div>
               )}

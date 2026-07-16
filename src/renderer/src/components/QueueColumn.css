@@ -167,11 +167,6 @@
   justify-content: space-between;
 }
 
-.task-cost {
-  color: var(--text-muted);
-  margin-left: 6px;
-}
-
 .task-error {
   font-size: 11px;
   color: var(--error);

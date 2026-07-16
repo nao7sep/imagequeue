@@ -157,7 +157,6 @@ export interface Task {
   model: string
   params: Record<string, unknown>
   status: TaskStatus
-  estimatedCostUsd: number | null
   enqueuedAt: string
   startedAt: string | null
   completedAt: string | null
