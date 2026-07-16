@@ -17,6 +17,7 @@ import {
   SessionSummary,
 } from '../shared/types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
+import type { UiState } from '../shared/ui-state'
 import type {
   CliJobSnapshot,
   CliChunkEvent,
@@ -254,6 +255,12 @@ const api = {
     ipcRenderer.on('cli-job:status', handler)
     return () => { ipcRenderer.removeListener('cli-job:status', handler) }
   },
+
+  getUiState: (): Promise<UiState> =>
+    ipcRenderer.invoke('state:get'),
+
+  updateUiState: (patch: Partial<UiState>): Promise<UiState> =>
+    ipcRenderer.invoke('state:update', patch),
 
   getDependenciesState: (): Promise<DependenciesState> =>
     ipcRenderer.invoke('dependencies:getState'),

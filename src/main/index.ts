@@ -6,6 +6,7 @@ import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
+import { registerStateIpc } from './state-ipc'
 import { registerDependenciesIpc } from './dependencies-ipc'
 import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
@@ -168,6 +169,7 @@ app.whenReady().then(() => {
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc()
+  registerStateIpc()
   registerDependenciesIpc()
   registerElaboratorsIpc()
   registerAppLogIpc()

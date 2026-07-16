@@ -16,6 +16,7 @@ import {
   SessionSummary,
 } from './types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
+import type { UiState } from './ui-state'
 import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
 
 // The Node platform string (member set of NodeJS.Platform), spelled out as a
@@ -139,6 +140,11 @@ export interface ElectronAPI {
   cliGetJobSnapshot: (jobId: string) => Promise<CliJobSnapshot | null>
   onCliJobChunk: (callback: (e: CliChunkEvent) => void) => (() => void)
   onCliJobStatus: (callback: (e: CliStatusEvent) => void) => (() => void)
+
+  // Ephemeral UI state (state.json): persisted view adjustments — currently the
+  // per-provider column width. Hydrated once on mount, written back on a drag.
+  getUiState: () => Promise<UiState>
+  updateUiState: (patch: Partial<UiState>) => Promise<UiState>
 
   // Managed dependencies surface (the modal + pane pointer). Every mutating call
   // returns the full DependenciesState so the renderer re-renders from one snapshot.

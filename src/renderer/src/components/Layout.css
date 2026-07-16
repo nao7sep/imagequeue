@@ -269,10 +269,33 @@
   overflow-y: auto;
 }
 
+/* Draggable boundary between the left fill pane and the provider columns. It sets
+   the per-provider column width (--iq-column-width) so the columns — the work
+   area — can grow on a wide window instead of the preview eating all the surplus.
+   It is a 1px line that REPLACES .right-pane's old border-left, so it consumes the
+   same 1px the derived window minimum already reserves as the left↔group border
+   (layout-metrics PANE_BORDER_PX) — no change to the minimum. A wider invisible
+   grab margin comes from the ::before overlay. */
+.pane-splitter {
+  flex: 0 0 1px;
+  cursor: col-resize;
+  background: var(--border);
+  position: relative;
+  z-index: 1;
+}
+.pane-splitter::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px; /* widen the grab area to ~9px without taking layout space */
+}
+.pane-splitter:hover,
+.pane-splitter.dragging {
+  background: var(--accent);
+}
+
 .right-pane {
   display: flex;
   flex-shrink: 0;
-  border-left: 1px solid var(--border);
   background: var(--pane-bg);
 }
 

@@ -1,11 +1,12 @@
 .queue-column {
-  /* Fixed column width = the per-column content floor (mirrors COLUMN_MIN_PX in
-     shared/layout-metrics.ts — keep in sync; the window minimum reserves one of
-     these per visible backend). Below this the model row + enqueue button stop
-     being usable. Columns are a fixed width, not responsive: only the left fill
-     pane grows with the window (per app-chrome-conventions), so there is no
-     width breakpoint that relays the column out. */
-  width: 160px;
+  /* The per-provider column width the user sets by dragging the pane splitter,
+     driven by --iq-column-width on .layout and persisted to state.json. It falls
+     back to the content floor (COLUMN_MIN_PX in shared/layout-metrics.ts — keep
+     min-width in sync; the window minimum reserves one floor per visible backend).
+     Below the floor the model row + enqueue button stop being usable, so the
+     renderer clamps --iq-column-width to never display narrower than this and
+     never so wide the left fill pane loses its minimum. */
+  width: var(--iq-column-width, 160px);
   min-width: 160px;
   flex-shrink: 0;
   display: flex;

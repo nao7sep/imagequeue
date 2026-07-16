@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
 import { SettingsModal } from './SettingsModal'
@@ -12,6 +13,7 @@ import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
+import { displayedColumnWidth } from '../../../shared/ui-state'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
@@ -42,6 +44,83 @@ export function Layout(): React.JSX.Element {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [overlay, setOverlay] = useState<Overlay>(null)
+
+  // Provider-column width. The persisted INTENT (px, or null = the COLUMN_MIN_PX
+  // floor) lives in state.json; the DISPLAYED width is derived from it and the live
+  // window so a narrow reopen can't clip the columns, and returns to the intent
+  // when the window grows. Only a splitter drag changes the intent and persists it.
+  const visibleColumnCount = BACKENDS.length
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const [columnWidthIntent, setColumnWidthIntent] = useState<number | null>(null)
+  const columnWidthIntentRef = useRef<number | null>(null)
+  columnWidthIntentRef.current = columnWidthIntent
+  const [containerWidth, setContainerWidth] = useState<number | null>(null)
+  const [draggingSplitter, setDraggingSplitter] = useState(false)
+
+  // The width fed to the columns via the --iq-column-width CSS var. Until the
+  // container is measured (first paint), the intent is shown as-is; the observer
+  // corrects it immediately after. Below the summed minimum the window itself is
+  // clamped (derived window minimum), so this never squeezes the left pane out.
+  const displayedColumn = displayedColumnWidth(
+    columnWidthIntent,
+    containerWidth ?? Number.POSITIVE_INFINITY,
+    visibleColumnCount,
+  )
+
+  // Hydrate the persisted column width once on mount.
+  useEffect(() => {
+    let cancelled = false
+    void window.electronAPI.getUiState().then((state) => {
+      if (!cancelled) setColumnWidthIntent(state.columnWidth)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Measure the layout width and keep it live, so a window resize re-derives the
+  // displayed column width from the unchanged intent and persists nothing.
+  useEffect(() => {
+    const el = layoutRef.current
+    if (!el) return
+    setContainerWidth(el.getBoundingClientRect().width)
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width) setContainerWidth(width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // Drag the splitter to set the provider-column width. The splitter sits at the
+  // column group's left edge, so dragging left widens the group; that extra width
+  // is shared across the visible columns (delta / count per column). The result is
+  // clamped to [floor, what the window fits] on every move, and the final intent is
+  // persisted on release — resize and mount never reach here, so they never write.
+  const startSplitterDrag = useCallback((e: ReactMouseEvent): void => {
+    e.preventDefault()
+    const startX = e.clientX
+    const count = visibleColumnCount
+    const container = layoutRef.current?.getBoundingClientRect().width ?? containerWidth ?? Number.POSITIVE_INFINITY
+    const startColumn = displayedColumnWidth(columnWidthIntentRef.current, container, count)
+    let latest = startColumn
+    setDraggingSplitter(true)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    const onMove = (ev: MouseEvent): void => {
+      const raw = startColumn - (ev.clientX - startX) / count
+      latest = displayedColumnWidth(raw, container, count)
+      setColumnWidthIntent(latest)
+    }
+    const onUp = (): void => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setDraggingSplitter(false)
+      void window.electronAPI.updateUiState({ columnWidth: latest })
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [visibleColumnCount, containerWidth])
 
   // App/window chrome shortcuts. Cmd+, opens Settings, Cmd+/ opens the shortcut
   // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal intercepts)
@@ -171,7 +250,11 @@ export function Layout(): React.JSX.Element {
   }, [viewerOpen, selectedTask])
 
   return (
-    <div className="layout">
+    <div
+      className="layout"
+      ref={layoutRef}
+      style={{ '--iq-column-width': `${displayedColumn}px` } as React.CSSProperties}
+    >
       {overlay === 'settings' && (
         <SettingsModal onClose={() => setOverlay(null)} />
       )}
@@ -252,6 +335,13 @@ export function Layout(): React.JSX.Element {
             onPromptChange={setPrompt}
           />
       </div>
+      <div
+        className={`pane-splitter${draggingSplitter ? ' dragging' : ''}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize provider columns"
+        onMouseDown={startSplitterDrag}
+      />
       <div className="right-pane">
         {BACKENDS.map((b) => (
           <QueueColumn
