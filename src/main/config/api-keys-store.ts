@@ -13,9 +13,11 @@ import { log, serializeError } from '../logger'
 //
 // A key id is a dotted path of `[a-z0-9]` segments. Segment 0 is the conventional
 // vendor/env name, so the environment variable derives from the segments with no
-// mapping table: `gemini.text` → GEMINI_TEXT_API_KEY (falling back to
-// GEMINI_API_KEY). The on-disk value is `obf:` + base64 of the reversed UTF-8
-// bytes (encodeApiKey) — not encryption, just a guard against casual grep.
+// mapping table: `gemini.text` → GEMINI_TEXT_API_KEY. Resolution is EXACT — a key
+// is consulted only under its own full id, with no fallback to a shorter/bare
+// provider key (the why is on resolveApiKey). The on-disk value is `obf:` + base64
+// of the reversed UTF-8 bytes (encodeApiKey) — not encryption, just a guard against
+// casual grep.
 
 const SECRETS_FILE_MODE = 0o600
 const ENFORCE_FILE_MODE = process.platform !== 'win32'
@@ -66,13 +68,6 @@ function getSecretsPath(): string {
 // Env var name from segments: uppercased, joined by '_', suffixed '_API_KEY'.
 function apiKeyEnvVar(segments: string[]): string {
   return `${segments.map((s) => s.toUpperCase()).join('_')}_API_KEY`
-}
-
-// Prefixes of a segment list, most specific first: [a,b] → [[a,b],[a]].
-function prefixes(segments: string[]): string[][] {
-  const out: string[][] = []
-  for (let n = segments.length; n >= 1; n--) out.push(segments.slice(0, n))
-  return out
 }
 
 function envValue(segments: string[]): string {
@@ -208,27 +203,28 @@ function warnMalformedStoredKey(keyId: string): void {
   log('warn', 'Stored API key value is malformed; treating as absent', { keyId })
 }
 
-// Resolve the plaintext key for a secret id, source-first (environment then
-// stored, most→least specific), trimmed, or '' ('' meaning "not configured").
+// Resolve the plaintext key for a secret id: the environment value for its EXACT
+// id first, then the stored value for that exact id, trimmed, or '' ("not
+// configured"). There is deliberately NO fallback to a shorter/bare provider key.
+//
+// This is a per-app choice against the convention's default `fallback: true`, and
+// imagequeue is the case that warrants it: every openai/gemini key here is
+// purpose-scoped (openai.text vs openai.image, gemini.imagen vs gemini.nanobanana),
+// so a bare `openai`/`gemini` — or an ambient OPENAI_API_KEY/GEMINI_API_KEY exported
+// for some other tool — is never a key the user set *here*. Falling back to it would
+// light up one of five billed backends the user never configured in this app.
+// Exact-only keeps one key bound to one backend; env injection uses the exact var
+// (OPENAI_IMAGE_API_KEY, GEMINI_IMAGEN_API_KEY, …).
 export function resolveApiKey(id: SecretId): string {
-  const levels = prefixes(id.split('.'))
-  for (const level of levels) {
-    const fromEnv = envValue(level)
-    if (fromEnv) return fromEnv
+  const fromEnv = envValue(id.split('.'))
+  if (fromEnv) return fromEnv
+  const stored = readSecretsFile().keys[id]
+  if (typeof stored !== 'string' || !stored) return ''
+  if (!isValidStoredApiKey(stored)) {
+    warnMalformedStoredKey(id)
+    return ''
   }
-  const file = readSecretsFile()
-  for (const level of levels) {
-    const levelId = level.join('.')
-    const stored = file.keys[levelId]
-    if (typeof stored !== 'string' || !stored) continue
-    if (!isValidStoredApiKey(stored)) {
-      warnMalformedStoredKey(levelId)
-      continue
-    }
-    const key = decodeApiKey(stored).trim()
-    if (key) return key
-  }
-  return ''
+  return decodeApiKey(stored).trim()
 }
 
 // True when a usable key resolves from the environment or the stored file.

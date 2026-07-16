@@ -77,11 +77,23 @@ describe('api-keys-store', () => {
     expect(getStoredApiKey('gemini.text')).toBe('stored-gemini')
   })
 
-  it('honors the provider-conventional fallback env var (segment chain)', () => {
-    // GEMINI_TEXT_API_KEY is unset; the bare GEMINI_API_KEY still resolves
-    // gemini.text via the most-to-least-specific env chain.
+  it('does NOT fall back to a bare provider key — resolution is exact-only', () => {
+    // Every openai/gemini key here is purpose-scoped, so a bare `gemini` (a stored
+    // one, or an ambient GEMINI_API_KEY exported for another tool) is never a key
+    // the user set in this app. Resolving a scoped id from it would light up a
+    // billed backend nobody configured here — the surprise this prevents. Both the
+    // bare env var and a bare stored key are ignored for gemini.text.
     process.env['GEMINI_API_KEY'] = 'conventional-gemini'
-    expect(resolveApiKey('gemini.text')).toBe('conventional-gemini')
+    fs.writeFileSync(
+      path.join(tmpRoot, 'api-keys.json'),
+      JSON.stringify({ keys: { gemini: 'sk-bare-stored' } })
+    )
+    expect(resolveApiKey('gemini.text')).toBe('')
+    expect(hasApiKey('gemini.text')).toBe(false)
+
+    // The exact-id env var still resolves it, as before.
+    process.env['GEMINI_TEXT_API_KEY'] = 'env-scoped'
+    expect(resolveApiKey('gemini.text')).toBe('env-scoped')
   })
 
   it('derives a single-segment vendor key from its bare env var', () => {
