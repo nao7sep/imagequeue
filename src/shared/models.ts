@@ -10,7 +10,19 @@ export interface SizePreset {
   height: number
 }
 
+// gpt-image-2 custom-size limits (OpenAI image-generation docs).
+//
+// The API's real lower bound is a MINIMUM TOTAL PIXEL COUNT, not a per-edge
+// minimum — a small-area size like 1024x512 (524,288 px) is rejected by the API
+// even though both edges are large. That area rule is OPENAI_GPT2_MIN_PIXELS,
+// enforced at request time in validateGptImage2Size (openai-request.ts).
+//
+// OPENAI_GPT2_MIN_EDGE is a separate, softer concern: the per-edge floor the
+// renderer clamps the width/height INPUT controls to, so a single dimension can't
+// be normalized to something absurd. It is NOT the API constraint — a per-edge-valid
+// pair can still be too small in area and is rejected by the min-pixels check.
 export const OPENAI_GPT2_MIN_EDGE = 512
+export const OPENAI_GPT2_MIN_PIXELS = 655_360
 export const OPENAI_GPT2_MAX_EDGE = 3840
 export const OPENAI_GPT2_SIZE_STEP = 16
 export const OPENAI_GPT2_MAX_ASPECT_RATIO = 3
@@ -150,7 +162,9 @@ const NANO_BANANA_ASPECT_RATIOS_BASE: { label: string; value: string }[] = [
   { label: '21:9', value: '21:9' }
 ]
 
-// Nano Banana 2 adds the extra extreme ratios documented for Gemini 3.1 Flash Image.
+// The Gemini 3.1 image generation (both gemini-3.1-flash-image and its Lite
+// sibling) add the extra extreme ratios on top of the base set. Live-verified
+// 2026-07-16: both accept 4:1 (and reject on the 3-pro / 2.5 models).
 const NANO_BANANA_ASPECT_RATIOS_FLASH2: { label: string; value: string }[] = [
   { label: '1:1',  value: '1:1' },
   { label: '1:4',  value: '1:4' },
@@ -187,6 +201,11 @@ const NANO_BANANA_SIZES: { label: string; value: string }[] = [
   { label: '4K', value: '4K' }
 ]
 
+// Nano Banana 2 Lite (Gemini 3.1 Flash-Lite Image) generates at 1K only.
+const NANO_BANANA_SIZES_LITE: { label: string; value: string }[] = [
+  { label: '1K', value: '1K' }
+]
+
 export interface NanoBananaModelDef extends ModelDef {
   backend: 'nanobanana'
   // Image config support varies by model and is controlled per registry entry.
@@ -196,10 +215,12 @@ export interface NanoBananaModelDef extends ModelDef {
 }
 
 export type GrokAspectRatio =
-  '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
+  'auto' | '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
   '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
 
 const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
+  // 'auto' lets Grok pick the ratio for the prompt (live-verified accepted).
+  { label: 'Auto',   value: 'auto' },
   { label: '1:1',    value: '1:1' },
   { label: '1:2',    value: '1:2' },
   { label: '2:1',    value: '2:1' },
@@ -251,7 +272,7 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'transparent'],
+    backgrounds: ['opaque', 'transparent', 'auto'],
   },
   {
     id: 'gpt-image-1',
@@ -261,7 +282,7 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'transparent'],
+    backgrounds: ['opaque', 'transparent', 'auto'],
   },
   {
     id: 'gpt-image-1-mini',
@@ -271,7 +292,7 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
     moderations: ['auto', 'low'],
     sizes: OPENAI_SIZES,
     outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'transparent'],
+    backgrounds: ['opaque', 'transparent', 'auto'],
   }
 ]
 
@@ -349,9 +370,22 @@ export const FLUX_MODELS: FluxModelDef[] = [
 
 // --- Nano Banana (Gemini native image generation) models ---
 
+// Listed high -> middle -> low tier (pro -> flash -> flash-lite), the fleet
+// ordering rule: capability tier drives the order, not recency, so a newer middle
+// model still sorts below the high one. The two Gemini-3 image ids are the GA
+// models; their `-preview` predecessors (gemini-3.1-flash-image-preview,
+// gemini-3-pro-image-preview) were shut down 2026-06-25 and must not be shipped.
 export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
   {
-    id: 'gemini-3.1-flash-image-preview',
+    id: 'gemini-3-pro-image',
+    label: 'Nano Banana Pro',
+    backend: 'nanobanana',
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
+    imageSizes: NANO_BANANA_SIZES_PRO,
+  },
+  {
+    id: 'gemini-3.1-flash-image',
     label: 'Nano Banana 2',
     backend: 'nanobanana',
     isDefault: true,
@@ -360,20 +394,22 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
     imageSizes: NANO_BANANA_SIZES_FLASH2,
   },
   {
-    id: 'gemini-3-pro-image-preview',
-    label: 'Nano Banana Pro',
-    backend: 'nanobanana',
-    supportsImageConfig: true,
-    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
-    imageSizes: NANO_BANANA_SIZES_PRO,
-  },
-  {
     id: 'gemini-2.5-flash-image',
     label: 'Nano Banana',
     backend: 'nanobanana',
     supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
     imageSizes: NANO_BANANA_SIZES,
+  },
+  {
+    id: 'gemini-3.1-flash-lite-image',
+    label: 'Nano Banana 2 Lite',
+    backend: 'nanobanana',
+    supportsImageConfig: true,
+    // Same 3.1 generation as gemini-3.1-flash-image: it accepts the extreme ratios
+    // too (live-verified), so it gets the extended list, not the base-10.
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
+    imageSizes: NANO_BANANA_SIZES_LITE,
   }
 ]
 

@@ -4,7 +4,7 @@ import {
   OPENAI_GPT2_MAX_ASPECT_RATIO,
   OPENAI_GPT2_MAX_EDGE,
   OPENAI_GPT2_MAX_PIXELS,
-  OPENAI_GPT2_MIN_EDGE,
+  OPENAI_GPT2_MIN_PIXELS,
   OPENAI_GPT2_SIZE_STEP,
 } from '../../shared/models'
 
@@ -20,11 +20,11 @@ export function validateGptImage2Size(width: number, height: number): void {
   if (!Number.isInteger(width) || !Number.isInteger(height)) {
     throw new Error('GPT Image 2 size must use whole-number width and height values')
   }
-  if (width < OPENAI_GPT2_MIN_EDGE || height < OPENAI_GPT2_MIN_EDGE) {
-    throw new Error(`GPT Image 2 width and height must be at least ${OPENAI_GPT2_MIN_EDGE}px`)
-  }
   if (width > OPENAI_GPT2_MAX_EDGE || height > OPENAI_GPT2_MAX_EDGE) {
     throw new Error(`GPT Image 2 width and height must not exceed ${OPENAI_GPT2_MAX_EDGE}px`)
+  }
+  if (width * height < OPENAI_GPT2_MIN_PIXELS) {
+    throw new Error(`GPT Image 2 size must be at least ${OPENAI_GPT2_MIN_PIXELS.toLocaleString()} pixels total`)
   }
   if (width % OPENAI_GPT2_SIZE_STEP !== 0 || height % OPENAI_GPT2_SIZE_STEP !== 0) {
     throw new Error(`GPT Image 2 width and height must be multiples of ${OPENAI_GPT2_SIZE_STEP}px`)

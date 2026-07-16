@@ -99,8 +99,15 @@ describe('validateGptImage2Size', () => {
     expect(() => validateGptImage2Size(1024.5, 1024)).toThrow(/whole-number/)
   })
 
-  it('rejects dimensions below the minimum edge', () => {
-    expect(() => validateGptImage2Size(256, 1024)).toThrow(/at least/)
+  it('rejects a total pixel count below the floor (not a per-edge minimum)', () => {
+    // The real OpenAI rule is a minimum TOTAL pixel count (655,360), not a min edge.
+    // 512x512 = 262,144 px: valid 1:1 ratio, both edges multiples of 16 and in range,
+    // yet rejected for too few pixels. 1024x512 = 524,288 px is the exact case the
+    // old "512px min edge" rule wrongly accepted.
+    expect(() => validateGptImage2Size(512, 512)).toThrow(/at least .* pixels total/)
+    expect(() => validateGptImage2Size(1024, 512)).toThrow(/at least .* pixels total/)
+    // Just above the floor is accepted: 1024x1024 = 1,048,576 px.
+    expect(() => validateGptImage2Size(1024, 1024)).not.toThrow()
   })
 
   it('rejects dimensions above the maximum edge', () => {
@@ -118,6 +125,6 @@ describe('validateGptImage2Size', () => {
 
   it('rejects a total pixel count above the cap', () => {
     // 3840x2176: edges in range, multiples of 16, ratio < 3, but > 8.29M pixels.
-    expect(() => validateGptImage2Size(3840, 2176)).toThrow(/pixels/)
+    expect(() => validateGptImage2Size(3840, 2176)).toThrow(/at or below/)
   })
 })
