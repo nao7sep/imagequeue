@@ -1,5 +1,5 @@
 import { AppConfig } from './types'
-import { DEFAULT_GEMINI_TEXT_MODELS, getDefaultModelForBackend } from '../../shared/models'
+import { getDefaultModelForBackend } from '../../shared/models'
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -8,19 +8,27 @@ export function createDefaultConfig(): AppConfig {
       gemini: {
         api_key: '',
         timeout_ms: 30000,
-        // Copied, not referenced: every call returns a fresh config the caller
-        // may mutate, so the shared built-in array is never handed out.
-        models: [...DEFAULT_GEMINI_TEXT_MODELS],
-        light_model: 'gemini-3.1-flash-lite',
-        main_model: 'gemini-3-flash-preview'
+        // Picks into the closed GEMINI_TEXT_MODELS list. main = the fleet's Gemini
+        // default (matches mumbler/fotoready) for the elaboration tier whose output
+        // is generated from; light = the cheapest model for throwaway slug work.
+        main_model: 'gemini-3.5-flash',
+        light_model: 'gemini-3.1-flash-lite'
       },
       openai: {
-        // Empty endpoint resolves to the official https://api.openai.com/v1 at call time.
+        // Empty endpoint is a sentinel, not a gap: it resolves to the official
+        // https://api.openai.com/v1 in code (openai.ts), so the field tracks the
+        // constant and never goes stale. The UI shows the URL as a placeholder + hint.
+        // Left blank deliberately rather than seeding the literal.
         endpoint: '',
         api_key: '',
         timeout_ms: 60000,
-        light_model: '',
-        main_model: ''
+        // Starter defaults for the common case (the endpoint IS OpenAI). Verified live
+        // through the real provider: both run elaboration + slug. This is an OPEN backend
+        // — any OpenAI-compatible endpoint — so these are only a working starting point a
+        // user pointing elsewhere (OpenRouter, Ollama, …) overrides. No reset exists (model
+        // and endpoint are coupled — see tapebox), so this reaches fresh installs only.
+        main_model: 'gpt-5.6-terra',
+        light_model: 'gpt-5.6-luna'
       }
     },
     general: {

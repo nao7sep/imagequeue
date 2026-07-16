@@ -6,16 +6,17 @@ import type { FormatDirectives } from '../../shared/session-draft'
 export interface GeminiTextAIConfig {
   api_key: string
   timeout_ms: number
-  // The user-owned Gemini text model list (config-seeding conventions, shape 1:
-  // a value-keyed list plus selections). Seeded from DEFAULT_GEMINI_TEXT_MODELS
-  // at first run, then the user's to add to and remove from. light_model and
-  // main_model are the two selections *into* this list; they live in the same
-  // store so a selection never points at a set the app could redefine underneath
-  // it. Neither selection is validated against the list — a bad id fails fast at
-  // the API call, not here.
-  models: string[]
-  light_model: string
+  // The two tier selections into the app-owned closed list (GEMINI_TEXT_MODELS in
+  // shared/models). The list itself is not stored — it has one home — so the config
+  // carries only the picks. main_model is the general/elaboration tier, light_model
+  // the throwaway/slug tier; main leads because it is the more consequential choice.
+  //
+  // Both are `string`, not GeminiTextModel: a config from an older build (when the list
+  // was editable) or a hand-edited file can name anything, and the store never judges a
+  // selection (the validity boundary). A retired or unsupported id fails fast at the API
+  // call, never snapped to a valid one here.
   main_model: string
+  light_model: string
 }
 
 export interface OpenAITextAIConfig {
@@ -23,8 +24,9 @@ export interface OpenAITextAIConfig {
   endpoint: string
   api_key: string
   timeout_ms: number
-  light_model: string
+  // main leads light, matching the Gemini config and the UI order.
   main_model: string
+  light_model: string
 }
 
 export interface TextAIConfig {

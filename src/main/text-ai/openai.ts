@@ -23,11 +23,19 @@ export class OpenAIProvider implements TextAIProvider {
       timeout: opts.timeoutMs,
     })
 
-    // json_object is the broadly-compatible JSON mode across OpenAI-compatible
-    // servers (OpenAI, OpenRouter, xAI, DeepSeek, llama.cpp). Strict json_schema
-    // works only on some endpoints; we parse the response loosely via
-    // extractJson, so server-side schema enforcement isn't worth the
-    // compatibility cost.
+    // NO capability-dependent parameters — no temperature, top_p, max_tokens, or
+    // reasoning knobs. This path targets ANY OpenAI-compatible endpoint (OpenAI,
+    // OpenRouter, xAI, DeepSeek, llama.cpp, Ollama, LM Studio) and cannot know which
+    // model accepts which of those, so it sends none.
+    //
+    // `response_format: json_object` is a different category: it is the JSON-mode
+    // directive, part of how the schema path reliably returns parseable JSON rather
+    // than hoping the prompt holds — not a capability knob. `json_object` (not the
+    // stricter `json_schema`) is the broadly-supported mode across these servers, and
+    // it is sent ONLY when a schema is requested (elaboration); the slug path sends no
+    // schema, so no format directive. extractJson still parses loosely as a backstop.
+    // Trade-off knowingly kept: a few exotic endpoints 400 on json_object — rare enough
+    // that guaranteeing structured output on the common endpoints wins.
     const response = await client.chat.completions.create({
       model: this.model,
       messages: toOpenAIMessages(opts.messages),

@@ -448,22 +448,25 @@ export const GROK_MODELS: GrokModelDef[] = [
 
 // --- Text AI backends and models ---
 
-// Built-in Gemini text model ids, seeded into the user-owned, editable list
-// (config.text_ai.gemini.models) at first run and restored by "Reset Gemini
-// models". Unlike the image models above — which stay app-owned because their
-// request parameters are coupled to the model — nothing here is coupled to the
-// id, so the user owns this list and tracks Google's releases themselves.
+// The Gemini text models imagequeue offers. A CLOSED list (ai-model-routing-conventions):
+// the app ships it, the user picks the light and main tiers from it, nothing adds to it at
+// runtime — so there is no list editor and no "Reset Gemini models". The two selections are
+// stored; the list is not (it lives here, one home).
 //
-// Ids only, deliberately: the list is user-extensible, and a user-added id has
-// no label to show, so the UI renders raw ids for every entry rather than
-// labelling the built-ins and leaving the user's own additions bare. A wrong or
-// retired id surfaces at call time (the validity boundary), never from here.
-export const DEFAULT_GEMINI_TEXT_MODELS: string[] = [
+// Ordered by category (pro -> flash -> flash-lite), which also runs most- to least-expensive.
+// Verified live 2026-07-16 for the text path: all four resolve and run both tiers (slug +
+// elaboration) on dynamic thinking. Same four ids fotoready ships for vision — re-proven for
+// text here rather than assumed to carry across modality. Verification is a design-time act;
+// the app never queries the model-list endpoint. A wrong or retired selection surfaces at call
+// time (the validity boundary), never from a stored list.
+export const GEMINI_TEXT_MODELS = [
   'gemini-3.1-pro-preview',
   'gemini-3.5-flash',
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite'
-]
+] as const
+
+export type GeminiTextModel = (typeof GEMINI_TEXT_MODELS)[number]
 
 export interface TextAIBackendOption {
   id: TextAIBackendId

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { deepMergeDefaults } from '../../../src/main/config/config-store'
-import { DEFAULT_GEMINI_TEXT_MODELS } from '../../../src/shared/models'
+import { GEMINI_TEXT_MODELS } from '../../../src/shared/models'
 import { PROMPT_FORMATS, PROMPT_LENGTHS } from '../../../src/shared/session-draft'
 
 describe('createDefaultConfig', () => {
@@ -36,44 +36,47 @@ describe('createDefaultConfig', () => {
   })
 })
 
-// The Gemini text model list is user-owned (config-seeding conventions): seeded
-// here at first run, then freely edited. The seed and the two selections into it
-// are one unit, so the seed must be coherent as shipped.
-describe('default Gemini text models', () => {
-  it('seeds a non-empty list from the built-in ids', () => {
-    const { models } = createDefaultConfig().text_ai.gemini
-    expect(models.length).toBeGreaterThan(0)
-    expect(models).toEqual(DEFAULT_GEMINI_TEXT_MODELS)
+// The Gemini text list is app-owned and closed (GEMINI_TEXT_MODELS): the config seeds only
+// the two tier selections, not the list. The seed must be coherent — both picks members of
+// the shipped list — or a fresh install would open Settings with its own default already
+// labelled "no longer offered".
+describe('default Gemini text selections', () => {
+  it('does not seed a stored models list', () => {
+    expect(createDefaultConfig().text_ai.gemini).not.toHaveProperty('models')
   })
 
-  // Both selections must be members of the list they point into, or a fresh
-  // install would open Settings with its own defaults already showing as
-  // "(not in list)".
-  it('seeds both selections as members of the seeded list', () => {
-    const { models, light_model, main_model } = createDefaultConfig().text_ai.gemini
-    expect(models).toContain(light_model)
-    expect(models).toContain(main_model)
+  it('seeds both selections as members of the closed list', () => {
+    const { light_model, main_model } = createDefaultConfig().text_ai.gemini
+    expect(GEMINI_TEXT_MODELS).toContain(light_model)
+    expect(GEMINI_TEXT_MODELS).toContain(main_model)
   })
 
-  // The two use-case defaults are pinned: a reset restores exactly these, so a
-  // silent flip here would silently redefine what "Reset Gemini models" means.
+  // The two tier defaults are pinned so a silent flip is caught: main is the fleet's Gemini
+  // default (elaboration, whose output is generated from); light is the cheapest (throwaway
+  // slug). They must differ, and main must be the more capable of the two.
   it('keeps the light and main selections distinct and pinned', () => {
     const { light_model, main_model } = createDefaultConfig().text_ai.gemini
+    expect(main_model).toBe('gemini-3.5-flash')
     expect(light_model).toBe('gemini-3.1-flash-lite')
-    expect(main_model).toBe('gemini-3-flash-preview')
     expect(light_model).not.toBe(main_model)
   })
+})
 
-  // Every caller gets a config it may mutate, so the seed copies the built-in
-  // array rather than handing out the shared module-level one.
-  it('copies the built-in ids instead of sharing the array across calls', () => {
-    const a = createDefaultConfig()
-    const b = createDefaultConfig()
-    expect(a.text_ai.gemini.models).not.toBe(b.text_ai.gemini.models)
-    expect(a.text_ai.gemini.models).not.toBe(DEFAULT_GEMINI_TEXT_MODELS)
+// The OpenAI-compatible backend is OPEN (any endpoint), so these are starter defaults for
+// the common case, not a closed contract. The endpoint stays a blank sentinel — resolved to
+// the official URL in code — and the two model seeds are pinned so a flip is caught. Both were
+// verified live through the real provider before shipping.
+describe('default OpenAI text config', () => {
+  it('leaves the endpoint blank so it resolves to the official URL in code, not a stale literal', () => {
+    expect(createDefaultConfig().text_ai.openai.endpoint).toBe('')
+  })
 
-    a.text_ai.gemini.models.push('user-added-id')
-    expect(createDefaultConfig().text_ai.gemini.models).toEqual(DEFAULT_GEMINI_TEXT_MODELS)
+  it('seeds working starter models rather than blank (a blank model breaks the backend on first use)', () => {
+    const { main_model, light_model } = createDefaultConfig().text_ai.openai
+    expect(main_model).toBe('gpt-5.6-terra')
+    expect(light_model).toBe('gpt-5.6-luna')
+    expect(main_model.length).toBeGreaterThan(0)
+    expect(light_model.length).toBeGreaterThan(0)
   })
 })
 
