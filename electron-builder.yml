@@ -54,12 +54,13 @@ mac:
     - target: zip
       arch:
         - arm64
-  # No Apple Developer certificate available. Do NOT set identity:null — that
-  # skips signing entirely and leaves the arm64 bundle's seal broken so it won't
-  # launch cleanly. Instead we ad-hoc sign the whole bundle (electron-builder's
-  # fallback when CSC_IDENTITY_AUTO_DISCOVERY=false, set in the build env), which
-  # runs locally; macOS still shows "unidentified developer" until a Developer ID
-  # cert + notarization are added via CI secrets.
+  # No Apple Developer certificate available. `identity: "-"` ad-hoc-signs the whole
+  # bundle — a valid seal that launches cleanly, unlike identity:null which skips
+  # bundle signing and leaves the seal broken. CSC_IDENTITY_AUTO_DISCOVERY=false (CI)
+  # only blocks real-cert discovery; the "-" identity is what produces the seal.
+  # macOS still shows "unidentified developer" until a Developer ID cert +
+  # notarization are added via CI secrets.
+  identity: "-"
   notarize: false
 
 win:
