@@ -507,6 +507,7 @@ export function findModel(backend: 'imagen', modelId: string): ImagenModelDef | 
 export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
 export function findModel(backend: 'grok', modelId: string): GrokModelDef | undefined
 export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined
+export function findModel(backend: BackendId, modelId: string): ModelDef | undefined
 export function findModel(backend: BackendId, modelId: string): ModelDef | undefined {
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
