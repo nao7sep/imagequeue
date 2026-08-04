@@ -19,8 +19,14 @@
   overflow: hidden;
 }
 
-/* Settings modal: taller, flex-column so content scrolls and footer sticks */
+/* Settings modal: taller, flex-column so content scrolls and footer sticks.
+   The single definition — Layout.css once carried a second one, and CSS import
+   order silently decided which max-height won. */
 .settings-modal-box {
+  /* Wide enough that the settings fields get real room (the old 540px cramped
+     them for no reason); still clamped to the viewport on small screens. */
+  width: 720px;
+  max-width: 90vw;
   display: flex;
   flex-direction: column;
   max-height: 85vh;

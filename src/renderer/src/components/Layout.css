@@ -256,19 +256,6 @@
   color: var(--text-muted);
 }
 
-.settings-modal-box {
-  width: 540px;
-  max-width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.settings-modal-box .settings-overlay {
-  flex: 1;
-  overflow-y: auto;
-}
-
 /* Draggable boundary between the left fill pane and the provider columns. It sets
    the per-provider column width (--iq-column-width) so the columns — the work
    area — can grow on a wide window instead of the preview eating all the surplus.
