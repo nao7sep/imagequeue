@@ -31,7 +31,6 @@ export type SecretId =
   | 'gemini.text'
   | 'openai.text'
   | 'openai.image'
-  | 'gemini.imagen'
   | 'gemini.nanobanana'
   | 'xai'
   | 'bfl'
@@ -40,7 +39,6 @@ export const SECRET_IDS: SecretId[] = [
   'gemini.text',
   'openai.text',
   'openai.image',
-  'gemini.imagen',
   'gemini.nanobanana',
   'xai',
   'bfl'
@@ -51,7 +49,6 @@ export const SECRET_IDS: SecretId[] = [
 // product name everywhere; only the API key is the conventional vendor segment.
 export const IMAGE_BACKEND_SECRET: Record<string, SecretId> = {
   openai: 'openai.image',
-  imagen: 'gemini.imagen',
   nanobanana: 'gemini.nanobanana',
   grok: 'xai',
   flux: 'bfl'
@@ -209,12 +206,12 @@ function warnMalformedStoredKey(keyId: string): void {
 //
 // This is a per-app choice against the convention's default `fallback: true`, and
 // imagequeue is the case that warrants it: every openai/gemini key here is
-// purpose-scoped (openai.text vs openai.image, gemini.imagen vs gemini.nanobanana),
+// purpose-scoped (openai.text vs openai.image, gemini.text vs gemini.nanobanana),
 // so a bare `openai`/`gemini` — or an ambient OPENAI_API_KEY/GEMINI_API_KEY exported
 // for some other tool — is never a key the user set *here*. Falling back to it would
-// light up one of five billed backends the user never configured in this app.
+// light up one of four billed backends the user never configured in this app.
 // Exact-only keeps one key bound to one backend; env injection uses the exact var
-// (OPENAI_IMAGE_API_KEY, GEMINI_IMAGEN_API_KEY, …).
+// (OPENAI_IMAGE_API_KEY, GEMINI_NANOBANANA_API_KEY, …).
 export function resolveApiKey(id: SecretId): string {
   const fromEnv = envValue(id.split('.'))
   if (fromEnv) return fromEnv

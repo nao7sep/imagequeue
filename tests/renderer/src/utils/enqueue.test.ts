@@ -23,7 +23,7 @@ describe('isBackendReadyToEnqueue', () => {
 
   it('is true for a cloud backend with an API key', () => {
     expect(isBackendReadyToEnqueue({
-      backendId: 'imagen', apiKeyMissing: false, cliInstalled: false, downloadedModelCount: 0,
+      backendId: 'nanobanana', apiKeyMissing: false, cliInstalled: false, downloadedModelCount: 0,
     })).toBe(true)
   })
 
@@ -67,21 +67,21 @@ describe('buildEnqueueRequestsForAll', () => {
   it('emits one request per ready backend, preserving the given order', () => {
     const snapshots: Partial<Record<BackendId, EnqueueConfigSnapshot>> = {
       openai: readySnapshot({ model: 'gpt-image-2' }),
-      imagen: readySnapshot({ model: 'imagen-4' }),
+      nanobanana: readySnapshot({ model: 'gemini-3.1-flash-image' }),
     }
-    const order: BackendId[] = ['imagen', 'openai']
+    const order: BackendId[] = ['nanobanana', 'openai']
     const requests = buildEnqueueRequestsForAll('a cat', snapshots, order)
-    expect(requests.map((r) => r.backend)).toEqual(['imagen', 'openai'])
+    expect(requests.map((r) => r.backend)).toEqual(['nanobanana', 'openai'])
     expect(requests.every((r) => r.prompt === 'a cat' && r.count === 1)).toBe(true)
   })
 
   it('skips backends that are missing a snapshot or not ready', () => {
     const snapshots: Partial<Record<BackendId, EnqueueConfigSnapshot>> = {
       openai: readySnapshot(),
-      imagen: readySnapshot({ ready: false }),
+      nanobanana: readySnapshot({ ready: false }),
       // grok intentionally absent
     }
-    const order: BackendId[] = ['openai', 'imagen', 'grok']
+    const order: BackendId[] = ['openai', 'nanobanana', 'grok']
     const requests = buildEnqueueRequestsForAll('a cat', snapshots, order)
     expect(requests.map((r) => r.backend)).toEqual(['openai'])
   })

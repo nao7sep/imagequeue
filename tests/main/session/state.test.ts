@@ -133,4 +133,26 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest({ ...valid, draft: 'garbage' })).toBe(true)
     expect(isSessionManifest({ ...valid, draft: null })).toBe(true)
   })
+
+  // A session written before the Imagen backend was removed still carries an
+  // `imagen` task list. It must open normally — the retired queue is simply not
+  // read, never a reason to reject the session or fail opaquely.
+  it('accepts a manifest carrying a task list for a retired backend', () => {
+    const withRetired = {
+      ...valid,
+      tasks: { ...createEmptyQueues(), imagen: [makeTask('old', 'completed')] }
+    }
+    expect(isSessionManifest(withRetired)).toBe(true)
+  })
+})
+
+describe('createEmptyQueues', () => {
+  // readManifestFromDir rebuilds every loaded session's task map from this, copying
+  // only the current backends across — which is what keeps a retired backend's saved
+  // tasks from resurrecting a column that no longer exists.
+  it('has exactly one queue per current backend and no retired ones', () => {
+    expect(Object.keys(createEmptyQueues()).sort()).toEqual(
+      ['drawthings', 'flux', 'grok', 'nanobanana', 'openai']
+    )
+  })
 })

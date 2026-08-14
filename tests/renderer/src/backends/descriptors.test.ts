@@ -3,7 +3,6 @@ import {
   CLOUD_BACKENDS,
   fluxBackend,
   grokBackend,
-  imagenBackend,
   nanoBananaBackend,
   openaiBackend,
 } from '../../../../src/renderer/src/backends'
@@ -28,7 +27,6 @@ describe('defaults', () => {
       outputFormat: 'png',
       background: 'opaque',
     })
-    expect(imagenBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K', personGeneration: 'allow_all' })
     expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K' })
     expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k' })
     expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, steps: 50, guidance: 5, seed: '' })

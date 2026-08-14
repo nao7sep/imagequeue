@@ -17,7 +17,6 @@
 
 /* Per-backend accent colors */
 [data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; --col-text: #34d399; }
-[data-backend="imagen"]     { --col-accent: #f97316; --col-accent-hover: #fb923c; --col-text: #fb923c; }
 [data-backend="grok"]       { --col-accent: #a855f7; --col-accent-hover: #c084fc; --col-text: #d8b4fe; }
 [data-backend="flux"]       { --col-accent: #06b6d4; --col-accent-hover: #22d3ee; --col-text: #22d3ee; }
 [data-backend="nanobanana"] { --col-accent: #eab308; --col-accent-hover: #facc15; --col-text: #facc15; }

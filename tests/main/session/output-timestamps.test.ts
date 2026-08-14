@@ -37,7 +37,7 @@ describe('parseOutputOrdinal', () => {
   })
 
   it('is the exact inverse of outputBaseName for every backend/ordinal', () => {
-    for (const backend of ['openai', 'imagen', 'drawthings'] as const) {
+    for (const backend of ['openai', 'nanobanana', 'drawthings'] as const) {
       for (const ordinal of [0, 1, 5, 41]) {
         const name = outputBaseName('20260604-093015', ordinal, 'a-slug', backend)
         expect(parseOutputOrdinal(name, backend)).toBe(ordinal)

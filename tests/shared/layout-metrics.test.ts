@@ -32,10 +32,10 @@ describe('getVisibleBackendsForPlatform', () => {
     expect(getVisibleBackendsForPlatform('linux')).not.toContain('drawthings')
   })
 
-  it('counts 6 columns on darwin and 5 elsewhere', () => {
-    expect(getVisibleBackendCount('darwin')).toBe(6)
-    expect(getVisibleBackendCount('win32')).toBe(5)
-    expect(getVisibleBackendCount('linux')).toBe(5)
+  it('counts 5 columns on darwin and 4 elsewhere', () => {
+    expect(getVisibleBackendCount('darwin')).toBe(5)
+    expect(getVisibleBackendCount('win32')).toBe(4)
+    expect(getVisibleBackendCount('linux')).toBe(4)
     // Derived from the list, not a literal: the darwin count is the full list,
     // and the off-mac count is exactly one fewer (Draw Things).
     expect(getVisibleBackendCount('darwin')).toBe(BACKEND_IDS_IN_UI_ORDER.length)
@@ -44,13 +44,13 @@ describe('getVisibleBackendsForPlatform', () => {
 })
 
 describe('computeWindowMinWidth', () => {
-  it('equals LEFT_PANE_MIN + 6*COLUMN_MIN + borders on darwin', () => {
-    const expected = LEFT_PANE_MIN_PX + 6 * COLUMN_MIN_PX + 6 * PANE_BORDER_PX
+  it('equals LEFT_PANE_MIN + 5*COLUMN_MIN + borders on darwin', () => {
+    const expected = LEFT_PANE_MIN_PX + 5 * COLUMN_MIN_PX + 5 * PANE_BORDER_PX
     expect(computeWindowMinWidth('darwin')).toBe(expected)
   })
 
-  it('equals the 5-column sum on win32 and linux', () => {
-    const expected = LEFT_PANE_MIN_PX + 5 * COLUMN_MIN_PX + 5 * PANE_BORDER_PX
+  it('equals the 4-column sum on win32 and linux', () => {
+    const expected = LEFT_PANE_MIN_PX + 4 * COLUMN_MIN_PX + 4 * PANE_BORDER_PX
     expect(computeWindowMinWidth('win32')).toBe(expected)
     expect(computeWindowMinWidth('linux')).toBe(expected)
   })

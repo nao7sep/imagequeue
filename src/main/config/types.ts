@@ -50,18 +50,6 @@ export interface OpenAIBackendConfig {
   timeout_ms: number
 }
 
-export interface ImagenBackendConfig {
-  api_key: string
-  model: string
-  default_params: {
-    aspectRatio: string
-    imageSize: string
-    personGeneration: string
-  }
-  concurrency: number
-  timeout_ms: number
-}
-
 export interface FluxBackendConfig {
   api_key: string
   model: string
@@ -118,7 +106,6 @@ export interface GrokBackendConfig {
 
 export interface ImageBackendsConfig {
   openai: OpenAIBackendConfig
-  imagen: ImagenBackendConfig
   nanobanana: NanoBananaBackendConfig
   grok: GrokBackendConfig
   flux: FluxBackendConfig

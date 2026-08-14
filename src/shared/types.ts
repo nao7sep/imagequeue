@@ -2,12 +2,11 @@
 
 import type { SessionDraft } from './session-draft'
 
-export type BackendId = 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
+export type BackendId = 'openai' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
 export type CloudBackendId = Exclude<BackendId, 'drawthings'>
 
 export const BACKEND_IDS_IN_UI_ORDER: BackendId[] = [
   'openai',
-  'imagen',
   'nanobanana',
   'grok',
   'flux',
@@ -20,7 +19,6 @@ export const CLOUD_BACKEND_IDS_IN_UI_ORDER = BACKEND_IDS_IN_UI_ORDER.filter(
 
 export const BACKEND_LABELS: Record<BackendId, string> = {
   openai: 'GPT Image',
-  imagen: 'Google Imagen',
   nanobanana: 'Nano Banana',
   grok: 'Grok Imagine',
   flux: 'FLUX',

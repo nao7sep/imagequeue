@@ -4,7 +4,6 @@ import { BackendId, Task, EnqueueBatchUnit, EnqueueRequest } from '../../shared/
 export function createEmptyQueues(): Record<BackendId, Task[]> {
   return {
     openai: [],
-    imagen: [],
     nanobanana: [],
     grok: [],
     flux: [],

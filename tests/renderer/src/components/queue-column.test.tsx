@@ -12,7 +12,7 @@ import { getDefaultModelForBackend } from '../../../../src/shared/models'
 // wiring in a real DOM — everything short of the Electron main process.
 
 const emptyTasks = (): Record<BackendId, Task[]> => ({
-  openai: [], imagen: [], nanobanana: [], grok: [], flux: [], drawthings: [],
+  openai: [], nanobanana: [], grok: [], flux: [], drawthings: [],
 })
 
 let settingsValue: {

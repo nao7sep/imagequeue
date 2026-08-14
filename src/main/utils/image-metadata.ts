@@ -1,8 +1,10 @@
 // Sidecar JSON metadata written alongside each generated image.
 
+import type { BackendId } from '../../shared/types'
+
 export interface ImageMetadata {
   prompt: string
-  backend: 'openai' | 'imagen' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
+  backend: BackendId
   model: string
   params: Record<string, unknown>
   slug: string

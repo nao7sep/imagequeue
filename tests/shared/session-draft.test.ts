@@ -20,7 +20,7 @@ function fullDraft(): SessionDraft {
     selectedContentElaboratorId: 'content-1',
     selectedCompositionElaboratorId: 'comp-1',
     selectedStyleElaboratorId: 'style-1',
-    selectedProprietary: { openai: true, imagen: false, nanobanana: true, grok: false, flux: false, drawthings: false },
+    selectedProprietary: { openai: true, nanobanana: true, grok: false, flux: false, drawthings: false },
     selectedDtFiles: ['model-a.ckpt', 'model-b.ckpt'],
     promptMode: 'fresh-task',
     targetScope: 'all',
@@ -158,11 +158,11 @@ describe('normalizeSessionDraft', () => {
   describe('selectedProprietary', () => {
     it('keeps only strictly-true known backends', () => {
       const result = normalizeSessionDraft({
-        selectedProprietary: { openai: true, imagen: 1, grok: 'yes', flux: false },
+        selectedProprietary: { openai: true, nanobanana: 1, grok: 'yes', flux: false },
       })
       expect(result.selectedProprietary.openai).toBe(true)
       // Truthy-but-not-true values are not selections.
-      expect(result.selectedProprietary.imagen).toBe(false)
+      expect(result.selectedProprietary.nanobanana).toBe(false)
       expect(result.selectedProprietary.grok).toBe(false)
       expect(result.selectedProprietary.flux).toBe(false)
     })

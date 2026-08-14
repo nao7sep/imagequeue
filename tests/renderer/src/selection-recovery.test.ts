@@ -6,7 +6,7 @@ const ids = (...names: string[]): TaskRef[] => names.map((id) => ({ id }))
 const noGeometry = (): number | null => null
 
 describe('nextSelectionAfterRemoval', () => {
-  const visible: BackendId[] = ['openai', 'imagen', 'flux']
+  const visible: BackendId[] = ['openai', 'nanobanana', 'flux']
 
   it('selects the next task down in the same column', () => {
     const lists = { openai: ids('a', 'b', 'c') }
@@ -27,7 +27,7 @@ describe('nextSelectionAfterRemoval', () => {
   it('jumps to the nearest task in the next column by vertical center', () => {
     const lists = {
       openai: ids('only'), // removing the sole task — no same-column neighbor
-      imagen: ids('x', 'y', 'z')
+      nanobanana: ids('x', 'y', 'z')
     }
     // removed center 100; y (center 110) is nearest.
     const centers: Record<string, number> = { only: 100, x: 0, y: 110, z: 300 }
@@ -37,13 +37,13 @@ describe('nextSelectionAfterRemoval', () => {
       visible,
       (id) => centers[id] ?? null
     )
-    expect(result).toEqual({ backend: 'imagen', taskId: 'y' })
+    expect(result).toEqual({ backend: 'nanobanana', taskId: 'y' })
   })
 
   it('falls back to the first task in the column when the removed row has no geometry', () => {
-    const lists = { openai: ids('only'), imagen: ids('x', 'y') }
+    const lists = { openai: ids('only'), nanobanana: ids('x', 'y') }
     const result = nextSelectionAfterRemoval({ backend: 'openai', taskId: 'only' }, lists, visible, noGeometry)
-    expect(result).toEqual({ backend: 'imagen', taskId: 'x' })
+    expect(result).toEqual({ backend: 'nanobanana', taskId: 'x' })
   })
 
   it('searches leftward when no column to the right has tasks', () => {

@@ -17,7 +17,7 @@ const isPosix = process.platform !== 'win32'
 const PROVIDER_ENV = [
   'GEMINI_API_KEY',
   'GEMINI_TEXT_API_KEY',
-  'GEMINI_IMAGEN_API_KEY',
+  'GEMINI_NANOBANANA_API_KEY',
   'GEMINI_NANOBANANA_API_KEY',
   'OPENAI_API_KEY',
   'OPENAI_TEXT_API_KEY',
@@ -120,10 +120,10 @@ describe('api-keys-store', () => {
   })
 
   it('clears the stored key when set to an empty value', () => {
-    setStoredApiKey('gemini.imagen', 'temp')
-    expect(getStoredApiKey('gemini.imagen')).toBe('temp')
-    setStoredApiKey('gemini.imagen', '')
-    expect(getStoredApiKey('gemini.imagen')).toBe('')
+    setStoredApiKey('gemini.nanobanana', 'temp')
+    expect(getStoredApiKey('gemini.nanobanana')).toBe('temp')
+    setStoredApiKey('gemini.nanobanana', '')
+    expect(getStoredApiKey('gemini.nanobanana')).toBe('')
   })
 
   it('treats a malformed obf: stored value as absent and warns once, naming the key id', () => {

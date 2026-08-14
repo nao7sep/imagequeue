@@ -4,8 +4,6 @@ import {
   getDefaultModelForBackend,
   FLUX_MODELS,
   GROK_MODELS,
-  IMAGEN_MODELS,
-  IMAGEN_PERSON_GENERATION_LABELS,
   NANO_BANANA_MODELS,
   OPENAI_MODELS,
   OPENAI_OUTPUT_FORMAT_LABELS
@@ -14,7 +12,6 @@ import {
 describe('model registry invariants', () => {
   const groups = [
     ['openai', OPENAI_MODELS],
-    ['imagen', IMAGEN_MODELS],
     ['nanobanana', NANO_BANANA_MODELS],
     ['grok', GROK_MODELS],
     ['flux', FLUX_MODELS]
@@ -53,11 +50,6 @@ describe('model registry invariants', () => {
       expect(model.backgrounds.length, model.id).toBeGreaterThan(0)
       expect(model.sizes.length, model.id).toBeGreaterThan(0)
     }
-    for (const model of IMAGEN_MODELS) {
-      expect(model.aspectRatios.length, model.id).toBeGreaterThan(0)
-      expect(model.imageSizes.length, model.id).toBeGreaterThan(0)
-      expect(model.personGeneration.length, model.id).toBeGreaterThan(0)
-    }
     for (const model of GROK_MODELS) {
       expect(model.aspectRatios.length, model.id).toBeGreaterThan(0)
       expect(model.resolutions.length, model.id).toBeGreaterThan(0)
@@ -78,11 +70,6 @@ describe('model registry invariants', () => {
     for (const model of OPENAI_MODELS) {
       for (const format of model.outputFormats) {
         expect(OPENAI_OUTPUT_FORMAT_LABELS[format], `${model.id}/${format}`).toBeTruthy()
-      }
-    }
-    for (const model of IMAGEN_MODELS) {
-      for (const person of model.personGeneration) {
-        expect(IMAGEN_PERSON_GENERATION_LABELS[person], `${model.id}/${person}`).toBeTruthy()
       }
     }
   })

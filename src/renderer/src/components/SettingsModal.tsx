@@ -500,22 +500,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         </div>
 
         <div className="settings-section">
-          <h3>Google Imagen</h3>
-          <div className="settings-field">
-            <label>API Key</label>
-            <input type="password" value={backends.imagen.api_key as string} onChange={(e) => updateBackend('imagen', 'api_key', e.target.value)} />
-          </div>
-          <div className="settings-field">
-            <label>Concurrency</label>
-            <input type="number" min={1} max={10} value={backends.imagen.concurrency as number} onChange={(e) => updateBackend('imagen', 'concurrency', parseInt(e.target.value) || 1)} />
-          </div>
-          <div className="settings-field">
-            <label>Timeout (s)</label>
-            <input type="number" min={1} step={1} value={(backends.imagen.timeout_ms as number) / 1000} onChange={(e) => updateBackend('imagen', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
-          </div>
-        </div>
-
-        <div className="settings-section">
           <h3>Nano Banana</h3>
           <div className="settings-field">
             <label>Gemini API Key</label>

@@ -2,14 +2,12 @@ import type { CloudBackendId } from '../../../shared/types'
 import type { ModelDef } from '../../../shared/models'
 import type { BackendParamModel } from './types'
 import { openaiBackend } from './openai'
-import { imagenBackend } from './imagen'
 import { nanoBananaBackend } from './nanobanana'
 import { grokBackend } from './grok'
 import { fluxBackend } from './flux'
 
 export type { BackendParamModel } from './types'
 export { openaiBackend, type OpenAIParams } from './openai'
-export { imagenBackend, type ImagenParams } from './imagen'
 export { nanoBananaBackend, type NanoBananaParams } from './nanobanana'
 export { grokBackend, type GrokParams } from './grok'
 export { fluxBackend, type FluxParams } from './flux'
@@ -21,7 +19,6 @@ export type AnyBackendParamModel = BackendParamModel<Record<string, unknown>, Mo
 
 export const CLOUD_BACKENDS: Record<CloudBackendId, AnyBackendParamModel> = {
   openai: openaiBackend as unknown as AnyBackendParamModel,
-  imagen: imagenBackend as unknown as AnyBackendParamModel,
   nanobanana: nanoBananaBackend as unknown as AnyBackendParamModel,
   grok: grokBackend as unknown as AnyBackendParamModel,
   flux: fluxBackend as unknown as AnyBackendParamModel,

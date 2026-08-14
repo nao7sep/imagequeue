@@ -3,7 +3,6 @@ import { TimestampAllocator, type OutputTimestamp } from './timestamp-allocator'
 
 const allocators: Record<BackendId, TimestampAllocator> = {
   openai: new TimestampAllocator(),
-  imagen: new TimestampAllocator(),
   nanobanana: new TimestampAllocator(),
   grok: new TimestampAllocator(),
   flux: new TimestampAllocator(),

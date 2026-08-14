@@ -15,7 +15,6 @@ const QueueContext = createContext<QueueContextValue | null>(null)
 function createEmptyTaskMap(): Record<BackendId, Task[]> {
   return {
     openai: [],
-    imagen: [],
     nanobanana: [],
     grok: [],
     flux: [],

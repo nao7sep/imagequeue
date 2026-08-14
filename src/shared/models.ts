@@ -61,23 +61,6 @@ export const STANDARD_SIZE_PRESETS: SizePreset[] = [
   { label: '2160×3840 (4K Tall)', width: 2160, height: 3840 }
 ]
 
-// Google uses aspect ratios; sizes are "1K" (~1024px) or "2K" (~2048px, standard/ultra only)
-export type ImagenAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
-export type ImagenImageSize = '1K' | '2K'
-
-const IMAGEN_ASPECT_RATIOS: { label: string; value: ImagenAspectRatio }[] = [
-  { label: '1:1', value: '1:1' },
-  { label: '3:4', value: '3:4' },
-  { label: '4:3', value: '4:3' },
-  { label: '9:16', value: '9:16' },
-  { label: '16:9', value: '16:9' }
-]
-
-const IMAGEN_IMAGE_SIZES: { label: string; value: ImagenImageSize }[] = [
-  { label: '1K', value: '1K' },
-  { label: '2K', value: '2K' }
-]
-
 // FLUX.2's dimension limits, named here beside the OpenAI equivalents above and
 // exported for the FLUX backend to validate against — the ladder below and that
 // check must agree, so they read the same constants.
@@ -96,22 +79,15 @@ export type OpenAIQuality = 'low' | 'medium' | 'high' | 'auto'
 export type OpenAIModeration = 'low' | 'auto'
 export type OpenAIOutputFormat = 'png' | 'jpeg' | 'webp'
 export type OpenAIBackground = 'opaque' | 'transparent' | 'auto'
-export type ImagenPersonGeneration = 'dont_allow' | 'allow_adult' | 'allow_all'
 
-// Display names for the two option sets whose wire values do not survive a
-// mechanical prettify ('webp' → 'WebP', 'dont_allow' → "Don't allow"). Each model
-// declares which values it supports; these name them. Quality, moderation, and
-// background are single lowercase words and are capitalized at the call site.
+// Display names for the one option set whose wire values do not survive a
+// mechanical prettify ('webp' → 'WebP'). Each model declares which values it
+// supports; these name them. Quality, moderation, and background are single
+// lowercase words and are capitalized at the call site.
 export const OPENAI_OUTPUT_FORMAT_LABELS: Record<OpenAIOutputFormat, string> = {
   png: 'PNG',
   jpeg: 'JPEG',
   webp: 'WebP'
-}
-
-export const IMAGEN_PERSON_GENERATION_LABELS: Record<ImagenPersonGeneration, string> = {
-  dont_allow: "Don't allow",
-  allow_adult: 'Allow adult',
-  allow_all: 'Allow all'
 }
 
 export interface ModelDef {
@@ -129,14 +105,6 @@ export interface OpenAIModelDef extends ModelDef {
   supportsCustomSizes?: boolean
   outputFormats: OpenAIOutputFormat[]
   backgrounds: OpenAIBackground[]
-}
-
-export interface ImagenModelDef extends ModelDef {
-  backend: 'imagen'
-  aspectRatios: typeof IMAGEN_ASPECT_RATIOS
-  imageSizes: typeof IMAGEN_IMAGE_SIZES
-  supportsImageSize: boolean
-  personGeneration: ImagenPersonGeneration[]
 }
 
 export interface FluxModelDef extends ModelDef {
@@ -296,39 +264,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
   }
 ]
 
-// --- Imagen models ---
-
-export const IMAGEN_MODELS: ImagenModelDef[] = [
-  {
-    id: 'imagen-4.0-ultra-generate-001',
-    label: 'Imagen 4 Ultra',
-    backend: 'imagen',
-    aspectRatios: IMAGEN_ASPECT_RATIOS,
-    imageSizes: IMAGEN_IMAGE_SIZES,
-    supportsImageSize: true,
-    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-  },
-  {
-    id: 'imagen-4.0-generate-001',
-    label: 'Imagen 4',
-    backend: 'imagen',
-    isDefault: true,
-    aspectRatios: IMAGEN_ASPECT_RATIOS,
-    imageSizes: IMAGEN_IMAGE_SIZES,
-    supportsImageSize: true,
-    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-  },
-  {
-    id: 'imagen-4.0-fast-generate-001',
-    label: 'Imagen 4 Fast',
-    backend: 'imagen',
-    aspectRatios: IMAGEN_ASPECT_RATIOS,
-    imageSizes: IMAGEN_IMAGE_SIZES,
-    supportsImageSize: false,
-    personGeneration: ['dont_allow', 'allow_adult', 'allow_all'],
-  }
-]
-
 // --- FLUX models ---
 
 export const FLUX_MODELS: FluxModelDef[] = [
@@ -468,7 +403,6 @@ export const TEXT_AI_BACKEND_OPTIONS: TextAIBackendOption[] = [
 // --- Lookup helpers ---
 
 export function getModelsForBackend(backend: 'openai'): OpenAIModelDef[]
-export function getModelsForBackend(backend: 'imagen'): ImagenModelDef[]
 export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
 export function getModelsForBackend(backend: 'grok'): GrokModelDef[]
 export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
@@ -478,7 +412,6 @@ export function getModelsForBackend(backend: BackendId): ModelDef[]
 export function getModelsForBackend(backend: BackendId): ModelDef[] {
   switch (backend) {
     case 'openai': return OPENAI_MODELS
-    case 'imagen': return IMAGEN_MODELS
     case 'nanobanana': return NANO_BANANA_MODELS
     case 'grok': return GROK_MODELS
     case 'flux': return FLUX_MODELS
@@ -492,7 +425,6 @@ export function getModelsForBackend(backend: BackendId): ModelDef[] {
 // marks no default (or has no registry, like Draw Things) falls back to its first
 // entry, and returns undefined only when it has no models at all.
 export function getDefaultModelForBackend(backend: 'openai'): OpenAIModelDef
-export function getDefaultModelForBackend(backend: 'imagen'): ImagenModelDef
 export function getDefaultModelForBackend(backend: 'nanobanana'): NanoBananaModelDef
 export function getDefaultModelForBackend(backend: 'grok'): GrokModelDef
 export function getDefaultModelForBackend(backend: 'flux'): FluxModelDef
@@ -503,7 +435,6 @@ export function getDefaultModelForBackend(backend: BackendId): ModelDef | undefi
 }
 
 export function findModel(backend: 'openai', modelId: string): OpenAIModelDef | undefined
-export function findModel(backend: 'imagen', modelId: string): ImagenModelDef | undefined
 export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
 export function findModel(backend: 'grok', modelId: string): GrokModelDef | undefined
 export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined

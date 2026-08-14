@@ -9,7 +9,6 @@ import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
 import { generateOpenAI } from './openai'
-import { generateImagen } from './imagen'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
 import { generateFlux } from './flux'
@@ -20,7 +19,6 @@ type GenerateFn = (task: Task) => Promise<{ buffer: Buffer; mimeType?: string }>
 
 const generators: Record<BackendId, GenerateFn> = {
   openai: generateOpenAI,
-  imagen: generateImagen,
   nanobanana: generateNanoBanana,
   grok: generateGrok,
   flux: generateFlux,
@@ -30,7 +28,6 @@ const generators: Record<BackendId, GenerateFn> = {
 // Per-backend active task counts for concurrency limiting
 const activeCounts: Record<BackendId, number> = {
   openai: 0,
-  imagen: 0,
   nanobanana: 0,
   grok: 0,
   flux: 0,
@@ -57,7 +54,6 @@ function getFallbackExt(backend: BackendId, params: Task['params']): ImageExt {
     return 'png'
   }
   const staticExts: Record<Exclude<BackendId, 'openai'>, ImageExt> = {
-    imagen: 'png',
     nanobanana: 'png',
     grok: 'jpg',
     flux: 'png',

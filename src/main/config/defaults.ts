@@ -58,20 +58,6 @@ export function createDefaultConfig(): AppConfig {
         concurrency: 3,
         timeout_ms: 180000
       },
-      imagen: {
-        api_key: '',
-        model: getDefaultModelForBackend('imagen').id,
-        default_params: {
-          aspectRatio: '1:1',
-          imageSize: '1K',
-          // allow_adult (not allow_all): the safest default that works everywhere.
-          // allow_all is regionally blocked (EU/UK/CH/MENA) on the Gemini API, so it
-          // would fail out of the box there; it stays user-selectable, just not the seed.
-          personGeneration: 'allow_adult'
-        },
-        concurrency: 3,
-        timeout_ms: 180000
-      },
       nanobanana: {
         api_key: '',
         model: getDefaultModelForBackend('nanobanana').id,

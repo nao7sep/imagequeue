@@ -81,19 +81,27 @@ export function loadConfig(): AppConfig {
   // exposed to an overwrite bug, and it picks up newly added keys on the next real save — the in-code
   // default for any absent key already drives behavior in the meantime.
   const merged = deepMergeDefaults(parsed, createDefaultConfig())
-  dropLegacyGeminiModels(merged)
+  dropLegacyConfigKeys(merged)
   cachedConfig = merged
   return merged
 }
 
-// A config written before the Gemini text list was closed carries the old user-owned
-// `models` array. It has no home now — the list lives in shared/models — so it is dropped
-// on load and save rather than persisted forever as dead data (deepMergeDefaults would keep
-// it verbatim otherwise). The two tier selections are untouched: a legacy pick survives even
-// if it named a model no longer on the shipped list, and fails fast at the API call if gone.
-function dropLegacyGeminiModels(config: AppConfig): void {
+// Keys an older build wrote that have no home in the current schema. deepMergeDefaults
+// preserves anything already in the loaded file, so without this they would persist
+// forever as dead data. Dropped on both load and save; each entry names why it is gone.
+function dropLegacyConfigKeys(config: AppConfig): void {
+  // The Gemini text list, from before it was closed — the list lives in shared/models
+  // now. The two tier selections are untouched: a legacy pick survives even if it names
+  // a model no longer on the shipped list, and fails fast at the API call if gone.
   const gemini = config.text_ai?.gemini as unknown as Record<string, unknown> | undefined
   if (gemini && 'models' in gemini) delete gemini.models
+
+  // The Imagen backend, removed before release: the whole Imagen 4 family shut down
+  // 2026-08-17, so the backend stopped working rather than degrading. Its config block
+  // can no longer be reached by any UI, and its stored API key (gemini.imagen) is
+  // deliberately NOT touched here — a credential is the user's to delete.
+  const backends = config.image_backends as unknown as Record<string, unknown> | undefined
+  if (backends && 'imagen' in backends) delete backends.imagen
 }
 
 // API keys live in the separate 0600 api-keys.json (config/api-keys-store.ts),
@@ -113,7 +121,7 @@ function scrubApiKeys(config: AppConfig): void {
 export function saveConfig(config: AppConfig): void {
   ensureDataDir()
   scrubApiKeys(config)
-  dropLegacyGeminiModels(config)
+  dropLegacyConfigKeys(config)
   const configPath = getConfigPath()
   // recorded: config.json is the durable user-settings store — the canonical
   // managed durable text this net exists to protect (data-backup conventions).

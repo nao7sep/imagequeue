@@ -2,14 +2,12 @@ import type { CloudBackendId } from '../../../shared/types'
 import type {
   FluxModelDef,
   GrokModelDef,
-  ImagenModelDef,
   ModelDef,
   NanoBananaModelDef,
   OpenAIModelDef,
 } from '../../../shared/models'
 import { fluxBackend } from '../backends/flux'
 import { grokBackend } from '../backends/grok'
-import { imagenBackend } from '../backends/imagen'
 import { nanoBananaBackend } from '../backends/nanobanana'
 import { openaiBackend } from '../backends/openai'
 import type { BackendParamModel } from '../backends/types'
@@ -65,9 +63,6 @@ export function resolveSavedImageBackendDefaults(
 
   if (backend === 'openai') {
     return resolveWith(openaiBackend, modelDef as OpenAIModelDef, model, savedDefaultParams)
-  }
-  if (backend === 'imagen') {
-    return resolveWith(imagenBackend, modelDef as ImagenModelDef, model, savedDefaultParams)
   }
   if (backend === 'nanobanana') {
     return resolveWith(nanoBananaBackend, modelDef as NanoBananaModelDef, model, savedDefaultParams)
