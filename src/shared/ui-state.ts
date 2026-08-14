@@ -5,16 +5,17 @@
 // its splitter-drag churn must never rewrite the config file. Disposable — losing
 // it just restores the default pane width.
 
-import { COLUMN_MIN_PX, LEFT_PANE_MIN_PX, PANE_BORDER_PX } from './layout-metrics'
+import { COLUMN_DEFAULT_PX, COLUMN_MIN_PX, LEFT_PANE_MIN_PX, PANE_BORDER_PX } from './layout-metrics'
 
 export interface UiState {
   /**
    * The per-provider queue-column width the user dragged to, in CSS px (the
-   * INTENT). `null` means never set — columns sit at their COLUMN_MIN_PX floor,
-   * the pre-splitter look. The DISPLAYED width is derived from this intent and the
-   * live window (displayedColumnWidth): the intent is clamped to what fits so a
-   * narrow window can't clip the columns, but the stored value is not, so a wide
-   * layout survives a narrow reopen and returns when the window grows.
+   * INTENT). `null` means never set — columns open at COLUMN_DEFAULT_PX, the width
+   * that holds a column's longest real row without clipping. The DISPLAYED width is
+   * derived from this intent and the live window (displayedColumnWidth): the intent
+   * is clamped to what fits so a narrow window can't clip the columns, but the
+   * stored value is not, so a wide layout survives a narrow reopen and returns when
+   * the window grows.
    */
   columnWidth: number | null
 }
@@ -38,9 +39,11 @@ export function maxColumnWidthForContainer(containerWidth: number, visibleCount:
 }
 
 /**
- * The per-column width to render: the stored intent (defaulting to the floor when
- * unset or invalid), floored at COLUMN_MIN_PX and capped at what the container can
- * show. Pure so the splitter, the render, and the tests all agree.
+ * The per-column width to render: the stored intent (defaulting to
+ * COLUMN_DEFAULT_PX when unset or invalid), floored at COLUMN_MIN_PX and capped at
+ * what the container can show. Pure so the splitter, the render, and the tests all
+ * agree. On a window too narrow to grant the default, the cap wins and columns show
+ * narrower — the intent is untouched, so widening the window restores it.
  */
 export function displayedColumnWidth(
   intent: number | null,
@@ -48,6 +51,6 @@ export function displayedColumnWidth(
   visibleCount: number,
 ): number {
   const wanted =
-    intent != null && Number.isFinite(intent) ? Math.max(COLUMN_MIN_PX, Math.round(intent)) : COLUMN_MIN_PX
+    intent != null && Number.isFinite(intent) ? Math.max(COLUMN_MIN_PX, Math.round(intent)) : COLUMN_DEFAULT_PX
   return Math.min(wanted, maxColumnWidthForContainer(containerWidth, visibleCount))
 }

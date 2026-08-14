@@ -1,13 +1,17 @@
 .queue-column {
   /* The per-provider column width the user sets by dragging the pane splitter,
-     driven by --iq-column-width on .layout and persisted to state.json. It falls
-     back to the content floor (COLUMN_MIN_PX in shared/layout-metrics.ts — keep
-     min-width in sync; the window minimum reserves one floor per visible backend).
-     Below the floor the model row + enqueue button stop being usable, so the
-     renderer clamps --iq-column-width to never display narrower than this and
-     never so wide the left fill pane loses its minimum. */
-  width: var(--iq-column-width, 160px);
-  min-width: 160px;
+     driven by --iq-column-width on .layout and persisted to state.json. Two
+     different numbers, both mirrored from shared/layout-metrics.ts — keep them in
+     sync: the fallback is COLUMN_DEFAULT_PX (220), the width a column opens at
+     when nothing has been dragged, and min-width is COLUMN_MIN_PX (190), the floor
+     the window minimum reserves one of per visible backend. They are NOT the same
+     value: the default is sized to hold a column's longest real row (the model
+     name), the floor only to keep it usable on a cramped window. Below the floor
+     the model row + enqueue button stop working, so the renderer clamps
+     --iq-column-width to never display narrower than this and never so wide the
+     left fill pane loses its minimum. */
+  width: var(--iq-column-width, 220px);
+  min-width: 190px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -15,12 +19,23 @@
   background: var(--pane-bg);
 }
 
-/* Per-backend accent colors */
+/* Per-backend accent colors. One hue per backend, spread around the wheel so five
+   simultaneously-visible columns stay tellable apart; validated against the app's
+   single dark surface (--bg-secondary) with the dataviz categorical checks.
+   Two rules this set exists to hold:
+     - A column accent is never one of the app's reserved status tokens. Draw Things
+       used to BE --warning (#f59e0b, ΔE 0.0), so a local backend read as a warning.
+     - Nano Banana keeps yellow: it is the one accent that carries meaning.
+   The residual gap is deliberate and bounded: five categorical hues cannot all clear
+   the ΔE >= 15 normal-vision floor at once (searched exhaustively; the only sets that
+   do discard every existing identity), and the checks permit the floor band when
+   identity is not carried by color alone. Here every column is titled with its
+   backend name, which is that secondary encoding. */
 [data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; --col-text: #34d399; }
 [data-backend="grok"]       { --col-accent: #a855f7; --col-accent-hover: #c084fc; --col-text: #d8b4fe; }
 [data-backend="flux"]       { --col-accent: #06b6d4; --col-accent-hover: #22d3ee; --col-text: #22d3ee; }
 [data-backend="nanobanana"] { --col-accent: #eab308; --col-accent-hover: #facc15; --col-text: #facc15; }
-[data-backend="drawthings"] { --col-accent: #f59e0b; --col-accent-hover: #fbbf24; --col-text: #fbbf24; }
+[data-backend="drawthings"] { --col-accent: #ec4899; --col-accent-hover: #f472b6; --col-text: #f9a8d4; }
 
 .queue-column:last-child {
   border-right: none;

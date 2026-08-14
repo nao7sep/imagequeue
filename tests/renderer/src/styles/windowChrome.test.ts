@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import {
+  COLUMN_DEFAULT_PX,
   COLUMN_MIN_PX,
   LEFT_PANE_MIN_PX,
 } from '../../../../src/shared/layout-metrics'
@@ -63,5 +64,15 @@ describe('pane min-widths mirror the shared constants', () => {
     const css = read('components/QueueColumn.css')
     const block = css.slice(css.indexOf('.queue-column'))
     expect(block).toMatch(new RegExp(`min-width:\\s*${COLUMN_MIN_PX}px`))
+  })
+
+  // The column carries a SECOND mirrored number: the --iq-column-width fallback,
+  // which is the default width, not the floor. It is the width a column actually
+  // shows before the renderer sets the variable, so a stale copy here is visible on
+  // first paint. Guarded separately because the two are deliberately different.
+  it('.queue-column --iq-column-width fallback matches COLUMN_DEFAULT_PX', () => {
+    const css = read('components/QueueColumn.css')
+    const block = css.slice(css.indexOf('.queue-column'))
+    expect(block).toMatch(new RegExp(`var\\(--iq-column-width,\\s*${COLUMN_DEFAULT_PX}px\\)`))
   })
 })

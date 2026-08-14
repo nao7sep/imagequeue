@@ -43,9 +43,11 @@ describe('buildMainWindowOptions', () => {
   it('opens at a default size that always clears the minimum (size not persisted)', () => {
     // The opening size must never be below the window's own minimum — otherwise
     // the OS would immediately snap it larger and the "opens at its default
-    // size" guarantee would be a lie. On the 6-column macOS layout the content
-    // minimum exceeds a bare 720p-style default, so the default must grow with
-    // it rather than stay pinned at a literal.
+    // size" guarantee would be a lie. At five columns no platform's minimum
+    // exceeds the designed default, so nothing is being grown today; the clamp
+    // last bound at six columns on macOS (minimum 1326 > designed 1280). This
+    // asserts the invariant, not the current slack, so it keeps holding if a
+    // backend is added back.
     for (const platform of ['darwin', 'win32', 'linux'] as const) {
       const opts = buildMainWindowOptions(platform)
       expect(opts.width).toBeGreaterThanOrEqual(computeWindowMinWidth(platform))

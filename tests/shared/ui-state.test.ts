@@ -4,7 +4,12 @@ import {
   displayedColumnWidth,
   maxColumnWidthForContainer,
 } from '../../src/shared/ui-state'
-import { COLUMN_MIN_PX, LEFT_PANE_MIN_PX, PANE_BORDER_PX } from '../../src/shared/layout-metrics'
+import {
+  COLUMN_DEFAULT_PX,
+  COLUMN_MIN_PX,
+  LEFT_PANE_MIN_PX,
+  PANE_BORDER_PX,
+} from '../../src/shared/layout-metrics'
 
 // The persisted intent (columnWidth) is turned into a rendered per-column width by
 // displayedColumnWidth, the single pure function the splitter, the render, and
@@ -37,8 +42,12 @@ describe('maxColumnWidthForContainer', () => {
 })
 
 describe('displayedColumnWidth', () => {
-  it('shows the floor when the intent is unset (default)', () => {
-    expect(displayedColumnWidth(null, 3000, 6)).toBe(COLUMN_MIN_PX)
+  // The default is COLUMN_DEFAULT_PX, deliberately NOT the floor. They were once the
+  // same value, which meant a fresh install opened every column at its minimum and
+  // clipped the longest model names; these two assert they stay apart.
+  it('opens at the default width when the intent is unset', () => {
+    expect(displayedColumnWidth(null, 3000, 6)).toBe(COLUMN_DEFAULT_PX)
+    expect(COLUMN_DEFAULT_PX).toBeGreaterThan(COLUMN_MIN_PX)
   })
 
   it('returns a roomy intent verbatim when the container can fit it', () => {
@@ -63,8 +72,8 @@ describe('displayedColumnWidth', () => {
     expect(displayedColumnWidth(intent, 3000, 6)).toBe(300)
   })
 
-  it('falls back to the floor on a non-finite intent', () => {
-    expect(displayedColumnWidth(Number.NaN, 3000, 6)).toBe(COLUMN_MIN_PX)
+  it('falls back to the default on a non-finite intent', () => {
+    expect(displayedColumnWidth(Number.NaN, 3000, 6)).toBe(COLUMN_DEFAULT_PX)
   })
 
   it('rounds a fractional intent', () => {

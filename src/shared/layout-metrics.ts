@@ -20,12 +20,25 @@
 import { BACKEND_IDS_IN_UI_ORDER, type BackendId } from './types'
 import type { Platform } from './electron-api'
 
-/** The fixed width of one backend column, in CSS px — also its content floor:
- *  the per-column width below which the model row + enqueue button stop being
- *  usable. Columns are a fixed width, not responsive (.queue-column width ===
- *  min-width === this), so this is both the rendered column width and the amount
- *  the window minimum reserves per visible backend. */
-export const COLUMN_MIN_PX = 160
+/** The narrowest a backend column may ever display, in CSS px — the floor, NOT the
+ *  default (that is COLUMN_DEFAULT_PX below). Below this the model row and enqueue
+ *  button stop being usable. It stays tight because the window minimum reserves one
+ *  of these per visible backend, so raising it raises the smallest window the app can
+ *  open in: 190 puts the five-column minimum at 1315, which still fits a 1366-wide
+ *  laptop, where 200 would push it to 1365 and leave a single pixel of slack. */
+export const COLUMN_MIN_PX = 190
+
+/** The width a column displays when the user has never dragged the splitter.
+ *
+ *  Measured, not guessed: rendered in Electron's own engine, the widest setting row
+ *  a column must hold is `background: transparent` at 193px and the longest model
+ *  name ("Grok Imagine Quality") at 211px, so anything under ~215 truncates real
+ *  content on a fresh install. This used to BE COLUMN_MIN_PX, which meant every
+ *  column opened at its absolute floor and clipped a third of the longest rows.
+ *
+ *  The floor and the default are separate on purpose: a cramped window can still
+ *  squeeze columns down to COLUMN_MIN_PX, but nobody starts there. */
+export const COLUMN_DEFAULT_PX = 220
 
 /** A real minimum for the left prompt/preview pane, in CSS px — wide enough to
  *  keep the prompt textarea, the preview, and their toolbars usable rather than

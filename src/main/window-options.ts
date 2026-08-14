@@ -50,9 +50,13 @@ const BACKGROUND_COLOR = '#1a1a2e'
  * minWidth/minHeight are derived from the shared pane minimums (and the
  * platform-dependent visible-column count), so they can never silently disagree
  * with the layout the renderer paints. The opening size is the designed default
- * clamped up to the derived minimum (plus headroom) so it is always valid — on
- * the 6-column macOS layout the content minimum exceeds the bare 720p-style
- * default, so the default grows to match rather than open under its minimum.
+ * clamped up to the derived minimum (plus headroom) so it is always valid.
+ *
+ * That clamp is a guarantee, not a constant: with five columns on macOS the
+ * minimum (1165) now sits below the designed 1280, so the default applies as
+ * written. It last bound at six columns, where the 1326 minimum forced the window
+ * open at 1406. Adding a backend can make it bind again, which is why the default
+ * is derived here rather than pinned to a literal.
  */
 export function buildMainWindowOptions(platform: Platform): MainWindowOptions {
   const minWidth = computeWindowMinWidth(platform)
