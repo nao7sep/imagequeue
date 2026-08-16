@@ -145,7 +145,7 @@ app.whenReady().then(() => {
       'ImageQueue could not start',
       `${err instanceof Error ? err.message : String(err)}\n\n` +
         'The file has been left exactly where it is so nothing is lost. ' +
-        'Fix or remove it, then start imagequeue again.',
+        'Fix or remove it, then start ImageQueue again.',
     )
     app.exit(1)
   }
