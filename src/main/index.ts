@@ -142,7 +142,7 @@ app.whenReady().then(() => {
     startUp()
   } catch (err) {
     dialog.showErrorBox(
-      'imagequeue could not start',
+      'ImageQueue could not start',
       `${err instanceof Error ? err.message : String(err)}\n\n` +
         'The file has been left exactly where it is so nothing is lost. ' +
         'Fix or remove it, then start imagequeue again.',
