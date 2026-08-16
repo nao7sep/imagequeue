@@ -365,10 +365,12 @@ function utcStampForFilename(): string {
 
 // Move a corrupt elaborators file aside to a timestamped `.invalid` neighbour before defaults are
 // reseeded over it, so the reset never silently discards the user's (possibly hand-edited) data —
-// the storage-path conventions' quarantine-then-reset rule. Best-effort: a rename failure is logged,
-// not fatal (the caller still reseeds). Renaming also means the bad file is handled once, not
-// re-flagged on every read, since the reseeded file then parses cleanly. The discriminator is
-// hyphen-joined into the target's stem — `<stem>-<stamp>.invalid` — never a dot-appended suffix.
+// the storage-path conventions' quarantine-then-reset rule. The rename either lands or its failure
+// PROPAGATES: swallowing it here let the caller reseed the shipped defaults over a still-corrupt
+// file, destroying the user's hand-edited templates with no `.invalid` copy anywhere — the exact
+// silent reset the rule forbids. Renaming also means the bad file is handled once, not re-flagged on
+// every read, since the reseeded file then parses cleanly. The discriminator is hyphen-joined into
+// the target's stem — `<stem>-<stamp>.invalid` — never a dot-appended suffix.
 function quarantineCorruptFile(file: string, reason: string, err?: unknown): void {
   const dir = path.dirname(file)
   const stem = path.basename(file, path.extname(file))
@@ -381,10 +383,11 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): voi
       ...(err ? { error: serializeError(err) } : {}),
     })
   } catch (renameErr) {
-    log('error', 'Failed to quarantine corrupt elaborators file; reseeding defaults', {
+    log('error', 'Failed to quarantine corrupt elaborators file; leaving it in place', {
       path: file,
       error: serializeError(renameErr),
     })
+    throw renameErr
   }
 }
 
