@@ -199,8 +199,32 @@ describe('elaborators store', () => {
       expect(() => listElaborators()).toThrow('locked')
       expect(fs.readFileSync(filePath, 'utf-8')).toBe('{ not valid json')
       expect(drainElaboratorRecoveryNotices()).toEqual([
-        { kind: 'failed', path: filePath, error: 'locked' },
+        { kind: 'quarantine-failed', path: filePath, error: 'locked' },
       ])
+      rename.mockRestore()
+    })
+
+    it('reports a reseed failure without retrying quarantine or misreporting recovery', () => {
+      const filePath = path.join(tmpRoot, 'elaborators.json')
+      const corruptBytes = '{ not valid json'
+      fs.writeFileSync(filePath, corruptBytes, 'utf-8')
+      const rename = vi.spyOn(fs, 'renameSync')
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementationOnce(() => {
+        throw new Error('disk full')
+      })
+
+      expect(() => listElaborators()).toThrow('disk full')
+
+      expect(rename).toHaveBeenCalledTimes(1)
+      expect(fs.existsSync(filePath)).toBe(false)
+      const quarantined = fs.readdirSync(tmpRoot).find((name) => name.endsWith('.invalid'))!
+      const quarantinedPath = path.join(tmpRoot, quarantined)
+      expect(fs.readFileSync(quarantinedPath, 'utf-8')).toBe(corruptBytes)
+      expect(drainElaboratorRecoveryNotices()).toEqual([
+        { kind: 'reseed-failed', path: quarantinedPath, error: 'disk full' },
+      ])
+
+      write.mockRestore()
       rename.mockRestore()
     })
 

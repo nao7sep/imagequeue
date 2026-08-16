@@ -365,7 +365,8 @@ function utcStampForFilename(): string {
 
 export type ElaboratorRecoveryNotice =
   | { kind: 'recovered'; path: string }
-  | { kind: 'failed'; path: string; error: string }
+  | { kind: 'quarantine-failed'; path: string; error: string }
+  | { kind: 'reseed-failed'; path: string; error: string }
 
 const recoveryNotices: ElaboratorRecoveryNotice[] = []
 
@@ -374,7 +375,7 @@ export function drainElaboratorRecoveryNotices(): ElaboratorRecoveryNotice[] {
 }
 
 // Preserve user-authored templates before reseeding. A failed rename propagates.
-function quarantineCorruptFile(file: string, reason: string, err?: unknown): void {
+function quarantineCorruptFile(file: string, reason: string, err?: unknown): string {
   const dir = path.dirname(file)
   const stem = path.basename(file, path.extname(file))
   const movedTo = path.join(dir, `${stem}-${utcStampForFilename()}.invalid`)
@@ -385,14 +386,14 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): voi
       to: movedTo,
       ...(err ? { error: serializeError(err) } : {}),
     })
-    recoveryNotices.push({ kind: 'recovered', path: movedTo })
+    return movedTo
   } catch (renameErr) {
     log('error', 'Failed to quarantine corrupt elaborators file; leaving it in place', {
       path: file,
       error: serializeError(renameErr),
     })
     recoveryNotices.push({
-      kind: 'failed',
+      kind: 'quarantine-failed',
       path: file,
       error: String(serializeError(renameErr).message ?? renameErr),
     })
@@ -401,10 +402,21 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): voi
 }
 
 // Recreate a valid live file after the corrupt one has moved aside.
-function reseedAfterQuarantine(): Elaborator[] {
+function reseedAfterQuarantine(quarantinedPath: string): Elaborator[] {
   const seeded = defaultElaborators()
-  writeFile(seeded)
-  return seeded
+  try {
+    writeFile(seeded)
+    recoveryNotices.push({ kind: 'recovered', path: quarantinedPath })
+    return seeded
+  } catch (err) {
+    const error = String(serializeError(err).message ?? err)
+    log('error', 'Failed to reseed elaborators after quarantine', {
+      quarantinedPath,
+      error: serializeError(err),
+    })
+    recoveryNotices.push({ kind: 'reseed-failed', path: quarantinedPath, error })
+    throw err
+  }
 }
 
 // Reads the persisted elaborators, or null when the file is genuinely absent
@@ -420,17 +432,18 @@ function readFile(): Elaborator[] | null {
   // A file that EXISTS but is unparseable or malformed is unexpected (corrupt or
   // hand-edited); quarantine the bad bytes aside and recreate valid defaults.
   if (!fs.existsSync(file)) return null
+  let parsed: unknown
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
-    if (!Array.isArray(parsed) || !parsed.every(isElaborator)) {
-      quarantineCorruptFile(file, 'malformed')
-      return reseedAfterQuarantine()
-    }
-    return parsed
+    parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
   } catch (err) {
-    quarantineCorruptFile(file, 'unreadable', err)
-    return reseedAfterQuarantine()
+    const quarantinedPath = quarantineCorruptFile(file, 'unreadable', err)
+    return reseedAfterQuarantine(quarantinedPath)
   }
+  if (!Array.isArray(parsed) || !parsed.every(isElaborator)) {
+    const quarantinedPath = quarantineCorruptFile(file, 'malformed')
+    return reseedAfterQuarantine(quarantinedPath)
+  }
+  return parsed
 }
 
 function writeFile(items: Elaborator[]): void {

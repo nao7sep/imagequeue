@@ -23,6 +23,7 @@ import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
+import { startupFailureMessage } from './startup-error'
 
 let mainWin: BrowserWindow | null = null
 
@@ -143,9 +144,7 @@ app.whenReady().then(() => {
   } catch (err) {
     dialog.showErrorBox(
       'ImageQueue could not start',
-      `${err instanceof Error ? err.message : String(err)}\n\n` +
-        'The file has been left exactly where it is so nothing is lost. ' +
-        'Fix or remove it, then start ImageQueue again.',
+      startupFailureMessage(err),
     )
     app.exit(1)
   }

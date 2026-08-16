@@ -24,13 +24,21 @@ export function registerElaboratorsIpc(): void {
             notice.path +
             '\n\nImageQueue restored the shipped defaults. Your edited templates remain in the file above.'
         )
-      } else {
+      } else if (notice.kind === 'quarantine-failed') {
         dialog.showErrorBox(
           'Elaborator settings could not be read',
           'ImageQueue left the unreadable file in place because it could not set it aside:\n\n' +
             notice.path +
             '\n\n' + notice.error +
             '\n\nNo replacement file was written.'
+        )
+      } else {
+        dialog.showErrorBox(
+          'Elaborator defaults could not be restored',
+          'ImageQueue preserved the unreadable elaborator settings here:\n\n' +
+            notice.path +
+            '\n\nIt could not write the replacement defaults:\n\n' + notice.error +
+            '\n\nCorrect the reported problem, then try again.'
         )
       }
     }
