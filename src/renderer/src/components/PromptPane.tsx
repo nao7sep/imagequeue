@@ -5,6 +5,7 @@ import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { getVisibleBackends } from '../utils/visibleBackends'
 import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
+import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import './PromptPane.css'
@@ -130,7 +131,13 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       // candidate is being composed — that key belongs to the composition.
       if (isImeComposing(e)) return
 
-      const mod = e.metaKey || e.ctrlKey
+      // On macOS a bare-Ctrl chord on a Cocoa text-editing key (Ctrl+P =
+      // move-up) belongs to the text system while the caret is editable —
+      // without this, Ctrl+P in the prompt replaces it with the clipboard
+      // mid-sentence; the Cmd half always fires (keyboard-shortcut-conventions).
+      if (isEditableTarget(e.target) && shadowsMacTextBinding(e)) return
+
+      const mod = hasMod(e)
 
       if (mod && e.key === 'Enter') {
         e.preventDefault()

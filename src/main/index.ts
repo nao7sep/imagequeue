@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeTheme } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
@@ -133,6 +133,25 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // The startup body throws on a corrupt config.json (loadConfig deliberately
+  // does not fall back to defaults — see config-store.ts). Without this catch
+  // the rejection lands in the unhandledRejection hook, which logs and does NOT
+  // exit — a running process with no window and no dialog is not a halt
+  // (storage-path conventions: a halt names the store and reaches the user).
+  try {
+    startUp()
+  } catch (err) {
+    dialog.showErrorBox(
+      'imagequeue could not start',
+      `${err instanceof Error ? err.message : String(err)}\n\n` +
+        'The file has been left exactly where it is so nothing is lost. ' +
+        'Fix or remove it, then start imagequeue again.',
+    )
+    app.exit(1)
+  }
+})
+
+function startUp(): void {
   // The app ships a single dark theme; force dark native chrome (title bar,
   // menus) so it doesn't follow a light OS appearance. The value comes from the
   // same window-options source createWindow uses, so chrome theme and window
@@ -197,7 +216,7 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
-})
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

@@ -20,6 +20,7 @@ import { useQueue } from '../context/QueueContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
+import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 
 const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
 
@@ -140,7 +141,12 @@ export function Layout(): React.JSX.Element {
       }
       if (isAnyModalOpen()) return
 
-      const mod = e.metaKey || e.ctrlKey
+      // On macOS Ctrl+Slash is a Cocoa text binding: the chord stands down
+      // while the caret is editable; Cmd+Slash always fires
+      // (keyboard-shortcut-conventions).
+      if (isEditableTarget(e.target) && shadowsMacTextBinding(e)) return
+
+      const mod = hasMod(e)
       if (mod && e.key === ',') {
         e.preventDefault()
         setOverlay('settings')
