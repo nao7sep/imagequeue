@@ -131,10 +131,6 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       // candidate is being composed — that key belongs to the composition.
       if (isImeComposing(e)) return
 
-      // On macOS a bare-Ctrl chord on a Cocoa text-editing key (Ctrl+P =
-      // move-up) belongs to the text system while the caret is editable —
-      // without this, Ctrl+P in the prompt replaces it with the clipboard
-      // mid-sentence; the Cmd half always fires (keyboard-shortcut-conventions).
       if (isEditableTarget(e.target) && shadowsMacTextBinding(e)) return
 
       const mod = hasMod(e)

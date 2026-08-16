@@ -363,14 +363,17 @@ function utcStampForFilename(): string {
   )
 }
 
-// Move a corrupt elaborators file aside to a timestamped `.invalid` neighbour before defaults are
-// reseeded over it, so the reset never silently discards the user's (possibly hand-edited) data —
-// the storage-path conventions' quarantine-then-reset rule. The rename either lands or its failure
-// PROPAGATES: swallowing it here let the caller reseed the shipped defaults over a still-corrupt
-// file, destroying the user's hand-edited templates with no `.invalid` copy anywhere — the exact
-// silent reset the rule forbids. Renaming also means the bad file is handled once, not re-flagged on
-// every read, since the reseeded file then parses cleanly. The discriminator is hyphen-joined into
-// the target's stem — `<stem>-<stamp>.invalid` — never a dot-appended suffix.
+export type ElaboratorRecoveryNotice =
+  | { kind: 'recovered'; path: string }
+  | { kind: 'failed'; path: string; error: string }
+
+const recoveryNotices: ElaboratorRecoveryNotice[] = []
+
+export function drainElaboratorRecoveryNotices(): ElaboratorRecoveryNotice[] {
+  return recoveryNotices.splice(0)
+}
+
+// Preserve user-authored templates before reseeding. A failed rename propagates.
 function quarantineCorruptFile(file: string, reason: string, err?: unknown): void {
   const dir = path.dirname(file)
   const stem = path.basename(file, path.extname(file))
@@ -382,21 +385,22 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): voi
       to: movedTo,
       ...(err ? { error: serializeError(err) } : {}),
     })
+    recoveryNotices.push({ kind: 'recovered', path: movedTo })
   } catch (renameErr) {
     log('error', 'Failed to quarantine corrupt elaborators file; leaving it in place', {
       path: file,
       error: serializeError(renameErr),
     })
+    recoveryNotices.push({
+      kind: 'failed',
+      path: file,
+      error: String(serializeError(renameErr).message ?? renameErr),
+    })
     throw renameErr
   }
 }
 
-// Quarantine a corrupt elaborators.json aside, then recreate defaults on disk —
-// the storage-path conventions' quarantine-then-reset branch, kept self-contained
-// so listElaborators can stay a pure read. Returns the reseeded defaults. The
-// corrupt file was renamed to its `.invalid` neighbour above, so this write
-// creates a fresh, valid elaborators.json (never an overwrite of the corrupt
-// bytes, which are preserved for recovery).
+// Recreate a valid live file after the corrupt one has moved aside.
 function reseedAfterQuarantine(): Elaborator[] {
   const seeded = defaultElaborators()
   writeFile(seeded)

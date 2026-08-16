@@ -4,6 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createElaborator,
+  drainElaboratorRecoveryNotices,
   listElaborators,
   materializeElaborators,
 } from '../../src/main/elaborators'
@@ -25,6 +26,7 @@ describe('elaborators store', () => {
   beforeEach(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-elaborators-'))
     process.env[ENV_VAR] = tmpRoot
+    drainElaboratorRecoveryNotices()
   })
 
   afterEach(() => {
@@ -182,6 +184,24 @@ describe('elaborators store', () => {
       expect(quarantined).toHaveLength(1)
       expect(quarantined[0]).toMatch(/^elaborators-\d{8}-\d{6}-\d{3}-utc\.invalid$/)
       expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf-8')).toBe('{ not valid json')
+      expect(drainElaboratorRecoveryNotices()).toEqual([
+        { kind: 'recovered', path: path.join(tmpRoot, quarantined[0]) },
+      ])
+    })
+
+    it('reports a failed quarantine without replacing the corrupt file', () => {
+      const filePath = path.join(tmpRoot, 'elaborators.json')
+      fs.writeFileSync(filePath, '{ not valid json', 'utf-8')
+      const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+        throw new Error('locked')
+      })
+
+      expect(() => listElaborators()).toThrow('locked')
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('{ not valid json')
+      expect(drainElaboratorRecoveryNotices()).toEqual([
+        { kind: 'failed', path: filePath, error: 'locked' },
+      ])
+      rename.mockRestore()
     })
 
     it('leaves no orphaned temp file after a mutating write', () => {

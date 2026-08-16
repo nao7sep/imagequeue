@@ -1,9 +1,11 @@
+import { dialog } from 'electron'
 import { handle } from './ipc-boundary'
 import { brainstormPrompts, cancelBrainstorm } from './brainstorm'
 import { createDefaultConfig } from './config/defaults'
 import {
   createElaborator,
   deleteElaborator,
+  drainElaboratorRecoveryNotices,
   listElaborators,
   resetElaborators,
   updateElaborator,
@@ -13,28 +15,65 @@ import type { ElaboratorKind } from '../shared/types'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
 
 export function registerElaboratorsIpc(): void {
-  handle('elaborators:list', () => {
-    return listElaborators()
-  })
+  const reportRecovery = (): void => {
+    for (const notice of drainElaboratorRecoveryNotices()) {
+      if (notice.kind === 'recovered') {
+        dialog.showErrorBox(
+          'Elaborator settings were reset',
+          'Your elaborator settings file was unreadable and has been set aside here:\n\n' +
+            notice.path +
+            '\n\nImageQueue restored the shipped defaults. Your edited templates remain in the file above.'
+        )
+      } else {
+        dialog.showErrorBox(
+          'Elaborator settings could not be read',
+          'ImageQueue left the unreadable file in place because it could not set it aside:\n\n' +
+            notice.path +
+            '\n\n' + notice.error +
+            '\n\nNo replacement file was written.'
+        )
+      }
+    }
+  }
+
+  const withRecoveryReport = async <T>(operation: () => T | Promise<T>): Promise<T> => {
+    try {
+      const result = operation()
+      // Async functions run synchronously until their first await, which covers
+      // the store read at the start of brainstormPrompts.
+      reportRecovery()
+      return await result
+    } finally {
+      reportRecovery()
+    }
+  }
+
+  handle('elaborators:list', () => withRecoveryReport(listElaborators))
 
   handle('elaborators:create', (_event, input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => {
-    const created = createElaborator(input)
-    log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
-    return created
+    return withRecoveryReport(() => {
+      const created = createElaborator(input)
+      log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
+      return created
+    })
   })
 
   handle('elaborators:update', (_event, id: string, patch: { name?: string; description?: string; template?: string }) => {
-    const updated = updateElaborator(id, patch)
-    if (updated) {
-      log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
-    }
-    return updated
+    return withRecoveryReport(() => {
+      const updated = updateElaborator(id, patch)
+      if (updated) {
+        log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
+      }
+      return updated
+    })
   })
 
   handle('elaborators:delete', (_event, id: string) => {
-    const ok = deleteElaborator(id)
-    if (ok) log('info', 'Elaborator deleted', { id })
-    return ok
+    return withRecoveryReport(() => {
+      const ok = deleteElaborator(id)
+      if (ok) log('info', 'Elaborator deleted', { id })
+      return ok
+    })
   })
 
   handle('elaborators:reset', (_event, kind?: ElaboratorKind) => {
@@ -59,7 +98,7 @@ export function registerElaboratorsIpc(): void {
         length: PromptLength
       }
     ) => {
-      return brainstormPrompts(req)
+      return withRecoveryReport(() => brainstormPrompts(req))
     }
   )
 

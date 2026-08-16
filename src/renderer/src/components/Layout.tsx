@@ -141,9 +141,6 @@ export function Layout(): React.JSX.Element {
       }
       if (isAnyModalOpen()) return
 
-      // On macOS Ctrl+Slash is a Cocoa text binding: the chord stands down
-      // while the caret is editable; Cmd+Slash always fires
-      // (keyboard-shortcut-conventions).
       if (isEditableTarget(e.target) && shadowsMacTextBinding(e)) return
 
       const mod = hasMod(e)
