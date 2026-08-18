@@ -16,8 +16,9 @@ interface Props {
 // exactly like the other in-app lists (Sessions, Elaborators, Models). The only
 // addition is that a delete recovers BOTH the selection and DOM focus to the same
 // neighbour, in one place, so the highlight and the focus cursor can never drift
-// apart (the two-highlight bug). This is the same list the brainstorm orchestrator
-// reads as previousPrompts, so deletions here tell the AI to stop avoiding them.
+// apart (the two-highlight bug). The list is the session's record of elaborated
+// prompts; concept variety is enforced by the concept ledger, not by re-reading
+// this list, so deleting here only edits the record.
 export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const { state, deleteElaboratedPromptAt, clearElaboratedPrompts } = useSessionDraft()
   const confirm = useConfirm()
@@ -107,7 +108,7 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
     if (elaboratedPrompts.length === 0) return
     const ok = await confirm({
       title: 'Delete all prompts',
-      message: `Remove all ${elaboratedPrompts.length} prompt${elaboratedPrompts.length === 1 ? '' : 's'} from this session's list? Future brainstorm calls will start with no "previously elaborated" context.`,
+      message: `Remove all ${elaboratedPrompts.length} prompt${elaboratedPrompts.length === 1 ? '' : 's'} from this session's list?`,
       confirmLabel: 'Delete all',
       danger: true,
     })

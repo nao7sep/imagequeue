@@ -101,7 +101,6 @@ export function registerElaboratorsIpc(): void {
         styleElaboratorId: string
         seed: string
         count: number
-        previousPrompts: string[]
         format: PromptFormat
         length: PromptLength
       }

@@ -265,7 +265,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         styleElaboratorId: selectedStyleElaboratorId,
         seed,
         count,
-        previousPrompts: elaboratedPrompts,
         format: promptFormat,
         length: promptLength,
       })
@@ -275,7 +274,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       setBrainstormProgress(null)
       activeRequestIdRef.current = null
     }
-  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, elaboratedPrompts, promptFormat, promptLength])
+  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, promptFormat, promptLength])
 
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (gates.elaborate.disabled) return
@@ -286,7 +285,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       compositionElaborator: elaboratorsByKind.composition.find((e) => e.id === selectedCompositionElaboratorId)?.name ?? null,
       styleElaborator: elaboratorsByKind.style.find((e) => e.id === selectedStyleElaboratorId)?.name ?? null,
       seedLen: seed.length,
-      previousCount: elaboratedPrompts.length,
+      sessionPromptCount: elaboratedPrompts.length,
     })
     try {
       const newPrompts = await runBrainstorm(1)
@@ -357,7 +356,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       drawthingsCount: targets.dt.length,
       iterations: copies,
       totalTasks: allTargetCount * copies,
-      previousCount: elaboratedPrompts.length,
+      sessionPromptCount: elaboratedPrompts.length,
     })
     try {
 

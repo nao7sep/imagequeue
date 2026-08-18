@@ -6,6 +6,28 @@ import {
   fillTemplate,
   getRuntimeBrainstormConfig,
 } from './text-ai/templates'
+import { getSessionId } from './session'
+import {
+  CONCEPT_REUSE_WINDOW_DRAWS,
+  addConcepts,
+  addProbes,
+  drawConcept,
+  ensureFacet,
+  listFacetDisplays,
+  listProbeDisplays,
+  markProbeExpanded,
+  recordUse,
+  unexpandedProbes,
+  type DrawnConcept,
+  type FacetRow,
+} from './concepts/concept-store'
+import {
+  PROBES_PER_EXPANSION_CALL,
+  expandProbes,
+  generateProbes,
+  resolveFacets,
+  type AskJson,
+} from './concepts/planner'
 import type { ConversationMessage, TextAIProvider } from './text-ai'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
 import { log, serializeError } from './logger'
@@ -17,7 +39,6 @@ export interface BrainstormRequest {
   styleElaboratorId: string
   seed: string
   count: number
-  previousPrompts: string[]
   format: PromptFormat
   length: PromptLength
 }
@@ -67,39 +88,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function formatPreviousList(previous: string[]): string {
-  return previous.map((p, i) => `${i + 1}. ${p}`).join('\n')
-}
-
-function buildFirstMessage(
-  templates: { first_no_previous: string; first_with_previous: string },
-  elaboratorTemplate: string,
-  formatDirective: string,
-  seed: string,
-  previousPrompts: string[],
-  countToAskFor: number
-): string {
-  if (previousPrompts.length === 0) {
-    return fillTemplate(templates.first_no_previous, {
-      ELABORATOR: elaboratorTemplate,
-      FORMAT: formatDirective,
-      SEED: seed,
-      N: String(countToAskFor),
-    })
-  }
-  return fillTemplate(templates.first_with_previous, {
-    ELABORATOR: elaboratorTemplate,
-    FORMAT: formatDirective,
-    SEED: seed,
-    PREVIOUS: formatPreviousList(previousPrompts),
-    N: String(countToAskFor),
-  })
-}
-
-function buildContinuationMessage(template: string, formatDirective: string, countToAskFor: number): string {
-  return fillTemplate(template, { FORMAT: formatDirective, N: String(countToAskFor) })
-}
-
 // Scaffolding for the combined elaborator message: app-owned prompt text the user
 // never edits (the elaborators themselves are theirs), named here beside
 // STRICT_JSON_NUDGE rather than buried in the array that assembles the message.
@@ -145,17 +133,20 @@ function extractPromptsFromParsed(parsed: unknown): string[] {
   return candidate.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
 }
 
-// One conversation turn with up to maxRetries retries. Returns the parsed
-// prompts, or throws after all retries are exhausted.
-async function askWithRetry(
+// One schema-forced JSON call with up to maxRetries retries. `validate` turns
+// the parsed payload into the caller's value, or returns null to reject the
+// attempt and retry — so a transport failure and an unusable payload follow the
+// same backoff path. Throws the last error once retries are exhausted.
+async function askJsonWithRetry<T>(
   provider: TextAIProvider,
   messages: ConversationMessage[],
+  schema: object,
   timeoutMs: number,
-  expectedCount: number,
+  validate: (parsed: unknown, rawText: string) => T | null,
   maxRetries: number,
   backoffSchedule: number[],
   signal: AbortSignal
-): Promise<string[]> {
+): Promise<T> {
   let lastError: unknown = null
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // Once aborted, don't start or retry a request — the caller handles the abort.
@@ -164,7 +155,7 @@ async function askWithRetry(
       const backoff = backoffSchedule.length > 0
         ? backoffSchedule[Math.min(attempt - 1, backoffSchedule.length - 1)]
         : 1000
-      log('warn', 'Brainstorm turn failed, retrying', {
+      log('warn', 'Brainstorm call failed, retrying', {
         attempt, backoff,
         error: serializeError(lastError),
       })
@@ -182,31 +173,123 @@ async function askWithRetry(
           )
       const result = await provider.ask({
         messages: effectiveMessages,
-        schema: PROMPTS_RESPONSE_SCHEMA,
+        schema,
         timeoutMs,
         signal,
       })
-      const prompts = extractPromptsFromParsed(result.parsed)
-      if (prompts.length === 0) {
-        log('warn', 'Brainstorm turn returned no usable prompts', { rawText: result.text })
-        throw new Error('Text AI returned no usable prompts.')
+      const value = validate(result.parsed, result.text)
+      if (value === null) {
+        log('warn', 'Brainstorm call returned no usable payload', { rawText: result.text })
+        throw new Error('Text AI returned no usable payload.')
       }
-      // Trim to expected count if model overshot; tolerate undercount and let the loop ask for more next turn.
-      return prompts.slice(0, expectedCount)
+      return value
     } catch (err) {
       lastError = err
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'Cancelled.'))
 }
 
-// Generate `count` prompts via a single conversation, batched into turns of
-// `batch_size`. Each turn retries on transient failures. Progress (done/total)
-// is emitted to all renderer windows after every successful turn.
+/**
+ * The no-progress guard on minting: how many probe-expansion rounds a single
+ * draw may trigger before the run reaches for a stale value or fails with a
+ * clear error. Without a bound, a model that keeps returning concepts the
+ * ledger already holds would loop forever — the hang the old accept-everything
+ * loop never had to worry about.
+ */
+const MAX_REFILL_ROUNDS = 3
+
+interface RunExcludes {
+  concepts: Set<number>
+  probes: Set<number>
+}
+
+/**
+ * Produce `count` values for one facet, minting as needed. Facets are
+ * independent — separate concept rows, separate clusters, separate excludes —
+ * so the orchestrator runs one of these per facet CONCURRENTLY: planning-call
+ * latency is dominated by fixed per-call overhead, and stacking four facets'
+ * minting sequentially would quadruple it for nothing. SQLite writes are
+ * synchronous (DatabaseSync), so concurrent facets interleave between
+ * statements, never inside one; the one shared surface, the uses window, moves
+ * only in recordUse, which runs after the prose call — never during this.
+ */
+async function obtainConceptsForFacet(
+  facet: FacetRow,
+  ask: AskJson,
+  sessionId: string,
+  preferNew: boolean,
+  excludes: RunExcludes,
+  count: number
+): Promise<DrawnConcept[]> {
+  const out: DrawnConcept[] = []
+  for (let i = 0; i < count; i++) {
+    const concept = await obtainConcept(facet, ask, sessionId, preferNew, excludes)
+    excludes.concepts.add(concept.id)
+    excludes.probes.add(concept.probeId)
+    out.push(concept)
+  }
+  return out
+}
+
+/**
+ * Produce one usable value for a facet: draw from the ledger, and when nothing
+ * is eligible, mint — generate probes if none await expansion, expand a batch
+ * of probes into clusters, then draw again. Stale (outside-the-window) values
+ * are the fallback of last resort when prefer-new minting yields nothing.
+ */
+async function obtainConcept(
+  facet: FacetRow,
+  ask: AskJson,
+  sessionId: string,
+  preferNew: boolean,
+  excludes: RunExcludes
+): Promise<DrawnConcept> {
+  const baseOpts = {
+    sessionId,
+    windowDraws: CONCEPT_REUSE_WINDOW_DRAWS,
+    excludeConceptIds: [...excludes.concepts],
+    excludeProbeIds: [...excludes.probes],
+  }
+  const first = drawConcept(facet.id, { ...baseOpts, allowStale: !preferNew })
+  if (first) return first
+
+  for (let round = 0; round < MAX_REFILL_ROUNDS; round++) {
+    let probes = unexpandedProbes(facet.id, PROBES_PER_EXPANSION_CALL)
+    if (probes.length === 0) {
+      const texts = await generateProbes(ask, facet.display, listProbeDisplays(facet.id))
+      addProbes(facet.id, texts)
+      probes = unexpandedProbes(facet.id, PROBES_PER_EXPANSION_CALL)
+      // The model yielded no new probes; count the round and try again.
+      if (probes.length === 0) continue
+    }
+    const clusters = await expandProbes(ask, facet.display, probes)
+    for (const { probeId, concepts } of clusters) {
+      addConcepts(facet.id, probeId, concepts)
+      markProbeExpanded(probeId)
+    }
+    const fresh = drawConcept(facet.id, { ...baseOpts, allowStale: false })
+    if (fresh) return fresh
+  }
+
+  const stale = drawConcept(facet.id, { ...baseOpts, allowStale: true })
+  if (stale) return stale
+  throw new Error(
+    `Could not obtain an unused "${facet.display}" concept after ${MAX_REFILL_ROUNDS} refill rounds.`
+  )
+}
+
+// Generate `count` prompts. Concept variety is enforced by construction, not
+// instruction: the seed resolves once into facets (aspects); each prompt draws
+// one never-spent value per facet from the concept ledger; and each batch of
+// assignments expands into prose in a FRESH call carrying no conversation
+// history — so there is no accumulated model output to imitate, which is the
+// mechanism that made long runs collapse onto one repeated concept. A use is
+// recorded only for prompts that actually come back.
 //
 // Returns the full set on success, or the prompts collected so far if the run
-// is cancelled between turns. On failure, throws the last error — the caller
-// persists nothing for a run that didn't complete and queue its tasks.
+// is cancelled. On failure, throws the last error — the caller persists
+// nothing for a run that didn't complete and queue its tasks.
 export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
   if (req.count < 1) throw new Error('Count must be at least 1.')
   if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
@@ -241,67 +324,98 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   const formatDirective = `${formats[req.format]} ${lengths[req.length]}`
   const batchSize = Math.max(1, brainstormConfig.batch_size)
   const maxRetries = Math.max(0, brainstormConfig.max_retries_per_turn)
+  const preferNew = brainstormConfig.prefer_new_concepts === true
 
   const startTime = Date.now()
-
-  const messages: ConversationMessage[] = []
+  const sessionId = getSessionId()
   const collected: string[] = []
   let turn = 0
 
   const controller = new AbortController()
   activeControllers.set(req.requestId, controller)
 
+  // Planning calls share the prose calls' provider, retry policy, and abort
+  // signal; validation is the planner's (it parses and throws on junk).
+  const ask: AskJson = (messages, schema) =>
+    askJsonWithRetry(
+      handle.provider, messages, schema, handle.timeoutMs,
+      (parsed) => (parsed === null || parsed === undefined ? null : parsed),
+      maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
+    )
+
   try {
+    const facetNames = await resolveFacets(ask, req.seed, listFacetDisplays())
+    const facets = facetNames.map((name) => ensureFacet(name))
+    // Values and clusters drawn by this run, per facet. Draws are recorded as
+    // uses only when their prompt comes back, so within the run these sets are
+    // what keep a drawn-but-unrecorded value from being drawn twice.
+    const excludesByFacet = new Map<number, RunExcludes>(
+      facets.map((facet) => [facet.id, { concepts: new Set<number>(), probes: new Set<number>() }])
+    )
+
     while (collected.length < req.count) {
-      if (controller.signal.aborted) {
-        log('info', 'Brainstorm cancelled', {
-          requestId: req.requestId, collected: collected.length, turns: turn,
-        })
-        break
-      }
-      const remaining = req.count - collected.length
-      const askFor = Math.min(remaining, batchSize)
+      if (controller.signal.aborted) break
+      const askFor = Math.min(req.count - collected.length, batchSize)
       turn++
 
-      const userMessage = collected.length === 0
-        ? buildFirstMessage(brainstormConfig.templates, combinedElaboratorTemplate, formatDirective, req.seed, req.previousPrompts, askFor)
-        : buildContinuationMessage(brainstormConfig.templates.continuation, formatDirective, askFor)
-      messages.push({ role: 'user', text: userMessage })
-
-      let newPrompts: string[]
-      try {
-        newPrompts = await askWithRetry(
-          handle.provider, messages, handle.timeoutMs, askFor,
-          maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
+      // One assignment per requested prompt: one drawn value per facet. Each
+      // facet produces its column concurrently (see obtainConceptsForFacet);
+      // the columns then zip into per-prompt assignments.
+      const perFacet = await Promise.all(
+        facets.map((facet) =>
+          obtainConceptsForFacet(
+            facet, ask, sessionId, preferNew, excludesByFacet.get(facet.id)!, askFor
+          )
         )
-      } catch (err) {
-        // An aborted request rejects; treat that as cancellation (keep what we
-        // collected) rather than a failure to report and rethrow.
-        if (controller.signal.aborted) {
-          log('info', 'Brainstorm cancelled', {
-            requestId: req.requestId, collected: collected.length, turns: turn,
-          })
-          break
-        }
-        throw err
+      )
+      const assignments = Array.from({ length: askFor }, (_, i) =>
+        facets.map((facet, fi) => ({ facet, concept: perFacet[fi][i] }))
+      )
+
+      const conceptsText = assignments
+        .map((parts, i) => `${i + 1}. ${parts.map((p) => `${p.facet.display}: ${p.concept.display}`).join('; ')}`)
+        .join('\n')
+      const userMessage = fillTemplate(brainstormConfig.templates.expansion, {
+        ELABORATOR: combinedElaboratorTemplate,
+        FORMAT: formatDirective,
+        SEED: req.seed,
+        CONCEPTS: conceptsText,
+        N: String(assignments.length),
+      })
+
+      // Fresh context on every turn: exactly one user message, never the
+      // conversation so far. This is the attractor kill — nothing of the
+      // model's own output is available for it to imitate.
+      const newPrompts = await askJsonWithRetry(
+        handle.provider,
+        [{ role: 'user', text: userMessage }],
+        PROMPTS_RESPONSE_SCHEMA,
+        handle.timeoutMs,
+        (parsed) => {
+          const prompts = extractPromptsFromParsed(parsed)
+          return prompts.length > 0 ? prompts : null
+        },
+        maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
+      )
+
+      // Prompts map to assignments by position; a use is recorded only for
+      // assignments whose prompt actually came back. An overshoot is trimmed;
+      // an undercount leaves the loop to top up with fresh assignments.
+      const kept = newPrompts.slice(0, assignments.length)
+      collected.push(...kept)
+      for (let i = 0; i < kept.length; i++) {
+        for (const part of assignments[i]) recordUse(part.concept.id, sessionId)
       }
-      collected.push(...newPrompts)
-      messages.push({ role: 'model', text: JSON.stringify({ prompts: newPrompts }) })
 
       // The prompts themselves persist in the session manifest's
       // `elaboratedPrompts` array — no need to duplicate them here.
-      log('debug', 'Brainstorm turn complete', { turn, count: newPrompts.length })
+      log('debug', 'Brainstorm turn complete', { turn, count: kept.length })
 
       broadcastProgress({
         requestId: req.requestId,
         done: Math.min(collected.length, req.count),
         total: req.count,
       })
-
-      if (newPrompts.length === 0) {
-        // Defensive: askWithRetry throws when 0; shouldn't reach here. Bail to avoid an infinite loop.
-        throw new Error('Text AI returned no prompts on a turn.')
-      }
     }
 
     log('info', 'Brainstorm complete', {
@@ -310,12 +424,21 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       styleElaborator: styleElaborator.name,
       backend: handle.backend,
       model: handle.modelId,
+      facets: facetNames,
       count: collected.length,
       turns: turn,
       durationMs: Date.now() - startTime,
     })
     return { prompts: collected.slice(0, req.count) }
   } catch (err) {
+    // An aborted run rejects out of whichever call was in flight — planning or
+    // prose. Treat it as cancellation: keep what was collected.
+    if (controller.signal.aborted) {
+      log('info', 'Brainstorm cancelled', {
+        requestId: req.requestId, collected: collected.length, turns: turn,
+      })
+      return { prompts: collected.slice(0, req.count) }
+    }
     log('error', 'Brainstorm failed', {
       contentElaborator: contentElaborator.name,
       compositionElaborator: compositionElaborator.name,

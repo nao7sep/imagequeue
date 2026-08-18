@@ -7,6 +7,7 @@ import { SessionsModal } from './SessionsModal'
 import { ElaboratorsModal } from './ElaboratorsModal'
 import { ElaborationSettingsModal } from './ElaborationSettingsModal'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
+import { ConceptLibraryModal } from './ConceptLibraryModal'
 import { ShortcutsModal } from './ShortcutsModal'
 import { AboutModal } from './AboutModal'
 import { DependenciesModal } from './DependenciesModal'
@@ -28,7 +29,7 @@ import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortc
 // is also derived from.
 const PANES = getVisiblePanes(window.electronAPI.platform, CLOUD_BACKEND_IDS_IN_UI_ORDER)
 
-type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'dependencies' | null
+type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
 
 export function Layout(): React.JSX.Element {
   useNotifications()
@@ -275,6 +276,9 @@ export function Layout(): React.JSX.Element {
       {overlay === 'elaborated-prompts' && (
         <ElaboratedPromptsModal onClose={() => setOverlay(null)} />
       )}
+      {overlay === 'concept-library' && (
+        <ConceptLibraryModal onClose={() => setOverlay(null)} />
+      )}
       {overlay === 'about' && (
         <AboutModal onClose={() => setOverlay(null)} />
       )}
@@ -325,6 +329,7 @@ export function Layout(): React.JSX.Element {
               <MenuItem onSelect={() => setOverlay('elaborators')}>Elaborators</MenuItem>
               <MenuItem onSelect={() => setOverlay('elaboration-settings')}>Elaboration Settings</MenuItem>
               <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>Elaborated Prompts</MenuItem>
+              <MenuItem onSelect={() => setOverlay('concept-library')}>Concept Library</MenuItem>
             </Submenu>
             <MenuItem onSelect={() => setOverlay('shortcuts')}>Keyboard Shortcuts</MenuItem>
             <MenuItem onSelect={() => setOverlay('about')}>About</MenuItem>

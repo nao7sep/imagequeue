@@ -11,6 +11,7 @@ import { registerDependenciesIpc } from './dependencies-ipc'
 import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
+import { registerConceptsIpc } from './concepts-ipc'
 import { materializeElaborators } from './elaborators'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
@@ -206,6 +207,7 @@ function startUp(): void {
   registerStateIpc()
   registerDependenciesIpc()
   registerElaboratorsIpc()
+  registerConceptsIpc()
   registerAppLogIpc()
   registerViewerIpc(() => mainWin)
   registerNotificationIpc(() => mainWin)

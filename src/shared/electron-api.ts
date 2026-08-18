@@ -14,6 +14,8 @@ import {
   DependencyProgress,
   DrawThingsModelParams,
   SessionSummary,
+  ConceptFacetSummary,
+  ConceptRow,
 } from './types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
 import type { UiState } from './ui-state'
@@ -87,7 +89,6 @@ export interface ElectronAPI {
     styleElaboratorId: string
     seed: string
     count: number
-    previousPrompts: string[]
     format: PromptFormat
     length: PromptLength
   }) => Promise<{ prompts: string[] }>
@@ -96,13 +97,17 @@ export interface ElectronAPI {
     batch_size: number
     max_retries_per_turn: number
     retry_backoff_ms: number[]
+    prefer_new_concepts: boolean
     templates: {
-      first_no_previous: string
-      first_with_previous: string
-      continuation: string
+      expansion: string
     }
     format_directives: FormatDirectives
   }>
+  // Concept ledger (the Concept Library modal)
+  listConceptFacets: () => Promise<ConceptFacetSummary[]>
+  listConceptRows: (facetId: number) => Promise<ConceptRow[]>
+  deleteConceptRow: (conceptId: number) => Promise<void>
+  deleteConceptFacet: (facetId: number) => Promise<void>
   promptsGetDefaultSlug: () => Promise<string>
   appLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: Record<string, unknown>) => Promise<void>
   onBrainstormProgress: (

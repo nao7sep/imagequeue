@@ -22,10 +22,9 @@ interface BrainstormForm {
   batch_size: number
   max_retries_per_turn: number
   retry_backoff_ms_csv: string
+  prefer_new_concepts: boolean
   templates: {
-    first_no_previous: string
-    first_with_previous: string
-    continuation: string
+    expansion: string
   }
   format_directives: FormatDirectives
 }
@@ -34,6 +33,7 @@ interface BrainstormConfig {
   batch_size: number
   max_retries_per_turn: number
   retry_backoff_ms: number[]
+  prefer_new_concepts: boolean
   templates: BrainstormForm['templates']
   format_directives: FormatDirectives
 }
@@ -58,6 +58,7 @@ function fromConfig(cfg: BrainstormConfig): BrainstormForm {
     batch_size: cfg.batch_size,
     max_retries_per_turn: cfg.max_retries_per_turn,
     retry_backoff_ms_csv: cfg.retry_backoff_ms.join(', '),
+    prefer_new_concepts: cfg.prefer_new_concepts,
     templates: { ...cfg.templates },
     format_directives: cloneDirectives(cfg.format_directives),
   }
@@ -79,15 +80,9 @@ function parseBackoffCsv(csv: string): { ok: true; value: number[] } | { ok: fal
 
 function checkPlaceholders(form: BrainstormForm): string | null {
   const t = form.templates
-  if (!t.first_no_previous.includes('{{ELABORATOR}}')) return 'First (no previous): missing {{ELABORATOR}}.'
-  if (!t.first_no_previous.includes('{{N}}')) return 'First (no previous): missing {{N}}.'
-  if (!t.first_no_previous.includes('{{FORMAT}}')) return 'First (no previous): missing {{FORMAT}}.'
-  if (!t.first_with_previous.includes('{{ELABORATOR}}')) return 'First (with previous): missing {{ELABORATOR}}.'
-  if (!t.first_with_previous.includes('{{PREVIOUS}}')) return 'First (with previous): missing {{PREVIOUS}}.'
-  if (!t.first_with_previous.includes('{{N}}')) return 'First (with previous): missing {{N}}.'
-  if (!t.first_with_previous.includes('{{FORMAT}}')) return 'First (with previous): missing {{FORMAT}}.'
-  if (!t.continuation.includes('{{N}}')) return 'Continuation: missing {{N}}.'
-  if (!t.continuation.includes('{{FORMAT}}')) return 'Continuation: missing {{FORMAT}}.'
+  for (const tag of ['{{ELABORATOR}}', '{{SEED}}', '{{CONCEPTS}}', '{{FORMAT}}', '{{N}}'] as const) {
+    if (!t.expansion.includes(tag)) return `Expansion message: missing ${tag}.`
+  }
   return null
 }
 
@@ -205,10 +200,9 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         batch_size: form.batch_size,
         max_retries_per_turn: form.max_retries_per_turn,
         retry_backoff_ms: backoff.value,
+        prefer_new_concepts: form.prefer_new_concepts,
         templates: {
-          first_no_previous: multiline(form.templates.first_no_previous),
-          first_with_previous: multiline(form.templates.first_with_previous),
-          continuation: multiline(form.templates.continuation),
+          expansion: multiline(form.templates.expansion),
         },
         format_directives: cleanDirectives(form.format_directives),
       }
@@ -280,7 +274,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
               value={form.batch_size}
               onChange={(e) => setForm({ ...form, batch_size: parseInt(e.target.value) || 1 })}
             />
-            <span className="elaboration-settings-hint">prompts per conversation turn (1–50)</span>
+            <span className="elaboration-settings-hint">prompts per expansion call (1–50)</span>
           </div>
           <div className="elaboration-settings-row">
             <label>Max retries per turn</label>
@@ -303,41 +297,30 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             />
             <span className="elaboration-settings-hint">comma-separated; if there are more retries than values, the last one repeats</span>
           </div>
+          <div className="elaboration-settings-row">
+            <label>Prefer new concepts</label>
+            <input
+              type="checkbox"
+              checked={form.prefer_new_concepts}
+              onChange={(e) => setForm({ ...form, prefer_new_concepts: e.target.checked })}
+            />
+            <span className="elaboration-settings-hint">ask the AI for new concepts instead of reusing ones whose last use has aged out of the reuse window</span>
+          </div>
         </div>
 
         <div className="elaboration-settings-section">
           <div className="elaboration-settings-section-title">Templates</div>
           <p className="elaboration-settings-help">
-            Sent to the AI with placeholders filled in at call time. Keep <code>{'{{FORMAT}}'}</code> and <code>{'{{JSON}}'}</code> in every template; the README explains each placeholder.
+            Sent to the AI once per batch with placeholders filled in at call time: the combined elaborators ({'{{ELABORATOR}}'}), the seed ({'{{SEED}}'}), the drawn concept assignments ({'{{CONCEPTS}}'}), the format directive ({'{{FORMAT}}'}), the batch size ({'{{N}}'}), and the response shape ({'{{JSON}}'}).
           </p>
 
           <label className="elaboration-settings-template">
-            <span>First message — no previous prompts</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{FORMAT}} {{N}} {{JSON}}'}</span>
+            <span>Expansion message — one fresh call per batch, grounded in assigned concepts</span>
+            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{CONCEPTS}} {{FORMAT}} {{N}} {{JSON}}'}</span>
             <textarea
-              rows={5}
-              value={form.templates.first_no_previous}
-              onChange={(e) => setForm({ ...form, templates: { ...form.templates, first_no_previous: e.target.value } })}
-            />
-          </label>
-
-          <label className="elaboration-settings-template">
-            <span>First message — with previous prompts</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{PREVIOUS}} {{FORMAT}} {{N}} {{JSON}}'}</span>
-            <textarea
-              rows={5}
-              value={form.templates.first_with_previous}
-              onChange={(e) => setForm({ ...form, templates: { ...form.templates, first_with_previous: e.target.value } })}
-            />
-          </label>
-
-          <label className="elaboration-settings-template">
-            <span>Continuation message</span>
-            <span className="elaboration-settings-tags">{'{{FORMAT}} {{N}} {{JSON}}'}</span>
-            <textarea
-              rows={5}
-              value={form.templates.continuation}
-              onChange={(e) => setForm({ ...form, templates: { ...form.templates, continuation: e.target.value } })}
+              rows={8}
+              value={form.templates.expansion}
+              onChange={(e) => setForm({ ...form, templates: { ...form.templates, expansion: e.target.value } })}
             />
           </label>
         </div>

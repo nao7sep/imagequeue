@@ -15,6 +15,8 @@ import {
   DependencyProgress,
   DrawThingsModelParams,
   SessionSummary,
+  ConceptFacetSummary,
+  ConceptRow,
 } from '../shared/types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
 import type { UiState } from '../shared/ui-state'
@@ -122,7 +124,6 @@ const api = {
     styleElaboratorId: string
     seed: string
     count: number
-    previousPrompts: string[]
     format: PromptFormat
     length: PromptLength
   }): Promise<{ prompts: string[] }> =>
@@ -135,14 +136,23 @@ const api = {
     batch_size: number
     max_retries_per_turn: number
     retry_backoff_ms: number[]
+    prefer_new_concepts: boolean
     templates: {
-      first_no_previous: string
-      first_with_previous: string
-      continuation: string
+      expansion: string
     }
     format_directives: FormatDirectives
   }> =>
     ipcRenderer.invoke('brainstorm:getDefaults'),
+
+  // Concept ledger (the Concept Library modal)
+  listConceptFacets: (): Promise<ConceptFacetSummary[]> =>
+    ipcRenderer.invoke('concepts:listFacets'),
+  listConceptRows: (facetId: number): Promise<ConceptRow[]> =>
+    ipcRenderer.invoke('concepts:listConcepts', facetId),
+  deleteConceptRow: (conceptId: number): Promise<void> =>
+    ipcRenderer.invoke('concepts:deleteConcept', conceptId),
+  deleteConceptFacet: (facetId: number): Promise<void> =>
+    ipcRenderer.invoke('concepts:deleteFacet', facetId),
 
   promptsGetDefaultSlug: (): Promise<string> =>
     ipcRenderer.invoke('prompts:getDefaultSlug'),

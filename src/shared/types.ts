@@ -217,6 +217,26 @@ export interface SessionThumbnail {
   baseName: string
 }
 
+// Concept-ledger rows surfaced to the Concept Library modal. Shapes mirror
+// concept-store.ts; shared here so preload and renderer type against one source.
+export interface ConceptFacetSummary {
+  id: number
+  display: string
+  conceptCount: number
+  unusedCount: number
+  probeCount: number
+  lastUsedAt: string | null
+}
+
+export interface ConceptRow {
+  id: number
+  display: string
+  probe: string
+  useCount: number
+  lastUsedAt: string | null
+  createdAt: string
+}
+
 export interface SessionSummary {
   sessionId: string
   createdAt: string

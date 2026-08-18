@@ -1,37 +1,38 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { brainstormPrompts, cancelBrainstorm, hasActiveBrainstorms } from '../../src/main/brainstorm'
+import { closeConceptStore, listConceptRows, listFacetsWithStats } from '../../src/main/concepts/concept-store'
 import { getElaborator } from '../../src/main/elaborators'
 import { getMainProvider } from '../../src/main/text-ai'
 import type { AskOptions, AskResult, TextAIProvider } from '../../src/main/text-ai'
 import type { Elaborator, ElaboratorKind } from '../../src/shared/types'
 
-// brainstorm.ts imports electron for broadcasting progress; stub it so progress
-// is a no-op in the node test env.
+// Integration tests: the real orchestrator against the REAL concept store (a
+// throwaway IMAGEQUEUE_HOME) and a scripted provider that answers each planning
+// ask by its message markers. What is pinned here is the mechanism itself:
+// every prose call runs in a FRESH context (the attractor kill), no concept
+// value is assigned twice within a session, and a use is recorded only for
+// prompts that actually came back.
+
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
 }))
-
 vi.mock('../../src/main/elaborators', () => ({ getElaborator: vi.fn() }))
 vi.mock('../../src/main/text-ai', () => ({ getMainProvider: vi.fn() }))
-
-// One prompt per turn (batch_size 1) and no retries, so a brainstorm of N runs
-// exactly N turns — letting us observe cancellation taking effect at a turn
-// boundary. fillTemplate does minimal real substitution and the templates embed
-// {{FORMAT}} so tests can assert which template ran and that the format directive
-// is injected. The directive itself comes from config.format_directives, stubbed
-// here to recognizable tokens.
+vi.mock('../../src/main/session', () => ({ getSessionId: () => 'test-session' }))
 vi.mock('../../src/main/text-ai/templates', () => ({
-  PROMPTS_RESPONSE_SCHEMA: {},
+  PROMPTS_RESPONSE_SCHEMA: { marker: 'prompts' },
   fillTemplate: (template: string, values: Record<string, string>) =>
     Object.entries(values).reduce((out, [key, value]) => out.split(`{{${key}}}`).join(value), template),
   getRuntimeBrainstormConfig: () => ({
-    batch_size: 1,
+    batch_size: 2,
     max_retries_per_turn: 0,
     retry_backoff_ms: [],
+    prefer_new_concepts: false,
     templates: {
-      first_no_previous: 'first|{{FORMAT}}|{{SEED}}|{{N}}',
-      first_with_previous: 'firstprev|{{FORMAT}}|{{PREVIOUS}}|{{N}}',
-      continuation: 'cont|{{FORMAT}}|{{N}}',
+      expansion: 'exp|{{FORMAT}}|{{SEED}}|{{N}}\n{{CONCEPTS}}',
     },
     format_directives: {
       formats: { sentences: 'FMT(sentences)', phrases: 'FMT(phrases)' },
@@ -40,24 +41,78 @@ vi.mock('../../src/main/text-ai/templates', () => ({
   }),
 }))
 
+const ENV_VAR = 'IMAGEQUEUE_HOME'
+
 const elaboratorFor = (kind: ElaboratorKind): Elaborator => ({
   id: kind, kind, name: kind, template: kind,
 })
 
-// Builds a provider whose ask() returns `p1`, `p2`, … and optionally invokes a
-// side effect (e.g. cancelling) on a given call number.
-function installProvider(onCall?: (call: number) => void): { ask: ReturnType<typeof vi.fn> } {
-  let calls = 0
-  const ask = vi.fn(async (_opts: AskOptions): Promise<AskResult> => {
-    calls += 1
-    onCall?.(calls)
-    return { text: '', parsed: { prompts: [`p${calls}`] } }
+interface ScriptOptions {
+  /** Prompts returned per expansion call; defaults to exactly what was asked. */
+  promptsPerCall?: (asked: number, call: number) => number
+  /** Hook running before each PROSE call resolves (planning calls excluded). */
+  onProseCall?: (call: number) => void
+  /** Probes yielded per generation ask; default 12. */
+  probesPerGeneration?: number
+}
+
+interface Script {
+  ask: ReturnType<typeof vi.fn>
+  /** Every message list a prose (expansion) call received. */
+  proseCalls: { messages: AskOptions['messages']; text: string }[]
+  /** The concept assignment lines each prose call carried. */
+  assignmentLines: () => string[]
+}
+
+// A provider that recognizes each planning ask by its structural marker and
+// returns generated-on-demand, never-repeating planning data — so any repeated
+// concept the orchestrator produces is the orchestrator's fault, not the fake's.
+function installScriptedProvider(opts: ScriptOptions = {}): Script {
+  let probeCounter = 0
+  let conceptCounter = 0
+  let proseCounter = 0
+  const proseCalls: Script['proseCalls'] = []
+  const ask = vi.fn(async (options: AskOptions): Promise<AskResult> => {
+    const text = options.messages[options.messages.length - 1].text
+    if (text.includes('<existing_aspects>')) {
+      return { text: '', parsed: { facets: ['place', 'occupation'] } }
+    }
+    if (text.includes('<existing_domains>')) {
+      const probes = Array.from(
+        { length: opts.probesPerGeneration ?? 12 },
+        () => `domain ${++probeCounter}`
+      )
+      return { text: '', parsed: { probes } }
+    }
+    if (text.includes('<domains>')) {
+      const domains = [...text.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1])
+      const clusters = domains.map((domain) => ({
+        domain,
+        concepts: Array.from({ length: 12 }, () => `concept ${++conceptCounter}`),
+      }))
+      return { text: '', parsed: { clusters } }
+    }
+    // Prose call: "exp|...|N" followed by assignment lines.
+    proseCounter++
+    opts.onProseCall?.(proseCounter)
+    proseCalls.push({ messages: options.messages, text })
+    const asked = Number(text.split('\n')[0].split('|').pop())
+    const produce = opts.promptsPerCall?.(asked, proseCounter) ?? asked
+    return {
+      text: '',
+      parsed: { prompts: Array.from({ length: produce }, (_, i) => `prompt ${proseCounter}-${i + 1}`) },
+    }
   })
   const provider: TextAIProvider = { ask }
   vi.mocked(getMainProvider).mockReturnValue({
     provider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
   })
-  return { ask }
+  return {
+    ask,
+    proseCalls,
+    assignmentLines: () =>
+      proseCalls.flatMap((c) => c.text.split('\n').filter((line) => /^\d+\. /.test(line))),
+  }
 }
 
 const request = (over: { requestId: string; count: number }): Parameters<typeof brainstormPrompts>[0] => ({
@@ -65,15 +120,19 @@ const request = (over: { requestId: string; count: number }): Parameters<typeof 
   contentElaboratorId: 'content',
   compositionElaboratorId: 'composition',
   styleElaboratorId: 'style',
-  seed: 'a cat',
+  seed: 'a mysterious man',
   count: over.count,
-  previousPrompts: [],
   format: 'phrases',
   length: 'medium',
 })
 
-describe('brainstormPrompts cancellation', () => {
+describe('brainstormPrompts (concept-driven)', () => {
+  let tmpRoot: string
+  const originalHome = process.env[ENV_VAR]
+
   beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-brainstorm-'))
+    process.env[ENV_VAR] = tmpRoot
     vi.mocked(getElaborator).mockImplementation((id: string) =>
       id === 'content' || id === 'composition' || id === 'style'
         ? elaboratorFor(id as ElaboratorKind)
@@ -81,164 +140,127 @@ describe('brainstormPrompts cancellation', () => {
     )
   })
 
-  it('collects all requested prompts when never cancelled', async () => {
-    const { ask } = installProvider()
+  afterEach(() => {
+    closeConceptStore()
+    if (originalHome === undefined) delete process.env[ENV_VAR]
+    else process.env[ENV_VAR] = originalHome
+    fs.rmSync(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('produces the requested count across batches', async () => {
+    const script = installScriptedProvider()
     const result = await brainstormPrompts(request({ requestId: 'r1', count: 3 }))
-    expect(result.prompts).toEqual(['p1', 'p2', 'p3'])
-    expect(ask).toHaveBeenCalledTimes(3)
+    expect(result.prompts).toHaveLength(3)
+    // batch_size 2 → two prose calls (2 + 1)
+    expect(script.proseCalls).toHaveLength(2)
   })
 
-  it('stops at the next turn boundary once cancelled mid-run', async () => {
-    // Cancel during the 2nd turn; the loop checks before turn 3 and breaks.
-    const { ask } = installProvider((call) => { if (call === 2) cancelBrainstorm('r2') })
-    const result = await brainstormPrompts(request({ requestId: 'r2', count: 5 }))
-    expect(result.prompts).toEqual(['p1', 'p2'])
-    expect(ask).toHaveBeenCalledTimes(2)
+  it('sends every prose call with a FRESH context: one user message, no history', async () => {
+    const script = installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'r2', count: 4 }))
+    expect(script.proseCalls.length).toBeGreaterThan(1)
+    for (const call of script.proseCalls) {
+      expect(call.messages).toHaveLength(1)
+      expect(call.messages[0].role).toBe('user')
+    }
   })
 
-  it('clears the cancelled id after the run, so reusing it does not pre-cancel', async () => {
-    // First run is cancelled after turn 1.
-    installProvider((call) => { if (call === 1) cancelBrainstorm('r3') })
-    const first = await brainstormPrompts(request({ requestId: 'r3', count: 4 }))
-    expect(first.prompts).toEqual(['p1'])
-
-    // Same id reused: the finally cleanup removed it from the registry, so this
-    // run completes fully instead of stopping immediately.
-    const { ask } = installProvider()
-    const second = await brainstormPrompts(request({ requestId: 'r3', count: 2 }))
-    expect(second.prompts).toEqual(['p1', 'p2'])
-    expect(ask).toHaveBeenCalledTimes(2)
+  it('injects the format directive into the expansion message', async () => {
+    const script = installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'r3', count: 1 }))
+    expect(script.proseCalls[0].text).toContain('exp|FMT(phrases) LEN(medium)|a mysterious man|1')
   })
 
-  it('aborts the in-flight request mid-turn and keeps the prompts collected so far', async () => {
-    // Turn 1 resolves; turn 2 hangs until its AbortSignal fires, then rejects
-    // like a real SDK abort. The loop should treat that as cancellation, not a
-    // failure, and return only the prompt from turn 1.
-    let calls = 0
-    const ask = vi.fn((opts: AskOptions): Promise<AskResult> => {
-      calls += 1
-      if (calls === 1) return Promise.resolve({ text: '', parsed: { prompts: ['p1'] } })
-      return new Promise((_resolve, reject) => {
-        opts.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+  it('never assigns the same concept value twice, within a run or across runs in one session', async () => {
+    const script = installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'r4', count: 3 }))
+    await brainstormPrompts(request({ requestId: 'r5', count: 3 }))
+    const values = script.assignmentLines().flatMap((line) =>
+      line.replace(/^\d+\. /, '').split('; ').map((part) => part.split(': ')[1])
+    )
+    expect(values.length).toBe(6 * 2) // 6 prompts x 2 facets
+    expect(new Set(values).size).toBe(values.length)
+  })
+
+  it('draws each value in a batch from a different cluster, before any use is recorded', async () => {
+    // One probe per generation ask, so at the moment of the second draw exactly
+    // one cluster exists and it still holds eligible values. Only the in-run
+    // exclusion can force that draw into a freshly minted second cluster —
+    // recorded uses cannot, because uses land after the prose call.
+    installScriptedProvider({ probesPerGeneration: 1 })
+    await brainstormPrompts(request({ requestId: 'rc', count: 2 }))
+    for (const facet of listFacetsWithStats()) {
+      const used = listConceptRows(facet.id).filter((r) => r.useCount > 0)
+      expect(used).toHaveLength(2)
+      expect(new Set(used.map((r) => r.probe)).size).toBe(2)
+    }
+  })
+
+  it('plans the facets concurrently, not one after another', async () => {
+    // On a cold ledger every facet must mint before the first draw. Each facet
+    // chain runs synchronously up to its first planning await, so concurrent
+    // chains issue BOTH facets' domain-generation asks before either expansion
+    // ask; a sequential loop would finish facet 1's whole chain first.
+    const script = installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'rp', count: 1 }))
+    const kinds = script.ask.mock.calls
+      .map((c) => {
+        const text = (c[0] as AskOptions).messages.at(-1)!.text
+        if (text.includes('<existing_aspects>')) return 'resolve'
+        if (text.includes('<existing_domains>')) return 'generate'
+        if (text.includes('<domains>')) return 'expand'
+        return 'prose'
       })
-    })
-    vi.mocked(getMainProvider).mockReturnValue({
-      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
-    })
-
-    const pending = brainstormPrompts(request({ requestId: 'r4', count: 5 }))
-    // Let turn 1 resolve and turn 2's ask reach its awaiting state, then cancel.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    cancelBrainstorm('r4')
-    const result = await pending
-    expect(result.prompts).toEqual(['p1'])
-    expect(ask).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('brainstormPrompts format directive', () => {
-  beforeEach(() => {
-    vi.mocked(getElaborator).mockImplementation((id: string) =>
-      id === 'content' || id === 'composition' || id === 'style'
-        ? elaboratorFor(id as ElaboratorKind)
-        : null
-    )
+    expect(kinds.slice(0, 3)).toEqual(['resolve', 'generate', 'generate'])
   })
 
-  // Records the latest user message sent to the provider on each turn.
-  function installCapturingProvider(): { messages: string[] } {
-    const messages: string[] = []
-    const ask = vi.fn(async (opts: AskOptions): Promise<AskResult> => {
-      messages.push(opts.messages[opts.messages.length - 1].text)
-      return { text: '', parsed: { prompts: [`p${messages.length}`] } }
-    })
-    vi.mocked(getMainProvider).mockReturnValue({
-      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
-    })
-    return { messages }
-  }
-
-  it('injects the directive on both the first and the continuation turns', async () => {
-    const { messages } = installCapturingProvider()
-    await brainstormPrompts({ ...request({ requestId: 'fmt', count: 2 }), format: 'sentences', length: 'long' })
-    expect(messages).toHaveLength(2)
-    // Turn 1 uses the no-previous template; turn 2 uses continuation. Both carry
-    // the composed directive (format part + space + length part).
-    expect(messages[0]).toContain('first|FMT(sentences) LEN(long)|')
-    expect(messages[1]).toContain('cont|FMT(sentences) LEN(long)|')
+  it('records a use only for prompts that actually came back', async () => {
+    installScriptedProvider({ promptsPerCall: (asked, call) => (call === 1 ? asked - 1 : asked) })
+    const result = await brainstormPrompts(request({ requestId: 'r6', count: 2 }))
+    expect(result.prompts).toHaveLength(2)
+    const stats = listFacetsWithStats()
+    const used = stats.reduce((n, f) => n + (f.conceptCount - f.unusedCount), 0)
+    // 2 prompts x 2 facets — the assignment whose prompt never came back is NOT used.
+    expect(used).toBe(4)
   })
 
-  it('injects the directive into the with-previous template', async () => {
-    const { messages } = installCapturingProvider()
-    await brainstormPrompts({
-      ...request({ requestId: 'fmtp', count: 1 }),
-      previousPrompts: ['an old prompt'],
-      format: 'phrases',
-      length: 'short',
-    })
-    expect(messages[0]).toContain('firstprev|FMT(phrases) LEN(short)|')
-    expect(messages[0]).toContain('an old prompt')
-  })
-})
-
-// hasActiveBrainstorms backs the wake lock: elaboration runs before any task is
-// queued, so it is the one long operation neither task nor CLI status reflects.
-// Each test drives a full run and owns its lifecycle — no test leans on another's
-// cleanup, and the in-flight case releases its hung turn even if an assertion
-// throws, so a regression fails one test instead of cascading into the rest.
-describe('hasActiveBrainstorms', () => {
-  beforeEach(() => {
-    vi.mocked(getElaborator).mockImplementation((id: string) =>
-      id === 'content' || id === 'composition' || id === 'style'
-        ? elaboratorFor(id as ElaboratorKind)
-        : null
-    )
+  it('stops at the batch boundary once cancelled and keeps what it collected', async () => {
+    installScriptedProvider({ onProseCall: (call) => { if (call === 1) cancelBrainstorm('r7') } })
+    const result = await brainstormPrompts(request({ requestId: 'r7', count: 6 }))
+    expect(result.prompts).toHaveLength(2)
   })
 
-  it('is false before a run, true while in flight, and false once it settles', async () => {
-    // The only turn hangs until released, exposing the in-flight window.
-    let release!: () => void
-    const ask = vi.fn(
-      () =>
-        new Promise<AskResult>((resolve) => {
-          release = () => resolve({ text: '', parsed: { prompts: ['p1'] } })
-        })
-    )
-    vi.mocked(getMainProvider).mockReturnValue({
-      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
-    })
-
+  it('clears the active flag on success, failure, and cancellation', async () => {
+    installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'r8', count: 1 }))
     expect(hasActiveBrainstorms()).toBe(false)
 
-    // brainstormPrompts registers its controller synchronously, before its first
-    // await, so the flag is already true here with no need to yield to the loop.
+    const failing = vi.fn(async (): Promise<AskResult> => { throw new Error('boom') })
+    vi.mocked(getMainProvider).mockReturnValue({
+      provider: { ask: failing } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
+    })
+    await expect(brainstormPrompts(request({ requestId: 'r9', count: 1 }))).rejects.toThrow('boom')
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  it('is true while a run is in flight (the wake-lock signal)', async () => {
+    let release!: () => void
+    const hung = vi.fn(
+      () => new Promise<AskResult>((resolve) => {
+        release = () => resolve({ text: '', parsed: { facets: ['place'] } })
+      })
+    )
+    vi.mocked(getMainProvider).mockReturnValue({
+      provider: { ask: hung } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
+    })
     const pending = brainstormPrompts(request({ requestId: 'busy', count: 1 }))
     try {
       expect(hasActiveBrainstorms()).toBe(true)
     } finally {
+      cancelBrainstorm('busy')
       release()
       await pending
     }
-    expect(hasActiveBrainstorms()).toBe(false)
-  })
-
-  it('clears the flag when a run fails after the controller is registered', async () => {
-    const ask = vi.fn(async (): Promise<AskResult> => { throw new Error('boom') })
-    vi.mocked(getMainProvider).mockReturnValue({
-      provider: { ask } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
-    })
-
-    await expect(brainstormPrompts(request({ requestId: 'fail', count: 1 }))).rejects.toThrow('boom')
-    // ask having run proves the failure landed past controller registration, so
-    // the cleared flag reflects the finally block, not a run that never started.
-    expect(ask).toHaveBeenCalled()
-    expect(hasActiveBrainstorms()).toBe(false)
-  })
-
-  it('clears the flag when a run is cancelled', async () => {
-    const { ask } = installProvider((call) => { if (call === 1) cancelBrainstorm('cancel') })
-    await brainstormPrompts(request({ requestId: 'cancel', count: 4 }))
-    expect(ask).toHaveBeenCalled()
     expect(hasActiveBrainstorms()).toBe(false)
   })
 })

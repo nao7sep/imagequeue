@@ -117,20 +117,25 @@ export interface PromptsConfig {
 }
 
 export interface BrainstormTemplates {
-  // Sent on the first turn when the renderer's session has no prior prompts.
-  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{FORMAT}}, {{N}}, {{JSON}}.
-  first_no_previous: string
-  // Sent on the first turn when there ARE prior prompts to avoid.
-  // Placeholders: {{ELABORATOR}}, {{SEED}}, {{PREVIOUS}}, {{FORMAT}}, {{N}}, {{JSON}}.
-  first_with_previous: string
-  // Sent on turns 2+ within the same conversation. Placeholders: {{FORMAT}}, {{N}}, {{JSON}}.
-  continuation: string
+  // The one prose template: each turn is a FRESH call (no conversation history)
+  // that expands a batch of concept assignments into prompts. Placeholders:
+  // {{ELABORATOR}}, {{SEED}}, {{CONCEPTS}}, {{FORMAT}}, {{N}}, {{JSON}}.
+  // The planning messages (facet resolution, probe generation, cluster
+  // expansion) are app-owned constants in concepts/planner.ts — their output
+  // feeds a parser, so a template edit must not be able to break the mechanism.
+  expansion: string
 }
 
 export interface BrainstormConfig {
+  // Prompts per expansion call. Each call is independent, so this trades
+  // fewer/larger calls against progress granularity, nothing else.
   batch_size: number
   max_retries_per_turn: number
   retry_backoff_ms: number[]
+  // Mint new concept values in preference to reusing ones whose last use has
+  // aged out of the reuse window. Off: stale values are reused first and the
+  // text AI is only asked for more when nothing at all is eligible.
+  prefer_new_concepts: boolean
   templates: BrainstormTemplates
   format_directives: FormatDirectives
 }
