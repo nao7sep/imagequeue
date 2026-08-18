@@ -23,6 +23,9 @@ import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
+import { getVisiblePanes } from '../shared/layout-metrics'
+import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../shared/types'
+import type { Platform } from '../shared/electron-api'
 import { startupFailureMessage } from './startup-error'
 
 let mainWin: BrowserWindow | null = null
@@ -59,13 +62,26 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason)
 })
 
+// How many panes the right-hand group will show, from the one shared rule the
+// renderer's layout also uses (shared/layout-metrics), so the window minimum and
+// what is painted can never disagree.
+//
+// Every cloud backend counts as keyed for now, which reproduces the behaviour
+// this replaced. Passing real key presence here is what starts hiding columns,
+// and that waits on the renderer being able to see presence too — otherwise the
+// window would size itself for panes the UI still draws.
+function visiblePaneCount(): number {
+  return getVisiblePanes(process.platform as Platform, CLOUD_BACKEND_IDS_IN_UI_ORDER).length
+}
+
 function createWindow(): void {
   // Chrome + sizing come from the pure buildMainWindowOptions: the window
-  // minimum is DERIVED from the shared pane minimums plus the platform-dependent
-  // visible-column count (see shared/layout-metrics), never a magic literal, so
-  // the window can't be shrunk small enough to truncate a pane. themeSource is
-  // applied to nativeTheme in app.whenReady() from the same source.
-  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(process.platform)
+  // minimum and opening width are DERIVED from the shared pane minimums and the
+  // pane count (see shared/layout-metrics), never a magic literal, so the window
+  // can't be shrunk small enough to truncate a pane and doesn't open wider than
+  // its panes need. themeSource is applied to nativeTheme in app.whenReady()
+  // from the same source.
+  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(visiblePaneCount())
   const win = new BrowserWindow({
     ...windowOptions,
     webPreferences: {
@@ -155,7 +171,7 @@ function startUp(): void {
   // menus) so it doesn't follow a light OS appearance. The value comes from the
   // same window-options source createWindow uses, so chrome theme and window
   // sizing stay defined in one place.
-  nativeTheme.themeSource = buildMainWindowOptions(process.platform).themeSource
+  nativeTheme.themeSource = buildMainWindowOptions(visiblePaneCount()).themeSource
   // Set the renderer CSP before any window loads its content. Gate the strict
   // policy on the production-renderer signal (no dev-server URL), not
   // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs

@@ -12,7 +12,9 @@ import { AboutModal } from './AboutModal'
 import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { isAnyModalOpen } from './modalStack'
-import { BACKEND_IDS_IN_UI_ORDER, BACKEND_LABELS } from '../../../shared/types'
+import { BACKEND_LABELS, CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../shared/types'
+import { getVisiblePanes, WELCOME_PANE } from '../../../shared/layout-metrics'
+import { WelcomePane } from './WelcomePane'
 import { displayedColumnWidth } from '../../../shared/ui-state'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
@@ -22,12 +24,9 @@ import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 
-const ALL_BACKENDS = BACKEND_IDS_IN_UI_ORDER.map((id) => ({ id, label: BACKEND_LABELS[id] }))
-
-// Draw Things CLI is macOS-only — show it only on macOS
-const BACKENDS = window.electronAPI.platform === 'darwin'
-  ? ALL_BACKENDS
-  : ALL_BACKENDS.filter((b) => b.id !== 'drawthings')
+// The panes of the right-hand group, from the one shared rule the window minimum
+// is also derived from.
+const PANES = getVisiblePanes(window.electronAPI.platform, CLOUD_BACKEND_IDS_IN_UI_ORDER)
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'dependencies' | null
 
@@ -50,7 +49,7 @@ export function Layout(): React.JSX.Element {
   // floor) lives in state.json; the DISPLAYED width is derived from it and the live
   // window so a narrow reopen can't clip the columns, and returns to the intent
   // when the window grows. Only a splitter drag changes the intent and persists it.
-  const visibleColumnCount = BACKENDS.length
+  const visibleColumnCount = PANES.length
   const layoutRef = useRef<HTMLDivElement>(null)
   const [columnWidthIntent, setColumnWidthIntent] = useState<number | null>(null)
   const columnWidthIntentRef = useRef<number | null>(null)
@@ -346,14 +345,21 @@ export function Layout(): React.JSX.Element {
         onMouseDown={startSplitterDrag}
       />
       <div className="right-pane">
-        {BACKENDS.map((b) => (
-          <QueueColumn
-            key={b.id}
-            backendId={b.id}
-            label={b.label}
-            prompt={prompt}
-          />
-        ))}
+        {PANES.map((pane) =>
+          pane === WELCOME_PANE ? (
+            <WelcomePane
+              key={pane}
+              onOpenSettings={() => setOverlay('settings')}
+            />
+          ) : (
+            <QueueColumn
+              key={pane}
+              backendId={pane}
+              label={BACKEND_LABELS[pane]}
+              prompt={prompt}
+            />
+          )
+        )}
       </div>
     </div>
   )

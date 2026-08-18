@@ -11,6 +11,11 @@ import { useConfirm } from '../context/ConfirmContext'
 // Driven by the event (not the Sessions modal) so it survives that modal
 // closing on resume, and mounted once at app level. Renders nothing itself —
 // the confirm dialog is owned by ConfirmProvider.
+//
+// Labelled Retry, never Resume: "Resume" belongs to the Sessions modal, where it
+// means switching the app to another session, and two different actions reading
+// as the same word is what made this dialog confusing. This one is the bulk form
+// of a task row's own `retry` button, so it takes that verb.
 export function ResumeInterruptedPrompt(): null {
   const confirm = useConfirm()
 
@@ -19,13 +24,13 @@ export function ResumeInterruptedPrompt(): null {
       const label = count === 1 ? 'task' : 'tasks'
       const message =
         `This session has ${count} ${label} that ${count === 1 ? 'was' : 'were'} left unfinished ` +
-        `when it was last open. Resume ${count === 1 ? 'it' : 'them all'} to re-queue for generation, ` +
+        `when it was last open. Retry ${count === 1 ? 'it' : 'them all'} to re-queue for generation, ` +
         `or keep ${count === 1 ? 'it' : 'them'} paused to retry individually later.`
 
       void confirm({
-        title: 'Resume Interrupted Tasks',
+        title: 'Retry Interrupted Tasks',
         message,
-        confirmLabel: 'Resume All',
+        confirmLabel: 'Retry All',
         cancelLabel: 'Not Now'
       }).then((ok) => {
         if (ok) void window.electronAPI.resumeInterruptedTasks()

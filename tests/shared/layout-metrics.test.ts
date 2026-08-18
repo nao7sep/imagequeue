@@ -44,38 +44,45 @@ describe('getVisibleBackendsForPlatform', () => {
 })
 
 describe('computeWindowMinWidth', () => {
-  it('equals LEFT_PANE_MIN + 5*COLUMN_MIN + borders on darwin', () => {
-    const expected = LEFT_PANE_MIN_PX + 5 * COLUMN_MIN_PX + 5 * PANE_BORDER_PX
-    expect(computeWindowMinWidth('darwin')).toBe(expected)
-  })
-
-  it('equals the 4-column sum on win32 and linux', () => {
-    const expected = LEFT_PANE_MIN_PX + 4 * COLUMN_MIN_PX + 4 * PANE_BORDER_PX
-    expect(computeWindowMinWidth('win32')).toBe(expected)
-    expect(computeWindowMinWidth('linux')).toBe(expected)
-  })
-
-  it('is derived from the live constants and column count, not a literal', () => {
-    for (const platform of ['darwin', 'win32', 'linux'] as const) {
-      const columns = getVisibleBackendCount(platform)
-      expect(computeWindowMinWidth(platform)).toBe(
-        LEFT_PANE_MIN_PX + columns * COLUMN_MIN_PX + columns * PANE_BORDER_PX
+  it('equals LEFT_PANE_MIN + one COLUMN_MIN and border per pane', () => {
+    for (const panes of [1, 2, 4, 5]) {
+      expect(computeWindowMinWidth(panes)).toBe(
+        LEFT_PANE_MIN_PX + panes * COLUMN_MIN_PX + panes * PANE_BORDER_PX
       )
     }
   })
 
-  it('reserves at least the sum of the visible panes minimums', () => {
-    for (const platform of ['darwin', 'win32', 'linux'] as const) {
-      const columns = getVisibleBackendCount(platform)
-      const sumOfPaneMins = LEFT_PANE_MIN_PX + columns * COLUMN_MIN_PX
-      expect(computeWindowMinWidth(platform)).toBeGreaterThanOrEqual(sumOfPaneMins)
+  it('reserves at least the sum of the pane minimums', () => {
+    for (const panes of [1, 2, 4, 5]) {
+      expect(computeWindowMinWidth(panes)).toBeGreaterThanOrEqual(
+        LEFT_PANE_MIN_PX + panes * COLUMN_MIN_PX
+      )
     }
   })
 
-  it('is wider on darwin than off-mac by exactly one column plus its border', () => {
-    expect(computeWindowMinWidth('darwin') - computeWindowMinWidth('win32')).toBe(
+  it('grows by exactly one column plus its border for each added pane', () => {
+    expect(computeWindowMinWidth(5) - computeWindowMinWidth(4)).toBe(
       COLUMN_MIN_PX + PANE_BORDER_PX
     )
+    expect(computeWindowMinWidth(2) - computeWindowMinWidth(1)).toBe(
+      COLUMN_MIN_PX + PANE_BORDER_PX
+    )
+  })
+
+  // The point of taking a count: a user with one provider is not held to a
+  // window sized for a full set of columns that are not being drawn.
+  it('lets a single-pane layout open far narrower than a full one', () => {
+    expect(computeWindowMinWidth(1)).toBeLessThan(computeWindowMinWidth(5))
+    expect(computeWindowMinWidth(1)).toBe(LEFT_PANE_MIN_PX + COLUMN_MIN_PX + PANE_BORDER_PX)
+  })
+
+  it('still agrees with the platform column count when every backend is shown', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      const columns = getVisibleBackendCount(platform)
+      expect(computeWindowMinWidth(columns)).toBe(
+        LEFT_PANE_MIN_PX + columns * COLUMN_MIN_PX + columns * PANE_BORDER_PX
+      )
+    }
   })
 })
 

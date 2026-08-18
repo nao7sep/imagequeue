@@ -13,8 +13,12 @@
 // size is the sum of the panes' minimums plus chrome, derived from
 // shared/layout-metrics — never a magic literal.
 
-import { computeWindowMinWidth, computeWindowMinHeight } from '../shared/layout-metrics'
-import type { Platform } from '../shared/electron-api'
+import {
+  computeWindowDefaultWidth,
+  computeWindowDefaultHeight,
+  computeWindowMinWidth,
+  computeWindowMinHeight,
+} from '../shared/layout-metrics'
 
 export interface MainWindowOptions {
   width: number
@@ -27,43 +31,23 @@ export interface MainWindowOptions {
   themeSource: 'dark'
 }
 
-/** Designed opening size; the window opens at this size on every launch (size is
- *  not persisted — see window-chrome-conventions). This is the intent for a
- *  roomy default, but it is clamped up to clear the platform's derived minimum
- *  so the window never opens below its own minimum (where the OS would
- *  immediately snap it larger). */
-const DESIGNED_WIDTH = 1280
-const DESIGNED_HEIGHT = 720
-
-/** Comfortable headroom added over the bare minimum when the designed default
- *  doesn't already clear it — so the default doesn't sit exactly on the floor
- *  with every pane at its smallest. */
-const DEFAULT_WIDTH_HEADROOM = 80
-const DEFAULT_HEIGHT_HEADROOM = 80
-
 /** The app's primary surface color (matches --bg-primary in styles.css), painted
  *  behind the renderer so there is no white flash before first paint. */
 const BACKGROUND_COLOR = '#1a1a2e'
 
 /**
- * Build the chrome/sizing options for the main window on a given platform. The
- * minWidth/minHeight are derived from the shared pane minimums (and the
- * platform-dependent visible-column count), so they can never silently disagree
- * with the layout the renderer paints. The opening size is the designed default
- * clamped up to the derived minimum (plus headroom) so it is always valid.
- *
- * That clamp is a guarantee, not a constant: with five columns on macOS the
- * minimum (1165) now sits below the designed 1280, so the default applies as
- * written. It last bound at six columns, where the 1326 minimum forced the window
- * open at 1406. Adding a backend can make it bind again, which is why the default
- * is derived here rather than pinned to a literal.
+ * Build the chrome/sizing options for the main window, given how many panes the
+ * right-hand group will show (getVisiblePanes). Both the minimum and the opening
+ * width come from that count via the shared pane minimums, so neither can
+ * silently disagree with the layout the renderer paints, and a user with one
+ * provider is not forced into a window sized for five.
  */
-export function buildMainWindowOptions(platform: Platform): MainWindowOptions {
-  const minWidth = computeWindowMinWidth(platform)
+export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
+  const minWidth = computeWindowMinWidth(paneCount)
   const minHeight = computeWindowMinHeight()
   return {
-    width: Math.max(DESIGNED_WIDTH, minWidth + DEFAULT_WIDTH_HEADROOM),
-    height: Math.max(DESIGNED_HEIGHT, minHeight + DEFAULT_HEIGHT_HEADROOM),
+    width: computeWindowDefaultWidth(paneCount),
+    height: computeWindowDefaultHeight(),
     minWidth,
     minHeight,
     backgroundColor: BACKGROUND_COLOR,

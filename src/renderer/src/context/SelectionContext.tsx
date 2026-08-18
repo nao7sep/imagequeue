@@ -153,19 +153,29 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     await window.electronAPI.removeTask(backend, taskId)
   }, [confirm, settings, setSelectionInternal])
 
+  // Deletes any task that is not mid-generation, whether or not it ever produced
+  // an image: an unprocessed task has nothing on disk, and the main process
+  // already handles that case by removing the queue entry alone. `generating` is
+  // refused here as it is in removeTask, and this is the only place that refuses
+  // it — queue:deleteWithFiles, unlike queue:removeTask, has no guard of its own,
+  // so dropping this one would let a task vanish while its image is being written.
   const deleteTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task) return
-    if (task.status !== 'completed' && task.status !== 'kept') return
+    if (task.status === 'generating') return
 
     const general = (settings?.general as { confirm_delete?: boolean; delete_to_trash?: unknown } | undefined)
     if (general?.confirm_delete) {
+      // The file-removal promise is made only when there are files to remove;
+      // baseName is what the main process itself checks before touching disk.
       const toTrash = shouldDeleteToTrash(general.delete_to_trash)
       const ok = await confirm({
         title: 'Delete Task',
-        message: toTrash
-          ? 'Delete this task and move its files to the Trash?'
-          : 'Delete this task and permanently delete its files?',
+        message: !task.baseName
+          ? 'Delete this task? It has no generated image, so nothing is removed from disk.'
+          : toTrash
+            ? 'Delete this task and move its files to the Trash?'
+            : 'Delete this task and permanently delete its files?',
         confirmLabel: 'Delete',
         danger: true
       })

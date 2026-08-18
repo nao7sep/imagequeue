@@ -1,0 +1,77 @@
+/* The welcome pane occupies one column slot in the right-hand group, so it takes
+   the same width rules as .queue-column (mirrored from shared/layout-metrics.ts:
+   COLUMN_DEFAULT_PX 220 / COLUMN_MIN_PX 190 — keep in sync). It reuses
+   .column-header for its title, and falls back to the app accent rather than a
+   per-backend one, because it stands for no backend. */
+.welcome-pane {
+  width: var(--iq-column-width, 220px);
+  min-width: 190px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--pane-bg);
+}
+
+.welcome-pane:last-child {
+  border-right: none;
+}
+
+.welcome-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.welcome-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.welcome-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.welcome-step-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.welcome-step p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.welcome-btn {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.welcome-btn:hover {
+  border-color: var(--accent);
+}
+
+.welcome-btn-primary {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
+}

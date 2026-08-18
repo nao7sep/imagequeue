@@ -17,7 +17,7 @@
 // (.left-pane min-width, .queue-column min-width) mirror them by value with a
 // comment pointing back here, and a CSS-text test keeps the two in sync.
 
-import { BACKEND_IDS_IN_UI_ORDER, type BackendId } from './types'
+import { BACKEND_IDS_IN_UI_ORDER, type BackendId, type CloudBackendId } from './types'
 import type { Platform } from './electron-api'
 
 /** The narrowest a backend column may ever display, in CSS px — the floor, NOT the
@@ -69,24 +69,88 @@ export function getVisibleBackendsForPlatform(platform: Platform): BackendId[] {
     : BACKEND_IDS_IN_UI_ORDER.filter((b) => b !== 'drawthings')
 }
 
-/** Number of visible backend columns for a platform (6 on darwin, 5 elsewhere). */
+/** Number of visible backend columns for a platform — one fewer off macOS,
+ *  where Draw Things does not run. */
 export function getVisibleBackendCount(platform: Platform): number {
   return getVisibleBackendsForPlatform(platform).length
 }
 
+/** A pane in the right-hand group. Every backend column, plus the welcome pane,
+ *  which is a pane and NOT a backend: it holds no tasks, so column shortcuts and
+ *  selection navigation iterate the backends, never this list. */
+export type PaneId = BackendId | 'welcome'
+
+export const WELCOME_PANE = 'welcome' as const
+
 /**
- * Minimum window width for a platform: the left pane's minimum, plus one column
- * minimum per visible backend, plus one inter-pane border per boundary
- * (left-pane↔right-pane and between every adjacent column). Strictly derived —
- * change any constant above or the backend list and this moves with it.
+ * The panes the right-hand group shows, in order. A cloud backend appears only
+ * once it has a key — an unusable column is noise, and its absence is what the
+ * window minimum shrinks to fit. Draw Things needs no key, so on macOS its column
+ * is always there, installed or not; the column carries its own route to the
+ * installer.
+ *
+ * The welcome pane stands in when that leaves the group empty, which keeps a
+ * fresh install from being a preview pane beside a strip of nothing. Because
+ * macOS always has the Draw Things column, an empty group is only reachable off
+ * macOS — so the welcome pane is in practice a Windows one, and says nothing
+ * about a backend that platform cannot run.
  */
-export function computeWindowMinWidth(platform: Platform): number {
-  const columns = getVisibleBackendCount(platform)
-  // Borders: one between the left pane and the right column group, plus one
-  // between each pair of adjacent columns (columns - 1). With >= 1 column that
-  // is exactly `columns` borders.
-  const borders = columns * PANE_BORDER_PX
-  return LEFT_PANE_MIN_PX + columns * COLUMN_MIN_PX + borders
+export function getVisiblePanes(
+  platform: Platform,
+  keyedCloudBackends: readonly CloudBackendId[]
+): PaneId[] {
+  const columns = getVisibleBackendsForPlatform(platform).filter(
+    (id) => id === 'drawthings' || keyedCloudBackends.includes(id as CloudBackendId)
+  )
+  return columns.length > 0 ? columns : [WELCOME_PANE]
+}
+
+/** Panes that are backends — the list column shortcuts and selection navigation
+ *  walk. Derived from getVisiblePanes so the two can never drift apart. */
+export function getVisibleBackendColumns(panes: readonly PaneId[]): BackendId[] {
+  return panes.filter((id): id is BackendId => id !== WELCOME_PANE)
+}
+
+/**
+ * Minimum window width for a given number of right-hand panes: the left pane's
+ * minimum, plus one column minimum per pane, plus one inter-pane border per
+ * boundary (left-pane↔right-pane and between every adjacent pane). Strictly
+ * derived — change any constant above and this moves with it.
+ *
+ * It takes the pane COUNT, not a platform, because the panes shown depend on
+ * which providers are configured as well as the platform (getVisiblePanes). A
+ * minimum that reserved width for panes nobody is drawing would forbid window sizes
+ * the layout can hold perfectly well.
+ */
+export function computeWindowMinWidth(paneCount: number): number {
+  // Borders: one between the left pane and the right pane group, plus one
+  // between each pair of adjacent panes (paneCount - 1). With >= 1 pane that is
+  // exactly `paneCount` borders.
+  const borders = paneCount * PANE_BORDER_PX
+  return LEFT_PANE_MIN_PX + paneCount * COLUMN_MIN_PX + borders
+}
+
+/**
+ * The width the window opens at for a given pane count: the left pane at its
+ * minimum, plus one column at its DEFAULT width per pane, plus the borders. It
+ * uses COLUMN_DEFAULT_PX, not COLUMN_MIN_PX, because that is the width a column
+ * actually displays at on a fresh install — opening any wider hands the surplus
+ * to the left pane, which is what stretches the preview sideways.
+ */
+export function computeWindowDefaultWidth(paneCount: number): number {
+  return LEFT_PANE_MIN_PX + paneCount * COLUMN_DEFAULT_PX + paneCount * PANE_BORDER_PX
+}
+
+/**
+ * The height the window opens at. The opening WIDTH always leaves the left pane
+ * exactly its minimum (the surplus goes to the columns), so giving the preview
+ * region that same measure as its height opens the preview square. It is
+ * independent of the pane count, because nothing about the vertical stack is.
+ *
+ * This sits above computeWindowMinHeight, so the window never opens on its floor.
+ */
+export function computeWindowDefaultHeight(): number {
+  return PANE_TOOLBAR_MIN_PX + PROMPT_REGION_MIN_PX + LEFT_PANE_MIN_PX
 }
 
 /**
