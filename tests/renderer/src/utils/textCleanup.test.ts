@@ -107,8 +107,8 @@ describe('truncate', () => {
     // Surrogate-pair emoji.
     expect(truncate('\u{1F600}x', 1)).toEqual({ text: '\u{1F600}', truncated: true })
     // ZWJ family emoji stays whole — ZWJ is structural, not whitespace.
-    expect(truncate('\u{1F468}‍\u{1F469}‍\u{1F467}x', 1)).toEqual({
-      text: '\u{1F468}‍\u{1F469}‍\u{1F467}',
+    expect(truncate('\u{1F468}\u200D\u{1F469}\u200D\u{1F467}x', 1)).toEqual({
+      text: '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}',
       truncated: true,
     })
     // Combining mark stays with its base.
