@@ -217,6 +217,16 @@ export interface SessionThumbnail {
   baseName: string
 }
 
+// Which API keys resolve, environment values included — the presence signal the
+// renderer needs because the settings payload carries only stored keys (so that
+// editing a field cannot overwrite an env-supplied key). Booleans only: no key
+// value ever crosses this boundary.
+export interface ApiKeyPresence {
+  image: Record<CloudBackendId, boolean>
+  geminiText: boolean
+  openaiText: boolean
+}
+
 // Concept-ledger rows surfaced to the Concept Library modal. Shapes mirror
 // concept-store.ts; shared here so preload and renderer type against one source.
 export interface ConceptFacetSummary {

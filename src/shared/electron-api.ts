@@ -14,6 +14,7 @@ import {
   DependencyProgress,
   DrawThingsModelParams,
   SessionSummary,
+  ApiKeyPresence,
   ConceptFacetSummary,
   ConceptProbeSummary,
   ConceptRow,
@@ -128,6 +129,7 @@ export interface ElectronAPI {
   getSettings: () => Promise<Record<string, unknown>>
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<{ success: boolean }>
+  getApiKeyPresence: () => Promise<ApiKeyPresence>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
   checkLocalModel: (filename: string) => Promise<boolean>

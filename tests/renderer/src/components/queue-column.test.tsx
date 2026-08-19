@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, fireEvent, act, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend } from '../../../../src/shared/models'
@@ -17,6 +17,7 @@ const emptyTasks = (): Record<BackendId, Task[]> => ({
 
 let settingsValue: {
   settings: Record<string, unknown> | null
+  apiKeyPresence: { image: Record<string, boolean>; geminiText: boolean; openaiText: boolean } | null
   saveChangedSettings: ReturnType<typeof vi.fn>
   saveBrainstormSettings: ReturnType<typeof vi.fn>
   saveImageBackendDefaults: ReturnType<typeof vi.fn>
@@ -72,6 +73,7 @@ const SAVED_DT_PARAMS: DrawThingsModelParams = { width: 768, height: 512, steps:
 beforeEach(() => {
   settingsValue = {
     settings: null,
+    apiKeyPresence: null,
     saveChangedSettings: vi.fn(async () => ({})),
     saveBrainstormSettings: vi.fn(async () => ({})),
     saveImageBackendDefaults: vi.fn(async () => ({})),
@@ -291,5 +293,45 @@ describe('drawthings column', () => {
       { ...SAVED_DT_PARAMS, width: 1024 }
     )
     expect((container.querySelector('.enqueue-btn') as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
+
+// The env-only-key bug, at the surface the user meets: the column's warning and
+// its + Queue button must follow the presence signal, not the stored api_key
+// string in settings. With a key supplied only through the environment, the
+// stored string is empty and the presence flag is true — the old check read the
+// string and disabled a backend that worked.
+describe('API key warning follows presence, not the stored settings value', () => {
+  const presence = (openai: boolean): typeof settingsValue.apiKeyPresence => ({
+    image: { openai, nanobanana: false, grok: false, flux: false },
+    geminiText: false,
+    openaiText: false,
+  })
+
+  // An env-supplied key: settings carries an EMPTY stored value, presence says yes.
+  it('shows no warning and enables + Queue for an environment-only key', () => {
+    settingsValue.settings = { image_backends: { openai: { api_key: '' } } }
+    settingsValue.apiKeyPresence = presence(true)
+    render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    expect(screen.queryByText('API key not set')).toBeNull()
+    expect(screen.getByRole('button', { name: '+ Queue' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('warns and disables + Queue when no key resolves', () => {
+    settingsValue.settings = { image_backends: { openai: { api_key: '' } } }
+    settingsValue.apiKeyPresence = presence(false)
+    render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    expect(screen.getByText('API key not set')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '+ Queue' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  // Startup: presence is null for a moment. A column must not flash
+  // "API key not set" before the answer arrives.
+  it('does not warn while presence is still loading', () => {
+    settingsValue.settings = { image_backends: { openai: { api_key: '' } } }
+    settingsValue.apiKeyPresence = null
+    render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    expect(screen.queryByText('API key not set')).toBeNull()
   })
 })

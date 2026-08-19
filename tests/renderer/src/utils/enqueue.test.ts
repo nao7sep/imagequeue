@@ -3,6 +3,7 @@ import type { BackendId } from '../../../../src/shared/types'
 import {
   buildEnqueueRequest,
   buildEnqueueRequestsForAll,
+  hasApiKeyFor,
   isBackendReadyToEnqueue,
   type EnqueueConfigSnapshot,
 } from '../../../../src/renderer/src/utils/enqueue'
@@ -89,5 +90,32 @@ describe('buildEnqueueRequestsForAll', () => {
   it('returns nothing for a blank prompt', () => {
     const snapshots: Partial<Record<BackendId, EnqueueConfigSnapshot>> = { openai: readySnapshot() }
     expect(buildEnqueueRequestsForAll('  ', snapshots, ['openai'])).toEqual([])
+  })
+})
+
+
+// The bug this guards: key presence must come from the main process (which
+// resolves the environment first), never from the settings payload's stored
+// api_key string. A backend keyed only by OPENAI_IMAGE_API_KEY has an empty
+// stored value, so reading that string reported "API key not set" and disabled
+// + Queue for a backend the main process would have called successfully.
+describe('hasApiKeyFor', () => {
+  it('reports a backend keyed only by environment as present', () => {
+    // What the main process returns when the key came from the environment and
+    // nothing is stored — the exact case the old stored-string check got wrong.
+    expect(hasApiKeyFor('openai', { image: { openai: true, nanobanana: false, grok: false, flux: false } })).toBe(true)
+  })
+
+  it('reports an unkeyed backend as absent', () => {
+    expect(hasApiKeyFor('flux', { image: { openai: true, nanobanana: false, grok: false, flux: false } })).toBe(false)
+  })
+
+  it('needs no key for Draw Things, whatever presence says', () => {
+    expect(hasApiKeyFor('drawthings', { image: { openai: false, nanobanana: false, grok: false, flux: false } })).toBe(true)
+    expect(hasApiKeyFor('drawthings', null)).toBe(true)
+  })
+
+  it('treats not-yet-loaded presence as present, so no column flickers unconfigured at startup', () => {
+    expect(hasApiKeyFor('openai', null)).toBe(true)
   })
 })

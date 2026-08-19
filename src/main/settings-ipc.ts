@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig, saveConfig, getDataDir } from './config'
-import { getStoredApiKey, setStoredApiKey, IMAGE_BACKEND_SECRET } from './config/api-keys-store'
+import { getStoredApiKey, setStoredApiKey, hasApiKey, IMAGE_BACKEND_SECRET } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
@@ -68,6 +68,20 @@ export function registerSettingsIpc(): void {
     }
     saveConfig(config)
     return { success: true }
+  })
+
+  // Which secrets are actually resolvable, environment value included. The
+  // renderer cannot work this out for itself: settings:get deliberately surfaces
+  // only the STORED key, so that editing a field can never silently overwrite an
+  // env-supplied one — which means a backend configured purely by environment
+  // variable looks unconfigured to every UI check that reads that string. This
+  // handler is the presence signal those checks need; it never carries a value.
+  handle('settings:getApiKeyPresence', () => {
+    const image = {} as Record<CloudBackendId, boolean>
+    for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
+      image[backend] = hasApiKey(IMAGE_BACKEND_SECRET[backend])
+    }
+    return { image, geminiText: hasApiKey('gemini.text'), openaiText: hasApiKey('openai.text') }
   })
 
   handle('settings:saveBrainstorm', (_event, brainstorm: AppConfig['brainstorm']) => {

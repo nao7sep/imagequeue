@@ -56,3 +56,18 @@ export function buildEnqueueRequestsForAll(
   }
   return requests
 }
+
+// Whether a cloud backend's key resolves, from the presence signal rather than
+// the stored settings string. `null` presence means not yet loaded: treated as
+// PRESENT so a backend is never briefly declared unconfigured during startup —
+// a false "API key not set" that flickers on every launch is worse than a
+// disabled call the main process rejects with a real error. Draw Things needs
+// no key, so it is always true.
+export function hasApiKeyFor(
+  backendId: BackendId,
+  presence: { image: Record<string, boolean> } | null
+): boolean {
+  if (backendId === 'drawthings') return true
+  if (!presence) return true
+  return presence.image[backendId] === true
+}

@@ -15,6 +15,7 @@ import {
   DependencyProgress,
   DrawThingsModelParams,
   SessionSummary,
+  ApiKeyPresence,
   ConceptFacetSummary,
   ConceptProbeSummary,
   ConceptRow,
@@ -203,6 +204,8 @@ const api = {
 
   saveBrainstormSettings: (brainstorm: Record<string, unknown>): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
+  getApiKeyPresence: (): Promise<ApiKeyPresence> =>
+    ipcRenderer.invoke('settings:getApiKeyPresence'),
 
   saveImageBackendDefaults: (
     backend: CloudBackendId,

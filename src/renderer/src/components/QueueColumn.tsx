@@ -14,7 +14,7 @@ import {
   resolveSavedImageBackendDefaults,
   type SavedImageBackendDefaults,
 } from '../utils/imageBackendDefaults'
-import { isBackendReadyToEnqueue } from '../utils/enqueue'
+import { hasApiKeyFor, isBackendReadyToEnqueue } from '../utils/enqueue'
 import { isFreshCompletion } from '../utils/taskScroll'
 import { useImeGuard } from '../utils/imeGuard'
 import './QueueColumn.css'
@@ -48,7 +48,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     deleteSelected,
   } = useSelection()
   const isComposing = useImeGuard()
-  const { settings, saveImageBackendDefaults } = useSettings()
+  const { settings, apiKeyPresence, saveImageBackendDefaults } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId)
   const defaultModel = models.find((m) => m.isDefault) ?? models[0]
@@ -76,11 +76,11 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     setCloudParams((prev) => cloudBackend.clampToModel(prev, cloudModelDef))
   }, [cloudBackend, cloudModelDef])
 
-  // Derived from context — updates automatically when settings change (no effect needed)
-  const apiKey = backendId !== 'drawthings'
-    ? ((settings?.image_backends as Record<string, Record<string, unknown>>)?.[backendId]?.api_key as string | undefined)
-    : undefined
-  const apiKeyMissing = backendId !== 'drawthings' && (!apiKey || apiKey.trim() === '')
+  // Derived from context — updates automatically when settings change (no effect
+  // needed). Read from the PRESENCE signal, never from settings' api_key string:
+  // that string is the stored value only, so an env-supplied key would read as
+  // missing here and disable a backend the main process can call perfectly well.
+  const apiKeyMissing = !hasApiKeyFor(backendId, apiKeyPresence)
 
   // All Draw Things state, effects, and handlers live in useDrawThingsColumn;
   // the column consumes its enqueue params, readiness inputs, and controls.

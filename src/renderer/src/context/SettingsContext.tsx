@@ -1,8 +1,17 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import type { CloudBackendId } from '../../../shared/types'
+import type { ApiKeyPresence, CloudBackendId } from '../../../shared/types'
 
 interface SettingsContextValue {
   settings: Record<string, unknown> | null
+  // Which keys actually resolve, environment values included. It rides beside
+  // `settings` rather than inside it because the two answer different questions:
+  // `settings.image_backends[b].api_key` is the STORED value the settings form
+  // edits, deliberately blind to the environment, while this is whether the
+  // backend can be called at all. Every readiness check must use this one —
+  // reading the stored string instead is what made an env-only backend look
+  // unconfigured. Null until loaded; treat null as "not yet known", never as
+  // absent (see hasApiKeyFor).
+  apiKeyPresence: ApiKeyPresence | null
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
@@ -13,9 +22,11 @@ const SettingsContext = createContext<SettingsContextValue | null>(null)
 
 export function SettingsProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
+  const [apiKeyPresence, setApiKeyPresence] = useState<ApiKeyPresence | null>(null)
 
   useEffect(() => {
     window.electronAPI.getSettings().then((cfg) => setSettings(cfg as Record<string, unknown>))
+    void window.electronAPI.getApiKeyPresence().then(setApiKeyPresence)
   }, [])
 
   // Apply the configured UI font by overriding the `--font-ui` CSS variable on :root; blank reverts
@@ -29,10 +40,17 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     else root.style.removeProperty('--font-ui')
   }, [uiFontFamily])
 
+  // Every save refreshes presence alongside the settings: storing or clearing a
+  // key changes what resolves, and an env-supplied key means the stored value
+  // and the presence flag can disagree in either direction.
   const refreshSettings = useCallback(async (): Promise<Record<string, unknown>> => {
-    const fresh = await window.electronAPI.getSettings()
+    const [fresh, presence] = await Promise.all([
+      window.electronAPI.getSettings(),
+      window.electronAPI.getApiKeyPresence(),
+    ])
     const next = fresh as Record<string, unknown>
     setSettings(next)
+    setApiKeyPresence(presence)
     return next
   }, [])
 
@@ -69,6 +87,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     <SettingsContext.Provider
       value={{
         settings,
+        apiKeyPresence,
         saveChangedSettings,
         saveBrainstormSettings,
         saveImageBackendDefaults,

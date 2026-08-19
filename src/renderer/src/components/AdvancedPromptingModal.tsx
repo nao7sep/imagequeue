@@ -6,6 +6,7 @@ import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { multiline } from '../utils/textCleanup'
+import { hasApiKeyFor } from '../utils/enqueue'
 import {
   MAX_DRAFT_ITERATIONS,
   normalizeCount,
@@ -60,7 +61,7 @@ function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborato
 }
 
 export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
-  const { settings } = useSettings()
+  const { settings, apiKeyPresence } = useSettings()
   const confirm = useConfirm()
   const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useSessionDraft()
@@ -140,15 +141,16 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     window.electronAPI.localListDownloadedModels().then((list) => setDownloadedDtModels(sortLocalModels(list)))
   }, [])
 
+  // From the presence signal, not settings' stored api_key string — see
+  // hasApiKeyFor. Reading the stored value here hid env-configured backends
+  // from the batch targets just as it disabled their column.
   const proprietaryApiKeyByBackend = useMemo<Record<string, boolean>>(() => {
     const result: Record<string, boolean> = {}
-    const backends = (settings?.image_backends ?? {}) as Record<string, Record<string, unknown>>
     for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-      const key = backends[id]?.api_key
-      result[id] = typeof key === 'string' && key.trim().length > 0
+      result[id] = hasApiKeyFor(id, apiKeyPresence)
     }
     return result
-  }, [settings])
+  }, [apiKeyPresence])
 
   // Draw Things fallback params read straight from config: config-store's
   // deepMergeDefaults guarantees these keys exist, so the defaults live in one
