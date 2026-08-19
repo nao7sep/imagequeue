@@ -1,9 +1,10 @@
 import { Modal } from './Modal'
 import { BACKEND_LABELS } from '../../../shared/types'
-import { getVisibleBackends } from '../utils/visibleBackends'
+import { useVisiblePanes } from '../hooks/useVisiblePanes'
 
 // Mirror the actual column shortcuts: each visible backend maps to mod+(index+1).
-const BACKENDS = getVisibleBackends().map((id) => ({ id, label: BACKEND_LABELS[id] }))
+// Read at render, not at import: hiding an unkeyed provider renumbers the
+// columns, and a reference that listed the old numbering would be wrong.
 
 interface Props {
   onClose: () => void
@@ -12,6 +13,8 @@ interface Props {
 export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
   const isMac = window.electronAPI.platform === 'darwin'
   const mod = isMac ? 'Cmd+' : 'Ctrl+'
+  const { backends } = useVisiblePanes()
+  const BACKENDS = backends.map((id) => ({ id, label: BACKEND_LABELS[id] }))
 
   return (
     <Modal

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
-import { getVisibleBackends } from '../utils/visibleBackends'
+import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
@@ -19,6 +19,8 @@ interface Props {
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
   const { settings, saveNotificationField } = useSettings()
+  // Column shortcuts follow what is drawn: Cmd+2 is the second VISIBLE column.
+  const { backends: visibleBackends } = useVisiblePanes()
   const { enqueueToBackend, enqueueToAll } = useEnqueueConfigs()
   const isImeComposing = useImeGuard()
 
@@ -148,7 +150,6 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         return
       }
       if (mod && e.key >= '1' && e.key <= '9') {
-        const visibleBackends = getVisibleBackends()
         const backend = visibleBackends[parseInt(e.key) - 1]
         if (!backend) return
         e.preventDefault()

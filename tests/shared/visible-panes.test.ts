@@ -43,6 +43,30 @@ describe('getVisiblePanes', () => {
   it('is the only pane when it appears', () => {
     expect(getVisiblePanes('win32', NONE_KEYED)).toHaveLength(1)
   })
+
+  // Hiding a column that holds work would hide the work: a task left
+  // generating, failing, or completing where it cannot be seen, retried, or
+  // deleted. An unkeyed backend therefore keeps its column until its queue
+  // empties — removing a key stops NEW work reaching it, nothing more.
+  it('keeps an unkeyed backend visible while it still holds tasks', () => {
+    expect(getVisiblePanes('win32', NONE_KEYED, ['grok'])).toEqual(['grok'])
+    expect(getVisiblePanes('win32', ['openai'], ['grok'])).toEqual(['openai', 'grok'])
+  })
+
+  it('drops the column once the unkeyed backend has no tasks left', () => {
+    expect(getVisiblePanes('win32', ['openai'], [])).toEqual(['openai'])
+  })
+
+  it('shows no welcome pane while any backend holds tasks, keyed or not', () => {
+    expect(getVisiblePanes('win32', NONE_KEYED, ['flux'])).not.toContain(WELCOME_PANE)
+  })
+
+  it('keeps UI order regardless of the order backends are supplied in', () => {
+    // Column NUMBER is what Cmd+N maps to, so order must come from the canonical
+    // list, never from the order presence or task counts happened to arrive in.
+    const panes = getVisiblePanes('win32', ['flux', 'openai'], ['grok'])
+    expect(panes).toEqual(CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((id) => panes.includes(id)))
+  })
 })
 
 describe('getVisibleBackendColumns', () => {

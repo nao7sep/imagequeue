@@ -13,8 +13,8 @@ import { AboutModal } from './AboutModal'
 import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { isAnyModalOpen } from './modalStack'
-import { BACKEND_LABELS, CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../shared/types'
-import { getVisiblePanes, WELCOME_PANE } from '../../../shared/layout-metrics'
+import { BACKEND_LABELS } from '../../../shared/types'
+import { WELCOME_PANE } from '../../../shared/layout-metrics'
 import { WelcomePane } from './WelcomePane'
 import { displayedColumnWidth } from '../../../shared/ui-state'
 import './Layout.css'
@@ -23,11 +23,8 @@ import { useQueue } from '../context/QueueContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
+import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
-
-// The panes of the right-hand group, from the one shared rule the window minimum
-// is also derived from.
-const PANES = getVisiblePanes(window.electronAPI.platform, CLOUD_BACKEND_IDS_IN_UI_ORDER)
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
 
@@ -36,6 +33,8 @@ export function Layout(): React.JSX.Element {
   const isImeComposing = useImeGuard()
   const { selectedTask, clear, navigate, removeSelected, restoreSelected, deleteSelected } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
+  // The right-hand group's panes, reactive to key presence and task counts.
+  const { panes: PANES } = useVisiblePanes()
   // The main prompt lives in the session draft: persisted per session and
   // re-hydrated on session change (new/resume), alongside the Advanced
   // Prompting state. No local reset is needed — the context handles it.

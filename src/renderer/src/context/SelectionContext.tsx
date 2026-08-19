@@ -12,7 +12,7 @@ import { shouldDeleteToTrash, type BackendId, type Task } from '../../../shared'
 import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
-import { getVisibleBackends } from '../utils/visibleBackends'
+import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { nextSelectionAfterRemoval } from '../utils/selection-recovery'
 
 export interface Selection {
@@ -76,7 +76,9 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // the gesture came from within a `.task-list`.
   const pendingFocusIdRef = useRef<string | null>(null)
 
-  const visibleBackends = useMemo(() => getVisibleBackends(), [])
+  // Reactive: a backend losing its key (or its last task) leaves the column
+  // list, and arrowing must stop reaching it the moment it does.
+  const { backends: visibleBackends } = useVisiblePanes()
 
   const selectedTask = useMemo<Task | null>(() => {
     if (!selection) return null

@@ -83,11 +83,15 @@ export type PaneId = BackendId | 'welcome'
 export const WELCOME_PANE = 'welcome' as const
 
 /**
- * The panes the right-hand group shows, in order. A cloud backend appears only
- * once it has a key — an unusable column is noise, and its absence is what the
- * window minimum shrinks to fit. Draw Things needs no key, so on macOS its column
- * is always there, installed or not; the column carries its own route to the
- * installer.
+ * The panes the right-hand group shows, in order. A cloud backend appears once it
+ * has a key — an unusable column is noise, and its absence is what the window
+ * minimum shrinks to fit — OR once it holds tasks, whatever its key situation:
+ * hiding a column with work in it would hide work, leaving a task generating,
+ * failing, or completing where nobody can see, retry, or delete it. Removing a
+ * key therefore stops new work reaching a backend without stranding the work
+ * already there; the column leaves when its queue empties. Draw Things needs no
+ * key, so on macOS its column is always present, installed or not; the column
+ * carries its own route to the installer.
  *
  * The welcome pane stands in when that leaves the group empty, which keeps a
  * fresh install from being a preview pane beside a strip of nothing. Because
@@ -97,10 +101,14 @@ export const WELCOME_PANE = 'welcome' as const
  */
 export function getVisiblePanes(
   platform: Platform,
-  keyedCloudBackends: readonly CloudBackendId[]
+  keyedCloudBackends: readonly CloudBackendId[],
+  occupiedCloudBackends: readonly CloudBackendId[] = []
 ): PaneId[] {
   const columns = getVisibleBackendsForPlatform(platform).filter(
-    (id) => id === 'drawthings' || keyedCloudBackends.includes(id as CloudBackendId)
+    (id) =>
+      id === 'drawthings' ||
+      keyedCloudBackends.includes(id as CloudBackendId) ||
+      occupiedCloudBackends.includes(id as CloudBackendId)
   )
   return columns.length > 0 ? columns : [WELCOME_PANE]
 }

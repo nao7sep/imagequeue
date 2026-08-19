@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { BackendId } from '../../../shared/types'
 import { useQueue } from './QueueContext'
-import { getVisibleBackends } from '../utils/visibleBackends'
+import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import {
   buildEnqueueRequest,
   buildEnqueueRequestsForAll,
@@ -43,11 +43,12 @@ export function EnqueueConfigProvider({ children }: { children: ReactNode }): Re
     if (request) void enqueue(request)
   }, [snapshots, enqueue])
 
+  const { backends: visibleBackends } = useVisiblePanes()
   const enqueueToAll = useCallback((prompt: string): void => {
-    for (const request of buildEnqueueRequestsForAll(prompt, snapshots, getVisibleBackends())) {
+    for (const request of buildEnqueueRequestsForAll(prompt, snapshots, visibleBackends)) {
       void enqueue(request)
     }
-  }, [snapshots, enqueue])
+  }, [snapshots, enqueue, visibleBackends])
 
   const value = useMemo(
     () => ({ snapshots, setSnapshot, enqueueToBackend, enqueueToAll }),

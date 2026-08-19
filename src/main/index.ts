@@ -25,6 +25,7 @@ import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
 import { getVisiblePanes } from '../shared/layout-metrics'
+import { hasApiKey, IMAGE_BACKEND_SECRET } from './config/api-keys-store'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../shared/types'
 import type { Platform } from '../shared/electron-api'
 import { startupFailureMessage } from './startup-error'
@@ -64,15 +65,30 @@ process.on('unhandledRejection', (reason) => {
 })
 
 // How many panes the right-hand group will show, from the one shared rule the
-// renderer's layout also uses (shared/layout-metrics), so the window minimum and
-// what is painted can never disagree.
-//
-// Every cloud backend counts as keyed for now, which reproduces the behaviour
-// this replaced. Passing real key presence here is what starts hiding columns,
-// and that waits on the renderer being able to see presence too — otherwise the
-// window would size itself for panes the UI still draws.
+// renderer's layout also uses (shared/layout-metrics), fed the same two inputs:
+// which keys resolve (environment first — the renderer learns this only through
+// settings:getApiKeyPresence, but here it is a direct call) and which backends
+// hold tasks. Deriving both sides from one rule is what keeps the window minimum
+// from disagreeing with the panes actually painted.
 function visiblePaneCount(): number {
-  return getVisiblePanes(process.platform as Platform, CLOUD_BACKEND_IDS_IN_UI_ORDER).length
+  const keyed = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) =>
+    hasApiKey(IMAGE_BACKEND_SECRET[backend])
+  )
+  const tasks = queueManager.getAllStoredTasks()
+  const occupied = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) => (tasks[backend]?.length ?? 0) > 0)
+  return getVisiblePanes(process.platform as Platform, keyed, occupied).length
+}
+
+// Re-apply the window minimum after anything that can change the pane count —
+// a key stored or cleared, a session's tasks restored. Electron grows a window
+// that sits below a raised minimum, which is the window fitting a column that
+// just appeared; a lowered minimum only widens what the user may drag to, and
+// never resizes anything on its own.
+export function refreshWindowMinimumSize(): void {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win || win.isDestroyed()) return
+  const { minWidth, minHeight } = buildMainWindowOptions(visiblePaneCount())
+  win.setMinimumSize(minWidth, minHeight)
 }
 
 function createWindow(): void {
