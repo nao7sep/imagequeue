@@ -279,7 +279,22 @@ export function Submenu({
         onKeyDown={onParentKeyDown}
       >
         <span>{label}</span>
-        <span className="menu-submenu-arrow" aria-hidden="true">▸</span>
+        {/* Drawn, not typed: the glyph ▸ renders tiny and font-dependent at
+            this size. Same stroke idiom as the hamburger trigger's SVG. */}
+        <svg
+          className="menu-submenu-arrow"
+          width="1em"
+          height="1em"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="9 5 17 12 9 19" />
+        </svg>
       </button>
       {open && (
         <div

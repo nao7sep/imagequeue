@@ -8,6 +8,8 @@ import {
   closeConceptStore,
   deleteConcept,
   deleteFacet,
+  deleteProbe,
+  listProbesWithStats,
   drawConcept,
   ensureFacet,
   listConceptRows,
@@ -189,6 +191,33 @@ describe('concept store', () => {
     markProbeExpanded(pa.id)
     expect(unexpandedProbes(f.id, 10).map((p) => p.id)).not.toContain(pa.id)
     expect(listProbeDisplays(f.id)).toHaveLength(2)
+  })
+
+  it('deleteProbe removes its whole cluster and nothing beside it', () => {
+    const f = ensureFacet('place')
+    addProbes(f.id, ['ports', 'forests'])
+    const [ports, forests] = unexpandedProbes(f.id, 2)
+    addConcepts(f.id, ports.id, ['dock', 'wharf'])
+    addConcepts(f.id, forests.id, ['clearing'])
+    const c = draw(f.id, { excludeProbeIds: [forests.id] })!
+    recordUse(c.id, 's1')
+    deleteProbe(ports.id)
+    expect(listProbesWithStats(f.id).map((p) => p.display)).toEqual(['forests'])
+    expect(listConceptRows(f.id).map((r) => r.display)).toEqual(['clearing'])
+    // The deleted cluster's use is gone too, so the window no longer counts it.
+    expect(listFacetsWithStats()[0].conceptCount).toBe(1)
+  })
+
+  it('listProbesWithStats reports per-cluster counts', () => {
+    const f = ensureFacet('place')
+    addProbes(f.id, ['ports'])
+    const [ports] = unexpandedProbes(f.id, 1)
+    addConcepts(f.id, ports.id, ['dock', 'wharf'])
+    const c = draw(f.id)!
+    recordUse(c.id, 's1')
+    const [stats] = listProbesWithStats(f.id)
+    expect(stats.conceptCount).toBe(2)
+    expect(stats.unusedCount).toBe(1)
   })
 
   it('deleteConcept drops the row and its uses; deleteFacet cascades', () => {

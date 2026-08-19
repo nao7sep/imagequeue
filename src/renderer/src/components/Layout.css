@@ -147,6 +147,9 @@
   margin-left: 12px;
   font-size: 11px;
   color: var(--text-muted);
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .menu-submenu {

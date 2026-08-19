@@ -121,6 +121,7 @@ export function createDefaultConfig(): AppConfig {
     },
     brainstorm: {
       batch_size: 10,
+      concurrency: 12,
       max_retries_per_turn: 3,
       retry_backoff_ms: [1000, 2000, 4000],
       prefer_new_concepts: false,

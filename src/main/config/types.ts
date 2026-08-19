@@ -130,6 +130,11 @@ export interface BrainstormConfig {
   // Prompts per expansion call. Each call is independent, so this trades
   // fewer/larger calls against progress granularity, nothing else.
   batch_size: number
+  // Expansion calls in flight at once. Concurrent turns hold disjoint concept
+  // assignments by construction (draws serialize before any call fires), so
+  // this trades only wall time against provider rate limits — an overshoot
+  // lands in the retry path as a 429, never in a correctness failure.
+  concurrency: number
   max_retries_per_turn: number
   retry_backoff_ms: number[]
   // Mint new concept values in preference to reusing ones whose last use has

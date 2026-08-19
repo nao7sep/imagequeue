@@ -22,12 +22,14 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/elaborators', () => ({ getElaborator: vi.fn() }))
 vi.mock('../../src/main/text-ai', () => ({ getMainProvider: vi.fn() }))
 vi.mock('../../src/main/session', () => ({ getSessionId: () => 'test-session' }))
+const mockKnobs = vi.hoisted(() => ({ concurrency: 1 }))
 vi.mock('../../src/main/text-ai/templates', () => ({
   PROMPTS_RESPONSE_SCHEMA: { marker: 'prompts' },
   fillTemplate: (template: string, values: Record<string, string>) =>
     Object.entries(values).reduce((out, [key, value]) => out.split(`{{${key}}}`).join(value), template),
   getRuntimeBrainstormConfig: () => ({
     batch_size: 2,
+    concurrency: mockKnobs.concurrency,
     max_retries_per_turn: 0,
     retry_backoff_ms: [],
     prefer_new_concepts: false,
@@ -54,6 +56,8 @@ interface ScriptOptions {
   onProseCall?: (call: number) => void
   /** Probes yielded per generation ask; default 12. */
   probesPerGeneration?: number
+  /** Per-prose-call artificial latency in ms (drives the concurrency tests). */
+  proseDelayMs?: (call: number) => number
 }
 
 interface Script {
@@ -62,6 +66,8 @@ interface Script {
   proseCalls: { messages: AskOptions['messages']; text: string }[]
   /** The concept assignment lines each prose call carried. */
   assignmentLines: () => string[]
+  /** The most prose calls ever simultaneously in flight. */
+  maxProseInFlight: () => number
 }
 
 // A provider that recognizes each planning ask by its structural marker and
@@ -71,6 +77,8 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
   let probeCounter = 0
   let conceptCounter = 0
   let proseCounter = 0
+  let proseInFlight = 0
+  let maxInFlight = 0
   const proseCalls: Script['proseCalls'] = []
   const ask = vi.fn(async (options: AskOptions): Promise<AskResult> => {
     const text = options.messages[options.messages.length - 1].text
@@ -94,13 +102,19 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
     }
     // Prose call: "exp|...|N" followed by assignment lines.
     proseCounter++
-    opts.onProseCall?.(proseCounter)
+    const call = proseCounter
+    opts.onProseCall?.(call)
     proseCalls.push({ messages: options.messages, text })
+    proseInFlight++
+    maxInFlight = Math.max(maxInFlight, proseInFlight)
+    const delay = opts.proseDelayMs?.(call) ?? 0
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
+    proseInFlight--
     const asked = Number(text.split('\n')[0].split('|').pop())
-    const produce = opts.promptsPerCall?.(asked, proseCounter) ?? asked
+    const produce = opts.promptsPerCall?.(asked, call) ?? asked
     return {
       text: '',
-      parsed: { prompts: Array.from({ length: produce }, (_, i) => `prompt ${proseCounter}-${i + 1}`) },
+      parsed: { prompts: Array.from({ length: produce }, (_, i) => `prompt ${call}-${i + 1}`) },
     }
   })
   const provider: TextAIProvider = { ask }
@@ -112,6 +126,7 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
     proseCalls,
     assignmentLines: () =>
       proseCalls.flatMap((c) => c.text.split('\n').filter((line) => /^\d+\. /.test(line))),
+    maxProseInFlight: () => maxInFlight,
   }
 }
 
@@ -133,6 +148,7 @@ describe('brainstormPrompts (concept-driven)', () => {
   beforeEach(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-brainstorm-'))
     process.env[ENV_VAR] = tmpRoot
+    mockKnobs.concurrency = 1
     vi.mocked(getElaborator).mockImplementation((id: string) =>
       id === 'content' || id === 'composition' || id === 'style'
         ? elaboratorFor(id as ElaboratorKind)
@@ -194,6 +210,24 @@ describe('brainstormPrompts (concept-driven)', () => {
       expect(used).toHaveLength(2)
       expect(new Set(used.map((r) => r.probe)).size).toBe(2)
     }
+  })
+
+  it('runs a wave of prose calls concurrently when concurrency allows', async () => {
+    mockKnobs.concurrency = 3
+    const script = installScriptedProvider({ proseDelayMs: () => 5 })
+    await brainstormPrompts(request({ requestId: 'rw', count: 6 }))
+    // count 6 at batch 2 = 3 turns; all fired in one wave.
+    expect(script.proseCalls).toHaveLength(3)
+    expect(script.maxProseInFlight()).toBe(3)
+  })
+
+  it('assembles wave results in turn order even when turns finish out of order', async () => {
+    mockKnobs.concurrency = 2
+    // Turn 1 resolves SLOWER than turn 2; the collected list must still carry
+    // turn 1's prompts first, because prompts map to assignments by position.
+    installScriptedProvider({ proseDelayMs: (call) => (call === 1 ? 30 : 1) })
+    const result = await brainstormPrompts(request({ requestId: 'ro', count: 4 }))
+    expect(result.prompts).toEqual(['prompt 1-1', 'prompt 1-2', 'prompt 2-1', 'prompt 2-2'])
   })
 
   it('plans the facets concurrently, not one after another', async () => {

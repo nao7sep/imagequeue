@@ -15,6 +15,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
   ConceptFacetSummary,
+  ConceptProbeSummary,
   ConceptRow,
 } from './types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
@@ -95,6 +96,7 @@ export interface ElectronAPI {
   cancelBrainstorm: (requestId: string) => Promise<void>
   brainstormGetDefaults: () => Promise<{
     batch_size: number
+    concurrency: number
     max_retries_per_turn: number
     retry_backoff_ms: number[]
     prefer_new_concepts: boolean
@@ -106,6 +108,8 @@ export interface ElectronAPI {
   // Concept ledger (the Concept Library modal)
   listConceptFacets: () => Promise<ConceptFacetSummary[]>
   listConceptRows: (facetId: number) => Promise<ConceptRow[]>
+  listConceptProbes: (facetId: number) => Promise<ConceptProbeSummary[]>
+  deleteConceptProbe: (probeId: number) => Promise<void>
   deleteConceptRow: (conceptId: number) => Promise<void>
   deleteConceptFacet: (facetId: number) => Promise<void>
   promptsGetDefaultSlug: () => Promise<string>

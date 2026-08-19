@@ -323,6 +323,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   const { formats, lengths } = brainstormConfig.format_directives
   const formatDirective = `${formats[req.format]} ${lengths[req.length]}`
   const batchSize = Math.max(1, brainstormConfig.batch_size)
+  const concurrency = Math.max(1, brainstormConfig.concurrency)
   const maxRetries = Math.max(0, brainstormConfig.max_retries_per_turn)
   const preferNew = brainstormConfig.prefer_new_concepts === true
 
@@ -355,67 +356,102 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
     while (collected.length < req.count) {
       if (controller.signal.aborted) break
-      const askFor = Math.min(req.count - collected.length, batchSize)
-      turn++
+      // Plan a wave: up to `concurrency` turns of up to batchSize prompts each.
+      const waveSizes: number[] = []
+      let waveLeft = req.count - collected.length
+      while (waveLeft > 0 && waveSizes.length < concurrency) {
+        const size = Math.min(waveLeft, batchSize)
+        waveSizes.push(size)
+        waveLeft -= size
+      }
+      const waveTotal = waveSizes.reduce((a, b) => a + b, 0)
+      turn += waveSizes.length
 
-      // One assignment per requested prompt: one drawn value per facet. Each
-      // facet produces its column concurrently (see obtainConceptsForFacet);
-      // the columns then zip into per-prompt assignments.
+      // Draw EVERY assignment for the wave before any prose call fires. Draws
+      // are the serialization point of the whole mechanism — synchronous store
+      // reads guarded by the in-run excludes — so concurrent turns hold
+      // disjoint assignments by construction, and the prose calls themselves
+      // never touch the ledger. Each facet fills its column concurrently.
       const perFacet = await Promise.all(
         facets.map((facet) =>
           obtainConceptsForFacet(
-            facet, ask, sessionId, preferNew, excludesByFacet.get(facet.id)!, askFor
+            facet, ask, sessionId, preferNew, excludesByFacet.get(facet.id)!, waveTotal
           )
         )
       )
-      const assignments = Array.from({ length: askFor }, (_, i) =>
-        facets.map((facet, fi) => ({ facet, concept: perFacet[fi][i] }))
+      const waveAssignments: { facet: FacetRow; concept: DrawnConcept }[][][] = []
+      let offset = 0
+      for (const size of waveSizes) {
+        const start = offset
+        waveAssignments.push(
+          Array.from({ length: size }, (_, i) =>
+            facets.map((facet, fi) => ({ facet, concept: perFacet[fi][start + i] }))
+          )
+        )
+        offset += size
+      }
+
+      // Fire the wave. Progress accumulates as turns complete, in whatever
+      // order they land; the results assemble in turn order below, so the
+      // prompt list and the position mapping stay deterministic.
+      let done = collected.length
+      const settled = await Promise.allSettled(
+        waveAssignments.map(async (assignments) => {
+          const conceptsText = assignments
+            .map((parts, i) => `${i + 1}. ${parts.map((p) => `${p.facet.display}: ${p.concept.display}`).join('; ')}`)
+            .join('\n')
+          const userMessage = fillTemplate(brainstormConfig.templates.expansion, {
+            ELABORATOR: combinedElaboratorTemplate,
+            FORMAT: formatDirective,
+            SEED: req.seed,
+            CONCEPTS: conceptsText,
+            N: String(assignments.length),
+          })
+          // Fresh context on every turn: exactly one user message, never the
+          // conversation so far. This is the attractor kill — nothing of the
+          // model's own output is available for it to imitate.
+          const newPrompts = await askJsonWithRetry(
+            handle.provider,
+            [{ role: 'user', text: userMessage }],
+            PROMPTS_RESPONSE_SCHEMA,
+            handle.timeoutMs,
+            (parsed) => {
+              const prompts = extractPromptsFromParsed(parsed)
+              return prompts.length > 0 ? prompts : null
+            },
+            maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
+          )
+          const kept = newPrompts.slice(0, assignments.length)
+          done = Math.min(done + kept.length, req.count)
+          broadcastProgress({ requestId: req.requestId, done, total: req.count })
+          return { assignments, kept }
+        })
       )
 
-      const conceptsText = assignments
-        .map((parts, i) => `${i + 1}. ${parts.map((p) => `${p.facet.display}: ${p.concept.display}`).join('; ')}`)
-        .join('\n')
-      const userMessage = fillTemplate(brainstormConfig.templates.expansion, {
-        ELABORATOR: combinedElaboratorTemplate,
-        FORMAT: formatDirective,
-        SEED: req.seed,
-        CONCEPTS: conceptsText,
-        N: String(assignments.length),
-      })
-
-      // Fresh context on every turn: exactly one user message, never the
-      // conversation so far. This is the attractor kill — nothing of the
-      // model's own output is available for it to imitate.
-      const newPrompts = await askJsonWithRetry(
-        handle.provider,
-        [{ role: 'user', text: userMessage }],
-        PROMPTS_RESPONSE_SCHEMA,
-        handle.timeoutMs,
-        (parsed) => {
-          const prompts = extractPromptsFromParsed(parsed)
-          return prompts.length > 0 ? prompts : null
-        },
-        maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
-      )
-
-      // Prompts map to assignments by position; a use is recorded only for
-      // assignments whose prompt actually came back. An overshoot is trimmed;
-      // an undercount leaves the loop to top up with fresh assignments.
-      const kept = newPrompts.slice(0, assignments.length)
-      collected.push(...kept)
-      for (let i = 0; i < kept.length; i++) {
-        for (const part of assignments[i]) recordUse(part.concept.id, sessionId)
+      // Assemble in TURN ORDER, keeping the ordered prefix of successes. A
+      // failed turn drops any later fulfilled turns (their tokens are spent
+      // but their values were never recorded as uses, so nothing is burnt);
+      // prompts map to assignments by position, and a use is recorded only
+      // for assignments whose prompt actually came back. An undercounting
+      // turn leaves the outer loop to top up with a fresh wave.
+      let failure: unknown = null
+      for (const outcome of settled) {
+        if (outcome.status === 'rejected') {
+          failure = outcome.reason
+          break
+        }
+        collected.push(...outcome.value.kept)
+        for (let i = 0; i < outcome.value.kept.length; i++) {
+          for (const part of outcome.value.assignments[i]) recordUse(part.concept.id, sessionId)
+        }
+      }
+      if (failure !== null) {
+        throw failure instanceof Error ? failure : new Error(String(failure))
       }
 
       // The prompts themselves persist in the session manifest's
       // `elaboratedPrompts` array — no need to duplicate them here.
-      log('debug', 'Brainstorm turn complete', { turn, count: kept.length })
-
-      broadcastProgress({
-        requestId: req.requestId,
-        done: Math.min(collected.length, req.count),
-        total: req.count,
-      })
+      log('debug', 'Brainstorm wave complete', { turns: turn, collected: collected.length })
     }
 
     log('info', 'Brainstorm complete', {

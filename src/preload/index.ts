@@ -16,6 +16,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
   ConceptFacetSummary,
+  ConceptProbeSummary,
   ConceptRow,
 } from '../shared/types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
@@ -134,6 +135,7 @@ const api = {
 
   brainstormGetDefaults: (): Promise<{
     batch_size: number
+    concurrency: number
     max_retries_per_turn: number
     retry_backoff_ms: number[]
     prefer_new_concepts: boolean
@@ -149,6 +151,10 @@ const api = {
     ipcRenderer.invoke('concepts:listFacets'),
   listConceptRows: (facetId: number): Promise<ConceptRow[]> =>
     ipcRenderer.invoke('concepts:listConcepts', facetId),
+  listConceptProbes: (facetId: number): Promise<ConceptProbeSummary[]> =>
+    ipcRenderer.invoke('concepts:listProbes', facetId),
+  deleteConceptProbe: (probeId: number): Promise<void> =>
+    ipcRenderer.invoke('concepts:deleteProbe', probeId),
   deleteConceptRow: (conceptId: number): Promise<void> =>
     ipcRenderer.invoke('concepts:deleteConcept', conceptId),
   deleteConceptFacet: (facetId: number): Promise<void> =>

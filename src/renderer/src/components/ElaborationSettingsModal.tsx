@@ -20,6 +20,7 @@ interface Props {
 
 interface BrainstormForm {
   batch_size: number
+  concurrency: number
   max_retries_per_turn: number
   retry_backoff_ms_csv: string
   prefer_new_concepts: boolean
@@ -31,6 +32,7 @@ interface BrainstormForm {
 
 interface BrainstormConfig {
   batch_size: number
+  concurrency: number
   max_retries_per_turn: number
   retry_backoff_ms: number[]
   prefer_new_concepts: boolean
@@ -56,6 +58,7 @@ function cleanDirectives(d: FormatDirectives): FormatDirectives {
 function fromConfig(cfg: BrainstormConfig): BrainstormForm {
   return {
     batch_size: cfg.batch_size,
+    concurrency: cfg.concurrency,
     max_retries_per_turn: cfg.max_retries_per_turn,
     retry_backoff_ms_csv: cfg.retry_backoff_ms.join(', '),
     prefer_new_concepts: cfg.prefer_new_concepts,
@@ -170,6 +173,10 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       setMessage('Batch size must be an integer between 1 and 50.')
       return
     }
+    if (form.concurrency < 1 || form.concurrency > 24 || !Number.isInteger(form.concurrency)) {
+      setMessage('Concurrency must be an integer between 1 and 24.')
+      return
+    }
     if (form.max_retries_per_turn < 0 || form.max_retries_per_turn > 10 || !Number.isInteger(form.max_retries_per_turn)) {
       setMessage('Max retries must be an integer between 0 and 10.')
       return
@@ -198,6 +205,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       // breaks, keep horizontal spacing).
       const next = {
         batch_size: form.batch_size,
+        concurrency: form.concurrency,
         max_retries_per_turn: form.max_retries_per_turn,
         retry_backoff_ms: backoff.value,
         prefer_new_concepts: form.prefer_new_concepts,
@@ -275,6 +283,17 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
               onChange={(e) => setForm({ ...form, batch_size: parseInt(e.target.value) || 1 })}
             />
             <span className="elaboration-settings-hint">prompts per expansion call (1–50)</span>
+          </div>
+          <div className="elaboration-settings-row">
+            <label>Concurrency</label>
+            <input
+              type="number"
+              min={1}
+              max={24}
+              value={form.concurrency}
+              onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || 1 })}
+            />
+            <span className="elaboration-settings-hint">expansion calls in flight at once (1–24) — lower it if your provider rate-limits</span>
           </div>
           <div className="elaboration-settings-row">
             <label>Max retries per turn</label>

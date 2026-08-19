@@ -230,11 +230,20 @@ export interface ConceptFacetSummary {
 
 export interface ConceptRow {
   id: number
+  probeId: number
   display: string
   probe: string
   useCount: number
   lastUsedAt: string | null
   createdAt: string
+}
+
+export interface ConceptProbeSummary {
+  id: number
+  display: string
+  expanded: number
+  conceptCount: number
+  unusedCount: number
 }
 
 export interface SessionSummary {

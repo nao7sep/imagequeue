@@ -2,8 +2,10 @@ import { handle } from './ipc-boundary'
 import {
   deleteConcept,
   deleteFacet,
+  deleteProbe,
   listConceptRows,
   listFacetsWithStats,
+  listProbesWithStats,
 } from './concepts/concept-store'
 
 // IPC for the Concept Library modal: read the concept ledger's facets and
@@ -12,6 +14,10 @@ import {
 export function registerConceptsIpc(): void {
   handle('concepts:listFacets', () => listFacetsWithStats())
   handle('concepts:listConcepts', (_event, facetId: number) => listConceptRows(facetId))
+  handle('concepts:listProbes', (_event, facetId: number) => listProbesWithStats(facetId))
+  handle('concepts:deleteProbe', (_event, probeId: number) => {
+    deleteProbe(probeId)
+  })
   handle('concepts:deleteConcept', (_event, conceptId: number) => {
     deleteConcept(conceptId)
   })

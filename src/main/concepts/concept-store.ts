@@ -263,6 +263,7 @@ export function listFacetsWithStats(): ConceptFacetSummary[] {
 
 export interface ConceptListRow {
   id: number
+  probeId: number
   display: string
   probe: string
   useCount: number
@@ -272,12 +273,47 @@ export interface ConceptListRow {
 
 export function listConceptRows(facetId: number): ConceptListRow[] {
   return open().prepare(`
-    SELECT c.id, c.display, p.display AS probe, c.use_count AS useCount,
-           c.last_used_at AS lastUsedAt, c.created_at AS createdAt
+    SELECT c.id, c.probe_id AS probeId, c.display, p.display AS probe,
+           c.use_count AS useCount, c.last_used_at AS lastUsedAt, c.created_at AS createdAt
     FROM concepts c JOIN probes p ON p.id = c.probe_id
     WHERE c.facet_id = ?
     ORDER BY c.use_count DESC, c.display ASC
   `).all(facetId) as unknown as ConceptListRow[]
+}
+
+export interface ConceptProbeSummary {
+  id: number
+  display: string
+  expanded: number
+  conceptCount: number
+  unusedCount: number
+}
+
+/** Domains of a facet with their cluster statistics, creation order. */
+export function listProbesWithStats(facetId: number): ConceptProbeSummary[] {
+  return open().prepare(`
+    SELECT p.id, p.display, p.expanded,
+      (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id) AS conceptCount,
+      (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0) AS unusedCount
+    FROM probes p WHERE p.facet_id = ? ORDER BY p.id
+  `).all(facetId) as unknown as ConceptProbeSummary[]
+}
+
+/** Delete one domain with its whole cluster: concepts and their use history.
+ *  Like concept deletion this drops rows, it does not blocklist — a future
+ *  probe-generation ask may re-propose a similar domain. */
+export function deleteProbe(probeId: number): void {
+  const d = open()
+  d.exec('BEGIN')
+  try {
+    d.prepare('DELETE FROM uses WHERE concept_id IN (SELECT id FROM concepts WHERE probe_id = ?)').run(probeId)
+    d.prepare('DELETE FROM concepts WHERE probe_id = ?').run(probeId)
+    d.prepare('DELETE FROM probes WHERE id = ?').run(probeId)
+    d.exec('COMMIT')
+  } catch (err) {
+    d.exec('ROLLBACK')
+    throw err
+  }
 }
 
 /** Delete one concept and its use history. The value may be re-discovered by a

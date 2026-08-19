@@ -1,5 +1,10 @@
+/* A working surface, not a dialog: the library holds thousands of rows, so the
+   modal takes most of the window and scrolls inside its panes. */
 .concept-library-modal-box {
-  width: min(860px, 92vw);
+  /* Override the shell's default cap (Modal.css max-width): the library is a
+     working surface over thousands of rows, so it takes most of the window. */
+  width: min(1240px, 94vw);
+  max-width: 94vw;
 }
 
 .concept-library-body {
@@ -7,14 +12,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
+  height: min(72vh, 780px);
   min-height: 0;
-}
-
-.concept-library-note {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-secondary);
 }
 
 .concept-library-message {
@@ -23,7 +22,7 @@
 }
 
 .concept-library-empty {
-  padding: 24px 0;
+  padding: 32px 0;
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
@@ -31,8 +30,9 @@
 
 .concept-library-columns {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 14px;
+  flex: 1;
   min-height: 0;
 }
 
@@ -41,11 +41,11 @@
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
-  max-height: 55vh;
+  min-height: 0;
 }
 
 .concept-library-facet {
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--bg-primary);
@@ -60,7 +60,7 @@
 }
 
 .concept-library-facet-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -74,8 +74,9 @@
 .concept-library-detail {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+  min-height: 0;
 }
 
 .concept-library-toolbar {
@@ -87,7 +88,16 @@
 .concept-library-toolbar input[type='search'] {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.concept-library-toolbar select {
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-input);
@@ -95,40 +105,71 @@
   font-size: 12px;
 }
 
-.concept-library-rows {
+.concept-library-sections {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   overflow-y: auto;
-  max-height: 48vh;
+  min-height: 0;
+  padding-right: 2px;
 }
 
-.concept-library-row {
+.concept-library-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  overflow: hidden;
+  /* Sections are flex children of the scrolling column; without this they
+     shrink below content height (overflow:hidden permits it) and 96 domains
+     collapse into 96 hairlines. The column scrolls; sections never shrink. */
+  flex-shrink: 0;
+}
+
+.concept-library-section-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg-primary);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-secondary));
 }
 
-.concept-library-row-main {
-  min-width: 0;
-}
-
-.concept-library-row-name {
+.concept-library-section-title {
   font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.concept-library-row-meta {
+.concept-library-section-meta {
   font-size: 11px;
   color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Dense value grid: several concepts per line, each row a compact card. */
+.concept-library-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+
+.concept-library-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 10px;
+  background: var(--bg-primary);
+}
+
+.concept-library-row-name {
+  font-size: 12px;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -138,4 +179,16 @@
   font-size: 11px;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.concept-library-row .modal-btn,
+.concept-library-section-header .modal-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.concept-library-totals {
+  font-size: 12px;
+  color: var(--text-muted);
+  align-self: center;
 }
