@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Menu, MenuItem } from './Menu'
+import { MenuItem, Submenu } from './Menu'
 import { useConfirm } from '../context/ConfirmContext'
 import type { QueueControlState } from '../../../shared/types'
 
-// The queue's control surface: one small button beside the app menu, opening the
-// four actions that were previously impossible or only reachable by quitting the
-// app. Deliberately a menu rather than a row of buttons — every item here is
-// rare, and rare destructive actions should cost a deliberate second click
-// rather than sit permanently under the cursor.
+// The queue's control surface: a submenu in the app menu, plus the one piece of
+// it that has to be visible without opening anything.
+//
+// Everything here is rare — pausing, stopping, clearing — so none of it earns
+// permanent space in a window that is already dense with per-backend controls,
+// and a rare destructive action should cost a deliberate second click rather
+// than sit under the cursor.
 //
 // Pause is first because it is the common case: stop starting new work, let the
 // image already generating finish and save. Stopping mid-generation throws away
 // a partly-done image (and, on a paid backend, a call already billed), so it is
 // the second choice, not the default.
-export function QueueControlMenu(): React.JSX.Element {
-  const confirm = useConfirm()
+
+function useQueueControlState(): { state: QueueControlState | null; refresh: () => Promise<void> } {
   const [state, setState] = useState<QueueControlState | null>(null)
 
   useEffect(() => {
@@ -27,6 +29,28 @@ export function QueueControlMenu(): React.JSX.Element {
   const refresh = useCallback(async (): Promise<void> => {
     setState(await window.electronAPI.getQueueControlState())
   }, [])
+
+  return { state, refresh }
+}
+
+/**
+ * Paused is a standing state, and the only part of this surface that must be
+ * readable without opening a menu: a queue that starts nothing looks broken
+ * rather than held. Nothing is drawn while the queue runs.
+ */
+export function QueuePausedBadge(): React.JSX.Element | null {
+  const { state } = useQueueControlState()
+  if (!state?.paused) return null
+  return (
+    <span className="queue-paused-badge" title="The queue is paused; nothing new will start">
+      Paused
+    </span>
+  )
+}
+
+export function QueueControlSubmenu(): React.JSX.Element {
+  const confirm = useConfirm()
+  const { state, refresh } = useQueueControlState()
 
   const paused = state?.paused ?? false
   const generating = state?.generating ?? 0
@@ -41,9 +65,12 @@ export function QueueControlMenu(): React.JSX.Element {
   const handleStopGenerating = useCallback(async (): Promise<void> => {
     const ok = await confirm({
       title: 'Stop Generating',
+      // Aborting a cloud request stops us waiting; it does not stop the
+      // provider, which bills the call either way. Said here rather than
+      // discovered on an invoice.
       message: generating === 1
-        ? 'Stop the image currently generating? Its work so far is discarded, and it becomes retryable.'
-        : `Stop the ${generating} images currently generating? Their work so far is discarded, and they become retryable.`,
+        ? 'Stop the image currently generating? Its work so far is discarded and it becomes retryable, but a paid backend may still bill the call.'
+        : `Stop the ${generating} images currently generating? Their work so far is discarded and they become retryable, but a paid backend may still bill the calls.`,
       confirmLabel: 'Stop',
       danger: true,
     })
@@ -86,23 +113,7 @@ export function QueueControlMenu(): React.JSX.Element {
   }, [confirm, queued, refresh])
 
   return (
-    <Menu
-      label="Queue controls"
-      trigger={(props) => (
-        <button
-          className={`queue-control-btn${paused ? ' paused' : ''}`}
-          aria-label="Queue controls"
-          title={paused ? 'Queue paused' : 'Queue controls'}
-          {...props}
-        >
-          {/* Drawn, not typed: pause bars when running (the action available),
-              a play triangle when paused (what resuming would do). */}
-          <svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            {paused ? <path d="M8 5v14l11-7z" /> : <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />}
-          </svg>
-        </button>
-      )}
-    >
+    <Submenu label="Queue">
       <MenuItem onSelect={() => void handlePause()}>
         {paused ? 'Resume queue' : 'Pause queue'}
       </MenuItem>
@@ -118,6 +129,6 @@ export function QueueControlMenu(): React.JSX.Element {
       <MenuItem onSelect={() => void handleClearPending()} disabled={queued === 0}>
         {queued > 0 ? `Clear pending (${queued})` : 'Clear pending'}
       </MenuItem>
-    </Menu>
+    </Submenu>
   )
 }

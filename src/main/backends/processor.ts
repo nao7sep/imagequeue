@@ -8,7 +8,7 @@ import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
-import { CANCELLED_MESSAGE, isQueuePaused } from './cancellation'
+import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight } from './cancellation'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
@@ -16,7 +16,11 @@ import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
 
-type GenerateFn = (task: Task) => Promise<{ buffer: Buffer; mimeType?: string }>
+// Every generator takes the queue's cancellation signal. It is a parameter
+// rather than something each backend registers for itself: registration lived
+// in Draw Things alone, which made "stop generating" a Draw-Things-only command
+// and left the four cloud backends running with no way to reach them.
+type GenerateFn = (task: Task, signal: AbortSignal) => Promise<{ buffer: Buffer; mimeType?: string }>
 
 const generators: Record<BackendId, GenerateFn> = {
   openai: generateOpenAI,
@@ -116,8 +120,14 @@ export function processQueues(): void {
 async function processTask(backend: BackendId, task: Task): Promise<void> {
   const generate = generators[backend]
 
+  // The processor owns the canceller for the whole run, so the registry holds an
+  // entry for every generating task whatever backend it belongs to — which is
+  // also what makes the menu's "generating" count the real one.
+  const controller = new AbortController()
+  registerInFlight(task.id, () => controller.abort())
+
   try {
-    const { buffer: imageBuffer, mimeType } = await generate(task)
+    const { buffer: imageBuffer, mimeType } = await generate(task, controller.signal)
     const completedAt = new Date()
 
     task.completedAt = completedAt.toISOString()
@@ -171,7 +181,9 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     // `interrupted` — the same status a crash mid-generation produces — so the
     // existing per-row retry and bulk "Retry All" already put it back in the
     // queue, and the row reads "interrupted" rather than showing an error.
-    if (message === CANCELLED_MESSAGE) {
+    // `signal.aborted` is the authority, not the message: an SDK that turns an
+    // abort into its own error type would otherwise be recorded as a failure.
+    if (message === CANCELLED_MESSAGE || controller.signal.aborted) {
       task.status = 'interrupted'
       task.startedAt = null
       task.completedAt = null
@@ -195,6 +207,8 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       params: task.params,
       durationMs: task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : null
     })
+  } finally {
+    clearInFlight(task.id)
   }
 
   persistActiveSession()

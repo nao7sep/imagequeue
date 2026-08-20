@@ -12,7 +12,7 @@ import { ShortcutsModal } from './ShortcutsModal'
 import { AboutModal } from './AboutModal'
 import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
-import { QueueControlMenu } from './QueueControlMenu'
+import { QueueControlSubmenu, QueuePausedBadge } from './QueueControls'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
@@ -287,9 +287,11 @@ export function Layout(): React.JSX.Element {
       )}
       <div className="left-pane">
         <div className="pane-toolbar">
-          <span className="app-name">ImageQueue</span>
+          <div className="pane-toolbar-title">
+            <span className="app-name">ImageQueue</span>
+            <QueuePausedBadge />
+          </div>
           <div className="pane-toolbar-actions">
-          <QueueControlMenu />
           <Menu
             label="Main menu"
             trigger={(props) => (
@@ -311,6 +313,7 @@ export function Layout(): React.JSX.Element {
               </button>
             )}
           >
+            <QueueControlSubmenu />
             <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder() }}>Open Output Folder</MenuItem>
             <MenuItem onSelect={() => setOverlay('sessions')}>Sessions</MenuItem>
             <MenuCheckboxItem checked={showKeptImages} onToggle={toggleShowKeptImages}>

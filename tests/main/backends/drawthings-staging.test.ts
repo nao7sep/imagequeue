@@ -63,7 +63,7 @@ describe('Draw Things output staging', () => {
       id: 't1', prompt: 'a cat', backend: 'drawthings', model: 'm.ckpt',
       params: {}, status: 'generating', enqueuedAt: '', startedAt: '', completedAt: null,
       durationMs: null, imagePath: null, baseName: null, error: null,
-    } as never)
+    } as never, new AbortController().signal)
 
     expect(result.buffer.length).toBeGreaterThan(0)
     const outPath = spawnCalls[0].args[spawnCalls[0].args.indexOf('--output') + 1]

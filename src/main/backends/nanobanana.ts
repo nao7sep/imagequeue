@@ -5,13 +5,14 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 import { assertUsableGeminiResponse } from '../provider-response'
+import { CANCELLED_MESSAGE } from './cancellation'
 
 // Calls the Gemini native image generation API (generateContent) and returns
 // the first image part as a Buffer along with its MIME-type hint. The Gemini
 // API may return either PNG or JPEG bytes; callers should rely on the hint
 // (and magic-byte detection) rather than assuming a fixed format.
 // Uses the 'gemini.nanobanana' secret (its own key, not the text_ai key).
-export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
+export async function generateNanoBanana(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('gemini.nanobanana')
 
@@ -38,9 +39,13 @@ export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; 
     contents: task.prompt,
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
+      // Client-side only, per the SDK: aborting stops us waiting, it does not
+      // stop the service, and the call is still billed.
+      abortSignal: signal,
       ...(supportsImageConfig && { imageConfig: { aspectRatio, imageSize } })
     } as Record<string, unknown>
   }).catch((err: unknown) => {
+    if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
       throw new Error(`Nano Banana API timed out after ${config.image_backends.nanobanana.timeout_ms / 1000}s`)

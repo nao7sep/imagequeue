@@ -3,13 +3,14 @@ import { FLUX_MAX_PIXELS, FLUX_SIZE_STEP } from '../../shared/models'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
+import { CANCELLED_MESSAGE } from './cancellation'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
 
 // Calls FLUX API (async submit/poll/download flow) and returns the image bytes
 // plus the Content-Type reported by the signed-URL download.
-export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
+export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('bfl')
 
@@ -44,8 +45,13 @@ export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeTy
   const startTime = Date.now()
 
   const { timeout_ms } = config.image_backends.flux
+  // One controller, two reasons to fire: the request's own timeout and the
+  // queue asking to stop. Aborting it also breaks the polling loop, which would
+  // otherwise keep asking for a result nobody is waiting for.
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout_ms)
+  const onAbort = (): void => controller.abort()
+  signal.addEventListener('abort', onAbort, { once: true })
 
   try {
     const submitResponse = await fetch(`${BASE_URL}/${task.model}`, {
@@ -116,6 +122,9 @@ export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeTy
       // Otherwise status is "Pending" or "Processing" — keep polling
     }
   } catch (err) {
+    // The queue's signal and the timeout share one controller, so the abort
+    // alone cannot say which fired; `signal.aborted` can.
+    if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'FLUX generation timed out', { model: task.model, timeoutMs: timeout_ms, elapsedMs: Date.now() - startTime })
       throw new Error(`FLUX generation timed out after ${timeout_ms / 1000}s`)
@@ -123,6 +132,7 @@ export async function generateFlux(task: Task): Promise<{ buffer: Buffer; mimeTy
     throw err
   } finally {
     clearTimeout(timer)
+    signal.removeEventListener('abort', onAbort)
   }
 }
 

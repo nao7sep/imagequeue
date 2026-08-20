@@ -2,13 +2,14 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
+import { CANCELLED_MESSAGE } from './cancellation'
 
 const BASE_URL = 'https://api.x.ai/v1'
 
 // Calls the xAI Grok Imagine image generation API and returns the image bytes
 // with an `image/jpeg` MIME hint. The API always returns JPEG — no format
 // selection is available.
-export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
+export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('xai')
 
@@ -17,8 +18,13 @@ export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeTy
   }
 
   const { timeout_ms } = config.image_backends.grok
+  // One controller, two reasons to fire: the request's own timeout and the
+  // queue asking to stop. Which one fired is read back off `signal` below, so a
+  // stop is never logged or recorded as a timeout.
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout_ms)
+  const onAbort = (): void => controller.abort()
+  signal.addEventListener('abort', onAbort, { once: true })
 
   const params = task.params as { aspectRatio?: string; resolution?: string; quality?: string }
 
@@ -65,6 +71,9 @@ export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeTy
 
     return { buffer: Buffer.from(b64, 'base64'), mimeType: 'image/jpeg' }
   } catch (err) {
+    // The queue's signal and the timeout share one controller, so the abort
+    // alone cannot say which fired; `signal.aborted` can.
+    if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Grok Imagine timed out', { model: task.model, timeoutMs: timeout_ms })
       throw new Error(`Grok API timed out after ${timeout_ms / 1000}s`)
@@ -78,5 +87,6 @@ export async function generateGrok(task: Task): Promise<{ buffer: Buffer; mimeTy
     throw err
   } finally {
     clearTimeout(timer)
+    signal.removeEventListener('abort', onAbort)
   }
 }

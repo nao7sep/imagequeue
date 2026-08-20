@@ -5,15 +5,15 @@ import { nanoid } from 'nanoid'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getTempDir } from '../dependencies/paths'
-import { CANCELLED_MESSAGE, clearInFlight, registerInFlight } from './cancellation'
+import { CANCELLED_MESSAGE } from './cancellation'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
-export async function generateDrawThings(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
-  return generateDrawThingsCli(task)
+export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
+  return generateDrawThingsCli(task, signal)
 }
 
-async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
+async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const defaults = config.image_backends.drawthings.default_params
   const cliPath = resolveCliPath()
@@ -77,16 +77,18 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
 
     // The child process is the ONLY handle that can stop a Draw Things
     // generation: there is no request to abort and the CLI runs to completion
-    // otherwise. Registered for the duration of the run so the queue can reach
-    // it, with the same SIGTERM-then-SIGKILL escalation cli-jobs uses for
-    // downloads — a CLI mid-write ignores a polite signal often enough to matter.
-    registerInFlight(task.id, () => {
+    // otherwise. The queue's signal reaches it here, with the same
+    // SIGTERM-then-SIGKILL escalation cli-jobs uses for downloads — a CLI
+    // mid-write ignores a polite signal often enough to matter.
+    const onAbort = (): void => {
       cancelled = true
       try { proc.kill('SIGTERM') } catch { /* already gone */ }
       setTimeout(() => {
         try { proc.kill('SIGKILL') } catch { /* already gone */ }
       }, 2000)
-    })
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    proc.on('close', () => signal.removeEventListener('abort', onAbort))
 
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     proc.on('close', (code) => {
@@ -104,7 +106,7 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
       log('error', 'draw-things-cli spawn failed', { cliPath, error: serializeError(err) })
       reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
     })
-  }).finally(() => clearInFlight(task.id))
+  })
 
   if (!fs.existsSync(outputPath)) {
     log('error', 'draw-things-cli produced no output file', { model: task.model, outputPath })

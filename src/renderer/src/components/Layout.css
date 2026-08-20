@@ -300,39 +300,33 @@
   text-decoration: underline;
 }
 
-/* Queue controls sit beside the app menu: one small button, not a row of
-   actions. Everything behind it is rare, and a rare destructive action should
-   cost a deliberate click rather than live permanently under the cursor. */
+.pane-toolbar-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .pane-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
-.queue-control-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 15px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.queue-control-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
-
-/* Paused is a standing state the user must be able to see without opening the
-   menu — otherwise a queue that starts nothing looks broken. */
-.queue-control-btn.paused {
+/* Paused is a standing state the user must be able to see WITHOUT opening a
+   menu — a queue that starts nothing looks broken rather than held. It is the
+   one part of the queue's control surface that stays in the window, and it
+   costs nothing while the queue runs: the element is not rendered at all. */
+.queue-paused-badge {
+  flex-shrink: 0;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--warning);
+  border-radius: 999px;
   color: var(--warning);
-  border-color: var(--warning);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .menu-item:disabled {

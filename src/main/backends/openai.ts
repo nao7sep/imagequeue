@@ -4,10 +4,11 @@ import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { buildOpenAIImageParams } from './openai-request'
+import { CANCELLED_MESSAGE } from './cancellation'
 
 // Calls OpenAI image generation API and returns the image bytes plus a
 // MIME-type hint derived from the user-selected output_format.
-export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mimeType?: string }> {
+export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('openai.image')
 
@@ -27,7 +28,10 @@ export async function generateOpenAI(task: Task): Promise<{ buffer: Buffer; mime
     prompt: task.prompt,
     n: 1,
     stream: false,
-  }).catch((err: unknown) => {
+  }, { signal }).catch((err: unknown) => {
+    // A stop the user asked for is not a timeout and not a failure; checked
+    // first so the log does not claim otherwise.
+    if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (
       err instanceof Error &&
       (err.name === 'AbortError' ||
