@@ -2,9 +2,11 @@
    modal takes most of the window and scrolls inside its panes. */
 .concept-library-modal-box {
   /* Override the shell's default cap (Modal.css max-width): the library is a
-     working surface over thousands of rows, so it takes most of the window. */
-  width: min(1240px, 94vw);
-  max-width: 94vw;
+     working surface over thousands of values, so it takes the same share of
+     the window as Advanced Prompting — the chips wrap to fill whatever width
+     they are given. */
+  width: 95vw;
+  max-width: 1500px;
 }
 
 .concept-library-body {
@@ -149,31 +151,35 @@
   white-space: nowrap;
 }
 
-/* Dense value grid: several concepts per line, each row a compact card. */
+/* Content-sized chips wrapping freely: as many per line as the width holds,
+   no column grid to cap them — which is also what makes the wide modal pay
+   off, and what survives a narrow window with no special casing (chips just
+   wrap sooner). */
 .concept-library-rows {
-  display: grid;
-  /* min(280px, 100%) instead of a bare 280px floor: the window minimum is
-     DERIVED from visible panes (layout-metrics), so with few API keys it can
-     sit at ~551px — where a fixed 280px card floor beside the facet rail
-     overflows the modal. min(…, 100%) keeps the density everywhere it fits
-     and degrades to one full-width column where it does not. */
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-  gap: 1px;
-  background: var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
 }
 
 .concept-library-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--space-2);
+  display: inline-flex;
   align-items: center;
-  padding: var(--space-1) var(--space-2);
+  gap: var(--space-2);
+  /* The facet rail's own padding, per row — the chips were visibly tighter
+     than the rail beside them. */
+  padding: var(--space-2) var(--space-3);
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
 }
 
 .concept-library-row-name {
   font-size: var(--text-sm);
   color: var(--text-primary);
+  /* Content-sized, so nothing to ellipsize in the normal case; the guard only
+     bites when a single chip hits the container width. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

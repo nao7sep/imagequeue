@@ -264,14 +264,22 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                           {sectionRows.length > 0 && (
                             <div className="concept-library-rows">
                               {sectionRows.map((row) => (
-                                <div key={row.id} className="concept-library-row">
-                                  <div className="concept-library-row-name" title={row.display}>
+                                /* The chip shows what gets consulted — the value
+                                   and how spent it is; WHEN it was last drawn is
+                                   trivia, so it lives in the tooltip with the
+                                   added date. */
+                                <div
+                                  key={row.id}
+                                  className="concept-library-row"
+                                  title={row.useCount === 0
+                                    ? `never used · added ${formatUiDateTime(row.createdAt)}`
+                                    : `used ${row.useCount}× · last ${formatUiDateTime(row.lastUsedAt ?? row.createdAt)} · added ${formatUiDateTime(row.createdAt)}`}
+                                >
+                                  <div className="concept-library-row-name">
                                     {row.display}
                                   </div>
                                   <div className="concept-library-row-stats">
-                                    {row.useCount === 0
-                                      ? 'unused'
-                                      : `${row.useCount}× · ${formatUiDateTime(row.lastUsedAt ?? row.createdAt)}`}
+                                    {row.useCount === 0 ? 'unused' : `${row.useCount}×`}
                                   </div>
                                   {/* Pointer-only affordances (tabIndex -1): the facet
                                       rail is the keyboard surface; this pane is a
