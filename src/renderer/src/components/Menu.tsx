@@ -114,6 +114,33 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
+  // Escape closes from ANYWHERE, the symmetric half of the outside-click handler
+  // above. The popup's own onKeyDown only sees keys aimed at the menu, so an open
+  // menu whose focus had moved elsewhere ignored Escape entirely while a click
+  // still dismissed it — the one dismissable surface in the app that did not
+  // answer Escape.
+  //
+  // A nested Escape is already safe without this listener's help: Submenu's
+  // handler calls stopPropagation, so the native event never reaches document and
+  // one Escape closes one level. The `defaultPrevented` check is therefore
+  // defensive rather than load-bearing — it keeps the focused path's own handler
+  // (which preventDefaults, closes, and pulls focus back to the trigger) as the
+  // one that runs, instead of both firing for the same keystroke.
+  //
+  // Focus is deliberately NOT pulled back to the trigger here: the key came from
+  // somewhere else, and yanking the caret out of whatever the user was typing in
+  // would be a worse surprise than the menu closing quietly.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: globalThis.KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (isComposing()) return
+      setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, isComposing])
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (e.key === 'Escape' || e.key === 'Tab') {
       e.preventDefault()
