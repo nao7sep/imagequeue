@@ -61,7 +61,7 @@ export function Icon({ name, className }: { name: IconName; className?: string }
       focusable="false"
       // CSS lands an inline SVG's box BOTTOM on the text baseline, not its art;
       // this puts the drawn baseline there instead. Inert inside a flex control.
-      style={{ verticalAlign: '-0.1667em' }}
+      style={{ display: 'inline-block', verticalAlign: '-0.1667em' }}
     >
       {PATHS[name]}
     </svg>

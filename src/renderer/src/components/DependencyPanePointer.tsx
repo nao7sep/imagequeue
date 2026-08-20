@@ -40,6 +40,12 @@ function summarize(state: DependenciesState): string {
   if (state.cli.state === 'update-available') return 'Draw Things CLI update available'
   if (state.recommendations.state === 'update-available') return 'Recommended parameters update available'
   if (state.recommendations.state === 'not-installed') return 'Recommended parameters not downloaded'
+  // Two different informational stories, told apart: a present CLI whose version
+  // could not be read needs re-acquiring (the modal's Update), where a
+  // merely-unchecked one only needs a check.
+  if (state.cli.state === 'installed-unchecked' && !state.cli.installedLabel) {
+    return 'Draw Things CLI version unreadable'
+  }
   return 'Draw Things dependencies not checked'
 }
 
