@@ -120,12 +120,12 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
   // still dismissed it — the one dismissable surface in the app that did not
   // answer Escape.
   //
-  // A nested Escape is already safe without this listener's help: Submenu's
-  // handler calls stopPropagation, so the native event never reaches document and
-  // one Escape closes one level. The `defaultPrevented` check is therefore
-  // defensive rather than load-bearing — it keeps the focused path's own handler
-  // (which preventDefaults, closes, and pulls focus back to the trigger) as the
-  // one that runs, instead of both firing for the same keystroke.
+  // `defaultPrevented` is this listener's version of the containment check above:
+  // the click handler refuses events that belong to the menu, and a GLOBAL key
+  // handler must likewise refuse a key another surface has already claimed —
+  // otherwise it closes a menu sitting under anything that handles Escape itself.
+  // (A nested Escape needs no help from it: Submenu calls stopPropagation, so the
+  // native event never reaches document and one Escape closes one level.)
   //
   // Focus is deliberately NOT pulled back to the trigger here: the key came from
   // somewhere else, and yanking the caret out of whatever the user was typing in

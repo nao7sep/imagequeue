@@ -63,6 +63,31 @@ describe('Menu — Escape closes it from anywhere', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  // An Escape another surface has already claimed is not also the menu's. The
+  // document listener is global, so without this it would close a menu sitting
+  // under anything that handles Escape itself — the keyboard analogue of the
+  // outside-click listener refusing clicks that land inside the menu. Simulated
+  // the way a layered handler actually behaves: claim the key in the capture
+  // phase, before the listener on document sees it.
+  it('leaves the menu open when another handler has already claimed the Escape', async () => {
+    renderMenu()
+    await openMenu()
+    const claim = (e: globalThis.KeyboardEvent): void => {
+      if (e.key === 'Escape') e.preventDefault()
+    }
+    document.addEventListener('keydown', claim, true)
+    try {
+      const outside = document.createElement('button')
+      document.body.appendChild(outside)
+      outside.focus()
+      fireEvent.keyDown(outside, { key: 'Escape' })
+      expect(screen.queryByRole('menu')).toBeTruthy()
+      outside.remove()
+    } finally {
+      document.removeEventListener('keydown', claim, true)
+    }
+  })
+
   // One Escape must close ONE level. Submenu's handler calls stopPropagation, so
   // the native event never reaches the document listener — this pins that the
   // new listener cannot collapse the whole menu in a single keystroke.
