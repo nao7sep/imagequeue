@@ -293,6 +293,8 @@
   font-size: var(--text-md);
   color: var(--accent);
   text-decoration: none;
+  /* An icon plus its words is one label: never break between them. */
+  white-space: nowrap;
 }
 .about-link:hover {
   text-decoration: underline;

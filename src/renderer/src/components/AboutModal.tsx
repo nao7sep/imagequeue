@@ -1,4 +1,5 @@
 import { Modal } from './Modal'
+import { Icon } from './Icon'
 
 interface Props {
   onClose: () => void
@@ -32,7 +33,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
               window.electronAPI.openExternal(e.currentTarget.href)
             }}
           >
-            GitHub ↗
+            GitHub <Icon name="external-link" />
           </a>
           <a
             href="https://github.com/nao7sep/imagequeue/issues"
@@ -43,7 +44,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
               window.electronAPI.openExternal(e.currentTarget.href)
             }}
           >
-            Report Issue ↗
+            Report Issue <Icon name="external-link" />
           </a>
         </div>
         <p className="about-copyright">

@@ -21,6 +21,7 @@ export type IconName =
   | 'upload'
   | 'stop'
   | 'dots'
+  | 'external-link'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   'chevron-right': <polyline points="9 5 17 12 9 19" />,
@@ -39,6 +40,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
   upload: <><polyline points="8 8 12 4 16 8" /><line x1="12" y1="4" x2="12" y2="16" /><path d="M4 20h16" /></>,
   stop: <rect x="6" y="6" width="12" height="12" rx="1" />,
   dots: <><circle cx="12" cy="5" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="12" cy="19" r="1.2" /></>,
+  // A window with an arrow leaving it. Its ink is fitted to the ↗ it replaces and
+  // sits ON the baseline: a box hanging below one reads as broken beside capitals.
+  'external-link': <><path d="M15.90 12.50L15.90 19.00L5.50 19.00L5.50 8.60L12.00 8.60" /><path d="M13.30 5.57L18.50 5.57L18.50 10.77" /><path d="M18.50 5.57L11.13 12.93" /></>,
 }
 
 export function Icon({ name, className }: { name: IconName; className?: string }): React.JSX.Element {
@@ -55,6 +59,9 @@ export function Icon({ name, className }: { name: IconName; className?: string }
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
+      // CSS lands an inline SVG's box BOTTOM on the text baseline, not its art;
+      // this puts the drawn baseline there instead. Inert inside a flex control.
+      style={{ verticalAlign: '-0.1667em' }}
     >
       {PATHS[name]}
     </svg>
