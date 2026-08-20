@@ -288,7 +288,6 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
                 </p>
                 <div className="dt-import-row">
                   <input
-                    className="dt-import-input"
                     placeholder="Model file path"
                     value={importPath}
                     onChange={(e) => setImportPath(e.target.value)}

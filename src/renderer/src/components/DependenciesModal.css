@@ -8,33 +8,33 @@
 .dependencies-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-3);
   /* The Modal shell renders the body un-padded; each modal pads its own. */
-  padding: 16px;
+  padding: var(--space-4);
 }
 
 .dependencies-intro {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .dependencies-error {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--error);
   border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
-  border-radius: 4px;
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
   background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
 .dependency-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
 }
 
 .dependency-main {
@@ -45,21 +45,21 @@
 .dependency-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .dependency-title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--text-primary);
 }
 
 .dependency-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--text-muted) 18%, transparent);
   color: var(--text-secondary);
 }
@@ -80,22 +80,22 @@
 }
 
 .dependency-desc {
-  margin: 6px 0 0;
-  font-size: 11px;
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .dependency-meta {
-  margin: 6px 0 0;
-  font-size: 11px;
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .dependency-progress {
-  margin-top: 10px;
+  margin-top: var(--space-2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .dependency-progress-bar {
@@ -113,18 +113,20 @@
 }
 
 .dependency-progress-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .dependency-action {
   flex-shrink: 0;
-  padding: 6px 14px;
+  height: var(--control-md);
+  padding: var(--control-pad-md);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   color: var(--text-primary);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -140,7 +142,7 @@
 .dependencies-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }

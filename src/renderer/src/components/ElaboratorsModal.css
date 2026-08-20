@@ -9,25 +9,28 @@
 .elaborators-body {
   flex: 1;
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--space-3);
+  padding: var(--space-4);
   overflow: hidden;
   min-height: 0;
 }
 
 .elaborators-message {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
   color: var(--error);
   background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
 .elaborators-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  /* One equal column per lane, derived rather than counted: the grid had been
+     pinned at three and kept an empty third after the content lane was dropped. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-3);
   min-height: 0;
 }
 
@@ -37,7 +40,7 @@
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
   overflow: hidden;
 }
@@ -46,8 +49,8 @@
 .elaborators-pane-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--space-2);
+  padding: var(--space-3);
   background: var(--bg-primary);
 }
 
@@ -63,7 +66,7 @@
 }
 
 .elaborators-pane-title {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -72,7 +75,7 @@
 
 .elaborators-pane-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -81,32 +84,32 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-2);
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .elaborators-empty {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 14px 12px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .elaborators-list {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .elaborator-row {
   display: block;
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   text-align: left;
   cursor: pointer;
 }
@@ -133,7 +136,7 @@
 }
 
 .elaborator-row-name {
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -142,8 +145,8 @@
 }
 
 .elaborator-row-desc {
-  margin-top: 3px;
-  font-size: 12px;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.35;
   display: -webkit-box;
@@ -154,47 +157,43 @@
 
 .elaborator-editor {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2);
   border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
   background: var(--bg-primary);
-  scroll-margin-top: 12px;
+  scroll-margin-top: var(--space-3);
 }
 
 .elaborator-editor-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .elaborator-field {
   display: grid;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .elaborator-field input,
 .elaborator-field textarea {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 7px 9px;
   background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: inherit;
+  border-radius: var(--radius-md);
 }
 
+/* The template body is the text being written, so it takes the body size. */
 .elaborator-field textarea {
-  resize: vertical;
   min-height: 180px;
+  font-size: var(--text-md);
 }
 
 .elaborator-editor-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .elaborators-help {

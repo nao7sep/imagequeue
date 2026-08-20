@@ -9,10 +9,10 @@
 .sessions-modal-body {
   flex: 1;
   min-height: 0;
-  padding: 16px;
+  padding: var(--space-4);
   overflow-y: auto;
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   align-content: start;
 }
 
@@ -20,12 +20,12 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .sessions-modal-note {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--text-secondary);
   flex: 1;
@@ -35,9 +35,9 @@
 .sessions-modal-message,
 .sessions-modal-empty {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .sessions-modal-warning {
@@ -57,16 +57,16 @@
 
 .sessions-list {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .session-card {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
-  padding: 12px;
+  padding: var(--space-3);
   display: grid;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 /* Persistent selected mark: a bordered item, so it emphasizes via its own
@@ -85,19 +85,19 @@
 
 .session-card-header {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .session-card-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .session-card-title {
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--text-primary);
   word-break: break-word;
@@ -107,35 +107,35 @@
   flex-shrink: 0;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 11px;
+  padding: 1px var(--space-2);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--accent);
 }
 
 .session-card-summary {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .session-card-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  font-size: 12px;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .session-preview-strip {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 64px;
 }
 
 .session-preview-thumb {
   width: 64px;
   height: 64px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   object-fit: cover;
   background: var(--bg-surface);
@@ -148,5 +148,5 @@
 .session-card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }

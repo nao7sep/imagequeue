@@ -10,28 +10,28 @@
 .concept-library-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   height: min(72vh, 780px);
   min-height: 0;
 }
 
 .concept-library-message {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--error);
 }
 
 .concept-library-empty {
-  padding: 32px 0;
+  padding: var(--space-5) 0;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .concept-library-columns {
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr);
-  gap: 14px;
+  gap: var(--space-3);
   flex: 1;
   min-height: 0;
 }
@@ -39,15 +39,15 @@
 .concept-library-facets {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   overflow-y: auto;
   min-height: 0;
 }
 
 .concept-library-facet {
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   cursor: pointer;
   outline: none;
@@ -60,55 +60,39 @@
 }
 
 .concept-library-facet-name {
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .concept-library-facet-meta {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 .concept-library-detail {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-2);
   min-width: 0;
   min-height: 0;
 }
 
 .concept-library-toolbar {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 
 .concept-library-toolbar input[type='search'] {
   flex: 1;
-  min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 13px;
-}
-
-.concept-library-toolbar select {
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 12px;
 }
 
 .concept-library-sections {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   overflow-y: auto;
   min-height: 0;
   padding-right: 2px;
@@ -116,7 +100,7 @@
 
 .concept-library-section {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
   overflow: hidden;
   /* Sections are flex children of the scrolling column; without this they
@@ -128,15 +112,15 @@
 .concept-library-section-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  gap: var(--space-2);
   align-items: center;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--accent) 7%, var(--bg-secondary));
 }
 
 .concept-library-section-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -145,7 +129,7 @@
 }
 
 .concept-library-section-meta {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -161,14 +145,14 @@
 .concept-library-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
-  padding: 5px 10px;
+  padding: var(--space-1) var(--space-2);
   background: var(--bg-primary);
 }
 
 .concept-library-row-name {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -176,19 +160,22 @@
 }
 
 .concept-library-row-stats {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
+/* Row actions in a list of thousands take the small control, not the modal
+   default: --control-sm is exactly this case. */
 .concept-library-row .modal-btn,
 .concept-library-section-header .modal-btn {
-  padding: 2px 8px;
-  font-size: 11px;
+  height: var(--control-sm);
+  padding: var(--control-pad-sm);
+  font-size: var(--text-xs);
 }
 
 .concept-library-totals {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   align-self: center;
 }

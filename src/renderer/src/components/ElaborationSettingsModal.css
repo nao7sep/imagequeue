@@ -7,31 +7,31 @@
 }
 
 .elaboration-settings-body {
-  padding: 16px;
+  padding: var(--space-4);
   overflow-y: auto;
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   flex: 1;
   min-height: 0;
 }
 
 
 .elaboration-settings-empty {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .elaboration-settings-section {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
   background: var(--bg-primary);
 }
 
 .elaboration-settings-section-title {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -40,7 +40,7 @@
 
 .elaboration-settings-help {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -48,7 +48,7 @@
 .elaboration-settings-help code {
   background: var(--bg-surface);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
 }
 
@@ -56,32 +56,28 @@
   display: grid;
   grid-template-columns: 180px 140px 1fr;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .elaboration-settings-row label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
 .elaboration-settings-row input {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 9px;
   background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 13px;
+  border-radius: var(--radius-md);
 }
 
 .elaboration-settings-hint {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .elaboration-settings-template {
   display: grid;
-  gap: 4px;
-  font-size: 13px;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -90,27 +86,23 @@
 }
 
 .elaboration-settings-tags {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
+/* The template body is the text being written, so it takes the body size. */
 .elaboration-settings-template textarea {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
   background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
 }
 
 .elaboration-settings-message {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
   color: var(--error);
   background: color-mix(in srgb, var(--error) 10%, transparent);
 }
@@ -118,5 +110,5 @@
 .elaboration-settings-reset-row {
   display: flex;
   justify-content: flex-end;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }

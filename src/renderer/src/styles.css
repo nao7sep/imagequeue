@@ -60,6 +60,7 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 24px;
 
   /* The app ships a single dark theme; declare it so native form controls and
      any built-in browser UI render in the dark palette (the global scroll-bar
