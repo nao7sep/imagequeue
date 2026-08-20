@@ -100,6 +100,10 @@ export async function checkAllDependencies(): Promise<DependenciesState> {
  * check is older than the staleness cap. Never throws — a failed check just
  * leaves that dependency 'installed-unchecked'. */
 export async function checkDependenciesAtLaunch(): Promise<void> {
+  // The CLI and its recommendations are macOS-only; on any other platform this
+  // would fetch GitHub releases for a binary the machine cannot run and cache
+  // an "update available" nobody can act on.
+  if (process.platform !== 'darwin') return
   if (!checkUpdatesAtLaunch()) return
   const cache = readDependenciesCache()
   const now = Date.now()
