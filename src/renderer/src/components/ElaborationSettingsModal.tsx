@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
-import { singleLine, multiline } from '../utils/textCleanup'
+import { singleLine, multiline } from '../../../shared/textCleanup'
 import {
   PROMPT_FORMATS,
   PROMPT_LENGTHS,

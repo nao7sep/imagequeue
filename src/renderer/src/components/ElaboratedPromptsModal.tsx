@@ -3,7 +3,7 @@ import { Modal } from './Modal'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
-import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
+import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import './ElaboratedPromptsModal.css'
 
 interface Props {

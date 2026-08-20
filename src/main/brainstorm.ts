@@ -15,6 +15,7 @@ import {
   drawConcept,
   ensureFacet,
   listFacetDisplays,
+  listFacetsWithStats,
   listProbeDisplays,
   markProbeExpanded,
   recordUse,
@@ -33,6 +34,12 @@ import {
 import type { ConversationMessage, TextAIProvider } from './text-ai'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
 import { log, serializeError } from './logger'
+import { truncate } from '../shared/textCleanup'
+
+/** How much of a rejected reply the log keeps. Long enough to recognize what
+ *  came back — a markdown fence, an apology, a truncated object — and far short
+ *  of storing the reply. */
+const REJECTED_PAYLOAD_PREVIEW_GRAPHEMES = 200
 
 export interface BrainstormRequest {
   requestId: string
@@ -140,6 +147,11 @@ function extractPromptsFromParsed(parsed: unknown): string[] {
   return candidate.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
 }
 
+/** Which call a retry belongs to. Planning and prose share this path, so
+ *  without it a retry line cannot say whether an aspects ask or a prose turn is
+ *  the one struggling — and those have very different causes. */
+type CallLabel = 'aspects' | 'domains' | 'clusters' | 'prose'
+
 // One schema-forced JSON call with up to maxRetries retries. `validate` turns
 // the parsed payload into the caller's value, or returns null to reject the
 // attempt and retry — so a transport failure and an unusable payload follow the
@@ -152,7 +164,9 @@ async function askJsonWithRetry<T>(
   validate: (parsed: unknown, rawText: string) => T | null,
   maxRetries: number,
   backoffSchedule: number[],
-  signal: AbortSignal
+  signal: AbortSignal,
+  label: CallLabel,
+  requestId: string
 ): Promise<T> {
   let lastError: unknown = null
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -163,7 +177,7 @@ async function askJsonWithRetry<T>(
         ? backoffSchedule[Math.min(attempt - 1, backoffSchedule.length - 1)]
         : 1000
       log('warn', 'Brainstorm call failed, retrying', {
-        attempt, backoff,
+        requestId, call: label, attempt, backoff,
         error: serializeError(lastError),
       })
       await sleep(backoff)
@@ -186,7 +200,19 @@ async function askJsonWithRetry<T>(
       })
       const value = validate(result.parsed, result.text)
       if (value === null) {
-        log('warn', 'Brainstorm call returned no usable payload', { rawText: result.text })
+        // The reply is the only clue to why the schema was not met, so some of
+        // it earns a place — but a whole model response is a dump, and the
+        // logging conventions want a summary. Minified head plus the real
+        // length: enough to recognize a fenced block or an apology, bounded.
+        const preview = truncate(result.text ?? '', REJECTED_PAYLOAD_PREVIEW_GRAPHEMES)
+        log('warn', 'Brainstorm call returned no usable payload', {
+          requestId,
+          call: label,
+          attempt,
+          replyChars: (result.text ?? '').length,
+          replyPreview: preview.text,
+          previewTruncated: preview.truncated,
+        })
         throw new Error('Text AI returned no usable payload.')
       }
       return value
@@ -212,6 +238,50 @@ interface RunExcludes {
 }
 
 /**
+ * What one run did to the ledger, accumulated as it goes and reported once at
+ * the end. Per-draw lines would scale with the prompt count, which the logging
+ * conventions put at `debug`; these are the aggregate the `info` summary needs.
+ */
+interface RunStats {
+  draws: number
+  mints: number
+  probesGenerated: number
+  conceptsAdded: number
+  staleFallbacks: number
+}
+
+function newRunStats(): RunStats {
+  return { draws: 0, mints: 0, probesGenerated: 0, conceptsAdded: 0, staleFallbacks: 0 }
+}
+
+/** Ledger-wide totals: what the store holds across every facet, not just this
+ *  run's. One query, taken only at run boundaries. */
+function ledgerTotals(): { facets: number; domains: number; concepts: number; unused: number } {
+  const all = listFacetsWithStats()
+  return {
+    facets: all.length,
+    domains: all.reduce((n, f) => n + f.probeCount, 0),
+    concepts: all.reduce((n, f) => n + f.conceptCount, 0),
+    unused: all.reduce((n, f) => n + f.unusedCount, 0),
+  }
+}
+
+/** Per-facet stock for the facets this run drew on — the numbers that explain
+ *  why a run minted, or fell back to a stale value, or did neither. */
+function facetInventory(facets: readonly FacetRow[]): Record<string, unknown>[] {
+  const byId = new Map(listFacetsWithStats().map((f) => [f.id, f]))
+  return facets.map((facet) => {
+    const stats = byId.get(facet.id)
+    return {
+      facet: facet.display,
+      concepts: stats?.conceptCount ?? 0,
+      unused: stats?.unusedCount ?? 0,
+      domains: stats?.probeCount ?? 0,
+    }
+  })
+}
+
+/**
  * Produce `count` values for one facet, minting as needed. Facets are
  * independent — separate concept rows, separate clusters, separate excludes —
  * so the orchestrator runs one of these per facet CONCURRENTLY: planning-call
@@ -227,15 +297,31 @@ async function obtainConceptsForFacet(
   sessionId: string,
   preferNew: boolean,
   excludes: RunExcludes,
-  count: number
+  count: number,
+  requestId: string,
+  stats: RunStats
 ): Promise<DrawnConcept[]> {
   const out: DrawnConcept[] = []
+  const mintsBefore = stats.mints
   for (let i = 0; i < count; i++) {
-    const concept = await obtainConcept(facet, ask, sessionId, preferNew, excludes, count - i)
+    const concept = await obtainConcept(
+      facet, ask, sessionId, preferNew, excludes, count - i, requestId, stats
+    )
     excludes.concepts.add(concept.id)
     excludes.probes.add(concept.probeId)
+    stats.draws++
     out.push(concept)
   }
+  // One line per facet per wave, not per value: a 300-prompt run draws 1,200
+  // values, which is the scale the conventions send to `debug` — and this is
+  // the aggregate that answers "did this facet have to mint?".
+  log('debug', 'Concepts drawn for facet', {
+    requestId,
+    facet: facet.display,
+    drawn: count,
+    mintedRounds: stats.mints - mintsBefore,
+    values: out.map((c) => c.display),
+  })
   return out
 }
 
@@ -251,7 +337,9 @@ async function obtainConcept(
   sessionId: string,
   preferNew: boolean,
   excludes: RunExcludes,
-  valuesStillNeeded: number
+  valuesStillNeeded: number,
+  requestId: string,
+  stats: RunStats
 ): Promise<DrawnConcept> {
   const baseOpts = {
     sessionId,
@@ -265,27 +353,71 @@ async function obtainConcept(
   for (let round = 0; round < MAX_REFILL_ROUNDS; round++) {
     // Mine only what this run still needs: a three-prompt run asks for three
     // domains, a long one still batches up to the ceiling.
+    const mintStart = Date.now()
+    let generated = 0
     let probes = unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
     if (probes.length === 0) {
+      const requested = planProbeGenerationSize(valuesStillNeeded)
       const texts = await generateProbes(
-        ask, facet.display, listProbeDisplays(facet.id), planProbeGenerationSize(valuesStillNeeded)
+        ask, facet.display, listProbeDisplays(facet.id), requested
       )
-      addProbes(facet.id, texts)
+      generated = addProbes(facet.id, texts)
+      stats.probesGenerated += generated
       probes = unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
-      // The model yielded no new probes; count the round and try again.
-      if (probes.length === 0) continue
+      if (probes.length === 0) {
+        // Not an error — the round is bounded and the next one tries again —
+        // but it is the shape of a pool that is running out of new ground, and
+        // silently retrying is how that stays invisible until the run fails.
+        log('warn', 'Domain generation added nothing new', {
+          requestId,
+          facet: facet.display,
+          round: round + 1,
+          requested,
+          returned: texts.length,
+          alreadyKnown: texts.length - generated,
+        })
+        continue
+      }
     }
     const clusters = await expandProbes(ask, facet.display, probes)
+    let added = 0
     for (const { probeId, concepts } of clusters) {
-      addConcepts(facet.id, probeId, concepts)
+      added += addConcepts(facet.id, probeId, concepts)
       markProbeExpanded(probeId)
     }
+    stats.conceptsAdded += added
+    stats.mints++
+    // A boundary crossing (two planning calls) with an aggregate outcome, so
+    // `info` — and it is the line that explains where a cold run's minutes go.
+    log('info', 'Minted concepts', {
+      requestId,
+      facet: facet.display,
+      round: round + 1,
+      neededValues: valuesStillNeeded,
+      domainsGenerated: generated,
+      domainsExpanded: probes.length,
+      conceptsAdded: added,
+      durationMs: Date.now() - mintStart,
+    })
     const fresh = drawConcept(facet.id, { ...baseOpts, allowStale: false })
     if (fresh) return fresh
   }
 
   const stale = drawConcept(facet.id, { ...baseOpts, allowStale: true })
-  if (stale) return stale
+  if (stale) {
+    // The mechanism degraded to reuse. Not a failure — the value is outside the
+    // window and unused this session — but it is the one event that says the
+    // pool could not stay ahead of the run, which is exactly what a repeat
+    // complaint would need to be traced back to.
+    stats.staleFallbacks++
+    log('warn', 'Fell back to a previously used concept', {
+      requestId,
+      facet: facet.display,
+      afterRounds: MAX_REFILL_ROUNDS,
+      concept: stale.display,
+    })
+    return stale
+  }
   throw new Error(
     `Could not obtain an unused "${facet.display}" concept after ${MAX_REFILL_ROUNDS} refill rounds.`
   )
@@ -341,20 +473,74 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
   const controller = new AbortController()
   activeControllers.set(req.requestId, controller)
+  const stats = newRunStats()
+
+  log('info', 'Brainstorm started', {
+    requestId: req.requestId,
+    requested: req.count,
+    seedLength: req.seed.length,
+    format: req.format,
+    length: req.length,
+    compositionElaborator: compositionElaborator.name,
+    styleElaborator: styleElaborator.name,
+    backend: handle.backend,
+    model: handle.modelId,
+    batchSize,
+    concurrency,
+    preferNew,
+    ledger: ledgerTotals(),
+  })
 
   // Planning calls share the prose calls' provider, retry policy, and abort
   // signal; validation is the planner's (it parses and throws on junk).
-  const ask: AskJson = (messages, schema) =>
-    askJsonWithRetry(
-      handle.provider, messages, schema, handle.timeoutMs,
-      (parsed) => (parsed === null || parsed === undefined ? null : parsed),
-      maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
-    )
+  // Every planning call crosses the same boundary, so it is logged in one
+  // place rather than three. `debug`, not `info`: the outcome each call feeds
+  // is already reported at `info` ("Concept aspects resolved", "Minted
+  // concepts"), and this is the developer's view of the calls behind it.
+  const ask: AskJson = async (messages, schema, label) => {
+    const started = Date.now()
+    log('debug', 'Planning call started', {
+      requestId: req.requestId,
+      call: label,
+      promptChars: messages.reduce((n, m) => n + m.text.length, 0),
+    })
+    try {
+      const parsed = await askJsonWithRetry(
+        handle.provider, messages, schema, handle.timeoutMs,
+        (p) => (p === null || p === undefined ? null : p),
+        maxRetries, brainstormConfig.retry_backoff_ms, controller.signal,
+        label, req.requestId
+      )
+      log('debug', 'Planning call finished', {
+        requestId: req.requestId, call: label, durationMs: Date.now() - started,
+      })
+      return parsed
+    } catch (err) {
+      // Cancellation is the user's doing, not a failure of the call.
+      if (controller.signal.aborted) throw err
+      log('error', 'Planning call failed', {
+        requestId: req.requestId,
+        call: label,
+        durationMs: Date.now() - started,
+        error: serializeError(err),
+      })
+      throw err
+    }
+  }
 
   try {
     broadcastProgress({ requestId: req.requestId, done: 0, total: req.count, phase: 'facets' })
+    const knownFacets = new Set(listFacetDisplays().map((d) => d.toLowerCase()))
     const facetNames = await resolveFacets(ask, req.seed, listFacetDisplays())
     const facets = facetNames.map((name) => ensureFacet(name))
+    const newFacets = facetNames.filter((name) => !knownFacets.has(name.toLowerCase()))
+    log('info', 'Concept aspects resolved', {
+      requestId: req.requestId,
+      aspects: facetNames,
+      newAspects: newFacets,
+      valuesNeededPerAspect: req.count,
+      inventory: facetInventory(facets),
+    })
     // Values and clusters drawn by this run, per facet. Draws are recorded as
     // uses only when their prompt comes back, so within the run these sets are
     // what keep a drawn-but-unrecorded value from being drawn twice.
@@ -386,7 +572,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       const perFacet = await Promise.all(
         facets.map((facet) =>
           obtainConceptsForFacet(
-            facet, ask, sessionId, preferNew, excludesByFacet.get(facet.id)!, waveTotal
+            facet, ask, sessionId, preferNew, excludesByFacet.get(facet.id)!, waveTotal,
+            req.requestId, stats
           )
         )
       )
@@ -430,7 +617,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
               const prompts = extractPromptsFromParsed(parsed)
               return prompts.length > 0 ? prompts : null
             },
-            maxRetries, brainstormConfig.retry_backoff_ms, controller.signal
+            maxRetries, brainstormConfig.retry_backoff_ms, controller.signal,
+            'prose', req.requestId
           )
           const kept = newPrompts.slice(0, assignments.length)
           done = Math.min(done + kept.length, req.count)
@@ -462,18 +650,28 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
       // The prompts themselves persist in the session manifest's
       // `elaboratedPrompts` array — no need to duplicate them here.
-      log('debug', 'Brainstorm wave complete', { turns: turn, collected: collected.length })
+      log('debug', 'Brainstorm wave complete', {
+        requestId: req.requestId,
+        turns: turn,
+        collected: collected.length,
+        requested: req.count,
+      })
     }
 
     log('info', 'Brainstorm complete', {
+      requestId: req.requestId,
       compositionElaborator: compositionElaborator.name,
       styleElaborator: styleElaborator.name,
       backend: handle.backend,
       model: handle.modelId,
       facets: facetNames,
       count: collected.length,
+      requested: req.count,
       turns: turn,
       durationMs: Date.now() - startTime,
+      concepts: stats,
+      inventory: facetInventory(facets),
+      ledger: ledgerTotals(),
     })
     return { prompts: collected.slice(0, req.count) }
   } catch (err) {
@@ -481,7 +679,12 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     // prose. Treat it as cancellation: keep what was collected.
     if (controller.signal.aborted) {
       log('info', 'Brainstorm cancelled', {
-        requestId: req.requestId, collected: collected.length, turns: turn,
+        requestId: req.requestId,
+        collected: collected.length,
+        requested: req.count,
+        turns: turn,
+        durationMs: Date.now() - startTime,
+        concepts: stats,
       })
       return { prompts: collected.slice(0, req.count) }
     }
@@ -494,6 +697,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       collected: collected.length,
       turns: turn,
       durationMs: Date.now() - startTime,
+      concepts: stats,
+      ledger: ledgerTotals(),
       error: serializeError(err),
     })
     throw err instanceof Error ? err : new Error(String(err))

@@ -4,7 +4,7 @@ import {
   multiline,
   truncate,
   PROMPT_PREVIEW_MIN_GRAPHEMES,
-} from '../../../../src/renderer/src/utils/textCleanup'
+} from '../../../../src/shared/textCleanup'
 
 // These mirror the test-proven cases from the convention's reference
 // verification, plus the specific shapes this app actually relies on:

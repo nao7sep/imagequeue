@@ -8,7 +8,7 @@ import { getModelsForBackend, findModel } from '../../../shared/models'
 import { CLOUD_BACKENDS } from '../backends'
 import { useDrawThingsColumn, DrawThingsControls } from './DrawThingsColumn'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
-import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
+import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import { useAutosavedImageBackendDefaults } from '../hooks/useAutosavedImageBackendDefaults'
 import {
   resolveSavedImageBackendDefaults,

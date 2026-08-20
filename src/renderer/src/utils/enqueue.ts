@@ -1,5 +1,5 @@
 import type { BackendId, EnqueueRequest } from '../../../shared/types'
-import { multiline } from './textCleanup'
+import { multiline } from '../../../shared/textCleanup'
 
 export interface EnqueueConfigSnapshot {
   model: string

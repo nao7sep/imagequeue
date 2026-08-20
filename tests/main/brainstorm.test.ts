@@ -22,7 +22,20 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/elaborators', () => ({ getElaborator: vi.fn() }))
 vi.mock('../../src/main/text-ai', () => ({ getMainProvider: vi.fn() }))
 vi.mock('../../src/main/session', () => ({ getSessionId: () => 'test-session' }))
-const mockKnobs = vi.hoisted(() => ({ concurrency: 1 }))
+// The log is the only window into a run that costs real money to watch, so what
+// it says is part of the contract, not decoration.
+const logCalls = vi.hoisted(
+  () => [] as { level: string; message: string; data: Record<string, unknown> }[],
+)
+vi.mock('../../src/main/logger', () => ({
+  log: (level: string, message: string, data: Record<string, unknown> = {}) => {
+    logCalls.push({ level, message, data })
+  },
+  serializeError: (err: unknown) => ({ message: String(err) }),
+}))
+const logged = (message: string): Record<string, unknown>[] =>
+  logCalls.filter((c) => c.message === message).map((c) => c.data)
+const mockKnobs = vi.hoisted(() => ({ concurrency: 1, maxRetries: 0 }))
 vi.mock('../../src/main/text-ai/templates', () => ({
   PROMPTS_RESPONSE_SCHEMA: { marker: 'prompts' },
   fillTemplate: (template: string, values: Record<string, string>) =>
@@ -30,7 +43,7 @@ vi.mock('../../src/main/text-ai/templates', () => ({
   getRuntimeBrainstormConfig: () => ({
     batch_size: 2,
     concurrency: mockKnobs.concurrency,
-    max_retries_per_turn: 0,
+    max_retries_per_turn: mockKnobs.maxRetries,
     retry_backoff_ms: [],
     prefer_new_concepts: false,
     templates: {
@@ -58,6 +71,8 @@ interface ScriptOptions {
   probesPerGeneration?: number
   /** Per-prose-call artificial latency in ms (drives the concurrency tests). */
   proseDelayMs?: (call: number) => number
+  /** Replaces a prose reply outright — used to stage an unusable payload. */
+  proseReplacement?: (call: number) => AskResult
 }
 
 interface Script {
@@ -110,6 +125,8 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
     const delay = opts.proseDelayMs?.(call) ?? 0
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
     proseInFlight--
+    const replaced = opts.proseReplacement?.(call)
+    if (replaced) return replaced
     const asked = Number(text.split('\n')[0].split('|').pop())
     const produce = opts.promptsPerCall?.(asked, call) ?? asked
     return {
@@ -148,6 +165,8 @@ describe('brainstormPrompts (concept-driven)', () => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-brainstorm-'))
     process.env[ENV_VAR] = tmpRoot
     mockKnobs.concurrency = 1
+    mockKnobs.maxRetries = 0
+    logCalls.length = 0
     vi.mocked(getElaborator).mockImplementation((id: string) =>
       id === 'composition' || id === 'style'
         ? elaboratorFor(id as ElaboratorKind)
@@ -290,6 +309,113 @@ describe('brainstormPrompts (concept-driven)', () => {
     })
     await expect(brainstormPrompts(request({ requestId: 'r9', count: 1 }))).rejects.toThrow('boom')
     expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  // A concept run is mostly invisible: it spends minutes on planning calls
+  // before a single prompt exists, and the only record of what it drew from,
+  // minted, or fell back to is the log. These pin the numbers that answer
+  // "why did this run take so long" and "why did that concept come back".
+  describe('what the log records', () => {
+    it('reports the ledger it started from and what it holds at the end', async () => {
+      installScriptedProvider()
+      await brainstormPrompts(request({ requestId: 'log1', count: 3 }))
+
+      const [started] = logged('Brainstorm started')
+      expect(started.requested).toBe(3)
+      expect(started.ledger).toEqual({ facets: 0, domains: 0, concepts: 0, unused: 0 })
+
+      const [complete] = logged('Brainstorm complete')
+      const ledger = complete.ledger as Record<string, number>
+      expect(ledger.facets).toBe(2)
+      expect(ledger.concepts).toBeGreaterThan(0)
+      // Two facets x three prompts, and a use recorded for each.
+      expect(complete.concepts).toMatchObject({ draws: 6 })
+    })
+
+    it('names the aspects, and which of them the ledger had never seen', async () => {
+      installScriptedProvider()
+      await brainstormPrompts(request({ requestId: 'log2', count: 1 }))
+      const [first] = logged('Concept aspects resolved')
+      expect(first.aspects).toEqual(['place', 'occupation'])
+      expect(first.newAspects).toEqual(['place', 'occupation'])
+
+      logCalls.length = 0
+      await brainstormPrompts(request({ requestId: 'log3', count: 1 }))
+      const [second] = logged('Concept aspects resolved')
+      expect(second.aspects).toEqual(['place', 'occupation'])
+      // Second run: the same aspects, none of them new.
+      expect(second.newAspects).toEqual([])
+    })
+
+    it('reports every mint with what it asked for and what it added', async () => {
+      installScriptedProvider()
+      await brainstormPrompts(request({ requestId: 'log4', count: 1 }))
+      const mints = logged('Minted concepts')
+      // One per facet: an empty ledger cannot answer the first draw.
+      expect(mints).toHaveLength(2)
+      for (const mint of mints) {
+        expect(mint.domainsGenerated).toBeGreaterThan(0)
+        expect(mint.domainsExpanded).toBeGreaterThan(0)
+        expect(mint.conceptsAdded).toBeGreaterThan(0)
+        expect(typeof mint.durationMs).toBe('number')
+      }
+    })
+
+    it('carries per-aspect stock, not just a grand total', async () => {
+      installScriptedProvider()
+      await brainstormPrompts(request({ requestId: 'log5', count: 2 }))
+      const [complete] = logged('Brainstorm complete')
+      const inventory = complete.inventory as Record<string, number>[]
+      expect(inventory.map((row) => row.facet)).toEqual(['place', 'occupation'])
+      for (const row of inventory) {
+        expect(row.concepts).toBeGreaterThan(0)
+        expect(row.domains).toBeGreaterThan(0)
+        // Two prompts drew two values from this facet, so two are now spent.
+        expect(row.unused).toBe(row.concepts - 2)
+      }
+    })
+
+    // Planning and prose share one retry path. Without the label a retry line
+    // cannot say whether an aspects ask or a prose turn is the one struggling,
+    // and those have entirely different causes.
+    it('says which call is being retried, and summarizes the reply it rejected', async () => {
+      mockKnobs.maxRetries = 1
+      let proseAttempts = 0
+      installScriptedProvider({
+        onProseCall: () => {
+          proseAttempts++
+          // First prose attempt returns something the schema cannot use.
+          if (proseAttempts === 1) throw new Error('boom')
+        },
+      })
+      await brainstormPrompts(request({ requestId: 'log7', count: 1 })).catch(() => undefined)
+      const retries = logged('Brainstorm call failed, retrying')
+      expect(retries.length).toBeGreaterThan(0)
+      expect(retries[0].call).toBe('prose')
+      expect(retries[0].requestId).toBe('log7')
+    })
+
+    it('keeps a bounded preview of an unusable reply, never the whole thing', async () => {
+      const long = 'Sure! Here you go:\n\n'.repeat(200)
+      installScriptedProvider({ proseReplacement: () => ({ text: long, parsed: { nope: true } }) })
+      await brainstormPrompts(request({ requestId: 'log8', count: 1 })).catch(() => undefined)
+      const [rejected] = logged('Brainstorm call returned no usable payload')
+      expect(rejected.call).toBe('prose')
+      expect(rejected.replyChars).toBe(long.length)
+      // Bounded, and far short of the reply itself.
+      expect(String(rejected.replyPreview).length).toBeLessThan(300)
+      expect(rejected.previewTruncated).toBe(true)
+      expect(rejected).not.toHaveProperty('rawText')
+    })
+
+    it('labels each planning call so the boundary crossings can be told apart', async () => {
+      installScriptedProvider()
+      await brainstormPrompts(request({ requestId: 'log6', count: 1 }))
+      const calls = logged('Planning call finished').map((d) => d.call)
+      expect(calls).toContain('aspects')
+      expect(calls).toContain('domains')
+      expect(calls).toContain('clusters')
+    })
   })
 
   it('is true while a run is in flight (the wake-lock signal)', async () => {

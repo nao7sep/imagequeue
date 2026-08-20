@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import { STANDARD_SIZE_PRESETS, type SizePreset } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
-import { singleLine } from '../utils/textCleanup'
+import { singleLine } from '../../../shared/textCleanup'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { DependencyPanePointer } from './DependencyPanePointer'
 

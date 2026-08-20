@@ -3,7 +3,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { useTablist } from '../hooks/useTablist'
-import { multiline } from '../utils/textCleanup'
+import { multiline } from '../../../shared/textCleanup'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS } from '../../../shared/models'
 import './SettingsModal.css'
 

@@ -51,7 +51,14 @@ export const MAX_FACETS_PER_SEED = 4
 /** One schema-forced JSON ask. The orchestrator supplies this (it owns the
  *  provider handle, retries, and the abort signal), keeping planner logic
  *  testable against a plain fake. */
-export type AskJson = (messages: ConversationMessage[], schema: object) => Promise<unknown>
+/** The planner's one outside dependency. `label` names which of the three asks
+ *  is crossing the boundary, so the caller can log the crossing without the
+ *  planner having to know what a logger is. */
+export type AskJson = (
+  messages: ConversationMessage[],
+  schema: object,
+  label: 'aspects' | 'domains' | 'clusters',
+) => Promise<unknown>
 
 export const FACETS_SCHEMA = {
   type: 'object',
@@ -169,7 +176,9 @@ export function parseClusters(parsed: unknown, probeDisplays: readonly string[])
 }
 
 export async function resolveFacets(ask: AskJson, seed: string, existingFacets: readonly string[]): Promise<string[]> {
-  const parsed = await ask([{ role: 'user', text: buildResolveFacetsMessage(seed, existingFacets) }], FACETS_SCHEMA)
+  const parsed = await ask(
+    [{ role: 'user', text: buildResolveFacetsMessage(seed, existingFacets) }], FACETS_SCHEMA, 'aspects'
+  )
   const facets = parseStringList(parsed, 'facets').slice(0, MAX_FACETS_PER_SEED)
   if (facets.length === 0) throw new Error('Text AI returned no usable aspects for the seed.')
   return facets
@@ -181,7 +190,9 @@ export async function generateProbes(
   existingProbes: readonly string[],
   count: number = PROBES_PER_GENERATION
 ): Promise<string[]> {
-  const parsed = await ask([{ role: 'user', text: buildGenerateProbesMessage(facet, existingProbes, count) }], PROBES_SCHEMA)
+  const parsed = await ask(
+    [{ role: 'user', text: buildGenerateProbesMessage(facet, existingProbes, count) }], PROBES_SCHEMA, 'domains'
+  )
   const existingKeys = new Set(existingProbes.map(normalizeKey))
   return parseStringList(parsed, 'probes').filter((p) => !existingKeys.has(normalizeKey(p)))
 }
@@ -197,7 +208,9 @@ export async function expandProbes(
   probes: readonly { id: number; display: string }[]
 ): Promise<ExpandedCluster[]> {
   const displays = probes.map((p) => p.display)
-  const parsed = await ask([{ role: 'user', text: buildExpandProbesMessage(facet, displays) }], CLUSTERS_SCHEMA)
+  const parsed = await ask(
+    [{ role: 'user', text: buildExpandProbesMessage(facet, displays) }], CLUSTERS_SCHEMA, 'clusters'
+  )
   const aligned = parseClusters(parsed, displays)
   return probes.map((p, i) => ({ probeId: p.id, concepts: aligned[i] }))
 }

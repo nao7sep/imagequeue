@@ -6,7 +6,7 @@ import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import type { BrainstormPhase } from '../../../shared/types'
-import { multiline } from '../utils/textCleanup'
+import { multiline } from '../../../shared/textCleanup'
 import { hasApiKeyFor } from '../utils/enqueue'
 import {
   MAX_DRAFT_ITERATIONS,
@@ -298,9 +298,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         return
       }
       // Elaborate is a preview: fill the elaborated box and record the result in
-      // the session history (it feeds future runs' "avoid repeats" context), but
-      // leave the user's prompt-source selection alone. Switching it here would
-      // hijack a deliberate choice just because they wanted to see one sample.
+      // the session history (which the Prompts list reads, and which "Elaborated
+      // prompt (same for all)" queues from), but leave the user's prompt-source
+      // selection alone. Switching it here would hijack a deliberate choice just
+      // because they wanted to see one sample.
       update({ elaborated: first })
       appendElaboratedPrompts([first])
     } catch (err) {
