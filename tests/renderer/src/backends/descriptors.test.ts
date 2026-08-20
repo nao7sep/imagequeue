@@ -28,7 +28,7 @@ describe('defaults', () => {
       background: 'opaque',
     })
     expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K' })
-    expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k' })
+    expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'medium' })
     expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, steps: 50, guidance: 5, seed: '' })
   })
 })
@@ -79,6 +79,45 @@ describe('fromSaved', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const params = fluxBackend.fromSaved({ steps: 9999 }, flex)
     expect(params.steps).toBe(flex.stepsRange!.max)
+  })
+})
+
+describe('grok quality — a parameter only one model declares', () => {
+  const v2 = findModel('grok', 'grok-imagine-image-2.0')!
+  const v1 = findModel('grok', 'grok-imagine-image')!
+  const v1q = findModel('grok', 'grok-imagine-image-quality')!
+
+  // 2.0 takes `quality` as a request field; the 1.x pair encode the same choice in their
+  // model ids, so sending it there would be a second, contradictory way to say the same
+  // thing. Both halves are asserted — an `if` that is never observed false proves nothing.
+  it('enqueues quality for 2.0 and omits it for both 1.x ids', () => {
+    const params = grokBackend.defaults()
+    expect(grokBackend.toEnqueueParams(params, v2)).toHaveProperty('quality', 'medium')
+    expect(grokBackend.toEnqueueParams(params, v1)).not.toHaveProperty('quality')
+    expect(grokBackend.toEnqueueParams(params, v1q)).not.toHaveProperty('quality')
+  })
+
+  // Only 2.0 declares the list, so only 2.0 renders the control.
+  it('declares qualities on 2.0 alone', () => {
+    expect(v2.qualities?.map((q) => q.value)).toEqual(['low', 'medium', 'high'])
+    expect(v1.qualities).toBeUndefined()
+    expect(v1q.qualities).toBeUndefined()
+  })
+
+  // The value is HELD while hidden rather than reset: a user who picks high, switches to a
+  // 1.x id and comes back should find high, not the default. This is the flux steps rule.
+  it('keeps a chosen quality across a switch to a model that does not declare it', () => {
+    const chosen = { ...grokBackend.defaults(), quality: 'high' as const }
+    const on1x = grokBackend.clampToModel(chosen, v1)
+    expect(on1x.quality).toBe('high')
+    expect(grokBackend.clampToModel(on1x, v2).quality).toBe('high')
+  })
+
+  // An unreadable saved value falls to `medium` (the API's own default), NOT to the list's
+  // first entry — positional clamping here would silently downgrade output to `low`.
+  it('falls back to medium, not to the first list entry', () => {
+    expect(grokBackend.fromSaved({ quality: 'ultra' }, v2).quality).toBe('medium')
+    expect(v2.qualities![0].value).toBe('low')
   })
 })
 

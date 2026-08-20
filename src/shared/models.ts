@@ -211,14 +211,40 @@ const GROK_RESOLUTIONS: { label: string; value: GrokResolution }[] = [
   { label: '2K', value: '2k' }
 ]
 
+// Quality is a REQUEST PARAMETER on Grok Imagine 2.0, where 1.x expressed the same idea as
+// two separate model ids (grok-imagine-image / -quality). Only 2.0 declares this list, so
+// only 2.0 shows the control and sends the field — the FluxModelDef stepsRange/guidanceRange
+// idiom, for the same reason: a parameter belongs to the models that declare it.
+//
+// Live-verified 2026-08-20 by sending `quality: "ultra"` and reading the deserializer's
+// own complaint: `unknown variant \`ultra\`, expected one of \`low\`, \`medium\`, \`high\``.
+// Three values, not the two the published docs list — an invalid value is the cheapest
+// way to make an API state its real contract, and it cost nothing to ask.
+export type GrokQuality = 'low' | 'medium' | 'high'
+
+export const GROK_QUALITY_VALUES: { label: string; value: GrokQuality }[] = [
+  { label: 'Low',    value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High',   value: 'high' }
+]
+
 export interface GrokModelDef extends ModelDef {
   backend: 'grok'
   aspectRatios: { label: string; value: GrokAspectRatio }[]
   resolutions: { label: string; value: GrokResolution }[]
+  // Only Grok Imagine 2.0 takes a `quality` parameter; the 1.x pair encode the same
+  // choice in their model ids. Absent means the field is neither shown nor sent.
+  qualities?: { label: string; value: GrokQuality }[]
 }
 
 // --- OpenAI models ---
 
+// A high -> middle -> low band: gpt-image-2, gpt-image-1.5, gpt-image-1-mini. gpt-image-1 was
+// removed 2026-08-20 as the redundant fourth — it shuts down 2026-10-23, ahead of the other two.
+//
+// The band is temporary by construction: 1.5 and 1-mini both shut down 2026-12-01 and OpenAI
+// publishes no mini variant of gpt-image-2, so the cheap end does not migrate, it disappears.
+// Decide before December whether this collapses to one model or keeps a low tier another way.
 export const OPENAI_MODELS: OpenAIModelDef[] = [
   {
     id: 'gpt-image-2',
@@ -235,16 +261,6 @@ export const OPENAI_MODELS: OpenAIModelDef[] = [
   {
     id: 'gpt-image-1.5',
     label: 'GPT Image 1.5',
-    backend: 'openai',
-    qualities: ['auto', 'low', 'medium', 'high'],
-    moderations: ['auto', 'low'],
-    sizes: OPENAI_SIZES,
-    outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'transparent', 'auto'],
-  },
-  {
-    id: 'gpt-image-1',
-    label: 'GPT Image 1',
     backend: 'openai',
     qualities: ['auto', 'low', 'medium', 'high'],
     moderations: ['auto', 'low'],
@@ -350,7 +366,21 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
 
 // --- Grok Imagine models ---
 
+// Newest first. 2.0 was ADDED 2026-08-20, not swapped in: both 1.x ids are still listed and
+// still generate (live-verified the same day), and a model that works is not removed merely
+// for having a successor — the same rule that keeps gpt-image-1.5 and -1-mini until their
+// shutdown dates. Only the shipped DEFAULT moves to 2.0; an existing config keeps its pick.
+// 2.0 alone declares `qualities`, because 1.x expresses that choice through the id instead.
 export const GROK_MODELS: GrokModelDef[] = [
+  {
+    id: 'grok-imagine-image-2.0',
+    label: 'Grok Imagine 2.0',
+    backend: 'grok',
+    isDefault: true,
+    aspectRatios: GROK_ASPECT_RATIOS,
+    resolutions: GROK_RESOLUTIONS,
+    qualities: GROK_QUALITY_VALUES,
+  },
   {
     id: 'grok-imagine-image-quality',
     label: 'Grok Imagine Quality',
@@ -362,7 +392,6 @@ export const GROK_MODELS: GrokModelDef[] = [
     id: 'grok-imagine-image',
     label: 'Grok Imagine',
     backend: 'grok',
-    isDefault: true,
     aspectRatios: GROK_ASPECT_RATIOS,
     resolutions: GROK_RESOLUTIONS,
   }
@@ -375,17 +404,20 @@ export const GROK_MODELS: GrokModelDef[] = [
 // runtime — so there is no list editor and no "Reset Gemini models". The two selections are
 // stored; the list is not (it lives here, one home).
 //
-// Ordered by category (pro -> flash -> flash-lite), which also runs most- to least-expensive.
-// Verified live 2026-07-16 for the text path: all four resolve and run both tiers (slug +
-// elaboration) on dynamic thinking. Same four ids fotoready ships for vision — re-proven for
-// text here rather than assumed to carry across modality. Verification is a design-time act;
-// the app never queries the model-list endpoint. A wrong or retired selection surfaces at call
-// time (the validity boundary), never from a stored list.
+// Ordered by category (pro -> flash -> flash-lite), ONE PER CATEGORY, which also runs most- to
+// least-expensive. Verified live 2026-07-16 for the text path, and re-verified 2026-08-20 against
+// the models endpoint after the flash pair was rotated forward. Same ids fotoready ships for
+// vision — re-proven for text rather than assumed to carry across modality. Verification is a
+// design-time act; the app never queries the model-list endpoint. A wrong or retired selection
+// surfaces at call time (the validity boundary), never from a stored list.
+//
+// The ids this replaced (gemini-3.5-flash, gemini-3-flash-preview, gemini-3.1-flash-lite) all
+// still resolve — superseded, not retired. Worth stating because a published Google page listed
+// gemini-3-flash-preview as shut down while the live API served it: the endpoint is the authority.
 export const GEMINI_TEXT_MODELS = [
   'gemini-3.1-pro-preview',
-  'gemini-3.5-flash',
-  'gemini-3-flash-preview',
-  'gemini-3.1-flash-lite'
+  'gemini-3.7-flash',
+  'gemini-3.5-flash-lite'
 ] as const
 
 export type GeminiTextModel = (typeof GEMINI_TEXT_MODELS)[number]

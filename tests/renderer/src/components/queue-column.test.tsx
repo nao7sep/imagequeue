@@ -198,7 +198,7 @@ describe('openai column', () => {
   it('clamps a background the newly selected model does not offer', async () => {
     vi.useFakeTimers()
     // gpt-image-1 offers 'transparent'; gpt-image-2 does not.
-    stageSettings('openai', 'gpt-image-1', { background: 'transparent' })
+    stageSettings('openai', 'gpt-image-1.5', { background: 'transparent' })
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
     expect((rowControl(container, 'background') as HTMLSelectElement).value).toBe('transparent')
@@ -214,7 +214,7 @@ describe('openai column', () => {
     await flush()
     expect(rowControl(container, 'width')).toBeTruthy()
 
-    fireEvent.change(rowControl(container, 'model'), { target: { value: 'gpt-image-1' } })
+    fireEvent.change(rowControl(container, 'model'), { target: { value: 'gpt-image-1.5' } })
     await flush()
     const widthRow = Array.from(container.querySelectorAll('.setting-row')).find(
       (r) => r.querySelector('label')?.textContent === 'width'

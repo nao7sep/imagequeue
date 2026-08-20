@@ -32,7 +32,7 @@ describe('normalizeOpenAiDimension', () => {
 })
 
 describe('resolveOpenAiSize', () => {
-  const fixedModel = findModel('openai', 'gpt-image-1')!     // supportsCustomSizes falsy
+  const fixedModel = findModel('openai', 'gpt-image-1.5')!   // supportsCustomSizes falsy
   const customModel = findModel('openai', 'gpt-image-2')!    // supportsCustomSizes true
 
   it('keeps a matching preset and falls back to sizes[0] otherwise (fixed-size model)', () => {

@@ -56,8 +56,8 @@ describe('default Gemini text selections', () => {
   // slug). They must differ, and main must be the more capable of the two.
   it('keeps the light and main selections distinct and pinned', () => {
     const { light_model, main_model } = createDefaultConfig().text_ai.gemini
-    expect(main_model).toBe('gemini-3.5-flash')
-    expect(light_model).toBe('gemini-3.1-flash-lite')
+    expect(main_model).toBe('gemini-3.7-flash')
+    expect(light_model).toBe('gemini-3.5-flash-lite')
     expect(light_model).not.toBe(main_model)
   })
 })

@@ -99,6 +99,7 @@ export interface GrokBackendConfig {
   default_params: {
     aspectRatio: string
     resolution: string
+    quality: string
   }
   concurrency: number
   timeout_ms: number

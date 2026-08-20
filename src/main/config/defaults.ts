@@ -11,8 +11,8 @@ export function createDefaultConfig(): AppConfig {
         // Picks into the closed GEMINI_TEXT_MODELS list. main = the fleet's Gemini
         // default (matches mumbler/fotoready) for the elaboration tier whose output
         // is generated from; light = the cheapest model for throwaway slug work.
-        main_model: 'gemini-3.5-flash',
-        light_model: 'gemini-3.1-flash-lite'
+        main_model: 'gemini-3.7-flash',
+        light_model: 'gemini-3.5-flash-lite'
       },
       openai: {
         // Empty endpoint is a sentinel, not a gap: it resolves to the official
@@ -73,7 +73,11 @@ export function createDefaultConfig(): AppConfig {
         model: getDefaultModelForBackend('grok').id,
         default_params: {
           aspectRatio: '1:1',
-          resolution: '1k'
+          resolution: '1k',
+          // `medium` is the API's own default, so a fresh install sends what it would
+          // have sent with the parameter omitted. Seeding `low` (first in the list)
+          // would have quietly changed everyone's output in the name of consistency.
+          quality: 'medium'
         },
         concurrency: 3,
         timeout_ms: 180000
