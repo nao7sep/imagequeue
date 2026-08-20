@@ -11,16 +11,14 @@ export type ActiveOperation = 'elaborate' | 'queue' | null
 
 // Whether each elaborator category currently has a valid selection.
 export interface ElaboratorPicks {
-  content: boolean
   composition: boolean
   style: boolean
 }
 
 // The first elaborator category lacking a valid selection, in the fixed
-// content → composition → style order the UI presents, or null when all three
+// composition → style order the UI presents, or null when both
 // are picked. Brainstorming needs one of each.
 export function firstMissingElaboratorKind(picks: ElaboratorPicks): ElaboratorKind | null {
-  if (!picks.content) return 'content'
   if (!picks.composition) return 'composition'
   if (!picks.style) return 'style'
   return null

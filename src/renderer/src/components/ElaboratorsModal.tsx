@@ -25,11 +25,10 @@ interface DraftTarget {
 }
 
 const EMPTY_DRAFT: DraftState = { name: '', description: '', template: '' }
-const ELABORATOR_KINDS: ElaboratorKind[] = ['content', 'composition', 'style']
+const ELABORATOR_KINDS: ElaboratorKind[] = ['composition', 'style']
 
 function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborator[]> {
   return {
-    content: items.filter((item) => item.kind === 'content'),
     composition: items.filter((item) => item.kind === 'composition'),
     style: items.filter((item) => item.kind === 'style'),
   }
@@ -42,7 +41,6 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [selectedIds, setSelectedIds] = useState<Record<ElaboratorKind, string | null>>({
-    content: null,
     composition: null,
     style: null,
   })
@@ -59,7 +57,6 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       setItems(next)
       const grouped = groupElaborators(next)
       setSelectedIds((prev) => ({
-        content: grouped.content.some((item) => item.id === prev.content) ? prev.content : grouped.content[0]?.id ?? null,
         composition: grouped.composition.some((item) => item.id === prev.composition) ? prev.composition : grouped.composition[0]?.id ?? null,
         style: grouped.style.some((item) => item.id === prev.style) ? prev.style : grouped.style[0]?.id ?? null,
       }))

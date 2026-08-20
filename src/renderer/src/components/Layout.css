@@ -297,3 +297,47 @@
 .about-link:hover {
   text-decoration: underline;
 }
+
+/* Queue controls sit beside the app menu: one small button, not a row of
+   actions. Everything behind it is rare, and a rare destructive action should
+   cost a deliberate click rather than live permanently under the cursor. */
+.pane-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.queue-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.queue-control-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* Paused is a standing state the user must be able to see without opening the
+   menu — otherwise a queue that starts nothing looks broken. */
+.queue-control-btn.paused {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.menu-item:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.menu-item:disabled:hover {
+  background: none;
+}

@@ -17,7 +17,6 @@ function fullDraft(): SessionDraft {
     prompt: 'a cat',
     seed: 'a cat in a hat',
     elaborated: 'a photorealistic cat wearing a striped hat',
-    selectedContentElaboratorId: 'content-1',
     selectedCompositionElaboratorId: 'comp-1',
     selectedStyleElaboratorId: 'style-1',
     selectedProprietary: { openai: true, nanobanana: true, grok: false, flux: false, drawthings: false },
@@ -36,7 +35,6 @@ describe('createEmptySessionDraft', () => {
     expect(draft.prompt).toBe('')
     expect(draft.seed).toBe('')
     expect(draft.elaborated).toBe('')
-    expect(draft.selectedContentElaboratorId).toBeNull()
     expect(draft.selectedCompositionElaboratorId).toBeNull()
     expect(draft.selectedStyleElaboratorId).toBeNull()
     expect(draft.selectedDtFiles).toEqual([])
@@ -96,11 +94,9 @@ describe('normalizeSessionDraft', () => {
 
   it('treats non-string elaborator ids as null', () => {
     const result = normalizeSessionDraft({
-      selectedContentElaboratorId: 42,
       selectedCompositionElaboratorId: 'keep-me',
       selectedStyleElaboratorId: { id: 'x' },
     })
-    expect(result.selectedContentElaboratorId).toBeNull()
     expect(result.selectedCompositionElaboratorId).toBe('keep-me')
     expect(result.selectedStyleElaboratorId).toBeNull()
   })

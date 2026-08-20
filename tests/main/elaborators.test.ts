@@ -77,7 +77,7 @@ describe('elaborators store', () => {
       const userItems: Elaborator[] = [
         {
           id: 'elab-user-kept',
-          kind: 'content',
+          kind: 'style',
           name: 'User kept',
           template: 'A user-authored template that must survive startup.',
         },
@@ -234,7 +234,7 @@ describe('elaborators store', () => {
 
       // Mutating the store exercises writeFile -> writeJsonAtomic again.
       const created = createElaborator({
-        kind: 'content',
+        kind: 'style',
         name: 'Test elaborator',
         template: 'A focused test template.',
       })

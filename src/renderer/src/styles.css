@@ -26,6 +26,41 @@
   --error: #f87171;
   --warning: #f59e0b;
 
+  /* ─── Control scale ──────────────────────────────────────────────────────
+     One scale for every clickable thing, so controls stop being sized ad hoc
+     per component. The app's affordances had drifted to ~20px tall with 2px
+     padding and 3px radii — the dense text-chip idiom of a 1990s desktop tool,
+     which reads as cramped rather than as information-dense. These are the
+     sizes a pointer actually wants: --control-sm for row actions inside a dense
+     list, --control-md for ordinary buttons, --control-lg for a primary action.
+     Radii are softened to match; the type scale below stops every label being
+     11px. Adopt these rather than typing new pixel values. */
+  --control-sm: 26px;
+  --control-md: 32px;
+  --control-lg: 36px;
+  --control-pad-sm: 0 7px;
+  --control-pad-md: 0 12px;
+  --control-pad-lg: 0 16px;
+
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+
+  /* Type scale. --text-xs is for metadata that must not compete (counts,
+     timestamps); --text-sm is the default for controls and dense rows;
+     --text-md is body copy; --text-lg is a heading inside a pane. */
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-md: 14px;
+  --text-lg: 16px;
+
+  /* Spacing steps, so gaps and padding come from a scale rather than from
+     whatever number looked right in one component. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+
   /* The app ships a single dark theme; declare it so native form controls and
      any built-in browser UI render in the dark palette (the global scroll-bar
      styling below handles the bar itself, which color-scheme alone does not). */

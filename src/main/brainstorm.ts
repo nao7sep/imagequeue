@@ -35,7 +35,6 @@ import { log, serializeError } from './logger'
 
 export interface BrainstormRequest {
   requestId: string
-  contentElaboratorId: string
   compositionElaboratorId: string
   styleElaboratorId: string
   seed: string
@@ -92,20 +91,25 @@ function sleep(ms: number): Promise<void> {
 // Scaffolding for the combined elaborator message: app-owned prompt text the user
 // never edits (the elaborators themselves are theirs), named here beside
 // STRICT_JSON_NUDGE rather than buried in the array that assembles the message.
-const ELABORATOR_COMBINE_PREAMBLE =
-  'Apply the following elaborator instruction sets in order. Preserve explicit user intent throughout.'
+// The contract the two elaborators are applied under. It lives HERE, stated
+// once by the app, rather than being re-typed into every user-editable template
+// — where it consumed a quarter of each one, competed with the actual
+// instruction, and could be weakened by an edit. The safety line in particular
+// was previously present in exactly one style template out of eighteen; as app
+// contract it now covers every style.
+const ELABORATOR_COMBINE_PREAMBLE = [
+  'Apply the following direction to every prompt. Each is a list of concrete visual specifics:',
+  'weave them into the description rather than listing them, and keep them consistent across the batch.',
+  'Preserve explicit user intent and the assigned concepts throughout.',
+  'Do not sexualize people beyond what the seed explicitly asks.',
+].join(' ')
 
 function buildCombinedElaboratorInstructions(parts: {
-  content: string
   composition: string
   style: string
 }): string {
   return [
     ELABORATOR_COMBINE_PREAMBLE,
-    '',
-    '<content_elaborator>',
-    parts.content,
-    '</content_elaborator>',
     '',
     '<composition_elaborator>',
     parts.composition,
@@ -300,12 +304,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   if (req.count < 1) throw new Error('Count must be at least 1.')
   if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
 
-  const contentElaborator = getElaborator(req.contentElaboratorId)
   const compositionElaborator = getElaborator(req.compositionElaboratorId)
   const styleElaborator = getElaborator(req.styleElaboratorId)
-  if (!contentElaborator || contentElaborator.kind !== 'content') {
-    throw new Error('Content elaborator not found.')
-  }
   if (!compositionElaborator || compositionElaborator.kind !== 'composition') {
     throw new Error('Composition elaborator not found.')
   }
@@ -314,7 +314,6 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   }
 
   const combinedElaboratorTemplate = buildCombinedElaboratorInstructions({
-    content: contentElaborator.template,
     composition: compositionElaborator.template,
     style: styleElaborator.template,
   })
@@ -461,7 +460,6 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     }
 
     log('info', 'Brainstorm complete', {
-      contentElaborator: contentElaborator.name,
       compositionElaborator: compositionElaborator.name,
       styleElaborator: styleElaborator.name,
       backend: handle.backend,
@@ -482,7 +480,6 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       return { prompts: collected.slice(0, req.count) }
     }
     log('error', 'Brainstorm failed', {
-      contentElaborator: contentElaborator.name,
       compositionElaborator: compositionElaborator.name,
       styleElaborator: styleElaborator.name,
       backend: handle.backend,

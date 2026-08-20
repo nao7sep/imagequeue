@@ -210,6 +210,44 @@ export class QueueManager {
     return count
   }
 
+  /** Mark every task waiting to start as interrupted, so it stops being picked
+   *  up and becomes retryable through the paths that already exist. Tasks
+   *  currently generating are untouched — stopping those is the cancellation
+   *  registry's job, and each lands here through its own failure path. */
+  interruptQueuedTasks(): number {
+    let count = 0
+    for (const backend of Object.keys(this.queues) as BackendId[]) {
+      for (const task of this.queues[backend]) {
+        if (task.status === 'queued') {
+          task.status = 'interrupted'
+          task.error = null
+          count++
+        }
+      }
+    }
+    return count
+  }
+
+  /** Remove every task waiting to start, leaving finished and running work
+   *  alone. Unlike interrupting, this is not retryable — the tasks are gone. */
+  removeQueuedTasks(): number {
+    let count = 0
+    for (const backend of Object.keys(this.queues) as BackendId[]) {
+      const before = this.queues[backend].length
+      this.queues[backend] = this.queues[backend].filter((task) => task.status !== 'queued')
+      count += before - this.queues[backend].length
+    }
+    return count
+  }
+
+  countByStatus(status: Task['status']): number {
+    let count = 0
+    for (const backend of Object.keys(this.queues) as BackendId[]) {
+      count += this.queues[backend].filter((task) => task.status === status).length
+    }
+    return count
+  }
+
   hasQueuedTasks(): boolean {
     return Object.values(this.queues).some((tasks) => tasks.some((task) => task.status === 'queued'))
   }

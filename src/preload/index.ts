@@ -16,6 +16,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
   ApiKeyPresence,
+  QueueControlState,
   ConceptFacetSummary,
   ConceptProbeSummary,
   ConceptRow,
@@ -66,6 +67,21 @@ const api = {
 
   resumeInterruptedTasks: (): Promise<number> =>
     ipcRenderer.invoke('queue:resumeInterrupted'),
+  setQueuePaused: (paused: boolean): Promise<void> =>
+    ipcRenderer.invoke('queue:setPaused', paused),
+  stopGenerating: (): Promise<number> =>
+    ipcRenderer.invoke('queue:stopGenerating'),
+  stopAllQueueWork: (): Promise<{ cancelled: number; queued: number }> =>
+    ipcRenderer.invoke('queue:stopAll'),
+  clearPendingTasks: (): Promise<number> =>
+    ipcRenderer.invoke('queue:clearPending'),
+  getQueueControlState: (): Promise<QueueControlState> =>
+    ipcRenderer.invoke('queue:getControlState'),
+  onQueueControlState: (callback: (state: QueueControlState) => void): (() => void) => {
+    const handler = (_e: unknown, state: QueueControlState): void => callback(state)
+    ipcRenderer.on('queue:controlState', handler)
+    return () => { ipcRenderer.removeListener('queue:controlState', handler) }
+  },
 
   reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
     ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
@@ -121,7 +137,6 @@ const api = {
 
   brainstormPrompts: (req: {
     requestId: string
-    contentElaboratorId: string
     compositionElaboratorId: string
     styleElaboratorId: string
     seed: string

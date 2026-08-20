@@ -8,6 +8,7 @@ import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
+import { CANCELLED_MESSAGE, isQueuePaused } from './cancellation'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
@@ -69,7 +70,7 @@ export function startProcessor(): void {
   }, 500)
 }
 
-function processQueues(): void {
+export function processQueues(): void {
   // Close out a finished drain before scheduling new work: once nothing is in
   // flight and nothing is queued, the busy period that just ended gets its one
   // summary line. The 500ms tick that observes the idle state may land up to
@@ -78,6 +79,11 @@ function processQueues(): void {
   if (summary) {
     log('info', 'Queue drained', { ...summary })
   }
+
+  // Paused: start nothing new. Work already running is deliberately untouched —
+  // it finishes and saves normally, which is the whole point of pausing rather
+  // than stopping. Cancelling in-flight work is a separate, explicit action.
+  if (isQueuePaused()) return
 
   const config = loadConfig()
   const backends: BackendId[] = BACKEND_IDS_IN_UI_ORDER
@@ -160,10 +166,27 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     drainTracker.recordOk()
     logGenerationComplete(task.id, task.durationMs, task.baseName)
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // A cancellation is not a failure: the user asked for it. It lands as
+    // `interrupted` — the same status a crash mid-generation produces — so the
+    // existing per-row retry and bulk "Retry All" already put it back in the
+    // queue, and the row reads "interrupted" rather than showing an error.
+    if (message === CANCELLED_MESSAGE) {
+      task.status = 'interrupted'
+      task.startedAt = null
+      task.completedAt = null
+      task.durationMs = null
+      task.error = null
+      drainTracker.recordFailed()
+      log('info', 'Generation stopped by request', { taskId: task.id, backend })
+      persistActiveSession()
+      broadcastUpdate()
+      return
+    }
     task.status = 'failed'
     // task.error stays a short string for the UI and the persisted manifest;
     // the log captures the full error (type, message, stack, cause).
-    task.error = err instanceof Error ? err.message : String(err)
+    task.error = message
     drainTracker.recordFailed()
     logGenerationFailed(task.id, err, {
       backend,

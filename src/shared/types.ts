@@ -132,10 +132,15 @@ export interface DrawThingsModelParams {
 
 export type TextAIBackendId = 'gemini' | 'openai'
 export type TaskStatus = 'queued' | 'generating' | 'completed' | 'kept' | 'failed' | 'interrupted'
-export type ElaboratorKind = 'content' | 'composition' | 'style'
+// Two lanes, not three. A `content` lane existed and was removed on measurement:
+// swapping between its templates moved the resulting image 2.7/10, and DELETING
+// it moved it 2.2 — less than the noise between two of its own variants, on both
+// a person seed and a food seed. Its job (what details a subject needs) is now
+// the concept mechanism's: occupation, setting, era and object arrive as drawn
+// concepts, so a template asking for them was describing what was already there.
+export type ElaboratorKind = 'composition' | 'style'
 
 export const ELABORATOR_KIND_LABELS: Record<ElaboratorKind, string> = {
-  content: 'Content',
   composition: 'Composition',
   style: 'Style',
 }
@@ -215,6 +220,15 @@ export interface SessionManifest {
 
 export interface SessionThumbnail {
   baseName: string
+}
+
+// What the queue-control menu enables or disables against. Counts rather than
+// booleans so the menu can say how much each action would affect.
+export interface QueueControlState {
+  paused: boolean
+  generating: number
+  queued: number
+  interrupted: number
 }
 
 // Which API keys resolve, environment values included — the presence signal the

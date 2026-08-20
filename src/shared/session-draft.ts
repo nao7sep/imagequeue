@@ -54,7 +54,6 @@ export interface SessionDraft {
   seed: string
   elaborated: string
   // Advanced Prompting: the three elaborator selections.
-  selectedContentElaboratorId: string | null
   selectedCompositionElaboratorId: string | null
   selectedStyleElaboratorId: string | null
   // Advanced Prompting: the chosen targets and execution settings.
@@ -79,7 +78,6 @@ export function createEmptySessionDraft(): SessionDraft {
     prompt: '',
     seed: '',
     elaborated: '',
-    selectedContentElaboratorId: null,
     selectedCompositionElaboratorId: null,
     selectedStyleElaboratorId: null,
     selectedProprietary: emptySelectedProprietary(),
@@ -140,7 +138,6 @@ export function normalizeSessionDraft(value: unknown): SessionDraft {
     prompt: asString(v.prompt, base.prompt),
     seed: asString(v.seed, base.seed),
     elaborated: asString(v.elaborated, base.elaborated),
-    selectedContentElaboratorId: asNullableId(v.selectedContentElaboratorId),
     selectedCompositionElaboratorId: asNullableId(v.selectedCompositionElaboratorId),
     selectedStyleElaboratorId: asNullableId(v.selectedStyleElaboratorId),
     selectedProprietary: normalizeSelectedProprietary(v.selectedProprietary),

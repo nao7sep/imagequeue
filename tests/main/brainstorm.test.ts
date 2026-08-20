@@ -132,7 +132,6 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
 
 const request = (over: { requestId: string; count: number }): Parameters<typeof brainstormPrompts>[0] => ({
   requestId: over.requestId,
-  contentElaboratorId: 'content',
   compositionElaboratorId: 'composition',
   styleElaboratorId: 'style',
   seed: 'a mysterious man',
@@ -150,7 +149,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     process.env[ENV_VAR] = tmpRoot
     mockKnobs.concurrency = 1
     vi.mocked(getElaborator).mockImplementation((id: string) =>
-      id === 'content' || id === 'composition' || id === 'style'
+      id === 'composition' || id === 'style'
         ? elaboratorFor(id as ElaboratorKind)
         : null
     )

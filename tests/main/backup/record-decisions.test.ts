@@ -61,7 +61,7 @@ describe('record/no-record decisions at real write sites', () => {
 
   it('records elaborators.json on materialize and on a mutating write', () => {
     materializeElaborators() // first-run write-if-absent
-    createElaborator({ kind: 'content', name: 'X', template: 'a template' })
+    createElaborator({ kind: 'style', name: 'X', template: 'a template' })
     closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'elaborators.json'))
   })

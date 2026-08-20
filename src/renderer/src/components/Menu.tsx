@@ -154,9 +154,15 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
 export function MenuItem({
   onSelect,
   children,
+  disabled = false,
 }: {
   onSelect: () => void
   children: ReactNode
+  // A disabled item stays VISIBLE rather than being dropped from the menu: the
+  // reader learns the action exists and why it is unavailable (the label carries
+  // the count), and the menu's shape does not shift under the cursor as counts
+  // change. It keeps aria-disabled, so assistive tech reads it the same way.
+  disabled?: boolean
 }): React.JSX.Element {
   const ctx = useContext(MenuContext)
   return (
@@ -165,7 +171,10 @@ export function MenuItem({
       role="menuitem"
       tabIndex={-1}
       className="menu-item"
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       onClick={() => {
+        if (disabled) return
         ctx?.closeAll()
         onSelect()
       }}

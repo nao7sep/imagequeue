@@ -17,6 +17,7 @@ import {
 import { hasApiKeyFor, isBackendReadyToEnqueue } from '../utils/enqueue'
 import { isFreshCompletion } from '../utils/taskScroll'
 import { useImeGuard } from '../utils/imeGuard'
+import { Icon } from './Icon'
 import './QueueColumn.css'
 
 interface Props {
@@ -356,8 +357,12 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     if (!task.baseName) return
     void window.electronAPI.exportImage(task.baseName, getExt())
   }
-  const removeLabel = task.status === 'completed' ? 'keep' : 'rm'
-  const removeTitle = task.status === 'completed' ? 'Mark as kept and remove from active list' : 'Remove from queue'
+  // Keeping and removing are the same gesture at different ends of a task's
+  // life — file a finished image away, or drop one that never ran — so they
+  // share a button and differ only in icon and wording.
+  const keeping = task.status === 'completed'
+  const removeIcon = keeping ? 'archive' : 'close'
+  const removeTitle = keeping ? 'Keep — file this image away, out of the active list' : 'Remove from queue'
   const statusLabel = task.status === 'kept' ? 'kept' : task.status
 
   // One-line prompt preview: flatten the (possibly multiline) prompt to a single
@@ -420,20 +425,34 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
           command keys (Backspace removes/keeps/restores, Delete deletes) on the
           active row. This keeps the column a single tab stop. */}
       <div className="task-actions">
+        {/* Icon buttons, not text chips: at a row's scale a word has to shrink
+            to ~11px to fit, which is where the old `keep`/`rm`/`exp` affordances
+            became unreadable. The accessible name lives on the button (the icon
+            is aria-hidden), and the title carries the same words as before. */}
         {(task.status === 'failed' || task.status === 'interrupted') && (
-          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title="Retry">retry</button>
+          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title="Retry" aria-label="Retry">
+            <Icon name="retry" />
+          </button>
         )}
         {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
-          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder">exp</button>
+          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder" aria-label="Export">
+            <Icon name="export" />
+          </button>
         )}
         {task.status === 'kept' && (
-          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list">restore</button>
+          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list" aria-label="Restore">
+            <Icon name="restore" />
+          </button>
         )}
         {task.status !== 'generating' && task.status !== 'kept' && (
-          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle}>{removeLabel}</button>
+          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={keeping ? 'Keep' : 'Remove'}>
+            <Icon name={removeIcon} />
+          </button>
         )}
         {(task.status === 'completed' || task.status === 'kept') && (
-          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files">del</button>
+          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files" aria-label="Delete">
+            <Icon name="trash" />
+          </button>
         )}
       </div>
     </div>

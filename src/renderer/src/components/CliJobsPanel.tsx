@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-jobs'
 import { useCliJobs } from '../context/CliJobsContext'
+import { Icon, type IconName } from './Icon'
 import './CliJobsPanel.css'
 
 function jobTitle(
@@ -50,12 +51,16 @@ function jobSummary(
   }
 }
 
-function jobIcon(kind: CliJobKind, status: CliJobStatus, exitCode: number | null): string {
-  if (status === 'queued') return '…'
-  if (status === 'running' || status === 'stalled') return kind === 'import' ? '↑' : '↓'
-  if (status === 'exited' && exitCode === 0) return '✓'
-  if (status === 'killed') return '■'
-  return '✗'
+// Status as a drawn icon rather than a typed glyph: ■ and ✗ in particular
+// rendered at wildly different weights across fonts, and this row is scanned,
+// not read. `null` keeps the queued state deliberately empty — a job that has
+// not started yet has nothing to report, and a placeholder would read as one.
+function jobIcon(kind: CliJobKind, status: CliJobStatus, exitCode: number | null): IconName | null {
+  if (status === 'queued') return null
+  if (status === 'running' || status === 'stalled') return kind === 'import' ? 'upload' : 'download'
+  if (status === 'exited' && exitCode === 0) return 'check'
+  if (status === 'killed') return 'stop'
+  return 'close'
 }
 
 // ─── CliJobRow ────────────────────────────────────────────────────────────────
@@ -134,12 +139,14 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   return (
     <div className="cli-job-row">
       <div className="cli-job-row-header">
-        <span className="cli-job-row-icon" aria-hidden="true">{icon}</span>
+        <span className="cli-job-row-icon" aria-hidden="true">{icon && <Icon name={icon} />}</span>
         <span className={titleClass} title={title}>{title}</span>
         {isActive ? (
           <button className="cli-job-row-btn cli-job-row-btn-stop" onClick={handleStop}>Stop</button>
         ) : (
-          <button className="cli-job-row-btn" onClick={onDismiss} title="Dismiss">×</button>
+          <button className="cli-job-row-btn" onClick={onDismiss} title="Dismiss" aria-label="Dismiss">
+            <Icon name="close" />
+          </button>
         )}
       </div>
       {summary && (

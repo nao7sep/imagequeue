@@ -3,6 +3,7 @@ import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
+import { Icon } from './Icon'
 import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../utils/textCleanup'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
@@ -251,10 +252,10 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
 
         {(selectedTask?.status === 'completed' || selectedTask?.status === 'kept') && selectedTask?.baseName && (
           <div className="preview-toolbar">
-            <button className="preview-btn preview-btn-neutral" onClick={handleCopyPrompt}>{promptCopied ? '✓ Copied' : 'Copy Prompt'}</button>
+            <button className="preview-btn preview-btn-neutral" onClick={handleCopyPrompt}>{promptCopied ? <><Icon name="check" /> Copied</> : 'Copy Prompt'}</button>
             <button className="preview-btn preview-btn-neutral" onClick={handleReveal}>Reveal</button>
-            <button className="preview-btn preview-btn-neutral" onClick={handleCopyImage}>{imageCopied ? '✓ Copied' : 'Copy to Clipboard'}</button>
-            <button className="preview-btn preview-btn-export" onClick={handleExport}>{exported ? '✓ Exported' : 'Export'}</button>
+            <button className="preview-btn preview-btn-neutral" onClick={handleCopyImage}>{imageCopied ? <><Icon name="check" /> Copied</> : 'Copy to Clipboard'}</button>
+            <button className="preview-btn preview-btn-export" onClick={handleExport}>{exported ? <><Icon name="check" /> Exported</> : 'Export'}</button>
             <button className="preview-btn preview-btn-export" onClick={handleSaveAs}>Save As…</button>
           </div>
         )}
@@ -270,7 +271,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         <div ref={detailsRef} className="metadata-section">
           {!detailsOpen ? (
             <button className="metadata-toggle" onClick={() => setDetailsOpen(true)}>
-              <span className="metadata-toggle-chevron" aria-hidden="true">▸</span>
+              <Icon name="chevron-right" className="metadata-toggle-chevron" />
               <span className="metadata-toggle-model">{selectedTask.model}</span>
               <span className="metadata-toggle-sep"> · </span>
               {/* One-line prompt preview: flatten + cap to a generous budget; CSS

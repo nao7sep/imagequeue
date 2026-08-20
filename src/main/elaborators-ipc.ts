@@ -96,8 +96,7 @@ export function registerElaboratorsIpc(): void {
       _event,
       req: {
         requestId: string
-        contentElaboratorId: string
-        compositionElaboratorId: string
+            compositionElaboratorId: string
         styleElaboratorId: string
         seed: string
         count: number

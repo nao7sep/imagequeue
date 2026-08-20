@@ -12,6 +12,7 @@ import { ShortcutsModal } from './ShortcutsModal'
 import { AboutModal } from './AboutModal'
 import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
+import { QueueControlMenu } from './QueueControlMenu'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
@@ -287,6 +288,8 @@ export function Layout(): React.JSX.Element {
       <div className="left-pane">
         <div className="pane-toolbar">
           <span className="app-name">ImageQueue</span>
+          <div className="pane-toolbar-actions">
+          <QueueControlMenu />
           <Menu
             label="Main menu"
             trigger={(props) => (
@@ -333,6 +336,7 @@ export function Layout(): React.JSX.Element {
             <MenuItem onSelect={() => setOverlay('shortcuts')}>Keyboard Shortcuts</MenuItem>
             <MenuItem onSelect={() => setOverlay('about')}>About</MenuItem>
           </Menu>
+          </div>
         </div>
         <PromptPane
             selectedTask={selectedTask}

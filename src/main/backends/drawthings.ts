@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getTempDir } from '../dependencies/paths'
+import { CANCELLED_MESSAGE, clearInFlight, registerInFlight } from './cancellation'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
@@ -72,9 +73,27 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(cliPath, args, { stdio: 'pipe' })
     let stderr = ''
+    let cancelled = false
+
+    // The child process is the ONLY handle that can stop a Draw Things
+    // generation: there is no request to abort and the CLI runs to completion
+    // otherwise. Registered for the duration of the run so the queue can reach
+    // it, with the same SIGTERM-then-SIGKILL escalation cli-jobs uses for
+    // downloads — a CLI mid-write ignores a polite signal often enough to matter.
+    registerInFlight(task.id, () => {
+      cancelled = true
+      try { proc.kill('SIGTERM') } catch { /* already gone */ }
+      setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch { /* already gone */ }
+      }, 2000)
+    })
 
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     proc.on('close', (code) => {
+      if (cancelled) {
+        reject(new Error(CANCELLED_MESSAGE))
+        return
+      }
       if (code === 0) resolve()
       else {
         log('error', 'draw-things-cli exited with error', { code, model: task.model, stderr })
@@ -85,7 +104,7 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
       log('error', 'draw-things-cli spawn failed', { cliPath, error: serializeError(err) })
       reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
     })
-  })
+  }).finally(() => clearInFlight(task.id))
 
   if (!fs.existsSync(outputPath)) {
     log('error', 'draw-things-cli produced no output file', { model: task.model, outputPath })

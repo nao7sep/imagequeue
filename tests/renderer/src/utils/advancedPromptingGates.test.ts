@@ -9,7 +9,7 @@ import {
   type ElaboratorPicks,
 } from '../../../../src/renderer/src/utils/advancedPromptingGates'
 
-const allPicked: ElaboratorPicks = { content: true, composition: true, style: true }
+const allPicked: ElaboratorPicks = { composition: true, style: true }
 
 describe('firstMissingElaboratorKind', () => {
   it('returns null when all three categories are picked', () => {
@@ -17,9 +17,9 @@ describe('firstMissingElaboratorKind', () => {
   })
 
   it('reports the missing category in content → composition → style order', () => {
-    expect(firstMissingElaboratorKind({ content: false, composition: false, style: false })).toBe('content')
-    expect(firstMissingElaboratorKind({ content: true, composition: false, style: false })).toBe('composition')
-    expect(firstMissingElaboratorKind({ content: true, composition: true, style: false })).toBe('style')
+    expect(firstMissingElaboratorKind({ composition: false, style: false })).toBe('composition')
+    expect(firstMissingElaboratorKind({ composition: false, style: false })).toBe('composition')
+    expect(firstMissingElaboratorKind({ composition: true, style: false })).toBe('style')
   })
 })
 
@@ -45,12 +45,12 @@ describe('promptModeDisabledReason', () => {
 
   it('blocks brainstorm modes until elaborators are picked', () => {
     expect(promptModeDisabledReason('fresh-iteration', false, 'style')).toBe('Pick a style elaborator first.')
-    expect(promptModeDisabledReason('fresh-task', false, 'content')).toBe('Pick a content elaborator first.')
+    expect(promptModeDisabledReason('fresh-task', false, 'composition')).toBe('Pick a composition elaborator first.')
     expect(promptModeDisabledReason('fresh-iteration', false, null)).toBeNull()
   })
 
   it('never blocks the as-is mode', () => {
-    expect(promptModeDisabledReason('as-is', false, 'content')).toBeNull()
+    expect(promptModeDisabledReason('as-is', false, 'composition')).toBeNull()
   })
 })
 
@@ -68,7 +68,7 @@ describe('queueDisabledReason', () => {
   })
 
   it('requires elaborators then a seed in brainstorm modes', () => {
-    expect(queueDisabledReason('fresh-task', false, false, 'content', 1)).toBe('Pick a content elaborator first.')
+    expect(queueDisabledReason('fresh-task', false, false, 'composition', 1)).toBe('Pick a composition elaborator first.')
     expect(queueDisabledReason('fresh-iteration', false, false, null, 1)).toBe('Enter a seed prompt for elaboration.')
   })
 
@@ -132,7 +132,7 @@ describe('computeAdvancedGates', () => {
       activeOperation: null,
       seedFilled: true,
       elaboratedFilled: false,
-      picks: { content: true, composition: false, style: false },
+      picks: { composition: false, style: false },
       promptMode: 'elaborated',
       totalTasks: 1,
     })

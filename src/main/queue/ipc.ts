@@ -7,6 +7,8 @@ import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
 import { persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
+import { cancelAllInFlight, inFlightCount, isQueuePaused, setQueuePaused } from '../backends/cancellation'
+import type { QueueControlState } from '../../shared/types'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -120,11 +122,60 @@ export function registerQueueIpc(): void {
     return count
   })
 
+  // Queue control. Pausing starts nothing new and leaves running work to finish
+  // and save — the common "stop, but not mid-image" case. Stopping additionally
+  // cancels what is running. Both land tasks in `interrupted`, so the retry paths
+  // that already exist (per-row retry, Retry All) put them back.
+  handle('queue:setPaused', (_event, paused: boolean) => {
+    setQueuePaused(paused)
+    notifyAllWindows('queue:controlState', buildControlState())
+  })
+
+  handle('queue:stopGenerating', () => {
+    const cancelled = cancelAllInFlight()
+    log('info', 'Stopping in-flight generation', { cancelled })
+    notifyAllWindows('queue:controlState', buildControlState())
+    return cancelled
+  })
+
+  handle('queue:stopAll', () => {
+    setQueuePaused(true)
+    const cancelled = cancelAllInFlight()
+    const queued = queueManager.interruptQueuedTasks()
+    log('info', 'Stopping all queue work', { cancelled, queued })
+    persistActiveSession()
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    notifyAllWindows('queue:controlState', buildControlState())
+    return { cancelled, queued }
+  })
+
+  handle('queue:clearPending', () => {
+    const removed = queueManager.removeQueuedTasks()
+    log('info', 'Cleared pending tasks', { removed })
+    persistActiveSession()
+    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    notifyAllWindows('queue:controlState', buildControlState())
+    return removed
+  })
+
+  handle('queue:getControlState', () => buildControlState())
+
   handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
     queueManager.reorderTasks(backend, taskIds)
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
   })
+}
+
+// What the queue-control menu needs to know to enable or disable each item, so
+// the renderer never has to infer it from the task list.
+function buildControlState(): QueueControlState {
+  return {
+    paused: isQueuePaused(),
+    generating: inFlightCount(),
+    queued: queueManager.countByStatus('queued'),
+    interrupted: queueManager.countByStatus('interrupted'),
+  }
 }
 
 function notifyAllWindows(channel: string, data: unknown): void {

@@ -188,8 +188,8 @@
 
 .metadata-toggle-chevron {
   flex-shrink: 0;
-  font-size: 10px;
-  line-height: 1;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .metadata-toggle-model {
@@ -229,7 +229,11 @@
 }
 
 .preview-btn {
-  padding: 5px 10px;
+  height: var(--control-md);
+  padding: var(--control-pad-md);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-surface);

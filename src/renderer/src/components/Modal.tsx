@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { Icon } from './Icon'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { isTopmostModal, popModal, pushModal } from './modalStack'
 import './Modal.css'
@@ -131,7 +132,7 @@ export function Modal({
           <div className="modal-header">
             <span id={titleId}>{title}</span>
             <button className="modal-close" onClick={onClose} aria-label="Close">
-              ✕
+              <Icon name="close" />
             </button>
           </div>
         )}

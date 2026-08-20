@@ -50,11 +50,10 @@ interface DtParams {
 }
 
 const isMacPlatform = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
-const ELABORATOR_KINDS: ElaboratorKind[] = ['content', 'composition', 'style']
+const ELABORATOR_KINDS: ElaboratorKind[] = ['composition', 'style']
 
 function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborator[]> {
   return {
-    content: items.filter((item) => item.kind === 'content'),
     composition: items.filter((item) => item.kind === 'composition'),
     style: items.filter((item) => item.kind === 'style'),
   }
@@ -66,7 +65,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useSessionDraft()
   const {
-    prompt, seed, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated,
+    prompt, seed, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated,
     selectedProprietary, selectedDtFiles, promptMode, targetScope, count, elaboratedPrompts,
     promptFormat, promptLength,
   } = state
@@ -110,9 +109,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     setElaborators(next)
     const grouped = groupElaborators(next)
     update({
-      selectedContentElaboratorId: grouped.content.some((e) => e.id === selectedContentElaboratorId)
-        ? selectedContentElaboratorId
-        : grouped.content[0]?.id ?? null,
       selectedCompositionElaboratorId: grouped.composition.some((e) => e.id === selectedCompositionElaboratorId)
         ? selectedCompositionElaboratorId
         : grouped.composition[0]?.id ?? null,
@@ -120,18 +116,18 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         ? selectedStyleElaboratorId
         : grouped.style[0]?.id ?? null,
     })
-  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, update])
+  }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, update])
 
   useEffect(() => {
     void refreshElaborators()
   }, [refreshElaborators])
 
   useEffect(() => {
-    for (const id of [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId]) {
+    for (const id of [selectedCompositionElaboratorId, selectedStyleElaboratorId]) {
       if (!id) continue
       elaboratorRowRefs.current.get(id)?.scrollIntoView({ block: 'nearest' })
     }
-  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborators])
+  }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborators])
 
   useEffect(() => {
     if (!isMacPlatform) {
@@ -214,7 +210,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
   const totalTasks = Math.max(0, targetCount * Math.max(1, count))
   const picks = {
-    content: selectedContentElaboratorId !== null && elaboratorsByKind.content.some((e) => e.id === selectedContentElaboratorId),
     composition: selectedCompositionElaboratorId !== null && elaboratorsByKind.composition.some((e) => e.id === selectedCompositionElaboratorId),
     style: selectedStyleElaboratorId !== null && elaboratorsByKind.style.some((e) => e.id === selectedStyleElaboratorId),
   }
@@ -246,8 +241,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // tasks, or accepting the single Elaborate result), so an aborted or failed
   // run leaves nothing behind. Progress events drive only the live counter.
   const runBrainstorm = useCallback(async (count: number): Promise<string[]> => {
-    if (!selectedContentElaboratorId || !selectedCompositionElaboratorId || !selectedStyleElaboratorId) {
-      throw new Error('Pick content, composition, and style elaborators first.')
+    if (!selectedCompositionElaboratorId || !selectedStyleElaboratorId) {
+      throw new Error('Pick composition and style elaborators first.')
     }
     if (!seed.trim()) throw new Error('Seed prompt is empty.')
 
@@ -262,7 +257,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     try {
       const result = await window.electronAPI.brainstormPrompts({
         requestId,
-        contentElaboratorId: selectedContentElaboratorId,
         compositionElaboratorId: selectedCompositionElaboratorId,
         styleElaboratorId: selectedStyleElaboratorId,
         seed,
@@ -276,14 +270,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       setBrainstormProgress(null)
       activeRequestIdRef.current = null
     }
-  }, [selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, promptFormat, promptLength])
+  }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, promptFormat, promptLength])
 
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (gates.elaborate.disabled) return
     setActiveOperation('elaborate')
     setError('')
     void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
-      contentElaborator: elaboratorsByKind.content.find((e) => e.id === selectedContentElaboratorId)?.name ?? null,
       compositionElaborator: elaboratorsByKind.composition.find((e) => e.id === selectedCompositionElaboratorId)?.name ?? null,
       styleElaborator: elaboratorsByKind.style.find((e) => e.id === selectedStyleElaboratorId)?.name ?? null,
       seedLen: seed.length,
@@ -310,7 +303,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     }
   }, [
     gates.elaborate.disabled, runBrainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts,
-    elaboratorsByKind, selectedContentElaboratorId, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
+    elaboratorsByKind, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
   ])
 
   const buildDtParams = useCallback(async (modelFile: string): Promise<{ model: string; params: DtParams }> => {
@@ -487,9 +480,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   const selectElaborator = useCallback((kind: ElaboratorKind, id: string): void => {
     switch (kind) {
-      case 'content':
-        update({ selectedContentElaboratorId: id })
-        return
       case 'composition':
         update({ selectedCompositionElaboratorId: id })
         return
@@ -500,7 +490,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [update])
 
   const selectedElaboratorIds: Record<ElaboratorKind, string | null> = {
-    content: selectedContentElaboratorId,
     composition: selectedCompositionElaboratorId,
     style: selectedStyleElaboratorId,
   }

@@ -15,6 +15,7 @@ import {
   DrawThingsModelParams,
   SessionSummary,
   ApiKeyPresence,
+  QueueControlState,
   ConceptFacetSummary,
   ConceptProbeSummary,
   ConceptRow,
@@ -64,6 +65,13 @@ export interface ElectronAPI {
   deleteWithFiles: (backend: BackendId, taskId: string) => Promise<void>
   retryTask: (backend: BackendId, taskId: string) => Promise<void>
   resumeInterruptedTasks: () => Promise<number>
+  // Queue control (the queue mini-menu)
+  setQueuePaused: (paused: boolean) => Promise<void>
+  stopGenerating: () => Promise<number>
+  stopAllQueueWork: () => Promise<{ cancelled: number; queued: number }>
+  clearPendingTasks: () => Promise<number>
+  getQueueControlState: () => Promise<QueueControlState>
+  onQueueControlState: (callback: (state: QueueControlState) => void) => (() => void)
   reorderTasks: (backend: BackendId, taskIds: string[]) => Promise<void>
 
   createSession: () => Promise<void>
@@ -86,7 +94,6 @@ export interface ElectronAPI {
   resetElaborators: (kind?: ElaboratorKind) => Promise<Elaborator[]>
   brainstormPrompts: (req: {
     requestId: string
-    contentElaboratorId: string
     compositionElaboratorId: string
     styleElaboratorId: string
     seed: string

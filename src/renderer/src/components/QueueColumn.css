@@ -127,10 +127,10 @@
   position: relative;
   --task-bg: var(--bg-secondary);
   --task-actions-bg: var(--task-bg);
-  padding: 8px;
+  padding: var(--space-3) var(--space-3) var(--space-2);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  margin-bottom: 6px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
   background: var(--task-bg);
   cursor: pointer;
 }
@@ -167,7 +167,8 @@
 }
 
 .task-prompt {
-  font-size: 12px;
+  font-size: var(--text-sm);
+  line-height: 1.45;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -176,7 +177,8 @@
 }
 
 .task-status {
-  font-size: 12px;
+  font-size: var(--text-xs);
+  margin-top: var(--space-1);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -331,12 +333,12 @@
 
 .task-actions {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
+  bottom: var(--space-1);
+  right: var(--space-1);
   display: flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 6px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
   background: var(--task-actions-bg);
   opacity: 0;
   transition: opacity 0.15s;
@@ -345,14 +347,28 @@
   opacity: 1;
 }
 .task-btn {
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--task-actions-bg);
+  /* A real pointer target instead of a 20px text chip. Square, because the
+     content is an icon; borderless, because five bordered boxes in a row was
+     most of what made this read as a 1990s toolbar — the hover state carries
+     the affordance instead. */
+  width: var(--control-sm);
+  height: var(--control-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 15px;
   cursor: pointer;
-  line-height: 1.4;
+  line-height: 1;
+}
+
+.task-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .task-btn-retry:hover {
   color: var(--accent);
