@@ -66,6 +66,11 @@ export interface FluxBackendConfig {
 }
 
 export interface DrawThingsBackendConfig {
+  // The one bound on a generation run. Local rendering legitimately takes
+  // minutes on big models, so the default is generous — but without ANY bound
+  // a wedged CLI held its queue slot forever with no error, kept the wake
+  // lock, and blocked every Draw Things task behind it (concurrency is 1).
+  timeout_ms: number
   default_params: {
     fallback_width: number
     fallback_height: number

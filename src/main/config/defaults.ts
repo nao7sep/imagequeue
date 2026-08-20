@@ -97,6 +97,7 @@ export function createDefaultConfig(): AppConfig {
         timeout_ms: 180000
       },
       drawthings: {
+        timeout_ms: 1800000,
         default_params: {
           fallback_width: 1024,
           fallback_height: 1024,

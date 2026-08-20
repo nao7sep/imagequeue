@@ -73,10 +73,24 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   })
   const startTime = Date.now()
 
+  const { timeout_ms } = loadConfig().image_backends.drawthings
+
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(cliPath, args, { stdio: 'pipe' })
     let stderr = ''
     let cancelled = false
+    let timedOut = false
+
+    // The same escalation the abort path uses, on a clock: a wedged CLI (a
+    // corrupt model, a stalled device) otherwise holds the single Draw Things
+    // slot forever with no error and keeps the machine awake.
+    const timer = setTimeout(() => {
+      timedOut = true
+      try { proc.kill('SIGTERM') } catch { /* already gone */ }
+      setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch { /* already gone */ }
+      }, 2000)
+    }, timeout_ms)
 
     // The child process is the ONLY handle that can stop a Draw Things
     // generation: there is no request to abort and the CLI runs to completion
@@ -95,8 +109,14 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
 
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     proc.on('close', (code) => {
+      clearTimeout(timer)
       if (cancelled) {
         reject(new Error(CANCELLED_MESSAGE))
+        return
+      }
+      if (timedOut) {
+        log('error', 'draw-things-cli timed out', { model: task.model, timeoutMs: timeout_ms })
+        reject(new Error(`Draw Things generation timed out after ${Math.round(timeout_ms / 1000)}s`))
         return
       }
       if (code === 0) resolve()

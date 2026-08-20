@@ -12,19 +12,49 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // the app never handled. In temp it is swept by clearTempDir at the next launch.
 
 const spawnCalls: { args: string[] }[] = []
+const killSignals: string[] = []
+let hangUntilKilled = false
 
 vi.mock('node:child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
 vi.mock('child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
 
-function makeProc(args: string[]): EventEmitter & { stderr: EventEmitter } {
+// The generation timeout is read from config, which caches per process — the
+// mock gives each test its own knob.
+const configKnobs = vi.hoisted(() => ({ timeoutMs: 60_000 }))
+vi.mock('../../../src/main/config', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  loadConfig: () => ({
+    image_backends: {
+      drawthings: {
+        timeout_ms: configKnobs.timeoutMs,
+        models_dir: '',
+        default_params: {
+          fallback_width: 1024, fallback_height: 1024, fallback_steps: 4,
+          fallback_guidance: 1, fallback_negative_prompt: '', seed: null,
+        },
+      },
+    },
+  }),
+}))
+
+function makeProc(args: string[]): EventEmitter & { stderr: EventEmitter; kill: (sig?: string) => void } {
   spawnCalls.push({ args })
-  const proc = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
-  // Write the file the CLI would produce, then report success.
-  const outIndex = args.indexOf('--output')
-  const outPath = args[outIndex + 1]
-  fs.mkdirSync(path.dirname(outPath), { recursive: true })
-  fs.writeFileSync(outPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
-  setTimeout(() => proc.emit('close', 0), 0)
+  const proc = Object.assign(new EventEmitter(), {
+    stderr: new EventEmitter(),
+    kill: (sig?: string) => {
+      killSignals.push(sig ?? 'SIGTERM')
+      // The first signal is enough for the fake: report a killed close.
+      setTimeout(() => proc.emit('close', null), 0)
+    },
+  })
+  if (!hangUntilKilled) {
+    // Write the file the CLI would produce, then report success.
+    const outIndex = args.indexOf('--output')
+    const outPath = args[outIndex + 1]
+    fs.mkdirSync(path.dirname(outPath), { recursive: true })
+    fs.writeFileSync(outPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    setTimeout(() => proc.emit('close', 0), 0)
+  }
   return proc
 }
 
@@ -42,6 +72,9 @@ describe('Draw Things output staging', () => {
 
   beforeEach(() => {
     spawnCalls.length = 0
+    killSignals.length = 0
+    hangUntilKilled = false
+    configKnobs.timeoutMs = 60_000
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-dt-'))
     process.env[ENV_VAR] = tmpRoot
   })
@@ -63,6 +96,22 @@ describe('Draw Things output staging', () => {
       durationMs: null, imagePath: null, baseName: null, error: null,
     } as never, controller.signal)).rejects.toThrow('Generation stopped.')
     expect(spawnCalls).toHaveLength(0)
+  })
+
+  // A wedged CLI is killed on the clock with the same SIGTERM→SIGKILL
+  // escalation a Stop uses, and the task fails with a timeout error instead of
+  // holding the single Draw Things slot forever.
+  it('times out a CLI that never exits, with the escalating kill', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    hangUntilKilled = true
+    configKnobs.timeoutMs = 50
+
+    await expect(generateDrawThings({
+      id: 'tt', prompt: 'a cat', backend: 'drawthings', model: 'm.ckpt',
+      params: {}, status: 'generating', enqueuedAt: '', startedAt: '', completedAt: null,
+      durationMs: null, imagePath: null, baseName: null, error: null,
+    } as never, new AbortController().signal)).rejects.toThrow(/timed out after/)
+    expect(killSignals).toContain('SIGTERM')
   })
 
   it('stages the CLI output under temp/, never the session directory', async () => {

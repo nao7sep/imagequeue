@@ -552,8 +552,17 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <h3>Draw Things</h3>
           <div className="settings-field">
             <label>Models Directory</label>
-            <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use ~/.imagequeue/models" />
+            {/* The placeholder names no literal path: the real default lives
+                under the app's data directory, which IMAGEQUEUE_HOME moves. */}
+            <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use the app data models folder" />
           </div>
+          <div className="settings-field">
+            <label>Timeout (s)</label>
+            <input type="number" min={1} value={Math.round(((backends.drawthings.timeout_ms as number) ?? 1800000) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+          </div>
+          <p className="settings-hint settings-field-full">
+            A generation running longer than this is stopped and marked failed. Local renders can legitimately take minutes on large models, so the default is generous (30 minutes).
+          </p>
           <p className="settings-hint settings-field-full">
             The Draw Things CLI and its recommended parameters are managed from the Dependencies window (main menu → Dependencies).
           </p>
