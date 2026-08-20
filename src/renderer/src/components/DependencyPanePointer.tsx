@@ -5,22 +5,32 @@ import type { DependenciesState, DependencyInfo } from '../../../shared/types'
 // Its only job is to lead the user to the modal — it carries no actions of its
 // own. It decides its own visibility from the dependency state, following the
 // convention's display models:
-//   - everything fine            → silent (renders nothing)
-//   - an update is available     → WARN, shown persistently until resolved
-//   - optional setup / unchecked → INFO, shown temporarily then auto-hidden
+//   - everything fine                  → silent (renders nothing)
+//   - CLI missing, or update available → WARN, shown until resolved
+//   - configs.json missing / unchecked → INFO, normal muted ink, also permanent
 //
-// Draw Things is one optional backend among several, so its dependencies are
-// OPTIONAL: an absent CLI or configs.json is informational (the convention's
-// optional-absent), never a warning and never a blocking first-run. The
-// always-present Dependencies menu item is the permanent way in; this pointer is
-// the temporary nudge. Only an available update — "you're behind" — is a WARN.
-
-const TEMPORARY_VISIBLE_MS = 30_000
+// Both roles show PERMANENTLY (fleet decision, 2026-08-21, superseding the old
+// 30-second temporary info): this pointer is the one standing path to notice the
+// Draw Things tools are missing or may be stale — a nudge that hides leaves only
+// the menu item, which nothing points at. It sits among the column's other
+// state-driven rows (which themselves appear once the CLI is installed), so it
+// shifts no app chrome.
+//
+// Draw Things is one optional backend among several, so app-wide its
+// dependencies are OPTIONAL: nothing blocks first-run and nothing interrupts.
+// But required-ness follows the surface's scope, and within THIS pane the CLI is
+// required — the whole column is dead without it, exactly as a provider column
+// is dead without its API key, whose row already warns. So a missing CLI warns
+// here, while the recommendations file — genuine garnish generation works fully
+// without — stays informational when absent.
 
 type Severity = 'warn' | 'info'
 
-function isWarn(dep: DependencyInfo): boolean {
-  return dep.state === 'update-available'
+// `requiredInPane` is the scope rule from the header: the CLI's absence warns
+// because this pane cannot work without it; the recommendations file's does not.
+function isWarn(dep: DependencyInfo, requiredInPane: boolean): boolean {
+  if (dep.state === 'update-available') return true
+  return requiredInPane && dep.state === 'not-installed'
 }
 
 function isInfo(dep: DependencyInfo): boolean {
@@ -28,7 +38,7 @@ function isInfo(dep: DependencyInfo): boolean {
 }
 
 function severityFor(state: DependenciesState): Severity | null {
-  if (isWarn(state.cli) || isWarn(state.recommendations)) return 'warn'
+  if (isWarn(state.cli, true) || isWarn(state.recommendations, false)) return 'warn'
   if (isInfo(state.cli) || isInfo(state.recommendations)) return 'info'
   return null
 }
@@ -51,7 +61,6 @@ function summarize(state: DependenciesState): string {
 
 export function DependencyPanePointer(): React.JSX.Element | null {
   const [state, setState] = useState<DependenciesState | null>(null)
-  const [temporaryElapsed, setTemporaryElapsed] = useState(false)
 
   const refresh = useCallback((): void => {
     void window.electronAPI.getDependenciesState().then(setState)
@@ -70,17 +79,7 @@ export function DependencyPanePointer(): React.JSX.Element | null {
   const severity = state?.platformSupported ? severityFor(state) : null
   const summary = state ? summarize(state) : ''
 
-  // Restart the temporary timer whenever the message changes; a WARN never times
-  // out (the cleanup just clears any prior timer).
-  useEffect(() => {
-    setTemporaryElapsed(false)
-    if (severity !== 'info') return
-    const id = window.setTimeout(() => setTemporaryElapsed(true), TEMPORARY_VISIBLE_MS)
-    return () => window.clearTimeout(id)
-  }, [severity, summary])
-
   if (!severity) return null
-  if (severity === 'info' && temporaryElapsed) return null
 
   return (
     <button
