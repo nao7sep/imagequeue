@@ -315,7 +315,7 @@ describe('API key warning follows presence, not the stored settings value', () =
     settingsValue.apiKeyPresence = presence(true)
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     expect(screen.queryByText('API key not set')).toBeNull()
-    expect(screen.getByRole('button', { name: '+ Queue' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Queue' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('warns and disables + Queue when no key resolves', () => {
@@ -323,7 +323,7 @@ describe('API key warning follows presence, not the stored settings value', () =
     settingsValue.apiKeyPresence = presence(false)
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     expect(screen.getByText('API key not set')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '+ Queue' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Queue' }).hasAttribute('disabled')).toBe(true)
   })
 
   // Startup: presence is null for a moment. A column must not flash
