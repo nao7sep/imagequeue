@@ -3,6 +3,7 @@ import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParam
 import { STANDARD_SIZE_PRESETS, type SizePreset } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
+import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { DependencyPanePointer } from './DependencyPanePointer'
 
@@ -99,31 +100,17 @@ export function useDrawThingsColumn({
   // under model B's key.
   const [loadedModel, setLoadedModel] = useState('')
 
-  const drawThingsDefaultParams = (
-    (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
-      ?.default_params as Record<string, unknown> | undefined
-  ) ?? {}
-  const fallbackWidth = (drawThingsDefaultParams.fallback_width as number | undefined) ?? 1024
-  const fallbackHeight = (drawThingsDefaultParams.fallback_height as number | undefined) ?? 1024
-  const fallbackSteps = (drawThingsDefaultParams.fallback_steps as number | undefined) ?? 4
-  const fallbackGuidance = (drawThingsDefaultParams.fallback_guidance as number | undefined) ?? 1
-  const fallbackSeed = drawThingsDefaultParams.seed == null ? '' : String(drawThingsDefaultParams.seed)
-  const fallbackNegativePrompt = (drawThingsDefaultParams.fallback_negative_prompt as string | undefined) ?? ''
-  const fallbacks = useMemo(() => ({
-    width: fallbackWidth,
-    height: fallbackHeight,
-    steps: fallbackSteps,
-    guidance: fallbackGuidance,
-    seed: fallbackSeed,
-    negativePrompt: fallbackNegativePrompt,
-  }), [
-    fallbackWidth,
-    fallbackHeight,
-    fallbackSteps,
-    fallbackGuidance,
-    fallbackSeed,
-    fallbackNegativePrompt,
-  ])
+  // One shared derivation with Advanced Prompting (drawThingsParams.ts) — the
+  // two surfaces had grown divergent copies of this precedence.
+  const fallbacksRaw = dtFallbacksFromSettings(settings as Record<string, unknown> | null)
+  const fallbacks = useMemo(
+    () => fallbacksRaw,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      fallbacksRaw.width, fallbacksRaw.height, fallbacksRaw.steps,
+      fallbacksRaw.guidance, fallbacksRaw.seed, fallbacksRaw.negativePrompt,
+    ],
+  )
   const currentDrawThingsParams = useMemo(
     () => buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt),
     [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt]
@@ -267,21 +254,13 @@ export function useDrawThingsColumn({
     ]).then(([saved, recommendation]) => {
       if (cancelled) return
       setSelectedRecommendation(recommendation)
-      if (saved) {
-        setLocalWidth(saved.width)
-        setLocalHeight(saved.height)
-        setLocalSteps(saved.steps)
-        setLocalGuidance(saved.guidance)
-        setLocalSeed(saved.seed)
-        setNegativePrompt(saved.negativePrompt)
-      } else {
-        setLocalWidth(recommendation?.width ?? fallbacks.width)
-        setLocalHeight(recommendation?.height ?? fallbacks.height)
-        setLocalSteps(recommendation?.steps ?? fallbacks.steps)
-        setLocalGuidance(recommendation?.guidance ?? fallbacks.guidance)
-        setLocalSeed(fallbacks.seed)
-        setNegativePrompt(recommendation?.negativePrompt ?? fallbacks.negativePrompt)
-      }
+      const resolved = resolveDtParams(saved, recommendation, fallbacks)
+      setLocalWidth(resolved.width)
+      setLocalHeight(resolved.height)
+      setLocalSteps(resolved.steps)
+      setLocalGuidance(resolved.guidance)
+      setLocalSeed(resolved.seed)
+      setNegativePrompt(resolved.negativePrompt)
       setLoadedModel(model)
     })
 
@@ -342,20 +321,10 @@ export function useDrawThingsColumn({
   }, [active, model, loadedModel, currentDrawThingsParams])
 
   const enqueueParams = useMemo<Record<string, unknown>>(() => {
-    const params: Record<string, unknown> = {
-      width: localWidth,
-      height: localHeight,
-      steps: localSteps,
-      guidance: localGuidance
-    }
-    const parsedSeed = localSeed ? Number.parseInt(localSeed, 10) : NaN
-    if (!Number.isNaN(parsedSeed)) params.seed = parsedSeed
-    // The negative prompt is a scalar field; clean it (flatten any pasted line
-    // break, keep horizontal spacing) at this snapshot/commit point, then guard
-    // emptiness on the cleaned value so an all-whitespace entry is dropped.
-    const cleanedNegativePrompt = singleLine(negativePrompt)
-    if (cleanedNegativePrompt) params.negativePrompt = cleanedNegativePrompt
-    return params
+    // Seed/negative gating shared with Advanced Prompting (drawThingsParams.ts).
+    return toDrawThingsTaskParams(
+      buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt)
+    )
   }, [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt])
 
   const closeModelsModal = useCallback(() => setShowModelsModal(false), [])

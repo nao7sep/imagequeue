@@ -22,6 +22,8 @@ export type IconName =
   | 'stop'
   | 'dots'
   | 'external-link'
+  | 'plus'
+  | 'menu'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   'chevron-right': <polyline points="9 5 17 12 9 19" />,
@@ -43,6 +45,8 @@ const PATHS: Record<IconName, React.ReactNode> = {
   // A window with an arrow leaving it. Its ink is fitted to the ↗ it replaces and
   // sits ON the baseline: a box hanging below one reads as broken beside capitals.
   'external-link': <><path d="M15.90 12.50L15.90 19.00L5.50 19.00L5.50 8.60L12.00 8.60" /><path d="M13.30 5.57L18.50 5.57L18.50 10.77" /><path d="M18.50 5.57L11.13 12.93" /></>,
+  plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
+  menu: <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>,
 }
 
 export function Icon({ name, className }: { name: IconName; className?: string }): React.JSX.Element {

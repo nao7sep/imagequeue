@@ -2,7 +2,11 @@
   position: fixed;
   bottom: var(--space-4);
   right: var(--space-4);
-  z-index: 400;
+  /* Above the in-window chrome (menus at 200/201), BELOW every modal (300):
+     a transient notice must never cover a modal's footer actions — at 400 the
+     card stack sat over Queue Tasks / Cancel in the wide modals and ate the
+     clicks. */
+  z-index: 250;
   width: 520px;
   display: flex;
   flex-direction: column;

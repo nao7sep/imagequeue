@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { isTopmostModal, popModal, pushModal } from './modalStack'
+import { useImeGuard } from '../utils/imeGuard'
 import './Modal.css'
 
 interface ModalProps {
@@ -42,6 +43,7 @@ export function Modal({
   const modalId = useId()
   const titleId = `${modalId}-title`
   const boxRef = useRef<HTMLDivElement>(null)
+  const isImeComposing = useImeGuard()
 
   // Capture the focus-restore target during the first render, before commit
   // moves focus (a child's `autoFocus`, or our own focus-on-open) — otherwise we
@@ -77,6 +79,12 @@ export function Modal({
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if (!isTopmostModal(modalId)) return
+      // While an IME candidate is pending, Escape belongs to the composition
+      // (it cancels the candidate). Without this, the one capture-phase key
+      // handler in the app closed the modal AND swallowed the cancel, losing
+      // both the candidate and the surface — the only Escape site that lacked
+      // the guard every other dispatch in the renderer carries.
+      if (isImeComposing(e)) return
 
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -108,7 +116,7 @@ export function Modal({
     }
     document.addEventListener('keydown', handler, true)
     return () => document.removeEventListener('keydown', handler, true)
-  }, [modalId, onClose])
+  }, [modalId, onClose, isImeComposing])
 
   const content = (
     <div

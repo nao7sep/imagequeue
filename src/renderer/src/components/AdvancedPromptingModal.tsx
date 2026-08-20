@@ -8,6 +8,7 @@ import { useSessionDraft } from '../context/SessionDraftContext'
 import type { BrainstormPhase, ElaboratedPromptRecord } from '../../../shared/types'
 import { multiline } from '../../../shared/textCleanup'
 import { promptTextForUnit, promptsNeeded } from '../utils/advancedQueueUnits'
+import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
 import { hasApiKeyFor } from '../utils/enqueue'
 import {
   MAX_DRAFT_ITERATIONS,
@@ -101,6 +102,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // wave lands in a burst, so the live counter can jump from a low number
   // straight to done — closing at that instant reads as a half-finished run.
   const [completionNote, setCompletionNote] = useState('')
+  // True only during the post-queue receipt hold: everything is already
+  // committed, so a close during it must neither warn about discarding work
+  // (nothing will be discarded) nor cancel anything — just close.
+  const holdingRef = useRef(false)
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
@@ -170,14 +175,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     const params = (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
       ?.default_params as Record<string, unknown> | undefined
     if (!params) return null
-    return {
-      width: params.fallback_width as number,
-      height: params.fallback_height as number,
-      steps: params.fallback_steps as number,
-      guidance: params.fallback_guidance as number,
-      seed: params.seed == null ? null : Number(params.seed),
-      negativePrompt: (params.fallback_negative_prompt as string | undefined) ?? '',
-    }
+    // Same derivation the column uses (drawThingsParams.ts) — null stays the
+    // still-loading sentinel that buildDtParams halts on.
+    return dtFallbacksFromSettings(settings as Record<string, unknown>)
   }, [settings])
 
   const toggleProprietary = (id: BackendId): void => {
@@ -324,35 +324,18 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     elaboratorsByKind, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
   ])
 
+  // Resolution and gating shared with the column (drawThingsParams.ts): saved
+  // params take the whole set, else recommendation over configured fallbacks.
   const buildDtParams = useCallback(async (modelFile: string): Promise<{ model: string; params: DtParams }> => {
     const saved = await window.electronAPI.dtGetModelParams(modelFile)
-    if (saved) {
-      const params: DtParams = {
-        width: saved.width,
-        height: saved.height,
-        steps: saved.steps,
-        guidance: saved.guidance,
-      }
-      const seedNum = saved.seed ? parseInt(saved.seed) : NaN
-      if (!Number.isNaN(seedNum) && seedNum > 0) params.seed = seedNum
-      if (saved.negativePrompt) params.negativePrompt = saved.negativePrompt
-      return { model: modelFile, params }
-    }
-    const rec = await window.electronAPI.resolveRecommendation(modelFile)
-    if (!drawThingsFallbacks) {
+    const rec = saved ? null : await window.electronAPI.resolveRecommendation(modelFile)
+    // Saved params need no fallbacks; a resolution without them halts rather
+    // than inventing values (the non-null assertion below is covered by this).
+    if (!saved && !drawThingsFallbacks) {
       throw new Error('Draw Things settings are still loading — try again in a moment.')
     }
-    const params: DtParams = {
-      width: rec?.width ?? drawThingsFallbacks.width,
-      height: rec?.height ?? drawThingsFallbacks.height,
-      steps: rec?.steps ?? drawThingsFallbacks.steps,
-      guidance: rec?.guidance ?? drawThingsFallbacks.guidance,
-    }
-    const fallbackSeed = drawThingsFallbacks.seed
-    if (fallbackSeed != null && fallbackSeed > 0) params.seed = fallbackSeed
-    const neg = rec?.negativePrompt ?? drawThingsFallbacks.negativePrompt
-    if (neg) params.negativePrompt = neg
-    return { model: modelFile, params }
+    const resolved = resolveDtParams(saved, rec, drawThingsFallbacks!)
+    return { model: modelFile, params: toDrawThingsTaskParams(resolved) as unknown as DtParams }
   }, [drawThingsFallbacks])
 
   const handleQueue = useCallback(async (): Promise<void> => {
@@ -454,7 +437,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // count, held just long enough to register. It replaces the surprise of
       // closing on "2 / 12" — the missing ten completed in the same burst.
       setCompletionNote(`Queued ${units.length} task${units.length === 1 ? '' : 's'}.`)
+      holdingRef.current = true
       await new Promise((resolve) => setTimeout(resolve, QUEUE_COMPLETION_HOLD_MS))
+      holdingRef.current = false
       succeeded = true
       // No success message: the modal closes below (after the finally clears the
       // busy state), and the now-populated queue columns are the confirmation.
@@ -477,6 +462,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // user to confirm is while a long-running operation is in flight, since
   // state itself is session-scoped (closing is otherwise non-destructive).
   const handleRequestClose = useCallback(async (): Promise<void> => {
+    // During the receipt hold the operation flag is still set but the work is
+    // fully committed — a close is safe and needs no confirmation.
+    if (holdingRef.current) {
+      onClose()
+      return
+    }
     if (busy) {
       const ok = await confirm({
         title: 'Operation in progress',

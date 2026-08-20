@@ -11,6 +11,8 @@
   gap: var(--space-3);
   /* The Modal shell renders the body un-padded; each modal pads its own. */
   padding: var(--space-4);
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .dependencies-intro {

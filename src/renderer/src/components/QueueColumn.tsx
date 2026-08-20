@@ -260,7 +260,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
           disabled={!hasPrompt || !readyToEnqueue}
           onClick={() => enqueueToBackend(backendId, prompt)}
         >
-          + Queue
+          <Icon name="plus" /> Queue
         </button>
       </div>
 

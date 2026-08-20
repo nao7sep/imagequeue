@@ -15,8 +15,20 @@
   border-radius: var(--radius-lg);
   min-width: 360px;
   max-width: 480px;
+  /* The shell owns the height bound and the column layout, so a long body can
+     never push the header or the footer's Close/Cancel off a short window —
+     previously each modal opted in individually and three (About, Confirm,
+     Dependencies) did not, clipping unreachable content under overflow:hidden
+     at the derived window minimum. Bodies keep their own overflow-y. */
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+}
+
+.modal-header {
+  flex-shrink: 0;
 }
 
 /* Settings modal: taller, flex-column so content scrolls and footer sticks.

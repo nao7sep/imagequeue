@@ -25,12 +25,12 @@ export function ResumeInterruptedPrompt(): null {
       const message =
         `This session has ${count} ${label} that ${count === 1 ? 'was' : 'were'} left unfinished ` +
         `when it was last open. Retry ${count === 1 ? 'it' : 'them all'} to re-queue for generation, ` +
-        `or keep ${count === 1 ? 'it' : 'them'} paused to retry individually later.`
+        `or leave ${count === 1 ? 'it' : 'them'} stopped to retry individually later.`
 
       void confirm({
         title: 'Retry Interrupted Tasks',
         message,
-        confirmLabel: 'Retry All',
+        confirmLabel: 'Retry All Stopped',
         cancelLabel: 'Not Now'
       }).then((ok) => {
         if (ok) void window.electronAPI.resumeInterruptedTasks()

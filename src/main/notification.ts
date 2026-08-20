@@ -112,7 +112,14 @@ function showNotification(type: 'success' | 'failure', _mainWin: BrowserWindow |
 
   const display = screen.getPrimaryDisplay()
 
-  const label = type === 'success' ? '\u2713 Complete' : '\u2717 Failed'
+  // Drawn, not typed: the toast renders in a user-configurable font, which is
+  // exactly the weight-drift the app's drawn-icon rule exists to prevent — the
+  // check and cross reuse the renderer icon set's own paths inline, since this
+  // window cannot import the React component.
+  const MARK_SVG = type === 'success'
+    ? '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><polyline points="4 12 10 18 20 6"/></svg>'
+    : '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>'
+  const label = type === 'success' ? 'Complete' : 'Failed'
   const cssClass = type === 'success' ? 'toast success' : 'toast failure'
 
   // Lock immediately so a second rapid call is rejected while executeJavaScript is in-flight.
@@ -128,7 +135,9 @@ function showNotification(type: 'success' | 'failure', _mainWin: BrowserWindow |
       var t = document.getElementById('toast');
       var m = document.getElementById('toast-message');
       t.className = ${JSON.stringify(cssClass)};
-      m.textContent = ${JSON.stringify(label)};
+      // Fixed app-authored markup + a text node for the label — no user data.
+      m.innerHTML = ${JSON.stringify(MARK_SVG)};
+      m.appendChild(document.createTextNode(' ' + ${JSON.stringify(label)}));
       var font = ${JSON.stringify(uiFont)};
       if (font) { t.style.fontFamily = font; }
 
@@ -147,7 +156,10 @@ function showNotification(type: 'success' | 'failure', _mainWin: BrowserWindow |
 
       var msg = document.createElement('span');
       msg.className = 'toast-message';
-      msg.textContent = ${JSON.stringify(label)};
+      // Mirror the live span exactly (mark + label) so the measured width
+      // matches what renders.
+      msg.innerHTML = ${JSON.stringify(MARK_SVG)};
+      msg.appendChild(document.createTextNode(' ' + ${JSON.stringify(label)}));
 
       measure.appendChild(app);
       measure.appendChild(msg);
