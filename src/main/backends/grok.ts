@@ -17,6 +17,11 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
     throw new Error('Grok Imagine API key not configured')
   }
 
+  // A signal that is ALREADY aborted never fires its listener — today no await
+  // sits between registration and this point, but that is one refactor from
+  // silently ignoring a stop. The guard makes the contract explicit.
+  if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
+
   const { timeout_ms } = config.image_backends.grok
   // One controller, two reasons to fire: the request's own timeout and the
   // queue asking to stop. Which one fired is read back off `signal` below, so a

@@ -53,6 +53,18 @@ describe('Draw Things output staging', () => {
     vi.resetModules()
   })
 
+  it('answers an already-aborted signal at the door, before any spawn', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    const controller = new AbortController()
+    controller.abort()
+    await expect(generateDrawThings({
+      id: 't0', prompt: 'a cat', backend: 'drawthings', model: 'm.ckpt',
+      params: {}, status: 'generating', enqueuedAt: '', startedAt: '', completedAt: null,
+      durationMs: null, imagePath: null, baseName: null, error: null,
+    } as never, controller.signal)).rejects.toThrow('Generation stopped.')
+    expect(spawnCalls).toHaveLength(0)
+  })
+
   it('stages the CLI output under temp/, never the session directory', async () => {
     const sessionDir = path.join(tmpRoot, 'output', 'a-session')
     fs.mkdirSync(sessionDir, { recursive: true })

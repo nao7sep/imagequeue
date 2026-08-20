@@ -158,8 +158,9 @@ export function registerQueueIpc(): void {
 }
 
 // What the queue-control menu needs to know to enable or disable each item, so
-// the renderer never has to infer it from the task list.
-function buildControlState(): QueueControlState {
+// the renderer never has to infer it from the task list. Exported for the
+// processor, whose start/settle broadcasts are the other place counts change.
+export function buildControlState(): QueueControlState {
   return {
     paused: isQueuePaused(),
     generating: inFlightCount(),

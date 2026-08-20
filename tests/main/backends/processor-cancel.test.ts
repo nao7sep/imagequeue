@@ -9,22 +9,43 @@ import type { BackendId } from '../../../src/shared/types'
 // rather than `failed`, and the registry is released however the run ended (a
 // leaked entry would inflate the count the menu enables itself from).
 
-let captured: { signal: AbortSignal; reject: (err: unknown) => void } | null = null
+let captured: {
+  signal: AbortSignal
+  resolve: (v: { buffer: Buffer }) => void
+  reject: (err: unknown) => void
+} | null = null
 
 const generate = vi.fn(
   (_task: unknown, signal: AbortSignal) =>
-    new Promise<{ buffer: Buffer }>((_resolve, reject) => {
-      captured = { signal, reject }
+    new Promise<{ buffer: Buffer }>((resolve, reject) => {
+      captured = { signal, resolve, reject }
     }),
 )
 
-vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
+const sentChannels = vi.hoisted(() => [] as string[])
+vi.mock('electron', () => ({
+  ipcMain: { handle: () => undefined },
+  BrowserWindow: {
+    getAllWindows: () => [
+      { webContents: { send: (channel: string) => { sentChannels.push(channel) } } },
+    ],
+  },
+}))
 vi.mock('../../../src/main/backends/openai', () => ({ generateOpenAI: generate }))
 vi.mock('../../../src/main/backends/nanobanana', () => ({ generateNanoBanana: generate }))
 vi.mock('../../../src/main/backends/grok', () => ({ generateGrok: generate }))
 vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
-vi.mock('../../../src/main/backends/slug', () => ({ generateSlug: async () => 'slug' }))
+const slugState = vi.hoisted(() => ({ failNext: false }))
+vi.mock('../../../src/main/backends/slug', () => ({
+  generateSlug: async () => {
+    if (slugState.failNext) {
+      slugState.failNext = false
+      throw new Error('slug service hiccup')
+    }
+    return 'slug'
+  },
+}))
 vi.mock('../../../src/main/session', () => ({
   allocateOutputTimestamp: () => ({ timestamp: '20260819-000000', ordinal: 1 }),
   persistActiveSession: () => undefined,
@@ -67,6 +88,8 @@ function settle(): Promise<void> {
 beforeEach(() => {
   generate.mockClear()
   captured = null
+  slugState.failNext = false
+  sentChannels.length = 0
   resetCancellationState()
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
 })
@@ -103,6 +126,64 @@ describe('stopping a generation reaches every backend', () => {
 
     expect(statusOf(backend)).toBe('interrupted')
     expect(queueManager.getAllStoredTasks()[backend][0].error).toBeNull()
+  })
+})
+
+describe('a stop cannot reach a task past its generation', () => {
+  // Once generate() resolves the image exists and, on a cloud backend, is paid
+  // for. The task must leave the registry AT THAT MOMENT: a Stop during the
+  // slug/write phase must find nothing to cancel — and if the slug then fails
+  // for its own reasons, the task lands `failed`, never `interrupted`, because
+  // retrying an interrupted task would buy the already-bought image again.
+  it('counts nothing after generation, and a slug failure lands as failed', async () => {
+    queueOne('openai')
+    processQueues()
+    expect(inFlightCount()).toBe(1)
+
+    slugState.failNext = true
+    captured!.resolve({ buffer: Buffer.from([1]) })
+    // One microtask turn: generate settles, the registry entry is released,
+    // and processTask is now inside the slug call.
+    await Promise.resolve()
+    expect(inFlightCount()).toBe(0)
+    expect(cancelAllInFlight()).toBe(0)
+
+    await settle()
+    expect(statusOf('openai')).toBe('failed')
+    expect(queueManager.getAllStoredTasks().openai[0].error).toContain('slug service hiccup')
+  })
+
+  // The abort itself can race a generation that succeeds anyway (the response
+  // was already on the wire). signal.aborted stays true forever after — the
+  // classification must not let that stale flag turn a later, unrelated
+  // failure into `interrupted`.
+  it('a stale abort flag cannot reclassify a post-generation failure', async () => {
+    queueOne('grok')
+    processQueues()
+    cancelAllInFlight()
+    expect(captured!.signal.aborted).toBe(true)
+
+    slugState.failNext = true
+    captured!.resolve({ buffer: Buffer.from([1]) })
+    await settle()
+    expect(statusOf('grok')).toBe('failed')
+  })
+})
+
+describe('the queue broadcasts control state as work starts and settles', () => {
+  // The handlers' broadcasts cannot see starts and settles, so without the
+  // processor's own broadcast an open All Queues menu shows counts frozen at
+  // the moment it opened.
+  it('sends queue:controlState alongside queue:updated', async () => {
+    queueOne('flux')
+    processQueues()
+    expect(sentChannels).toContain('queue:controlState')
+
+    sentChannels.length = 0
+    captured!.reject(new Error('boom'))
+    await settle()
+    expect(sentChannels).toContain('queue:controlState')
+    expect(sentChannels).toContain('queue:updated')
   })
 })
 

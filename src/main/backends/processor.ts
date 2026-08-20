@@ -9,6 +9,7 @@ import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
 import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight } from './cancellation'
+import { buildControlState } from '../queue/ipc'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
@@ -126,8 +127,16 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   const controller = new AbortController()
   registerInFlight(task.id, () => controller.abort())
 
+  // Only generate() is cancellable work. Once it resolves, the image exists
+  // (and, on a cloud backend, is paid for) — so the task leaves the registry
+  // RIGHT THEN, not in the finally: a Stop arriving during the slug/write
+  // phase must neither count this task as cancelled nor reach it.
+  let generated = false
+
   try {
     const { buffer: imageBuffer, mimeType } = await generate(task, controller.signal)
+    generated = true
+    clearInFlight(task.id)
     const completedAt = new Date()
 
     task.completedAt = completedAt.toISOString()
@@ -183,7 +192,11 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     // queue, and the row reads "interrupted" rather than showing an error.
     // `signal.aborted` is the authority, not the message: an SDK that turns an
     // abort into its own error type would otherwise be recorded as a failure.
-    if (message === CANCELLED_MESSAGE || controller.signal.aborted) {
+    // `!generated` bounds the classification to the phase a stop can reach: a
+    // transient slug/write failure AFTER a successful generation must land as
+    // `failed`, never `interrupted` — retrying an interrupted task would buy
+    // the already-bought image again.
+    if (!generated && (message === CANCELLED_MESSAGE || controller.signal.aborted)) {
       task.status = 'interrupted'
       task.startedAt = null
       task.completedAt = null
@@ -217,7 +230,13 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
 function broadcastUpdate(): void {
   const allTasks = queueManager.getAllStoredTasks()
+  // Every queue change is also a control-state change (a start moves queued →
+  // generating, a settle moves generating → terminal), and the handlers'
+  // broadcasts cannot see these — without this, an open All Queues menu shows
+  // counts frozen at the moment it opened.
+  const controlState = buildControlState()
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('queue:updated', allTasks)
+    win.webContents.send('queue:controlState', controlState)
   }
 }

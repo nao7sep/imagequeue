@@ -10,6 +10,9 @@ import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
 export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
+  // Same guard as the cloud backends with manual wiring: an already-aborted
+  // signal never fires its listener, so it must be answered before spawn.
+  if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
   return generateDrawThingsCli(task, signal)
 }
 

@@ -44,6 +44,11 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
   logApiRequest('flux', task.model, { width, height, steps: body.steps, guidance: body.guidance, seed: body.seed })
   const startTime = Date.now()
 
+  // A signal that is ALREADY aborted never fires its listener — today no await
+  // sits between registration and this point, but that is one refactor from
+  // silently ignoring a stop. The guard makes the contract explicit.
+  if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
+
   const { timeout_ms } = config.image_backends.flux
   // One controller, two reasons to fire: the request's own timeout and the
   // queue asking to stop. Aborting it also breaks the polling loop, which would
