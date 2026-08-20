@@ -10,6 +10,7 @@
 // network told us and when, which has no on-disk source at all.
 
 import fs from 'fs'
+import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { getDependenciesStatePath } from './paths'
 import path from 'path'
@@ -42,8 +43,12 @@ export function readDependenciesCache(): DependenciesCache {
       cli: { ...base.cli, ...parsed.cli },
       recommendations: { ...base.recommendations, ...parsed.recommendations },
     }
-  } catch {
-    // Absent or malformed — start clean; the file is a rebuildable cache.
+  } catch (err) {
+    // Absent is an expected probe (silent); present-but-unparseable is an
+    // unexpected failure worth a trace before the silent rebuild.
+    if (fs.existsSync(getDependenciesStatePath())) {
+      log('warn', 'Ignoring unreadable dependencies.json; rebuilding the cache', { error: serializeError(err) })
+    }
     return emptyCache()
   }
 }

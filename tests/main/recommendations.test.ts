@@ -7,7 +7,7 @@ import {
   applyPendingRecommendations,
   hasPendingRecommendationsUpdate,
   resolveRecommendedParams,
-} from '../../../src/main/recommendations'
+} from '../../src/main/recommendations'
 
 let home: string
 let modelsDir: string

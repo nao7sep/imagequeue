@@ -83,10 +83,16 @@ export function writeImageOutput(
   // saved. The bump is logged because it should not normally happen.
   let attempt = ordinal
   let baseName = outputBaseName(timestamp, attempt, slug, backend)
-  while (
-    fs.existsSync(path.join(dir, `${baseName}.${ext}`)) ||
-    fs.existsSync(path.join(dir, `${baseName}.json`))
-  ) {
+  // Case-insensitive sibling check (storage-path conventions: a hard
+  // invariant): fs.existsSync is case-sensitive on a case-sensitive volume,
+  // and the nanoid fallback slug is mixed-case, so an exists() probe alone
+  // could admit a name differing only by case.
+  const lowerSiblings = new Set(
+    (fs.existsSync(dir) ? fs.readdirSync(dir) : []).map((name) => name.toLowerCase())
+  )
+  const collides = (base: string): boolean =>
+    lowerSiblings.has(`${base}.${ext}`.toLowerCase()) || lowerSiblings.has(`${base}.json`.toLowerCase())
+  while (collides(baseName)) {
     attempt++
     baseName = outputBaseName(timestamp, attempt, slug, backend)
   }

@@ -1,3 +1,4 @@
+import { singleLine } from '../../shared/textCleanup'
 // Identity normalization for the concept store. A value's key decides whether
 // two texts are the same concept: Unicode compatibility forms fold (a
 // full-width comma reads as its ASCII form), case folds, whitespace runs
@@ -17,5 +18,8 @@ export function normalizeKey(text: string): string {
 // punctuation strip — the stored display is shown to the user and woven into
 // prompts, so it keeps its casing.
 export function cleanDisplay(text: string): string {
-  return text.normalize('NFKC').replace(/\s+/gu, ' ').trim()
+  // NFKC is a normalization concern (outside the text-cleanup patterns); the
+  // whitespace half is the shared helper's single-line minify — composed, not
+  // re-implemented, so a fix there reaches the ledger's stored displays too.
+  return singleLine(text.normalize('NFKC'), { minify: true })
 }

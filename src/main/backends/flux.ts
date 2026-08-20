@@ -71,7 +71,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
 
     if (!submitResponse.ok) {
       const text = await submitResponse.text()
-      log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text })
+      log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
       throw new Error(`FLUX submit failed (${submitResponse.status}): ${text}`)
     }
 
@@ -120,8 +120,8 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
       }
 
       if (pollData.status === 'Error' || pollData.status === 'Failed') {
-        log('error', 'FLUX generation returned error status', { model: task.model, status: pollData.status, pollData })
-        throw new Error(`FLUX generation failed: ${JSON.stringify(pollData)}`)
+        log('error', 'FLUX generation returned error status', { model: task.model, status: pollData.status })
+        throw new Error(`FLUX generation failed with status ${pollData.status}`)
       }
 
       // Otherwise status is "Pending" or "Processing" — keep polling

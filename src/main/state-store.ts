@@ -11,6 +11,7 @@
 //   - self-healing — a malformed file falls back to defaults rather than failing.
 
 import fs from 'fs'
+import { log, serializeError } from './logger'
 import path from 'path'
 import { writeJsonAtomic } from './utils/atomic-write'
 import { getDataDir } from './config'
@@ -32,17 +33,23 @@ export function readUiState(): UiState {
           ? parsed.columnWidth
           : base.columnWidth,
     }
-  } catch {
-    // Absent or malformed — start from defaults; the file is disposable view state.
+  } catch (err) {
+    // Absent is an expected probe (silent); present-but-unparseable is an
+    // unexpected failure that silently resetting would leave untraceable.
+    if (fs.existsSync(getUiStatePath())) {
+      log('warn', 'Ignoring unreadable state.json; resetting to defaults', { error: serializeError(err) })
+    }
     return defaultUiState()
   }
 }
 
 export function writeUiState(state: UiState): void {
   fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-  // not recorded: state.json is disposable view state (pane widths), re-derivable
-  // to defaults on loss — not durable user-authored data (data-backup conventions).
-  writeJsonAtomic(getUiStatePath(), state, false)
+  // Recorded: the data-backup conventions name state.json explicitly among the
+  // recorded stores — small frequently-rewritten JSON is exactly what the
+  // dedupe-by-content history absorbs for free, and state files are where
+  // durable registries tend to accumulate later.
+  writeJsonAtomic(getUiStatePath(), state, true)
 }
 
 /** Read, apply the patch, and persist in one step. Returns the new full state. */

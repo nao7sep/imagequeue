@@ -31,6 +31,13 @@ export default defineConfig({
         'src/main/index.ts', // Electron main entry / bootstrap
         'src/preload/**', // contextBridge wiring
         'src/renderer/src/main.tsx', // React DOM mount
+        // Hand-written re-export barrels: permanent zeros that would bury the
+        // real gaps the coverage report exists to map.
+        'src/main/config/index.ts',
+        'src/main/backends/index.ts',
+        'src/main/queue/index.ts',
+        'src/main/session/index.ts',
+        'src/shared/index.ts',
         '**/*.d.ts'
       ]
     }

@@ -26,7 +26,7 @@ export async function generateSlug(prompt: string): Promise<string> {
       return slug
     }
     log('warn', 'Slug AI returned unusable output, falling back to nanoid', {
-      rawResponse: result.text ?? null,
+      responsePreview: (result.text ?? '').slice(0, 300), responseChars: (result.text ?? '').length,
       derivedSlug: slug ?? null,
     })
     return nanoid(10)

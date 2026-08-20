@@ -5,7 +5,7 @@ import {
   COLUMN_DEFAULT_PX,
   COLUMN_MIN_PX,
   LEFT_PANE_MIN_PX,
-} from '../../../../src/shared/layout-metrics'
+} from '../../../src/shared/layout-metrics'
 
 // CSS cannot import the shared layout metrics, and the scroll-bar styling lives
 // in exactly one global block. This test reads the actual CSS text and pins both
@@ -15,7 +15,7 @@ import {
 //   2. The pane min-widths mirrored into the CSS match the shared constants the
 //      window minimum is derived from, so the two can never silently drift.
 
-const SRC = path.resolve(__dirname, '../../../../src/renderer/src')
+const SRC = path.resolve(__dirname, '../../../src/renderer/src')
 
 function read(rel: string): string {
   return fs.readFileSync(path.join(SRC, rel), 'utf-8')

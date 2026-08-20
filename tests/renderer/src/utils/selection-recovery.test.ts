@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { nextSelectionAfterRemoval, type TaskRef } from '../../../src/renderer/src/utils/selection-recovery'
-import type { BackendId } from '../../../src/shared'
+import { nextSelectionAfterRemoval, type TaskRef } from '../../../../src/renderer/src/utils/selection-recovery'
+import type { BackendId } from '../../../../src/shared'
 
 const ids = (...names: string[]): TaskRef[] => names.map((id) => ({ id }))
 const noGeometry = (): number | null => null

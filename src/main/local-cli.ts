@@ -18,12 +18,34 @@ export function resolveCliPath(): string {
   return getCliBinaryPath()
 }
 
+/**
+ * Expand a user-typed path per the storage-path conventions: `~` / `~/` (and
+ * `~\`) to the home directory, `$VAR` and `%VAR%` to their environment
+ * values, then resolve anything still relative against the storage root — a
+ * relative string must never reach the filesystem, where it would resolve
+ * against process.cwd(), which is `/` for a double-clicked app.
+ *
+ * `~user` deliberately does NOT expand (the old bare-`~` replace turned it
+ * into `<home>user`, a corruption worse than passing it through).
+ */
+export function expandUserPath(raw: string): string {
+  let expanded = raw.trim()
+  if (expanded === '~') expanded = os.homedir()
+  else if (expanded.startsWith('~/') || expanded.startsWith('~\\')) {
+    expanded = path.join(os.homedir(), expanded.slice(2))
+  }
+  expanded = expanded
+    .replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (m, name) => process.env[name] ?? m)
+    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (m, name) => process.env[name] ?? m)
+  return path.isAbsolute(expanded) ? expanded : path.join(getDataDir(), expanded)
+}
+
 /** Resolve the effective models directory. Empty config uses ImageQueue's private models dir. */
 export function resolveModelsDir(): string {
   const config = loadConfig()
   const dir = config.image_backends.drawthings.models_dir
   if (!dir) return getDefaultModelsDir()
-  return dir.replace(/^~/, os.homedir())
+  return expandUserPath(dir)
 }
 
 /** Ensure the models directory exists (creates if needed). */

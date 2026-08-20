@@ -121,7 +121,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
       }
       if (code === 0) resolve()
       else {
-        log('error', 'draw-things-cli exited with error', { code, model: task.model, stderr })
+        log('error', 'draw-things-cli exited with error', { code, model: task.model, stderr: stderr.slice(-2000), stderrChars: stderr.length })
         reject(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
       }
     })
