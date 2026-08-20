@@ -109,6 +109,14 @@ function dropLegacyConfigKeys(config: AppConfig): void {
   const backends = config.image_backends as unknown as Record<string, unknown> | undefined
   if (backends && 'imagen' in backends) delete backends.imagen
 
+  // The notification volume, from before it moved to state.json — how loud this
+  // machine plays a sound is a presentation adjustment, not an authored setting
+  // (persisted-store-separation conventions). Dropped rather than migrated: the
+  // app is pre-release, so it takes the default once instead of carrying
+  // migration scaffolding forever.
+  const notifications = config.notifications as unknown as Record<string, unknown> | undefined
+  if (notifications && 'volume' in notifications) delete notifications.volume
+
   // api_key fields, from before keys moved out of the config type entirely (they
   // live only in api-keys.json). This is housekeeping, NOT a guard: no current
   // code path can put a key into the config object, so the only api_key that can

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
+import { useUiState } from '../context/UiStateContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { Icon } from './Icon'
@@ -28,7 +29,9 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
   const soundsEnabled = (notificationCfg.sounds_enabled as boolean) ?? true
-  const volume = (notificationCfg.volume as number) ?? 0.7
+  // Volume is state, not config — it lives in state.json beside the pane width.
+  const { uiState, patchUiState } = useUiState()
+  const volume = uiState.notificationVolume
 
   // Local volume state for smooth slider dragging; syncs on pointer up.
   const [localVolume, setLocalVolume] = useState<number>(volume)
@@ -230,7 +233,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             value={localVolume}
             title={`Volume: ${Math.round(localVolume * 100)}%`}
             onChange={(e) => setLocalVolume(parseFloat(e.target.value))}
-            onPointerUp={(e) => persistNotificationField('volume', parseFloat((e.target as HTMLInputElement).value))}
+            onPointerUp={(e) => patchUiState({ notificationVolume: parseFloat((e.target as HTMLInputElement).value) })}
           />
           <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
             Send to All

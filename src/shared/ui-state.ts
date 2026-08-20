@@ -25,10 +25,20 @@ export interface UiState {
    * the window grows.
    */
   columnWidth: number | null
+  /**
+   * Playback volume for the completion sounds, 0–1. State rather than config: the
+   * persisted-store-separation conventions draw that line at
+   * presentation-versus-setting and name volume on the state side, beside zoom and
+   * pane width. Whether sounds play at all IS a setting and stays in config; how
+   * loud this machine plays them is an adjustment to the here and now.
+   */
+  notificationVolume: number
 }
 
+export const NOTIFICATION_VOLUME_DEFAULT = 0.7
+
 export function defaultUiState(): UiState {
-  return { columnWidth: null }
+  return { columnWidth: null, notificationVolume: NOTIFICATION_VOLUME_DEFAULT }
 }
 
 /**

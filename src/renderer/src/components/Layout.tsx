@@ -24,6 +24,7 @@ import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
+import { useUiState } from '../context/UiStateContext'
 import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
@@ -42,6 +43,7 @@ export function Layout(): React.JSX.Element {
   // re-hydrated on session change (new/resume), alongside the Advanced
   // Prompting state. No local reset is needed — the context handles it.
   const { state: draft, update: updateDraft } = useSessionDraft()
+  const { uiState, patchUiState } = useUiState()
   const prompt = draft.prompt
   const setPrompt = useCallback((value: string): void => updateDraft({ prompt: value }), [updateDraft])
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
@@ -72,14 +74,14 @@ export function Layout(): React.JSX.Element {
     containerHeight,
   )
 
-  // Hydrate the persisted column width once on mount.
+  // Adopt the persisted column width. It arrives through the one UI-state
+  // context (hydrated once for the window), so this and the volume sliders share
+  // a single reader and a single writer for state.json. A drag updates the local
+  // intent live and only lands in the context on release, so this re-runs with a
+  // value it already has.
   useEffect(() => {
-    let cancelled = false
-    void window.electronAPI.getUiState().then((state) => {
-      if (!cancelled) setColumnWidthIntent(state.columnWidth)
-    })
-    return () => { cancelled = true }
-  }, [])
+    setColumnWidthIntent(uiState.columnWidth)
+  }, [uiState.columnWidth])
 
   // Measure the layout width and keep it live, so a window resize re-derives the
   // displayed column width from the unchanged intent and persists nothing.
@@ -132,11 +134,11 @@ export function Layout(): React.JSX.Element {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       setDraggingSplitter(false)
-      void window.electronAPI.updateUiState({ columnWidth: latest })
+      patchUiState({ columnWidth: latest })
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
-  }, [visibleColumnCount, containerWidth, containerHeight])
+  }, [visibleColumnCount, containerWidth, containerHeight, patchUiState])
 
   // App/window chrome shortcuts. Cmd+, opens Settings, Cmd+/ opens the shortcut
   // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal intercepts)

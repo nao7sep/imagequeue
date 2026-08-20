@@ -43,7 +43,6 @@ const secretIds = new Set<string>(SECRET_IDS)
 const notificationFields = new Set<string>([
   'notifications_enabled',
   'sounds_enabled',
-  'volume',
   'success_file',
   'failure_file',
 ])

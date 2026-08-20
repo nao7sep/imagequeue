@@ -3,11 +3,11 @@
 // (user-authored settings) and dependencies.json (the check cache), per the
 // persisted-store-separation conventions.
 //
-// Like the dependencies cache and unlike config.json, this file is disposable:
-//   - written with writeJsonAtomic(..., recorded=false) — deliberately NOT in the
-//     data-backup store, since losing it only restores default pane widths;
+// The file is:
+//   - recorded in the data-backup store (see writeUiState) — small, frequently
+//     rewritten JSON is exactly what a dedupe-by-content history absorbs;
 //   - materialized lazily — a missing file reads as defaults and is not written
-//     until the user actually changes something (a splitter drag);
+//     until the user actually changes something (a splitter drag, a volume drag);
 //   - self-healing — a malformed file falls back to defaults rather than failing.
 
 import fs from 'fs'
@@ -32,6 +32,12 @@ export function readUiState(): UiState {
         typeof parsed.columnWidth === 'number' && Number.isFinite(parsed.columnWidth)
           ? parsed.columnWidth
           : base.columnWidth,
+      // Clamped, not just type-checked: this drives an <audio> volume, which
+      // throws on a value outside 0–1, and the file is hand-editable.
+      notificationVolume:
+        typeof parsed.notificationVolume === 'number' && Number.isFinite(parsed.notificationVolume)
+          ? Math.min(1, Math.max(0, parsed.notificationVolume))
+          : base.notificationVolume,
     }
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an

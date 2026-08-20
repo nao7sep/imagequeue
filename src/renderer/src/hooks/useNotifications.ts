@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { TaskStatus } from '../../../shared/types'
 import { useQueue } from '../context/QueueContext'
 import { useSettings } from '../context/SettingsContext'
+import { useUiState } from '../context/UiStateContext'
 import successUrl from '../assets/success.wav'
 import failureUrl from '../assets/failure.wav'
 
@@ -26,6 +27,8 @@ function playAudio(src: string, volume: number, onDone: () => void): void {
 export function useNotifications(): void {
   const { tasks } = useQueue()
   const { settings } = useSettings()
+  // Whether sounds play is a setting (config); how loud is an adjustment (state).
+  const { uiState } = useUiState()
 
   // null = not yet initialized (first render); after first render holds previous statuses.
   const prevStatusesRef = useRef<Map<string, TaskStatus> | null>(null)
@@ -54,7 +57,7 @@ export function useNotifications(): void {
       ) {
         if (!document.hasFocus()) {
           const type = task.status === 'completed' ? 'success' : 'failure'
-          triggerEvent(type, settings, isPlayingRef)
+          triggerEvent(type, settings, uiState.notificationVolume, isPlayingRef)
           break // At most one event per tasks update (first match wins)
         }
       }
@@ -64,18 +67,18 @@ export function useNotifications(): void {
     const newMap = new Map<string, TaskStatus>()
     for (const task of allTasks) newMap.set(task.id, task.status)
     prevStatusesRef.current = newMap
-  }, [tasks, settings])
+  }, [tasks, settings, uiState.notificationVolume])
 }
 
 function triggerEvent(
   type: 'success' | 'failure',
   settings: Record<string, unknown> | null,
+  volume: number,
   isPlayingRef: React.MutableRefObject<boolean>
 ): void {
   const notificationCfg = (settings?.notifications ?? {}) as Record<string, unknown>
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
   const soundsEnabled = (notificationCfg.sounds_enabled as boolean) ?? true
-  const volume = (notificationCfg.volume as number) ?? 0.7
   const successFile = (notificationCfg.success_file as string) ?? ''
   const failureFile = (notificationCfg.failure_file as string) ?? ''
 

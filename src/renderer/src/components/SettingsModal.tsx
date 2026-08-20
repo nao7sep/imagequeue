@@ -6,6 +6,7 @@ import { useTablist } from '../hooks/useTablist'
 import { multiline } from '../../../shared/textCleanup'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS } from '../../../shared/models'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
+import { useUiState } from '../context/UiStateContext'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -60,11 +61,13 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     onSelect: setActiveTab,
     idBase: 'settings',
   })
-  const [settingsVolume, setSettingsVolume] = useState<number>((((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7)
+  // Volume is state, not config: it lives in state.json and is shared with the
+  // prompt pane's slider through the one context, so the two never disagree.
+  const { uiState, patchUiState } = useUiState()
+  const [settingsVolume, setSettingsVolume] = useState<number>(uiState.notificationVolume)
   useEffect(() => {
-    const v = (((settings?.notifications as Record<string, unknown>)?.volume) as number) ?? 0.7
-    setSettingsVolume(v)
-  }, [settings])
+    setSettingsVolume(uiState.notificationVolume)
+  }, [uiState.notificationVolume])
   useEffect(() => {
     if (config || !settings) return
     const next = cloneSettings(settings)
@@ -197,7 +200,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     setConfig({ ...config, notifications: { ...notificationCfg, [key]: value } })
   }
 
-  // Notification toggles and volume save immediately (bypass staged config).
+  // Notification toggles save immediately (bypass staged config). Volume is not
+  // among them — it is state, and patchUiState persists it on its own channel.
   const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
     await saveNotificationField(key, value)
     // Immediate settings are no longer dirty once the main process accepts them.
@@ -405,7 +409,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               step={0.05}
               value={settingsVolume}
               onChange={(e) => setSettingsVolume(parseFloat(e.target.value))}
-              onPointerUp={(e) => { void saveNotificationImmediate('volume', parseFloat((e.target as HTMLInputElement).value)) }}
+              onPointerUp={(e) => patchUiState({ notificationVolume: parseFloat((e.target as HTMLInputElement).value) })}
             />
           </div>
           <div className="settings-field">

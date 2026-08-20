@@ -167,7 +167,8 @@ export interface GeneralConfig {
 export interface NotificationsConfig {
   notifications_enabled: boolean
   sounds_enabled: boolean
-  volume: number
+  // No volume here: whether sounds play is a setting, how loud they play is a
+  // presentation adjustment and lives in state.json (shared/ui-state).
   success_file: string
   failure_file: string
 }

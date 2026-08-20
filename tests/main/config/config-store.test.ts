@@ -114,6 +114,16 @@ describe('legacy config keys', () => {
     expect(gemini.main_model).toBe('kept')
   })
 
+  it('drops the notification volume, which moved to state.json', async () => {
+    const loaded = await loadWritten({
+      notifications: { volume: 0.9, sounds_enabled: false },
+    })
+    const notifications = loaded.notifications as unknown as Record<string, unknown>
+    expect(notifications).not.toHaveProperty('volume')
+    // The neighbouring toggle is a real setting and stays.
+    expect(notifications.sounds_enabled).toBe(false)
+  })
+
   it('strips a stale api_key an older build left on disk, value and all', async () => {
     const loaded = await loadWritten({
       text_ai: { gemini: { api_key: 'sk-stale-secret' } },

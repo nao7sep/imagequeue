@@ -25,6 +25,9 @@ vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
 vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({
   useConfirm: () => async () => true,
 }))
+vi.mock('../../../../src/renderer/src/context/UiStateContext', () => ({
+  useUiState: () => ({ uiState: { columnWidth: null, notificationVolume: 0.7 }, patchUiState: vi.fn() }),
+}))
 
 const { SettingsModal } = await import('../../../../src/renderer/src/components/SettingsModal')
 
@@ -56,7 +59,7 @@ function baseConfig(): Record<string, unknown> {
       drop_empty_sessions: true, keep_awake_during_work: true,
     },
     notifications: {
-      notifications_enabled: true, sounds_enabled: true, volume: 0.7,
+      notifications_enabled: true, sounds_enabled: true,
       success_file: '', failure_file: '',
     },
     image_backends: {

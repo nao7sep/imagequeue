@@ -8,25 +8,28 @@ import { SelectionProvider } from './context/SelectionContext'
 import { SettingsProvider } from './context/SettingsContext'
 import { SessionDraftProvider } from './context/SessionDraftContext'
 import { EnqueueConfigProvider } from './context/EnqueueConfigContext'
+import { UiStateProvider } from './context/UiStateContext'
 import './styles.css'
 
 export function App(): React.JSX.Element {
   return (
     <CliJobsProvider>
       <ConfirmProvider>
-        <SettingsProvider>
-          <QueueProvider>
-            <SelectionProvider>
-              <EnqueueConfigProvider>
-                <SessionDraftProvider>
-                  <Layout />
-                  <CliJobsPanel />
-                  <ResumeInterruptedPrompt />
-                </SessionDraftProvider>
-              </EnqueueConfigProvider>
-            </SelectionProvider>
-          </QueueProvider>
-        </SettingsProvider>
+        <UiStateProvider>
+          <SettingsProvider>
+            <QueueProvider>
+              <SelectionProvider>
+                <EnqueueConfigProvider>
+                  <SessionDraftProvider>
+                    <Layout />
+                    <CliJobsPanel />
+                    <ResumeInterruptedPrompt />
+                  </SessionDraftProvider>
+                </EnqueueConfigProvider>
+              </SelectionProvider>
+            </QueueProvider>
+          </SettingsProvider>
+        </UiStateProvider>
       </ConfirmProvider>
     </CliJobsProvider>
   )
