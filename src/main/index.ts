@@ -217,6 +217,10 @@ function startUp(): void {
     debug: DEBUG_ENABLED,
     config: summarizeConfig(loadConfig()),
   })
+  // Every launch opens a fresh session, and the log has to say which one: it is
+  // where this launch's images land, and the log no longer lives inside it.
+  // Switching or resuming a session logs its own line from session/state.
+  log('info', 'Session started', { sessionDir: getSessionDir() })
 
   persistActiveSession()
   registerSessionIpc()
