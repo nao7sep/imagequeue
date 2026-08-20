@@ -14,25 +14,26 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 
 ## Features
 
-- **Side-by-side queue** — one prompt to one backend or all; review queued, running, completed, failed, and interrupted tasks per column
+- **Side-by-side queue** — one prompt to one backend or all; review queued, running, completed, failed, interrupted, and kept tasks per column
 - **Sessions** — each launch is a saved session you can resume; interrupted work returns ready to retry
-- **Advanced Prompting** — batch across backends and models with optional AI-elaborated prompt variations and reusable elaborators
+- **Advanced Prompting** — batch across backends and models with AI-elaborated prompt variations, reusable elaborators, and a persistent **Concept Library** that guarantees the elaborated prompts keep varying instead of collapsing onto the model's favourite ideas
 - **Stays awake during long runs**, with optional toast and sound notifications on completion
 
 ## Requirements
 
 - macOS or Windows (Draw Things support is macOS-only)
-- An API key for each cloud backend you use. Draw Things needs no API key. On macOS it uses two app-managed dependencies, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
+- An API key for each cloud image backend you use. Draw Things needs no API key.
+- Prompt elaboration (the Elaborate button and Advanced Prompting's fresh-elaboration modes) additionally needs a **Text AI** key — OpenAI or Gemini, configured in **Settings → Text AI**. It is separate from the image keys: an image key does not enable it. Without one, images still generate from your prompt as typed. On macOS it uses two app-managed dependencies, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
   - The **Draw Things CLI** — downloaded directly from its official GitHub release (no Homebrew) and verified before use; the backend stays disabled until it's installed.
   - **Recommended per-model parameters** (`configs.json`, fetched from `models.drawthings.ai`) — optional; without them the app falls back to your default parameters.
 - Both are fetched only when you ask. A single **check for updates at launch** toggle (on by default, in the Dependencies window) looks for newer versions and offers an **Update** — nothing is ever downloaded, installed, or updated silently.
-- Node.js 20+ — only to build or run from source
+- Node.js 20.19+ (or 22.12+) — only to build or run from source
 
 ## Download
 
 Prebuilt installers and portable builds for macOS (Apple Silicon) and Windows are on the [Releases](https://github.com/nao7sep/imagequeue/releases/latest) page. These builds are **unsigned**, so the OS warns the first time you open one:
 
-- **macOS** — right-click the app and choose **Open** (or run `xattr -dr com.apple.quarantine /Applications/ImageQueue.app`).
+- **macOS** — open it once (it will be blocked), then allow it under **System Settings → Privacy & Security → Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/ImageQueue.app`).
 - **Windows** — on the SmartScreen prompt, click **More info → Run anyway**.
 
 ## Run from source
