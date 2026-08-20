@@ -36,6 +36,21 @@
   min-height: 0;
 }
 
+/* Below ~900px of WINDOW the fixed facet rail beside the grid cannot hold
+   (reachable on Windows, where fewer keyed backends derive a narrower window
+   minimum — down to ~551px with one pane). The rail moves on top, capped, and
+   the detail keeps the height. */
+@media (max-width: 899px) {
+  .concept-library-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .concept-library-facets {
+    max-height: 180px;
+  }
+}
+
 .concept-library-facets {
   display: flex;
   flex-direction: column;
@@ -137,7 +152,12 @@
 /* Dense value grid: several concepts per line, each row a compact card. */
 .concept-library-rows {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* min(280px, 100%) instead of a bare 280px floor: the window minimum is
+     DERIVED from visible panes (layout-metrics), so with few API keys it can
+     sit at ~551px — where a fixed 280px card floor beside the facet rail
+     overflows the modal. min(…, 100%) keeps the density everywhere it fits
+     and degrades to one full-width column where it does not. */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 1px;
   background: var(--border);
 }

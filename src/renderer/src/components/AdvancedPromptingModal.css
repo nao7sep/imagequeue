@@ -18,6 +18,32 @@
   min-height: 0;
 }
 
+/* Below ~900px of WINDOW the fixed 280px + 250px side panes cannot hold
+   (reachable on Windows: the window minimum is derived from visible panes and
+   bottoms out near 551px with one key). The three panes stack and the BODY
+   becomes the one scroll container; the panes' internal scrolls hand over to
+   it, except the lists that can grow without bound, which keep a cap. */
+@media (max-width: 899px) {
+  .advanced-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .advanced-pane,
+  .advanced-pane-scroll {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .advanced-targets-list {
+    flex: none;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+}
+
 .advanced-pane {
   display: flex;
   flex-direction: column;

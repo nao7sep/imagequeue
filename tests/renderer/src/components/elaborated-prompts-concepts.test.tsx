@@ -47,6 +47,17 @@ describe('ElaboratedPromptsModal concept credits', () => {
     expect(line!.textContent).toContain('cargo quay')
   })
 
+  // The modal's reason to exist is the FULL record: a 200-grapheme preview here
+  // (the budget the dense queue rows rightly use) would truncate the very thing
+  // the user opened it to read.
+  it('shows a long prompt whole, not a preview of it', () => {
+    const long = Array.from({ length: 120 }, (_, i) => `word${i}`).join(' ')
+    prompts.push({ text: long, concepts: [] })
+    render(<ElaboratedPromptsModal onClose={() => {}} />)
+    const text = document.querySelector('.elaborated-prompts-text')
+    expect(text!.textContent).toBe(long)
+  })
+
   it('renders no credits line for a legacy prompt without them', () => {
     prompts.push({ text: 'an old prompt from before credits', concepts: [] })
     render(<ElaboratedPromptsModal onClose={() => {}} />)

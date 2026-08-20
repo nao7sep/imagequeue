@@ -1,5 +1,7 @@
 .elaboration-settings-modal-box {
-  width: 760px;
+  /* Wide enough to edit the expansion template — a ~1000-character body —
+     without reading it through a letterbox. */
+  width: min(960px, 94vw);
   max-width: 92vw;
   max-height: 88vh;
   display: flex;

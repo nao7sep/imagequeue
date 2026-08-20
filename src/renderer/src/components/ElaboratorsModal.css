@@ -34,6 +34,29 @@
   min-height: 0;
 }
 
+/* Same narrow-window degradation as the other wide modals: below ~900px of
+   window the side-by-side lanes stack and the body scrolls as one. */
+@media (max-width: 899px) {
+  .elaborators-body {
+    overflow-y: auto;
+  }
+
+  .elaborators-grid {
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .elaborators-pane {
+    min-height: auto;
+  }
+
+  .elaborators-pane-body {
+    flex: none;
+    overflow: visible;
+  }
+}
+
 .elaborators-pane {
   display: flex;
   flex-direction: column;

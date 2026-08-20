@@ -35,6 +35,15 @@
   gap: var(--space-4);
 }
 
+/* Narrow-window degradation: the halves stack, splitting the height, each
+   keeping its own scroll (both lists are long). */
+@media (max-width: 899px) {
+  .dt-model-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
 .dt-model-column {
   min-height: 0;
   display: flex;

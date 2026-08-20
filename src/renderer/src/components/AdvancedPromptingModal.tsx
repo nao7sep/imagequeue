@@ -38,6 +38,10 @@ import {
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import './AdvancedPromptingModal.css'
 
+// How long the "Queued N tasks." receipt stays on screen before the modal
+// closes. Long enough to register, short enough not to feel like a stall.
+const QUEUE_COMPLETION_HOLD_MS = 900
+
 interface Props {
   onClose: () => void
 }
@@ -92,6 +96,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const [brainstormProgress, setBrainstormProgress] = useState<
     { done: number; total: number; phase: BrainstormPhase } | null
   >(null)
+  // The footer's terminal line, held briefly before the modal closes. The prose
+  // wave lands in a burst, so the live counter can jump from a low number
+  // straight to done — closing at that instant reads as a half-finished run.
+  const [completionNote, setCompletionNote] = useState('')
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
@@ -230,7 +238,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     totalTasks,
   })
   const busy = gates.busy
-  const statusText = describeBrainstormProgress(activeOperation, brainstormProgress)
+  const statusText = completionNote || describeBrainstormProgress(activeOperation, brainstormProgress)
 
   // Note: we do NOT auto-reset promptMode when preconditions go away. On
   // modal open, one or more category selections can transiently read as
@@ -350,6 +358,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     if (gates.queue.disabled) return
     setActiveOperation('queue')
     setError('')
+    setCompletionNote('')
     const targets = effectiveTargets
     const copies = Math.max(1, count)
     const allTargetCount = targetCount
@@ -450,6 +459,11 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // in the session history. A run that was cancelled or failed never reaches
       // this point, so it leaves no orphan entries.
       if (brainstormed) appendElaboratedPrompts(records)
+      // Let the finish be SEEN before the modal goes: a receipt with the final
+      // count, held just long enough to register. It replaces the surprise of
+      // closing on "2 / 12" — the missing ten completed in the same burst.
+      setCompletionNote(`Queued ${units.length} task${units.length === 1 ? '' : 's'}.`)
+      await new Promise((resolve) => setTimeout(resolve, QUEUE_COMPLETION_HOLD_MS))
       succeeded = true
       // No success message: the modal closes below (after the finally clears the
       // busy state), and the now-populated queue columns are the confirmation.

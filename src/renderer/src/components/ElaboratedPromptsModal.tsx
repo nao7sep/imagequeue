@@ -3,7 +3,6 @@ import { Modal } from './Modal'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
-import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import './ElaboratedPromptsModal.css'
 
 interface Props {
@@ -155,19 +154,18 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
                 <li key={row.id} className="elaborated-prompts-row" {...getOptionProps(row.id)}>
                   <div className="elaborated-prompts-number" aria-hidden="true">{displayNumber}.</div>
                   <div className="elaborated-prompts-main">
-                    {/* One-line preview: flatten + cap to a generous budget; CSS
-                        clamps visually, the full prompt lives in the title tooltip. */}
-                    <div className="elaborated-prompts-text" title={row.prompt}>
-                      {truncate(row.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
+                    {/* The full prompt, unabridged: showing these is this modal's
+                        entire job, so nothing here previews or truncates — the
+                        dense surfaces (queue rows, the metadata toggle) keep
+                        their one-line previews and point here for the whole text. */}
+                    <div className="elaborated-prompts-text">
+                      {row.prompt}
                     </div>
                     {/* The assignment the prompt was built from — the part of the
                         record no amount of reading the prose reliably recovers.
                         Absent for prompts predating concept credits. */}
                     {row.concepts.length > 0 && (
-                      <div
-                        className="elaborated-prompts-concepts"
-                        title={row.concepts.map((c) => `${c.facet}: ${c.concept}`).join('\n')}
-                      >
+                      <div className="elaborated-prompts-concepts">
                         {row.concepts.map((c, i) => (
                           <span key={`${c.facet} ${c.concept}`}>
                             {i > 0 && <span className="elaborated-prompts-concept-sep" aria-hidden="true"> · </span>}
