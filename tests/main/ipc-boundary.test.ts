@@ -27,15 +27,17 @@ const createdDirs: string[] = []
 
 // Points the real logger (no electron dependency) at a fresh session dir so the
 // test can read back exactly what the wrapper wrote, rather than mocking log().
-function freshSessionDir(): string {
+let logFile = ''
+
+function freshLogsDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-ipc-'))
   createdDirs.push(dir)
-  initLogger(dir)
+  logFile = initLogger(dir)
   return dir
 }
 
-function readEntries(dir: string): Record<string, unknown>[] {
-  const content = fs.readFileSync(path.join(dir, 'session.log'), 'utf-8')
+function readEntries(_dir: string): Record<string, unknown>[] {
+  const content = fs.readFileSync(logFile, 'utf-8')
   return content
     .split('\n')
     .filter((line) => line.length > 0)
@@ -60,7 +62,7 @@ afterAll(() => {
 
 describe('handle (IPC boundary wrapper)', () => {
   it('returns the handler result and logs nothing for sync and async successes', async () => {
-    const dir = freshSessionDir()
+    const dir = freshLogsDir()
     handle('ok:sync', (_event, a: number, b: number) => a + b)
     handle('ok:async', async (_event, name: string) => `hi ${name}`)
 
@@ -71,7 +73,7 @@ describe('handle (IPC boundary wrapper)', () => {
   })
 
   it('logs the channel + full error and still rejects when a sync handler throws', async () => {
-    const dir = freshSessionDir()
+    const dir = freshLogsDir()
     handle('boom:sync', () => {
       throw new Error('kaboom')
     })
@@ -94,7 +96,7 @@ describe('handle (IPC boundary wrapper)', () => {
   })
 
   it('logs the channel and rejects when an async handler rejects', async () => {
-    const dir = freshSessionDir()
+    const dir = freshLogsDir()
     handle('boom:async', async () => {
       throw new Error('later')
     })
@@ -107,7 +109,7 @@ describe('handle (IPC boundary wrapper)', () => {
   })
 
   it('rethrows the original error instance unchanged', async () => {
-    freshSessionDir()
+    freshLogsDir()
     const original = new Error('identity')
     handle('boom:identity', () => {
       throw original

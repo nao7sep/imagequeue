@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme } from 'electron'
 import path from 'path'
-import { loadConfig, ensureDataDir, summarizeConfig } from './config'
+import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor } from './backends'
@@ -35,7 +35,7 @@ let mainWin: BrowserWindow | null = null
 // Debug is diagnostic-only: enabled automatically for an unpackaged development
 // build, and available in packaged builds only through an explicit
 // IMAGEQUEUE_DEBUG=1 launch. Set once at process start so every debug line —
-// including any logged before the session file is opened — honors the gate.
+// including any logged before the launch log is opened — honors the gate.
 const DEBUG_ENABLED = shouldEnableDebugLogging({
   isPackaged: app.isPackaged,
   imagequeueDebug: process.env['IMAGEQUEUE_DEBUG'],
@@ -44,7 +44,7 @@ setLoggerDebug(DEBUG_ENABLED)
 
 // Global last-resort hooks: log with full error fidelity before the process
 // dies, and also surface to the console as a backstop for the brief window
-// before the session log file is open. An uncaught exception leaves the process
+// before the launch log is open. An uncaught exception leaves the process
 // in an undefined state, so we exit after logging; an unhandled rejection is
 // logged but allowed to continue.
 process.on('uncaughtException', (err) => {
@@ -195,6 +195,10 @@ function startUp(): void {
   // unpackaged) still exercise the strict production CSP.
   installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
   ensureDataDir()
+  // Open this launch's log immediately after the storage root exists and before
+  // any other startup step, so a failure in one of them is logged rather than
+  // lost to the console. Everything below this line has a log to write to.
+  initLogger(getLogsDir())
   clearTempDir()
   loadConfig()
   // Materialize the shipped elaborators the same way loadConfig materializes
@@ -207,7 +211,6 @@ function startUp(): void {
   materializeElaborators()
   initSession()
   resetOutputTimestampAllocators()
-  initLogger(getSessionDir())
   log('info', 'App started', {
     version: app.getVersion(),
     packaged: app.isPackaged,
@@ -294,15 +297,6 @@ async function gracefulShutdown(reason: string): Promise<void> {
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
   await guarded('killAllCliJobs', () => killAllCliJobs())
   await guarded('releaseWakeLock', () => releaseWakeLock())
-  // Write the "Session ended" line BEFORE dropping the session, not after. The
-  // logger appends to the active session's session.log inside the session dir;
-  // dropCurrentSessionIfEmpty trashes that whole directory for an empty session,
-  // so logging afterward would fail with ENOENT and spill the line to stderr on
-  // every clean quit of an empty session. Ordered this way, a kept session gets
-  // the line in-file, and a dropped session writes-then-discards it with the
-  // directory — no failed append either way. This is the last shutdown line;
-  // every earlier step logs only on failure (guarded's catch) and runs before
-  // the drop, so none shares this hazard.
   log('info', 'Session ended', { reason })
   await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
 }

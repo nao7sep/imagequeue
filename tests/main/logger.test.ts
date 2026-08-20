@@ -6,14 +6,20 @@ import { initLogger, log, redact, serializeError, setLoggerDebug, shouldEnableDe
 
 const createdDirs: string[] = []
 
-function freshSessionDir(): string {
+// initLogger creates the logs dir and returns the launch log's full path, which
+// is what these tests read — the filename carries a timestamp, so nothing here
+// reconstructs it by hand.
+let logFile = ''
+
+function freshLogsDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-log-'))
   createdDirs.push(dir)
+  logFile = initLogger(dir)
   return dir
 }
 
-function readEntries(dir: string): Record<string, unknown>[] {
-  const content = fs.readFileSync(path.join(dir, 'session.log'), 'utf-8')
+function readEntries(_dir: string): Record<string, unknown>[] {
+  const content = fs.readFileSync(logFile, 'utf-8')
   return content
     .split('\n')
     .filter((line) => line.length > 0)
@@ -172,14 +178,14 @@ describe('log', () => {
   })
 
   it('writes one JSON object per line carrying the envelope', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
+    const dir = freshLogsDir()
     log('info', 'hello', { a: 1, nested: { b: 2 } })
 
     const entries = readEntries(dir)
-    // initLogger emits the session-start line first.
-    expect(entries[0].message).toBe('Session started')
-    const entry = entries[1]
+    // initLogger opens the file and writes nothing of its own, so the first
+    // line belongs to the first caller.
+    expect(entries).toHaveLength(1)
+    const entry = entries[0]
     expect(entry.level).toBe('info')
     expect(entry.message).toBe('hello')
     expect(entry.a).toBe(1)
@@ -188,8 +194,7 @@ describe('log', () => {
   })
 
   it('redacts denied keys in the written line', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
+    const dir = freshLogsDir()
     log('info', 'config', { api_key: 'sk-secret', model: 'gpt-image-1', nested: { token: 'abc' } })
 
     const entry = readEntries(dir).at(-1)!
@@ -199,8 +204,7 @@ describe('log', () => {
   })
 
   it('does not let caller fields overwrite the reserved envelope keys', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
+    const dir = freshLogsDir()
     log('error', 'real message', { level: 'info', message: 'spoofed', time: 'whenever', extra: 1 })
 
     const entry = readEntries(dir).at(-1)!
@@ -211,8 +215,7 @@ describe('log', () => {
   })
 
   it('suppresses debug when disabled and emits it when enabled', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
+    const dir = freshLogsDir()
 
     setLoggerDebug(false)
     log('debug', 'debug-off')
@@ -224,8 +227,7 @@ describe('log', () => {
   })
 
   it('always writes info, warn and error regardless of the debug gate', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
+    const dir = freshLogsDir()
     setLoggerDebug(false)
     log('info', 'i')
     log('warn', 'w')
@@ -235,8 +237,7 @@ describe('log', () => {
   })
 
   it('falls back to a bare envelope when a field cannot be serialized', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
+    const dir = freshLogsDir()
     // A BigInt cannot be JSON-serialized; the event must survive as a valid line.
     log('warn', 'bigint field', { n: BigInt(10) })
 
@@ -248,18 +249,17 @@ describe('log', () => {
     expect('n' in entry).toBe(false)
   })
 
-  // FINDING #5 (shutdown log ordering): the logger appends to session.log inside
-  // the active session's directory. If that directory has already been removed —
-  // which is exactly what dropCurrentSessionIfEmpty does to an empty session on
-  // quit — the append fails with ENOENT and the line spills to stderr. This test
-  // pins that hazard, which is why gracefulShutdown must write "Session ended"
-  // BEFORE dropping the session, not after: a kept session gets the line in-file,
-  // a dropped session writes-then-discards it, and neither path fails the append.
-  it('degrades to the console (never crashes) when the session directory is gone', () => {
-    const dir = freshSessionDir()
-    initLogger(dir)
-    // Simulate dropCurrentSessionIfEmpty having trashed the session directory:
-    // the logger still points at <dir>/session.log, but the directory is gone.
+  // An append can fail at any time — the disk fills, permissions change, the
+  // directory is removed out from under the process. Whatever the cause, the app
+  // must not crash and the event must not be lost.
+  //
+  // This once carried a second job: the log lived inside the active session's
+  // directory, so dropping an empty session at quit deleted it and every
+  // shutdown line spilled to stderr. The log is launch-scoped now and sits
+  // outside any session, so that hazard is gone along with the ordering
+  // workaround it forced — only the general degradation contract remains.
+  it('degrades to the console (never crashes) when the log file cannot be written', () => {
+    const dir = freshLogsDir()
     fs.rmSync(dir, { recursive: true, force: true })
 
     // The write failure spills a notice to console.error and echoes the rendered
@@ -270,8 +270,7 @@ describe('log', () => {
     // Logging must not throw even though appendFileSync will ENOENT...
     expect(() => log('info', 'Session ended', { reason: 'quit' })).not.toThrow()
     // ...and the failed append degrades to the console (the notice on stderr)
-    // rather than crashing. This spill is the noise the ordering fix removes on
-    // every clean quit of an empty session.
+    // rather than crashing.
     expect(consoleError).toHaveBeenCalled()
     // The event's actual content — not just a generic "write failed" notice —
     // still reaches the console via consoleFallback's echoed JSON line, so the
@@ -283,5 +282,48 @@ describe('log', () => {
     expect(printed).toContain('Session ended')
     consoleError.mockRestore()
     consoleLog.mockRestore()
+  })
+})
+
+// The launch log replaced a per-session log that was neither one launch nor one
+// session: it was opened inside the active session directory and repointed on
+// every session switch. These pin the three properties that cost the app a log.
+describe('one log file per launch', () => {
+  it('names the file for the launch instant and puts it in the given directory', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-launch-'))
+    createdDirs.push(dir)
+    const file = initLogger(dir)
+    expect(path.dirname(file)).toBe(dir)
+    expect(path.basename(file)).toMatch(/^\d{8}-\d{6}-\d{3}-utc\.log$/)
+  })
+
+  it('creates the file at init, so a launch that logs nothing still leaves a record', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-launch-'))
+    createdDirs.push(dir)
+    const file = initLogger(dir)
+    expect(fs.existsSync(file)).toBe(true)
+    expect(fs.readFileSync(file, 'utf-8')).toBe('')
+  })
+
+  // The property that matters most: the log lives outside every session
+  // directory, so dropping an empty session at quit — which trashes that whole
+  // directory — can no longer take the launch's only log with it.
+  it('keeps writing after a session directory is removed', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-launch-'))
+    createdDirs.push(root)
+    const file = initLogger(path.join(root, 'logs'))
+
+    const sessionDir = path.join(root, 'output', '20260101-000000-000-utc')
+    fs.mkdirSync(sessionDir, { recursive: true })
+    log('info', 'App started')
+    fs.rmSync(sessionDir, { recursive: true, force: true })
+    log('info', 'Session ended', { reason: 'quit' })
+
+    const messages = fs
+      .readFileSync(file, 'utf-8')
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => (JSON.parse(line) as { message: string }).message)
+    expect(messages).toEqual(['App started', 'Session ended'])
   })
 })

@@ -19,6 +19,12 @@ export function getConfigPath(): string {
   return path.join(getDataDir(), 'config.json')
 }
 
+// One log file per launch lives here, per the logging-conventions. The logger
+// creates the directory; this only names it.
+export function getLogsDir(): string {
+  return path.join(getDataDir(), 'logs')
+}
+
 export function ensureDataDir(): void {
   // resolveStorageRoot already creates the root (and throws on an unusable
   // override); calling it here keeps ensureDataDir an idempotent startup

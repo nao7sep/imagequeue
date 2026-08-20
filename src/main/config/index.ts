@@ -1,5 +1,5 @@
 export { type AppConfig } from './types'
 export { createDefaultConfig } from './defaults'
-export { loadConfig, saveConfig, getDataDir, getConfigPath, ensureDataDir } from './config-store'
+export { loadConfig, saveConfig, getDataDir, getConfigPath, getLogsDir, ensureDataDir } from './config-store'
 export { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 export { summarizeConfig } from './summary'

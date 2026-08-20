@@ -2,7 +2,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createSessionDir, formatTimestamp, formatTimestampMs } from '../../../src/main/session/session'
+import { createSessionDir } from '../../../src/main/session/session'
+import { formatTimestamp, formatTimestampMs } from '../../../src/shared/utc-stamp'
 
 describe('formatTimestamp', () => {
   it('formats a UTC date as yyyymmdd-hhmmss', () => {

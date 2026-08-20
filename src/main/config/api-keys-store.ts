@@ -5,6 +5,7 @@ import { getDataDir } from './config-store'
 import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
+import { utcStampForFilename } from '../../shared/utc-stamp'
 
 // The secret store, realized per the fleet api-key-storage-conventions. Secrets
 // live in their own file under the storage root (`~/.imagequeue/api-keys.json`),
@@ -78,16 +79,6 @@ function warnIfInsecureMode(filePath: string): void {
   }
 }
 
-// Machine-paced UTC stamp (yyyymmdd-hhmmss-fff-utc) for the quarantine filename.
-function utcStampForFilename(): string {
-  const d = new Date()
-  const p = (n: number, len = 2): string => String(n).padStart(len, '0')
-  return (
-    `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
-    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}` +
-    `-${p(d.getUTCMilliseconds(), 3)}-utc`
-  )
-}
 
 // Move the unreadable file aside to a timestamped neighbour (handled once, not
 // re-flagged on every read), returning the new path or null on failure. The

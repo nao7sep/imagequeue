@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { serializeError } from '../shared/serialize-error'
+import { utcStampForFilename } from '../shared/utc-stamp'
 
 // Re-exported so main-process modules can keep importing serializeError from the
 // logger alongside log(); the single implementation lives in shared/ so the
@@ -8,9 +9,22 @@ import { serializeError } from '../shared/serialize-error'
 export { serializeError }
 
 // A small, hand-rolled, dependency-free logger that writes one JSON object per
-// line (JSON Lines) to the active session's session.log. It is deliberately
-// free of any electron import so it stays unit-testable under plain Node (see
+// line (JSON Lines) to this launch's log file. It is deliberately free of any
+// electron import so it stays unit-testable under plain Node (see
 // vitest.config.ts) and so the file-IO edge here carries no app logic.
+//
+// ONE FILE PER LAUNCH, in `<storage root>/logs/`, opened before anything else
+// runs. The app used to write into the active session directory's session.log
+// and repoint on every session switch, reading the logging-convention's
+// "per-session directory" allowance — but that allowance says *session* meaning
+// one process launch, and imagequeue's sessions are a different thing wearing
+// the same word: they are resumable across launches and one launch can touch
+// several. So the file was neither one launch nor one session, three ways:
+// startup lines landed in whichever session opened first, a resumed session's
+// log interleaved several launches, and dropping an empty session at quit
+// DELETED that launch's only log — including the startup failure a user would
+// be reporting. A launch-scoped file at a fixed location has none of those
+// problems and needs no carve-out from the convention.
 //
 // The caller describes *what happened* as a stable message plus structured
 // fields; this module builds the envelope, redacts denied keys, serializes, and
@@ -60,22 +74,25 @@ export function setLoggerDebug(enabled: boolean): void {
   debugEnabled = enabled
 }
 
-function setLogSessionDir(sessionDir: string): void {
-  logFilePath = path.join(sessionDir, 'session.log')
-}
-
-// Points the logger at a session directory's session.log and records the
-// session start. The per-session directory + fixed session.log name is the
-// logging-convention's explicitly allowed alternative to a <utc>.log file.
-export function initLogger(sessionDir: string): void {
-  setLogSessionDir(sessionDir)
-  log('info', 'Session started', { sessionDir })
-}
-
-// Repoints the logger when the user resumes a different session.
-export function retargetLogger(sessionDir: string): void {
-  setLogSessionDir(sessionDir)
-  log('info', 'Session resumed', { sessionDir })
+// Opens this launch's log file inside `logsDir` and returns its path. Called
+// once, as early in startup as the storage root allows: every line logged
+// before this point has nowhere to go but the console. The directory is passed
+// in rather than derived here so the logger keeps no dependency on the config
+// store — and so a test can point it at a temp dir.
+export function initLogger(logsDir: string): string {
+  const filePath = path.join(logsDir, `${utcStampForFilename()}.log`)
+  logFilePath = filePath
+  // Create the file up front so `logs/` is a record of every launch, including
+  // one that died before it could log anything. Best-effort like every other
+  // write here: an unwritable logs directory degrades to the console rather
+  // than taking the app down with it.
+  try {
+    fs.mkdirSync(logsDir, { recursive: true })
+    fs.closeSync(fs.openSync(filePath, 'a'))
+  } catch (err) {
+    console.error('[logger] could not open the launch log; echoing to console instead', err)
+  }
+  return filePath
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -166,12 +183,11 @@ export function log(level: LogLevel, message: string, fields?: LogFields): void 
   }
 
   if (!logFilePath) {
-    // Nothing has pointed the logger at a session yet (a line logged before
-    // initLogger/retargetLogger runs — e.g. while the storage root is still
-    // being resolved during early startup). There is no buffer to append this
-    // into and no session file to flush it to later, so — same as a write
-    // failure below — echo the real rendered line to the console rather than
-    // silently dropping the event.
+    // Logged before initLogger runs — the narrow window while the storage root
+    // itself is still being resolved, since the log lives under it. There is no
+    // buffer to append this into and no file to flush it to later, so — same as
+    // a write failure below — echo the real rendered line to the console rather
+    // than silently dropping the event.
     consoleFallback(level, line)
     return
   }

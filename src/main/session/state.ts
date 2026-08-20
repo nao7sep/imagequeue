@@ -15,7 +15,7 @@ import {
 } from '../../shared/types'
 import { createEmptySessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
 import { loadConfig } from '../config'
-import { initLogger, log, retargetLogger, serializeError } from '../logger'
+import { log, serializeError } from '../logger'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
 import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
@@ -296,11 +296,8 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 // auto-drop paths (new session, resume session, quit) when the setting is on
 // and the session is empty.
 //
-// The log call is intentionally BEFORE the destructive operation. The logger
-// writes into session.log inside sessionDir; if we logged after the trash/rm,
-// the append would silently fail (file is gone). Logging the intent up front
-// means the line lands on disk regardless of whether the op succeeds, and any
-// thrown error from the op surfaces to the caller for further handling.
+// The log call states the intent before the destructive operation, so the line
+// records what was attempted even if the op then throws.
 async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
   if (!fs.existsSync(sessionDir)) return
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
@@ -359,7 +356,7 @@ export function persistActiveSession(): SessionManifest {
   // not recorded: session.json is a generator-session manifest under output/<session>/ — imagequeue
   // is an image GENERATOR, and its output/ sessions are transient, harvest-then-discard drops the user
   // picks over and exports keepers from, not the app's reloaded durable state. The whole output/ tree
-  // (session dirs, their session.json manifests, the generated images, session.log) is app output,
+  // (session dirs, their session.json manifests, the generated images) is app output,
   // excluded wholesale as a binary-bearing directory (data-backup conventions: "Harvest-then-discard
   // output"; "Anything colocated in a binary-bearing directory").
   writeJsonAtomic(getManifestPath(sessionDir), manifest, false)
@@ -390,7 +387,7 @@ export async function createSession(): Promise<void> {
 
   const sessionDir = createSessionDir()
   setSessionDir(sessionDir)
-  initLogger(sessionDir)
+  log('info', 'Session started', { sessionDir })
   queueManager.replaceAllTasks(createEmptyQueues())
   resetOutputTimestampAllocators()
   adoptActiveSession({
@@ -464,7 +461,7 @@ export async function resumeSession(sessionId: string): Promise<void> {
 
   const resumedQueues = normalizeResumedQueues(manifest.tasks)
   setSessionDir(sessionDir)
-  retargetLogger(sessionDir)
+  log('info', 'Session resumed', { sessionDir })
   queueManager.replaceAllTasks(resumedQueues)
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)

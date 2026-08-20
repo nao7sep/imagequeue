@@ -1,4 +1,4 @@
-import { formatTimestamp } from './session'
+import { formatTimestamp } from '../../shared/utc-stamp'
 
 export interface OutputTimestamp {
   // Second-precision UTC timestamp string (yyyymmdd-hhmmss).

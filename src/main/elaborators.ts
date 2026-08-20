@@ -5,6 +5,7 @@ import type { Elaborator, ElaboratorKind } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
+import { utcStampForFilename } from '../shared/utc-stamp'
 
 function getElaboratorsFilePath(): string {
   ensureDataDir()
@@ -251,16 +252,6 @@ function isElaborator(value: unknown): value is Elaborator {
   return true
 }
 
-// yyyymmdd-hhmmss-fff-utc stamp for the quarantine filename (mirrors api-keys-store's helper).
-function utcStampForFilename(): string {
-  const d = new Date()
-  const p = (n: number, len = 2): string => String(n).padStart(len, '0')
-  return (
-    `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
-    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}` +
-    `-${p(d.getUTCMilliseconds(), 3)}-utc`
-  )
-}
 
 export type ElaboratorRecoveryNotice =
   | { kind: 'recovered'; path: string }
