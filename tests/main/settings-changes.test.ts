@@ -26,37 +26,23 @@ describe('valuesEqual', () => {
 })
 
 describe('applyChangedFields', () => {
-  it('writes a changed ordinary field into the target and returns no secrets', () => {
+  it('writes a changed ordinary field into the target', () => {
     const target = { general: { export_dir: '/old' } }
-    const secrets = applyChangedFields(
+    applyChangedFields(
       target,
       { general: { export_dir: '/old' } },
       { general: { export_dir: '/new' } }
     )
     expect(target).toEqual({ general: { export_dir: '/new' } })
-    expect(secrets).toEqual([])
-  })
-
-  it('routes an api_key change to the returned secret writes, never into the target', () => {
-    const target = { text_ai: { gemini: { api_key: 'PLACEHOLDER', model: 'g' } } }
-    const secrets = applyChangedFields(
-      target,
-      { text_ai: { gemini: { api_key: 'old', model: 'g' } } },
-      { text_ai: { gemini: { api_key: 'new-key', model: 'g' } } }
-    )
-    expect(secrets).toEqual([{ secret: 'gemini.text', value: 'new-key' }])
-    // The key must never be written into config (target) — only routed out.
-    expect(target.text_ai.gemini.api_key).toBe('PLACEHOLDER')
   })
 
   it('does nothing when base and next match despite different key order', () => {
     const target = { general: { a: 1, b: 2 } }
-    const secrets = applyChangedFields(
+    applyChangedFields(
       target,
       { general: { a: 1, b: 2 } },
       { general: { b: 2, a: 1 } }
     )
-    expect(secrets).toEqual([])
     expect(target).toEqual({ general: { a: 1, b: 2 } })
   })
 

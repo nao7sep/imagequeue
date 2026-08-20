@@ -62,7 +62,7 @@ describe('Gemini text models through loadConfig (closed list)', () => {
   it('never introduces a models key, and leaves the selections alone', async () => {
     const loaded = await loadFrom({
       text_ai: {
-        gemini: { api_key: '', timeout_ms: 30000, main_model: 'gemini-3.5-flash', light_model: 'gemini-3.1-flash-lite' },
+        gemini: { timeout_ms: 30000, main_model: 'gemini-3.5-flash', light_model: 'gemini-3.1-flash-lite' },
       },
     })
 

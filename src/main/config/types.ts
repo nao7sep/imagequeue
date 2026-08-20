@@ -1,10 +1,15 @@
 // Matches the config.json schema from the product spec.
+//
+// No api_key field appears anywhere in this type, and that is load-bearing: keys
+// live only in the separate 0600 api-keys.json (config/api-keys-store.ts). A type
+// that cannot hold a key needs no scrubbing on the way to disk, so there is no
+// carve list to keep in step with a new provider — config.json is key-free by
+// construction rather than by maintenance.
 
 import { TextAIBackendId } from '../../shared/types'
 import type { FormatDirectives } from '../../shared/session-draft'
 
 export interface GeminiTextAIConfig {
-  api_key: string
   timeout_ms: number
   // The two tier selections into the app-owned closed list (GEMINI_TEXT_MODELS in
   // shared/models). The list itself is not stored — it has one home — so the config
@@ -22,7 +27,6 @@ export interface GeminiTextAIConfig {
 export interface OpenAITextAIConfig {
   // Empty string means the official OpenAI endpoint (https://api.openai.com/v1).
   endpoint: string
-  api_key: string
   timeout_ms: number
   // main leads light, matching the Gemini config and the UI order.
   main_model: string
@@ -36,7 +40,6 @@ export interface TextAIConfig {
 }
 
 export interface OpenAIBackendConfig {
-  api_key: string
   model: string
   default_params: {
     width: number
@@ -51,7 +54,6 @@ export interface OpenAIBackendConfig {
 }
 
 export interface FluxBackendConfig {
-  api_key: string
   model: string
   default_params: {
     width: number
@@ -88,7 +90,6 @@ export interface DrawThingsBackendConfig {
 }
 
 export interface NanoBananaBackendConfig {
-  api_key: string
   model: string
   default_params: {
     aspectRatio: string
@@ -99,7 +100,6 @@ export interface NanoBananaBackendConfig {
 }
 
 export interface GrokBackendConfig {
-  api_key: string
   model: string
   default_params: {
     aspectRatio: string

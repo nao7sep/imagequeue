@@ -102,25 +102,23 @@ function dropLegacyConfigKeys(config: AppConfig): void {
   // deliberately NOT touched here — a credential is the user's to delete.
   const backends = config.image_backends as unknown as Record<string, unknown> | undefined
   if (backends && 'imagen' in backends) delete backends.imagen
-}
 
-// API keys live in the separate 0600 api-keys.json (config/api-keys-store.ts),
-// never in config.json. This blanks any api_key field — including a stale one
-// read from an older config.json — so the persisted settings file is always
-// key-free. Mutates in place; callers pass a config they own (a fresh default,
-// or the cache which is then re-cached key-free).
-function scrubApiKeys(config: AppConfig): void {
-  if (config.text_ai?.gemini) config.text_ai.gemini.api_key = ''
-  if (config.text_ai?.openai) config.text_ai.openai.api_key = ''
-  const backends = config.image_backends as unknown as Record<string, { api_key?: string }>
-  for (const backend of Object.values(backends ?? {})) {
-    if (backend && typeof backend === 'object' && 'api_key' in backend) backend.api_key = ''
+  // api_key fields, from before keys moved out of the config type entirely (they
+  // live only in api-keys.json). This is housekeeping, NOT a guard: no current
+  // code path can put a key into the config object, so the only api_key that can
+  // exist here is one already sitting in an older file on disk. Removing it also
+  // clears any non-empty key an old build may have left behind.
+  for (const section of [config.text_ai, config.image_backends] as unknown as Array<
+    Record<string, Record<string, unknown>> | undefined
+  >) {
+    for (const entry of Object.values(section ?? {})) {
+      if (entry && typeof entry === 'object' && 'api_key' in entry) delete entry.api_key
+    }
   }
 }
 
 export function saveConfig(config: AppConfig): void {
   ensureDataDir()
-  scrubApiKeys(config)
   dropLegacyConfigKeys(config)
   const configPath = getConfigPath()
   // recorded: config.json is the durable user-settings store — the canonical

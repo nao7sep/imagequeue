@@ -130,7 +130,7 @@ afterEach(() => {
 function stageSettings(backend: string, model: string, defaultParams: Record<string, unknown> = {}): void {
   settingsValue.settings = {
     image_backends: {
-      [backend]: { api_key: 'test-key', model, default_params: defaultParams },
+      [backend]: { model, default_params: defaultParams },
     },
   }
 }
@@ -298,10 +298,9 @@ describe('drawthings column', () => {
 
 
 // The env-only-key bug, at the surface the user meets: the column's warning and
-// its + Queue button must follow the presence signal, not the stored api_key
-// string in settings. With a key supplied only through the environment, the
-// stored string is empty and the presence flag is true — the old check read the
-// string and disabled a backend that worked.
+// its + Queue button must follow the presence signal. Settings carries no key at
+// all now — keys travel their own channel — so presence is the ONLY thing that
+// can answer "can this backend be called", and these pin that it is consulted.
 describe('API key warning follows presence, not the stored settings value', () => {
   const presence = (openai: boolean): typeof settingsValue.apiKeyPresence => ({
     image: { openai, nanobanana: false, grok: false, flux: false },
@@ -309,9 +308,9 @@ describe('API key warning follows presence, not the stored settings value', () =
     openaiText: false,
   })
 
-  // An env-supplied key: settings carries an EMPTY stored value, presence says yes.
+  // An env-supplied key: nothing in settings says so, presence says yes.
   it('shows no warning and enables + Queue for an environment-only key', () => {
-    settingsValue.settings = { image_backends: { openai: { api_key: '' } } }
+    settingsValue.settings = { image_backends: { openai: {} } }
     settingsValue.apiKeyPresence = presence(true)
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     expect(screen.queryByText('API key not set')).toBeNull()
@@ -319,7 +318,7 @@ describe('API key warning follows presence, not the stored settings value', () =
   })
 
   it('warns and disables + Queue when no key resolves', () => {
-    settingsValue.settings = { image_backends: { openai: { api_key: '' } } }
+    settingsValue.settings = { image_backends: { openai: {} } }
     settingsValue.apiKeyPresence = presence(false)
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     expect(screen.getByText('API key not set')).toBeTruthy()
@@ -329,7 +328,7 @@ describe('API key warning follows presence, not the stored settings value', () =
   // Startup: presence is null for a moment. A column must not flash
   // "API key not set" before the answer arrives.
   it('does not warn while presence is still loading', () => {
-    settingsValue.settings = { image_backends: { openai: { api_key: '' } } }
+    settingsValue.settings = { image_backends: { openai: {} } }
     settingsValue.apiKeyPresence = null
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     expect(screen.queryByText('API key not set')).toBeNull()

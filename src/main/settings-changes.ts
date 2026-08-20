@@ -1,12 +1,8 @@
-import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../shared/types'
-import { IMAGE_BACKEND_SECRET, type SecretId } from './config/api-keys-store'
-
-// The pure changed-field diff and secret routing behind settings:saveChangedFields,
-// split out of the Electron IPC shell so it can be tested against plain objects.
-// The diff mutates the config object in place for ordinary fields and *returns*
-// the api-key writes to route to the separate 0600 secrets store, rather than
-// performing that side effect itself — the IPC handler executes the returned
-// writes. No Electron, fs, or secrets store is touched here.
+// The pure changed-field diff behind settings:saveChangedFields, split out of the
+// Electron IPC shell so it can be tested against plain objects. It mutates the
+// config object in place and touches no Electron, fs, or store. API keys never
+// reach it: they are not part of the config type or its payload, and the Settings
+// form saves them by key id over settings:saveApiKeys.
 
 const settingsRootFields = new Set<string>([
   'text_ai',
@@ -15,22 +11,6 @@ const settingsRootFields = new Set<string>([
   'notifications',
   'prompts',
 ])
-
-// API keys are NOT stored in config.json. Each config path the UI binds to an
-// api_key field maps to a SecretId in the separate store; a changed value is
-// routed there and never allowed to reach config.json.
-const apiKeyConfigPathToSecret = new Map<string, SecretId>([
-  ['text_ai.gemini.api_key', 'gemini.text'],
-  ['text_ai.openai.api_key', 'openai.text'],
-  ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map(
-    (backend) => [`image_backends.${backend}.api_key`, IMAGE_BACKEND_SECRET[backend]] as const
-  ),
-])
-
-export interface SecretWrite {
-  secret: SecretId
-  value: string
-}
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -58,27 +38,23 @@ export function valuesEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Walk the base→next diff, applying every changed ordinary field into `target`
- * (the live config) and collecting the api-key changes to route to the secrets
- * store. Returns those secret writes; `target` is mutated in place. Throws when
- * a top-level section outside the supported set is changed.
+ * Walk the base→next diff, applying every changed field into `target` (the live
+ * config), which is mutated in place. Throws when a top-level section outside
+ * the supported set is changed.
  */
 export function applyChangedFields(
   target: Record<string, unknown>,
   base: unknown,
   next: unknown
-): SecretWrite[] {
-  const secrets: SecretWrite[] = []
-  walkChangedFields(target, base, next, [], secrets)
-  return secrets
+): void {
+  walkChangedFields(target, base, next, [])
 }
 
 function walkChangedFields(
   target: Record<string, unknown>,
   base: unknown,
   next: unknown,
-  pathParts: string[],
-  secrets: SecretWrite[]
+  pathParts: string[]
 ): void {
   if (valuesEqual(base, next)) return
 
@@ -90,7 +66,7 @@ function walkChangedFields(
         if (valuesEqual(baseValue, next[key])) continue
         throw new Error(`Cannot save unsupported settings section: ${key}`)
       }
-      walkChangedFields(target, baseValue, next[key], [key], secrets)
+      walkChangedFields(target, baseValue, next[key], [key])
     }
     return
   }
@@ -106,28 +82,20 @@ function walkChangedFields(
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
         throw new Error(`Cannot save settings path containing reserved key: ${key}`)
       }
-      walkChangedFields(target, isPlainObject(base) ? base[key] : undefined, next[key], [...pathParts, key], secrets)
+      walkChangedFields(target, isPlainObject(base) ? base[key] : undefined, next[key], [...pathParts, key])
     }
     return
   }
 
-  setConfigPath(target, pathParts, next, secrets)
+  setConfigPath(target, pathParts, next)
 }
 
 function setConfigPath(
   target: Record<string, unknown>,
   pathParts: string[],
-  value: unknown,
-  secrets: SecretWrite[]
+  value: unknown
 ): void {
   if (pathParts.length === 0) return
-  // API keys are diverted to the separate 0600 secrets file and never written
-  // into config.json. A blank value clears the stored key.
-  const secret = apiKeyConfigPathToSecret.get(pathParts.join('.'))
-  if (secret) {
-    secrets.push({ secret, value: String(value ?? '') })
-    return
-  }
   let cursor = target
   for (const part of pathParts.slice(0, -1)) {
     const next = cursor[part]

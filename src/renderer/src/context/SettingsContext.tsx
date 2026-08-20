@@ -1,18 +1,21 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import type { ApiKeyPresence, CloudBackendId } from '../../../shared/types'
+import type { ApiKeyPresence, CloudBackendId, SecretId } from '../../../shared/types'
 
 interface SettingsContextValue {
   settings: Record<string, unknown> | null
   // Which keys actually resolve, environment values included. It rides beside
   // `settings` rather than inside it because the two answer different questions:
-  // `settings.image_backends[b].api_key` is the STORED value the settings form
-  // edits, deliberately blind to the environment, while this is whether the
-  // backend can be called at all. Every readiness check must use this one —
-  // reading the stored string instead is what made an env-only backend look
-  // unconfigured. Null until loaded; treat null as "not yet known", never as
-  // absent (see hasApiKeyFor).
+  // `apiKeys` holds the STORED values the settings form edits, deliberately
+  // blind to the environment, while this is whether the backend can be called
+  // at all. Every readiness check must use this one — reading a stored string
+  // instead is what made an env-only backend look unconfigured. Null until
+  // loaded; treat null as "not yet known", never as absent (see hasApiKeyFor).
   apiKeyPresence: ApiKeyPresence | null
+  // Stored key values by id, for the Settings form alone. Keys are not part of
+  // `settings`: config.json cannot hold one, so they travel their own channel.
+  apiKeys: Record<SecretId, string> | null
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<Record<string, unknown>>
+  saveApiKeys: (changes: Partial<Record<SecretId, string>>) => Promise<Record<string, unknown>>
   saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveNotificationField: (field: string, value: unknown) => Promise<Record<string, unknown>>
@@ -23,10 +26,12 @@ const SettingsContext = createContext<SettingsContextValue | null>(null)
 export function SettingsProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
   const [apiKeyPresence, setApiKeyPresence] = useState<ApiKeyPresence | null>(null)
+  const [apiKeys, setApiKeys] = useState<Record<SecretId, string> | null>(null)
 
   useEffect(() => {
     window.electronAPI.getSettings().then((cfg) => setSettings(cfg as Record<string, unknown>))
     void window.electronAPI.getApiKeyPresence().then(setApiKeyPresence)
+    void window.electronAPI.getApiKeys().then(setApiKeys)
   }, [])
 
   // Apply the configured UI font by overriding the `--font-ui` CSS variable on :root; blank reverts
@@ -44,15 +49,25 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   // key changes what resolves, and an env-supplied key means the stored value
   // and the presence flag can disagree in either direction.
   const refreshSettings = useCallback(async (): Promise<Record<string, unknown>> => {
-    const [fresh, presence] = await Promise.all([
+    const [fresh, presence, keys] = await Promise.all([
       window.electronAPI.getSettings(),
       window.electronAPI.getApiKeyPresence(),
+      window.electronAPI.getApiKeys(),
     ])
     const next = fresh as Record<string, unknown>
     setSettings(next)
     setApiKeyPresence(presence)
+    setApiKeys(keys)
     return next
   }, [])
+
+  const saveApiKeys = useCallback(
+    async (changes: Partial<Record<SecretId, string>>): Promise<Record<string, unknown>> => {
+      await window.electronAPI.saveApiKeys(changes)
+      return refreshSettings()
+    },
+    [refreshSettings]
+  )
 
   const saveChangedSettings = useCallback(
     async (base: Record<string, unknown>, next: Record<string, unknown>): Promise<Record<string, unknown>> => {
@@ -88,7 +103,9 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
       value={{
         settings,
         apiKeyPresence,
+        apiKeys,
         saveChangedSettings,
+        saveApiKeys,
         saveBrainstormSettings,
         saveImageBackendDefaults,
         saveNotificationField,

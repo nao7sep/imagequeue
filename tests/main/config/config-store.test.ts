@@ -3,6 +3,31 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deepMergeDefaults } from '../../../src/main/config/config-store'
+import { createDefaultConfig } from '../../../src/main/config/defaults'
+
+// The security property behind keys living outside the config type: the shipped
+// config shape has nowhere to PUT a key, so config.json is key-free by
+// construction rather than by a scrub list somebody must extend when a provider
+// is added. A key reaching that file would be copied into the add-only backup
+// history, which has no prune path to retract it.
+//
+// This asserts against the default config object rather than the written file on
+// purpose: the written file is also swept by dropLegacyConfigKeys, so a test
+// reading it would still pass with this property broken.
+describe('the config shape cannot carry an api key', () => {
+  function apiKeyPaths(value: unknown, trail: string[] = []): string[] {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    return Object.entries(value).flatMap(([key, child]) =>
+      key === 'api_key'
+        ? [[...trail, key].join('.')]
+        : apiKeyPaths(child, [...trail, key])
+    )
+  }
+
+  it('has no api_key field anywhere in the shipped defaults', () => {
+    expect(apiKeyPaths(createDefaultConfig())).toEqual([])
+  })
+})
 
 describe('deepMergeDefaults', () => {
   it('fills structurally absent keys from defaults', () => {
@@ -87,5 +112,17 @@ describe('legacy config keys', () => {
     expect(gemini).not.toHaveProperty('models')
     // A legacy tier selection survives — the store never judges a selection.
     expect(gemini.main_model).toBe('kept')
+  })
+
+  it('strips a stale api_key an older build left on disk, value and all', async () => {
+    const loaded = await loadWritten({
+      text_ai: { gemini: { api_key: 'sk-stale-secret' } },
+      image_backends: { grok: { api_key: 'xai-stale-secret', model: 'kept' } },
+    })
+    const gemini = (loaded.text_ai as unknown as Record<string, Record<string, unknown>>).gemini
+    const grok = (loaded.image_backends as unknown as Record<string, Record<string, unknown>>).grok
+    expect(gemini).not.toHaveProperty('api_key')
+    expect(grok).not.toHaveProperty('api_key')
+    expect(grok.model).toBe('kept')
   })
 })

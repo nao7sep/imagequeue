@@ -6,7 +6,6 @@ export function createDefaultConfig(): AppConfig {
     text_ai: {
       backend: 'gemini',
       gemini: {
-        api_key: '',
         timeout_ms: 30000,
         // Picks into the closed GEMINI_TEXT_MODELS list. main = the fleet's Gemini
         // default (matches mumbler/fotoready) for the elaboration tier whose output
@@ -20,7 +19,6 @@ export function createDefaultConfig(): AppConfig {
         // constant and never goes stale. The UI shows the URL as a placeholder + hint.
         // Left blank deliberately rather than seeding the literal.
         endpoint: '',
-        api_key: '',
         timeout_ms: 60000,
         // Starter defaults for the common case (the endpoint IS OpenAI). Verified live
         // through the real provider: both run elaboration + slug. This is an OPEN backend
@@ -43,7 +41,6 @@ export function createDefaultConfig(): AppConfig {
     },
     image_backends: {
       openai: {
-        api_key: '',
         // Seeded from the registry's isDefault entry rather than restated here, so a
         // registry change reaches a fresh install without a second edit.
         model: getDefaultModelForBackend('openai').id,
@@ -59,7 +56,6 @@ export function createDefaultConfig(): AppConfig {
         timeout_ms: 180000
       },
       nanobanana: {
-        api_key: '',
         model: getDefaultModelForBackend('nanobanana').id,
         default_params: {
           aspectRatio: '1:1',
@@ -69,7 +65,6 @@ export function createDefaultConfig(): AppConfig {
         timeout_ms: 180000
       },
       grok: {
-        api_key: '',
         model: getDefaultModelForBackend('grok').id,
         default_params: {
           aspectRatio: '1:1',
@@ -83,7 +78,6 @@ export function createDefaultConfig(): AppConfig {
         timeout_ms: 180000
       },
       flux: {
-        api_key: '',
         model: getDefaultModelForBackend('flux').id,
         // No steps/guidance: they apply only to a model that declares their ranges,
         // and that model's own defaults are the source. Seeding numbers here made a

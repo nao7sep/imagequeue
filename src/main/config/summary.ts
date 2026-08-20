@@ -1,6 +1,6 @@
 import { AppConfig } from './types'
-import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../shared/types'
-import { hasApiKey, IMAGE_BACKEND_SECRET } from './api-keys-store'
+import { CLOUD_BACKEND_IDS_IN_UI_ORDER, IMAGE_BACKEND_SECRET } from '../../shared/types'
+import { hasApiKey } from './api-keys-store'
 
 // A secret-free summary of the effective configuration for the startup log
 // line. API keys are reduced to presence booleans and never logged — the raw

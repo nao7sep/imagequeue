@@ -94,11 +94,11 @@ describe('buildEnqueueRequestsForAll', () => {
 })
 
 
-// The bug this guards: key presence must come from the main process (which
-// resolves the environment first), never from the settings payload's stored
-// api_key string. A backend keyed only by OPENAI_IMAGE_API_KEY has an empty
-// stored value, so reading that string reported "API key not set" and disabled
-// + Queue for a backend the main process would have called successfully.
+// The bug this guards: key presence must come from the main process, which
+// resolves the environment first. A backend keyed only by OPENAI_IMAGE_API_KEY
+// is invisible to the settings payload — which carries no keys at all — so
+// anything reading settings reported "API key not set" and disabled + Queue for
+// a backend the main process would have called successfully.
 describe('hasApiKeyFor', () => {
   it('reports a backend keyed only by environment as present', () => {
     // What the main process returns when the key came from the environment and

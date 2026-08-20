@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import { getDataDir } from './config-store'
 import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
+import type { SecretId } from '../../shared/types'
 
 // The secret store, realized per the fleet api-key-storage-conventions. Secrets
 // live in their own file under the storage root (`~/.imagequeue/api-keys.json`),
@@ -23,27 +24,9 @@ const SECRETS_FILE_MODE = 0o600
 const ENFORCE_FILE_MODE = process.platform !== 'win32'
 const KEY_ID_RE = /^[a-z0-9]+(\.[a-z0-9]+)*$/
 
-// The api keys the app stores. The id is the vendor segment + an optional purpose
-// segment; the environment name and stored key derive from it directly. Image
-// backends keyed by product (grok/flux) map to their vendor key id below — the
-// backend keeps its product identity; only the key is vendor-conventional.
-export type SecretId =
-  | 'gemini.text'
-  | 'openai.text'
-  | 'openai.image'
-  | 'gemini.nanobanana'
-  | 'xai'
-  | 'bfl'
-
-// Image backend id (product) → the vendor key id its key is stored/resolved under.
-// `grok` is xAI's product, `flux` is Black Forest Labs' — the backend keeps its
-// product name everywhere; only the API key is the conventional vendor segment.
-export const IMAGE_BACKEND_SECRET: Record<string, SecretId> = {
-  openai: 'openai.image',
-  nanobanana: 'gemini.nanobanana',
-  grok: 'xai',
-  flux: 'bfl'
-}
+// The key-id vocabulary (SecretId, SECRET_IDS, IMAGE_BACKEND_SECRET) lives in
+// shared/types: the Settings form edits keys BY ID over their own IPC, so both
+// sides of the boundary need it. This module owns the store mechanics only.
 
 interface SecretsFile {
   keys: Record<string, string>

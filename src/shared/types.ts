@@ -250,8 +250,33 @@ export interface QueueControlState {
   interrupted: number
 }
 
+// The api keys the app stores, by id. A key id is a dotted path of segments:
+// the conventional vendor/env name plus an optional purpose segment, so the
+// environment variable derives from it with no mapping table (`gemini.text` →
+// GEMINI_TEXT_API_KEY). Shared because the Settings form edits keys by these
+// ids over their own IPC — keys are not part of the config payload.
+export const SECRET_IDS = [
+  'gemini.text',
+  'openai.text',
+  'openai.image',
+  'gemini.nanobanana',
+  'xai',
+  'bfl',
+] as const
+export type SecretId = (typeof SECRET_IDS)[number]
+
+// Image backend id (product) → the vendor key id its key is stored under.
+// `grok` is xAI's product, `flux` is Black Forest Labs' — the backend keeps its
+// product name everywhere; only the API key is the conventional vendor segment.
+export const IMAGE_BACKEND_SECRET: Record<CloudBackendId, SecretId> = {
+  openai: 'openai.image',
+  nanobanana: 'gemini.nanobanana',
+  grok: 'xai',
+  flux: 'bfl',
+}
+
 // Which API keys resolve, environment values included — the presence signal the
-// renderer needs because the settings payload carries only stored keys (so that
+// renderer needs because the api-key payload carries only stored keys (so that
 // editing a field cannot overwrite an env-supplied key). Booleans only: no key
 // value ever crosses this boundary.
 export interface ApiKeyPresence {

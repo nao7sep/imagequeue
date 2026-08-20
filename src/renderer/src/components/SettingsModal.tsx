@@ -5,6 +5,7 @@ import { Modal } from './Modal'
 import { useTablist } from '../hooks/useTablist'
 import { multiline } from '../../../shared/textCleanup'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS } from '../../../shared/models'
+import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -42,11 +43,15 @@ function withNotificationField(config: Record<string, unknown> | null, key: stri
 }
 
 export function SettingsModal({ onClose }: Props): React.JSX.Element {
-  const { settings, saveChangedSettings, saveNotificationField } = useSettings()
+  const { settings, apiKeys, saveChangedSettings, saveApiKeys, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
+  // API keys stage separately from the config because they are stored separately:
+  // config.json cannot hold one. Same edit-then-Save shape, its own diff on save.
+  const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
+  const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const tablist = useTablist<SettingsTab>({
@@ -67,9 +72,29 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     setBaseConfig(cloneSettings(settings))
   }, [config, settings])
 
+  // Keys arrive on their own channel and may land after the first render; adopt
+  // them once, exactly as the config above is adopted, without discarding edits.
+  const keysLoaded = apiKeys !== null
+  useEffect(() => {
+    if (!apiKeys) return
+    setKeys((prev) => (Object.keys(prev).length === 0 ? { ...apiKeys } : prev))
+    setBaseKeys((prev) => (Object.keys(prev).length === 0 ? { ...apiKeys } : prev))
+  }, [apiKeys])
+
+  // Only the ids whose value the user actually changed; a blank clears that key.
+  const changedKeys = useMemo(() => {
+    const changes: Record<string, string> = {}
+    for (const [id, value] of Object.entries(keys)) {
+      if (value !== (baseKeys[id] ?? '')) changes[id] = value
+    }
+    return changes
+  }, [keys, baseKeys])
+
   const dirty = useMemo(
-    () => (config && baseConfig ? JSON.stringify(config) !== JSON.stringify(baseConfig) : false),
-    [config, baseConfig]
+    () =>
+      Object.keys(changedKeys).length > 0 ||
+      (config && baseConfig ? JSON.stringify(config) !== JSON.stringify(baseConfig) : false),
+    [config, baseConfig, changedKeys]
   )
 
   const handleSave = async (): Promise<void> => {
@@ -84,6 +109,12 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           ? { ...config, prompts: { ...prompts, slug: multiline(prompts.slug) } }
           : config
       await saveChangedSettings(baseConfig, cleaned)
+      // Keys second, and only when changed: this write can add or remove a
+      // column, so it is the one that resizes the window.
+      if (Object.keys(changedKeys).length > 0) {
+        await saveApiKeys(changedKeys)
+        setBaseKeys({ ...keys })
+      }
       onClose()
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : String(e))
@@ -138,6 +169,20 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const updateGemini = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, gemini: { ...gemini, [key]: value } } })
   }
+
+  // One editor for every API key, addressed by key id. Blank means "no stored
+  // key" — saving it clears the stored value; it never writes an empty string.
+  const updateKey = (id: SecretId, value: string): void => {
+    setKeys((prev) => ({ ...prev, [id]: value }))
+  }
+  const keyField = (id: SecretId): React.JSX.Element => (
+    <input
+      type="password"
+      value={keys[id] ?? ''}
+      disabled={!keysLoaded}
+      onChange={(e) => updateKey(id, e.target.value)}
+    />
+  )
 
   const updateOpenai = (key: string, value: unknown): void => {
     setConfig({ ...config, text_ai: { ...textAi, openai: { ...openai, [key]: value } } })
@@ -421,7 +466,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             <h4>Gemini</h4>
             <div className="settings-field">
               <label>API Key</label>
-              <input type="password" value={gemini.api_key as string} onChange={(e) => updateGemini('api_key', e.target.value)} />
+              {keyField('gemini.text')}
             </div>
             <div className="settings-field">
               <label>Main model</label>
@@ -464,7 +509,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             </div>
             <div className="settings-field">
               <label>API Key</label>
-              <input type="password" value={openai.api_key as string} onChange={(e) => updateOpenai('api_key', e.target.value)} />
+              {keyField('openai.text')}
             </div>
             <div className="settings-field">
               <label>Main model</label>
@@ -487,7 +532,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <h3>GPT Image</h3>
           <div className="settings-field">
             <label>API Key</label>
-            <input type="password" value={backends.openai.api_key as string} onChange={(e) => updateBackend('openai', 'api_key', e.target.value)} />
+            {keyField(IMAGE_BACKEND_SECRET.openai)}
           </div>
           <div className="settings-field">
             <label>Concurrency</label>
@@ -503,7 +548,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <h3>Nano Banana</h3>
           <div className="settings-field">
             <label>Gemini API Key</label>
-            <input type="password" value={backends.nanobanana.api_key as string} onChange={(e) => updateBackend('nanobanana', 'api_key', e.target.value)} />
+            {keyField(IMAGE_BACKEND_SECRET.nanobanana)}
           </div>
           <div className="settings-field">
             <label>Concurrency</label>
@@ -519,7 +564,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <h3>Grok Imagine</h3>
           <div className="settings-field">
             <label>API Key</label>
-            <input type="password" value={backends.grok.api_key as string} onChange={(e) => updateBackend('grok', 'api_key', e.target.value)} />
+            {keyField(IMAGE_BACKEND_SECRET.grok)}
           </div>
           <div className="settings-field">
             <label>Concurrency</label>
@@ -535,7 +580,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <h3>FLUX</h3>
           <div className="settings-field">
             <label>API Key</label>
-            <input type="password" value={backends.flux.api_key as string} onChange={(e) => updateBackend('flux', 'api_key', e.target.value)} />
+            {keyField(IMAGE_BACKEND_SECRET.flux)}
           </div>
           <div className="settings-field">
             <label>Concurrency</label>

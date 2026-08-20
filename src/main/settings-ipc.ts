@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig, saveConfig, getDataDir } from './config'
-import { getStoredApiKey, setStoredApiKey, hasApiKey, IMAGE_BACKEND_SECRET } from './config/api-keys-store'
+import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { refreshWindowMinimumSize } from './index'
 import { getSessionDir } from './session'
@@ -25,13 +25,21 @@ import {
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
 import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
-import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type CloudBackendId, type DrawThingsModelParams } from '../shared/types'
+import {
+  CLOUD_BACKEND_IDS_IN_UI_ORDER,
+  IMAGE_BACKEND_SECRET,
+  SECRET_IDS,
+  type CloudBackendId,
+  type DrawThingsModelParams,
+  type SecretId,
+} from '../shared/types'
 
 function readClipboardText(): string {
   return clipboard.readText()
 }
 
 const cloudBackendIds = new Set<string>(CLOUD_BACKEND_IDS_IN_UI_ORDER)
+const secretIds = new Set<string>(SECRET_IDS)
 const notificationFields = new Set<string>([
   'notifications_enabled',
   'sounds_enabled',
@@ -43,30 +51,41 @@ const notificationFields = new Set<string>([
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(): void {
   handle('settings:get', () => {
-    // Clone the cached config so we never mutate the in-memory instance, then
-    // overlay the api_key fields from the separate secrets store (the only place
-    // keys live). The stored — not the environment — value is surfaced so editing
-    // never silently overwrites an env-supplied key.
-    const config = JSON.parse(JSON.stringify(loadConfig())) as AppConfig
-    config.text_ai.gemini.api_key = getStoredApiKey('gemini.text')
-    config.text_ai.openai.api_key = getStoredApiKey('openai.text')
-    for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-      config.image_backends[backend].api_key = getStoredApiKey(IMAGE_BACKEND_SECRET[backend])
-    }
-    return config
+    // The config carries no keys — they are neither in the type nor in this
+    // payload — so the cached object is returned as-is (IPC serializes it).
+    return loadConfig()
   })
 
   handle('settings:saveChangedFields', (_event, base: AppConfig, next: AppConfig) => {
     const config = loadConfig()
-    const secretWrites = applyChangedFields(config as unknown as Record<string, unknown>, base, next)
-    for (const { secret, value } of secretWrites) {
-      setStoredApiKey(secret, value)
-    }
+    applyChangedFields(config as unknown as Record<string, unknown>, base, next)
     saveConfig(config)
+    return { success: true }
+  })
+
+  // Keys are read and written by key id, on their own channels, never as part of
+  // the config payload. The STORED value is surfaced, not the resolved one: an
+  // environment-supplied key must stay invisible to the form so that saving a
+  // field the user never touched cannot overwrite it.
+  handle('settings:getApiKeys', () => {
+    const keys = {} as Record<SecretId, string>
+    for (const id of SECRET_IDS) keys[id] = getStoredApiKey(id)
+    return keys
+  })
+
+  handle('settings:saveApiKeys', (_event, changes: Record<string, string>) => {
+    // Trust boundary: ids come from the renderer's payload, so each is checked
+    // against the known set before it reaches the store.
+    const entries = Object.entries(changes ?? {})
+    for (const [id] of entries) {
+      if (!secretIds.has(id)) throw new Error(`Cannot save unsupported api key: ${id}`)
+    }
+    for (const [id, value] of entries) {
+      setStoredApiKey(id as SecretId, String(value ?? ''))
+    }
     // Storing or clearing a key can add or remove a column, which moves the
-    // window's derived minimum. Only secret writes can do that, so the refresh
-    // rides on their presence rather than firing on every settings save.
-    if (secretWrites.length > 0) refreshWindowMinimumSize()
+    // window's derived minimum.
+    if (entries.length > 0) refreshWindowMinimumSize()
     return { success: true }
   })
 
