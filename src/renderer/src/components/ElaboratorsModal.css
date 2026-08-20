@@ -196,3 +196,10 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.elaborators-help {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+}

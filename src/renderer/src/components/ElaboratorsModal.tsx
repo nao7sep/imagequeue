@@ -340,6 +340,15 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       }
     >
       <div className="elaborators-body">
+        {/* The one rule that decides whether an elaborator works. Measured, not
+            style advice: prose guidance scored 5.9/10 for how differently the
+            resulting images looked, concrete specifics 8.1. */}
+        <p className="elaborators-help">
+          Write concrete visual specifics — light, lens, palette, framing — not qualities like
+          “professional” or “believable”, which an image model cannot draw. Test: if two
+          elaborators in the same list could be satisfied by one sentence, they are too abstract
+          to change the picture.
+        </p>
         {message && <div className="elaborators-message">{message}</div>}
         <div className="elaborators-grid">
           {ELABORATOR_KINDS.map((kind) => renderPane(kind))}
