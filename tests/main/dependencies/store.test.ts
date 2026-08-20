@@ -27,7 +27,7 @@ describe('dependencies cache', () => {
   it('returns empty defaults when no file exists', () => {
     expect(readDependenciesCache()).toEqual({
       cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
-      recommendations: { lastCheckedAtUtc: null, pending: false },
+      recommendations: { lastCheckedAtUtc: null },
     })
   })
 
@@ -35,18 +35,28 @@ describe('dependencies cache', () => {
     updateDependenciesCache((cache) => {
       cache.cli.lastKnownLatest = 'v1.20260430.0'
       cache.cli.lastCheckedAtUtc = '2026-06-30T00:00:00.000Z'
-      cache.recommendations.pending = true
+      cache.recommendations.lastCheckedAtUtc = '2026-06-30T01:00:00.000Z'
     })
     const reread = readDependenciesCache()
     expect(reread.cli.lastKnownLatest).toBe('v1.20260430.0')
     expect(reread.cli.lastCheckedAtUtc).toBe('2026-06-30T00:00:00.000Z')
-    expect(reread.recommendations.pending).toBe(true)
+    expect(reread.recommendations.lastCheckedAtUtc).toBe('2026-06-30T01:00:00.000Z')
+  })
+
+  // The cache holds NETWORK knowledge only. Nothing here describes an artifact
+  // on disk: the CLI's tag is in its sidecar, and a waiting recommendations
+  // update is the staged file's existence — both read from the artifact, so
+  // neither can drift from it.
+  it('records nothing about the artifacts themselves', () => {
+    const cache = readDependenciesCache()
+    expect(Object.keys(cache.cli).sort()).toEqual(['lastCheckedAtUtc', 'lastKnownLatest'])
+    expect(Object.keys(cache.recommendations)).toEqual(['lastCheckedAtUtc'])
   })
 
   it('falls back to defaults (not a throw) on a malformed file', () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
     fs.writeFileSync(getDependenciesStatePath(), '{ not valid json')
-    expect(readDependenciesCache().recommendations.pending).toBe(false)
+    expect(readDependenciesCache().recommendations.lastCheckedAtUtc).toBeNull()
   })
 
   it('backfills missing sections from a partial file', () => {
@@ -55,6 +65,6 @@ describe('dependencies cache', () => {
     const cache = readDependenciesCache()
     expect(cache.cli.lastKnownLatest).toBe('v1.0.0')
     expect(cache.cli.lastCheckedAtUtc).toBeNull()
-    expect(cache.recommendations).toEqual({ lastCheckedAtUtc: null, pending: false })
+    expect(cache.recommendations).toEqual({ lastCheckedAtUtc: null })
   })
 })

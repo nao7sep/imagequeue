@@ -84,7 +84,7 @@ describe('record/no-record decisions at real write sites', () => {
   it('does NOT record dependencies.json (a re-derivable cache)', () => {
     updateDependenciesCache((cache) => {
       cache.cli.lastKnownLatest = 'v1.0'
-      cache.recommendations.pending = true
+      cache.recommendations.lastCheckedAtUtc = '2026-06-30T00:00:00.000Z'
     })
     // The cache file must be on disk...
     expect(fs.existsSync(path.join(tmpRoot, 'dependencies.json'))).toBe(true)

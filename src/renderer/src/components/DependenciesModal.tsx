@@ -21,20 +21,28 @@ const STATE_LABEL: Record<DependencyState, string> = {
   'installed-unchecked': 'Installed (not checked)',
 }
 
-// State → action verb. Only Install (absent) and Update (newer available); a
-// current or merely-unchecked dependency offers no button — the set-wide "Check
-// for updates" is how an unchecked one gets resolved.
-function actionLabelFor(state: DependencyState): string | null {
-  if (state === 'not-installed') return 'Install'
-  if (state === 'update-available') return 'Update'
+// State → action verb. Install (absent), Update (newer available) — and Update
+// again when a present dependency's own version could not be read, which is the
+// only way out of that row: the set-wide "Check for updates" resolves the LATEST,
+// so it can never clear an unreadable INSTALLED version, and re-acquiring is what
+// replaces the copy that would not answer. A current dependency, or one merely
+// unchecked with its version in hand, offers no button — Check is that move.
+function actionLabelFor(info: DependencyInfo): string | null {
+  if (info.state === 'not-installed') return 'Install'
+  if (info.state === 'update-available') return 'Update'
+  if (info.state === 'installed-unchecked' && !info.installedLabel) return 'Update'
   return null
 }
 
 function installedSummary(info: DependencyInfo): string {
-  if (!info.installedLabel) return 'Not installed'
+  if (info.state === 'not-installed') return 'Not installed'
   const updated = info.updatedAtUtc ? ` · updated ${formatUiDateTime(info.updatedAtUtc)}` : ''
   const latest =
     info.state === 'update-available' && info.latestLabel ? ` → ${info.latestLabel}` : ''
+  // Present, but it did not say what it is — an installed binary whose sidecar is
+  // missing. "Not installed" would be a lie, and silence would leave the row
+  // looking fine.
+  if (!info.installedLabel) return `version unreadable${latest}${updated}`
   return `${info.installedLabel}${latest}${updated}`
 }
 
@@ -217,7 +225,7 @@ function DependencyRow({
   progress: DependencyProgress | null
   onAction: () => void
 }): React.JSX.Element {
-  const actionLabel = actionLabelFor(info.state)
+  const actionLabel = actionLabelFor(info)
   const pct = progress ? progressPercent(progress) : null
 
   return (

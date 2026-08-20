@@ -51,3 +51,40 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
     expect(cli.lastCheckedAtUtc).not.toBeNull()
   })
 })
+
+// The installed version comes from the sidecar beside the binary, so a binary the
+// app has no record of installing — hand-placed, or left by an install whose
+// sidecar write did not land — is present with an UNKNOWN version. That is not
+// absent, and with nothing to compare it can never read as up to date.
+describe('a present CLI whose version cannot be read', () => {
+  function placeBinaryWithoutSidecar(): void {
+    const bin = path.join(home, 'bin')
+    fs.mkdirSync(bin, { recursive: true })
+    fs.writeFileSync(path.join(bin, 'draw-things-cli'), 'not a real binary')
+  }
+
+  it('reads installed-unchecked with no version, even after a successful check', async () => {
+    placeBinaryWithoutSidecar()
+    resolveMock.mockResolvedValue({ tag: 'v1.20260430.0', assetUrl: 'https://x', sha256: 'a' })
+
+    const state = await checkAllDependencies()
+
+    expect(state.cli.installedLabel).toBeNull()
+    expect(state.cli.latestLabel).toBe('v1.20260430.0')
+    expect(state.cli.state).toBe('installed-unchecked')
+  })
+
+  it('reads its version once the sidecar is beside it', async () => {
+    placeBinaryWithoutSidecar()
+    fs.writeFileSync(
+      path.join(home, 'bin', 'draw-things-cli.json'),
+      JSON.stringify({ tag: 'v1.20260430.0', sha256: 'a', installedAt: '2026-06-30T00:00:00.000Z' }),
+    )
+    resolveMock.mockResolvedValue({ tag: 'v1.20260430.0', assetUrl: 'https://x', sha256: 'a' })
+
+    const state = await checkAllDependencies()
+
+    expect(state.cli.installedLabel).toBe('v1.20260430.0')
+    expect(state.cli.state).toBe('up-to-date')
+  })
+})

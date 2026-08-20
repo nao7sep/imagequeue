@@ -9,6 +9,7 @@ import { log, serializeError } from '../logger'
 import {
   checkRecommendations,
   getRecommendationsStatus,
+  hasPendingRecommendationsUpdate,
 } from '../recommendations'
 import { isCliInstalled, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
@@ -44,7 +45,9 @@ function recommendationsInfo(): DependencyInfo {
   const status = getRecommendationsStatus()
   const present = status.exists
   const everChecked = cache.recommendations.lastCheckedAtUtc !== null
-  const comparison: DependencyComparison = cache.recommendations.pending
+  // "An update is waiting" is read from the staged file, not from a recorded
+  // flag — same rule as the CLI's tag: the fact lives with the artifact.
+  const comparison: DependencyComparison = hasPendingRecommendationsUpdate()
     ? 'outdated'
     : everChecked
       ? 'current'

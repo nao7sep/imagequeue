@@ -5,9 +5,9 @@ import path from 'path'
 import {
   getRecommendationsStatus,
   applyPendingRecommendations,
+  hasPendingRecommendationsUpdate,
   resolveRecommendedParams,
 } from '../../../src/main/recommendations'
-import { readDependenciesCache, updateDependenciesCache } from '../../../src/main/dependencies/store'
 
 let home: string
 let modelsDir: string
@@ -58,28 +58,43 @@ describe('getRecommendationsStatus', () => {
   })
 })
 
+// "An update is waiting" is the staged file's existence, never a recorded flag —
+// so applying it is the rename, and nothing else has to be kept in step.
 describe('applyPendingRecommendations', () => {
-  it('promotes the staged pending file over configs.json and clears the pending flag', () => {
+  it('promotes the staged pending file over configs.json', () => {
     writeConfigs(configsPath(), [{ name: 'old', configuration: { model: 'm' } }])
     writeConfigs(pendingPath(), [
       { name: 'new1', configuration: { model: 'm1' } },
       { name: 'new2', configuration: { model: 'm2' } },
     ])
-    updateDependenciesCache((c) => { c.recommendations.pending = true })
+    expect(hasPendingRecommendationsUpdate()).toBe(true)
 
     const status = applyPendingRecommendations()
 
     expect(fs.existsSync(pendingPath())).toBe(false)
     expect(JSON.parse(fs.readFileSync(configsPath(), 'utf8'))).toHaveLength(2)
     expect(status.entryCount).toBe(2)
-    expect(readDependenciesCache().recommendations.pending).toBe(false)
+    expect(hasPendingRecommendationsUpdate()).toBe(false)
   })
 
-  it('is a no-op (just clears the flag) when nothing is pending', () => {
+  it('is a no-op when nothing is staged', () => {
     writeConfigs(configsPath(), [{ name: 'only', configuration: { model: 'm' } }])
+    expect(hasPendingRecommendationsUpdate()).toBe(false)
     const status = applyPendingRecommendations()
     expect(status.entryCount).toBe(1)
-    expect(readDependenciesCache().recommendations.pending).toBe(false)
+  })
+
+  // The defect a persisted flag carries: it outlives the file it describes. A
+  // staged file deleted out of band (a cleaned models dir, a models_dir the user
+  // repointed) used to leave "update available" showing forever, with Apply a
+  // silent no-op. Read from disk, the row simply stops claiming an update.
+  it('stops claiming an update the moment the staged file is gone', () => {
+    writeConfigs(configsPath(), [{ name: 'old', configuration: { model: 'm' } }])
+    writeConfigs(pendingPath(), [{ name: 'new', configuration: { model: 'm1' } }])
+    expect(hasPendingRecommendationsUpdate()).toBe(true)
+
+    fs.rmSync(pendingPath())
+    expect(hasPendingRecommendationsUpdate()).toBe(false)
   })
 })
 

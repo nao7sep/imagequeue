@@ -1,8 +1,13 @@
 // Persistence of the dependency *check* cache — what we last learned from the
 // network, separate from the installed artifacts themselves. This file is pure
-// cache: deleting it just makes the next launch re-check. The installed CLI's
-// own identity (its release tag) lives in the binary's sidecar, not here, so it
-// travels with the artifact.
+// cache: deleting it just makes the next launch re-check.
+//
+// Nothing here describes an artifact on disk, deliberately: the installed CLI's
+// identity (its release tag) lives in the binary's sidecar, and whether a
+// recommendations update is waiting is the presence of the staged
+// configs-pending.json — both read from the artifact, so neither can drift from
+// it (managed-runtime-dependencies-conventions). What is left is only what the
+// network told us and when, which has no on-disk source at all.
 
 import fs from 'fs'
 import { writeJsonAtomic } from '../utils/atomic-write'
@@ -18,16 +23,13 @@ export interface DependenciesCache {
   }
   recommendations: {
     lastCheckedAtUtc: string | null
-    // A fetched configs.json that differed from the installed one is staged as
-    // the pending file; this flag records that an update is waiting to be applied.
-    pending: boolean
   }
 }
 
 function emptyCache(): DependenciesCache {
   return {
     cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
-    recommendations: { lastCheckedAtUtc: null, pending: false },
+    recommendations: { lastCheckedAtUtc: null },
   }
 }
 

@@ -39,8 +39,19 @@ export function getRecommendationsPath(): string {
   return path.join(resolveModelsDir(), RECOMMENDATIONS_FILE)
 }
 
-function getRecommendationsPendingPath(): string {
+export function getRecommendationsPendingPath(): string {
   return path.join(resolveModelsDir(), RECOMMENDATIONS_PENDING_FILE)
+}
+
+/**
+ * Whether a fetched update is staged and waiting to be applied — read from the
+ * staged file itself, never from a recorded flag. A flag in the check cache would
+ * be a fact about a file kept away from that file: it survives the file being
+ * deleted (a phantom "update available" that Apply silently no-ops), and it does
+ * not follow the user repointing models_dir, where the staged file lives.
+ */
+export function hasPendingRecommendationsUpdate(): boolean {
+  return fs.existsSync(getRecommendationsPendingPath())
 }
 
 export function getRecommendationsStatus(): RecommendationStatus {
@@ -76,7 +87,6 @@ export async function downloadLatestRecommendations(): Promise<RecommendationSta
   clearPendingUpdate()
   updateDependenciesCache((cache) => {
     cache.recommendations.lastCheckedAtUtc = new Date().toISOString()
-    cache.recommendations.pending = false
   })
 
   return getRecommendationsStatus()
@@ -93,7 +103,6 @@ export async function checkRecommendations(): Promise<RecommendationStatus> {
     clearPendingUpdate()
     updateDependenciesCache((cache) => {
       cache.recommendations.lastCheckedAtUtc = checkedAt
-      cache.recommendations.pending = false
     })
     return getRecommendationsStatus()
   }
@@ -111,15 +120,17 @@ export async function checkRecommendations(): Promise<RecommendationStatus> {
   } else {
     clearPendingUpdate()
   }
+  // Writing (or clearing) the staged file IS the record that an update waits:
+  // there is no separate flag to keep in step with it.
   updateDependenciesCache((cache) => {
     cache.recommendations.lastCheckedAtUtc = checkedAt
-    cache.recommendations.pending = differs
   })
   return getRecommendationsStatus()
 }
 
 /** Promote a staged pending update to configs.json. A no-op (returns current
- * status) when nothing is pending. */
+ * status) when nothing is staged — the rename both applies the update and ends
+ * the pending state, since that state IS the staged file. */
 export function applyPendingRecommendations(): RecommendationStatus {
   const pendingPath = getRecommendationsPendingPath()
   if (fs.existsSync(pendingPath)) {
@@ -128,9 +139,6 @@ export function applyPendingRecommendations(): RecommendationStatus {
     // and configs.json is not recorded either way (see downloadLatestRecommendations).
     fs.renameSync(pendingPath, getRecommendationsPath())
   }
-  updateDependenciesCache((cache) => {
-    cache.recommendations.pending = false
-  })
   return getRecommendationsStatus()
 }
 

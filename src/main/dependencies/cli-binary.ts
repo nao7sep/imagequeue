@@ -96,12 +96,14 @@ export async function installCliRelease(
     await stripQuarantine(tempPath)
 
     fs.mkdirSync(getBinDir(), { recursive: true })
-    // Write the sidecar first, then publish the binary by atomic rename. The
-    // binary is the presence gate (isCliInstalled scans for it), so making it the
-    // last commit guarantees a present binary always has its tag recorded — never
-    // an untagged binary that reads as "installed-unchecked". A sidecar left
-    // without a binary (if the rename then failed) reads as not-installed and is
-    // harmless, overwritten on the next install. Same filesystem → atomic replace.
+    // Publish the binary first, then record its tag beside it. The order is the
+    // honest one: a failure between the two leaves the NEW binary with a stale or
+    // absent sidecar, which reads as version-unknown and offers the re-acquire
+    // that fixes it. Writing the sidecar first would instead leave the OLD binary
+    // wearing the NEW tag on a failed rename — a stale install reading "up to
+    // date", which is the one outcome the state model must never produce. Same
+    // filesystem → atomic replace.
+    fs.renameSync(tempPath, getCliBinaryPath())
     const meta: CliMeta = { tag: release.tag, sha256: release.sha256, installedAt: new Date().toISOString() }
     // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
     // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
@@ -109,7 +111,6 @@ export async function installCliRelease(
     // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
     // colocated in a binary-bearing directory").
     writeJsonAtomic(getCliMetaPath(), meta, false)
-    fs.renameSync(tempPath, getCliBinaryPath())
     log('info', 'draw-things-cli installed', { tag: release.tag })
   } catch (err) {
     discardTempPath(tempPath)
