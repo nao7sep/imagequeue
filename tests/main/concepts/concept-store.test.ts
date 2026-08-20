@@ -190,7 +190,7 @@ describe('concept store', () => {
     const [pa] = unexpandedProbes(f.id, 1)
     markProbeExpanded(pa.id)
     expect(unexpandedProbes(f.id, 10).map((p) => p.id)).not.toContain(pa.id)
-    expect(listProbeDisplays(f.id)).toHaveLength(2)
+    expect(listProbeDisplays(f.id, 50)).toHaveLength(2)
   })
 
   it('deleteProbe removes its whole cluster and nothing beside it', () => {
@@ -231,6 +231,19 @@ describe('concept store', () => {
     expect(listConceptRows(f.id)).toHaveLength(1)
     deleteFacet(f.id)
     expect(listFacetsWithStats()).toHaveLength(0)
-    expect(listProbeDisplays(f.id)).toHaveLength(0)
+    expect(listProbeDisplays(f.id, 50)).toHaveLength(0)
+  })
+})
+
+describe('listProbeDisplays bound', () => {
+  // The list is every generation ask's avoid-list, and the ledger accumulates
+  // for life: unbounded, a months-old facet ships thousands of domains per
+  // call and eventually overflows the model's context. Recency is the sample
+  // that matters — the model's repeat candidates are its recent favourites.
+  it('returns only the most recent `limit` domains, oldest-first', () => {
+    const f = ensureFacet('bounded')
+    addProbes(f.id, ['one', 'two', 'three', 'four', 'five'])
+    expect(listProbeDisplays(f.id, 3)).toEqual(['three', 'four', 'five'])
+    expect(listProbeDisplays(f.id, 10)).toEqual(['one', 'two', 'three', 'four', 'five'])
   })
 })

@@ -97,6 +97,15 @@ function walkChangedFields(
 
   if (isPlainObject(next)) {
     for (const key of Object.keys(next)) {
+      // Trust boundary: keys come from the renderer's payload. A __proto__ /
+      // constructor / prototype segment would make the cursor walk below land
+      // on Object.prototype (which passes isPlainObject) and turn the final
+      // assignment into main-process prototype pollution — reachable only from
+      // a compromised renderer, which is exactly what this module's top-level
+      // allowlist exists to contain.
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        throw new Error(`Cannot save settings path containing reserved key: ${key}`)
+      }
       walkChangedFields(target, isPlainObject(base) ? base[key] : undefined, next[key], [...pathParts, key], secrets)
     }
     return

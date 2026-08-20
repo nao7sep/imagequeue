@@ -193,7 +193,13 @@ export function registerNotificationIpc(getMainWin: () => BrowserWindow | null):
   })
 
   handle('notification:loadAudioFile', async (_event, filePath: string) => {
-    if (!filePath || !fs.existsSync(filePath)) return null
+    // The renderer may only ask for the two paths the user configured through
+    // the file dialog — this was the one IPC read not pinned to a known
+    // location, making it an arbitrary-file read for a compromised renderer.
+    const notifications = loadConfig().notifications
+    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean)
+    if (!filePath || !allowed.includes(filePath)) return null
+    if (!fs.existsSync(filePath)) return null
     const data = await fs.promises.readFile(filePath)
     const ext = path.extname(filePath).slice(1).toLowerCase()
     const mimeMap: Record<string, string> = {

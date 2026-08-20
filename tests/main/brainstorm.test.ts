@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { brainstormPrompts, cancelBrainstorm, hasActiveBrainstorms } from '../../src/main/brainstorm'
-import { closeConceptStore, listConceptRows, listFacetsWithStats } from '../../src/main/concepts/concept-store'
+import { listProbesWithStats, closeConceptStore, listConceptRows, listFacetsWithStats } from '../../src/main/concepts/concept-store'
 import { getElaborator } from '../../src/main/elaborators'
 import { getMainProvider } from '../../src/main/text-ai'
 import type { AskOptions, AskResult, TextAIProvider } from '../../src/main/text-ai'
@@ -73,6 +73,8 @@ interface ScriptOptions {
   proseDelayMs?: (call: number) => number
   /** Replaces a prose reply outright — used to stage an unusable payload. */
   proseReplacement?: (call: number) => AskResult
+  /** When it returns true for an expansion call, every cluster comes back empty. */
+  emptyClustersOnCall?: (expansionCall: number) => boolean
 }
 
 interface Script {
@@ -91,6 +93,7 @@ interface Script {
 function installScriptedProvider(opts: ScriptOptions = {}): Script {
   let probeCounter = 0
   let conceptCounter = 0
+  let expansionCounter = 0
   let proseCounter = 0
   let proseInFlight = 0
   let maxInFlight = 0
@@ -108,10 +111,12 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
       return { text: '', parsed: { probes } }
     }
     if (text.includes('<domains>')) {
+      expansionCounter++
       const domains = [...text.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1])
+      const empty = opts.emptyClustersOnCall?.(expansionCounter) ?? false
       const clusters = domains.map((domain) => ({
         domain,
-        concepts: Array.from({ length: 12 }, () => `concept ${++conceptCounter}`),
+        concepts: empty ? [] : Array.from({ length: 12 }, () => `concept ${++conceptCounter}`),
       }))
       return { text: '', parsed: { clusters } }
     }
@@ -280,6 +285,47 @@ describe('brainstormPrompts (concept-driven)', () => {
     for (const ask of generateAsks) {
       expect(ask).toContain('List 4 narrow domains')
     }
+  })
+
+  // Uses commit only when prompts are DELIVERED. Recording incrementally burnt
+  // earlier waves' values when a later wave failed: the run threw, the caller
+  // kept nothing, yet the window blocked those values for 1000 draws.
+  it('a failed run records no uses at all, even for waves that succeeded first', async () => {
+    mockKnobs.concurrency = 1
+    let call = 0
+    installScriptedProvider({
+      onProseCall: () => {
+        call++
+        if (call === 2) throw new Error('second wave dies')
+      },
+    })
+    // batch_size 2 → count 4 = two waves; wave 1 succeeds, wave 2 throws.
+    await expect(brainstormPrompts(request({ requestId: 'burn1', count: 4 }))).rejects.toThrow('second wave dies')
+    const used = listFacetsWithStats().reduce((n, f) => n + (f.conceptCount - f.unusedCount), 0)
+    expect(used).toBe(0)
+  })
+
+  // A domain-expansion reply with NOTHING in it is a failed call, not a set of
+  // dud domains: burning those probes as "expanded" would consume the facet's
+  // supply on every bad model day, invisibly.
+  it('does not burn domains when a whole expansion reply is empty', async () => {
+    let expansions = 0
+    installScriptedProvider({
+      emptyClustersOnCall: () => {
+        expansions++
+        return expansions === 1
+      },
+    })
+    const result = await brainstormPrompts(request({ requestId: 'burn2', count: 1 }))
+    expect(result.prompts).toHaveLength(1)
+    // The discriminating corpse: burning would leave probes marked expanded
+    // with zero concepts. The fix retries the same batch instead, so every
+    // expanded probe carries the concepts its (retried) call returned.
+    for (const facet of listFacetsWithStats()) {
+      const burnt = listProbesWithStats(facet.id).filter((probe) => probe.expanded && probe.conceptCount === 0)
+      expect(burnt).toEqual([])
+    }
+    expect(expansions).toBeGreaterThanOrEqual(2)
   })
 
   it('records a use only for prompts that actually came back', async () => {

@@ -81,3 +81,26 @@ describe('applyChangedFields', () => {
     expect(() => applyChangedFields({}, {}, 42)).toThrow(/must be an object/i)
   })
 })
+
+describe('prototype-walking segments are rejected at the trust boundary', () => {
+  // The keys walked below the allowlisted root come from the renderer payload.
+  // Without this rejection, { general: { __proto__: { polluted: true } } }
+  // lands the cursor on Object.prototype and the write pollutes the MAIN
+  // process — the exact class of escape the top-level allowlist exists to stop.
+  it('throws on __proto__ instead of walking into Object.prototype', () => {
+    const base = { general: {} }
+    // Build the hostile payload with a real own '__proto__' key, the shape a
+    // structuredClone over IPC can deliver.
+    const hostile: Record<string, unknown> = { general: JSON.parse('{"__proto__": {"polluted": "yes"}}') }
+    expect(() => applyChangedFields({ general: {} } as never, base as never, hostile as never)).toThrow(/reserved key/)
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined()
+  })
+
+  it('throws on constructor and prototype segments too', () => {
+    for (const key of ['constructor', 'prototype']) {
+      const hostile: Record<string, unknown> = { general: { [key]: { x: 1 } } }
+      expect(() => applyChangedFields({ general: {} } as never, { general: {} } as never, hostile as never)).toThrow(/reserved key/)
+    }
+  })
+})
+

@@ -48,6 +48,12 @@ export function planProbeGenerationSize(valuesStillNeeded: number): number {
 }
 export const MAX_FACETS_PER_SEED = 4
 
+/** How many existing domains the generation ask carries as its avoid-list —
+ *  the most recent ones, per listProbeDisplays. Enough that the model's
+ *  recent favourites are all in view, bounded so the prompt cannot grow with
+ *  the ledger's age. */
+export const PROBE_AVOID_LIST_MAX = 200
+
 /** One schema-forced JSON ask. The orchestrator supplies this (it owns the
  *  provider handle, retries, and the abort signal), keeping planner logic
  *  testable against a plain fake. */

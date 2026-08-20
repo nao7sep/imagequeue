@@ -24,6 +24,7 @@ import {
   type FacetRow,
 } from './concepts/concept-store'
 import {
+  PROBE_AVOID_LIST_MAX,
   expandProbes,
   generateProbes,
   planProbeBatchSize,
@@ -362,7 +363,7 @@ async function obtainConcept(
     if (probes.length === 0) {
       const requested = planProbeGenerationSize(valuesStillNeeded)
       const texts = await generateProbes(
-        ask, facet.display, listProbeDisplays(facet.id), requested
+        ask, facet.display, listProbeDisplays(facet.id, PROBE_AVOID_LIST_MAX), requested
       )
       generated = addProbes(facet.id, texts)
       stats.probesGenerated += generated
@@ -383,9 +384,26 @@ async function obtainConcept(
       }
     }
     const clusters = await expandProbes(ask, facet.display, probes)
+    const totalReturned = clusters.reduce((n, c) => n + c.concepts.length, 0)
+    if (totalReturned === 0) {
+      // A reply that expanded NOTHING is a failed call, not a set of dud
+      // domains: marking these probes expanded would burn them forever (they
+      // are never retried), and a few such rounds would consume the facet's
+      // whole domain supply. Leave them unexpanded so the next round retries
+      // the same batch, and let the bounded round counter decide when to stop.
+      log('warn', 'Cluster expansion returned no concepts', {
+        requestId,
+        facet: facet.display,
+        round: round + 1,
+        domainsAsked: probes.length,
+      })
+      continue
+    }
     let added = 0
     for (const { probeId, concepts } of clusters) {
       added += addConcepts(facet.id, probeId, concepts)
+      // Within a productive call, an individually empty cluster is a dud
+      // domain the model chose to skip — done, not retryable.
       markProbeExpanded(probeId)
     }
     stats.conceptsAdded += added
@@ -472,6 +490,18 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   const startTime = Date.now()
   const sessionId = getSessionId()
   const collected: ElaboratedPromptRecord[] = []
+  // Concept ids per collected prompt, committed as uses only when the prompts
+  // are actually DELIVERED (success, or the cancel path returning partials).
+  // Recording incrementally burnt earlier waves' values when a later wave
+  // failed: the run threw, the caller kept nothing, yet the window blocked
+  // those values for 1000 draws.
+  const pendingUses: number[][] = []
+  const commitUses = (): void => {
+    for (const conceptIds of pendingUses) {
+      for (const conceptId of conceptIds) recordUse(conceptId, sessionId)
+    }
+    pendingUses.length = 0
+  }
   let turn = 0
 
   const controller = new AbortController()
@@ -636,12 +666,14 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       // prompts map to assignments by position, and a use is recorded only
       // for assignments whose prompt actually came back. An undercounting
       // turn leaves the outer loop to top up with a fresh wave.
-      let failure: unknown = null
+      const failure = settled.find(
+        (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'
+      )?.reason ?? null
+      if (failure !== null) {
+        throw failure instanceof Error ? failure : new Error(String(failure))
+      }
       for (const outcome of settled) {
-        if (outcome.status === 'rejected') {
-          failure = outcome.reason
-          break
-        }
+        if (outcome.status !== 'fulfilled') continue
         outcome.value.kept.forEach((text, i) => {
           const assignment = outcome.value.assignments[i]
           collected.push({
@@ -651,11 +683,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
               concept: part.concept.display,
             })),
           })
-          for (const part of assignment) recordUse(part.concept.id, sessionId)
+          pendingUses.push(assignment.map((part) => part.concept.id))
         })
-      }
-      if (failure !== null) {
-        throw failure instanceof Error ? failure : new Error(String(failure))
       }
 
       // The prompts themselves persist in the session manifest's
@@ -668,6 +697,9 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       })
     }
 
+    // Uses commit before the completion log so the inventory and ledger totals
+    // it reports are the post-run truth, not the pre-commit snapshot.
+    commitUses()
     log('info', 'Brainstorm complete', {
       requestId: req.requestId,
       compositionElaborator: compositionElaborator.name,
@@ -696,6 +728,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
         durationMs: Date.now() - startTime,
         concepts: stats,
       })
+      // The cancel path DELIVERS what was collected, so its uses commit too.
+      commitUses()
       return { prompts: collected.slice(0, req.count) }
     }
     log('error', 'Brainstorm failed', {

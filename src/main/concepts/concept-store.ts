@@ -126,8 +126,17 @@ export function addProbes(facetId: number, displays: readonly string[]): number 
   return added
 }
 
-export function listProbeDisplays(facetId: number): string[] {
-  const rows = open().prepare('SELECT display FROM probes WHERE facet_id = ? ORDER BY id').all(facetId) as unknown as { display: string }[]
+/** The most recent `limit` domain displays, oldest-first for prompt stability.
+ *  The bound matters: this list is prepended to every domain-generation ask as
+ *  the avoid-list, and the ledger accumulates for its whole life — unbounded,
+ *  a months-old facet would ship thousands of domains (tens of KB) per call
+ *  and eventually overflow the model's context. Recency is the right sample:
+ *  the model's repeat-candidates are its recent favourites, and exact dedupe
+ *  is enforced separately by the normalized-key UNIQUE constraint on insert. */
+export function listProbeDisplays(facetId: number, limit: number): string[] {
+  const rows = open().prepare(
+    'SELECT display FROM (SELECT id, display FROM probes WHERE facet_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id'
+  ).all(facetId, limit) as unknown as { display: string }[]
   return rows.map((r) => r.display)
 }
 

@@ -25,7 +25,9 @@ describe('message builders', () => {
     expect(msg).toContain('<seed_prompt>\na mysterious man\n</seed_prompt>')
   })
 
-  it('carry the bounded avoid-list of probes, never concepts', () => {
+  it('carries the avoid-list of probes, never concepts', () => {
+    // The recency BOUND on this list lives in the store's listProbeDisplays
+    // (limit param, pinned there); the builder renders whatever it is handed.
     const msg = buildGenerateProbesMessage('place', ['ports', 'forests'])
     expect(msg).toContain('ports\nforests')
   })
