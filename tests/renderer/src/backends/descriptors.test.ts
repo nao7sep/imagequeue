@@ -99,18 +99,23 @@ describe('grok quality — a parameter only one model declares', () => {
 
   // Only 2.0 declares the list, so only 2.0 renders the control.
   it('declares qualities on 2.0 alone', () => {
-    expect(v2.qualities?.map((q) => q.value)).toEqual(['low', 'medium', 'high'])
+    // NOT ['low','medium','high']: the wire enum has three, but 2.0 rejects `high` with
+    // 400 "This model only supports the following quality value(s): low, medium."
+    expect(v2.qualities?.map((q) => q.value)).toEqual(['low', 'medium'])
     expect(v1.qualities).toBeUndefined()
     expect(v1q.qualities).toBeUndefined()
   })
 
-  // The value is HELD while hidden rather than reset: a user who picks high, switches to a
-  // 1.x id and comes back should find high, not the default. This is the flux steps rule.
+  // The value is HELD while hidden rather than reset: a user who picks low, switches to a
+  // 1.x id and comes back should find low, not the default. This is the flux steps rule.
+  // ('low' and not 'high' — 2.0 rejects high, so a test using it would assert a state the
+  // app can never legitimately be in.)
   it('keeps a chosen quality across a switch to a model that does not declare it', () => {
-    const chosen = { ...grokBackend.defaults(), quality: 'high' as const }
+    const chosen = { ...grokBackend.defaults(), quality: 'low' as const }
+    expect(chosen.quality).not.toBe(grokBackend.defaults().quality)  // a real change, not the default
     const on1x = grokBackend.clampToModel(chosen, v1)
-    expect(on1x.quality).toBe('high')
-    expect(grokBackend.clampToModel(on1x, v2).quality).toBe('high')
+    expect(on1x.quality).toBe('low')
+    expect(grokBackend.clampToModel(on1x, v2).quality).toBe('low')
   })
 
   // An unreadable saved value falls to `medium` (the API's own default), NOT to the list's

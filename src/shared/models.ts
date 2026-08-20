@@ -216,16 +216,25 @@ const GROK_RESOLUTIONS: { label: string; value: GrokResolution }[] = [
 // only 2.0 shows the control and sends the field — the FluxModelDef stepsRange/guidanceRange
 // idiom, for the same reason: a parameter belongs to the models that declare it.
 //
-// Live-verified 2026-08-20 by sending `quality: "ultra"` and reading the deserializer's
-// own complaint: `unknown variant \`ultra\`, expected one of \`low\`, \`medium\`, \`high\``.
-// Three values, not the two the published docs list — an invalid value is the cheapest
-// way to make an API state its real contract, and it cost nothing to ask.
+// LOW AND MEDIUM ONLY, and the way that was established is the point of this comment.
+//
+// Sending `quality: "ultra"` makes the DESERIALIZER answer `unknown variant \`ultra\`,
+// expected one of \`low\`, \`medium\`, \`high\``, which reads like the contract and is not:
+// that is the shared wire enum for every Grok image model. Actually generating with
+// `high` on 2.0 returns 400 — *"This model only supports the following quality value(s):
+// low, medium."* The 1.x ids do accept `high`; 2.0 does not.
+//
+// So a deserializer error names the TYPE, a request names the CONTRACT, and only the
+// second one is per-model. The published docs said low/medium and were right; an
+// intermediate version of this list shipped `high` on the strength of the parse error
+// alone. Verify a value by using it, not by watching the parser refuse a different one.
 export type GrokQuality = 'low' | 'medium' | 'high'
 
+// 2.0's subset. The type stays wider because the wire enum is wider and the 1.x ids take
+// all three — this list is what 2.0 offers, not what Grok can parse.
 export const GROK_QUALITY_VALUES: { label: string; value: GrokQuality }[] = [
   { label: 'Low',    value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'High',   value: 'high' }
+  { label: 'Medium', value: 'medium' }
 ]
 
 export interface GrokModelDef extends ModelDef {
