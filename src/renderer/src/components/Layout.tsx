@@ -56,6 +56,7 @@ export function Layout(): React.JSX.Element {
   const columnWidthIntentRef = useRef<number | null>(null)
   columnWidthIntentRef.current = columnWidthIntent
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
+  const [containerHeight, setContainerHeight] = useState<number | null>(null)
   const [draggingSplitter, setDraggingSplitter] = useState(false)
 
   // The width fed to the columns via the --iq-column-width CSS var. Until the
@@ -66,6 +67,7 @@ export function Layout(): React.JSX.Element {
     columnWidthIntent,
     containerWidth ?? Number.POSITIVE_INFINITY,
     visibleColumnCount,
+    containerHeight,
   )
 
   // Hydrate the persisted column width once on mount.
@@ -82,10 +84,14 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     const el = layoutRef.current
     if (!el) return
-    setContainerWidth(el.getBoundingClientRect().width)
+    const rect = el.getBoundingClientRect()
+    setContainerWidth(rect.width)
+    setContainerHeight(rect.height)
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width
+      const height = entries[0]?.contentRect.height
       if (width) setContainerWidth(width)
+      if (height) setContainerHeight(height)
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -100,15 +106,17 @@ export function Layout(): React.JSX.Element {
     e.preventDefault()
     const startX = e.clientX
     const count = visibleColumnCount
-    const container = layoutRef.current?.getBoundingClientRect().width ?? containerWidth ?? Number.POSITIVE_INFINITY
-    const startColumn = displayedColumnWidth(columnWidthIntentRef.current, container, count)
+    const rect = layoutRef.current?.getBoundingClientRect()
+    const container = rect?.width ?? containerWidth ?? Number.POSITIVE_INFINITY
+    const height = rect?.height ?? containerHeight
+    const startColumn = displayedColumnWidth(columnWidthIntentRef.current, container, count, height)
     let latest = startColumn
     setDraggingSplitter(true)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
     const onMove = (ev: MouseEvent): void => {
       const raw = startColumn - (ev.clientX - startX) / count
-      latest = displayedColumnWidth(raw, container, count)
+      latest = displayedColumnWidth(raw, container, count, height)
       setColumnWidthIntent(latest)
     }
     const onUp = (): void => {
@@ -121,7 +129,7 @@ export function Layout(): React.JSX.Element {
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
-  }, [visibleColumnCount, containerWidth])
+  }, [visibleColumnCount, containerWidth, containerHeight])
 
   // App/window chrome shortcuts. Cmd+, opens Settings, Cmd+/ opens the shortcut
   // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal intercepts)

@@ -3,6 +3,7 @@ import {
   defaultUiState,
   displayedColumnWidth,
   maxColumnWidthForContainer,
+  leftPaneComfortWidth,
 } from '../../src/shared/ui-state'
 import {
   COLUMN_DEFAULT_PX,
@@ -78,5 +79,47 @@ describe('displayedColumnWidth', () => {
 
   it('rounds a fractional intent', () => {
     expect(displayedColumnWidth(200.6, 3000, 6)).toBe(201)
+  })
+})
+
+describe('wide-window surplus flows to the columns', () => {
+  // The left pane is flex, so before this rule it absorbed every surplus pixel
+  // and the preview grew sideways without limit. Once the left pane would pass
+  // its comfort width — the width at which the preview is square — the columns
+  // take the surplus instead.
+  it('boosts columns past the intent once the left pane would exceed comfort', () => {
+    // 900px tall → comfort = 900 - 42 - 220 = 638. Five columns at the 220
+    // intent leave 1900 - 638 - 5 = 1257 for columns → 251 each.
+    const w = displayedColumnWidth(220, 1900, 5, 900)
+    expect(w).toBe(251)
+  })
+
+  it('never narrows below the user intent', () => {
+    // A wide intent on a window whose surplus share is smaller: intent wins.
+    // 2500px: surplus share = (2500 - 638 - 5) / 5 = 371 < 400, cap = 427.
+    const w = displayedColumnWidth(400, 2500, 5, 900)
+    expect(w).toBe(400)
+  })
+
+  it('still caps at what leaves the left pane its minimum', () => {
+    // A short, wide window: comfort floors at LEFT_PANE_MIN, and the cap
+    // (which reserves LEFT_PANE_MIN) binds before the boost can exceed it.
+    const cap = maxColumnWidthForContainer(1900, 5)
+    expect(displayedColumnWidth(220, 1900, 5, 300)).toBe(cap)
+  })
+
+  it('does not boost while the container height is unknown', () => {
+    expect(displayedColumnWidth(220, 1900, 5, null)).toBe(220)
+    expect(displayedColumnWidth(220, 1900, 5)).toBe(220)
+  })
+
+  it('comfort width floors at the left-pane minimum on a short window', () => {
+    expect(leftPaneComfortWidth(300)).toBe(LEFT_PANE_MIN_PX)
+    expect(leftPaneComfortWidth(900)).toBe(900 - 42 - 220)
+  })
+
+  it('a narrow window is untouched: no surplus, no boost, cap as before', () => {
+    // At the five-pane window minimum there is nothing to distribute.
+    expect(displayedColumnWidth(220, 1315, 5, 622)).toBe(displayedColumnWidth(220, 1315, 5))
   })
 })
