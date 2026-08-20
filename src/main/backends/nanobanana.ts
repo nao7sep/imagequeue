@@ -4,6 +4,7 @@ import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
+import { assertUsableGeminiResponse } from '../provider-response'
 
 // Calls the Gemini native image generation API (generateContent) and returns
 // the first image part as a Buffer along with its MIME-type hint. The Gemini
@@ -54,6 +55,8 @@ export async function generateNanoBanana(task: Task): Promise<{ buffer: Buffer; 
   })
 
   logApiResponse('nanobanana', 'ok', Date.now() - startTime)
+
+  assertUsableGeminiResponse(response, 'image')
 
   const parts = response.candidates?.[0]?.content?.parts ?? []
   const imagePart = parts.find((p) => p.inlineData?.data)

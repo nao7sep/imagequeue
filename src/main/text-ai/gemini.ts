@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import type { AskOptions, AskResult, ConversationMessage, TextAIProvider } from './types'
 import { extractJson } from './json'
+import { assertUsableGeminiResponse } from '../provider-response'
 
 interface GeminiContent {
   role: 'user' | 'model'
@@ -49,6 +50,8 @@ export class GeminiProvider implements TextAIProvider {
       contents: toGeminiContents(opts.messages),
       config,
     })
+
+    assertUsableGeminiResponse(response, 'request')
 
     const text = response.text ?? ''
     const result: AskResult = { text }

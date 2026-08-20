@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import type { AskOptions, AskResult, ConversationMessage, TextAIProvider } from './types'
 import { extractJson } from './json'
+import { assertUsableOpenAIResponse } from '../provider-response'
 
 const OFFICIAL_OPENAI_ENDPOINT = 'https://api.openai.com/v1'
 
@@ -41,6 +42,8 @@ export class OpenAIProvider implements TextAIProvider {
       messages: toOpenAIMessages(opts.messages),
       ...(opts.schema ? { response_format: { type: 'json_object' as const } } : {}),
     }, { signal: opts.signal })
+
+    assertUsableOpenAIResponse(response, 'request')
 
     const text = response.choices[0]?.message?.content ?? ''
     const result: AskResult = { text }
