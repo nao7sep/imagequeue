@@ -1,12 +1,12 @@
 .cli-jobs-panel {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: var(--space-4);
+  right: var(--space-4);
   z-index: 400;
   width: 520px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* ─── Job card ───────────────────────────────────────────────────────────── */
@@ -14,18 +14,18 @@
 .cli-job-row {
   background: rgba(7, 11, 24, 0.97);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .cli-job-row-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .cli-job-row-icon {
@@ -33,7 +33,7 @@
   align-items: center;
   justify-content: center;
   width: 16px;
-  font-size: 14px;
+  font-size: var(--text-md);
   flex-shrink: 0;
 }
 
@@ -43,7 +43,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -51,16 +51,18 @@
 .cli-job-row-title-success { color: var(--success); }
 .cli-job-row-title-error   { color: var(--error); }
 
+/* Row action inside a dense card: the small control, same as the task rows. */
 .cli-job-row-btn {
   flex-shrink: 0;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  height: var(--control-sm);
+  font-size: var(--text-xs);
+  padding: var(--control-pad-sm);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;
-  line-height: 1.4;
+  line-height: 1;
 }
 
 .cli-job-row-btn:hover {
@@ -77,8 +79,8 @@
 }
 
 .cli-job-summary {
-  margin-bottom: 6px;
-  font-size: 11px;
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
   line-height: 1.4;
 }
 
@@ -94,7 +96,7 @@
 
 .cli-job-log-tail {
   border-top: 1px solid var(--border);
-  padding-top: 5px;
+  padding-top: var(--space-1);
   max-height: calc(1.5em * 3 + 5px);
   overflow-y: auto;
   /* Scroll-bar styling is global (styles.css), per window-chrome-conventions —
@@ -103,7 +105,7 @@
 
 .cli-job-tail-line {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: pre;
   overflow: hidden;
