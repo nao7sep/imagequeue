@@ -313,9 +313,9 @@ export function Layout(): React.JSX.Element {
               </button>
             )}
           >
-            <QueueControlSubmenu />
             <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder() }}>Open Output Folder</MenuItem>
             <MenuItem onSelect={() => setOverlay('sessions')}>Sessions</MenuItem>
+            <QueueControlSubmenu />
             <MenuCheckboxItem checked={showKeptImages} onToggle={toggleShowKeptImages}>
               Show Kept Images
             </MenuCheckboxItem>
@@ -332,8 +332,8 @@ export function Layout(): React.JSX.Element {
             )}
             <Submenu label="Elaboration">
               <MenuItem onSelect={() => setOverlay('elaborators')}>Elaborators</MenuItem>
-              <MenuItem onSelect={() => setOverlay('elaboration-settings')}>Elaboration Settings</MenuItem>
-              <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>Elaborated Prompts</MenuItem>
+              <MenuItem onSelect={() => setOverlay('elaboration-settings')}>Settings</MenuItem>
+              <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>Prompts</MenuItem>
               <MenuItem onSelect={() => setOverlay('concept-library')}>Concept Library</MenuItem>
             </Submenu>
             <MenuItem onSelect={() => setOverlay('shortcuts')}>Keyboard Shortcuts</MenuItem>

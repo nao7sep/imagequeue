@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent,
@@ -37,8 +38,14 @@ type Props = {
 }
 
 // `close` returns focus to the menu's trigger; `closeAll` (provided to nested
-// submenus) closes the whole chain after a command runs.
-const MenuContext = createContext<{ closeAll: () => void } | null>(null)
+// submenus) closes the whole chain after a command runs. `activeSubmenu` makes
+// the open submenu single: a menu with two of them would otherwise leave both
+// popups on screen, overlapping, because each held its own local flag.
+const MenuContext = createContext<{
+  closeAll: () => void
+  activeSubmenu: string | null
+  setActiveSubmenu: (id: string | null) => void
+} | null>(null)
 
 // Collect the menuitems that belong directly to a given menu container, excluding
 // any nested inside a submenu popup (those belong to that submenu's own group).
@@ -87,11 +94,13 @@ function moveByArrow(items: HTMLElement[], e: KeyboardEvent, isComposing: Return
 export function Menu({ label, trigger, children, className }: Props): React.JSX.Element {
   const isComposing = useImeGuard()
   const [open, setOpen] = useState(false)
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
 
   const close = useCallback((focusTrigger = true): void => {
     setOpen(false)
+    setActiveSubmenu(null)
     if (focusTrigger) triggerRef.current?.focus()
   }, [])
 
@@ -168,7 +177,9 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
           onKeyDown={onKeyDown}
           className={className ?? 'dropdown-menu'}
         >
-          <MenuContext.Provider value={{ closeAll: () => close() }}>{children}</MenuContext.Provider>
+          <MenuContext.Provider value={{ closeAll: () => close(), activeSubmenu, setActiveSubmenu }}>
+            {children}
+          </MenuContext.Provider>
         </div>
       )}
     </div>
@@ -259,7 +270,16 @@ export function Submenu({
 }): React.JSX.Element {
   const ctx = useContext(MenuContext)
   const isComposing = useImeGuard()
-  const [open, setOpen] = useState(false)
+  const id = useId()
+  // Openness is the PARENT menu's state, not this component's, so opening one
+  // submenu closes its siblings. The local flag is only the fallback for a
+  // Submenu rendered outside a Menu, where there are no siblings to conflict.
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = ctx ? ctx.activeSubmenu === id : localOpen
+  const setOpen = (next: boolean): void => {
+    if (ctx) ctx.setActiveSubmenu(next ? id : null)
+    else setLocalOpen(next)
+  }
   const parentRef = useRef<HTMLButtonElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
 

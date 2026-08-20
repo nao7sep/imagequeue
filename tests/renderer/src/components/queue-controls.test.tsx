@@ -52,7 +52,7 @@ async function renderSubmenu(): Promise<void> {
     await new Promise((r) => requestAnimationFrame(() => r(null)))
   })
   await act(async () => {
-    screen.getByRole('menuitem', { name: /Queue/ }).click()
+    screen.getByRole('menuitem', { name: /All Queues/ }).click()
     await new Promise((r) => requestAnimationFrame(() => r(null)))
   })
 }
@@ -78,21 +78,21 @@ describe('QueueControlSubmenu', () => {
   it('carries every command, with counts, behind one submenu', async () => {
     stubApi({ generating: 2, queued: 5, interrupted: 3 })
     await renderSubmenu()
-    expect(screen.getByRole('menuitem', { name: 'Pause queue' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Pause' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Stop generating (2)' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Stop everything' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Retry all stopped (3)' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Clear pending (5)' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Clear queued (5)' })).toBeTruthy()
   })
 
   it('disables what an empty queue cannot do, rather than hiding it', async () => {
     stubApi()
     await renderSubmenu()
-    for (const name of ['Stop generating', 'Stop everything', 'Retry all stopped', 'Clear pending']) {
+    for (const name of ['Stop generating', 'Stop everything', 'Retry all stopped', 'Clear queued']) {
       expect(screen.getByRole('menuitem', { name }).getAttribute('aria-disabled')).toBe('true')
     }
     expect(
-      screen.getByRole('menuitem', { name: 'Pause queue' }).getAttribute('aria-disabled'),
+      screen.getByRole('menuitem', { name: 'Pause' }).getAttribute('aria-disabled'),
     ).toBeNull()
   })
 

@@ -91,6 +91,37 @@ describe('Menu — Escape closes it from anywhere', () => {
   // One Escape must close ONE level. Submenu's handler calls stopPropagation, so
   // the native event never reaches the document listener — this pins that the
   // new listener cannot collapse the whole menu in a single keystroke.
+  // Two submenus in one menu is the case the app reached the moment queue
+  // control became a submenu beside Elaboration: each held its own local flag,
+  // so both popups stayed on screen, overlapping. Openness now belongs to the
+  // parent menu, which makes it single by construction.
+  it('closes the open submenu when a sibling opens', async () => {
+    render(
+      <Menu label="Test" trigger={(p) => <button {...p}>open</button>}>
+        <Submenu label="First">
+          <MenuItem onSelect={() => {}}>Alpha</MenuItem>
+        </Submenu>
+        <Submenu label="Second">
+          <MenuItem onSelect={() => {}}>Beta</MenuItem>
+        </Submenu>
+      </Menu>,
+    )
+    await openMenu()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /First/ }))
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+    })
+    expect(screen.queryByText('Alpha')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /Second/ }))
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+    })
+    expect(screen.queryByText('Beta')).toBeTruthy()
+    expect(screen.queryByText('Alpha')).toBeNull()
+  })
+
   it('closes only the submenu when one is open, leaving the parent up', async () => {
     render(
       <Menu label="Test" trigger={(p) => <button {...p}>open</button>}>

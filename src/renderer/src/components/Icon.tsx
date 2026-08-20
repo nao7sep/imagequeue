@@ -60,8 +60,12 @@ export function Icon({ name, className }: { name: IconName; className?: string }
       aria-hidden="true"
       focusable="false"
       // CSS lands an inline SVG's box BOTTOM on the text baseline, not its art;
-      // this puts the drawn baseline there instead. Inert inside a flex control.
-      style={{ display: 'inline-block', verticalAlign: '-0.1667em' }}
+      // this puts the drawn baseline there instead. Inert inside a flex control,
+      // so it only shows where an icon sits in real inline flow beside words —
+      // the About links and the copy/export buttons. A sixth of an em pushed the
+      // art visibly below the line; an eighth is the optical value for a 1em
+      // icon set against text, and reads level with the caps.
+      style={{ display: 'inline-block', verticalAlign: '-0.125em' }}
     >
       {PATHS[name]}
     </svg>

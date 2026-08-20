@@ -101,7 +101,7 @@ export function QueueControlSubmenu(): React.JSX.Element {
 
   const handleClearPending = useCallback(async (): Promise<void> => {
     const ok = await confirm({
-      title: 'Clear Pending',
+      title: 'Clear Queued',
       message: `Remove ${queued} task${queued === 1 ? '' : 's'} waiting to start? ` +
         'Unlike stopping, these are not retryable — they are removed. Generating and finished tasks are untouched.',
       confirmLabel: 'Clear',
@@ -113,9 +113,12 @@ export function QueueControlSubmenu(): React.JSX.Element {
   }, [confirm, queued, refresh])
 
   return (
-    <Submenu label="Queue">
+    // The label carries the scope, so the items need not repeat it: none of
+    // these acts on one column. Pause is a single global flag, and the other
+    // four iterate every backend's queue.
+    <Submenu label="All Queues">
       <MenuItem onSelect={() => void handlePause()}>
-        {paused ? 'Resume queue' : 'Pause queue'}
+        {paused ? 'Resume' : 'Pause'}
       </MenuItem>
       <MenuItem onSelect={() => void handleStopGenerating()} disabled={generating === 0}>
         {generating > 0 ? `Stop generating (${generating})` : 'Stop generating'}
@@ -126,8 +129,10 @@ export function QueueControlSubmenu(): React.JSX.Element {
       <MenuItem onSelect={() => void handleRetryAll()} disabled={interrupted === 0}>
         {interrupted > 0 ? `Retry all stopped (${interrupted})` : 'Retry all stopped'}
       </MenuItem>
+      {/* "Queued" is the status's own name and the word the columns already use
+          ("No tasks queued"); "pending" would be a second word for one state. */}
       <MenuItem onSelect={() => void handleClearPending()} disabled={queued === 0}>
-        {queued > 0 ? `Clear pending (${queued})` : 'Clear pending'}
+        {queued > 0 ? `Clear queued (${queued})` : 'Clear queued'}
       </MenuItem>
     </Submenu>
   )
