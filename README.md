@@ -22,8 +22,9 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 ## Requirements
 
 - macOS or Windows (Draw Things support is macOS-only)
-- An API key for each cloud image backend you use. Draw Things needs no API key.
-- Prompt elaboration (the Elaborate button and Advanced Prompting's fresh-elaboration modes) additionally needs a **Text AI** key — OpenAI or Gemini, configured in **Settings → Text AI**. It is separate from the image keys: an image key does not enable it. Without one, images still generate from your prompt as typed. On macOS it uses two app-managed dependencies, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
+- An API key for each cloud image backend you use.
+- Prompt elaboration (the Elaborate button and Advanced Prompting's fresh-elaboration modes) additionally needs a **Text AI** key — OpenAI or Gemini, configured in **Settings → Text AI**. It is separate from the image keys: an image key does not enable it. Without one, images still generate from your prompt as typed.
+- Draw Things needs no API key. On macOS it uses two app-managed dependencies, both installed from the **Dependencies** window (main menu → Dependencies, or the pointer in the Draw Things column):
   - The **Draw Things CLI** — downloaded directly from its official GitHub release (no Homebrew) and verified before use; the backend stays disabled until it's installed.
   - **Recommended per-model parameters** (`configs.json`, fetched from `models.drawthings.ai`) — optional; without them the app falls back to your default parameters.
 - Both are fetched only when you ask. A single **check for updates at launch** toggle (on by default, in the Dependencies window) looks for newer versions and offers an **Update** — nothing is ever downloaded, installed, or updated silently.
