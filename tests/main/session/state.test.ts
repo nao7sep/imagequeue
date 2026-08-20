@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  normalizeElaboratedPrompts,
   collectSessionThumbnails,
   createTaskCounts,
   isSessionManifest,
@@ -133,10 +134,26 @@ describe('isSessionManifest', () => {
     })).toBe(true)
   })
 
-  it('still rejects entries that are neither shape', () => {
-    expect(isSessionManifest({ ...valid, elaboratedPrompts: [42] })).toBe(false)
-    expect(isSessionManifest({ ...valid, elaboratedPrompts: [{ text: 7, concepts: [] }] })).toBe(false)
-    expect(isSessionManifest({ ...valid, elaboratedPrompts: [{ text: 'x', concepts: [{ facet: 1 }] }] })).toBe(false)
+  // Per-entry junk must never invalidate the manifest — that costs the session
+  // its whole task history for a display field. Junk is repaired away on read
+  // instead, exactly as a malformed draft is.
+  it('accepts a manifest whose prompt entries include junk', () => {
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [42] })).toBe(true)
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [{ text: 7, concepts: [] }] })).toBe(true)
+  })
+
+  it('repairs on read: strings normalize, junk drops, records survive', () => {
+    const repaired = normalizeElaboratedPrompts([
+      'legacy string',
+      42,
+      { text: 7, concepts: [] },
+      { text: 'good', concepts: [{ facet: 'place', concept: 'quay' }] },
+      { text: 'x', concepts: [{ facet: 1 }] },
+    ])
+    expect(repaired).toEqual([
+      { text: 'legacy string', concepts: [] },
+      { text: 'good', concepts: [{ facet: 'place', concept: 'quay' }] },
+    ])
   })
 
   it('rejects wrong version, missing fields, and malformed task maps', () => {
@@ -144,7 +161,8 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest({ ...valid, version: 999 })).toBe(false)
     expect(isSessionManifest({ ...valid, sessionId: 123 })).toBe(false)
     expect(isSessionManifest({ ...valid, elaboratedPrompts: 'nope' })).toBe(false)
-    expect(isSessionManifest({ ...valid, elaboratedPrompts: [1, 2] })).toBe(false)
+    // Junk ENTRIES no longer reject — they are repaired on read (see below);
+    // only a non-array field shape does.
     expect(isSessionManifest({ ...valid, tasks: { openai: 'not-an-array' } })).toBe(false)
   })
 

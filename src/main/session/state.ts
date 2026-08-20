@@ -133,10 +133,29 @@ function isElaboratedPromptEntry(entry: unknown): boolean {
   )
 }
 
-function normalizeElaboratedPrompt(entry: unknown): ElaboratedPromptRecord {
+/** Repair one stored entry: legacy strings become credit-less records, and
+ *  anything neither shape yields null for the caller to drop. */
+function normalizeElaboratedPrompt(entry: unknown): ElaboratedPromptRecord | null {
   if (typeof entry === 'string') return { text: entry, concepts: [] }
+  if (!isElaboratedPromptEntry(entry)) return null
   const record = entry as ElaboratedPromptRecord
   return { text: record.text, concepts: record.concepts.map((c) => ({ ...c })) }
+}
+
+/** All entries, repaired; unrecognizable ones dropped with a warn. Exported
+ *  for the tests that pin the repair behavior. */
+export function normalizeElaboratedPrompts(entries: readonly unknown[]): ElaboratedPromptRecord[] {
+  const repaired: ElaboratedPromptRecord[] = []
+  let dropped = 0
+  for (const entry of entries) {
+    const record = normalizeElaboratedPrompt(entry)
+    if (record) repaired.push(record)
+    else dropped++
+  }
+  if (dropped > 0) {
+    log('warn', 'Dropped unrecognizable elaborated-prompt entries', { dropped, kept: repaired.length })
+  }
+  return repaired
 }
 
 export function isSessionManifest(value: unknown): value is SessionManifest {
@@ -147,12 +166,13 @@ export function isSessionManifest(value: unknown): value is SessionManifest {
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
+  // Shape only — entries are repaired on read, not validated here. This field
+  // sits inside the all-or-nothing manifest check, and no prompt entry ever
+  // justifies costing a session its task history: like the draft below, bad
+  // entries are dropped by normalizeElaboratedPrompts instead of failing the
+  // whole file. (An earlier cut validated each entry and would have made one
+  // truncated write unresumable.)
   if (!Array.isArray(candidate.elaboratedPrompts)) return false
-  // Both shapes are valid: today's records, and the bare strings older
-  // manifests hold. Rejecting the old shape here would invalidate the WHOLE
-  // manifest and cost the session its task history — the same reasoning as the
-  // draft repair below, applied to a field that never justifies that loss.
-  if (!candidate.elaboratedPrompts.every(isElaboratedPromptEntry)) return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
@@ -173,7 +193,7 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     }
     return {
       ...parsed,
-      elaboratedPrompts: parsed.elaboratedPrompts.map(normalizeElaboratedPrompt),
+      elaboratedPrompts: normalizeElaboratedPrompts(parsed.elaboratedPrompts),
       // draft is intentionally not validated by isSessionManifest: a missing or
       // malformed draft must not discard an otherwise-good session, so it is
       // repaired to a clean draft here instead.

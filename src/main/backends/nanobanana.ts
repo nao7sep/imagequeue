@@ -37,13 +37,16 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   const response = await ai.models.generateContent({
     model: task.model,
     contents: task.prompt,
+    // No cast: GenerateContentConfig declares every field here, and the cast
+    // this replaced was silently erasing the only compile-time proof that the
+    // abort signal reaches this backend.
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
       // Client-side only, per the SDK: aborting stops us waiting, it does not
       // stop the service, and the call is still billed.
       abortSignal: signal,
-      ...(supportsImageConfig && { imageConfig: { aspectRatio, imageSize } })
-    } as Record<string, unknown>
+      ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {})
+    }
   }).catch((err: unknown) => {
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {

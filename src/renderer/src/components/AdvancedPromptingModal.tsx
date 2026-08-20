@@ -7,6 +7,7 @@ import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import type { BrainstormPhase, ElaboratedPromptRecord } from '../../../shared/types'
 import { multiline } from '../../../shared/textCleanup'
+import { promptTextForUnit, promptsNeeded } from '../utils/advancedQueueUnits'
 import { hasApiKeyFor } from '../utils/enqueue'
 import {
   MAX_DRAFT_ITERATIONS,
@@ -393,26 +394,16 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       } else if (promptMode === 'elaborated') {
         prompts = [multiline(elaborated)]
       } else {
-        const needed = promptMode === 'fresh-iteration' ? copies : allTargetCount * copies
-        records = await runBrainstorm(needed)
+        records = await runBrainstorm(promptsNeeded(promptMode, copies, allTargetCount))
         prompts = records.map((record) => record.text)
       }
       if (cancelledRef.current) return
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
 
-      // Indexing: prompts in iteration-major order so fresh-task reads naturally
-      // ("iter 0 across all models, then iter 1 across all models, ...").
-      const promptForUnit = (targetIndex: number, copyIndex: number): string => {
-        if (promptMode === 'as-is' || promptMode === 'elaborated') {
-          return prompts[0]
-        }
-        if (promptMode === 'fresh-iteration') {
-          return prompts[copyIndex % prompts.length]
-        }
-        // fresh-task
-        const idx = copyIndex * allTargetCount + targetIndex
-        return prompts[idx % prompts.length]
-      }
+      // The dealing lives in advancedQueueUnits (pure, unit-tested):
+      // iteration-major for fresh-task, shared per iteration otherwise.
+      const promptForUnit = (targetIndex: number, copyIndex: number): string =>
+        promptTextForUnit(promptMode, prompts, targetIndex, copyIndex, allTargetCount)
 
       const proprietaryUnits = targets.proprietary.map((backendId) => {
         const snapshot = snapshots[backendId]

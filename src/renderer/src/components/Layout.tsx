@@ -18,6 +18,7 @@ import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
 import { WelcomePane } from './WelcomePane'
 import { displayedColumnWidth } from '../../../shared/ui-state'
+import { COLUMN_MIN_PX } from '../../../shared/layout-metrics'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
@@ -116,7 +117,12 @@ export function Layout(): React.JSX.Element {
     document.body.style.userSelect = 'none'
     const onMove = (ev: MouseEvent): void => {
       const raw = startColumn - (ev.clientX - startX) / count
-      latest = displayedColumnWidth(raw, container, count, height)
+      // Store the INTENT, never the displayed width: displayedColumnWidth's
+      // surplus floor would otherwise be baked into the persisted value by any
+      // drag on a wide window, silently destroying a narrower preference the
+      // moment the user touched the splitter. Rendering re-derives the boosted
+      // width from this intent on every frame.
+      latest = Math.max(COLUMN_MIN_PX, Math.round(raw))
       setColumnWidthIntent(latest)
     }
     const onUp = (): void => {
