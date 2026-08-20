@@ -89,13 +89,6 @@ describe('QueueManager', () => {
     expect(qm.getActiveTasks('openai').map((t) => t.id)).toEqual(['a'])
   })
 
-  it('reorders active tasks while pinning kept tasks at the end', () => {
-    seed(qm, [makeTask('a', 'queued'), makeTask('k', 'kept'), makeTask('b', 'queued'), makeTask('c', 'queued')])
-    qm.reorderTasks('openai', ['c', 'a', 'b'])
-    const all = qm.getAllStoredTasks().openai.map((t) => t.id)
-    expect(all).toEqual(['c', 'a', 'b', 'k'])
-  })
-
   it('enqueueBatch inserts units newest-first across backends', () => {
     const tasks = qm.enqueueBatch([
       { prompt: 'p1', backend: 'openai', model: 'm', params: {} },
@@ -117,12 +110,6 @@ describe('QueueManager', () => {
     // Stored snapshot is a clone — mutating it does not affect the manager.
     stored.openai[0].status = 'failed'
     expect(qm.getTask('openai', 'a')!.status).toBe('completed')
-  })
-
-  it('reorderTasks ignores ids that are absent or non-active', () => {
-    seed(qm, [makeTask('a', 'queued'), makeTask('b', 'queued')])
-    qm.reorderTasks('openai', ['ghost', 'b', 'a'])
-    expect(qm.getActiveTasks('openai').map((t) => t.id)).toEqual(['b', 'a'])
   })
 
   it('removes a task by id and reports generating state', () => {

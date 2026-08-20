@@ -57,34 +57,31 @@ export function QueueControlSubmenu(): React.JSX.Element {
   const queued = state?.queued ?? 0
   const interrupted = state?.interrupted ?? 0
 
+  const pending = queued + interrupted
+
   const handlePause = useCallback(async (): Promise<void> => {
     await window.electronAPI.setQueuePaused(!paused)
     await refresh()
   }, [paused, refresh])
 
-  const handleStopGenerating = useCallback(async (): Promise<void> => {
+  // Stop is an ACT on the work, orthogonal to Pause (a MODE): it interrupts
+  // everything active — cancels what is generating and holds what is queued —
+  // without touching the pause flag. The queue goes quiet because nothing is
+  // left in `queued`, not because a mode was set; Retry then re-queues the
+  // stopped tasks and they start immediately, no Resume required.
+  const handleStop = useCallback(async (): Promise<void> => {
+    const parts: string[] = []
+    if (generating > 0) parts.push(`${generating} generating`)
+    if (queued > 0) parts.push(`${queued} waiting`)
     const ok = await confirm({
-      title: 'Stop Generating',
+      title: 'Stop',
       // Aborting a cloud request stops us waiting; it does not stop the
       // provider, which bills the call either way. Said here rather than
       // discovered on an invoice.
-      message: generating === 1
-        ? 'Stop the image currently generating? Its work so far is discarded and it becomes retryable, but a paid backend may still bill the call.'
-        : `Stop the ${generating} images currently generating? Their work so far is discarded and they become retryable, but a paid backend may still bill the calls.`,
+      message: `Stop ${parts.join(' and ')} task${generating + queued === 1 ? '' : 's'}? ` +
+        'Work in progress is discarded and every stopped task becomes retryable, ' +
+        'but a paid backend may still bill calls already in flight.',
       confirmLabel: 'Stop',
-      danger: true,
-    })
-    if (!ok) return
-    await window.electronAPI.stopGenerating()
-    await refresh()
-  }, [confirm, generating, refresh])
-
-  const handleStopAll = useCallback(async (): Promise<void> => {
-    const ok = await confirm({
-      title: 'Stop Everything',
-      message: `Stop ${generating} generating and hold ${queued} waiting task${queued === 1 ? '' : 's'}? ` +
-        'The queue pauses, and every stopped task becomes retryable.',
-      confirmLabel: 'Stop All',
       danger: true,
     })
     if (!ok) return
@@ -92,17 +89,22 @@ export function QueueControlSubmenu(): React.JSX.Element {
     await refresh()
   }, [confirm, generating, queued, refresh])
 
+  // No pause manipulation here: Stop never pauses, so the common stop-then-retry
+  // flow re-queues into a running processor. A pause that IS set is the user's
+  // own standing choice, and retrying must not silently revoke it — the retried
+  // tasks simply wait, exactly as the Paused badge says they will.
   const handleRetryAll = useCallback(async (): Promise<void> => {
     await window.electronAPI.resumeInterruptedTasks()
-    // Retrying while paused would queue work that never starts.
-    if (paused) await window.electronAPI.setQueuePaused(false)
     await refresh()
-  }, [paused, refresh])
+  }, [refresh])
 
   const handleClearPending = useCallback(async (): Promise<void> => {
+    const parts: string[] = []
+    if (queued > 0) parts.push(`${queued} waiting`)
+    if (interrupted > 0) parts.push(`${interrupted} stopped`)
     const ok = await confirm({
-      title: 'Clear Queued',
-      message: `Remove ${queued} task${queued === 1 ? '' : 's'} waiting to start? ` +
+      title: 'Clear Pending',
+      message: `Remove ${parts.join(' and ')} task${pending === 1 ? '' : 's'}? ` +
         'Unlike stopping, these are not retryable — they are removed. Generating and finished tasks are untouched.',
       confirmLabel: 'Clear',
       danger: true,
@@ -110,29 +112,30 @@ export function QueueControlSubmenu(): React.JSX.Element {
     if (!ok) return
     await window.electronAPI.clearPendingTasks()
     await refresh()
-  }, [confirm, queued, refresh])
+  }, [confirm, queued, interrupted, pending, refresh])
 
   return (
     // The label carries the scope, so the items need not repeat it: none of
     // these acts on one column. Pause is a single global flag, and the other
-    // four iterate every backend's queue.
+    // three iterate every backend's queue. Four commands on two orthogonal
+    // axes — Pause/Resume the mode, Stop/Retry/Clear the acts — replacing the
+    // five that entangled them (a Stop that also paused, a Retry that had to
+    // unpause, a Clear that took one pending kind and stranded the other).
     <Submenu label="All Queues">
       <MenuItem onSelect={() => void handlePause()}>
         {paused ? 'Resume' : 'Pause'}
       </MenuItem>
-      <MenuItem onSelect={() => void handleStopGenerating()} disabled={generating === 0}>
-        {generating > 0 ? `Stop generating (${generating})` : 'Stop generating'}
-      </MenuItem>
-      <MenuItem onSelect={() => void handleStopAll()} disabled={generating === 0 && queued === 0}>
-        Stop everything
+      <MenuItem onSelect={() => void handleStop()} disabled={generating === 0 && queued === 0}>
+        {generating + queued > 0 ? `Stop (${generating + queued})` : 'Stop'}
       </MenuItem>
       <MenuItem onSelect={() => void handleRetryAll()} disabled={interrupted === 0}>
         {interrupted > 0 ? `Retry all stopped (${interrupted})` : 'Retry all stopped'}
       </MenuItem>
-      {/* "Queued" is the status's own name and the word the columns already use
-          ("No tasks queued"); "pending" would be a second word for one state. */}
-      <MenuItem onSelect={() => void handleClearPending()} disabled={queued === 0}>
-        {queued > 0 ? `Clear queued (${queued})` : 'Clear queued'}
+      {/* Pending = queued + interrupted: everything that would still produce an
+          image. Clearing must take both — removing one kind and stranding the
+          other made the command a partial no-op. */}
+      <MenuItem onSelect={() => void handleClearPending()} disabled={pending === 0}>
+        {pending > 0 ? `Clear pending (${pending})` : 'Clear pending'}
       </MenuItem>
     </Submenu>
   )

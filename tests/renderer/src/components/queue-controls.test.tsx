@@ -3,12 +3,14 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, act, cleanup, waitFor } from '@testing-library/react'
 import type { QueueControlState } from '../../../../src/shared/types'
 
-// The queue's controls live in the app menu, so the only part of them that
-// stays in the window is the paused badge — which makes "is it visible when
-// paused, and absent when not" the property worth pinning. The commands
-// themselves are pinned for their labels, their disabled states, and the one
-// piece of behaviour that is not obvious: retrying has to lift a pause, or the
-// retried work is queued and never starts.
+// Four commands on two orthogonal axes. Pause/Resume is a MODE — the user's
+// standing choice that nothing new starts. Stop, Retry, and Clear are ACTS on
+// the work, and none of them touches the mode: Stop interrupts everything
+// active without pausing, Retry re-queues without unpausing, and Clear removes
+// BOTH pending kinds (queued and interrupted). The earlier five-command design
+// entangled the axes — a Stop that also paused, a Retry that had to unpause,
+// a Clear that took one pending kind and stranded the other — and these tests
+// pin the disentanglement.
 
 vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({
   useConfirm: () => async () => true,
@@ -32,10 +34,9 @@ function stubApi(state: Partial<QueueControlState> = {}) {
     ),
     onQueueControlState: vi.fn(() => () => {}),
     setQueuePaused: vi.fn(async () => {}),
-    stopGenerating: vi.fn(async () => {}),
-    stopAllQueueWork: vi.fn(async () => {}),
-    resumeInterruptedTasks: vi.fn(async () => {}),
-    clearPendingTasks: vi.fn(async () => {}),
+    stopAllQueueWork: vi.fn(async () => ({ cancelled: 0, queued: 0 })),
+    resumeInterruptedTasks: vi.fn(async () => 0),
+    clearPendingTasks: vi.fn(async () => 0),
   }
   ;(window as unknown as { electronAPI: typeof api }).electronAPI = api
   return api
@@ -75,20 +76,23 @@ describe('QueuePausedBadge', () => {
 })
 
 describe('QueueControlSubmenu', () => {
-  it('carries every command, with counts, behind one submenu', async () => {
+  it('offers exactly four commands, with counts', async () => {
     stubApi({ generating: 2, queued: 5, interrupted: 3 })
     await renderSubmenu()
     expect(screen.getByRole('menuitem', { name: 'Pause' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Stop generating (2)' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Stop everything' })).toBeTruthy()
+    // Stop acts on everything active: generating + queued.
+    expect(screen.getByRole('menuitem', { name: 'Stop (7)' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Retry all stopped (3)' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Clear queued (5)' })).toBeTruthy()
+    // Clear acts on everything pending: queued + interrupted.
+    expect(screen.getByRole('menuitem', { name: 'Clear pending (8)' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /Stop generating/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Stop everything/ })).toBeNull()
   })
 
   it('disables what an empty queue cannot do, rather than hiding it', async () => {
     stubApi()
     await renderSubmenu()
-    for (const name of ['Stop generating', 'Stop everything', 'Retry all stopped', 'Clear queued']) {
+    for (const name of ['Stop', 'Retry all stopped', 'Clear pending']) {
       expect(screen.getByRole('menuitem', { name }).getAttribute('aria-disabled')).toBe('true')
     }
     expect(
@@ -96,18 +100,32 @@ describe('QueueControlSubmenu', () => {
     ).toBeNull()
   })
 
-  it('lifts a pause when retrying, so the retried work actually starts', async () => {
-    const api = stubApi({ paused: true, interrupted: 4 })
+  // Interrupted tasks alone are enough for Clear: this is the exact case the
+  // first cut missed, where clearing after a stop removed nothing.
+  it('enables Clear when only stopped tasks remain', async () => {
+    const api = stubApi({ interrupted: 4 })
     await renderSubmenu()
-    await act(async () => {
-      screen.getByRole('menuitem', { name: 'Retry all stopped (4)' }).click()
-    })
-    expect(api.resumeInterruptedTasks).toHaveBeenCalled()
-    expect(api.setQueuePaused).toHaveBeenCalledWith(false)
+    const clear = screen.getByRole('menuitem', { name: 'Clear pending (4)' })
+    expect(clear.getAttribute('aria-disabled')).toBeNull()
+    await act(async () => { clear.click() })
+    expect(api.clearPendingTasks).toHaveBeenCalled()
   })
 
-  it('leaves a running queue alone when retrying', async () => {
-    const api = stubApi({ paused: false, interrupted: 4 })
+  it('Stop stops the work without touching the pause mode', async () => {
+    const api = stubApi({ generating: 2, queued: 3 })
+    await renderSubmenu()
+    await act(async () => {
+      screen.getByRole('menuitem', { name: 'Stop (5)' }).click()
+    })
+    expect(api.stopAllQueueWork).toHaveBeenCalled()
+    expect(api.setQueuePaused).not.toHaveBeenCalled()
+  })
+
+  // Retry never unpauses: Stop no longer pauses, so the stop-then-retry flow
+  // re-queues into a running processor — and a pause that IS set is the user's
+  // own standing choice, which retrying must not silently revoke.
+  it('Retry re-queues and leaves an explicit pause standing', async () => {
+    const api = stubApi({ paused: true, interrupted: 4 })
     await renderSubmenu()
     await act(async () => {
       screen.getByRole('menuitem', { name: 'Retry all stopped (4)' }).click()

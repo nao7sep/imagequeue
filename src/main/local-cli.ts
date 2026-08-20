@@ -149,45 +149,6 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   })
 }
 
-export interface EnsureModelResult {
-  success: boolean
-  error?: string
-}
-
-/** Download/ensure a model via CLI. Returns a promise that resolves when complete. */
-export async function ensureModel(modelFile: string): Promise<EnsureModelResult> {
-  const cliPath = resolveCliPath()
-
-  // Ensure models dir exists before downloading
-  ensureModelsDir()
-
-  const args = ['models', 'ensure', '--model', modelFile, ...modelsDirArgs()]
-
-  return new Promise((resolve) => {
-    log('info', 'Model download started', { modelFile })
-    const proc = spawn(cliPath, args, { stdio: 'pipe' })
-    let stderr = ''
-
-    proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
-    proc.stdout.on('data', () => { /* consume stdout */ })
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        log('info', 'Model download complete', { modelFile })
-        resolve({ success: true })
-      } else {
-        log('error', 'Model download failed', { modelFile, code, stderr })
-        resolve({ success: false, error: stderr || `exit code ${code}` })
-      }
-    })
-
-    proc.on('error', (err) => {
-      log('error', 'Model download spawn failed', { modelFile, error: serializeError(err) })
-      resolve({ success: false, error: err.message })
-    })
-  })
-}
-
 /**
  * ImageQueue's private models directory, under the storage root and so honoring
  * IMAGEQUEUE_HOME. Used when no `drawthings.models_dir` is configured, and shown

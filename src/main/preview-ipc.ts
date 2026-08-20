@@ -27,13 +27,4 @@ export function registerPreviewIpc(): void {
     return readImageFromDir(resolveSessionDir(sessionId), assertSafeBaseName(baseName))
   })
 
-  handle('preview:getMetadata', (_event, baseName: string) => {
-    const dir = getSessionDir()
-    const metaPath = path.join(dir, `${assertSafeBaseName(baseName)}.json`)
-
-    if (!fs.existsSync(metaPath)) return null
-
-    const raw = fs.readFileSync(metaPath, 'utf-8')
-    return JSON.parse(raw)
-  })
 }

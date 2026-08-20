@@ -123,21 +123,6 @@ export class QueueManager {
     return task
   }
 
-  // NOTE: this sweeps all kept tasks to the end of the array, which changes
-  // their absolute position. No UI calls this today, so it's harmless. If a
-  // drag-reorder UI is added later, kept rows visible in the column will
-  // visually jump to the bottom on every reorder — at that point either
-  // preserve kept tasks' original indices here, or block reorder while
-  // showKeptImages is true.
-  reorderTasks(backend: BackendId, taskIds: string[]): void {
-    const activeTasks = this.queues[backend].filter(isActiveTask)
-    const keptTasks = this.queues[backend].filter((task) => !isActiveTask(task))
-    const activeTaskMap = new Map(activeTasks.map((task) => [task.id, task]))
-    const reorderedActive = taskIds.map((id) => activeTaskMap.get(id)).filter(Boolean) as Task[]
-    const remainingActive = activeTasks.filter((task) => !taskIds.includes(task.id))
-    this.queues[backend] = [...reorderedActive, ...remainingActive, ...keptTasks]
-  }
-
   // Resets a task back to 'queued' so the processor picks it up again, clearing
   // the per-attempt result fields. Shared by single retry and bulk resume.
   private requeueTask(task: Task): void {
@@ -228,13 +213,18 @@ export class QueueManager {
     return count
   }
 
-  /** Remove every task waiting to start, leaving finished and running work
-   *  alone. Unlike interrupting, this is not retryable — the tasks are gone. */
-  removeQueuedTasks(): number {
+  /** Remove every pending task — `queued` and `interrupted` alike. Pending
+   *  means "will run, or could be retried": both are work the user has decided
+   *  not to do, so clearing one kind and stranding the other made the command
+   *  a partial no-op. Running and finished tasks are untouched, and unlike
+   *  stopping this is not retryable — the tasks are gone. */
+  removePendingTasks(): number {
     let count = 0
     for (const backend of Object.keys(this.queues) as BackendId[]) {
       const before = this.queues[backend].length
-      this.queues[backend] = this.queues[backend].filter((task) => task.status !== 'queued')
+      this.queues[backend] = this.queues[backend].filter(
+        (task) => task.status !== 'queued' && task.status !== 'interrupted'
+      )
       count += before - this.queues[backend].length
     }
     return count

@@ -35,15 +35,6 @@ export type SecretId =
   | 'xai'
   | 'bfl'
 
-export const SECRET_IDS: SecretId[] = [
-  'gemini.text',
-  'openai.text',
-  'openai.image',
-  'gemini.nanobanana',
-  'xai',
-  'bfl'
-]
-
 // Image backend id (product) → the vendor key id its key is stored/resolved under.
 // `grok` is xAI's product, `flux` is Black Forest Labs' — the backend keeps its
 // product name everywhere; only the API key is the conventional vendor segment.

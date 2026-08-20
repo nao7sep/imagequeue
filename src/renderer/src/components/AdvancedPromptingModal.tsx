@@ -5,7 +5,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
-import type { BrainstormPhase } from '../../../shared/types'
+import type { BrainstormPhase, ElaboratedPromptRecord } from '../../../shared/types'
 import { multiline } from '../../../shared/textCleanup'
 import { hasApiKeyFor } from '../utils/enqueue'
 import {
@@ -245,7 +245,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // — the caller persists them only after committing the run (queueing the
   // tasks, or accepting the single Elaborate result), so an aborted or failed
   // run leaves nothing behind. Progress events drive only the live counter.
-  const runBrainstorm = useCallback(async (count: number): Promise<string[]> => {
+  const runBrainstorm = useCallback(async (count: number): Promise<ElaboratedPromptRecord[]> => {
     if (!selectedCompositionElaboratorId || !selectedStyleElaboratorId) {
       throw new Error('Pick composition and style elaborators first.')
     }
@@ -297,12 +297,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         setError('Text AI returned no prompt.')
         return
       }
+      const firstText = first.text
       // Elaborate is a preview: fill the elaborated box and record the result in
       // the session history (which the Prompts list reads, and which "Elaborated
       // prompt (same for all)" queues from), but leave the user's prompt-source
       // selection alone. Switching it here would hijack a deliberate choice just
       // because they wanted to see one sample.
-      update({ elaborated: first })
+      update({ elaborated: firstText })
       appendElaboratedPrompts([first])
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -371,18 +372,21 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // text. Only brainstormed prompts get recorded in the session history, and
       // only after their tasks are queued below.
       const brainstormed = isBrainstormMode(promptMode)
+      // Brainstormed prompts arrive as records carrying their concept credits;
+      // the task units below need only the text, but the records are what the
+      // session history stores — the Prompts list shows which concepts each
+      // prompt was built from.
+      let records: ElaboratedPromptRecord[] = []
       let prompts: string[] = []
       if (promptMode === 'as-is') {
         // Reused prompt bodies — clean as multiline at this commit point.
         prompts = [multiline(seed)]
       } else if (promptMode === 'elaborated') {
         prompts = [multiline(elaborated)]
-      } else if (promptMode === 'fresh-iteration') {
-        prompts = await runBrainstorm(copies)
       } else {
-        // fresh-task
-        const needed = allTargetCount * copies
-        prompts = await runBrainstorm(needed)
+        const needed = promptMode === 'fresh-iteration' ? copies : allTargetCount * copies
+        records = await runBrainstorm(needed)
+        prompts = records.map((record) => record.text)
       }
       if (cancelledRef.current) return
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
@@ -445,7 +449,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // Commit: the tasks now exist, so record the freshly brainstormed prompts
       // in the session history. A run that was cancelled or failed never reaches
       // this point, so it leaves no orphan entries.
-      if (brainstormed) appendElaboratedPrompts(prompts)
+      if (brainstormed) appendElaboratedPrompts(records)
       succeeded = true
       // No success message: the modal closes below (after the finally clears the
       // busy state), and the now-populated queue columns are the confirmation.

@@ -245,7 +245,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     // turn 1's prompts first, because prompts map to assignments by position.
     installScriptedProvider({ proseDelayMs: (call) => (call === 1 ? 30 : 1) })
     const result = await brainstormPrompts(request({ requestId: 'ro', count: 4 }))
-    expect(result.prompts).toEqual(['prompt 1-1', 'prompt 1-2', 'prompt 2-1', 'prompt 2-2'])
+    expect(result.prompts.map((p) => p.text)).toEqual(['prompt 1-1', 'prompt 1-2', 'prompt 2-1', 'prompt 2-2'])
   })
 
   it('plans the facets concurrently, not one after another', async () => {
@@ -315,6 +315,27 @@ describe('brainstormPrompts (concept-driven)', () => {
   // before a single prompt exists, and the only record of what it drew from,
   // minted, or fell back to is the log. These pin the numbers that answer
   // "why did this run take so long" and "why did that concept come back".
+  // The record no amount of reading the prose recovers: WHICH ledger values
+  // grounded each prompt. The renderer stores these in the session history so
+  // the Prompts list can show them; if they drift out of alignment with the
+  // assignments the prose calls actually carried, the display lies.
+  it('returns each prompt with the exact concept assignment that grounded it', async () => {
+    const script = installScriptedProvider()
+    const result = await brainstormPrompts(request({ requestId: 'credit1', count: 3 }))
+
+    expect(result.prompts).toHaveLength(3)
+    const lines = script.assignmentLines()
+    result.prompts.forEach((record, i) => {
+      // Assignment line i reads "n. place: X; occupation: Y" — the credits must
+      // be the same pairs, in facet order.
+      const pairs = lines[i].replace(/^\d+\. /, '').split('; ')
+      expect(record.concepts.map((c) => `${c.facet}: ${c.concept}`)).toEqual(pairs)
+    })
+    // Every credit names a real drawn value, and none repeats across prompts.
+    const values = result.prompts.flatMap((r) => r.concepts.map((c) => c.concept))
+    expect(new Set(values).size).toBe(values.length)
+  })
+
   describe('what the log records', () => {
     it('reports the ledger it started from and what it holds at the end', async () => {
       installScriptedProvider()

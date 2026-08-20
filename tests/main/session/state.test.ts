@@ -116,6 +116,29 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest(valid)).toBe(true)
   })
 
+  // elaboratedPrompts has held two shapes: bare strings, then records carrying
+  // concept credits. BOTH must validate — this field sits inside the whole-
+  // manifest check, so rejecting either shape would not lose the list, it
+  // would lose the SESSION: an invalid manifest is unresumable, task history
+  // and all. That cost is never justified by a display field.
+  it('accepts both prompt shapes — legacy strings and concept-credited records', () => {
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: ['plain old string'] })).toBe(true)
+    expect(isSessionManifest({
+      ...valid,
+      elaboratedPrompts: [{ text: 'a prompt', concepts: [{ facet: 'place', concept: 'cargo quay' }] }],
+    })).toBe(true)
+    expect(isSessionManifest({
+      ...valid,
+      elaboratedPrompts: ['legacy', { text: 'new', concepts: [] }],
+    })).toBe(true)
+  })
+
+  it('still rejects entries that are neither shape', () => {
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [42] })).toBe(false)
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [{ text: 7, concepts: [] }] })).toBe(false)
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [{ text: 'x', concepts: [{ facet: 1 }] }] })).toBe(false)
+  })
+
   it('rejects wrong version, missing fields, and malformed task maps', () => {
     expect(isSessionManifest(null)).toBe(false)
     expect(isSessionManifest({ ...valid, version: 999 })).toBe(false)

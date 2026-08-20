@@ -62,13 +62,34 @@
   flex: 0 0 auto;
 }
 
+.elaborated-prompts-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 /* An elaborated prompt is the content this modal exists to show, so it takes
    the body size. */
 .elaborated-prompts-text {
-  flex: 1;
   font-size: var(--text-md);
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   min-width: 0;
+}
+
+/* The concept assignment under each prompt: metadata, so it must not compete
+   with the prose. One line, ellipsized — the full list is in the tooltip. */
+.elaborated-prompts-concepts {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.elaborated-prompts-concept-facet {
+  color: var(--text-secondary);
 }

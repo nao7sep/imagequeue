@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
+  ElaboratedPromptRecord,
   BackendId,
   BrainstormPhase,
   CloudBackendId,
@@ -29,11 +30,11 @@ import type {
   CliChunkEvent,
   CliStatusEvent,
 } from '../shared/cli-jobs'
-import type { ElectronAPI, EnsureModelResult } from '../shared/electron-api'
+import type { ElectronAPI } from '../shared/electron-api'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
-export type { ElectronAPI, EnsureModelResult } from '../shared/electron-api'
+export type { ElectronAPI } from '../shared/electron-api'
 
 const api = {
   platform: process.platform,
@@ -44,12 +45,6 @@ const api = {
 
   enqueueBatch: (units: EnqueueBatchUnit[]): Promise<Task[]> =>
     ipcRenderer.invoke('queue:enqueueBatch', units),
-
-  getTasks: (backend: BackendId): Promise<Task[]> =>
-    ipcRenderer.invoke('queue:getTasks', backend),
-
-  getAllTasks: (): Promise<Record<BackendId, Task[]>> =>
-    ipcRenderer.invoke('queue:getAllTasks'),
 
   getAllStoredTasks: (): Promise<Record<BackendId, Task[]>> =>
     ipcRenderer.invoke('queue:getAllStoredTasks'),
@@ -70,8 +65,6 @@ const api = {
     ipcRenderer.invoke('queue:resumeInterrupted'),
   setQueuePaused: (paused: boolean): Promise<void> =>
     ipcRenderer.invoke('queue:setPaused', paused),
-  stopGenerating: (): Promise<number> =>
-    ipcRenderer.invoke('queue:stopGenerating'),
   stopAllQueueWork: (): Promise<{ cancelled: number; queued: number }> =>
     ipcRenderer.invoke('queue:stopAll'),
   clearPendingTasks: (): Promise<number> =>
@@ -83,9 +76,6 @@ const api = {
     ipcRenderer.on('queue:controlState', handler)
     return () => { ipcRenderer.removeListener('queue:controlState', handler) }
   },
-
-  reorderTasks: (backend: BackendId, taskIds: string[]): Promise<void> =>
-    ipcRenderer.invoke('queue:reorderTasks', backend, taskIds),
 
   createSession: (): Promise<void> =>
     ipcRenderer.invoke('session:create'),
@@ -108,16 +98,16 @@ const api = {
   saveSessionDraft: (draft: SessionDraft): Promise<void> =>
     ipcRenderer.invoke('session:saveDraft', draft),
 
-  getSessionElaboratedPrompts: (): Promise<string[]> =>
+  getSessionElaboratedPrompts: (): Promise<ElaboratedPromptRecord[]> =>
     ipcRenderer.invoke('session:getElaboratedPrompts'),
 
-  appendSessionElaboratedPrompts: (prompts: string[]): Promise<string[]> =>
+  appendSessionElaboratedPrompts: (prompts: ElaboratedPromptRecord[]): Promise<ElaboratedPromptRecord[]> =>
     ipcRenderer.invoke('session:appendElaboratedPrompts', prompts),
 
-  deleteSessionElaboratedPromptAt: (index: number): Promise<string[]> =>
+  deleteSessionElaboratedPromptAt: (index: number): Promise<ElaboratedPromptRecord[]> =>
     ipcRenderer.invoke('session:deleteElaboratedPromptAt', index),
 
-  clearSessionElaboratedPrompts: (): Promise<string[]> =>
+  clearSessionElaboratedPrompts: (): Promise<ElaboratedPromptRecord[]> =>
     ipcRenderer.invoke('session:clearElaboratedPrompts'),
 
   // Elaborators
@@ -144,7 +134,7 @@ const api = {
     count: number
     format: PromptFormat
     length: PromptLength
-  }): Promise<{ prompts: string[] }> =>
+  }): Promise<{ prompts: ElaboratedPromptRecord[] }> =>
     ipcRenderer.invoke('elaborators:brainstorm', req),
 
   cancelBrainstorm: (requestId: string): Promise<void> =>
@@ -205,9 +195,6 @@ const api = {
   getSessionImage: (sessionId: string, baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
     ipcRenderer.invoke('preview:getSessionImage', sessionId, baseName),
 
-  getMetadata: (baseName: string): Promise<Record<string, unknown> | null> =>
-    ipcRenderer.invoke('preview:getMetadata', baseName),
-
   // Settings operations
   getSettings: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('settings:get'),
@@ -233,9 +220,6 @@ const api = {
   saveNotificationField: (field: string, value: unknown): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveNotificationField', field, value),
 
-  checkLocalModel: (filename: string): Promise<boolean> =>
-    ipcRenderer.invoke('settings:checkLocalModel', filename),
-
   // Draw Things CLI operations (macOS only)
   localCheckCli: (): Promise<CliStatus> =>
     ipcRenderer.invoke('local:checkCli'),
@@ -248,18 +232,6 @@ const api = {
 
   localReadCustomJsonImportedFiles: (): Promise<CustomJsonStatus> =>
     ipcRenderer.invoke('local:readCustomJsonImportedFiles'),
-
-  localEnsureModel: (modelFile: string): Promise<EnsureModelResult> =>
-    ipcRenderer.invoke('local:ensureModel', modelFile),
-
-  localGetModelsDir: (): Promise<string> =>
-    ipcRenderer.invoke('local:getModelsDir'),
-
-  localGetDefaultModelsDir: (): Promise<string> =>
-    ipcRenderer.invoke('local:getDefaultModelsDir'),
-
-  localOpenModelsDir: (): Promise<void> =>
-    ipcRenderer.invoke('local:openModelsDir'),
 
   cliStartImport: (artifactPath: string): Promise<string> =>
     ipcRenderer.invoke('cli-job:startImport', artifactPath),
@@ -275,9 +247,6 @@ const api = {
 
   cliKillJob: (jobId: string): Promise<void> =>
     ipcRenderer.invoke('cli-job:kill', jobId),
-
-  cliGetJobSnapshot: (jobId: string): Promise<CliJobSnapshot | null> =>
-    ipcRenderer.invoke('cli-job:getSnapshot', jobId),
 
   onCliJobChunk: (callback: (e: CliChunkEvent) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, e: CliChunkEvent): void => callback(e)

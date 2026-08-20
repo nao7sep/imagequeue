@@ -49,21 +49,26 @@ describe('queue control operations', () => {
     expect(manager.getAllStoredTasks().openai.every((t) => t.status === 'queued')).toBe(true)
   })
 
-  it('clears waiting tasks without touching anything else', () => {
-    seed(manager, ['queued', 'generating', 'completed', 'queued'])
-    expect(manager.removeQueuedTasks()).toBe(2)
+  // Pending = queued + interrupted: everything that would still produce an
+  // image. The first cut removed only `queued`, so clearing after a stop left
+  // the interrupted tasks stranded — a partial no-op the developer caught in use.
+  it('clears BOTH pending kinds — waiting and stopped — and touches nothing else', () => {
+    seed(manager, ['queued', 'generating', 'completed', 'interrupted', 'failed', 'queued'])
+    expect(manager.removePendingTasks()).toBe(3)
     const statuses = manager.getAllStoredTasks().openai.map((t) => t.status)
-    expect(statuses).toHaveLength(2)
+    expect(statuses).toHaveLength(3)
     expect(statuses).not.toContain('queued')
+    expect(statuses).not.toContain('interrupted')
     expect(statuses).toContain('generating')
     expect(statuses).toContain('completed')
+    expect(statuses).toContain('failed')
   })
 
   // Clearing is the one irreversible action in the menu: unlike stopping, the
   // tasks are gone, not retryable.
   it('leaves nothing to retry after clearing', () => {
-    seed(manager, ['queued', 'queued'])
-    manager.removeQueuedTasks()
+    seed(manager, ['queued', 'interrupted'])
+    manager.removePendingTasks()
     expect(manager.retryAllInterrupted()).toBe(0)
   })
 

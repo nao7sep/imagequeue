@@ -184,10 +184,20 @@ export interface EnqueueBatchUnit {
   params: Record<string, unknown>
 }
 
-export interface ColumnSettings {
-  model: string
-  params: Record<string, unknown>
-  imageCount: number
+/** One facet's contribution to a prompt: which aspect varied, and the value drawn. */
+export interface ConceptCredit {
+  facet: string
+  concept: string
+}
+
+/**
+ * One elaborated prompt with the ledger assignment that grounded it. `concepts`
+ * is empty for prompts that predate concept credits (older manifests store bare
+ * strings, normalized on read) and for anything not produced by a brainstorm.
+ */
+export interface ElaboratedPromptRecord {
+  text: string
+  concepts: ConceptCredit[]
 }
 
 export const SESSION_MANIFEST_VERSION = 1
@@ -209,7 +219,7 @@ export interface SessionManifest {
   updatedAt: string
   lastResumedAt: string | null
   taskCounts: SessionTaskCounts
-  elaboratedPrompts: string[]
+  elaboratedPrompts: ElaboratedPromptRecord[]
   // The renderer's working state for this session (prompt + Advanced Prompting
   // selections). Optional on disk: manifests written before this field existed,
   // or with a malformed draft, load fine and are backfilled with an empty draft

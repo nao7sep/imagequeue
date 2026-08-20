@@ -28,12 +28,13 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   // occurrence among identical texts), so an id never renumbers when a row above
   // it is deleted.
   const seen = new Map<string, number>()
-  const rows = [...elaboratedPrompts].reverse().map((prompt, index) => {
-    const occ = seen.get(prompt) ?? 0
-    seen.set(prompt, occ + 1)
+  const rows = [...elaboratedPrompts].reverse().map((record, index) => {
+    const occ = seen.get(record.text) ?? 0
+    seen.set(record.text, occ + 1)
     return {
-      id: `${occ} ${prompt}`,
-      prompt,
+      id: `${occ} ${record.text}`,
+      prompt: record.text,
+      concepts: record.concepts,
       originalIndex: elaboratedPrompts.length - 1 - index,
     }
   })
@@ -153,10 +154,28 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
               return (
                 <li key={row.id} className="elaborated-prompts-row" {...getOptionProps(row.id)}>
                   <div className="elaborated-prompts-number" aria-hidden="true">{displayNumber}.</div>
-                  {/* One-line preview: flatten + cap to a generous budget; CSS
-                      clamps visually, the full prompt lives in the title tooltip. */}
-                  <div className="elaborated-prompts-text" title={row.prompt}>
-                    {truncate(row.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
+                  <div className="elaborated-prompts-main">
+                    {/* One-line preview: flatten + cap to a generous budget; CSS
+                        clamps visually, the full prompt lives in the title tooltip. */}
+                    <div className="elaborated-prompts-text" title={row.prompt}>
+                      {truncate(row.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
+                    </div>
+                    {/* The assignment the prompt was built from — the part of the
+                        record no amount of reading the prose reliably recovers.
+                        Absent for prompts predating concept credits. */}
+                    {row.concepts.length > 0 && (
+                      <div
+                        className="elaborated-prompts-concepts"
+                        title={row.concepts.map((c) => `${c.facet}: ${c.concept}`).join('\n')}
+                      >
+                        {row.concepts.map((c, i) => (
+                          <span key={`${c.facet} ${c.concept}`}>
+                            {i > 0 && <span className="elaborated-prompts-concept-sep" aria-hidden="true"> · </span>}
+                            <span className="elaborated-prompts-concept-facet">{c.facet}:</span> {c.concept}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"

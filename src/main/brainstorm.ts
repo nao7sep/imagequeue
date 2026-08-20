@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import type { BrainstormPhase } from '../shared/types'
+import type { BrainstormPhase, ElaboratedPromptRecord } from '../shared/types'
 import { getElaborator } from './elaborators'
 import { getMainProvider } from './text-ai'
 import {
@@ -52,7 +52,10 @@ export interface BrainstormRequest {
 }
 
 export interface BrainstormResult {
-  prompts: string[]
+  /** Each prompt with the ledger assignment that grounded it — the renderer
+   *  records these in the session history, so the Prompts list can show WHICH
+   *  concepts a prompt was built from, not just the prose that came out. */
+  prompts: ElaboratedPromptRecord[]
 }
 
 // Emitted to the renderer after every successful turn so it can show live
@@ -468,7 +471,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
   const startTime = Date.now()
   const sessionId = getSessionId()
-  const collected: string[] = []
+  const collected: ElaboratedPromptRecord[] = []
   let turn = 0
 
   const controller = new AbortController()
@@ -639,10 +642,17 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
           failure = outcome.reason
           break
         }
-        collected.push(...outcome.value.kept)
-        for (let i = 0; i < outcome.value.kept.length; i++) {
-          for (const part of outcome.value.assignments[i]) recordUse(part.concept.id, sessionId)
-        }
+        outcome.value.kept.forEach((text, i) => {
+          const assignment = outcome.value.assignments[i]
+          collected.push({
+            text,
+            concepts: assignment.map((part) => ({
+              facet: part.facet.display,
+              concept: part.concept.display,
+            })),
+          })
+          for (const part of assignment) recordUse(part.concept.id, sessionId)
+        })
       }
       if (failure !== null) {
         throw failure instanceof Error ? failure : new Error(String(failure))

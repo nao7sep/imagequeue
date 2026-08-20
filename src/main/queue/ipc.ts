@@ -33,14 +33,6 @@ export function registerQueueIpc(): void {
     return tasks
   })
 
-  handle('queue:getTasks', (_event, backend: BackendId) => {
-    return queueManager.getActiveTasks(backend)
-  })
-
-  handle('queue:getAllTasks', () => {
-    return queueManager.getAllVisibleTasks()
-  })
-
   handle('queue:getAllStoredTasks', () => {
     return queueManager.getAllStoredTasks()
   })
@@ -122,27 +114,30 @@ export function registerQueueIpc(): void {
     return count
   })
 
-  // Queue control. Pausing starts nothing new and leaves running work to finish
-  // and save — the common "stop, but not mid-image" case. Stopping additionally
-  // cancels what is running. Both land tasks in `interrupted`, so the retry paths
-  // that already exist (per-row retry, Retry All) put them back.
+  // Queue control — two orthogonal axes, deliberately not entangled:
+  //
+  //   Pause  is a MODE: the user's standing choice that nothing new starts.
+  //          It touches no task and is the only thing Resume undoes.
+  //   Stop   is an ACT on the work: interrupt everything active — cancel what
+  //          is generating AND flip what is queued to `interrupted` — so the
+  //          queue goes quiet with nothing left for the processor to pick up.
+  //          It does NOT pause: a later Retry re-queues the stopped tasks and
+  //          they start immediately, because the app was never in a mode.
+  //
+  // Both stopped kinds land in `interrupted` — the status a crash already
+  // produces — so the existing retry paths (per-row retry, Retry All) bring
+  // any of it back with no new machinery.
   handle('queue:setPaused', (_event, paused: boolean) => {
     setQueuePaused(paused)
     notifyAllWindows('queue:controlState', buildControlState())
   })
 
-  handle('queue:stopGenerating', () => {
-    const cancelled = cancelAllInFlight()
-    log('info', 'Stopping in-flight generation', { cancelled })
-    notifyAllWindows('queue:controlState', buildControlState())
-    return cancelled
-  })
-
   handle('queue:stopAll', () => {
-    setQueuePaused(true)
-    const cancelled = cancelAllInFlight()
+    // Queued first, then in-flight: both are synchronous within this handler,
+    // so no processor tick can interleave — the order is for the reader.
     const queued = queueManager.interruptQueuedTasks()
-    log('info', 'Stopping all queue work', { cancelled, queued })
+    const cancelled = cancelAllInFlight()
+    log('info', 'Stopped all queue work', { cancelled, queued, paused: isQueuePaused() })
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
     notifyAllWindows('queue:controlState', buildControlState())
@@ -150,7 +145,7 @@ export function registerQueueIpc(): void {
   })
 
   handle('queue:clearPending', () => {
-    const removed = queueManager.removeQueuedTasks()
+    const removed = queueManager.removePendingTasks()
     log('info', 'Cleared pending tasks', { removed })
     persistActiveSession()
     notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
@@ -160,11 +155,6 @@ export function registerQueueIpc(): void {
 
   handle('queue:getControlState', () => buildControlState())
 
-  handle('queue:reorderTasks', (_event, backend: BackendId, taskIds: string[]) => {
-    queueManager.reorderTasks(backend, taskIds)
-    persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
-  })
 }
 
 // What the queue-control menu needs to know to enable or disable each item, so

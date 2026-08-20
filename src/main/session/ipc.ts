@@ -1,4 +1,5 @@
 import { shell } from 'electron'
+import type { ElaboratedPromptRecord } from '../../shared/types'
 import { handle } from '../ipc-boundary'
 import type { SessionDraft } from '../../shared/session-draft'
 import {
@@ -48,7 +49,7 @@ export function registerSessionIpc(): void {
     return getActiveSessionElaboratedPrompts()
   })
 
-  handle('session:appendElaboratedPrompts', (_event, prompts: string[]) => {
+  handle('session:appendElaboratedPrompts', (_event, prompts: ElaboratedPromptRecord[]) => {
     return appendActiveSessionElaboratedPrompts(prompts)
   })
 

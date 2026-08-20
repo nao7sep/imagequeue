@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { ElaboratedPromptRecord } from '../../../shared/types'
 import { createEmptySessionDraft, type SessionDraft } from '../../../shared/session-draft'
 import { serializeError } from '../../../shared/serialize-error'
 
@@ -10,7 +11,7 @@ import { serializeError } from '../../../shared/serialize-error'
 // append/delete/clear. Both live in session.json and re-hydrate on session
 // change, so resuming a session restores the full working context.
 export interface SessionDraftState extends SessionDraft {
-  elaboratedPrompts: string[]
+  elaboratedPrompts: ElaboratedPromptRecord[]
 }
 
 function emptyState(): SessionDraftState {
@@ -28,7 +29,7 @@ interface SessionDraftContextValue {
   // value depends on the previous (e.g. toggling a Set membership).
   update: (patch: Partial<SessionDraftState>) => void
   updateWith: (fn: (prev: SessionDraftState) => SessionDraftState) => void
-  appendElaboratedPrompts: (prompts: string[]) => void
+  appendElaboratedPrompts: (prompts: ElaboratedPromptRecord[]) => void
   deleteElaboratedPromptAt: (index: number) => void
   clearElaboratedPrompts: () => void
 }
@@ -95,7 +96,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     setState(fn)
   }, [])
 
-  const appendElaboratedPrompts = useCallback((prompts: string[]): void => {
+  const appendElaboratedPrompts = useCallback((prompts: ElaboratedPromptRecord[]): void => {
     if (prompts.length === 0) return
     setState((prev) => ({ ...prev, elaboratedPrompts: [...prev.elaboratedPrompts, ...prompts] }))
     void window.electronAPI.appendSessionElaboratedPrompts(prompts)

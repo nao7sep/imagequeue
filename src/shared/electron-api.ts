@@ -1,4 +1,5 @@
 import {
+  ElaboratedPromptRecord,
   BackendId,
   BrainstormPhase,
   CloudBackendId,
@@ -41,11 +42,6 @@ export type Platform =
   | 'cygwin'
   | 'netbsd'
 
-export interface EnsureModelResult {
-  success: boolean
-  error?: string
-}
-
 // The contextBridge API surface exposed to the renderer as `window.electronAPI`.
 // It is an explicit interface in `shared` — not `typeof api` from the preload —
 // so the renderer can reference the type without importing the preload module,
@@ -58,8 +54,6 @@ export interface ElectronAPI {
   // Queue operations
   enqueue: (request: EnqueueRequest) => Promise<Task[]>
   enqueueBatch: (units: EnqueueBatchUnit[]) => Promise<Task[]>
-  getTasks: (backend: BackendId) => Promise<Task[]>
-  getAllTasks: () => Promise<Record<BackendId, Task[]>>
   getAllStoredTasks: () => Promise<Record<BackendId, Task[]>>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
@@ -68,12 +62,10 @@ export interface ElectronAPI {
   resumeInterruptedTasks: () => Promise<number>
   // Queue control (the queue mini-menu)
   setQueuePaused: (paused: boolean) => Promise<void>
-  stopGenerating: () => Promise<number>
   stopAllQueueWork: () => Promise<{ cancelled: number; queued: number }>
   clearPendingTasks: () => Promise<number>
   getQueueControlState: () => Promise<QueueControlState>
   onQueueControlState: (callback: (state: QueueControlState) => void) => (() => void)
-  reorderTasks: (backend: BackendId, taskIds: string[]) => Promise<void>
 
   createSession: () => Promise<void>
   listSessions: () => Promise<SessionSummary[]>
@@ -82,10 +74,10 @@ export interface ElectronAPI {
   openSessionFolder: (sessionId: string) => Promise<void>
   getSessionDraft: () => Promise<SessionDraft>
   saveSessionDraft: (draft: SessionDraft) => Promise<void>
-  getSessionElaboratedPrompts: () => Promise<string[]>
-  appendSessionElaboratedPrompts: (prompts: string[]) => Promise<string[]>
-  deleteSessionElaboratedPromptAt: (index: number) => Promise<string[]>
-  clearSessionElaboratedPrompts: () => Promise<string[]>
+  getSessionElaboratedPrompts: () => Promise<ElaboratedPromptRecord[]>
+  appendSessionElaboratedPrompts: (prompts: ElaboratedPromptRecord[]) => Promise<ElaboratedPromptRecord[]>
+  deleteSessionElaboratedPromptAt: (index: number) => Promise<ElaboratedPromptRecord[]>
+  clearSessionElaboratedPrompts: () => Promise<ElaboratedPromptRecord[]>
 
   // Elaborators
   listElaborators: () => Promise<Elaborator[]>
@@ -101,7 +93,7 @@ export interface ElectronAPI {
     count: number
     format: PromptFormat
     length: PromptLength
-  }) => Promise<{ prompts: string[] }>
+  }) => Promise<{ prompts: ElaboratedPromptRecord[] }>
   cancelBrainstorm: (requestId: string) => Promise<void>
   brainstormGetDefaults: () => Promise<{
     batch_size: number
@@ -131,7 +123,6 @@ export interface ElectronAPI {
   // Preview operations
   getImage: (baseName: string) => Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null>
   getSessionImage: (sessionId: string, baseName: string) => Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null>
-  getMetadata: (baseName: string) => Promise<Record<string, unknown> | null>
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
@@ -140,23 +131,17 @@ export interface ElectronAPI {
   getApiKeyPresence: () => Promise<ApiKeyPresence>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
-  checkLocalModel: (filename: string) => Promise<boolean>
 
   // Draw Things CLI operations (macOS only)
   localCheckCli: () => Promise<CliStatus>
   localListDownloadedModels: () => Promise<LocalModelInfo[]>
   localListAvailableModels: () => Promise<LocalModelInfo[]>
   localReadCustomJsonImportedFiles: () => Promise<CustomJsonStatus>
-  localEnsureModel: (modelFile: string) => Promise<EnsureModelResult>
-  localGetModelsDir: () => Promise<string>
-  localGetDefaultModelsDir: () => Promise<string>
-  localOpenModelsDir: () => Promise<void>
   cliStartImport: (artifactPath: string) => Promise<string>
   cliStartDownload: (modelFile: string) => Promise<string>
   cliSubscribeJob: (jobId: string) => Promise<CliJobSnapshot | null>
   cliUnsubscribeJob: (jobId: string) => Promise<void>
   cliKillJob: (jobId: string) => Promise<void>
-  cliGetJobSnapshot: (jobId: string) => Promise<CliJobSnapshot | null>
   onCliJobChunk: (callback: (e: CliChunkEvent) => void) => (() => void)
   onCliJobStatus: (callback: (e: CliStatusEvent) => void) => (() => void)
 

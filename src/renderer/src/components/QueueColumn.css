@@ -282,35 +282,6 @@
   text-align: center;
 }
 
-.available-models-list {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px;
-  background: var(--bg-surface);
-}
-
-.available-model-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 4px;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.available-model-row:hover {
-  background: var(--bg-secondary);
-}
-
-.available-model-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .download-btn {
   padding: 1px 6px;
   border: 1px solid var(--border);

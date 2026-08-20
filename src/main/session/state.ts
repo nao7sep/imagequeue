@@ -2,6 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { BrowserWindow, shell } from 'electron'
 import {
+  ConceptCredit,
+  ElaboratedPromptRecord,
   BACKEND_IDS_IN_UI_ORDER,
   BackendId,
   SESSION_MANIFEST_VERSION,
@@ -32,7 +34,7 @@ const SESSION_MANIFEST_FILENAME = 'session.json'
 // sets them all together — a new field can't be wired into one transition and
 // silently forgotten in another.
 interface ActiveSessionState {
-  elaboratedPrompts: string[]
+  elaboratedPrompts: ElaboratedPromptRecord[]
   draft: SessionDraft
   createdAt: string
   lastResumedAt: string | null
@@ -114,6 +116,29 @@ function getManifestPath(sessionDir = getSessionDir()): string {
   return path.join(sessionDir, SESSION_MANIFEST_FILENAME)
 }
 
+// A stored elaborated-prompt entry: a record, or the bare string of an older
+// manifest (normalized to a record on read).
+function isElaboratedPromptEntry(entry: unknown): boolean {
+  if (typeof entry === 'string') return true
+  if (!entry || typeof entry !== 'object') return false
+  const candidate = entry as Partial<ElaboratedPromptRecord>
+  return (
+    typeof candidate.text === 'string' &&
+    Array.isArray(candidate.concepts) &&
+    candidate.concepts.every(
+      (c) => !!c && typeof c === 'object' &&
+        typeof (c as ConceptCredit).facet === 'string' &&
+        typeof (c as ConceptCredit).concept === 'string'
+    )
+  )
+}
+
+function normalizeElaboratedPrompt(entry: unknown): ElaboratedPromptRecord {
+  if (typeof entry === 'string') return { text: entry, concepts: [] }
+  const record = entry as ElaboratedPromptRecord
+  return { text: record.text, concepts: record.concepts.map((c) => ({ ...c })) }
+}
+
 export function isSessionManifest(value: unknown): value is SessionManifest {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<SessionManifest>
@@ -123,7 +148,11 @@ export function isSessionManifest(value: unknown): value is SessionManifest {
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
   if (!Array.isArray(candidate.elaboratedPrompts)) return false
-  if (!candidate.elaboratedPrompts.every((prompt) => typeof prompt === 'string')) return false
+  // Both shapes are valid: today's records, and the bare strings older
+  // manifests hold. Rejecting the old shape here would invalidate the WHOLE
+  // manifest and cost the session its task history — the same reasoning as the
+  // draft repair below, applied to a field that never justifies that loss.
+  if (!candidate.elaboratedPrompts.every(isElaboratedPromptEntry)) return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
@@ -144,7 +173,7 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     }
     return {
       ...parsed,
-      elaboratedPrompts: [...parsed.elaboratedPrompts],
+      elaboratedPrompts: parsed.elaboratedPrompts.map(normalizeElaboratedPrompt),
       // draft is intentionally not validated by isSessionManifest: a missing or
       // malformed draft must not discard an otherwise-good session, so it is
       // repaired to a clean draft here instead.
@@ -468,11 +497,13 @@ export function setActiveSessionDraft(draft: SessionDraft): void {
   draftWriter.schedule()
 }
 
-export function getActiveSessionElaboratedPrompts(): string[] {
+export function getActiveSessionElaboratedPrompts(): ElaboratedPromptRecord[] {
   return [...ensureActiveSessionLoaded().elaboratedPrompts]
 }
 
-export function appendActiveSessionElaboratedPrompts(prompts: string[]): string[] {
+export function appendActiveSessionElaboratedPrompts(
+  prompts: ElaboratedPromptRecord[]
+): ElaboratedPromptRecord[] {
   if (prompts.length === 0) return getActiveSessionElaboratedPrompts()
   const session = ensureActiveSessionLoaded()
   session.elaboratedPrompts = [...session.elaboratedPrompts, ...prompts]
@@ -480,7 +511,7 @@ export function appendActiveSessionElaboratedPrompts(prompts: string[]): string[
   return [...session.elaboratedPrompts]
 }
 
-export function deleteActiveSessionElaboratedPromptAt(index: number): string[] {
+export function deleteActiveSessionElaboratedPromptAt(index: number): ElaboratedPromptRecord[] {
   const session = ensureActiveSessionLoaded()
   if (index < 0 || index >= session.elaboratedPrompts.length) return [...session.elaboratedPrompts]
   session.elaboratedPrompts = session.elaboratedPrompts.filter((_, promptIndex) => promptIndex !== index)
@@ -488,7 +519,7 @@ export function deleteActiveSessionElaboratedPromptAt(index: number): string[] {
   return [...session.elaboratedPrompts]
 }
 
-export function clearActiveSessionElaboratedPrompts(): string[] {
+export function clearActiveSessionElaboratedPrompts(): ElaboratedPromptRecord[] {
   ensureActiveSessionLoaded().elaboratedPrompts = []
   persistActiveSession()
   return []

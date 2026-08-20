@@ -9,15 +9,11 @@ import { refreshWindowMinimumSize } from './index'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
-import { checkModelExists } from './backends'
 import {
   checkCli,
   listDownloadedModels,
   listAvailableModels,
-  ensureModel,
-  resolveModelsDir,
   resolveCliPath,
-  getDefaultModelsDir,
   readCustomJsonImportedFiles,
   ensureModelsDir,
 } from './local-cli'
@@ -26,7 +22,6 @@ import {
   subscribeCliJob,
   unsubscribeCliJob,
   killCliJob,
-  getCliJobSnapshot,
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
 import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
@@ -135,10 +130,6 @@ export function registerSettingsIpc(): void {
     return { success: true }
   })
 
-  handle('settings:checkLocalModel', (_event, filename: string) => {
-    return checkModelExists(filename)
-  })
-
   // --- Draw Things CLI integration ---
 
   handle('local:checkCli', async () => {
@@ -155,28 +146,6 @@ export function registerSettingsIpc(): void {
 
   handle('local:readCustomJsonImportedFiles', () => {
     return readCustomJsonImportedFiles()
-  })
-
-  handle('local:ensureModel', async (_event, modelFile: string) => {
-    return ensureModel(modelFile)
-  })
-
-  handle('local:getModelsDir', () => {
-    return resolveModelsDir()
-  })
-
-  handle('local:getDefaultModelsDir', () => {
-    return getDefaultModelsDir()
-  })
-
-  // Opening the models directory doubles as the way to remove an imported model: the Draw Things
-  // CLI has no models-delete verb (only `list`/`ensure`/`import`), so deletion is a manual file
-  // removal here — and an import can drop companion files beside the checkpoint, so removing one
-  // means deleting the whole artifact set, not just the .ckpt.
-  handle('local:openModelsDir', () => {
-    const dir = resolveModelsDir()
-    fs.mkdirSync(dir, { recursive: true })
-    shell.openPath(dir)
   })
 
   handle('cli-job:startImport', (event, artifactPath: string) => {
@@ -217,10 +186,6 @@ export function registerSettingsIpc(): void {
 
   handle('cli-job:kill', (_event, jobId: string) => {
     killCliJob(jobId)
-  })
-
-  handle('cli-job:getSnapshot', (_event, jobId: string) => {
-    return getCliJobSnapshot(jobId)
   })
 
   handle('recommendations:resolve', (_event, modelFile: string) => {
