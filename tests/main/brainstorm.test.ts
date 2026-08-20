@@ -248,6 +248,22 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(kinds.slice(0, 3)).toEqual(['resolve', 'generate', 'generate'])
   })
 
+  // The planning asks must be sized to the RUN, not to a fixed ceiling: a small
+  // run that mined a 300-prompt bank would spend tokens on concepts nothing
+  // reaches for months (one sibling per cluster is drawable per window).
+  it('sizes the domain ask to what the run still needs', async () => {
+    const script = installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'rs', count: 2 }))
+    const generateAsks = script.ask.mock.calls
+      .map((c) => (c[0] as AskOptions).messages.at(-1)!.text)
+      .filter((text) => text.includes('<existing_domains>'))
+    expect(generateAsks.length).toBeGreaterThan(0)
+    // 2 values still needed -> a modest surplus of 4, never the 48 ceiling.
+    for (const ask of generateAsks) {
+      expect(ask).toContain('List 4 narrow domains')
+    }
+  })
+
   it('records a use only for prompts that actually came back', async () => {
     installScriptedProvider({ promptsPerCall: (asked, call) => (call === 1 ? asked - 1 : asked) })
     const result = await brainstormPrompts(request({ requestId: 'r6', count: 2 }))

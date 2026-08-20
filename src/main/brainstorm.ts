@@ -22,9 +22,10 @@ import {
   type FacetRow,
 } from './concepts/concept-store'
 import {
-  PROBES_PER_EXPANSION_CALL,
   expandProbes,
   generateProbes,
+  planProbeBatchSize,
+  planProbeGenerationSize,
   resolveFacets,
   type AskJson,
 } from './concepts/planner'
@@ -224,7 +225,7 @@ async function obtainConceptsForFacet(
 ): Promise<DrawnConcept[]> {
   const out: DrawnConcept[] = []
   for (let i = 0; i < count; i++) {
-    const concept = await obtainConcept(facet, ask, sessionId, preferNew, excludes)
+    const concept = await obtainConcept(facet, ask, sessionId, preferNew, excludes, count - i)
     excludes.concepts.add(concept.id)
     excludes.probes.add(concept.probeId)
     out.push(concept)
@@ -243,7 +244,8 @@ async function obtainConcept(
   ask: AskJson,
   sessionId: string,
   preferNew: boolean,
-  excludes: RunExcludes
+  excludes: RunExcludes,
+  valuesStillNeeded: number
 ): Promise<DrawnConcept> {
   const baseOpts = {
     sessionId,
@@ -255,11 +257,15 @@ async function obtainConcept(
   if (first) return first
 
   for (let round = 0; round < MAX_REFILL_ROUNDS; round++) {
-    let probes = unexpandedProbes(facet.id, PROBES_PER_EXPANSION_CALL)
+    // Mine only what this run still needs: a three-prompt run asks for three
+    // domains, a long one still batches up to the ceiling.
+    let probes = unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
     if (probes.length === 0) {
-      const texts = await generateProbes(ask, facet.display, listProbeDisplays(facet.id))
+      const texts = await generateProbes(
+        ask, facet.display, listProbeDisplays(facet.id), planProbeGenerationSize(valuesStillNeeded)
+      )
       addProbes(facet.id, texts)
-      probes = unexpandedProbes(facet.id, PROBES_PER_EXPANSION_CALL)
+      probes = unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
       // The model yielded no new probes; count the round and try again.
       if (probes.length === 0) continue
     }

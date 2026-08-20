@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   MAX_FACETS_PER_SEED,
+  PROBES_PER_EXPANSION_CALL,
+  PROBES_PER_GENERATION,
+  planProbeBatchSize,
+  planProbeGenerationSize,
   buildExpandProbesMessage,
   buildGenerateProbesMessage,
   buildResolveFacetsMessage,
@@ -99,5 +103,48 @@ describe('expandProbes / parseClusters', () => {
 
   it('yields empty clusters, not a throw, for junk', () => {
     expect(parseClusters(null, ['ports'])).toEqual([[]])
+  })
+})
+
+
+// Sizing the ask to the need is what keeps a three-prompt run from paying for a
+// three-hundred-prompt bank. One domain yields one drawable value while the
+// reuse window holds it, so the need IS the domain count.
+describe('planProbeBatchSize', () => {
+  it('asks for exactly what a small run needs', () => {
+    expect(planProbeBatchSize(3)).toBe(3)
+    expect(planProbeBatchSize(1)).toBe(1)
+  })
+
+  it('still batches a long run up to the ceiling', () => {
+    expect(planProbeBatchSize(300)).toBe(PROBES_PER_EXPANSION_CALL)
+  })
+
+  it('never asks for nothing, so a draw always makes progress', () => {
+    expect(planProbeBatchSize(0)).toBe(1)
+    expect(planProbeBatchSize(-5)).toBe(1)
+  })
+})
+
+describe('planProbeGenerationSize', () => {
+  it('asks for a modest surplus, so the next draws find a domain waiting', () => {
+    expect(planProbeGenerationSize(3)).toBe(6)
+  })
+
+  it('caps at the ceiling for a long run', () => {
+    expect(planProbeGenerationSize(300)).toBe(PROBES_PER_GENERATION)
+  })
+
+  it('never asks for nothing', () => {
+    expect(planProbeGenerationSize(0)).toBe(1)
+  })
+})
+
+describe('generateProbes count', () => {
+  it('asks the model for the count it was given, not the ceiling', async () => {
+    const ask = vi.fn(async () => ({ probes: ['a', 'b'] }))
+    await generateProbes(ask, 'place', [], 6)
+    const sent = (ask.mock.calls[0] as unknown as [{ text: string }[]])[0][0].text
+    expect(sent).toContain('List 6 narrow domains')
   })
 })

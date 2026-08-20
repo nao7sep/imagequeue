@@ -30,7 +30,7 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 
 ## Download
 
-Prebuilt installers and portable builds for macOS (Apple Silicon) and Windows are on the [Releases](https://github.com/nao7sep/imagequeue/releases) page. These builds are **unsigned**, so the OS warns the first time you open one:
+Prebuilt installers and portable builds for macOS (Apple Silicon) and Windows are on the [Releases](https://github.com/nao7sep/imagequeue/releases/latest) page. These builds are **unsigned**, so the OS warns the first time you open one:
 
 - **macOS** — right-click the app and choose **Open** (or run `xattr -dr com.apple.quarantine /Applications/ImageQueue.app`).
 - **Windows** — on the SmartScreen prompt, click **More info → Run anyway**.

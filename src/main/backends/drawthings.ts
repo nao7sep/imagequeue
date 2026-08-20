@@ -4,7 +4,7 @@ import path from 'path'
 import { nanoid } from 'nanoid'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { getSessionDir } from '../session'
+import { getTempDir } from '../dependencies/paths'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
@@ -19,7 +19,15 @@ async function generateDrawThingsCli(task: Task): Promise<{ buffer: Buffer; mime
 
   ensureModelsDir()
 
-  const outputPath = path.join(getSessionDir(), `drawthings-${nanoid()}.png`)
+  // Staged in the app's temp directory, NEVER the session directory. Draw
+  // Things is the one backend where an external process owns the file: the CLI
+  // writes it, we read it in and delete it. Cloud backends return bytes over
+  // HTTP and touch disk only as their final named output, so they cannot strand
+  // anything. If the app dies (or is killed) between spawn and read, the CLI
+  // finishes writing into a directory nobody is watching — in the session folder
+  // that left a permanent `drawthings-<id>.png` the app never handled; here it
+  // is a staging file that clearTempDir sweeps at the next launch.
+  const outputPath = path.join(getTempDir(), `drawthings-${nanoid()}.png`)
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
 
   const width = task.params.width as number | undefined
