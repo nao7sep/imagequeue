@@ -7,6 +7,7 @@ import {
   queueDisabledReason,
   type AdvancedGatesInput,
   type ElaboratorPicks,
+  describeBrainstormProgress,
 } from '../../../../src/renderer/src/utils/advancedPromptingGates'
 
 const allPicked: ElaboratorPicks = { composition: true, style: true }
@@ -142,5 +143,42 @@ describe('computeAdvancedGates', () => {
     expect(gates.queue.disabled).toBe(true)
     expect(gates.queue.reason).toBe('Elaborated prompt is empty.')
     expect(gates.history.disabled).toBe(false)
+  })
+})
+
+describe('describeBrainstormProgress', () => {
+  // A cold run reaches the first prompt only after resolving aspects and
+  // minting concepts, which on an empty ledger is most of the wait. Reporting
+  // only the prompt counter left that stretch silent, which is what made a long
+  // elaboration read as a hang.
+  it('names the stage before any prompt exists', () => {
+    expect(describeBrainstormProgress('elaborate', { done: 0, total: 12, phase: 'facets' }))
+      .toBe('Choosing which aspects to vary…')
+    expect(describeBrainstormProgress('queue', { done: 0, total: 12, phase: 'concepts' }))
+      .toBe('Gathering concepts…')
+  })
+
+  it('counts prompts once they are being written', () => {
+    expect(describeBrainstormProgress('queue', { done: 3, total: 12, phase: 'prompts' }))
+      .toBe('Writing prompts… 3 / 12')
+  })
+
+  // Elaborate asks for exactly one, where "0 / 1" reads as a stalled counter.
+  it('drops the counter for a single prompt', () => {
+    expect(describeBrainstormProgress('elaborate', { done: 0, total: 1, phase: 'prompts' }))
+      .toBe('Writing the prompt…')
+  })
+
+  // The engine stops reporting when its prompts are done, but Queue still has
+  // real work left — the tasks it enqueues. Saying nothing there would put the
+  // silence back at the end instead of the beginning.
+  it('keeps saying something after the engine goes quiet', () => {
+    expect(describeBrainstormProgress('queue', null)).toBe('Queueing tasks…')
+    expect(describeBrainstormProgress('elaborate', null)).toBe('Finishing…')
+  })
+
+  it('says nothing when nothing is running, so the element is omitted', () => {
+    expect(describeBrainstormProgress(null, null)).toBe('')
+    expect(describeBrainstormProgress(null, { done: 3, total: 12, phase: 'prompts' })).toBe('')
   })
 })

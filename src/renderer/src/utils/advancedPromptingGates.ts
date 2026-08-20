@@ -1,4 +1,4 @@
-import { ELABORATOR_KIND_LABELS, type ElaboratorKind } from '../../../shared/types'
+import { ELABORATOR_KIND_LABELS, type BrainstormPhase, type ElaboratorKind } from '../../../shared/types'
 import { isBrainstormMode } from './promptMode'
 import type { PromptMode } from '../../../shared/session-draft'
 
@@ -122,5 +122,37 @@ export function computeAdvancedGates(input: AdvancedGatesInput): AdvancedGates {
     elaborate: { disabled: busy || elaborateReason !== null, reason: busy ? null : elaborateReason },
     queue: { disabled: busy || queueReason !== null, reason: busy ? null : queueReason },
     history: { disabled: busy },
+  }
+}
+
+/**
+ * What the modal's footer says while an operation runs.
+ *
+ * A cold run spends most of its wall time before a single prompt exists —
+ * resolving which aspects to vary, then minting concepts — so a bare counter
+ * reports nothing during exactly the stretch that looks like a hang. The engine
+ * names the stage it is in; the wording is the UI's, which is why it lives here
+ * and not in main.
+ *
+ * Returns '' when nothing is running, so the caller can omit the element.
+ */
+export function describeBrainstormProgress(
+  operation: ActiveOperation,
+  progress: { done: number; total: number; phase: BrainstormPhase } | null,
+): string {
+  if (!operation) return ''
+  // The engine has stopped reporting but the operation has not returned: the
+  // tasks are being queued, or the single Elaborate result is being accepted.
+  if (!progress) return operation === 'queue' ? 'Queueing tasks…' : 'Finishing…'
+  switch (progress.phase) {
+    case 'facets':
+      return 'Choosing which aspects to vary…'
+    case 'concepts':
+      return 'Gathering concepts…'
+    case 'prompts':
+    default:
+      return progress.total === 1
+        ? 'Writing the prompt…'
+        : `Writing prompts… ${progress.done} / ${progress.total}`
   }
 }

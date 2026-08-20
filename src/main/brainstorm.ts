@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import type { BrainstormPhase } from '../shared/types'
 import { getElaborator } from './elaborators'
 import { getMainProvider } from './text-ai'
 import {
@@ -55,6 +56,7 @@ interface BrainstormProgress {
   requestId: string
   done: number
   total: number
+  phase: BrainstormPhase
 }
 
 function broadcastProgress(progress: BrainstormProgress): void {
@@ -350,6 +352,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     )
 
   try {
+    broadcastProgress({ requestId: req.requestId, done: 0, total: req.count, phase: 'facets' })
     const facetNames = await resolveFacets(ask, req.seed, listFacetDisplays())
     const facets = facetNames.map((name) => ensureFacet(name))
     // Values and clusters drawn by this run, per facet. Draws are recorded as
@@ -377,6 +380,9 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       // reads guarded by the in-run excludes — so concurrent turns hold
       // disjoint assignments by construction, and the prose calls themselves
       // never touch the ledger. Each facet fills its column concurrently.
+      broadcastProgress({
+        requestId: req.requestId, done: collected.length, total: req.count, phase: 'concepts',
+      })
       const perFacet = await Promise.all(
         facets.map((facet) =>
           obtainConceptsForFacet(
@@ -428,7 +434,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
           )
           const kept = newPrompts.slice(0, assignments.length)
           done = Math.min(done + kept.length, req.count)
-          broadcastProgress({ requestId: req.requestId, done, total: req.count })
+          broadcastProgress({ requestId: req.requestId, done, total: req.count, phase: 'prompts' })
           return { assignments, kept }
         })
       )

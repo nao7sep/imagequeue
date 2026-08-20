@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
+import type { BrainstormPhase } from '../../../shared/types'
 import { multiline } from '../utils/textCleanup'
 import { hasApiKeyFor } from '../utils/enqueue'
 import {
@@ -31,6 +32,7 @@ import { isBrainstormMode } from '../utils/promptMode'
 import {
   computeAdvancedGates,
   promptModeDisabledReason as promptModeDisabledReasonFor,
+  describeBrainstormProgress,
   type ActiveOperation,
 } from '../utils/advancedPromptingGates'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
@@ -87,7 +89,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // engine, so at most one runs at a time. One value (not a boolean per action)
   // means there is no second flag a control can read by mistake.
   const [activeOperation, setActiveOperation] = useState<ActiveOperation>(null)
-  const [brainstormProgress, setBrainstormProgress] = useState<{ done: number; total: number } | null>(null)
+  const [brainstormProgress, setBrainstormProgress] = useState<
+    { done: number; total: number; phase: BrainstormPhase } | null
+  >(null)
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
@@ -226,6 +230,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     totalTasks,
   })
   const busy = gates.busy
+  const statusText = describeBrainstormProgress(activeOperation, brainstormProgress)
 
   // Note: we do NOT auto-reset promptMode when preconditions go away. On
   // modal open, one or more category selections can transiently read as
@@ -250,10 +255,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     activeRequestIdRef.current = requestId
 
     const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
-      setBrainstormProgress({ done: event.done, total: event.total })
+      setBrainstormProgress({ done: event.done, total: event.total, phase: event.phase })
     })
 
-    setBrainstormProgress({ done: 0, total: count })
+    // Seeded with the first stage the run enters, so the footer says something
+    // in the gap before the engine's own first event arrives.
+    setBrainstormProgress({ done: 0, total: count, phase: 'facets' })
     try {
       const result = await window.electronAPI.brainstormPrompts({
         requestId,
@@ -540,9 +547,18 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       closeOnBackdropClick={false}
       onClose={() => void handleRequestClose()}
       footer={
-        <button className="modal-btn" onClick={() => void handleRequestClose()}>
-          Cancel
-        </button>
+        <>
+          {/* The footer's leading slot: a long run is mostly spent before any
+              prompt exists, and this is the only place that says so. */}
+          {statusText && (
+            <span className="modal-footer-lead advanced-status" role="status">
+              {statusText}
+            </span>
+          )}
+          <button className="modal-btn" onClick={() => void handleRequestClose()}>
+            Cancel
+          </button>
+        </>
       }
     >
       <div className={`advanced-body${isMacPlatform ? '' : ' advanced-body-no-dt'}`}>
@@ -566,11 +582,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 disabled={gates.elaborate.disabled}
                 title={gates.busy ? '' : (gates.elaborate.reason ?? 'Generate one elaborated prompt')}
               >
-                {activeOperation === 'elaborate'
-                  ? (brainstormProgress && brainstormProgress.total > 1
-                      ? `Elaborating ${brainstormProgress.done} / ${brainstormProgress.total}…`
-                      : 'Elaborating…')
-                  : 'Elaborate'}
+                {activeOperation === 'elaborate' ? 'Elaborating…' : 'Elaborate'}
               </button>
             </div>
             <textarea
@@ -761,11 +773,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               disabled={gates.queue.disabled}
               title={gates.queue.reason ?? ''}
             >
-              {activeOperation === 'queue'
-                ? (brainstormProgress
-                    ? `Generating ${brainstormProgress.done} / ${brainstormProgress.total}…`
-                    : 'Queueing…')
-                : 'Queue Tasks'}
+              {activeOperation === 'queue' ? 'Queueing…' : 'Queue Tasks'}
             </button>
           </div>
         </div>

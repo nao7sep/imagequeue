@@ -224,6 +224,15 @@ export interface SessionThumbnail {
 
 // What the queue-control menu enables or disables against. Counts rather than
 // booleans so the menu can say how much each action would affect.
+/**
+ * Which stage of a brainstorm run a progress event describes. A cold run spends
+ * most of its time before a single prompt exists — resolving which aspects to
+ * vary, then minting concepts — so a counter alone reports nothing for the part
+ * of the wait that is longest. Main names the stage; the renderer owns the
+ * wording.
+ */
+export type BrainstormPhase = 'facets' | 'concepts' | 'prompts'
+
 export interface QueueControlState {
   paused: boolean
   generating: number

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   BackendId,
+  BrainstormPhase,
   CloudBackendId,
   Elaborator,
   ElaboratorKind,
@@ -184,14 +185,14 @@ const api = {
 
   onBrainstormProgress: (
     requestId: string,
-    callback: (event: { done: number; total: number }) => void
+    callback: (event: { done: number; total: number; phase: BrainstormPhase }) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      payload: { requestId: string; done: number; total: number }
+      payload: { requestId: string; done: number; total: number; phase: BrainstormPhase }
     ): void => {
       if (payload.requestId !== requestId) return
-      callback({ done: payload.done, total: payload.total })
+      callback({ done: payload.done, total: payload.total, phase: payload.phase })
     }
     ipcRenderer.on('brainstorm:progress', handler)
     return () => { ipcRenderer.removeListener('brainstorm:progress', handler) }

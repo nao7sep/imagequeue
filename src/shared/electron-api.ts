@@ -1,5 +1,6 @@
 import {
   BackendId,
+  BrainstormPhase,
   CloudBackendId,
   Elaborator,
   ElaboratorKind,
@@ -124,7 +125,7 @@ export interface ElectronAPI {
   appLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: Record<string, unknown>) => Promise<void>
   onBrainstormProgress: (
     requestId: string,
-    callback: (event: { done: number; total: number }) => void
+    callback: (event: { done: number; total: number; phase: BrainstormPhase }) => void
   ) => (() => void)
 
   // Preview operations

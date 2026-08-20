@@ -294,6 +294,13 @@
   border-color: color-mix(in srgb, var(--error) 50%, var(--border));
 }
 
+/* The footer's running commentary. Muted and non-bold: it reports, it does not
+   compete with the action beside it. */
+.advanced-status {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
 /* The pane's primary action takes the large control. */
 .advanced-queue-btn {
   height: var(--control-lg);
