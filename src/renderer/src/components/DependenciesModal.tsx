@@ -78,12 +78,11 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
     return window.electronAPI.onDependencyProgress(setProgress)
   }, [])
 
-  // An in-flight operation must not be abandoned mid-stream — closing during the
-  // CLI download orphans the install and its progress view. So while any op runs,
-  // every close path (Escape, backdrop, ✕, the Close button) is blocked through
-  // this one guard, per the modal convention's Busy and Non-Interruptible States.
+  // Closing while an operation is active cancels its main-process controller,
+  // then closes immediately. The operation owns its staging cleanup, so the user
+  // is never trapped in this modal and no partial artifact is published.
   const requestClose = useCallback((): void => {
-    if (busy.size > 0) return
+    if (busy.size > 0) void window.electronAPI.cancelDependencyOperations()
     onClose()
   }, [busy, onClose])
 
@@ -106,6 +105,15 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
         broadcastChange()
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
+        // A set-wide check may partially succeed. Re-read the local facts after
+        // any failure so successful rows advance even while the failed row's
+        // caller-visible error remains on screen.
+        try {
+          setState(await window.electronAPI.getDependenciesState())
+          broadcastChange()
+        } catch {
+          // Keep the operation error, which is the actionable failure.
+        }
       } finally {
         setBusy((prev) => {
           const next = new Set(prev)
@@ -141,7 +149,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
       title="Dependencies"
       className="dependencies-modal-box"
       onClose={requestClose}
-      closeOnBackdropClick={!anyBusy}
+      closeOnBackdropClick
       footer={
         <>
           <button
@@ -155,10 +163,9 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
           <button
             type="button"
             className="modal-btn"
-            disabled={anyBusy}
             onClick={requestClose}
           >
-            Close
+            {anyBusy ? 'Cancel and close' : 'Close'}
           </button>
         </>
       }

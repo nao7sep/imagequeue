@@ -34,4 +34,11 @@ describe('sha256File', () => {
   it('rejects when the file does not exist', async () => {
     await expect(sha256File(path.join(os.tmpdir(), 'iq-nope-does-not-exist'))).rejects.toThrow()
   })
+
+  it('stops hashing when the caller cancels', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('cancelled by caller'))
+    await expect(sha256File(writeTemp(crypto.randomBytes(64 * 1024)), controller.signal))
+      .rejects.toThrow('cancelled by caller')
+  })
 })

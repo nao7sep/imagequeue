@@ -5,6 +5,12 @@
 
 import type { DependencyComparison } from './state'
 
+/** Whether a sidecar value is an actual release tag, rather than merely text
+ * containing a version-shaped fragment. */
+export function isCliReleaseTag(value: string): boolean {
+  return /^v?\d+\.\d{8}\.\d+$/.test(value)
+}
+
 /**
  * Parse a `1.YYYYMMDD.N` version into comparable numeric parts. Accepts it bare,
  * `v`-prefixed, or embedded (e.g. `draw-things-cli 1.20260430.0`). Returns null

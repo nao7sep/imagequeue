@@ -29,9 +29,14 @@ export function downloadToFile(
   url: string,
   destPath: string,
   onProgress?: (progress: DownloadProgress) => void,
-  redirectsLeft = MAX_REDIRECTS
+  redirectsLeft = MAX_REDIRECTS,
+  signal?: AbortSignal
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason)
+      return
+    }
     let parsed: URL
     try {
       parsed = new URL(url)
@@ -67,7 +72,7 @@ export function downloadToFile(
 
     const request = https.get(
       url,
-      { timeout: 30_000, headers: { 'User-Agent': 'ImageQueue' } },
+      { timeout: 30_000, signal, headers: { 'User-Agent': 'ImageQueue' } },
       (response) => {
         const status = response.statusCode ?? 0
 
@@ -78,7 +83,7 @@ export function downloadToFile(
             return
           }
           const next = new URL(response.headers.location, url).toString()
-          downloadToFile(next, destPath, onProgress, redirectsLeft - 1).then(succeed, fail)
+          downloadToFile(next, destPath, onProgress, redirectsLeft - 1, signal).then(succeed, fail)
           return
         }
 
@@ -118,12 +123,24 @@ export function downloadToFile(
 }
 
 /** Stream a file through SHA-256 and return the lowercase hex digest. */
-export function sha256File(filePath: string): Promise<string> {
+export function sha256File(filePath: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256')
     const stream = fs.createReadStream(filePath)
+    const abort = (): void => {
+      stream.destroy(signal?.reason)
+    }
+    const cleanup = (): void => signal?.removeEventListener('abort', abort)
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
     stream.on('data', (chunk) => hash.update(chunk))
-    stream.on('error', reject)
-    stream.on('end', () => resolve(hash.digest('hex')))
+    stream.on('error', (error) => {
+      cleanup()
+      reject(error)
+    })
+    stream.on('end', () => {
+      cleanup()
+      resolve(hash.digest('hex'))
+    })
   })
 }

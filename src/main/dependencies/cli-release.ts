@@ -37,12 +37,17 @@ interface GithubRelease {
 // transient failure isn't retried on every panel render).
 let cache: CliRelease | null | undefined
 
-function fetchReleaseJson(): Promise<GithubRelease | null> {
+function fetchReleaseJson(signal?: AbortSignal): Promise<GithubRelease | null> {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(null)
+      return
+    }
     const request = https.get(
       LATEST_RELEASE_URL,
       {
         timeout: 10_000,
+        signal,
         headers: { 'User-Agent': 'ImageQueue', Accept: 'application/vnd.github+json' },
       },
       (response) => {
@@ -90,9 +95,14 @@ export function parseCliRelease(release: GithubRelease | null): CliRelease | nul
 /** Resolve the latest CLI release. Cached per process; pass `force` for an
  * explicit user-initiated check or install, which re-fetches and refreshes the
  * cache so a release published mid-session is seen. */
-export async function resolveLatestCliRelease(force = false): Promise<CliRelease | null> {
+export async function resolveLatestCliRelease(
+  force = false,
+  signal?: AbortSignal
+): Promise<CliRelease | null> {
   if (force || cache === undefined) {
-    cache = parseCliRelease(await fetchReleaseJson())
+    const release = parseCliRelease(await fetchReleaseJson(signal))
+    signal?.throwIfAborted()
+    cache = release
   }
   return cache
 }

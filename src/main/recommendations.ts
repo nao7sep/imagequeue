@@ -72,9 +72,11 @@ export function getRecommendationsStatus(): RecommendationStatus {
 
 /** Acquire (or force-refresh) configs.json from the server. Writes it directly,
  * which makes any staged pending update moot, so it is cleared. */
-export async function downloadLatestRecommendations(): Promise<RecommendationStatus> {
-  const data = await fetchBytes(RECOMMENDATIONS_URL)
+export async function downloadLatestRecommendations(signal?: AbortSignal): Promise<RecommendationStatus> {
+  signal?.throwIfAborted()
+  const data = await fetchBytes(RECOMMENDATIONS_URL, undefined, signal)
   validateRecommendationBytes(data)
+  signal?.throwIfAborted()
 
   ensureModelsDir()
   const filePath = getRecommendationsPath()
@@ -95,7 +97,8 @@ export async function downloadLatestRecommendations(): Promise<RecommendationSta
 /** Fetch the latest and compare to the installed file without changing it. If it
  * differs, stage it as a pending update and record that a check found one. Does
  * nothing destructive when configs.json is absent (that is the download path). */
-export async function checkRecommendations(): Promise<RecommendationStatus> {
+export async function checkRecommendations(signal?: AbortSignal): Promise<RecommendationStatus> {
+  signal?.throwIfAborted()
   const filePath = getRecommendationsPath()
   const checkedAt = new Date().toISOString()
 
@@ -107,8 +110,9 @@ export async function checkRecommendations(): Promise<RecommendationStatus> {
     return getRecommendationsStatus()
   }
 
-  const latest = await fetchBytes(RECOMMENDATIONS_URL)
+  const latest = await fetchBytes(RECOMMENDATIONS_URL, undefined, signal)
   validateRecommendationBytes(latest)
+  signal?.throwIfAborted()
   const differs = !fs.readFileSync(filePath).equals(latest)
 
   if (differs) {
@@ -167,8 +171,16 @@ function validateRecommendationBytes(data: Buffer): void {
 const MAX_REDIRECTS = 5
 const MAX_DOWNLOAD_BYTES = 16 * 1024 * 1024 // configs.json is small; bound memory regardless
 
-function fetchBytes(url: string, redirectsLeft = MAX_REDIRECTS): Promise<Buffer> {
+function fetchBytes(
+  url: string,
+  redirectsLeft = MAX_REDIRECTS,
+  signal?: AbortSignal
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason)
+      return
+    }
     let parsed: URL
     try {
       parsed = new URL(url)
@@ -183,7 +195,7 @@ function fetchBytes(url: string, redirectsLeft = MAX_REDIRECTS): Promise<Buffer>
       return
     }
 
-    const request = https.get(url, { timeout: 10000 }, (response) => {
+    const request = https.get(url, { timeout: 10000, signal }, (response) => {
       const status = response.statusCode ?? 0
       if (status >= 300 && status < 400 && response.headers.location) {
         response.resume()
@@ -192,7 +204,7 @@ function fetchBytes(url: string, redirectsLeft = MAX_REDIRECTS): Promise<Buffer>
           return
         }
         const next = new URL(response.headers.location, url).toString()
-        fetchBytes(next, redirectsLeft - 1).then(resolve, reject)
+        fetchBytes(next, redirectsLeft - 1, signal).then(resolve, reject)
         return
       }
       if (status < 200 || status > 299) {

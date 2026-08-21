@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareCliVersions, parseCliVersion } from '../../../src/main/dependencies/cli-version'
+import { compareCliVersions, isCliReleaseTag, parseCliVersion } from '../../../src/main/dependencies/cli-version'
 
 describe('parseCliVersion', () => {
   it('parses a bare, v-prefixed, or embedded version', () => {
@@ -13,6 +13,14 @@ describe('parseCliVersion', () => {
     expect(parseCliVersion('')).toBeNull()
     expect(parseCliVersion(null)).toBeNull()
     expect(parseCliVersion('unknown')).toBeNull()
+  })
+})
+
+describe('isCliReleaseTag', () => {
+  it('accepts official tags and rejects version-shaped fragments in malformed sidecars', () => {
+    expect(isCliReleaseTag('v1.20260430.0')).toBe(true)
+    expect(isCliReleaseTag('1.20260430.0')).toBe(true)
+    expect(isCliReleaseTag('garbage-v1.20260430.0')).toBe(false)
   })
 })
 

@@ -163,6 +163,7 @@ export interface ElectronAPI {
   downloadRecommendations: () => Promise<DependenciesState>
   applyRecommendationsUpdate: () => Promise<DependenciesState>
   setCheckUpdatesAtLaunch: (value: boolean) => Promise<DependenciesState>
+  cancelDependencyOperations: () => Promise<void>
   onDependencyProgress: (callback: (progress: DependencyProgress) => void) => (() => void)
 
   resolveRecommendation: (modelFile: string) => Promise<RecommendedParams | null>

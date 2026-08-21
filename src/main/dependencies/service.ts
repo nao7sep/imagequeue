@@ -22,6 +22,10 @@ function checkUpdatesAtLaunch(): boolean {
   return loadConfig().image_backends.drawthings.check_updates_at_launch
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function cliInfo(): DependencyInfo {
   const cache = readDependenciesCache()
   const present = isCliInstalled()
@@ -78,12 +82,12 @@ export function getDependenciesState(): DependenciesState {
 
 /** Resolve the latest CLI release and record the result (newest tag + checked-at)
  * in the cache. `force` re-fetches past the per-process cache. */
-async function checkCliForUpdate(force: boolean): Promise<void> {
-  const release = await resolveLatestCliRelease(force)
+async function checkCliForUpdate(force: boolean, signal?: AbortSignal): Promise<void> {
+  const release = await resolveLatestCliRelease(force, signal)
   // A failed lookup (offline, rate-limited, non-200) resolves null and must write
   // NO persisted fact (invariant I3): advancing the timestamp here would read as
   // "checked just now" having learned nothing, and suppress re-checks for 24h.
-  if (!release) return
+  if (!release) throw new Error('Could not reach the Draw Things release server')
   updateDependenciesCache((cache) => {
     cache.cli.lastCheckedAtUtc = new Date().toISOString()
     cache.cli.lastKnownLatest = release.tag
@@ -91,8 +95,21 @@ async function checkCliForUpdate(force: boolean): Promise<void> {
 }
 
 /** Run both dependency checks now (the modal's "Check for updates"). */
-export async function checkAllDependencies(): Promise<DependenciesState> {
-  await Promise.allSettled([checkCliForUpdate(true), checkRecommendations()])
+export async function checkAllDependencies(signal?: AbortSignal): Promise<DependenciesState> {
+  const checks = [
+    { label: 'Draw Things CLI', promise: checkCliForUpdate(true, signal) },
+    { label: 'Recommended parameters', promise: checkRecommendations(signal) },
+  ]
+  const results = await Promise.allSettled(checks.map((check) => check.promise))
+  signal?.throwIfAborted()
+  const failures = results.flatMap((result, index) =>
+    result.status === 'rejected'
+      ? [`${checks[index].label}: ${errorMessage(result.reason)}`]
+      : []
+  )
+  if (failures.length > 0) {
+    throw new Error(`Could not check dependencies. ${failures.join('; ')}`)
+  }
   return getDependenciesState()
 }
 
@@ -107,14 +124,23 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
   if (!checkUpdatesAtLaunch()) return
   const cache = readDependenciesCache()
   const now = Date.now()
-  const tasks: Promise<unknown>[] = []
-  if (!isCheckFresh(cache.cli.lastCheckedAtUtc, now)) tasks.push(checkCliForUpdate(false))
-  if (!isCheckFresh(cache.recommendations.lastCheckedAtUtc, now)) tasks.push(checkRecommendations())
+  const tasks: Array<{ label: string; promise: Promise<unknown> }> = []
+  if (!isCheckFresh(cache.cli.lastCheckedAtUtc, now)) {
+    tasks.push({ label: 'Draw Things CLI', promise: checkCliForUpdate(false) })
+  }
+  if (!isCheckFresh(cache.recommendations.lastCheckedAtUtc, now)) {
+    tasks.push({ label: 'Recommended parameters', promise: checkRecommendations() })
+  }
   if (tasks.length === 0) return
-  try {
-    await Promise.allSettled(tasks)
-  } catch (err) {
-    log('warn', 'Launch dependency check failed', { error: serializeError(err) })
+  const results = await Promise.allSettled(tasks.map((task) => task.promise))
+  for (let index = 0; index < results.length; index++) {
+    const result = results[index]
+    if (result.status === 'rejected') {
+      log('warn', 'Launch dependency check failed', {
+        dependency: tasks[index].label,
+        error: serializeError(result.reason),
+      })
+    }
   }
 }
 
@@ -125,13 +151,14 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
  * installCliRelease); on success records the installed tag as the latest seen.
  */
 export async function installOrUpdateCli(
-  onProgress?: (progress: DependencyProgress) => void
+  onProgress?: (progress: DependencyProgress) => void,
+  signal?: AbortSignal
 ): Promise<DependenciesState> {
-  const release = await resolveLatestCliRelease(true)
+  const release = await resolveLatestCliRelease(true, signal)
   if (!release) {
     throw new Error('Could not reach the Draw Things release server')
   }
-  await installCliRelease(release, onProgress)
+  await installCliRelease(release, onProgress, signal)
   updateDependenciesCache((cache) => {
     cache.cli.lastKnownLatest = release.tag
     cache.cli.lastCheckedAtUtc = new Date().toISOString()

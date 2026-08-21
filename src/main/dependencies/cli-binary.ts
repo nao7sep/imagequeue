@@ -16,6 +16,7 @@ import { writeJsonAtomic } from '../utils/atomic-write'
 import { getBinDir, getCliBinaryPath, getCliMetaPath, allocateTempPath, discardTempPath } from './paths'
 import { downloadToFile, sha256File, type DownloadProgress } from './download'
 import type { CliRelease } from './cli-release'
+import { isCliReleaseTag } from './cli-version'
 import type { DependencyProgress } from '../../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -40,7 +41,7 @@ export function readInstalledCliTag(): string | null {
   if (!isCliInstalled()) return null
   try {
     const meta = JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')) as Partial<CliMeta>
-    return typeof meta.tag === 'string' ? meta.tag : null
+    return typeof meta.tag === 'string' && isCliReleaseTag(meta.tag) ? meta.tag : null
   } catch {
     return null
   }
@@ -49,11 +50,12 @@ export function readInstalledCliTag(): string | null {
 /** Whether the Mach-O at `filePath` includes an arm64 slice. A universal binary
  * passes; an x86_64-only one fails (the fleet is Apple-Silicon-native, no Rosetta).
  * A `lipo` failure (not a Mach-O, tool missing) is treated as failing the gate. */
-export async function hasArm64Slice(filePath: string): Promise<boolean> {
+export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Promise<boolean> {
   try {
-    const { stdout } = await execFileAsync('lipo', ['-archs', filePath], { timeout: 5_000 })
+    const { stdout } = await execFileAsync('lipo', ['-archs', filePath], { timeout: 5_000, signal })
     return stdout.trim().split(/\s+/).includes('arm64')
   } catch (err) {
+    if (signal?.aborted) throw signal.reason
     log('warn', 'lipo arch check failed', { filePath, error: serializeError(err) })
     return false
   }
@@ -67,7 +69,8 @@ export async function hasArm64Slice(filePath: string): Promise<boolean> {
  */
 export async function installCliRelease(
   release: CliRelease,
-  onProgress?: (progress: DependencyProgress) => void
+  onProgress?: (progress: DependencyProgress) => void,
+  signal?: AbortSignal
 ): Promise<void> {
   if (!release.sha256) {
     throw new Error('Release asset has no published checksum; refusing to install unverified binary')
@@ -75,25 +78,32 @@ export async function installCliRelease(
 
   const tempPath = allocateTempPath(getCliBinaryPath())
   try {
-    await downloadToFile(release.assetUrl, tempPath, (p: DownloadProgress) =>
-      onProgress?.({ phase: 'downloading', downloadedBytes: p.downloadedBytes, totalBytes: p.totalBytes })
+    await downloadToFile(
+      release.assetUrl,
+      tempPath,
+      (p: DownloadProgress) =>
+        onProgress?.({ phase: 'downloading', downloadedBytes: p.downloadedBytes, totalBytes: p.totalBytes }),
+      undefined,
+      signal
     )
 
+    signal?.throwIfAborted()
     onProgress?.({ phase: 'verifying', downloadedBytes: 0, totalBytes: null })
-    const actual = await sha256File(tempPath)
+    const actual = await sha256File(tempPath, signal)
     if (actual !== release.sha256) {
       throw new Error(`Checksum mismatch: expected ${release.sha256}, got ${actual}`)
     }
-    if (!(await hasArm64Slice(tempPath))) {
+    if (!(await hasArm64Slice(tempPath, signal))) {
       throw new Error('Downloaded binary is not native arm64; refusing to install')
     }
 
     onProgress?.({ phase: 'installing', downloadedBytes: 0, totalBytes: null })
+    signal?.throwIfAborted()
     fs.chmodSync(tempPath, 0o755)
     // The file was written by us, not a browser, so it usually carries no
     // quarantine xattr — strip it defensively so Gatekeeper never blocks the
     // ad-hoc-signed binary on first run. A missing attribute is not an error.
-    await stripQuarantine(tempPath)
+    await stripQuarantine(tempPath, signal)
 
     fs.mkdirSync(getBinDir(), { recursive: true })
     // Publish the binary first, then record its tag beside it. The order is the
@@ -118,10 +128,11 @@ export async function installCliRelease(
   }
 }
 
-async function stripQuarantine(filePath: string): Promise<void> {
+async function stripQuarantine(filePath: string, signal?: AbortSignal): Promise<void> {
   try {
-    await execFileAsync('xattr', ['-d', 'com.apple.quarantine', filePath], { timeout: 5_000 })
+    await execFileAsync('xattr', ['-d', 'com.apple.quarantine', filePath], { timeout: 5_000, signal })
   } catch {
+    if (signal?.aborted) throw signal.reason
     /* attribute absent (the normal case) — nothing to strip */
   }
 }
