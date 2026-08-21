@@ -37,7 +37,8 @@ export function expandUserPath(raw: string): string {
   expanded = expanded
     .replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (m, name) => process.env[name] ?? m)
     .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (m, name) => process.env[name] ?? m)
-  return path.isAbsolute(expanded) ? expanded : path.join(getDataDir(), expanded)
+  const absolute = path.isAbsolute(expanded) ? expanded : path.join(getDataDir(), expanded)
+  return path.normalize(absolute)
 }
 
 /** Resolve the effective models directory. Empty config uses ImageQueue's private models dir. */

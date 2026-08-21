@@ -10,10 +10,7 @@ import {
   checkAllDependencies,
   installOrUpdateCli,
 } from './dependencies/service'
-import {
-  downloadLatestRecommendations,
-  applyPendingRecommendations,
-} from './recommendations'
+import { downloadLatestRecommendations } from './recommendations'
 import {
   cancelDependencyOperationsOwnedBy,
   runDependencyOperation,
@@ -38,7 +35,7 @@ export function registerDependenciesIpc(): void {
   handle('dependencies:getState', () => getDependenciesState())
 
   handle('dependencies:check', (event) =>
-    runWindowDependencyOperation(event.sender, ['cli', 'recommendations'], (signal) =>
+    runWindowDependencyOperation(event.sender, ['cli'], (signal) =>
       checkAllDependencies(signal)
     )
   )
@@ -54,14 +51,6 @@ export function registerDependenciesIpc(): void {
   handle('dependencies:downloadRecommendations', (event) =>
     runWindowDependencyOperation(event.sender, ['recommendations'], async (signal) => {
       await downloadLatestRecommendations(signal)
-      return getDependenciesState()
-    })
-  )
-
-  handle('dependencies:updateRecommendations', (event) =>
-    runWindowDependencyOperation(event.sender, ['recommendations'], async (signal) => {
-      signal.throwIfAborted()
-      applyPendingRecommendations()
       return getDependenciesState()
     })
   )

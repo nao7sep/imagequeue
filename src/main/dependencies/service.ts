@@ -6,19 +6,15 @@
 
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
-import {
-  checkRecommendations,
-  getRecommendationsStatus,
-  hasPendingRecommendationsUpdate,
-} from '../recommendations'
+import { getRecommendationsStatus } from '../recommendations'
 import { isCliInstalled, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
 import { compareCliVersions } from './cli-version'
+import { CLI_DOWNLOAD_LIMITS, withWholeOperationTimeout } from './download'
 import {
   APP_DEPENDENCY_OPERATION_OWNER,
   DependencyOperationBusyError,
   runDependencyOperation,
-  type MutableDependency,
 } from './operations'
 import { deriveDependencyState, isCheckFresh, type DependencyComparison } from './state'
 import { readDependenciesCache, updateDependenciesCache } from './store'
@@ -26,10 +22,6 @@ import type { DependenciesState, DependencyInfo, DependencyProgress } from '../.
 
 function checkUpdatesAtLaunch(): boolean {
   return loadConfig().image_backends.drawthings.check_updates_at_launch
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function cliInfo(): DependencyInfo {
@@ -51,17 +43,8 @@ function cliInfo(): DependencyInfo {
 }
 
 function recommendationsInfo(): DependencyInfo {
-  const cache = readDependenciesCache()
   const status = getRecommendationsStatus()
   const present = status.exists
-  const everChecked = cache.recommendations.lastCheckedAtUtc !== null
-  // "An update is waiting" is read from the staged file, not from a recorded
-  // flag — same rule as the CLI's tag: the fact lives with the artifact.
-  const comparison: DependencyComparison = hasPendingRecommendationsUpdate()
-    ? 'outdated'
-    : everChecked
-      ? 'current'
-      : 'unknown'
   const installedLabel = !present
     ? null
     : status.valid
@@ -69,11 +52,14 @@ function recommendationsInfo(): DependencyInfo {
       : 'file unreadable'
   return {
     id: 'recommendations',
-    state: deriveDependencyState(present, comparison),
+    // configs.json is mutable and versionless. Without upstream metadata there
+    // is no honest read-only latest comparison, so presence remains unchecked
+    // and the user may explicitly Refresh it whenever wanted.
+    state: deriveDependencyState(present, 'unknown'),
     installedLabel,
     latestLabel: null,
     updatedAtUtc: status.updatedAt,
-    lastCheckedAtUtc: cache.recommendations.lastCheckedAtUtc,
+    lastCheckedAtUtc: null,
   }
 }
 
@@ -100,83 +86,37 @@ async function checkCliForUpdate(force: boolean, signal?: AbortSignal): Promise<
   })
 }
 
-/** Run both dependency checks now (the modal's "Check for updates"). */
+/** Check the CLI metadata now. The versionless recommendations file has no
+ * metadata-only check and is acquired only by its explicit Install/Refresh. */
 export async function checkAllDependencies(signal?: AbortSignal): Promise<DependenciesState> {
-  const checks = [
-    { label: 'Draw Things CLI', promise: checkCliForUpdate(true, signal) },
-    { label: 'Recommended parameters', promise: checkRecommendations(signal) },
-  ]
-  const results = await Promise.allSettled(checks.map((check) => check.promise))
-  signal?.throwIfAborted()
-  const failures = results.flatMap((result, index) =>
-    result.status === 'rejected'
-      ? [`${checks[index].label}: ${errorMessage(result.reason)}`]
-      : []
-  )
-  if (failures.length > 0) {
-    throw new Error(`Could not check dependencies. ${failures.join('; ')}`)
-  }
+  await checkCliForUpdate(true, signal)
   return getDependenciesState()
 }
 
-async function runLaunchDependencyCheck(
-  dependency: MutableDependency,
-  label: string,
-  check: (signal: AbortSignal) => Promise<unknown>
-): Promise<void> {
-  try {
-    await runDependencyOperation(
-      APP_DEPENDENCY_OPERATION_OWNER,
-      [dependency],
-      check
-    )
-  } catch (err) {
-    if (err instanceof DependencyOperationBusyError) {
-      log('info', 'Launch dependency check skipped; dependency operation already running', {
-        dependency: label,
-      })
-      return
-    }
-    throw err
-  }
-}
-
-/** The launch path: when the toggle is on, re-check each dependency whose last
- * check is older than the staleness cap. Never throws — a failed check just
- * leaves that dependency 'installed-unchecked'. */
+/** The launch path: when the toggle is on, re-check CLI release metadata when
+ * stale. Never fetches recommendation bytes and never throws. */
 export async function checkDependenciesAtLaunch(): Promise<void> {
-  // The CLI and its recommendations are macOS-only; on any other platform this
-  // would fetch GitHub releases for a binary the machine cannot run and cache
-  // an "update available" nobody can act on.
+  // The CLI is macOS-only; on any other platform this would fetch GitHub
+  // releases for a binary the machine cannot run and cache an "update
+  // available" nobody can act on.
   if (process.platform !== 'darwin') return
   if (!checkUpdatesAtLaunch()) return
   const cache = readDependenciesCache()
   const now = Date.now()
-  const tasks: Array<{ label: string; promise: Promise<unknown> }> = []
-  if (!isCheckFresh(cache.cli.lastCheckedAtUtc, now)) {
-    tasks.push({
-      label: 'Draw Things CLI',
-      promise: runLaunchDependencyCheck('cli', 'Draw Things CLI', (signal) =>
-        checkCliForUpdate(false, signal)
-      ),
-    })
-  }
-  if (!isCheckFresh(cache.recommendations.lastCheckedAtUtc, now)) {
-    tasks.push({
-      label: 'Recommended parameters',
-      promise: runLaunchDependencyCheck('recommendations', 'Recommended parameters', (signal) =>
-        checkRecommendations(signal)
-      ),
-    })
-  }
-  if (tasks.length === 0) return
-  const results = await Promise.allSettled(tasks.map((task) => task.promise))
-  for (let index = 0; index < results.length; index++) {
-    const result = results[index]
-    if (result.status === 'rejected') {
+  if (isCheckFresh(cache.cli.lastCheckedAtUtc, now)) return
+  try {
+    await runDependencyOperation(
+      APP_DEPENDENCY_OPERATION_OWNER,
+      ['cli'],
+      (signal) => checkCliForUpdate(false, signal)
+    )
+  } catch (error) {
+    if (error instanceof DependencyOperationBusyError) {
+      log('info', 'Launch dependency check skipped; CLI operation already running')
+    } else {
       log('warn', 'Launch dependency check failed', {
-        dependency: tasks[index].label,
-        error: serializeError(result.reason),
+        dependency: 'Draw Things CLI',
+        error: serializeError(error),
       })
     }
   }
@@ -192,14 +132,21 @@ export async function installOrUpdateCli(
   onProgress?: (progress: DependencyProgress) => void,
   signal?: AbortSignal
 ): Promise<DependenciesState> {
-  const release = await resolveLatestCliRelease(true, signal)
-  if (!release) {
-    throw new Error('Could not reach the Draw Things release server')
-  }
-  await installCliRelease(release, onProgress, signal)
-  updateDependenciesCache((cache) => {
-    cache.cli.lastKnownLatest = release.tag
-    cache.cli.lastCheckedAtUtc = new Date().toISOString()
-  })
-  return getDependenciesState()
+  return withWholeOperationTimeout(
+    signal,
+    CLI_DOWNLOAD_LIMITS.wholeTimeoutMs,
+    'CLI acquisition',
+    async (boundedSignal) => {
+      const release = await resolveLatestCliRelease(true, boundedSignal)
+      if (!release) {
+        throw new Error('Could not reach the Draw Things release server')
+      }
+      await installCliRelease(release, onProgress, boundedSignal)
+      updateDependenciesCache((cache) => {
+        cache.cli.lastKnownLatest = release.tag
+        cache.cli.lastCheckedAtUtc = new Date().toISOString()
+      })
+      return getDependenciesState()
+    }
+  )
 }

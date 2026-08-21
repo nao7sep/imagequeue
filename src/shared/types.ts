@@ -35,7 +35,8 @@ export interface CliStatus {
 // The two managed runtime dependencies the app delivers and tracks for the
 // Draw Things backend: the CLI binary it downloads itself, and the recommended-
 // parameters file (configs.json). Both follow the managed-runtime-dependencies
-// convention — app-owned acquisition, verify-once-at-download, check-not-apply.
+// convention. The CLI has metadata-only checks; versionless configs.json is
+// installed or refreshed only by an explicit user action.
 export type DependencyId = 'cli' | 'recommendations'
 
 // The four lifecycle states a managed dependency can be in. "installed-unchecked"
@@ -50,8 +51,7 @@ export type DependencyState =
 // One dependency's surface state for the modal and the pane pointer. The labels
 // are presentation-ready strings derived in main: for the CLI they are release
 // tags; for configs.json the installed label summarizes the file (entry count +
-// date) and there is no latest label (it is versionless — "update available"
-// means a fetched copy differed byte-for-byte).
+// date) and there is no latest label because it is versionless.
 export interface DependencyInfo {
   id: DependencyId
   state: DependencyState
@@ -66,7 +66,7 @@ export interface DependencyInfo {
 export interface DependenciesState {
   cli: DependencyInfo
   recommendations: DependencyInfo
-  // The single launch-time check toggle gating both dependencies (default on).
+  // The launch-time metadata-check toggle for the CLI (default on).
   checkUpdatesAtLaunch: boolean
   // False off macOS, where the Draw Things backend (and so these dependencies)
   // does not exist; the renderer hides the whole surface.
@@ -101,8 +101,7 @@ export type CustomJsonStatus =
   | { kind: 'unreadable'; reason: string }
 
 // Only the fields the dependency surface actually reads. The recommendations
-// file (configs.json) is otherwise versionless; "update available" is decided by
-// a byte-compare, not by anything in this status.
+// file (configs.json) is otherwise versionless and is refreshed explicitly.
 export interface RecommendationStatus {
   exists: boolean
   valid: boolean

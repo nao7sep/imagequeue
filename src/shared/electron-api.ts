@@ -161,7 +161,6 @@ export interface ElectronAPI {
   checkDependencies: () => Promise<DependenciesState>
   installCli: () => Promise<DependenciesState>
   downloadRecommendations: () => Promise<DependenciesState>
-  applyRecommendationsUpdate: () => Promise<DependenciesState>
   setCheckUpdatesAtLaunch: (value: boolean) => Promise<DependenciesState>
   cancelDependencyOperations: () => Promise<void>
   onDependencyProgress: (callback: (progress: DependencyProgress) => void) => (() => void)

@@ -23,11 +23,14 @@ const STATE_LABEL: Record<DependencyState, string> = {
 
 // State → action verb. Install (absent), Update (newer available) — and Update
 // again when a present dependency's own version could not be read, which is the
-// only way out of that row: the set-wide "Check for updates" resolves the LATEST,
+// only way out of that row: the CLI metadata check resolves the LATEST,
 // so it can never clear an unreadable INSTALLED version, and re-acquiring is what
 // replaces the copy that would not answer. A current dependency, or one merely
 // unchecked with its version in hand, offers no button — Check is that move.
 function actionLabelFor(info: DependencyInfo): string | null {
+  if (info.id === 'recommendations') {
+    return info.state === 'not-installed' ? 'Install' : 'Refresh'
+  }
   if (info.state === 'not-installed') return 'Install'
   if (info.state === 'update-available') return 'Update'
   if (info.state === 'installed-unchecked' && !info.installedLabel) return 'Update'
@@ -62,8 +65,8 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
   const [state, setState] = useState<DependenciesState | null>(null)
   // Operations in flight, by id. A set (not a single value) so the two downloads —
   // the CLI and configs.json — can run at the same time; they touch different
-  // files and independent cache sections. 'check' is set-wide (re-reads both), so
-  // it's kept exclusive with the per-row actions; 'toggle' is the launch checkbox.
+  // files. The CLI metadata 'check' is serialized in this modal with row actions;
+  // 'toggle' is the launch checkbox.
   const [busy, setBusy] = useState<ReadonlySet<DependencyId | 'check' | 'toggle'>>(() => new Set())
   const [progress, setProgress] = useState<DependencyProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -105,9 +108,9 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
         broadcastChange()
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
-        // A set-wide check may partially succeed. Re-read the local facts after
-        // any failure so successful rows advance even while the failed row's
-        // caller-visible error remains on screen.
+        // An acquisition can fail after a durable local effect (for example,
+        // binary publication before its sidecar write). Re-read local facts so
+        // the UI remains honest while retaining the actionable operation error.
         try {
           setState(await window.electronAPI.getDependenciesState())
           broadcastChange()
@@ -134,12 +137,8 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
   const handleCliAction = (): Promise<void> =>
     run('cli', () => window.electronAPI.installCli())
 
-  const handleRecommendationsAction = (info: DependencyInfo): Promise<void> =>
-    run('recommendations', () =>
-      info.state === 'update-available'
-        ? window.electronAPI.applyRecommendationsUpdate()
-        : window.electronAPI.downloadRecommendations()
-    )
+  const handleRecommendationsAction = (): Promise<void> =>
+    run('recommendations', () => window.electronAPI.downloadRecommendations())
 
   const handleToggleCheckAtLaunch = (value: boolean): Promise<void> =>
     run('toggle', () => window.electronAPI.setCheckUpdatesAtLaunch(value))
@@ -158,7 +157,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
             disabled={anyBusy}
             onClick={() => { void handleCheck() }}
           >
-            {busy.has('check') ? 'Checking…' : 'Check for updates'}
+            {busy.has('check') ? 'Checking…' : 'Check for CLI updates'}
           </button>
           <button
             type="button"
@@ -172,7 +171,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
     >
       <div className="dependencies-body">
         <p className="dependencies-intro">
-          ImageQueue downloads and verifies these for the Draw Things backend. Nothing is
+          ImageQueue manages these for the Draw Things backend. Nothing is
           installed or updated without your go-ahead.
         </p>
 
@@ -191,12 +190,12 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
             />
             <DependencyRow
               title="Recommended parameters"
-              description="Per-model defaults (configs.json) from Draw Things. Optional — generation falls back to your defaults without it."
+              description="Versionless per-model defaults (configs.json) from Draw Things. Optional — Install or Refresh fetches the current file; generation falls back to your defaults without it."
               info={state.recommendations}
               busy={busy.has('recommendations')}
               disabled={busy.has('recommendations') || busy.has('check')}
               progress={null}
-              onAction={() => { void handleRecommendationsAction(state.recommendations) }}
+              onAction={() => { void handleRecommendationsAction() }}
             />
 
             <label className="dependencies-toggle">
@@ -206,7 +205,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
                 disabled={busy.has('toggle') || busy.has('check')}
                 onChange={(e) => { void handleToggleCheckAtLaunch(e.target.checked) }}
               />
-              Check for updates at launch
+              Check for CLI updates at launch
             </label>
           </>
         )}

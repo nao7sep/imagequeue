@@ -1,9 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import crypto from 'crypto'
-import { sha256File } from '../../../src/main/dependencies/download'
+import {
+  parseAdvertisedLength,
+  sha256File,
+  withWholeOperationTimeout,
+} from '../../../src/main/dependencies/download'
 
 const tempDirs: string[] = []
 
@@ -16,7 +20,38 @@ function writeTemp(bytes: Buffer): string {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   while (tempDirs.length) fs.rmSync(tempDirs.pop()!, { recursive: true, force: true })
+})
+
+describe('bounded transfers', () => {
+  it('accepts only valid advertised lengths within the byte ceiling', () => {
+    expect(parseAdvertisedLength(undefined, 10)).toBeNull()
+    expect(parseAdvertisedLength('10', 10)).toBe(10)
+    expect(() => parseAdvertisedLength('11', 10)).toThrow('exceeding the 10-byte limit')
+    expect(() => parseAdvertisedLength('not-a-number', 10)).toThrow('invalid Content-Length')
+  })
+
+  it('aborts a whole operation at its deadline', async () => {
+    vi.useFakeTimers()
+    const operation = withWholeOperationTimeout(undefined, 100, 'Test transfer', (signal) =>
+      new Promise<never>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    )
+    const assertion = expect(operation).rejects.toThrow(
+      'Test transfer exceeded its whole-operation timeout'
+    )
+    await vi.advanceTimersByTimeAsync(100)
+    await assertion
+  })
+
+  it('preserves cancellation from the caller', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('cancelled by caller'))
+    await expect(withWholeOperationTimeout(controller.signal, 100, 'Test transfer', async () => 1))
+      .rejects.toThrow('cancelled by caller')
+  })
 })
 
 describe('sha256File', () => {

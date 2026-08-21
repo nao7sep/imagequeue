@@ -4,8 +4,8 @@
 // is the integrity reference (Level 1): the app verifies the download against it,
 // with no hash pinned in source.
 
-import https from 'https'
 import { log, serializeError } from '../logger'
+import { fetchBytes, RELEASE_METADATA_LIMITS } from './download'
 
 const LATEST_RELEASE_URL =
   'https://api.github.com/repos/drawthingsai/draw-things-community/releases/latest'
@@ -37,47 +37,20 @@ interface GithubRelease {
 // transient failure isn't retried on every panel render).
 let cache: CliRelease | null | undefined
 
-function fetchReleaseJson(signal?: AbortSignal): Promise<GithubRelease | null> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) {
-      resolve(null)
-      return
-    }
-    const request = https.get(
+async function fetchReleaseJson(signal?: AbortSignal): Promise<GithubRelease | null> {
+  try {
+    const bytes = await fetchBytes(
       LATEST_RELEASE_URL,
-      {
-        timeout: 10_000,
-        signal,
-        headers: { 'User-Agent': 'ImageQueue', Accept: 'application/vnd.github+json' },
-      },
-      (response) => {
-        if ((response.statusCode ?? 0) !== 200) {
-          response.resume()
-          log('warn', 'draw-things-cli release lookup failed', { status: response.statusCode })
-          resolve(null)
-          return
-        }
-        const chunks: Buffer[] = []
-        response.on('data', (chunk: Buffer) => chunks.push(chunk))
-        response.on('end', () => {
-          try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as GithubRelease)
-          } catch (err) {
-            log('warn', 'draw-things-cli release parse failed', { error: serializeError(err) })
-            resolve(null)
-          }
-        })
-      }
+      RELEASE_METADATA_LIMITS,
+      signal,
+      { 'User-Agent': 'ImageQueue', Accept: 'application/vnd.github+json' }
     )
-    request.on('error', (err) => {
-      log('warn', 'draw-things-cli release request failed', { error: serializeError(err) })
-      resolve(null)
-    })
-    request.on('timeout', () => {
-      request.destroy()
-      resolve(null)
-    })
-  })
+    return JSON.parse(bytes.toString('utf8')) as GithubRelease
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason
+    log('warn', 'draw-things-cli release lookup failed', { error: serializeError(error) })
+    return null
+  }
 }
 
 /** Parse a release payload into the CLI asset's tag/url/sha256, or null when the

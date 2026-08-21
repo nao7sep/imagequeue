@@ -12,7 +12,7 @@ import fs from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { log, serializeError } from '../logger'
-import { writeJsonAtomic } from '../utils/atomic-write'
+import { syncDirectory, syncFile, writeJsonAtomic } from '../utils/atomic-write'
 import { getBinDir, getCliBinaryPath, getCliMetaPath, allocateTempPath, discardTempPath } from './paths'
 import { downloadToFile, sha256File, type DownloadProgress } from './download'
 import type { CliRelease } from './cli-release'
@@ -83,7 +83,6 @@ export async function installCliRelease(
       tempPath,
       (p: DownloadProgress) =>
         onProgress?.({ phase: 'downloading', downloadedBytes: p.downloadedBytes, totalBytes: p.totalBytes }),
-      undefined,
       signal
     )
 
@@ -104,6 +103,10 @@ export async function installCliRelease(
     // quarantine xattr — strip it defensively so Gatekeeper never blocks the
     // ad-hoc-signed binary on first run. A missing attribute is not an error.
     await stripQuarantine(tempPath, signal)
+    signal?.throwIfAborted()
+    // downloadToFile synced the bytes; sync once more after chmod/xattr so the
+    // executable metadata is durable before publication.
+    syncFile(tempPath)
 
     fs.mkdirSync(getBinDir(), { recursive: true })
     // Publish the binary first, then record its tag beside it. The order is the
@@ -113,7 +116,9 @@ export async function installCliRelease(
     // wearing the NEW tag on a failed rename — a stale install reading "up to
     // date", which is the one outcome the state model must never produce. Same
     // filesystem → atomic replace.
+    signal?.throwIfAborted()
     fs.renameSync(tempPath, getCliBinaryPath())
+    syncDirectory(getBinDir())
     const meta: CliMeta = { tag: release.tag, sha256: release.sha256, installedAt: new Date().toISOString() }
     // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
     // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary

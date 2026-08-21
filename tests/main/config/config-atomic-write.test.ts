@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadConfig, saveConfig, getConfigPath } from '../../../src/main/config'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
+import { writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
 const ENV_VAR = 'IMAGEQUEUE_HOME'
 
@@ -66,17 +67,51 @@ describe('config store (atomic write of config.json)', () => {
   })
 
   it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as config.json', () => {
-    const spy = vi.spyOn(fs, 'writeFileSync')
+    const spy = vi.spyOn(fs, 'openSync')
     const config = createDefaultConfig()
     saveConfig(config)
 
-    const tempCall = spy.mock.calls.find(
-      (call) => typeof call[0] === 'string' && (call[0] as string).includes('config-')
+    const tempCall = spy.mock.calls.find((call) =>
+      typeof call[0] === 'string' && (call[0] as string).includes('config-')
     )
     expect(tempCall).toBeDefined()
     const tempPath = tempCall![0] as string
     expect(path.dirname(tempPath)).toBe(tmpRoot)
     expect(path.basename(tempPath)).toMatch(/^config-[A-Za-z0-9_-]+\.tmp$/)
     spy.mockRestore()
+  })
+
+  it('syncs staged bytes before publication', () => {
+    const sync = vi.spyOn(fs, 'fsyncSync')
+    saveConfig(createDefaultConfig())
+    expect(sync).toHaveBeenCalled()
+    sync.mockRestore()
+  })
+
+  it('removes staging when publication fails', () => {
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+      throw new Error('simulated rename failure')
+    })
+    expect(() => saveConfig(createDefaultConfig())).toThrow('simulated rename failure')
+    rename.mockRestore()
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('publishes async acquisition bytes and leaves no staging file', async () => {
+    const destination = path.join(tmpRoot, 'configs.json')
+    await writeFileAtomicAsync(destination, Buffer.from('{"ok":true}'), false)
+    expect(fs.readFileSync(destination, 'utf8')).toBe('{"ok":true}')
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('cleans async acquisition staging when publication fails', async () => {
+    const rename = vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(
+      new Error('simulated async rename failure')
+    )
+    await expect(
+      writeFileAtomicAsync(path.join(tmpRoot, 'configs.json'), Buffer.from('{"ok":true}'), false)
+    ).rejects.toThrow('simulated async rename failure')
+    rename.mockRestore()
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 })

@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   checkAllDependencies: vi.fn(),
   installOrUpdateCli: vi.fn(),
   downloadLatestRecommendations: vi.fn(),
-  applyPendingRecommendations: vi.fn(),
 }))
 
 vi.mock('../../src/main/ipc-boundary', () => ({
@@ -50,7 +49,6 @@ vi.mock('../../src/main/dependencies/service', () => ({
 
 vi.mock('../../src/main/recommendations', () => ({
   downloadLatestRecommendations: mocks.downloadLatestRecommendations,
-  applyPendingRecommendations: mocks.applyPendingRecommendations,
 }))
 
 class FakeSender extends EventEmitter {
@@ -108,7 +106,6 @@ beforeEach(() => {
   mocks.checkAllDependencies.mockReset()
   mocks.installOrUpdateCli.mockReset()
   mocks.downloadLatestRecommendations.mockReset()
-  mocks.applyPendingRecommendations.mockReset()
 })
 
 describe('dependency IPC operation ownership', () => {
@@ -187,7 +184,7 @@ describe('dependency IPC operation ownership', () => {
     await expect(recommendationsDownload).resolves.toBe(state)
   })
 
-  it('reserves both dependencies while a set-wide check is running', async () => {
+  it('reserves only the CLI while its metadata check is running', async () => {
     const checkOwner = new FakeSender(1)
     const otherWindow = new FakeSender(2)
     let check!: DeferredOperation
@@ -201,9 +198,8 @@ describe('dependency IPC operation ownership', () => {
     await expect(invoke('dependencies:installCli', otherWindow)).rejects.toThrow(
       'Dependency cli operation is already running'
     )
-    await expect(
-      invoke('dependencies:downloadRecommendations', otherWindow)
-    ).rejects.toThrow('Dependency recommendations operation is already running')
+    mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
+    await expect(invoke('dependencies:downloadRecommendations', otherWindow)).resolves.toBe(state)
 
     check.resolve()
     await expect(checking).resolves.toBe(state)

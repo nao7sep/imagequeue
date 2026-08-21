@@ -285,9 +285,6 @@ const api = {
   downloadRecommendations: (): Promise<DependenciesState> =>
     ipcRenderer.invoke('dependencies:downloadRecommendations'),
 
-  applyRecommendationsUpdate: (): Promise<DependenciesState> =>
-    ipcRenderer.invoke('dependencies:updateRecommendations'),
-
   setCheckUpdatesAtLaunch: (value: boolean): Promise<DependenciesState> =>
     ipcRenderer.invoke('dependencies:setCheckAtLaunch', value),
 

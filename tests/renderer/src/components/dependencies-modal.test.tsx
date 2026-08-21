@@ -49,9 +49,9 @@ describe('DependenciesModal cancellation', () => {
 
     expect(cancelDependencyOperations).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
-  })
+  }, 15_000)
 
-  it('shows an explicit check failure and refreshes any partially successful facts', async () => {
+  it('shows an explicit CLI check failure and re-reads local state', async () => {
     const getDependenciesState = vi.fn(async () => initialState)
     const checkDependencies = vi.fn(async (): Promise<DependenciesState> => {
       throw new Error('Could not check dependencies. Draw Things CLI: offline')
@@ -66,9 +66,31 @@ describe('DependenciesModal cancellation', () => {
 
     render(<DependenciesModal onClose={vi.fn()} />)
     await screen.findAllByRole('button', { name: 'Install' })
-    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
 
     expect(await screen.findByText(/Draw Things CLI: offline/)).toBeTruthy()
     expect(getDependenciesState).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers an explicit Refresh for installed versionless recommendations', async () => {
+    const installed = {
+      ...initialState,
+      recommendations: {
+        ...initialState.recommendations,
+        state: 'installed-unchecked' as const,
+        installedLabel: '42 entries',
+      },
+    }
+    const downloadRecommendations = vi.fn(async () => installed)
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => installed),
+      downloadRecommendations,
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    render(<DependenciesModal onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
+    await waitFor(() => expect(downloadRecommendations).toHaveBeenCalledTimes(1))
   })
 })

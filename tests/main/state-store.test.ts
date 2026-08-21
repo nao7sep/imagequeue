@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { readUiState, updateUiState, getUiStatePath } from '../../src/main/state-store'
 import { defaultUiState, NOTIFICATION_VOLUME_DEFAULT } from '../../src/shared/ui-state'
+import { closeBackupStore } from '../../src/main/backup/backup-store'
 
 let home: string
 let prevHome: string | undefined
@@ -15,6 +16,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  closeBackupStore()
   if (prevHome === undefined) delete process.env.IMAGEQUEUE_HOME
   else process.env.IMAGEQUEUE_HOME = prevHome
   fs.rmSync(home, { recursive: true, force: true })

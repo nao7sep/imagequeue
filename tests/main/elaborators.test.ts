@@ -151,7 +151,7 @@ describe('elaborators store', () => {
 
   describe('atomic writes and corrupt-file recovery', () => {
     it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', () => {
-      const spy = vi.spyOn(fs, 'writeFileSync')
+      const spy = vi.spyOn(fs, 'openSync')
       materializeElaborators()
 
       const tempCall = spy.mock.calls.find(
