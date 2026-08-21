@@ -30,6 +30,9 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
+      - name: Verify release tag matches package.json
+        if: github.ref_type == 'tag'
+        run: npm run check:release-version -- "${{ github.ref_name }}"
       - run: npm run typecheck
       - run: npm test
 
@@ -83,5 +86,6 @@ jobs:
             - **Windows**: SmartScreen → **More info** → **Run anyway**
           files: |
             dist/*.dmg
-            dist/*.exe
-            dist/*.zip
+            dist/*-setup.exe
+            dist/*-mac.zip
+            dist/*-win.zip

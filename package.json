@@ -23,6 +23,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:test",
     "test": "vitest run",
     "check": "npm run typecheck && npm test",
+    "check:release-version": "node scripts/check-release-version.js",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
