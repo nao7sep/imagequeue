@@ -36,7 +36,13 @@ describe('main-window layout registration and refresh', () => {
   it('updates the explicitly registered main window', () => {
     keyed.add('openai.image')
     const setMinimumSize = vi.fn()
-    registeredWindow = { isDestroyed: () => false, setMinimumSize } as never
+    const setSize = vi.fn()
+    registeredWindow = {
+      isDestroyed: () => false,
+      setMinimumSize,
+      getSize: () => [2000, 1000],
+      setSize,
+    } as never
     registerMainWindowForLayout(registeredWindow)
 
     refreshMainWindowMinimumSize()
@@ -45,13 +51,40 @@ describe('main-window layout registration and refresh', () => {
       computeWindowMinWidth(getVisiblePaneCount()),
       computeWindowMinHeight(),
     )
+    expect(setSize).not.toHaveBeenCalled()
+  })
+
+  it('grows an existing window when a higher pane minimum overtakes it', () => {
+    keyed.add('openai.image')
+    keyed.add('gemini.nanobanana')
+    const minWidth = computeWindowMinWidth(getVisiblePaneCount())
+    const minHeight = computeWindowMinHeight()
+    const setMinimumSize = vi.fn()
+    const setSize = vi.fn()
+    registeredWindow = {
+      isDestroyed: () => false,
+      setMinimumSize,
+      getSize: () => [minWidth - 100, minHeight - 20],
+      setSize,
+    } as never
+    registerMainWindowForLayout(registeredWindow)
+
+    refreshMainWindowMinimumSize()
+
+    expect(setMinimumSize).toHaveBeenCalledWith(minWidth, minHeight)
+    expect(setSize).toHaveBeenCalledWith(minWidth, minHeight)
   })
 
   it('recomputes after the last occupied unkeyed task leaves', () => {
     keyed.add('openai.image')
     const task = queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)[0]
     const setMinimumSize = vi.fn()
-    registeredWindow = { isDestroyed: () => false, setMinimumSize } as never
+    registeredWindow = {
+      isDestroyed: () => false,
+      setMinimumSize,
+      getSize: () => [2000, 1000],
+      setSize: vi.fn(),
+    } as never
     registerMainWindowForLayout(registeredWindow)
     refreshMainWindowMinimumSize()
     const occupiedPaneCount = getVisiblePaneCount()

@@ -35,4 +35,14 @@ export function refreshMainWindowMinimumSize(): void {
   if (!win || win.isDestroyed()) return
   const { minWidth, minHeight } = buildMainWindowOptions(getVisiblePaneCount())
   win.setMinimumSize(minWidth, minHeight)
+
+  // macOS accepts a higher minimum without bringing an already-smaller window
+  // up to that floor. Grow only the undersized axes so a newly visible pane is
+  // usable immediately, while a lower minimum never changes the user's window.
+  const [width, height] = win.getSize()
+  const nextWidth = Math.max(width, minWidth)
+  const nextHeight = Math.max(height, minHeight)
+  if (nextWidth !== width || nextHeight !== height) {
+    win.setSize(nextWidth, nextHeight)
+  }
 }
