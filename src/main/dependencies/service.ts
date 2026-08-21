@@ -14,6 +14,12 @@ import {
 import { isCliInstalled, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
 import { compareCliVersions } from './cli-version'
+import {
+  APP_DEPENDENCY_OPERATION_OWNER,
+  DependencyOperationBusyError,
+  runDependencyOperation,
+  type MutableDependency,
+} from './operations'
 import { deriveDependencyState, isCheckFresh, type DependencyComparison } from './state'
 import { readDependenciesCache, updateDependenciesCache } from './store'
 import type { DependenciesState, DependencyInfo, DependencyProgress } from '../../shared/types'
@@ -113,6 +119,28 @@ export async function checkAllDependencies(signal?: AbortSignal): Promise<Depend
   return getDependenciesState()
 }
 
+async function runLaunchDependencyCheck(
+  dependency: MutableDependency,
+  label: string,
+  check: (signal: AbortSignal) => Promise<unknown>
+): Promise<void> {
+  try {
+    await runDependencyOperation(
+      APP_DEPENDENCY_OPERATION_OWNER,
+      [dependency],
+      check
+    )
+  } catch (err) {
+    if (err instanceof DependencyOperationBusyError) {
+      log('info', 'Launch dependency check skipped; dependency operation already running', {
+        dependency: label,
+      })
+      return
+    }
+    throw err
+  }
+}
+
 /** The launch path: when the toggle is on, re-check each dependency whose last
  * check is older than the staleness cap. Never throws — a failed check just
  * leaves that dependency 'installed-unchecked'. */
@@ -126,10 +154,20 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
   const now = Date.now()
   const tasks: Array<{ label: string; promise: Promise<unknown> }> = []
   if (!isCheckFresh(cache.cli.lastCheckedAtUtc, now)) {
-    tasks.push({ label: 'Draw Things CLI', promise: checkCliForUpdate(false) })
+    tasks.push({
+      label: 'Draw Things CLI',
+      promise: runLaunchDependencyCheck('cli', 'Draw Things CLI', (signal) =>
+        checkCliForUpdate(false, signal)
+      ),
+    })
   }
   if (!isCheckFresh(cache.recommendations.lastCheckedAtUtc, now)) {
-    tasks.push({ label: 'Recommended parameters', promise: checkRecommendations() })
+    tasks.push({
+      label: 'Recommended parameters',
+      promise: runLaunchDependencyCheck('recommendations', 'Recommended parameters', (signal) =>
+        checkRecommendations(signal)
+      ),
+    })
   }
   if (tasks.length === 0) return
   const results = await Promise.allSettled(tasks.map((task) => task.promise))
