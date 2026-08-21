@@ -22,6 +22,7 @@ import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSession
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { createCoalescedWriter } from '../utils/coalesced-writer'
+import { publishQueueState } from '../queue/publisher'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -320,12 +321,6 @@ export async function dropCurrentSessionIfEmpty(reason: string): Promise<boolean
   return true
 }
 
-function broadcastQueueUpdate(tasksByBackend: Record<BackendId, Task[]>): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('queue:updated', tasksByBackend)
-  }
-}
-
 // Fired whenever the active session changes (new session, resume into another).
 // Renderer-side session-scoped contexts (e.g. SessionDraftContext) listen to
 // this to re-hydrate their in-memory state from the now-active session.
@@ -397,7 +392,7 @@ export async function createSession(): Promise<void> {
     lastResumedAt: null,
   })
   persistActiveSession()
-  broadcastQueueUpdate(queueManager.getAllStoredTasks())
+  publishQueueState()
   broadcastSessionChanged(getSessionId())
 
   if (dropPrevious) {
@@ -473,7 +468,7 @@ export async function resumeSession(sessionId: string): Promise<void> {
     lastResumedAt: new Date().toISOString(),
   })
   persistActiveSession()
-  broadcastQueueUpdate(queueManager.getAllStoredTasks())
+  publishQueueState()
   broadcastSessionChanged(getSessionId())
 
   const interruptedCount = collectTasks(resumedQueues).filter((task) => task.status === 'interrupted').length

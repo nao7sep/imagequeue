@@ -1,4 +1,5 @@
 import { log } from '../logger'
+import { waitForAllSettledWithin } from '../utils/bounded-wait'
 
 // The registry of in-flight generations, and the queue's paused flag. Both exist
 // for one reason: nothing in this app could previously stop image generation.
@@ -20,7 +21,13 @@ export const CANCELLED_MESSAGE = 'Generation stopped.'
  *  request; Draw Things kills its child process. */
 type CancelFn = () => void
 
-const inFlight = new Map<string, CancelFn>()
+interface InFlightEntry {
+  cancel: CancelFn
+  /** Resolves only after the owning processor task has left all cleanup paths. */
+  settled: Promise<void>
+}
+
+const inFlight = new Map<string, InFlightEntry>()
 
 /** Set while the queue is paused: the processor starts nothing new, but work
  *  already running is left alone to finish and save normally. This is the
@@ -38,9 +45,13 @@ export function setQueuePaused(next: boolean): void {
   log('info', next ? 'Queue paused' : 'Queue resumed', { inFlight: inFlight.size })
 }
 
-/** Register a running generation's canceller for the duration of the call. */
-export function registerInFlight(taskId: string, cancel: CancelFn): void {
-  inFlight.set(taskId, cancel)
+/** Register a running generation's canceller and its full settlement barrier. */
+export function registerInFlight(
+  taskId: string,
+  cancel: CancelFn,
+  settled: Promise<void>,
+): void {
+  inFlight.set(taskId, { cancel, settled })
 }
 
 export function clearInFlight(taskId: string): void {
@@ -51,10 +62,10 @@ export function clearInFlight(taskId: string): void {
  *  task — a cancelled request rejects exactly like a failed one, and the caller
  *  decides what status it lands in. Returns false when the task was not running. */
 export function cancelInFlight(taskId: string): boolean {
-  const cancel = inFlight.get(taskId)
-  if (!cancel) return false
+  const entry = inFlight.get(taskId)
+  if (!entry) return false
   try {
-    cancel()
+    entry.cancel()
   } catch (err) {
     // A canceller that throws must not stop the others being cancelled.
     log('warn', 'Cancelling a generation threw', { taskId, error: String(err) })
@@ -69,6 +80,30 @@ export function cancelAllInFlight(): number {
     if (cancelInFlight(taskId)) count++
   }
   return count
+}
+
+/** Signal every generation, then wait for the processor-owned tasks to settle. */
+export async function cancelAllInFlightAndWait(timeoutMs: number): Promise<{
+  signalled: number
+  settled: boolean
+}> {
+  // Snapshot before signalling: generation itself leaves the registry as soon
+  // as bytes arrive, but shutdown must still await its slug/write/persist tail.
+  const entries = [...inFlight.entries()]
+  let signalled = 0
+  for (const [taskId, entry] of entries) {
+    try {
+      entry.cancel()
+    } catch (err) {
+      log('warn', 'Cancelling a generation threw', { taskId, error: String(err) })
+    }
+    signalled++
+  }
+
+  return {
+    signalled,
+    settled: await waitForAllSettledWithin(entries.map(([, entry]) => entry.settled), timeoutMs),
+  }
 }
 
 export function inFlightCount(): number {

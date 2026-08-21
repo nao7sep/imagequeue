@@ -1,4 +1,3 @@
-import { BrowserWindow } from 'electron'
 import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
@@ -9,7 +8,7 @@ import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
 import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight } from './cancellation'
-import { buildControlState } from '../queue/ipc'
+import { publishQueueState } from '../queue/publisher'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
@@ -44,6 +43,8 @@ const activeCounts: Record<BackendId, number> = {
 // queue logs a single aggregate summary instead of an info line per image.
 // Process-global like the queue itself; per-image start/complete stay at debug.
 const drainTracker = new DrainTracker()
+let processorTimer: NodeJS.Timeout | null = null
+let processorStopping = false
 
 function totalActive(): number {
   return Object.values(activeCounts).reduce((sum, count) => sum + count, 0)
@@ -70,12 +71,24 @@ function getFallbackExt(backend: BackendId, params: Task['params']): ImageExt {
 
 // Starts the queue processor loop. Call once at app startup.
 export function startProcessor(): void {
-  setInterval(() => {
+  processorStopping = false
+  if (processorTimer) clearInterval(processorTimer)
+  processorTimer = setInterval(() => {
     processQueues()
   }, 500)
 }
 
+/** Prevent a shutdown race from starting queued work after cleanup begins. */
+export function stopProcessor(): void {
+  processorStopping = true
+  if (processorTimer) {
+    clearInterval(processorTimer)
+    processorTimer = null
+  }
+}
+
 export function processQueues(): void {
+  if (processorStopping) return
   // Close out a finished drain before scheduling new work: once nothing is in
   // flight and nothing is queued, the busy period that just ended gets its one
   // summary line. The 500ms tick that observes the idle state may land up to
@@ -109,9 +122,12 @@ export function processQueues(): void {
       task.startedAt = new Date().toISOString()
       logGenerationStart(task.id, backend, task.model)
       persistActiveSession()
-      broadcastUpdate()
+      // Registration happens synchronously before processTask's first await.
+      // Start it before publishing so the menu count includes this task.
+      const processing = processTask(backend, task)
+      publishQueueState()
 
-      processTask(backend, task).finally(() => {
+      processing.finally(() => {
         activeCounts[backend]--
       })
     }
@@ -125,7 +141,9 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   // entry for every generating task whatever backend it belongs to — which is
   // also what makes the menu's "generating" count the real one.
   const controller = new AbortController()
-  registerInFlight(task.id, () => controller.abort())
+  let resolveSettled!: () => void
+  const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
+  registerInFlight(task.id, () => controller.abort(), settled)
 
   // Only generate() is cancellable work. Once it resolves, the image exists
   // (and, on a cloud backend, is paid for) — so the task leaves the registry
@@ -204,39 +222,30 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       task.error = null
       drainTracker.recordFailed()
       log('info', 'Generation stopped by request', { taskId: task.id, backend })
-      persistActiveSession()
-      broadcastUpdate()
-      return
+    } else {
+      task.status = 'failed'
+      // task.error stays a short string for the UI and the persisted manifest;
+      // the log captures the full error (type, message, stack, cause).
+      task.error = message
+      drainTracker.recordFailed()
+      logGenerationFailed(task.id, err, {
+        backend,
+        model: task.model,
+        prompt: task.prompt,
+        params: task.params,
+        durationMs: task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : null
+      })
     }
-    task.status = 'failed'
-    // task.error stays a short string for the UI and the persisted manifest;
-    // the log captures the full error (type, message, stack, cause).
-    task.error = message
-    drainTracker.recordFailed()
-    logGenerationFailed(task.id, err, {
-      backend,
-      model: task.model,
-      prompt: task.prompt,
-      params: task.params,
-      durationMs: task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : null
-    })
   } finally {
     clearInFlight(task.id)
   }
 
-  persistActiveSession()
-  broadcastUpdate()
-}
-
-function broadcastUpdate(): void {
-  const allTasks = queueManager.getAllStoredTasks()
-  // Every queue change is also a control-state change (a start moves queued →
-  // generating, a settle moves generating → terminal), and the handlers'
-  // broadcasts cannot see these — without this, an open All Queues menu shows
-  // counts frozen at the moment it opened.
-  const controlState = buildControlState()
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('queue:updated', allTasks)
-    win.webContents.send('queue:controlState', controlState)
+  try {
+    persistActiveSession()
+    publishQueueState()
+  } finally {
+    // The shutdown barrier covers the task's final state publication too, not
+    // merely the backend request/child exiting.
+    resolveSettled()
   }
 }

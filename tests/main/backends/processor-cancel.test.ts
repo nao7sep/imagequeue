@@ -22,12 +22,12 @@ const generate = vi.fn(
     }),
 )
 
-const sentChannels = vi.hoisted(() => [] as string[])
+const sentEvents = vi.hoisted(() => [] as { channel: string; payload: unknown }[])
 vi.mock('electron', () => ({
   ipcMain: { handle: () => undefined },
   BrowserWindow: {
     getAllWindows: () => [
-      { webContents: { send: (channel: string) => { sentChannels.push(channel) } } },
+      { webContents: { send: (channel: string, payload: unknown) => { sentEvents.push({ channel, payload }) } } },
     ],
   },
 }))
@@ -89,7 +89,7 @@ beforeEach(() => {
   generate.mockClear()
   captured = null
   slugState.failNext = false
-  sentChannels.length = 0
+  sentEvents.length = 0
   resetCancellationState()
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
 })
@@ -177,13 +177,14 @@ describe('the queue broadcasts control state as work starts and settles', () => 
   it('sends queue:controlState alongside queue:updated', async () => {
     queueOne('flux')
     processQueues()
-    expect(sentChannels).toContain('queue:controlState')
+    expect(sentEvents.find((event) => event.channel === 'queue:controlState')?.payload)
+      .toMatchObject({ generating: 1 })
 
-    sentChannels.length = 0
+    sentEvents.length = 0
     captured!.reject(new Error('boom'))
     await settle()
-    expect(sentChannels).toContain('queue:controlState')
-    expect(sentChannels).toContain('queue:updated')
+    expect(sentEvents.map((event) => event.channel)).toContain('queue:controlState')
+    expect(sentEvents.map((event) => event.channel)).toContain('queue:updated')
   })
 })
 

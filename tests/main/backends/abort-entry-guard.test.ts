@@ -40,6 +40,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -52,5 +53,23 @@ describe('an already-aborted signal is answered at the door', () => {
   it('flux: rejects as cancelled without touching the network', async () => {
     await expect(generateFlux(task, abortedSignal())).rejects.toThrow(CANCELLED_MESSAGE)
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('FLUX polling cancellation', () => {
+  it('wakes the poll delay immediately and starts no poll request', async () => {
+    vi.useFakeTimers()
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'job-1', polling_url: 'https://poll.test/job-1' }),
+    })
+    const controller = new AbortController()
+    const generation = generateFlux(task, controller.signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    controller.abort()
+    await expect(generation).rejects.toThrow(CANCELLED_MESSAGE)
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 })

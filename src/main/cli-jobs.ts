@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
 import { spawn as spawnPty } from 'node-pty'
 import { log, serializeError } from './logger'
+import { waitForAllSettledWithin } from './utils/bounded-wait'
 import {
   CliChunk,
   CliChunkEvent,
@@ -45,6 +46,8 @@ interface JobState {
   stdoutLastCR: boolean
   stderrLastCR: boolean
   finalized: boolean
+  settled: Promise<void>
+  resolveSettled: () => void
   cliPath: string
   args: string[]
   logContext: Record<string, unknown>
@@ -57,6 +60,8 @@ const CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS = 30_000
 
 export function startCliJob(opts: StartCliJobOpts): string {
   const jobId = nanoid()
+  let resolveSettled!: () => void
+  const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
   const state: JobState = {
     jobId,
     kind: opts.kind,
@@ -78,6 +83,8 @@ export function startCliJob(opts: StartCliJobOpts): string {
     stdoutLastCR: false,
     stderrLastCR: false,
     finalized: false,
+    settled,
+    resolveSettled,
     cliPath: opts.cliPath,
     args: opts.args,
     logContext: opts.logContext,
@@ -110,7 +117,7 @@ export function unsubscribeCliJob(jobId: string, wc: WebContents): void {
   removeSubscriber(state, wc)
 }
 
-export function killCliJob(jobId: string): void {
+export function killCliJob(jobId: string, killGraceMs = CLI_JOB_KILL_GRACE_MS): void {
   const state = jobs.get(jobId)
   if (!state) return
 
@@ -130,12 +137,29 @@ export function killCliJob(jobId: string): void {
   try { state.child?.kill('SIGTERM') } catch { /* ignore */ }
   state.killGraceTimer = setTimeout(() => {
     try { state.child?.kill('SIGKILL') } catch { /* ignore */ }
-  }, CLI_JOB_KILL_GRACE_MS)
+  }, killGraceMs)
   log('info', 'CLI job kill requested', { jobId })
 }
 
 export function killAllCliJobs(): void {
   for (const jobId of jobs.keys()) killCliJob(jobId)
+}
+
+/** Signal every live/queued CLI job and await real child settlement, bounded. */
+export async function killAllCliJobsAndWait(options: {
+  killGraceMs?: number
+  timeoutMs?: number
+} = {}): Promise<{ signalled: number; settled: boolean }> {
+  const killGraceMs = options.killGraceMs ?? CLI_JOB_KILL_GRACE_MS
+  const timeoutMs = options.timeoutMs ?? killGraceMs + 2_000
+  const active = [...jobs.values()].filter((state) => !state.finalized)
+
+  for (const state of active) killCliJob(state.jobId, killGraceMs)
+
+  return {
+    signalled: active.length,
+    settled: await waitForAllSettledWithin(active.map((state) => state.settled), timeoutMs),
+  }
 }
 
 export function getCliJobSnapshot(jobId: string): CliJobSnapshot | null {
@@ -444,6 +468,8 @@ function finalize(state: JobState, status: 'exited' | 'killed', code: number | n
     activeImportJobId = null
     launchNextImport()
   }
+
+  state.resolveSettled()
 }
 
 function snapshot(state: JobState): CliJobSnapshot {

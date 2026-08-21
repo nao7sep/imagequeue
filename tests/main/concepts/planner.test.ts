@@ -103,6 +103,19 @@ describe('expandProbes / parseClusters', () => {
     expect(aligned).toEqual([['a'], ['b']])
   })
 
+  it('never assigns an exact-matched row again as a positional fallback', () => {
+    const aligned = parseClusters(
+      {
+        clusters: [
+          { domain: 'forests', concepts: ['clearing'] },
+          { domain: 'harbours', concepts: ['dry dock'] },
+        ],
+      },
+      ['ports', 'forests']
+    )
+    expect(aligned).toEqual([['dry dock'], ['clearing']])
+  })
+
   it('yields empty clusters, not a throw, for junk', () => {
     expect(parseClusters(null, ['ports'])).toEqual([[]])
   })

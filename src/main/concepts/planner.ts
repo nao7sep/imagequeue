@@ -168,17 +168,40 @@ export function parseStringList(parsed: unknown, key: string): string[] {
  *  empty rather than throwing — the caller simply banks fewer concepts. */
 export function parseClusters(parsed: unknown, probeDisplays: readonly string[]): string[][] {
   const raw = (parsed as { clusters?: unknown } | null | undefined)?.clusters
-  const byKey = new Map<string, string[]>()
-  const byIndex: string[][] = []
+  const rows: { key: string; concepts: string[] }[] = []
   if (Array.isArray(raw)) {
     for (const cluster of raw) {
       const concepts = parseStringList(cluster, 'concepts')
-      byIndex.push(concepts)
       const domainKey = normalizeKey(String((cluster as Record<string, unknown> | null | undefined)?.domain ?? ''))
-      if (domainKey && !byKey.has(domainKey)) byKey.set(domainKey, concepts)
+      rows.push({ key: domainKey, concepts })
     }
   }
-  return probeDisplays.map((display, i) => byKey.get(normalizeKey(display)) ?? byIndex[i] ?? [])
+
+  // Claim exact-name rows first, then use unclaimed positional rows as the
+  // fallback. A row may be consumed only once: the old independent key/index
+  // lookup could assign one cluster to two probes when a response was partly
+  // reordered and partly misspelled, discarding another cluster entirely.
+  const claimed = new Set<number>()
+  const aligned: Array<string[] | undefined> = Array.from({ length: probeDisplays.length })
+  for (let probeIndex = 0; probeIndex < probeDisplays.length; probeIndex++) {
+    const key = normalizeKey(probeDisplays[probeIndex])
+    const rowIndex = rows.findIndex((row, i) => !claimed.has(i) && row.key === key)
+    if (rowIndex < 0) continue
+    claimed.add(rowIndex)
+    aligned[probeIndex] = rows[rowIndex].concepts
+  }
+  for (let probeIndex = 0; probeIndex < probeDisplays.length; probeIndex++) {
+    if (aligned[probeIndex]) continue
+    const positional = !claimed.has(probeIndex) && rows[probeIndex] ? probeIndex : -1
+    const rowIndex = positional >= 0 ? positional : rows.findIndex((_, i) => !claimed.has(i))
+    if (rowIndex < 0) {
+      aligned[probeIndex] = []
+      continue
+    }
+    claimed.add(rowIndex)
+    aligned[probeIndex] = rows[rowIndex].concepts
+  }
+  return aligned.map((concepts) => concepts ?? [])
 }
 
 export async function resolveFacets(ask: AskJson, seed: string, existingFacets: readonly string[]): Promise<string[]> {

@@ -1,4 +1,11 @@
 import type { PromptMode } from '../../../shared/session-draft'
+import type { BackendId, EnqueueBatchUnit } from '../../../shared/types'
+
+export interface AdvancedQueueTarget {
+  backend: BackendId
+  model: string
+  params: Record<string, unknown>
+}
 
 // The batch contract of Advanced Prompting's Queue Tasks, extracted from the
 // modal shell: how many prompts each mode needs, and which prompt each
@@ -39,4 +46,28 @@ export function promptTextForUnit(
     throw new Error(`Prompt ${index + 1} missing: have ${prompts.length} for mode ${mode}.`)
   }
   return prompt
+}
+
+/** Build the complete iteration-major batch after target params are resolved. */
+export function buildAdvancedQueueUnits(options: {
+  mode: PromptMode
+  prompts: readonly string[]
+  copies: number
+  targets: readonly AdvancedQueueTarget[]
+}): EnqueueBatchUnit[] {
+  const { mode, prompts, targets } = options
+  const copies = Math.max(1, options.copies)
+  const units: EnqueueBatchUnit[] = []
+
+  for (let copyIndex = 0; copyIndex < copies; copyIndex++) {
+    targets.forEach((target, targetIndex) => {
+      units.push({
+        prompt: promptTextForUnit(mode, prompts, targetIndex, copyIndex, targets.length),
+        backend: target.backend,
+        model: target.model,
+        params: target.params,
+      })
+    })
+  }
+  return units
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cancelAllInFlight,
+  cancelAllInFlightAndWait,
   cancelInFlight,
   clearInFlight,
   inFlightCount,
@@ -22,8 +23,8 @@ afterEach(() => resetCancellationState())
 describe('in-flight registry', () => {
   it('cancels one running generation and leaves the others alone', () => {
     const a = vi.fn(); const b = vi.fn()
-    registerInFlight('t1', a)
-    registerInFlight('t2', b)
+    registerInFlight('t1', a, Promise.resolve())
+    registerInFlight('t2', b, Promise.resolve())
     expect(cancelInFlight('t1')).toBe(true)
     expect(a).toHaveBeenCalledOnce()
     expect(b).not.toHaveBeenCalled()
@@ -34,15 +35,32 @@ describe('in-flight registry', () => {
   })
 
   it('cancels everything in flight and counts what it signalled', () => {
-    registerInFlight('t1', vi.fn())
-    registerInFlight('t2', vi.fn())
+    registerInFlight('t1', vi.fn(), Promise.resolve())
+    registerInFlight('t2', vi.fn(), Promise.resolve())
     expect(cancelAllInFlight()).toBe(2)
+  })
+
+  it('does not finish the shutdown barrier before generation settles', async () => {
+    let resolveSettled!: () => void
+    const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
+    const cancel = vi.fn()
+    registerInFlight('t1', cancel, settled)
+
+    const waiting = cancelAllInFlightAndWait(1_000)
+    let finished = false
+    void waiting.then(() => { finished = true })
+    await Promise.resolve()
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(finished).toBe(false)
+
+    resolveSettled()
+    await expect(waiting).resolves.toEqual({ signalled: 1, settled: true })
   })
 
   // A generation that finishes normally must not stay cancellable: a later
   // "stop everything" would otherwise signal a process that is long gone.
   it('stops tracking a generation once it clears', () => {
-    registerInFlight('t1', vi.fn())
+    registerInFlight('t1', vi.fn(), Promise.resolve())
     clearInFlight('t1')
     expect(inFlightCount()).toBe(0)
     expect(cancelInFlight('t1')).toBe(false)
@@ -53,8 +71,8 @@ describe('in-flight registry', () => {
   it('keeps cancelling after one canceller throws', () => {
     const boom = vi.fn(() => { throw new Error('already dead') })
     const ok = vi.fn()
-    registerInFlight('t1', boom)
-    registerInFlight('t2', ok)
+    registerInFlight('t1', boom, Promise.resolve())
+    registerInFlight('t2', ok, Promise.resolve())
     expect(cancelAllInFlight()).toBe(2)
     expect(ok).toHaveBeenCalledOnce()
   })
@@ -73,7 +91,7 @@ describe('queue pause flag', () => {
   // image finishes and saves rather than being thrown away.
   it('does not cancel anything in flight', () => {
     const cancel = vi.fn()
-    registerInFlight('t1', cancel)
+    registerInFlight('t1', cancel, Promise.resolve())
     setQueuePaused(true)
     expect(cancel).not.toHaveBeenCalled()
     expect(inFlightCount()).toBe(1)

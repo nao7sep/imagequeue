@@ -35,7 +35,7 @@ vi.mock('../../src/main/logger', () => ({
 }))
 const logged = (message: string): Record<string, unknown>[] =>
   logCalls.filter((c) => c.message === message).map((c) => c.data)
-const mockKnobs = vi.hoisted(() => ({ concurrency: 1, maxRetries: 0 }))
+const mockKnobs = vi.hoisted(() => ({ concurrency: 1, maxRetries: 0, backoffMs: [] as number[] }))
 vi.mock('../../src/main/text-ai/templates', () => ({
   PROMPTS_RESPONSE_SCHEMA: { marker: 'prompts' },
   fillTemplate: (template: string, values: Record<string, string>) =>
@@ -44,7 +44,7 @@ vi.mock('../../src/main/text-ai/templates', () => ({
     batch_size: 2,
     concurrency: mockKnobs.concurrency,
     max_retries_per_turn: mockKnobs.maxRetries,
-    retry_backoff_ms: [],
+    retry_backoff_ms: mockKnobs.backoffMs,
     prefer_new_concepts: false,
     templates: {
       expansion: 'exp|{{FORMAT}}|{{SEED}}|{{N}}\n{{CONCEPTS}}',
@@ -171,6 +171,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     process.env[ENV_VAR] = tmpRoot
     mockKnobs.concurrency = 1
     mockKnobs.maxRetries = 0
+    mockKnobs.backoffMs = []
     logCalls.length = 0
     vi.mocked(getElaborator).mockImplementation((id: string) =>
       id === 'composition' || id === 'style'
@@ -342,6 +343,26 @@ describe('brainstormPrompts (concept-driven)', () => {
     installScriptedProvider({ onProseCall: (call) => { if (call === 1) cancelBrainstorm('r7') } })
     const result = await brainstormPrompts(request({ requestId: 'r7', count: 6 }))
     expect(result.prompts).toHaveLength(2)
+  })
+
+  it('cancels immediately during retry backoff and starts no later request', async () => {
+    mockKnobs.maxRetries = 2
+    mockKnobs.backoffMs = [60_000]
+    let proseAttempts = 0
+    installScriptedProvider({
+      onProseCall: () => {
+        proseAttempts++
+        if (proseAttempts === 1) throw new Error('retry me')
+      },
+    })
+
+    const pending = brainstormPrompts(request({ requestId: 'backoff-cancel', count: 1 }))
+    while (logged('Brainstorm call failed, retrying').length === 0) await Promise.resolve()
+    cancelBrainstorm('backoff-cancel')
+
+    await expect(pending).resolves.toEqual({ prompts: [] })
+    expect(proseAttempts).toBe(1)
+    expect(hasActiveBrainstorms()).toBe(false)
   })
 
   it('clears the active flag on success, failure, and cancellation', async () => {

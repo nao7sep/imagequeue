@@ -5,7 +5,7 @@ import { handle } from './ipc-boundary'
 import { loadConfig, saveConfig, getDataDir } from './config'
 import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
-import { refreshWindowMinimumSize } from './index'
+import { refreshMainWindowMinimumSize } from './main-window-layout'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
@@ -84,7 +84,7 @@ export function registerSettingsIpc(): void {
     }
     // Storing or clearing a key can add or remove a column, which moves the
     // window's derived minimum.
-    if (entries.length > 0) refreshWindowMinimumSize()
+    if (entries.length > 0) refreshMainWindowMinimumSize()
     return { success: true }
   })
 

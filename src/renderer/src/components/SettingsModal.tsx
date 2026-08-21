@@ -7,6 +7,7 @@ import { multiline } from '../../../shared/textCleanup'
 import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS } from '../../../shared/models'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { useUiState } from '../context/UiStateContext'
+import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -64,10 +65,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   // Volume is state, not config: it lives in state.json and is shared with the
   // prompt pane's slider through the one context, so the two never disagree.
   const { uiState, patchUiState } = useUiState()
-  const [settingsVolume, setSettingsVolume] = useState<number>(uiState.notificationVolume)
-  useEffect(() => {
-    setSettingsVolume(uiState.notificationVolume)
-  }, [uiState.notificationVolume])
   useEffect(() => {
     if (config || !settings) return
     const next = cloneSettings(settings)
@@ -402,14 +399,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label>Volume</label>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={settingsVolume}
-              onChange={(e) => setSettingsVolume(parseFloat(e.target.value))}
-              onPointerUp={(e) => patchUiState({ notificationVolume: parseFloat((e.target as HTMLInputElement).value) })}
+            <NotificationVolumeSlider
+              value={uiState.notificationVolume}
+              onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
             />
           </div>
           <div className="settings-field">
@@ -671,4 +663,3 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     </Modal>
   )
 }
-

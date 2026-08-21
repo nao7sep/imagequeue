@@ -55,7 +55,7 @@ describe('queue:stopAll', () => {
   it('interrupts queued tasks and cancels in-flight ones', async () => {
     const tasks = seed(['queued', 'generating', 'queued'])
     let aborted = false
-    registerInFlight(tasks[1].id, () => { aborted = true })
+    registerInFlight(tasks[1].id, () => { aborted = true }, Promise.resolve())
 
     const result = await invoke('queue:stopAll')
     expect(result).toEqual({ cancelled: 1, queued: 2 })

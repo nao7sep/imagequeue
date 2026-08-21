@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { promptTextForUnit, promptsNeeded } from '../../../../src/renderer/src/utils/advancedQueueUnits'
+import {
+  buildAdvancedQueueUnits,
+  promptTextForUnit,
+  promptsNeeded,
+} from '../../../../src/renderer/src/utils/advancedQueueUnits'
 
 // The batch contract behind Queue Tasks. The count promise the button makes
 // (targets × iterations) is honest only if this dealing is exact — an error
@@ -43,5 +47,28 @@ describe('promptTextForUnit', () => {
   it('throws on a shortfall rather than wrapping around', () => {
     expect(() => promptTextForUnit('fresh-task', ['a', 'b'], 2, 0, 3)).toThrow(/missing/)
     expect(() => promptTextForUnit('fresh-iteration', ['a'], 0, 1, 3)).toThrow(/missing/)
+  })
+})
+
+describe('buildAdvancedQueueUnits', () => {
+  it('builds one iteration-major batch across cloud and local targets', () => {
+    const targets = [
+      { backend: 'openai' as const, model: 'cloud', params: { quality: 'low' } },
+      { backend: 'drawthings' as const, model: 'local', params: { steps: 4 } },
+    ]
+    const units = buildAdvancedQueueUnits({
+      mode: 'fresh-task',
+      prompts: ['cloud-0', 'local-0', 'cloud-1', 'local-1'],
+      copies: 2,
+      targets,
+    })
+
+    expect(units.map((unit) => [unit.backend, unit.prompt])).toEqual([
+      ['openai', 'cloud-0'],
+      ['drawthings', 'local-0'],
+      ['openai', 'cloud-1'],
+      ['drawthings', 'local-1'],
+    ])
+    expect(units[1].params).toEqual({ steps: 4 })
   })
 })

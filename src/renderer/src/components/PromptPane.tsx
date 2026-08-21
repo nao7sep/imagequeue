@@ -10,6 +10,7 @@ import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textClea
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
+import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import './PromptPane.css'
 
 interface Props {
@@ -31,11 +32,6 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const soundsEnabled = (notificationCfg.sounds_enabled as boolean) ?? true
   // Volume is state, not config — it lives in state.json beside the pane width.
   const { uiState, patchUiState } = useUiState()
-  const volume = uiState.notificationVolume
-
-  // Local volume state for smooth slider dragging; syncs on pointer up.
-  const [localVolume, setLocalVolume] = useState<number>(volume)
-  useEffect(() => { setLocalVolume(volume) }, [volume])
 
   const persistNotificationField = useCallback((field: string, value: unknown): void => {
     void saveNotificationField(field, value)
@@ -224,16 +220,10 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             />
             Sound
           </label>
-          <input
-            type="range"
+          <NotificationVolumeSlider
             className="notification-volume"
-            min={0}
-            max={1}
-            step={0.05}
-            value={localVolume}
-            title={`Volume: ${Math.round(localVolume * 100)}%`}
-            onChange={(e) => setLocalVolume(parseFloat(e.target.value))}
-            onPointerUp={(e) => patchUiState({ notificationVolume: parseFloat((e.target as HTMLInputElement).value) })}
+            value={uiState.notificationVolume}
+            onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
           />
           <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
             Send to All

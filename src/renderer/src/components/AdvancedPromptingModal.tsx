@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { nanoid } from 'nanoid'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
-import type { BrainstormPhase, ElaboratedPromptRecord } from '../../../shared/types'
+import type { ElaboratedPromptRecord } from '../../../shared/types'
 import { multiline } from '../../../shared/textCleanup'
-import { promptTextForUnit, promptsNeeded } from '../utils/advancedQueueUnits'
+import {
+  buildAdvancedQueueUnits,
+  promptsNeeded,
+  type AdvancedQueueTarget,
+} from '../utils/advancedQueueUnits'
+import { resolveAdvancedTargets } from '../utils/advancedTargets'
 import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
 import { hasApiKeyFor } from '../utils/enqueue'
 import {
@@ -23,7 +27,6 @@ import {
   BACKEND_LABELS,
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
   type BackendId,
-  type EnqueueBatchUnit,
   type Elaborator,
   ELABORATOR_KIND_LABELS,
   type ElaboratorKind,
@@ -38,6 +41,7 @@ import {
   type ActiveOperation,
 } from '../utils/advancedPromptingGates'
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
+import { useBrainstormOperation } from '../hooks/useBrainstormOperation'
 import './AdvancedPromptingModal.css'
 
 // How long the "Queued N tasks." receipt stays on screen before the modal
@@ -46,15 +50,6 @@ const QUEUE_COMPLETION_HOLD_MS = 900
 
 interface Props {
   onClose: () => void
-}
-
-interface DtParams {
-  width: number
-  height: number
-  steps: number
-  guidance: number
-  seed?: number
-  negativePrompt?: string
 }
 
 const isMacPlatform = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
@@ -95,9 +90,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // engine, so at most one runs at a time. One value (not a boolean per action)
   // means there is no second flag a control can read by mistake.
   const [activeOperation, setActiveOperation] = useState<ActiveOperation>(null)
-  const [brainstormProgress, setBrainstormProgress] = useState<
-    { done: number; total: number; phase: BrainstormPhase } | null
-  >(null)
   // The footer's terminal line, held briefly before the modal closes. The prose
   // wave lands in a burst, so the live counter can jump from a low number
   // straight to done — closing at that instant reads as a half-finished run.
@@ -116,10 +108,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // in-flight async continuations know to discard their results rather than
   // append prompts or enqueue tasks.
   const cancelledRef = useRef(false)
-  // The brainstorm requestId of the run in flight, so a deliberate close can
-  // tell the main process to stop generating. Null when no brainstorm is running.
-  const activeRequestIdRef = useRef<string | null>(null)
-
   const elaboratorsByKind = useMemo(() => groupElaborators(elaborators), [elaborators])
 
   const refreshElaborators = useCallback(async (): Promise<void> => {
@@ -194,30 +182,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }
 
   const effectiveTargets = useMemo(() => {
-    const proprietary: BackendId[] = []
-    let dt: string[] = []
-
-    if (targetScope === 'selected') {
-      for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-        if (selectedProprietary[id] && proprietaryApiKeyByBackend[id]) proprietary.push(id)
-      }
-      const selectedSet = new Set(selectedDtFiles)
-      dt = downloadedDtModels
-        .map((m) => m.file)
-        .filter((f) => selectedSet.has(f))
-    } else if (targetScope === 'all-proprietary') {
-      for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-        if (proprietaryApiKeyByBackend[id]) proprietary.push(id)
-      }
-    } else if (targetScope === 'all-drawthings') {
-      dt = downloadedDtModels.map((m) => m.file)
-    } else {
-      for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
-        if (proprietaryApiKeyByBackend[id]) proprietary.push(id)
-      }
-      dt = downloadedDtModels.map((m) => m.file)
-    }
-    return { proprietary, dt }
+    return resolveAdvancedTargets({
+      scope: targetScope,
+      selectedProprietary,
+      selectedDtFiles,
+      downloadedDtModels,
+      proprietaryEnabled: proprietaryApiKeyByBackend,
+    })
   }, [targetScope, selectedProprietary, selectedDtFiles, downloadedDtModels, proprietaryApiKeyByBackend])
 
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
@@ -238,8 +209,15 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     promptMode,
     totalTasks,
   })
+  const brainstorm = useBrainstormOperation({
+    compositionElaboratorId: selectedCompositionElaboratorId,
+    styleElaboratorId: selectedStyleElaboratorId,
+    seed,
+    format: promptFormat,
+    length: promptLength,
+  })
   const busy = gates.busy
-  const statusText = completionNote || describeBrainstormProgress(activeOperation, brainstormProgress)
+  const statusText = completionNote || describeBrainstormProgress(activeOperation, brainstorm.progress)
 
   // Note: we do NOT auto-reset promptMode when preconditions go away. On
   // modal open, one or more category selections can transiently read as
@@ -248,45 +226,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // problem.
   const promptModeDisabledReason = (which: PromptMode): string | null =>
     promptModeDisabledReasonFor(which, elaborated.trim().length > 0, gates.missingElaboratorKind)
-
-  // Run a brainstorm request and return the prompts it produced (not including
-  // prior session prompts). Prompts are NOT written to the session history here
-  // — the caller persists them only after committing the run (queueing the
-  // tasks, or accepting the single Elaborate result), so an aborted or failed
-  // run leaves nothing behind. Progress events drive only the live counter.
-  const runBrainstorm = useCallback(async (count: number): Promise<ElaboratedPromptRecord[]> => {
-    if (!selectedCompositionElaboratorId || !selectedStyleElaboratorId) {
-      throw new Error('Pick composition and style elaborators first.')
-    }
-    if (!seed.trim()) throw new Error('Seed prompt is empty.')
-
-    const requestId = nanoid()
-    activeRequestIdRef.current = requestId
-
-    const unsubscribe = window.electronAPI.onBrainstormProgress(requestId, (event) => {
-      setBrainstormProgress({ done: event.done, total: event.total, phase: event.phase })
-    })
-
-    // Seeded with the first stage the run enters, so the footer says something
-    // in the gap before the engine's own first event arrives.
-    setBrainstormProgress({ done: 0, total: count, phase: 'facets' })
-    try {
-      const result = await window.electronAPI.brainstormPrompts({
-        requestId,
-        compositionElaboratorId: selectedCompositionElaboratorId,
-        styleElaboratorId: selectedStyleElaboratorId,
-        seed,
-        count,
-        format: promptFormat,
-        length: promptLength,
-      })
-      return result.prompts
-    } finally {
-      unsubscribe()
-      setBrainstormProgress(null)
-      activeRequestIdRef.current = null
-    }
-  }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, seed, promptFormat, promptLength])
 
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (gates.elaborate.disabled) return
@@ -299,7 +238,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       sessionPromptCount: elaboratedPrompts.length,
     })
     try {
-      const newPrompts = await runBrainstorm(1)
+      const newPrompts = await brainstorm.run(1)
       if (cancelledRef.current) return
       const first = newPrompts[0]
       if (!first) {
@@ -320,13 +259,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       setActiveOperation(null)
     }
   }, [
-    gates.elaborate.disabled, runBrainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts,
+    gates.elaborate.disabled, brainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts,
     elaboratorsByKind, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
   ])
 
   // Resolution and gating shared with the column (drawThingsParams.ts): saved
   // params take the whole set, else recommendation over configured fallbacks.
-  const buildDtParams = useCallback(async (modelFile: string): Promise<{ model: string; params: DtParams }> => {
+  const buildDtParams = useCallback(async (modelFile: string): Promise<AdvancedQueueTarget> => {
     const saved = await window.electronAPI.dtGetModelParams(modelFile)
     const rec = saved ? null : await window.electronAPI.resolveRecommendation(modelFile)
     // Saved params need no fallbacks; a resolution without them halts rather
@@ -335,7 +274,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       throw new Error('Draw Things settings are still loading — try again in a moment.')
     }
     const resolved = resolveDtParams(saved, rec, drawThingsFallbacks!)
-    return { model: modelFile, params: toDrawThingsTaskParams(resolved) as unknown as DtParams }
+    return { backend: 'drawthings', model: modelFile, params: toDrawThingsTaskParams(resolved) }
   }, [drawThingsFallbacks])
 
   const handleQueue = useCallback(async (): Promise<void> => {
@@ -377,18 +316,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       } else if (promptMode === 'elaborated') {
         prompts = [multiline(elaborated)]
       } else {
-        records = await runBrainstorm(promptsNeeded(promptMode, copies, allTargetCount))
+        records = await brainstorm.run(promptsNeeded(promptMode, copies, allTargetCount))
         prompts = records.map((record) => record.text)
       }
       if (cancelledRef.current) return
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
 
-      // The dealing lives in advancedQueueUnits (pure, unit-tested):
-      // iteration-major for fresh-task, shared per iteration otherwise.
-      const promptForUnit = (targetIndex: number, copyIndex: number): string =>
-        promptTextForUnit(promptMode, prompts, targetIndex, copyIndex, allTargetCount)
-
-      const proprietaryUnits = targets.proprietary.map((backendId) => {
+      const proprietaryUnits: AdvancedQueueTarget[] = targets.proprietary.map((backendId) => {
         const snapshot = snapshots[backendId]
         if (!snapshot || !snapshot.model) {
           throw new Error(`The ${BACKEND_LABELS[backendId]} column is not ready yet.`)
@@ -401,26 +335,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       })
 
       const dtUnits = await Promise.all(targets.dt.map((modelFile) => buildDtParams(modelFile)))
-
-      const units: EnqueueBatchUnit[] = []
-      for (let c = 0; c < copies; c++) {
-        proprietaryUnits.forEach((unit, index) => {
-          units.push({
-            prompt: promptForUnit(index, c),
-            backend: unit.backend,
-            model: unit.model,
-            params: unit.params,
-          })
-        })
-        dtUnits.forEach((unit, index) => {
-          units.push({
-            prompt: promptForUnit(proprietaryUnits.length + index, c),
-            backend: 'drawthings',
-            model: unit.model,
-            params: unit.params as unknown as Record<string, unknown>,
-          })
-        })
-      }
+      const units = buildAdvancedQueueUnits({
+        mode: promptMode,
+        prompts,
+        copies,
+        targets: [...proprietaryUnits, ...dtUnits],
+      })
 
       // Re-check after the awaits above (snapshot reads, DT param resolution):
       // a deliberate close could have landed mid-build, and nothing should be
@@ -454,7 +374,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     if (succeeded) onClose()
   }, [
     gates.queue.disabled, effectiveTargets, count, targetCount, promptMode,
-    seed, elaborated, runBrainstorm, buildDtParams, elaboratedPrompts.length,
+    seed, elaborated, brainstorm, buildDtParams, elaboratedPrompts.length,
     snapshots, appendElaboratedPrompts, onClose,
   ])
 
@@ -480,11 +400,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // Stop the main-process brainstorm so it doesn't keep calling the text AI.
       // Nothing to clean up in the history: this run's prompts are only recorded
       // after its tasks are queued, which a cancelled run never reaches.
-      const requestId = activeRequestIdRef.current
-      if (requestId) void window.electronAPI.cancelBrainstorm(requestId)
+      brainstorm.cancel()
     }
     onClose()
-  }, [busy, confirm, onClose])
+  }, [busy, confirm, onClose, brainstorm])
 
   const selectElaborator = useCallback((kind: ElaboratorKind, id: string): void => {
     switch (kind) {

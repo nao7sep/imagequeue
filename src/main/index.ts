@@ -3,7 +3,7 @@ import path from 'path'
 import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
-import { startProcessor } from './backends'
+import { startProcessor, stopProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
 import { registerSettingsIpc } from './settings-ipc'
 import { registerStateIpc } from './state-ipc'
@@ -17,17 +17,19 @@ import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { initLogger, log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
-import { killAllCliJobs } from './cli-jobs'
+import { killAllCliJobsAndWait } from './cli-jobs'
+import { cancelAllInFlightAndWait } from './backends/cancellation'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
-import { getVisiblePanes } from '../shared/layout-metrics'
-import { hasApiKey } from './config/api-keys-store'
-import { CLOUD_BACKEND_IDS_IN_UI_ORDER, IMAGE_BACKEND_SECRET } from '../shared/types'
-import type { Platform } from '../shared/electron-api'
+import {
+  getVisiblePaneCount,
+  registerMainWindowForLayout,
+  unregisterMainWindowForLayout,
+} from './main-window-layout'
 import { startupFailureMessage } from './startup-error'
 
 let mainWin: BrowserWindow | null = null
@@ -64,33 +66,6 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason)
 })
 
-// How many panes the right-hand group will show, from the one shared rule the
-// renderer's layout also uses (shared/layout-metrics), fed the same two inputs:
-// which keys resolve (environment first — the renderer learns this only through
-// settings:getApiKeyPresence, but here it is a direct call) and which backends
-// hold tasks. Deriving both sides from one rule is what keeps the window minimum
-// from disagreeing with the panes actually painted.
-function visiblePaneCount(): number {
-  const keyed = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) =>
-    hasApiKey(IMAGE_BACKEND_SECRET[backend])
-  )
-  const tasks = queueManager.getAllStoredTasks()
-  const occupied = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) => (tasks[backend]?.length ?? 0) > 0)
-  return getVisiblePanes(process.platform as Platform, keyed, occupied).length
-}
-
-// Re-apply the window minimum after anything that can change the pane count —
-// a key stored or cleared, a session's tasks restored. Electron grows a window
-// that sits below a raised minimum, which is the window fitting a column that
-// just appeared; a lowered minimum only widens what the user may drag to, and
-// never resizes anything on its own.
-export function refreshWindowMinimumSize(): void {
-  const win = BrowserWindow.getAllWindows()[0]
-  if (!win || win.isDestroyed()) return
-  const { minWidth, minHeight } = buildMainWindowOptions(visiblePaneCount())
-  win.setMinimumSize(minWidth, minHeight)
-}
-
 function createWindow(): void {
   // Chrome + sizing come from the pure buildMainWindowOptions: the window
   // minimum and opening width are DERIVED from the shared pane minimums and the
@@ -98,7 +73,7 @@ function createWindow(): void {
   // can't be shrunk small enough to truncate a pane and doesn't open wider than
   // its panes need. themeSource is applied to nativeTheme in app.whenReady()
   // from the same source.
-  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(visiblePaneCount())
+  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(getVisiblePaneCount())
   const win = new BrowserWindow({
     ...windowOptions,
     webPreferences: {
@@ -110,9 +85,11 @@ function createWindow(): void {
   })
 
   mainWin = win
+  registerMainWindowForLayout(win)
   hardenWindow(win)
 
   win.on('closed', () => {
+    unregisterMainWindowForLayout(win)
     if (mainWin === win) mainWin = null
     closeViewerWindow()
     if (process.platform !== 'darwin') app.quit()
@@ -188,7 +165,7 @@ function startUp(): void {
   // menus) so it doesn't follow a light OS appearance. The value comes from the
   // same window-options source createWindow uses, so chrome theme and window
   // sizing stay defined in one place.
-  nativeTheme.themeSource = buildMainWindowOptions(visiblePaneCount()).themeSource
+  nativeTheme.themeSource = buildMainWindowOptions(getVisiblePaneCount()).themeSource
   // Set the renderer CSP before any window loads its content. Gate the strict
   // policy on the production-renderer signal (no dev-server URL), not
   // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
@@ -284,12 +261,28 @@ async function gracefulShutdown(reason: string): Promise<void> {
       })
     }
   }
+  // Freeze scheduling before touching active work. Otherwise the 500ms poller
+  // can promote another queued task between the cancellation snapshot and exit.
+  await guarded('stopProcessor', () => stopProcessor())
   await guarded('drainPendingModelParamsWrites', () => drainPendingModelParamsWrites())
   await guarded('drainPendingDraftWrites', () => drainPendingDraftWrites())
-  // Any task still 'generating' is being abandoned by this quit (an in-flight
-  // cloud call cannot be reclaimed). Record it as 'interrupted' and persist, so
-  // the manifest is honest at rest and resume offers to re-queue it, rather than
-  // leaving a task frozen as 'generating'.
+
+  // Signal both external-work families before awaiting either one. Each barrier
+  // is bounded and includes its TERM→KILL escalation, so quit cannot strand a
+  // child but also cannot hang forever on a broken process implementation.
+  const generationBarrier = cancelAllInFlightAndWait(5_000)
+  const cliBarrier = killAllCliJobsAndWait({ timeoutMs: 5_000 })
+  await guarded('cancelInFlightGenerations', async () => {
+    const result = await generationBarrier
+    if (!result.settled) log('warn', 'Generation shutdown barrier timed out', result)
+  })
+  await guarded('killAllCliJobs', async () => {
+    const result = await cliBarrier
+    if (!result.settled) log('warn', 'CLI job shutdown barrier timed out', result)
+  })
+
+  // Cancellation normally updates each task itself. This catches any residual
+  // task whose backend failed to settle before the bounded deadline.
   await guarded('interruptGeneratingTasks', () => {
     const count = queueManager.interruptGeneratingTasks()
     if (count > 0) {
@@ -299,7 +292,6 @@ async function gracefulShutdown(reason: string): Promise<void> {
   })
   await guarded('closeViewerWindow', () => closeViewerWindow())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
-  await guarded('killAllCliJobs', () => killAllCliJobs())
   await guarded('releaseWakeLock', () => releaseWakeLock())
   log('info', 'Session ended', { reason })
   await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
@@ -315,8 +307,8 @@ async function gracefulShutdown(reason: string): Promise<void> {
 // lingers and the user has to quit a second time to actually terminate. The
 // gracefulShutdown steps above have all run by the time the finally fires, so
 // app.exit(0) ends the process deterministically. (Note: an in-flight image
-// generation is not awaited — it is abandoned and recorded as 'interrupted' for
-// resume; a cloud call already issued cannot be reclaimed.) The shutdownStarted
+// generation and CLI child is signalled and awaited through a bounded barrier.)
+// A cloud call already issued may still be billed. The shutdownStarted
 // guard still lets a second quit during cleanup fall through without
 // preventDefault, as a force-quit escape hatch in case cleanup ever hangs.
 let shutdownStarted = false

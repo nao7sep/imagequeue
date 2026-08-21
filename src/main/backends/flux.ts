@@ -4,6 +4,7 @@ import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
+import { abortableDelay } from '../utils/abortable-delay'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
@@ -80,7 +81,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
 
     // Poll for result
     while (true) {
-      await sleep(POLL_INTERVAL_MS)
+      await abortableDelay(POLL_INTERVAL_MS, controller.signal)
 
       const pollResponse = await fetch(pollingUrl, {
         headers: { 'x-key': apiKey },
@@ -139,8 +140,4 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     clearTimeout(timer)
     signal.removeEventListener('abort', onAbort)
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
 }

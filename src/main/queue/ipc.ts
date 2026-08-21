@@ -1,4 +1,3 @@
-import { BrowserWindow } from 'electron'
 import { handle } from '../ipc-boundary'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
@@ -7,8 +6,9 @@ import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
 import { persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
-import { cancelAllInFlight, inFlightCount, isQueuePaused, setQueuePaused } from '../backends/cancellation'
-import type { QueueControlState } from '../../shared/types'
+import { cancelAllInFlight, isQueuePaused, setQueuePaused } from '../backends/cancellation'
+import { buildControlState } from './control-state'
+import { publishQueueControlState, publishQueueState } from './publisher'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -18,7 +18,7 @@ export function registerQueueIpc(): void {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    publishQueueState()
     return tasks
   })
 
@@ -29,7 +29,7 @@ export function registerQueueIpc(): void {
       logEnqueue(task.id, unit.backend, unit.model, unit.prompt, unit.params, 1)
     })
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    publishQueueState()
     return tasks
   })
 
@@ -53,7 +53,7 @@ export function registerQueueIpc(): void {
       queueManager.removeTask(backend, taskId)
     }
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    publishQueueState()
   })
 
   handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => {
@@ -62,17 +62,25 @@ export function registerQueueIpc(): void {
 
     log('info', 'Task restored from kept list', { taskId, backend, baseName: task.baseName ?? null })
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    publishQueueState()
   })
 
   handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
+    // Renderer state can be one processor tick stale: a row checked as queued
+    // there may be generating by the time this handler runs. Main owns the
+    // queue and is the authority that must keep live work from disappearing.
+    if (task?.status === 'generating') {
+      log('warn', 'Refusing to delete generating task', { taskId, backend })
+      return
+    }
+    if (!task) return
     const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
     log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
     // File removal is best-effort: whatever happens on disk, the user asked to delete
     // the task, so the queue entry is always removed (and broadcast) afterwards — a
     // failed/partial file removal must never leave the queue diverged from disk.
-    if (task?.baseName) {
+    if (task.baseName) {
       const ext = imageExtFromPath(task.imagePath)
       if (ext) {
         try {
@@ -92,7 +100,7 @@ export function registerQueueIpc(): void {
     }
     queueManager.removeTask(backend, taskId)
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+    publishQueueState()
   })
 
   handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
@@ -100,7 +108,7 @@ export function registerQueueIpc(): void {
     if (task) {
       log('info', 'Task retry requested', { taskId, backend })
       persistActiveSession()
-      notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+      publishQueueState()
     }
   })
 
@@ -109,7 +117,7 @@ export function registerQueueIpc(): void {
     if (count > 0) {
       log('info', 'Resuming interrupted tasks', { count })
       persistActiveSession()
-      notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
+      publishQueueState()
     }
     return count
   })
@@ -129,7 +137,7 @@ export function registerQueueIpc(): void {
   // any of it back with no new machinery.
   handle('queue:setPaused', (_event, paused: boolean) => {
     setQueuePaused(paused)
-    notifyAllWindows('queue:controlState', buildControlState())
+    publishQueueControlState()
   })
 
   handle('queue:stopAll', () => {
@@ -139,8 +147,7 @@ export function registerQueueIpc(): void {
     const cancelled = cancelAllInFlight()
     log('info', 'Stopped all queue work', { cancelled, queued, paused: isQueuePaused() })
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
-    notifyAllWindows('queue:controlState', buildControlState())
+    publishQueueState()
     return { cancelled, queued }
   })
 
@@ -148,8 +155,7 @@ export function registerQueueIpc(): void {
     const removed = queueManager.removePendingTasks()
     log('info', 'Cleared pending tasks', { removed })
     persistActiveSession()
-    notifyAllWindows('queue:updated', queueManager.getAllStoredTasks())
-    notifyAllWindows('queue:controlState', buildControlState())
+    publishQueueState()
     return removed
   })
 
@@ -157,20 +163,4 @@ export function registerQueueIpc(): void {
 
 }
 
-// What the queue-control menu needs to know to enable or disable each item, so
-// the renderer never has to infer it from the task list. Exported for the
-// processor, whose start/settle broadcasts are the other place counts change.
-export function buildControlState(): QueueControlState {
-  return {
-    paused: isQueuePaused(),
-    generating: inFlightCount(),
-    queued: queueManager.countByStatus('queued'),
-    interrupted: queueManager.countByStatus('interrupted'),
-  }
-}
-
-function notifyAllWindows(channel: string, data: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(channel, data)
-  }
-}
+export { buildControlState }

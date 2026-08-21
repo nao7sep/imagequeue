@@ -251,9 +251,9 @@ export interface GrokModelDef extends ModelDef {
 // A high -> middle -> low band: gpt-image-2, gpt-image-1.5, gpt-image-1-mini. gpt-image-1 was
 // removed 2026-08-20 as the redundant fourth — it shuts down 2026-10-23, ahead of the other two.
 //
-// The band is temporary by construction: 1.5 and 1-mini both shut down 2026-12-01 and OpenAI
-// publishes no mini variant of gpt-image-2, so the cheap end does not migrate, it disappears.
-// Decide before December whether this collapses to one model or keeps a low tier another way.
+// 1.5 and 1-mini both shut down 2026-12-01. Keep every working shipped id until
+// its shutdown; the routine model-currency sweep chooses successors as they
+// appear rather than treating this one date as a separate product decision.
 export const OPENAI_MODELS: OpenAIModelDef[] = [
   {
     id: 'gpt-image-2',
@@ -483,4 +483,3 @@ export function findModel(backend: BackendId, modelId: string): ModelDef | undef
 export function findModel(backend: BackendId, modelId: string): ModelDef | undefined {
   return getModelsForBackend(backend as 'openai').find((m) => m.id === modelId)
 }
-
