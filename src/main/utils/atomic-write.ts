@@ -48,12 +48,12 @@ export function syncFile(filePath: string): void {
 // as the target — the storage-path conventions' derived-filename grammar,
 // never a dot-appended `<file>.tmp`.
 //
-// This is the single managed-text atomic-write choke point, and — crucially —
-// the ONE place the data-backup hook lives (data-backup conventions). A
-// managed-text write that bypasses this helper is a silent backup gap; there is
-// deliberately no second managed-text atomic-write path in the app (the only
-// other temp+rename writers are api-keys-store, which is a SECRET and never
-// recorded, and file-output, which writes binary output the user harvests).
+// This module is the single managed-text atomic-write choke point and —
+// crucially — the ONE place the data-backup hook lives (data-backup
+// conventions). A managed-text write that bypasses these sync/async helpers is
+// a silent backup gap. The only other temp+rename writers are api-keys-store,
+// which is a SECRET and never recorded, and file-output, which writes binary
+// output the user harvests.
 //
 // `records` is the per-write-site record/no-record decision, made at authoring
 // time by the caller that knows what the file IS (data-backup conventions:
