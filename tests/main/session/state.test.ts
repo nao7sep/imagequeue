@@ -80,6 +80,18 @@ describe('normalizeResumedQueues', () => {
     const byId = Object.fromEntries(normalized.openai.map((t) => [t.id, t.status]))
     expect(byId).toEqual({ done: 'completed', mid: 'interrupted', wait: 'interrupted' })
   })
+
+  it('repairs duplicate task ids across backend queues while preserving every task', () => {
+    const first = makeTask('same-id', 'completed')
+    const second = makeTask('same-id', 'failed', { backend: 'grok' })
+    const normalized = normalizeResumedQueues(queuesWith([first, second]))
+    const tasks = [...normalized.openai, ...normalized.grok]
+
+    expect(tasks).toHaveLength(2)
+    expect(tasks[0].id).toBe('same-id')
+    expect(tasks[1].id).not.toBe('same-id')
+    expect(new Set(tasks.map((task) => task.id)).size).toBe(2)
+  })
 })
 
 describe('collectSessionThumbnails', () => {

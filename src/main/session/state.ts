@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { nanoid } from 'nanoid'
 import { BrowserWindow, shell } from 'electron'
 import {
   ConceptCredit,
@@ -280,8 +281,23 @@ export function toInterruptedTask(task: Task): Task {
 
 export function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
   const normalized = createEmptyQueues()
+  const usedIds = new Set<string>()
+  let repairedIds = 0
   for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-    normalized[backend] = (tasksByBackend[backend] ?? []).map(toInterruptedTask)
+    normalized[backend] = (tasksByBackend[backend] ?? []).map((task) => {
+      const resumed = toInterruptedTask(task)
+      if (typeof resumed.id !== 'string' || resumed.id.length === 0 || usedIds.has(resumed.id)) {
+        do {
+          resumed.id = nanoid()
+        } while (usedIds.has(resumed.id))
+        repairedIds++
+      }
+      usedIds.add(resumed.id)
+      return resumed
+    })
+  }
+  if (repairedIds > 0) {
+    log('warn', 'Repaired missing or duplicate task ids while resuming session', { repairedIds })
   }
   return normalized
 }

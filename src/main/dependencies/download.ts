@@ -214,11 +214,35 @@ async function downloadHop(
     return downloadHop(next, destPath, limits, signal, onProgress, redirectsLeft - 1)
   }
 
-  let handle: fs.promises.FileHandle | null = null
+  return writeDownloadResponse(response, destPath, limits, signal, onProgress)
+}
+
+/** Persist one accepted response body and durably sync it. Exported so the real
+ * stream lifecycle is regression-tested without a network mock: pipeline must
+ * observe its destination close, and progress must be bounded before it crosses
+ * the renderer IPC boundary. */
+export async function writeDownloadResponse(
+  response: IncomingMessage,
+  destPath: string,
+  limits: TransferLimits,
+  signal: AbortSignal,
+  onProgress?: (progress: DownloadProgress) => void
+): Promise<void> {
+  let syncHandle: fs.promises.FileHandle | null = null
   try {
     assertSuccessfulResponse(response)
     const advertisedBytes = parseContentLength(response, limits.maxBytes)
     let downloadedBytes = 0
+    let lastReportedAt = 0
+    let lastReportedBytes = -1
+    const reportProgress = (force = false): void => {
+      if (!onProgress || downloadedBytes === lastReportedBytes) return
+      const now = Date.now()
+      if (!force && lastReportedBytes >= 0 && now - lastReportedAt < 100) return
+      lastReportedAt = now
+      lastReportedBytes = downloadedBytes
+      onProgress({ downloadedBytes, totalBytes: advertisedBytes })
+    }
     const meter = new Transform({
       transform(value: Buffer, _encoding, callback): void {
         const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value)
@@ -230,19 +254,24 @@ async function downloadHop(
           return
         }
         downloadedBytes = nextTotal
-        onProgress?.({ downloadedBytes, totalBytes: advertisedBytes })
+        reportProgress(downloadedBytes === chunk.length || downloadedBytes === advertisedBytes)
         callback(null, chunk)
       },
     })
 
-    handle = await fs.promises.open(destPath, 'w')
-    const output = handle.createWriteStream({ autoClose: false })
+    // A pipeline resolves after its destination closes. The former
+    // FileHandle stream used autoClose:false and therefore reached 100% then
+    // waited forever for the close it had explicitly disabled. Let the stream
+    // own its descriptor, then reopen the completed file solely for fsync.
+    const output = fs.createWriteStream(destPath, { flags: 'w' })
     await pipeline(response, meter, output, { signal })
-    await handle.sync()
+    reportProgress(true)
+    syncHandle = await fs.promises.open(destPath, 'r+')
+    await syncHandle.sync()
   } finally {
     response.destroy()
     // Cleanup must not replace the transfer/limit error that brought us here.
-    await handle?.close().catch(() => undefined)
+    await syncHandle?.close().catch(() => undefined)
   }
 }
 

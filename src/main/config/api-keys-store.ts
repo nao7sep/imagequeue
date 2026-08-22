@@ -96,12 +96,15 @@ function moveAsideInvalid(filePath: string): string | null {
   }
 }
 
-// Canonicalize the on-disk shape `{ keys: { id: value } }`: ids lowercased and
-// matched against the id grammar, values kept only when strings.
-function normalize(raw: unknown): SecretsFile {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { keys: {} }
+// Validate the outer on-disk shape `{ keys: { id: value } }`, then canonicalize
+// its entries: ids lowercased and matched against the id grammar, values kept
+// only when strings. A wrong outer container is not the same thing as an empty
+// valid store: returning null lets the reader preserve those original bytes
+// before a later key edit writes a clean file.
+function normalize(raw: unknown): SecretsFile | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const rawKeys = (raw as { keys?: unknown }).keys
-  if (!rawKeys || typeof rawKeys !== 'object' || Array.isArray(rawKeys)) return { keys: {} }
+  if (!rawKeys || typeof rawKeys !== 'object' || Array.isArray(rawKeys)) return null
   const keys: Record<string, string> = {}
   for (const [id, value] of Object.entries(rawKeys as Record<string, unknown>)) {
     const canonical = id.toLowerCase()
@@ -110,7 +113,7 @@ function normalize(raw: unknown): SecretsFile {
   return { keys }
 }
 
-function readSecretsFile(): SecretsFile {
+function readSecretsFile(forMutation = false): SecretsFile {
   const filePath = getSecretsPath()
   warnIfInsecureMode(filePath)
   let text: string
@@ -124,10 +127,23 @@ function readSecretsFile(): SecretsFile {
       movedTo,
       error: serializeError(err)
     })
+    if (forMutation && !movedTo) {
+      throw new Error('API keys file was unreadable and could not be preserved; it was left unchanged')
+    }
     return { keys: {} }
   }
   try {
-    return normalize(JSON.parse(text))
+    const normalized = normalize(JSON.parse(text))
+    if (normalized) return normalized
+    const movedTo = moveAsideInvalid(filePath)
+    log('warn', 'API keys file had the wrong shape; set aside and treating as empty', {
+      path: filePath,
+      movedTo,
+    })
+    if (forMutation && !movedTo) {
+      throw new Error('API keys file had the wrong shape and could not be preserved; it was left unchanged')
+    }
+    return { keys: {} }
   } catch (err) {
     const movedTo = moveAsideInvalid(filePath)
     log('warn', 'API keys file is not valid JSON; set aside and treating as empty', {
@@ -135,6 +151,9 @@ function readSecretsFile(): SecretsFile {
       movedTo,
       error: serializeError(err)
     })
+    if (forMutation && !movedTo) {
+      throw new Error('API keys file was invalid and could not be preserved; it was left unchanged')
+    }
     return { keys: {} }
   }
 }
@@ -212,7 +231,7 @@ export function getStoredApiKey(id: SecretId): string {
 
 // Persist (or clear, when value is blank) the stored key for a secret id.
 export function setStoredApiKey(id: SecretId, value: string): void {
-  const file = readSecretsFile()
+  const file = readSecretsFile(true)
   const trimmed = value.trim()
   if (trimmed.length > 0) {
     file.keys[id] = encodeApiKey(trimmed)

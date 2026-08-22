@@ -33,7 +33,7 @@
   cursor: pointer;
 }
 
-.prompt-advanced-btn:hover {
+.prompt-advanced-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--bg-hover) 80%, var(--accent));
   border-color: color-mix(in srgb, var(--bg-hover) 80%, var(--accent));
 }
@@ -78,7 +78,7 @@
   cursor: pointer;
 }
 
-.prompt-actions button:hover {
+.prompt-actions button:hover:not(:disabled) {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--text-on-accent);
@@ -91,7 +91,7 @@
   font-weight: 600;
 }
 
-.prompt-actions .send-all:hover {
+.prompt-actions .send-all:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }

@@ -3,7 +3,10 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import crypto from 'crypto'
+import { PassThrough } from 'stream'
+import type { IncomingMessage } from 'http'
 import {
+  writeDownloadResponse,
   parseAdvertisedLength,
   sha256File,
   withWholeOperationTimeout,
@@ -51,6 +54,36 @@ describe('bounded transfers', () => {
     controller.abort(new Error('cancelled by caller'))
     await expect(withWholeOperationTimeout(controller.signal, 100, 'Test transfer', async () => 1))
       .rejects.toThrow('cancelled by caller')
+  })
+
+  it('closes a real destination stream, syncs the complete bytes, and bounds progress delivery', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-dl-'))
+    tempDirs.push(dir)
+    const dest = path.join(dir, 'download.bin')
+    const chunks = Array.from({ length: 256 }, (_, index) => Buffer.alloc(1024, index % 251))
+    const bytes = Buffer.concat(chunks)
+    const stream = new PassThrough()
+    Object.assign(stream, {
+      statusCode: 200,
+      headers: { 'content-length': String(bytes.length) },
+    })
+    const progress: Array<{ downloadedBytes: number; totalBytes: number | null }> = []
+    const limits = { maxBytes: bytes.length, idleTimeoutMs: 1000, wholeTimeoutMs: 5000 }
+
+    const writing = writeDownloadResponse(
+      stream as unknown as IncomingMessage,
+      dest,
+      limits,
+      new AbortController().signal,
+      (event) => progress.push(event)
+    )
+    for (const chunk of chunks) stream.write(chunk)
+    stream.end()
+    await writing
+
+    expect(fs.readFileSync(dest).equals(bytes)).toBe(true)
+    expect(progress.length).toBeLessThanOrEqual(3)
+    expect(progress.at(-1)).toEqual({ downloadedBytes: bytes.length, totalBytes: bytes.length })
   })
 })
 

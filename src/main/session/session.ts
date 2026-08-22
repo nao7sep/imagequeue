@@ -16,11 +16,17 @@ export function createSessionDir(baseDate = new Date()): string {
   let candidate = new Date(baseDate)
   while (true) {
     const nextDir = path.join(getOutputDir(), utcStampForFilename(candidate))
-    if (!fs.existsSync(nextDir)) {
-      fs.mkdirSync(nextDir, { recursive: true })
+    try {
+      // The mkdir itself is the claim. An exists-then-recursive-mkdir sequence
+      // lets two simultaneous launches both adopt the same session directory
+      // and overwrite each other's manifest. A non-recursive mkdir is atomic;
+      // the loser advances to the next millisecond-derived name.
+      fs.mkdirSync(nextDir)
       return nextDir
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
     }
-    candidate = new Date(candidate.getTime() + 1000)
+    candidate = new Date(candidate.getTime() + 1)
   }
 }
 

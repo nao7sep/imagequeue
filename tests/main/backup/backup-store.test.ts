@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, StatementSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { record, closeBackupStore } from '../../../src/main/backup/backup-store'
 import * as logger from '../../../src/main/logger'
@@ -156,6 +156,31 @@ describe('write-through backup store', () => {
     expect(new Set(rows.map((r) => r.path))).toEqual(new Set([a, b]))
   })
 
+  it('takes the SQLite write reservation before reading the latest row and commits the decision', () => {
+    const exec = vi.spyOn(DatabaseSync.prototype, 'exec')
+    const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare')
+    const get = vi.spyOn(StatementSync.prototype, 'get')
+    const run = vi.spyOn(StatementSync.prototype, 'run')
+
+    record(path.join(tmpRoot, 'config.json'), Buffer.from('{"transactional":true}'))
+
+    const begin = exec.mock.calls.findIndex(([sql]) => sql === 'BEGIN IMMEDIATE')
+    const select = prepare.mock.calls.findIndex(([sql]) => String(sql).startsWith('SELECT content_sha256'))
+    const commit = exec.mock.calls.findIndex(([sql]) => sql === 'COMMIT')
+    expect(begin).toBeGreaterThanOrEqual(0)
+    expect(select).toBeGreaterThanOrEqual(0)
+    expect(commit).toBeGreaterThan(begin)
+    expect(exec.mock.invocationCallOrder[begin]).toBeLessThan(prepare.mock.invocationCallOrder[select])
+    const latestReadOrder = get.mock.invocationCallOrder.find((order) =>
+      order > prepare.mock.invocationCallOrder[select]
+    )
+    const insertOrder = run.mock.invocationCallOrder.at(-1)
+    expect(latestReadOrder).toBeDefined()
+    expect(insertOrder).toBeDefined()
+    expect(latestReadOrder!).toBeLessThan(insertOrder!)
+    expect(insertOrder!).toBeLessThan(exec.mock.invocationCallOrder[commit])
+  })
+
   it('is best-effort: a store failure is caught, logged once at warn, never thrown, and the save is unaffected', () => {
     const warn = vi.spyOn(logger, 'log')
 
@@ -184,6 +209,7 @@ describe('write-through backup store', () => {
 
   it('an insert failure on an already-open store is caught and logged once at warn, without throwing', () => {
     const warn = vi.spyOn(logger, 'log')
+    const exec = vi.spyOn(DatabaseSync.prototype, 'exec')
     const target = path.join(tmpRoot, 'config.json')
 
     // Open the store cleanly with one successful record.
@@ -199,6 +225,8 @@ describe('write-through backup store', () => {
     // A changed content would normally insert; the throw must be swallowed.
     expect(() => record(target, Buffer.from('{"n":2}', 'utf-8'))).not.toThrow()
     spy.mockRestore()
+
+    expect(exec.mock.calls.some(([sql]) => sql === 'ROLLBACK')).toBe(true)
 
     const warnCalls = warn.mock.calls.filter((c) => c[0] === 'warn')
     expect(warnCalls).toHaveLength(1)

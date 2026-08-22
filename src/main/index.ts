@@ -31,8 +31,22 @@ import {
   unregisterMainWindowForLayout,
 } from './main-window-layout'
 import { startupFailureMessage } from './startup-error'
+import { restoreOrCreateMainWindow } from './main-window-lifecycle'
 
 let mainWin: BrowserWindow | null = null
+let startupComplete = false
+
+// Every mutable app store is process-owned. Letting a second ImageQueue process
+// open the same root would turn otherwise-atomic file replacement into competing
+// read/modify/write snapshots (most dangerously for api-keys.json). Electron's
+// native instance authority closes that entire class of split-brain state; a
+// second launch raises the existing window instead of starting another writer.
+const ownsSingleInstance = app.requestSingleInstanceLock()
+if (!ownsSingleInstance) app.quit()
+
+app.on('second-instance', () => {
+  restoreOrCreateMainWindow(mainWin, startupComplete, createWindow)
+})
 
 // Debug is diagnostic-only: enabled automatically for an unpackaged development
 // build, and available in packaged builds only through an explicit
@@ -143,7 +157,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+if (ownsSingleInstance) app.whenReady().then(() => {
   // The startup body throws on a corrupt config.json (loadConfig deliberately
   // does not fall back to defaults — see config-store.ts). Without this catch
   // the rejection lands in the unhandledRejection hook, which logs and does NOT
@@ -227,11 +241,10 @@ function startUp(): void {
   // nothing to run here — the history is always as current as the last save.
 
   createWindow()
+  startupComplete = true
 
   app.on('activate', () => {
-    if (!mainWin || mainWin.isDestroyed()) {
-      createWindow()
-    }
+    restoreOrCreateMainWindow(mainWin, startupComplete, createWindow)
   })
 }
 

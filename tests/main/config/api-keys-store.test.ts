@@ -171,6 +171,52 @@ describe('api-keys-store', () => {
     expect(entries).not.toContain('api-keys.json')
   })
 
+  it('preserves a valid-JSON secret store with the wrong root before a later edit', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    const original = JSON.stringify({ xai: 'do-not-overwrite-these-bytes' })
+    fs.writeFileSync(secretsPath, original)
+
+    setStoredApiKey('openai.image', 'new-key')
+
+    const entries = fs.readdirSync(tmpRoot)
+    const quarantined = entries.filter((e) => e.startsWith('api-keys-') && e.endsWith('.invalid'))
+    expect(quarantined).toHaveLength(1)
+    expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf8')).toBe(original)
+    expect(getStoredApiKey('openai.image')).toBe('new-key')
+  })
+
+  it('preserves a valid-JSON secret store whose keys container has the wrong shape', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    const original = JSON.stringify({ keys: ['xai', 'not-an-object-container'] })
+    fs.writeFileSync(secretsPath, original)
+
+    setStoredApiKey('xai', 'new-key')
+
+    const entries = fs.readdirSync(tmpRoot)
+    const quarantined = entries.filter((e) => e.startsWith('api-keys-') && e.endsWith('.invalid'))
+    expect(quarantined).toHaveLength(1)
+    expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf8')).toBe(original)
+    expect(getStoredApiKey('xai')).toBe('new-key')
+  })
+
+  it('fails a mutation closed when a wrong-shaped store cannot be quarantined', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    const original = JSON.stringify({ xai: 'must-remain-byte-identical' })
+    fs.writeFileSync(secretsPath, original)
+    const realRename = fs.renameSync.bind(fs)
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (from === secretsPath && String(to).endsWith('.invalid')) {
+        throw new Error('quarantine unavailable')
+      }
+      return realRename(from, to)
+    })
+
+    expect(() => setStoredApiKey('openai.image', 'must-not-land')).toThrow(/left unchanged/)
+    expect(fs.readFileSync(secretsPath, 'utf8')).toBe(original)
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+    rename.mockRestore()
+  })
+
   it.runIf(isPosix)('writes api-keys.json with 0600 permissions on POSIX', () => {
     setStoredApiKey('openai.image', 'sk-stored')
     const mode = fs.statSync(path.join(tmpRoot, 'api-keys.json')).mode & 0o777
