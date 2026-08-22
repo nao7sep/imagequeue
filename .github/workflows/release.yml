@@ -32,7 +32,9 @@ jobs:
       - run: npm ci
       - name: Verify release tag matches package.json
         if: github.ref_type == 'tag'
-        run: npm run check:release-version -- "${{ github.ref_name }}"
+        env:
+          IMAGEQUEUE_RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run check:release-version -- "$IMAGEQUEUE_RELEASE_TAG"
       - run: npm run typecheck
       - run: npm test
 
