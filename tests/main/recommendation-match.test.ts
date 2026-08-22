@@ -134,5 +134,14 @@ describe('parseRecommendationBytes', () => {
     expect(parseRecommendationBytes(Buffer.from(JSON.stringify([
       { name: 'bad-negative', negative: false, configuration: { model: 'a' } }
     ])))).toEqual([])
+    expect(parseRecommendationBytes(Buffer.from(JSON.stringify([
+      { name: 'bad-model', configuration: { model: 42 } }
+    ])))).toEqual([])
+    expect(parseRecommendationBytes(Buffer.from(JSON.stringify([
+      { name: 'bad-steps', configuration: { model: 'a', steps: 'many' } }
+    ])))).toEqual([])
+    expect(parseRecommendationBytes(Buffer.from(JSON.stringify([
+      { name: 'infinite-guidance', configuration: { guidanceScale: Infinity } }
+    ])))).toEqual([])
   })
 })

@@ -25,6 +25,26 @@ interface CliMeta {
   tag: string
   sha256: string
   installedAt: string
+  /** Device/inode identity of the verified binary this sidecar describes. */
+  binaryId?: string
+}
+
+function cliBinaryId(): string {
+  const stat = fs.statSync(getCliBinaryPath(), { bigint: true })
+  return `${stat.dev}:${stat.ino}`
+}
+
+function readCliMeta(): CliMeta | null {
+  try {
+    const meta = JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')) as Partial<CliMeta>
+    if (typeof meta.tag !== 'string' || !isCliReleaseTag(meta.tag)) return null
+    if (typeof meta.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(meta.sha256)) return null
+    if (typeof meta.installedAt !== 'string') return null
+    if (meta.binaryId !== undefined && typeof meta.binaryId !== 'string') return null
+    return meta as CliMeta
+  } catch {
+    return null
+  }
 }
 
 export function isCliInstalled(): boolean {
@@ -40,8 +60,9 @@ export function isCliInstalled(): boolean {
 export function readInstalledCliTag(): string | null {
   if (!isCliInstalled()) return null
   try {
-    const meta = JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')) as Partial<CliMeta>
-    return typeof meta.tag === 'string' && isCliReleaseTag(meta.tag) ? meta.tag : null
+    const meta = readCliMeta()
+    if (!meta) return null
+    return meta.binaryId === undefined || meta.binaryId === cliBinaryId() ? meta.tag : null
   } catch {
     return null
   }
@@ -70,11 +91,28 @@ export function publishCliBinary(
   sha256: string
 ): void {
   fs.mkdirSync(getBinDir(), { recursive: true })
-  fs.rmSync(getCliMetaPath(), { force: true })
-  syncDirectory(getBinDir())
+  const priorMeta = readCliMeta()
+  if (isCliInstalled()) {
+    // Bind a legacy sidecar to the still-current binary before replacement. If
+    // publication fails, that pair remains valid; if it succeeds and the new
+    // sidecar fails, the old identity cannot match the new binary.
+    if (priorMeta && priorMeta.binaryId === undefined) {
+      writeJsonAtomic(getCliMetaPath(), { ...priorMeta, binaryId: cliBinaryId() }, false)
+    }
+  } else {
+    // An orphan sidecar has no artifact to preserve and must not label the first
+    // binary published into this location.
+    fs.rmSync(getCliMetaPath(), { force: true })
+    syncDirectory(getBinDir())
+  }
   fs.renameSync(tempPath, getCliBinaryPath())
   syncDirectory(getBinDir())
-  const meta: CliMeta = { tag, sha256, installedAt: new Date().toISOString() }
+  const meta: CliMeta = {
+    tag,
+    sha256,
+    installedAt: new Date().toISOString(),
+    binaryId: cliBinaryId(),
+  }
   // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
   // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
   // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides

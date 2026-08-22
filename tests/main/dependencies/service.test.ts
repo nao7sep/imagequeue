@@ -83,7 +83,7 @@ describe('a present CLI whose version cannot be read', () => {
     placeBinaryWithoutSidecar()
     fs.writeFileSync(
       path.join(home, 'bin', 'draw-things-cli.json'),
-      JSON.stringify({ tag: 'v1.20260430.0', sha256: 'a', installedAt: '2026-06-30T00:00:00.000Z' }),
+      JSON.stringify({ tag: 'v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z' }),
     )
     resolveMock.mockResolvedValue({ tag: 'v1.20260430.0', assetUrl: 'https://x', sha256: 'a' })
 
@@ -97,7 +97,7 @@ describe('a present CLI whose version cannot be read', () => {
     placeBinaryWithoutSidecar()
     fs.writeFileSync(
       path.join(home, 'bin', 'draw-things-cli.json'),
-      JSON.stringify({ tag: 'garbage-v1.20260430.0', sha256: 'a', installedAt: '2026-06-30T00:00:00.000Z' }),
+      JSON.stringify({ tag: 'garbage-v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z' }),
     )
     resolveMock.mockResolvedValue({ tag: 'v1.20260430.0', assetUrl: 'https://x', sha256: 'a' })
 

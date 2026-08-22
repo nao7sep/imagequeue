@@ -23,12 +23,28 @@ export type RecommendationMatch = {
 export function isRecommendationSpec(value: unknown): value is RecommendationSpec {
   if (value === null || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
-  return typeof record.name === 'string' &&
-    (record.version === undefined || typeof record.version === 'string') &&
-    (record.negative === undefined || typeof record.negative === 'string') &&
-    record.configuration !== null &&
-    typeof record.configuration === 'object' &&
-    !Array.isArray(record.configuration)
+  if (typeof record.name !== 'string' ||
+    (record.version !== undefined && typeof record.version !== 'string') ||
+    (record.negative !== undefined && typeof record.negative !== 'string') ||
+    record.configuration === null ||
+    typeof record.configuration !== 'object' ||
+    Array.isArray(record.configuration)) {
+    return false
+  }
+  const configuration = record.configuration as Record<string, unknown>
+  return optionalString(configuration.model) &&
+    optionalFiniteNumber(configuration.width) &&
+    optionalFiniteNumber(configuration.height) &&
+    optionalFiniteNumber(configuration.steps) &&
+    optionalFiniteNumber(configuration.guidanceScale)
+}
+
+function optionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string'
+}
+
+function optionalFiniteNumber(value: unknown): boolean {
+  return value === undefined || (typeof value === 'number' && Number.isFinite(value))
 }
 
 export function parseRecommendationBytes(data: Buffer): RecommendationSpec[] {
