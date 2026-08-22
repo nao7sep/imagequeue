@@ -16,6 +16,7 @@ import {
 } from '../utils/imageBackendDefaults'
 import { hasApiKeyFor, isBackendReadyToEnqueue } from '../utils/enqueue'
 import { isFreshCompletion } from '../utils/taskScroll'
+import { taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
 import './QueueColumn.css'
@@ -232,7 +233,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       <div className="column-settings">
         {backendId !== 'drawthings' && (
           <div className="setting-row">
-            <label>model</label>
+            <label>Model</label>
             <select value={model} onChange={(e) => setModel(e.target.value)}>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>{m.label}</option>
@@ -363,7 +364,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const keeping = task.status === 'completed'
   const removeIcon = keeping ? 'archive' : 'close'
   const removeTitle = keeping ? 'Keep — file this image away, out of the active list' : 'Remove from queue'
-  const statusLabel = task.status === 'kept' ? 'kept' : task.status
+  const statusLabel = taskStatusLabel(task.status)
 
   // One-line prompt preview: flatten the (possibly multiline) prompt to a single
   // line and cap the carried text at a generous grapheme budget. CSS still does
@@ -413,10 +414,8 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             title={task.status === 'failed' && task.error ? task.error : undefined}
           >
             {task.status === 'failed'
-              ? `failed: ${task.error || 'unknown error'}`
-              : task.status === 'interrupted'
-                ? 'interrupted'
-                : statusLabel}
+              ? `Failed: ${task.error || 'unknown error'}`
+              : statusLabel}
           </span>
         </div>
       </div>

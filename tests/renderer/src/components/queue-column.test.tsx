@@ -135,6 +135,24 @@ function stageSettings(backend: string, model: string, defaultParams: Record<str
   }
 }
 
+function task(status: Task['status'], error: string | null = null): Task {
+  return {
+    id: `task-${status}`,
+    prompt: 'a cat',
+    backend: 'openai',
+    model: 'gpt-image-2',
+    params: {},
+    status,
+    enqueuedAt: '2026-08-23T00:00:00.000Z',
+    startedAt: null,
+    completedAt: null,
+    durationMs: null,
+    imagePath: null,
+    baseName: null,
+    error,
+  }
+}
+
 /** The control (select/input) beside the given row label. */
 function rowControl(container: HTMLElement, label: string): HTMLSelectElement | HTMLInputElement {
   const row = Array.from(container.querySelectorAll('.setting-row')).find(
@@ -164,7 +182,7 @@ describe('cloud columns: saved defaults at launch', () => {
       stageSettings(backend, model)
       const { container } = render(<QueueColumn backendId={backend} label={backend} prompt="a cat" />)
       await flush()
-      expect((rowControl(container, 'model') as HTMLSelectElement).value).toBe(model)
+      expect((rowControl(container, 'Model') as HTMLSelectElement).value).toBe(model)
       // The launch-time apply must round-trip to an identical snapshot: before
       // the descriptors, FLUX's resolver used a different params key order and
       // this exact wait produced one settings write per launch.
@@ -172,6 +190,27 @@ describe('cloud columns: saved defaults at launch', () => {
       expect(settingsValue.saveImageBackendDefaults).not.toHaveBeenCalled()
     }
   )
+
+  it.each(CLOUD_BACKEND_IDS_IN_UI_ORDER)('%s renders field labels in sentence case', async (backend) => {
+    stageSettings(backend, getDefaultModelForBackend(backend)!.id)
+    const { container } = render(<QueueColumn backendId={backend} label={backend} prompt="a cat" />)
+    await flush()
+
+    const labels = Array.from(container.querySelectorAll('.setting-row label')).map((label) => label.textContent ?? '')
+    expect(labels.length).toBeGreaterThan(0)
+    expect(labels.every((label) => /^[A-Z]/.test(label))).toBe(true)
+  })
+})
+
+describe('task status presentation', () => {
+  it('capitalizes a status label and its failure prefix without changing the stored state', () => {
+    queueValue.tasks.openai = [task('failed', 'provider refused the image')]
+
+    render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+
+    expect(screen.getByText('Failed: provider refused the image')).toBeTruthy()
+    expect(queueValue.tasks.openai[0].status).toBe('failed')
+  })
 })
 
 describe('openai column', () => {
@@ -181,7 +220,7 @@ describe('openai column', () => {
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
 
-    fireEvent.change(rowControl(container, 'quality'), { target: { value: 'high' } })
+    fireEvent.change(rowControl(container, 'Quality'), { target: { value: 'high' } })
     await advanceAutosave()
 
     expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalledTimes(1)
@@ -201,23 +240,23 @@ describe('openai column', () => {
     stageSettings('openai', 'gpt-image-1.5', { background: 'transparent' })
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
-    expect((rowControl(container, 'background') as HTMLSelectElement).value).toBe('transparent')
+    expect((rowControl(container, 'Background') as HTMLSelectElement).value).toBe('transparent')
 
-    fireEvent.change(rowControl(container, 'model'), { target: { value: 'gpt-image-2' } })
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'gpt-image-2' } })
     await flush()
-    expect((rowControl(container, 'background') as HTMLSelectElement).value).toBe('opaque')
+    expect((rowControl(container, 'Background') as HTMLSelectElement).value).toBe('opaque')
   })
 
   it('shows custom width/height inputs only for a model that supports them', async () => {
     stageSettings('openai', 'gpt-image-2')
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
-    expect(rowControl(container, 'width')).toBeTruthy()
+    expect(rowControl(container, 'Width')).toBeTruthy()
 
-    fireEvent.change(rowControl(container, 'model'), { target: { value: 'gpt-image-1.5' } })
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'gpt-image-1.5' } })
     await flush()
     const widthRow = Array.from(container.querySelectorAll('.setting-row')).find(
-      (r) => r.querySelector('label')?.textContent === 'width'
+      (r) => r.querySelector('label')?.textContent === 'Width'
     )
     expect(widthRow).toBeUndefined()
   })
@@ -229,14 +268,14 @@ describe('flux column', () => {
     const { container } = render(<QueueColumn backendId="flux" label="FLUX" prompt="a cat" />)
     await flush()
     const labels = Array.from(container.querySelectorAll('.setting-row label')).map((l) => l.textContent)
-    expect(labels).not.toContain('steps')
-    expect(labels).not.toContain('guidance')
-    expect(labels).toContain('seed')
+    expect(labels).not.toContain('Steps')
+    expect(labels).not.toContain('Guidance')
+    expect(labels).toContain('Seed')
 
-    fireEvent.change(rowControl(container, 'model'), { target: { value: 'flux-2-flex' } })
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'flux-2-flex' } })
     await flush()
-    expect(rowControl(container, 'steps')).toBeTruthy()
-    expect(rowControl(container, 'guidance')).toBeTruthy()
+    expect(rowControl(container, 'Steps')).toBeTruthy()
+    expect(rowControl(container, 'Guidance')).toBeTruthy()
   })
 })
 
@@ -279,14 +318,14 @@ describe('drawthings column', () => {
     await flush()
     await flush()
 
-    const modelSelect = rowControl(container, 'model') as HTMLSelectElement
+    const modelSelect = rowControl(container, 'Model') as HTMLSelectElement
     expect(Array.from(modelSelect.options).map((o) => o.textContent)).toEqual(['Model A', 'Model B'])
-    expect((rowControl(container, 'width') as HTMLInputElement).value).toBe('768')
-    expect((rowControl(container, 'seed') as HTMLInputElement).value).toBe('42')
+    expect((rowControl(container, 'Width') as HTMLInputElement).value).toBe('768')
+    expect((rowControl(container, 'Seed') as HTMLInputElement).value).toBe('42')
 
     // The loadedModel gate is open (the saved params landed), so an edit
     // persists under this model's key.
-    fireEvent.change(rowControl(container, 'width'), { target: { value: '1024' } })
+    fireEvent.change(rowControl(container, 'Width'), { target: { value: '1024' } })
     await flush()
     expect(electronAPI.dtSaveModelParams).toHaveBeenCalledWith(
       'model-a.ckpt',

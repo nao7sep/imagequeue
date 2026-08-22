@@ -375,7 +375,7 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
         <>
           {c.downloadedModels.length > 0 ? (
             <div className="setting-row">
-              <label>model</label>
+              <label>Model</label>
               <select value={model} onChange={(e) => c.onModelChange(e.target.value)}>
                 {c.downloadedModels.map((m) => (
                   <option key={m.file} value={m.file}>{localModelName(m)}</option>
@@ -388,7 +388,7 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </div>
           )}
           <div className="setting-row">
-            <label>size</label>
+            <label>Size</label>
             <select value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
               {DRAWTHINGS_SIZE_PRESETS.map((s) => (
                 <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>{s.label}</option>
@@ -397,19 +397,19 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </select>
           </div>
           <div className="setting-row">
-            <label>width</label>
+            <label>Width</label>
             <input type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
-            <label>height</label>
+            <label>Height</label>
             <input type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
-            <label>steps</label>
+            <label>Steps</label>
             <input type="number" value={c.steps} onChange={(e) => c.setSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
           </div>
           <div className="setting-row">
-            <label>guidance</label>
+            <label>Guidance</label>
             <input type="number" value={c.guidance} onChange={(e) => c.setGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
           </div>
           {c.canApplyToAllModels && (
@@ -423,11 +423,11 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </button>
           )}
           <div className="setting-row">
-            <label>seed</label>
+            <label>Seed</label>
             <input type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder="random" />
           </div>
           <div className="setting-row">
-            <label>neg.</label>
+            <label>Neg.</label>
             <input type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder="negative prompt" />
           </div>
           {c.canRestoreRecommended && c.effectiveRecommendation && (

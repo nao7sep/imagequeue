@@ -9,6 +9,7 @@ import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
+import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import './PromptPane.css'
@@ -275,23 +276,22 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             </button>
           ) : (
             <div className="preview-metadata" onClick={() => setDetailsOpen(false)}>
-              <div><strong>model:</strong> {selectedTask.model}</div>
-              <div><strong>status:</strong> {selectedTask.status}</div>
-              <div><strong>prompt:</strong> {selectedTask.prompt}</div>
+              <div><strong>Model:</strong> {selectedTask.model}</div>
+              <div><strong>Status:</strong> {taskStatusLabel(selectedTask.status)}</div>
+              <div><strong>Prompt:</strong> {selectedTask.prompt}</div>
               {selectedTask.durationMs !== null && (
-                <div><strong>time:</strong> {(selectedTask.durationMs / 1000).toFixed(1)}s</div>
+                <div><strong>Time:</strong> {(selectedTask.durationMs / 1000).toFixed(1)}s</div>
               )}
               {(() => {
                 const p = selectedTask.params
                 const rows: React.ReactNode[] = []
                 if (p.width != null && p.height != null) {
-                  rows.push(<div key="size"><strong>size:</strong> {String(p.width)}×{String(p.height)}</div>)
+                  rows.push(<div key="size"><strong>Size:</strong> {String(p.width)}×{String(p.height)}</div>)
                 }
                 const skip = new Set(['width', 'height'])
-                const labelMap: Record<string, string> = { outputFormat: 'format', negativePrompt: 'negative', personGeneration: 'persons', aspectRatio: 'aspect', imageSize: 'imgSize' }
                 for (const [k, v] of Object.entries(p)) {
                   if (skip.has(k) || v == null || v === '') continue
-                  rows.push(<div key={k}><strong>{labelMap[k] ?? k}:</strong> {String(v)}</div>)
+                  rows.push(<div key={k}><strong>{taskParameterLabel(k)}:</strong> {String(v)}</div>)
                 }
                 return rows
               })()}

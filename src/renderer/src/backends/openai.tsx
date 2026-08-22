@@ -107,7 +107,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
   return (
     <>
       <div className="setting-row">
-        <label>size</label>
+        <label>Size</label>
         <select value={sizeValue} onChange={(e) => handleSizeChange(e.target.value)}>
           {modelDef.sizes.map((size) => (
             <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>{size.label}</option>
@@ -120,7 +120,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
       {modelDef.supportsCustomSizes && (
         <>
           <div className="setting-row">
-            <label>width</label>
+            <label>Width</label>
             <input
               type="number"
               min={OPENAI_GPT2_MIN_EDGE}
@@ -131,7 +131,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
             />
           </div>
           <div className="setting-row">
-            <label>height</label>
+            <label>Height</label>
             <input
               type="number"
               min={OPENAI_GPT2_MIN_EDGE}
@@ -144,7 +144,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </>
       )}
       <div className="setting-row">
-        <label>moderation</label>
+        <label>Moderation</label>
         <select value={params.moderation} onChange={(e) => onChange({ ...params, moderation: e.target.value as OpenAIModeration })}>
           {modelDef.moderations.map((value) => (
             <option key={value} value={value}>{value}</option>
@@ -152,7 +152,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </select>
       </div>
       <div className="setting-row">
-        <label>quality</label>
+        <label>Quality</label>
         <select value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as OpenAIQuality })}>
           {modelDef.qualities.map((q) => (
             <option key={q} value={q}>{q}</option>
@@ -160,7 +160,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </select>
       </div>
       <div className="setting-row">
-        <label>format</label>
+        <label>Format</label>
         <select value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as OpenAIOutputFormat })}>
           {modelDef.outputFormats.map((fmt) => (
             <option key={fmt} value={fmt}>{OPENAI_OUTPUT_FORMAT_LABELS[fmt]}</option>
@@ -168,7 +168,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </select>
       </div>
       <div className="setting-row">
-        <label>background</label>
+        <label>Background</label>
         <select value={params.background} onChange={(e) => onChange({ ...params, background: e.target.value as OpenAIBackground })}>
           {modelDef.backgrounds.map((bg) => (
             <option key={bg} value={bg}>{bg.charAt(0).toUpperCase() + bg.slice(1)}</option>

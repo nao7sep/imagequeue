@@ -45,7 +45,7 @@ function installedSummary(info: DependencyInfo): string {
   // Present, but it did not say what it is — an installed binary whose sidecar is
   // missing. "Not installed" would be a lie, and silence would leave the row
   // looking fine.
-  if (!info.installedLabel) return `version unreadable${latest}${updated}`
+  if (!info.installedLabel) return `Version unreadable${latest}${updated}`
   return `${info.installedLabel}${latest}${updated}`
 }
 

@@ -543,7 +543,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                       onChange={() => toggleProprietary(id)}
                     />
                     <span>{BACKEND_LABELS[id]}</span>
-                    {!hasKey && <span className="advanced-target-hint">no API key</span>}
+                    {!hasKey && <span className="advanced-target-hint">No API key</span>}
                   </label>
                 )
               })}

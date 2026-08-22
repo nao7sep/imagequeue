@@ -32,7 +32,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<GrokParam
   return (
     <>
       <div className="setting-row">
-        <label>aspect</label>
+        <label>Aspect</label>
         <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value as GrokAspectRatio })}>
           {modelDef.aspectRatios.map((ar) => (
             <option key={ar.value} value={ar.value}>{ar.label}</option>
@@ -40,7 +40,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<GrokParam
         </select>
       </div>
       <div className="setting-row">
-        <label>size</label>
+        <label>Size</label>
         <select value={params.resolution} onChange={(e) => onChange({ ...params, resolution: e.target.value as GrokResolution })}>
           {modelDef.resolutions.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
@@ -49,7 +49,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<GrokParam
       </div>
       {modelDef.qualities && (
         <div className="setting-row">
-          <label>quality</label>
+          <label>Quality</label>
           <select value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as GrokQuality })}>
             {modelDef.qualities.map((q) => (
               <option key={q.value} value={q.value}>{q.label}</option>

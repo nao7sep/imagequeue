@@ -35,7 +35,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
   return (
     <>
       <div className="setting-row">
-        <label>size</label>
+        <label>Size</label>
         <select value={params.sizeIdx} onChange={(e) => onChange({ ...params, sizeIdx: Number.parseInt(e.target.value, 10) })}>
           {modelDef.sizes.map((s, i) => (
             <option key={i} value={i}>{s.label}</option>
@@ -44,7 +44,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
       </div>
       {modelDef.stepsRange && (
         <div className="setting-row">
-          <label>steps</label>
+          <label>Steps</label>
           <input
             type="number"
             value={params.steps}
@@ -62,7 +62,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
       )}
       {modelDef.guidanceRange && (
         <div className="setting-row">
-          <label>guidance</label>
+          <label>Guidance</label>
           <input
             type="number"
             value={params.guidance}
@@ -80,7 +80,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
         </div>
       )}
       <div className="setting-row">
-        <label>seed</label>
+        <label>Seed</label>
         <input type="text" value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder="random" />
       </div>
     </>

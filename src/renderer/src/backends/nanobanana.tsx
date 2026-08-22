@@ -21,7 +21,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
   return (
     <>
       <div className="setting-row">
-        <label>aspect</label>
+        <label>Aspect</label>
         <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
           {modelDef.aspectRatios.map((ar) => (
             <option key={ar.value} value={ar.value}>{ar.label}</option>
@@ -29,7 +29,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
         </select>
       </div>
       <div className="setting-row">
-        <label>size</label>
+        <label>Size</label>
         <select value={params.imageSize} onChange={(e) => onChange({ ...params, imageSize: e.target.value })}>
           {modelDef.imageSizes.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>

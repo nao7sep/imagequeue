@@ -28,6 +28,26 @@ const initialState: DependenciesState = {
 }
 
 describe('DependenciesModal cancellation', () => {
+  it('capitalizes the unavailable installed-version state', async () => {
+    const unreadable = {
+      ...initialState,
+      cli: {
+        ...initialState.cli,
+        state: 'installed-unchecked' as const,
+      },
+    }
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => unreadable),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    render(<DependenciesModal onClose={vi.fn()} />)
+
+    expect(await screen.findByText(/^Version unreadable/)).toBeTruthy()
+    expect(screen.queryByText(/^version unreadable/)).toBeNull()
+  })
+
   it('cancels active acquisition and closes instead of trapping the user', async () => {
     const cancelDependencyOperations = vi.fn(async () => undefined)
     const installCli = vi.fn(() => new Promise<DependenciesState>(() => undefined))
