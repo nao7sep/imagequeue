@@ -111,7 +111,7 @@ describe('recommendedParamsFromMatch (projection)', () => {
 })
 
 describe('parseRecommendationBytes', () => {
-  it('keeps only well-formed spec entries', () => {
+  it('rejects the entire payload when any entry is malformed', () => {
     const data = Buffer.from(JSON.stringify([
       { name: 'ok', configuration: { model: 'a' } },
       { name: 'no-config' },
@@ -120,10 +120,19 @@ describe('parseRecommendationBytes', () => {
       'not an object'
     ]))
     const specs = parseRecommendationBytes(data)
-    expect(specs.map((s) => s.name)).toEqual(['ok'])
+    expect(specs).toEqual([])
   })
 
   it('returns an empty array for non-array JSON', () => {
     expect(parseRecommendationBytes(Buffer.from('{}'))).toEqual([])
+  })
+
+  it('rejects invalid optional fields instead of publishing a partial schema', () => {
+    expect(parseRecommendationBytes(Buffer.from(JSON.stringify([
+      { name: 'bad-version', version: 1, configuration: { model: 'a' } }
+    ])))).toEqual([])
+    expect(parseRecommendationBytes(Buffer.from(JSON.stringify([
+      { name: 'bad-negative', negative: false, configuration: { model: 'a' } }
+    ])))).toEqual([])
   })
 })

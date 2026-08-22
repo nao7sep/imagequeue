@@ -61,6 +61,28 @@ export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Pro
   }
 }
 
+/** Publish verified CLI bytes and their release identity. The prior sidecar is
+ * removed before the binary commit so a post-publish failure can only leave the
+ * installed version unknown, never falsely identified as an older release. */
+export function publishCliBinary(
+  tempPath: string,
+  tag: string,
+  sha256: string
+): void {
+  fs.mkdirSync(getBinDir(), { recursive: true })
+  fs.rmSync(getCliMetaPath(), { force: true })
+  syncDirectory(getBinDir())
+  fs.renameSync(tempPath, getCliBinaryPath())
+  syncDirectory(getBinDir())
+  const meta: CliMeta = { tag, sha256, installedAt: new Date().toISOString() }
+  // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
+  // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
+  // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
+  // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
+  // colocated in a binary-bearing directory").
+  writeJsonAtomic(getCliMetaPath(), meta, false)
+}
+
 /**
  * Download, verify, arch-gate, and install the given release into bin/, recording
  * its tag. Reports progress while the body streams. Throws (leaving no partial
@@ -108,24 +130,12 @@ export async function installCliRelease(
     // executable metadata is durable before publication.
     syncFile(tempPath)
 
-    fs.mkdirSync(getBinDir(), { recursive: true })
-    // Publish the binary first, then record its tag beside it. The order is the
-    // honest one: a failure between the two leaves the NEW binary with a stale or
-    // absent sidecar, which reads as version-unknown and offers the re-acquire
-    // that fixes it. Writing the sidecar first would instead leave the OLD binary
-    // wearing the NEW tag on a failed rename — a stale install reading "up to
-    // date", which is the one outcome the state model must never produce. Same
-    // filesystem → atomic replace.
+    // Invalidate the prior artifact's identity immediately before publication.
+    // From this point until the new sidecar lands, either binary reads as
+    // version-unknown and remains re-acquirable; the new binary can never inherit
+    // the old binary's release tag after a sync or sidecar-write failure.
     signal?.throwIfAborted()
-    fs.renameSync(tempPath, getCliBinaryPath())
-    syncDirectory(getBinDir())
-    const meta: CliMeta = { tag: release.tag, sha256: release.sha256, installedAt: new Date().toISOString() }
-    // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
-    // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
-    // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
-    // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
-    // colocated in a binary-bearing directory").
-    writeJsonAtomic(getCliMetaPath(), meta, false)
+    publishCliBinary(tempPath, release.tag, release.sha256)
     log('info', 'draw-things-cli installed', { tag: release.tag })
   } catch (err) {
     discardTempPath(tempPath)

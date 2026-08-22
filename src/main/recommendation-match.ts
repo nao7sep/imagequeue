@@ -24,6 +24,8 @@ export function isRecommendationSpec(value: unknown): value is RecommendationSpe
   if (value === null || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   return typeof record.name === 'string' &&
+    (record.version === undefined || typeof record.version === 'string') &&
+    (record.negative === undefined || typeof record.negative === 'string') &&
     record.configuration !== null &&
     typeof record.configuration === 'object' &&
     !Array.isArray(record.configuration)
@@ -32,7 +34,8 @@ export function isRecommendationSpec(value: unknown): value is RecommendationSpe
 export function parseRecommendationBytes(data: Buffer): RecommendationSpec[] {
   const parsed = JSON.parse(data.toString('utf-8')) as unknown
   if (!Array.isArray(parsed)) return []
-  return parsed.filter(isRecommendationSpec)
+  if (!parsed.every(isRecommendationSpec)) return []
+  return parsed
 }
 
 export function findRecommendedSettings(
