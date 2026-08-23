@@ -18,6 +18,9 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version)
   },
   test: {
+    // Keep spawned-child startup and time-throttled integration tests from
+    // competing with an unbounded file pool on low-throughput supported hosts.
+    maxWorkers: 2,
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
     coverage: {
