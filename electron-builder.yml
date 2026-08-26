@@ -39,6 +39,10 @@ asarUnpack:
 extraResources:
   - from: build/Assets.car
     to: Assets.car
+  # Native status icons keep stable filenames so macOS recognizes the Template
+  # + @2x pair and the main process can swap explicit Windows contrast variants.
+  - from: build/status-icons
+    to: status-icons
 
 mac:
   category: public.app-category.graphics-design

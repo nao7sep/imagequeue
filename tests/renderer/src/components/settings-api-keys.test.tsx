@@ -56,7 +56,7 @@ function baseConfig(): Record<string, unknown> {
     general: {
       ui_font_family: '', auto_preview_idle_seconds: 30, export_dir: '',
       confirm_remove: false, confirm_delete: false, delete_to_trash: true,
-      drop_empty_sessions: true, keep_awake_during_work: true,
+      drop_empty_sessions: true, keep_awake_during_work: true, show_status_icon: true,
     },
     notifications: {
       notifications_enabled: true, sounds_enabled: true,
@@ -150,5 +150,23 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     const gemini = keyFields().find((f) => f.value === 'gemini-text-stored')!
     fireEvent.change(gemini, { target: { value: 'changed' } })
     expect(saveButton().disabled).toBe(false)
+  })
+})
+
+describe('Settings status icon preference', () => {
+  it('uses the macOS label and stages the preference with General settings', async () => {
+    render(<SettingsModal onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Show in menu bar'))
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledOnce())
+    const next = settingsValue.saveChangedSettings.mock.calls[0][1] as Record<string, Record<string, unknown>>
+    expect(next.general.show_status_icon).toBe(false)
+  })
+
+  it('uses the Windows notification-area label', () => {
+    ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'win32' }
+    render(<SettingsModal onClose={() => {}} />)
+    expect(screen.getByText('Show in notification area')).toBeTruthy()
   })
 })

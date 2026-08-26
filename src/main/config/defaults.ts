@@ -37,7 +37,8 @@ export function createDefaultConfig(): AppConfig {
       confirm_delete: false,
       delete_to_trash: true,
       drop_empty_sessions: true,
-      keep_awake_during_work: true
+      keep_awake_during_work: true,
+      show_status_icon: true
     },
     image_backends: {
       openai: {

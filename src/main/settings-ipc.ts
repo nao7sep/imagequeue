@@ -2,13 +2,15 @@ import { BrowserWindow, shell, dialog, app, clipboard, nativeImage } from 'elect
 import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
-import { loadConfig, saveConfig, getDataDir } from './config'
+import { loadConfig, saveConfig } from './config'
 import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { refreshMainWindowMinimumSize } from './main-window-layout'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt } from './utils/file-output'
 import { AppConfig } from './config/types'
+import { openOutputFolder } from './session/open-output-folder'
+import { log, serializeError } from './logger'
 import {
   checkCli,
   listDownloadedModels,
@@ -48,17 +50,28 @@ const notificationFields = new Set<string>([
 ])
 
 // IPC handlers for reading/writing settings.
-export function registerSettingsIpc(): void {
+export function registerSettingsIpc(
+  onConfigSaved?: (config: AppConfig) => Promise<void> | void,
+): void {
   handle('settings:get', () => {
     // The config carries no keys — they are neither in the type nor in this
     // payload — so the cached object is returned as-is (IPC serializes it).
     return loadConfig()
   })
 
-  handle('settings:saveChangedFields', (_event, base: AppConfig, next: AppConfig) => {
+  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig) => {
     const config = loadConfig()
     applyChangedFields(config as unknown as Record<string, unknown>, base, next)
     saveConfig(config)
+    if (onConfigSaved) {
+      try {
+        await onConfigSaved(config)
+      } catch (err) {
+        // The durable config write succeeded. A native presentation failure is
+        // logged and degraded, never reported as a failed settings save.
+        log('error', 'Post-settings-save reconciliation failed', { error: serializeError(err) })
+      }
+    }
     return { success: true }
   })
 
@@ -224,11 +237,7 @@ export function registerSettingsIpc(): void {
     shell.openExternal(url)
   })
 
-  handle('shell:openOutputFolder', () => {
-    const outputDir = path.join(getDataDir(), 'output')
-    fs.mkdirSync(outputDir, { recursive: true })
-    shell.openPath(outputDir)
-  })
+  handle('shell:openOutputFolder', openOutputFolder)
 
   handle('shell:revealFile', (_event, baseName: string, ext: string) => {
     const safeBase = assertSafeBaseName(baseName)
