@@ -48,4 +48,24 @@ describe('QueueProvider load state', () => {
     act(() => onUpdate(emptyTasks()))
     expect(screen.getByText('ready:0')).toBeTruthy()
   })
+
+  it('does not let an older initial-read failure overwrite a live update', async () => {
+    let rejectInitial!: (error: Error) => void
+    let onUpdate!: (tasks: Record<BackendId, Task[]>) => void
+    const initial = new Promise<Record<BackendId, Task[]>>((_, reject) => { rejectInitial = reject })
+    window.electronAPI = {
+      getAllStoredTasks: vi.fn(() => initial),
+      onQueueUpdated: vi.fn((callback) => {
+        onUpdate = callback
+        return () => undefined
+      }),
+    } as unknown as typeof window.electronAPI
+
+    render(<QueueProvider><Probe /></QueueProvider>)
+    act(() => onUpdate(emptyTasks()))
+    expect(screen.getByText('ready:0')).toBeTruthy()
+
+    await act(async () => rejectInitial(new Error('stale failure')))
+    expect(screen.getByText('ready:0')).toBeTruthy()
+  })
 })

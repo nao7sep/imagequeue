@@ -281,7 +281,14 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
               />
             </div>
             <div className="dt-column-scroll">
-              {renderModelList(filteredOfficialModels, 'catalog', 'Official models', 'No official models found.')}
+              {renderModelList(
+                filteredOfficialModels,
+                'catalog',
+                'Official models',
+                officialModels.length === 0
+                  ? 'No official models available.'
+                  : 'No official models match this search.'
+              )}
             </div>
           </section>
 
@@ -326,12 +333,26 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
                     Couldn&apos;t read <code>custom.json</code> ({customJsonStatus.reason}). Any imported models may currently be listed under Official Models until this file can be parsed.
                   </p>
                 )}
-                {renderModelList(filteredLocalImportModels, 'local', 'Local imports', 'No local imports detected.')}
+                {renderModelList(
+                  filteredLocalImportModels,
+                  'local',
+                  'Local imports',
+                  localImportModels.length === 0
+                    ? 'No local imports detected.'
+                    : 'No local imports match this search.'
+                )}
               </section>
 
               <section className="dt-section">
                 <h4 className="dt-section-title">Community Catalog</h4>
-                {renderModelList(filteredCommunityCatalogModels, 'catalog', 'Community catalog', 'No community models found.')}
+                {renderModelList(
+                  filteredCommunityCatalogModels,
+                  'catalog',
+                  'Community catalog',
+                  communityCatalogModels.length === 0
+                    ? 'No community catalog models available.'
+                    : 'No community models match this search.'
+                )}
               </section>
             </div>
           </section>

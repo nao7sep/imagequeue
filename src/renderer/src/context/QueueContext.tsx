@@ -55,7 +55,7 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
         setLoadState('ready')
       })
       .catch(() => {
-        if (!disposed) setLoadState('failed')
+        if (!disposed && !receivedLiveUpdate) setLoadState('failed')
       })
 
     // Subscribe to updates from main process
