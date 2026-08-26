@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate placeholder native status icons and an optional review specimen."""
+"""Generate the approved T2 rounded-card status icons and review specimen."""
 
 import argparse
 from pathlib import Path
@@ -10,30 +10,36 @@ from PIL import Image, ImageDraw, ImageFont
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / "build" / "status-icons"
 
 
-def tile_boxes(size: int) -> list[tuple[int, int, int, int]]:
-    # Native 16 px geometry: 5 px tiles, a 2 px gap, and a 2 px margin.
-    scale = size / 16
-    starts = (round(2 * scale), round(9 * scale))
-    tile_size = round(5 * scale)
-    return [
-        (x, y, x + tile_size - 1, y + tile_size - 1)
-        for y in starts
-        for x in starts
-    ]
-
-
-def draw_tiles(size: int, fill: str, outline: str | None = None) -> Image.Image:
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+def draw_tiles(size: int, fill: str) -> Image.Image:
+    # Approved T2 geometry after packaged-menu optical correction: four 7 px
+    # rounded cards, no embedded outer padding, a 2 px central gap, and a 2 px
+    # radius in a 16 px logical canvas. The status item / notification area
+    # supplies its own spacing; transparent rounded corners keep the glyph from
+    # reading as a full-bleed app-icon plate.
+    # Supersampling preserves the same optical shape at Windows' fractional
+    # 125% and 150% tray sizes instead of snapping them into diamonds.
+    supersample = 8
+    physical_size = size * supersample
+    scale = physical_size / 16
+    margin = 0
+    tile_size = int(7 * scale + 0.5)
+    radius = int(2 * scale + 0.5)
+    starts = (margin, physical_size - margin - tile_size)
+    image = Image.new("RGBA", (physical_size, physical_size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    width = max(1, round(size / 16)) if outline else 0
-    for box in tile_boxes(size):
-        draw.rectangle(box, fill=fill, outline=outline, width=width)
-    return image
+    for y in starts:
+        for x in starts:
+            draw.rounded_rectangle(
+                (x, y, x + tile_size - 1, y + tile_size - 1),
+                radius=radius,
+                fill=fill,
+            )
+    return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
-def save_ico(name: str, fill: str, outline: str | None = None) -> None:
+def save_ico(name: str, fill: str) -> None:
     sizes = (16, 20, 24, 32)
-    frames = [draw_tiles(size, fill, outline) for size in sizes]
+    frames = [draw_tiles(size, fill) for size in sizes]
     frames[-1].save(
         OUTPUT_DIR / name,
         format="ICO",
@@ -55,7 +61,7 @@ def ico_frames(path: Path) -> list[Image.Image]:
 
 def draw_specimen(output_path: Path) -> None:
     font = ImageFont.load_default()
-    width, row_height = 1_240, 132
+    width, row_height = 1_360, 132
     rows: list[tuple[str, str, list[Image.Image]]] = []
 
     for filename in ("ImageQueueStatusTemplate.png", "ImageQueueStatusTemplate@2x.png"):
@@ -69,22 +75,21 @@ def draw_specimen(output_path: Path) -> None:
     rows.extend([
         ("Windows light\nImageQueueStatusLight.ico", "#f3f3f3", ico_frames(OUTPUT_DIR / "ImageQueueStatusLight.ico")),
         ("Windows dark\nImageQueueStatusDark.ico", "#202020", ico_frames(OUTPUT_DIR / "ImageQueueStatusDark.ico")),
-        ("Windows high contrast\nImageQueueStatusHighContrast.ico", "#000000", ico_frames(OUTPUT_DIR / "ImageQueueStatusHighContrast.ico")),
     ])
 
     sheet = Image.new("RGB", (width, 54 + row_height * len(rows)), "#ffffff")
     draw = ImageDraw.Draw(sheet)
-    draw.text((20, 16), "ImageQueue placeholder status icon specimen - native pixels and nearest-neighbor enlargement", fill="#111111", font=font)
+    draw.text((20, 16), "ImageQueue T2 rounded-card status icon specimen - native pixels and nearest-neighbor enlargement", fill="#111111", font=font)
 
     for row_index, (label, background, frames) in enumerate(rows):
         top = 54 + row_index * row_height
         draw.multiline_text((20, top + 12), label, fill="#111111", font=font, spacing=4)
         draw.rectangle((260, top, width - 20, top + row_height - 12), fill=background)
         draw.text((272, top + 8), "native", fill="#777777" if background != "#202020" and background != "#000000" else "#bbbbbb", font=font)
-        draw.text((450, top + 8), "enlarged", fill="#777777" if background != "#202020" and background != "#000000" else "#bbbbbb", font=font)
+        draw.text((500, top + 8), "enlarged", fill="#777777" if background != "#202020" and background != "#000000" else "#bbbbbb", font=font)
 
         native_x = 280
-        enlarged_x = 450
+        enlarged_x = 500
         for frame in frames:
             native_y = top + 52
             sheet.paste(frame, (native_x, native_y), frame)
@@ -112,9 +117,6 @@ def main() -> None:
     # The appearance names describe the system surface, not the glyph color.
     save_ico("ImageQueueStatusLight.ico", "black")
     save_ico("ImageQueueStatusDark.ico", "white")
-    # A white fill with a black keyline remains distinguishable on either
-    # extreme used by Windows forced-colors themes.
-    save_ico("ImageQueueStatusHighContrast.ico", "white", "black")
     if args.specimen_output:
         draw_specimen(args.specimen_output)
 

@@ -104,7 +104,6 @@ describe('status icon presentation', () => {
     expect(statusIconAssetName('darwin', 'dark')).toBe('ImageQueueStatusTemplate.png')
     expect(statusIconAssetName('win32', 'light')).toBe('ImageQueueStatusLight.ico')
     expect(statusIconAssetName('win32', 'dark')).toBe('ImageQueueStatusDark.ico')
-    expect(statusIconAssetName('win32', 'high-contrast')).toBe('ImageQueueStatusHighContrast.ico')
     expect(statusIconAssetName('linux', 'dark')).toBeNull()
   })
 
@@ -221,6 +220,24 @@ describe('StatusIconController', () => {
 
     expect(mocks.imagePaths.at(-1)).toMatch(/ImageQueueStatusDark\.ico$/)
     expect(mocks.FakeTray.instances[0].image.source).toMatch(/ImageQueueStatusDark\.ico$/)
+  })
+
+  it('uses the same black or white T2 geometry in forced-colors mode', async () => {
+    mutableTheme.inForcedColorsMode = true
+    mutableTheme.shouldUseHighContrastColors = true
+    mutableTheme.shouldUseDarkColorsForSystemIntegratedUI = true
+    const controller = new StatusIconController({
+      platform: 'win32',
+      restoreMainWindow: vi.fn(),
+      requestQuit: vi.fn(),
+      openOutputFolder: vi.fn(),
+      setQueuePaused: vi.fn(),
+    })
+
+    await controller.reconcile(true)
+
+    expect(mocks.imagePaths.at(-1)).toMatch(/ImageQueueStatusDark\.ico$/)
+    expect(mocks.imagePaths.at(-1)).not.toMatch(/HighContrast/)
   })
 
   it('uses a macOS template image and degrades safely when an asset is invalid', async () => {

@@ -4,7 +4,7 @@ import type { QueueControlState } from '../shared/types'
 import { log, serializeError } from './logger'
 import { subscribeQueueControlState } from './queue/publisher'
 
-export type StatusIconAppearance = 'light' | 'dark' | 'high-contrast'
+export type StatusIconAppearance = 'light' | 'dark'
 
 export function statusIconAssetName(
   platform: NodeJS.Platform,
@@ -12,7 +12,6 @@ export function statusIconAssetName(
 ): string | null {
   if (platform === 'darwin') return 'ImageQueueStatusTemplate.png'
   if (platform !== 'win32') return null
-  if (appearance === 'high-contrast') return 'ImageQueueStatusHighContrast.ico'
   return appearance === 'dark' ? 'ImageQueueStatusDark.ico' : 'ImageQueueStatusLight.ico'
 }
 
@@ -182,9 +181,9 @@ export class StatusIconController {
   }
 
   private currentAppearance(): StatusIconAppearance {
-    if (nativeTheme.inForcedColorsMode || nativeTheme.shouldUseHighContrastColors) {
-      return 'high-contrast'
-    }
+    // Forced-colors themes reuse the same exact T2 geometry: white on a dark
+    // system surface, black on a light one. A separate outlined asset changed
+    // the cards' apparent spacing and was less faithful without adding contrast.
     return nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? 'dark' : 'light'
   }
 
