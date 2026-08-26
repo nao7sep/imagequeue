@@ -31,10 +31,13 @@ import {
   unregisterMainWindowForLayout,
 } from './main-window-layout'
 import { startupFailureMessage } from './startup-error'
-import { restoreOrCreateMainWindow } from './main-window-lifecycle'
+import { MainWindowController } from './main-window-lifecycle'
+import { StatusIconController } from './status-icon'
+import { openOutputFolder } from './session/open-output-folder'
+import { setQueuePausedAndPublish } from './queue/control-actions'
 
-let mainWin: BrowserWindow | null = null
-let startupComplete = false
+let mainWindowController: MainWindowController<BrowserWindow> | null = null
+let statusIconController: StatusIconController | null = null
 
 // Every mutable app store is process-owned. Letting a second ImageQueue process
 // open the same root would turn otherwise-atomic file replacement into competing
@@ -45,8 +48,13 @@ const ownsSingleInstance = app.requestSingleInstanceLock()
 if (!ownsSingleInstance) app.quit()
 
 app.on('second-instance', () => {
-  restoreOrCreateMainWindow(mainWin, startupComplete, createWindow)
+  void mainWindowController?.restoreOrCreate()
 })
+
+// Electron's default is to quit after the last BrowserWindow closes when no
+// listener exists. Primary-window close policy belongs to MainWindowController;
+// explicit quit paths continue through the before-quit handler below.
+app.on('window-all-closed', () => {})
 
 // Debug is diagnostic-only: enabled automatically for an unpackaged development
 // build, and available in packaged builds only through an explicit
@@ -80,7 +88,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason)
 })
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   // Chrome + sizing come from the pure buildMainWindowOptions: the window
   // minimum and opening width are DERIVED from the shared pane minimums and the
   // pane count (see shared/layout-metrics), never a magic literal, so the window
@@ -98,15 +106,11 @@ function createWindow(): void {
     }
   })
 
-  mainWin = win
   registerMainWindowForLayout(win)
   hardenWindow(win)
 
   win.on('closed', () => {
     unregisterMainWindowForLayout(win)
-    if (mainWin === win) mainWin = null
-    closeViewerWindow()
-    if (process.platform !== 'darwin') app.quit()
   })
 
   win.webContents.on('context-menu', (_event, params) => {
@@ -155,6 +159,7 @@ function createWindow(): void {
   } else {
     win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+  return win
 }
 
 if (ownsSingleInstance) app.whenReady().then(() => {
@@ -214,17 +219,35 @@ function startUp(): void {
   log('info', 'Session started', { sessionDir: getSessionDir() })
 
   persistActiveSession()
+  mainWindowController = new MainWindowController({
+    platform: process.platform,
+    createWindow,
+    isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
+    closeViewerWindow,
+    onPrimaryWindowClosed: () => {
+      if (process.platform !== 'darwin') app.quit()
+    },
+    dock: app.dock,
+  })
+  statusIconController = new StatusIconController({
+    restoreMainWindow: () => mainWindowController?.restoreOrCreate(),
+    requestQuit: () => app.quit(),
+    openOutputFolder,
+    setQueuePaused: setQueuePausedAndPublish,
+  })
   registerSessionIpc()
   registerQueueIpc()
   registerPreviewIpc()
-  registerSettingsIpc()
+  registerSettingsIpc(async (config) => {
+    await statusIconController?.reconcile(config.general.show_status_icon)
+  })
   registerStateIpc()
   registerDependenciesIpc()
   registerElaboratorsIpc()
   registerConceptsIpc()
   registerAppLogIpc()
-  registerViewerIpc(() => mainWin)
-  registerNotificationIpc(() => mainWin)
+  registerViewerIpc(() => mainWindowController?.getWindow() ?? null)
+  registerNotificationIpc()
   initNotificationWindow()
   startProcessor()
   startWakeLockMonitor()
@@ -240,19 +263,14 @@ function startUp(): void {
   // rename lands (see utils/atomic-write.ts → backup/backup-store.ts). There is
   // nothing to run here — the history is always as current as the last save.
 
-  createWindow()
-  startupComplete = true
+  void statusIconController.reconcile(loadConfig().general.show_status_icon)
+  mainWindowController.createInitialWindow()
+  mainWindowController.markStartupComplete()
 
   app.on('activate', () => {
-    restoreOrCreateMainWindow(mainWin, startupComplete, createWindow)
+    void mainWindowController?.restoreOrCreate()
   })
 }
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
 
 // Async cleanup run from before-quit. Each step is independently guarded so
 // one failing step doesn't skip the rest, and the whole thing is wrapped in
@@ -324,11 +342,11 @@ async function gracefulShutdown(reason: string): Promise<void> {
 // A cloud call already issued may still be billed. The shutdownStarted
 // guard still lets a second quit during cleanup fall through without
 // preventDefault, as a force-quit escape hatch in case cleanup ever hangs.
-let shutdownStarted = false
 app.on('before-quit', (event) => {
-  if (shutdownStarted) return
-  shutdownStarted = true
+  if (mainWindowController && !mainWindowController.beginShutdown()) return
   event.preventDefault()
+  statusIconController?.dispose()
+  mainWindowController?.dispose()
   gracefulShutdown('quit')
     .catch((err) => log('error', 'Graceful shutdown error', {
       error: serializeError(err),

@@ -50,6 +50,7 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
       deleteToTrash: config.general?.delete_to_trash,
       dropEmptySessions: config.general?.drop_empty_sessions,
       keepAwakeDuringWork: config.general?.keep_awake_during_work,
+      showStatusIcon: config.general?.show_status_icon,
     },
     notifications: {
       enabled: config.notifications?.notifications_enabled,

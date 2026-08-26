@@ -105,7 +105,7 @@ export function initNotificationWindow(): void {
   notificationWin = win
 }
 
-function showNotification(type: 'success' | 'failure', _mainWin: BrowserWindow | null): void {
+function showNotification(type: 'success' | 'failure'): void {
   if (isShowing) return
   const win = notificationWin
   if (!win || win.isDestroyed()) return
@@ -199,9 +199,9 @@ export function closeNotificationWindow(): void {
   if (win && !win.isDestroyed()) win.destroy()
 }
 
-export function registerNotificationIpc(getMainWin: () => BrowserWindow | null): void {
+export function registerNotificationIpc(): void {
   handle('notification:show', (_event, type: 'success' | 'failure') => {
-    showNotification(type, getMainWin())
+    showNotification(type)
   })
 
   handle('notification:loadAudioFile', async (_event, filePath: string) => {

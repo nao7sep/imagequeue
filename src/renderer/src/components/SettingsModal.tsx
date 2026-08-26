@@ -156,6 +156,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const backends = config.image_backends as Record<string, Record<string, unknown>>
   const prompts = config.prompts as Record<string, string>
   const general = (config.general ?? {}) as Record<string, unknown>
+  const supportsStatusIcon = window.electronAPI.platform === 'darwin' || window.electronAPI.platform === 'win32'
+  const statusIconLabel = window.electronAPI.platform === 'darwin'
+    ? 'Show in menu bar'
+    : 'Show in notification area'
   const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
   // The two tier selections into the closed GEMINI_TEXT_MODELS list. Reads the untyped
   // draft config, so it defends against a missing key. There is no stored list and no
@@ -364,6 +368,24 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               </label>
             </div>
           </div>
+          {supportsStatusIcon && (
+            <div className="settings-field settings-field-full">
+              <div className="settings-option-panel">
+                <div className="settings-option-title">Background access</div>
+                <label className="settings-panel-check">
+                  <input
+                    type="checkbox"
+                    checked={(general.show_status_icon as boolean) ?? true}
+                    onChange={(e) => updateGeneral('show_status_icon', e.target.checked)}
+                  />
+                  <span className="settings-panel-check-copy">
+                    <span>{statusIconLabel}</span>
+                    <span className="settings-panel-check-desc">Keep ImageQueue running there when the main window is closed. Use the icon to reopen or quit the app.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

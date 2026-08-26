@@ -27,6 +27,12 @@ describe('createDefaultConfig', () => {
     expect(legacy.general.keep_awake_during_work).toBe(true)
   })
 
+  it('shows the native status icon by default and backfills the preference', () => {
+    expect(createDefaultConfig().general.show_status_icon).toBe(true)
+    const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
+    expect(legacy.general.show_status_icon).toBe(true)
+  })
+
   // The UI font defaults to blank (meaning the built-in --font-ui stack), and a pre-existing config
   // without the key inherits that blank via deepMergeDefaults rather than breaking the load.
   it('defaults the UI font to blank and backfills it for an older config', () => {

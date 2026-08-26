@@ -6,9 +6,10 @@ import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
 import { persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
-import { cancelAllInFlight, isQueuePaused, setQueuePaused } from '../backends/cancellation'
+import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
-import { publishQueueControlState, publishQueueState } from './publisher'
+import { publishQueueState } from './publisher'
+import { setQueuePausedAndPublish } from './control-actions'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -136,8 +137,7 @@ export function registerQueueIpc(): void {
   // produces — so the existing retry paths (per-row retry, Retry All) bring
   // any of it back with no new machinery.
   handle('queue:setPaused', (_event, paused: boolean) => {
-    setQueuePaused(paused)
-    publishQueueControlState()
+    setQueuePausedAndPublish(paused)
   })
 
   handle('queue:stopAll', () => {
