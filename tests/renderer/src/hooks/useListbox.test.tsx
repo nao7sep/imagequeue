@@ -52,6 +52,23 @@ const PROMPT_IDS = [
 ]
 
 describe('useListbox with prompt-style ids (spaces + punctuation)', () => {
+  it('keeps the listbox itself reachable when there are no options', () => {
+    const onSelect = vi.fn()
+    const { container, rerender } = render(<Harness ids={[]} onSelect={onSelect} />)
+    const list = container.querySelector<HTMLElement>('[role="listbox"]')!
+
+    expect(list.tabIndex).toBe(0)
+    expect(list.querySelectorAll('[role="option"]')).toHaveLength(0)
+
+    rerender(<Harness ids={PROMPT_IDS} onSelect={onSelect} />)
+    expect(list.tabIndex).toBe(-1)
+    expect(list.querySelector<HTMLElement>('[role="option"]')?.tabIndex).toBe(0)
+
+    rerender(<Harness ids={[]} onSelect={onSelect} />)
+    expect(list.tabIndex).toBe(0)
+    expect(list.querySelectorAll('[role="option"]')).toHaveLength(0)
+  })
+
   it('arrow-navigates and moves DOM focus between rows', () => {
     const { container } = render(<Harness ids={PROMPT_IDS} onSelect={vi.fn()} />)
     const rows = Array.from(container.querySelectorAll<HTMLElement>('[data-listbox-option]'))
@@ -59,6 +76,7 @@ describe('useListbox with prompt-style ids (spaces + punctuation)', () => {
     expect(document.activeElement).toBe(rows[0])
 
     const list = container.querySelector('[role="listbox"]')!
+    expect((list as HTMLElement).tabIndex).toBe(-1)
     fireEvent.keyDown(list, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(rows[1])
     fireEvent.keyDown(list, { key: 'ArrowDown' })

@@ -38,6 +38,14 @@
   min-height: 0;
 }
 
+.concept-library-columns-empty {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.concept-library-columns-empty .concept-library-detail {
+  display: none;
+}
+
 /* Below ~900px of WINDOW the fixed facet rail beside the grid cannot hold
    (reachable on Windows, where fewer keyed backends derive a narrower window
    minimum — down to ~551px with one pane). The rail moves on top, capped, and

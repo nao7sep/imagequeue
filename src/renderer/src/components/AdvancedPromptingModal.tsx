@@ -86,6 +86,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [])
 
   const [elaborators, setElaborators] = useState<Elaborator[]>([])
+  const [elaboratorsLoading, setElaboratorsLoading] = useState(true)
+  const [elaboratorsError, setElaboratorsError] = useState('')
   // Elaborate and Queue are mutually exclusive: both drive the single brainstorm
   // engine, so at most one runs at a time. One value (not a boolean per action)
   // means there is no second flag a control can read by mistake.
@@ -99,6 +101,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // (nothing will be discarded) nor cancel anything — just close.
   const holdingRef = useRef(false)
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
+  const [dtModelsLoading, setDtModelsLoading] = useState(isMacPlatform)
+  const [dtModelsError, setDtModelsError] = useState('')
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
   const [error, setError] = useState('')
@@ -111,17 +115,25 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const elaboratorsByKind = useMemo(() => groupElaborators(elaborators), [elaborators])
 
   const refreshElaborators = useCallback(async (): Promise<void> => {
-    const next = await window.electronAPI.listElaborators()
-    setElaborators(next)
-    const grouped = groupElaborators(next)
-    update({
-      selectedCompositionElaboratorId: grouped.composition.some((e) => e.id === selectedCompositionElaboratorId)
-        ? selectedCompositionElaboratorId
-        : grouped.composition[0]?.id ?? null,
-      selectedStyleElaboratorId: grouped.style.some((e) => e.id === selectedStyleElaboratorId)
-        ? selectedStyleElaboratorId
-        : grouped.style[0]?.id ?? null,
-    })
+    setElaboratorsLoading(true)
+    setElaboratorsError('')
+    try {
+      const next = await window.electronAPI.listElaborators()
+      setElaborators(next)
+      const grouped = groupElaborators(next)
+      update({
+        selectedCompositionElaboratorId: grouped.composition.some((e) => e.id === selectedCompositionElaboratorId)
+          ? selectedCompositionElaboratorId
+          : grouped.composition[0]?.id ?? null,
+        selectedStyleElaboratorId: grouped.style.some((e) => e.id === selectedStyleElaboratorId)
+          ? selectedStyleElaboratorId
+          : grouped.style[0]?.id ?? null,
+      })
+    } catch (loadError) {
+      setElaboratorsError(loadError instanceof Error ? loadError.message : String(loadError))
+    } finally {
+      setElaboratorsLoading(false)
+    }
   }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, update])
 
   useEffect(() => {
@@ -138,9 +150,15 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   useEffect(() => {
     if (!isMacPlatform) {
       setDownloadedDtModels([])
+      setDtModelsLoading(false)
       return
     }
-    window.electronAPI.localListDownloadedModels().then((list) => setDownloadedDtModels(sortLocalModels(list)))
+    setDtModelsLoading(true)
+    setDtModelsError('')
+    void window.electronAPI.localListDownloadedModels()
+      .then((list) => setDownloadedDtModels(sortLocalModels(list)))
+      .catch((loadError) => setDtModelsError(loadError instanceof Error ? loadError.message : String(loadError)))
+      .finally(() => setDtModelsLoading(false))
   }, [])
 
   // From the presence signal, not settings' stored api_key string — see
@@ -426,9 +444,21 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     return (
       <div className="advanced-elaborator-column" key={kind}>
         <div className="advanced-elaborator-column-title">{ELABORATOR_KIND_LABELS[kind]}</div>
-        <div className="advanced-elaborator-column-list">
+        <div
+          className="advanced-elaborator-column-list"
+          role="radiogroup"
+          aria-label={`${ELABORATOR_KIND_LABELS[kind]} elaborators`}
+          aria-busy={elaboratorsLoading}
+          tabIndex={items.length === 0 ? 0 : -1}
+        >
           {items.length === 0 ? (
-            <div className="advanced-empty">No {ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators.</div>
+            <div className="advanced-empty">
+              {elaboratorsLoading
+                ? 'Loading elaborators…'
+                : elaboratorsError
+                  ? `Couldn’t load elaborators: ${elaboratorsError}`
+                  : `No ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators.`}
+            </div>
           ) : (
             items.map((el) => (
               <label
@@ -551,7 +581,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 <>
                   <div className="advanced-targets-group-title">Draw Things</div>
                   {downloadedDtModels.length === 0 ? (
-                    <div className="advanced-empty">No models downloaded.</div>
+                    <div className="advanced-empty">
+                      {dtModelsLoading
+                        ? 'Loading models…'
+                        : dtModelsError
+                          ? `Couldn’t load models: ${dtModelsError}`
+                          : 'No models downloaded.'}
+                    </div>
                   ) : (
                     downloadedDtModels.map((m) => (
                       <label key={m.file} className="advanced-target-row" title={localModelName(m)}>

@@ -28,6 +28,19 @@ const initialState: DependenciesState = {
 }
 
 describe('DependenciesModal cancellation', () => {
+  it('distinguishes an initial load failure from an empty tools list', async () => {
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => { throw new Error('state unavailable') }),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    render(<DependenciesModal onClose={vi.fn()} />)
+
+    expect(await screen.findByText('state unavailable')).toBeTruthy()
+    expect(screen.getByText('Couldn’t load managed-tool status.')).toBeTruthy()
+  })
+
   it('capitalizes the unavailable installed-version state', async () => {
     const unreadable = {
       ...initialState,

@@ -38,6 +38,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const [items, setItems] = useState<Elaborator[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [selectedIds, setSelectedIds] = useState<Record<ElaboratorKind, string | null>>({
@@ -52,6 +53,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
+    setLoadError('')
     try {
       const next = await window.electronAPI.listElaborators()
       setItems(next)
@@ -60,6 +62,8 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         composition: grouped.composition.some((item) => item.id === prev.composition) ? prev.composition : grouped.composition[0]?.id ?? null,
         style: grouped.style.some((item) => item.id === prev.style) ? prev.style : grouped.style[0]?.id ?? null,
       }))
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error))
     } finally {
       setLoading(false)
     }
@@ -300,19 +304,17 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         <div className="elaborators-pane-body">
           {draftOpenHere && renderEditor(kind)}
 
-          {loading ? (
-            <div className="elaborators-empty">Loading…</div>
-          ) : itemsForKind.length === 0 && !draftOpenHere ? (
-            <div className="elaborators-empty">No {ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators yet.</div>
-          ) : (
-            <ElaboratorList
-              label={ELABORATOR_KIND_LABELS[kind]}
-              items={itemsForKind}
-              selectedId={selectedId}
-              disabled={busy || (draftTarget !== null && !draftOpenHere)}
-              onSelect={(id) => setSelectedIds((prev) => ({ ...prev, [kind]: id }))}
-            />
-          )}
+          <ElaboratorList
+            label={ELABORATOR_KIND_LABELS[kind]}
+            items={itemsForKind}
+            selectedId={selectedId}
+            disabled={busy || (draftTarget !== null && !draftOpenHere)}
+            loading={loading}
+            emptyText={loadError
+              ? `Couldn’t load elaborators: ${loadError}`
+              : `No ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators yet.`}
+            onSelect={(id) => setSelectedIds((prev) => ({ ...prev, [kind]: id }))}
+          />
         </div>
 
         <div className="elaborators-pane-footer">
@@ -350,6 +352,9 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
           to change the picture.
         </p>
         {message && <div className="elaborators-message">{message}</div>}
+        {loadError && items.length > 0 && (
+          <div className="elaborators-message">Couldn’t refresh elaborators: {loadError}</div>
+        )}
         <div className="elaborators-grid">
           {ELABORATOR_KINDS.map((kind) => renderPane(kind))}
         </div>
@@ -366,12 +371,16 @@ function ElaboratorList({
   items,
   selectedId,
   disabled,
+  loading,
+  emptyText,
   onSelect,
 }: {
   label: string
   items: Elaborator[]
   selectedId: string | null
   disabled: boolean
+  loading: boolean
+  emptyText: string
   onSelect: (id: string) => void
 }): React.JSX.Element {
   const isComposing = useImeGuard()
@@ -384,7 +393,10 @@ function ElaboratorList({
   })
 
   return (
-    <div className="elaborators-list" aria-label={`${label} elaborators`} {...listboxProps}>
+    <div className="elaborators-list" aria-label={`${label} elaborators`} aria-busy={loading} {...listboxProps}>
+      {items.length === 0 && (
+        <div className="elaborators-empty" role="presentation">{loading ? 'Loading…' : emptyText}</div>
+      )}
       {items.map((item) => {
         const optionProps = getOptionProps(item.id)
         return (

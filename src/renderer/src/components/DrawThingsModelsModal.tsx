@@ -96,6 +96,8 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const [customJsonStatus, setCustomJsonStatus] = useState<CustomJsonStatus>({ kind: 'absent' })
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
+  const [downloadedError, setDownloadedError] = useState('')
+  const [availableError, setAvailableError] = useState('')
   const [importPath, setImportPath] = useState('')
   const [officialFilter, setOfficialFilter] = useState('')
   const [communityFilter, setCommunityFilter] = useState('')
@@ -103,6 +105,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   // CLI (list/import/download all shell out), so without it the modal can do
   // nothing — it shows a pointer to the Dependencies window instead of empty lists.
   const [cliInstalled, setCliInstalled] = useState<boolean | null>(null)
+  const [cliError, setCliError] = useState('')
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
     if (importPath.trim() === '') {
@@ -121,6 +124,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
   const loadDownloaded = useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) setLoadingDownloaded(true)
+    setDownloadedError('')
     try {
       const [list, status] = await Promise.all([
         window.electronAPI.localListDownloadedModels(),
@@ -128,26 +132,33 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       ])
       setDownloadedModels(list)
       setCustomJsonStatus(status)
+    } catch (error) {
+      setDownloadedError(error instanceof Error ? error.message : String(error))
     } finally {
       setLoadingDownloaded(false)
     }
   }, [])
 
   useEffect(() => {
-    window.electronAPI.localCheckCli().then((status) => setCliInstalled(status.installed))
+    void window.electronAPI.localCheckCli()
+      .then((status) => setCliInstalled(status.installed))
+      .catch((error) => setCliError(error instanceof Error ? error.message : String(error)))
   }, [])
 
   useEffect(() => {
     if (cliInstalled !== true) return
     void loadDownloaded()
-    window.electronAPI.localListAvailableModels().then((list) => {
-      setAvailableModels(list)
-      setLoadingAvailable(false)
-    })
+    setLoadingAvailable(true)
+    setAvailableError('')
+    void window.electronAPI.localListAvailableModels()
+      .then(setAvailableModels)
+      .catch((error) => setAvailableError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setLoadingAvailable(false))
   }, [cliInstalled, loadDownloaded])
 
   // Keep the downloaded list fresh while jobs finish in the background.
   useEffect(() => {
+    if (cliInstalled !== true) return
     const handler = (): void => { void loadDownloaded(false) }
     window.addEventListener('focus', handler)
     const id = window.setInterval(handler, 30000)
@@ -155,15 +166,16 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       window.removeEventListener('focus', handler)
       window.clearInterval(id)
     }
-  }, [loadDownloaded])
+  }, [cliInstalled, loadDownloaded])
 
   useEffect(() => {
+    if (cliInstalled !== true) return
     return window.electronAPI.onCliJobStatus((event) => {
       if (event.status === 'exited' || event.status === 'killed') {
         void loadDownloaded(false)
       }
     })
-  }, [loadDownloaded])
+  }, [cliInstalled, loadDownloaded])
 
   const handleStartDownload = async (modelFile: string): Promise<void> => {
     const jobId = await window.electronAPI.cliStartDownload(modelFile)
@@ -183,6 +195,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }
 
   const loadingModels = loadingDownloaded || loadingAvailable
+  const modelsError = downloadedError || availableError
   const allModels = mergeModels(availableModels, downloadedModels)
 
   // custom.json is the import ground truth (the CLI mislabels every import as
@@ -208,13 +221,13 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     label: string,
     emptyText: string
   ): React.JSX.Element => {
-    if (loadingModels) return <p className="dt-hint">Loading models...</p>
-    if (models.length === 0) return <p className="dt-hint">{emptyText}</p>
     return (
       <DtModelList
-        models={models}
+        models={loadingModels || modelsError ? [] : models}
         kind={kind}
         label={label}
+        loading={loadingModels}
+        emptyText={modelsError ? `Couldn’t load models: ${modelsError}` : emptyText}
         onDownload={(file) => { void handleStartDownload(file) }}
       />
     )
@@ -226,7 +239,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       // The wide fixed width is for the two model columns. The CLI-required
       // blocked state is just a sentence and a button, so it drops that class and
       // takes the shell's natural (narrower) modal sizing.
-      className={cliInstalled === false ? undefined : 'dt-modal-box'}
+      className={cliInstalled === true ? 'dt-modal-box' : undefined}
       onClose={() => { void handleRequestClose() }}
       footer={
         <button className="modal-btn" onClick={() => { void handleRequestClose() }}>
@@ -234,13 +247,16 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         </button>
       }
     >
-      {cliInstalled === false ? (
+      {cliInstalled !== true ? (
         <div className="dt-modal-body dt-cli-required">
           <p className="dt-hint">
-            The Draw Things CLI is required to list, download, or import models, and it isn&apos;t
-            installed yet.
+            {cliError
+              ? `Couldn’t check the Draw Things CLI: ${cliError}`
+              : cliInstalled === null
+                ? 'Checking the Draw Things CLI…'
+                : "The Draw Things CLI is required to list, download, or import models, and it isn't installed yet."}
           </p>
-          <button
+          {cliInstalled === false && <button
             className="dt-action-btn"
             onClick={() => {
               window.dispatchEvent(new CustomEvent('open-dependencies-modal'))
@@ -248,7 +264,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
             }}
           >
             Open Managed tools
-          </button>
+          </button>}
         </div>
       ) : (
       <div className="dt-modal-body">
@@ -335,11 +351,15 @@ function DtModelList({
   models,
   kind,
   label,
+  loading,
+  emptyText,
   onDownload,
 }: {
   models: LocalModelInfo[]
   kind: 'catalog' | 'local'
   label: string
+  loading: boolean
+  emptyText: string
   onDownload: (file: string) => void
 }): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -356,7 +376,10 @@ function DtModelList({
   })
 
   return (
-    <ul className="dt-model-list" aria-label={label} {...listboxProps}>
+    <ul className="dt-model-list" aria-label={label} aria-busy={loading} {...listboxProps}>
+      {models.length === 0 && (
+        <li className="dt-hint" role="presentation">{loading ? 'Loading models…' : emptyText}</li>
+      )}
       {models.map((model) => (
         <li
           key={`${kind}-${model.file}`}

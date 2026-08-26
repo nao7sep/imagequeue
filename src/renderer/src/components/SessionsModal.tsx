@@ -78,6 +78,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const { settings } = useSettings()
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
   const [creatingSession, setCreatingSession] = useState(false)
   const [message, setMessage] = useState('')
@@ -101,12 +102,12 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
 
   const refreshSessions = useCallback(async (): Promise<void> => {
     setLoading(true)
+    setLoadError('')
     try {
       const next = await window.electronAPI.listSessions()
       setSessions(next)
-      setMessage('')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setLoadError(error instanceof Error ? error.message : String(error))
     } finally {
       setLoading(false)
     }
@@ -250,12 +251,21 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
           </div>
         )}
         {message && <div className="sessions-modal-message">{message}</div>}
-        {loading ? (
-          <div className="sessions-modal-empty">Loading sessions…</div>
-        ) : sessions.length === 0 ? (
-          <div className="sessions-modal-empty">No saved sessions yet.</div>
-        ) : (
-          <div className="sessions-list" aria-label="Sessions" {...listboxProps}>
+        {loadError && sessions.length > 0 && (
+          <div className="sessions-modal-message">Couldn’t refresh sessions: {loadError}</div>
+        )}
+        <div className="sessions-list" aria-label="Sessions" aria-busy={loading} {...listboxProps}>
+          {sessions.length === 0 && (
+            <div className="sessions-modal-empty" role="presentation">
+              {loading
+                ? 'Loading sessions…'
+                : loadError
+                  ? `Couldn’t load sessions: ${loadError}`
+                  : 'No saved sessions yet.'}
+            </div>
+          )}
+          {sessions.length > 0 && (
+            <>
             {sessions.map((session) => {
               const busy = busySessionId === session.sessionId
               const selected = selectedSessionId === session.sessionId
@@ -310,8 +320,9 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                 </div>
               )
             })}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </Modal>
   )

@@ -20,15 +20,21 @@ type UseFilter = 'all' | 'unused' | 'used'
 // runs, so this modal never creates or edits rows.
 export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
-  const [facets, setFacets] = useState<ConceptFacetSummary[] | null>(null)
+  const [facets, setFacets] = useState<ConceptFacetSummary[]>([])
+  const [facetsLoading, setFacetsLoading] = useState(true)
+  const [facetsError, setFacetsError] = useState('')
   const [selectedFacetId, setSelectedFacetId] = useState<number | null>(null)
   const [probes, setProbes] = useState<ConceptProbeSummary[]>([])
   const [rows, setRows] = useState<ConceptRow[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
   const [filter, setFilter] = useState('')
   const [useFilter, setUseFilter] = useState<UseFilter>('all')
   const [message, setMessage] = useState('')
 
   const refreshFacets = useCallback(async (): Promise<void> => {
+    setFacetsLoading(true)
+    setFacetsError('')
     try {
       const list = await window.electronAPI.listConceptFacets()
       setFacets(list)
@@ -36,7 +42,9 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
         prev !== null && list.some((f) => f.id === prev) ? prev : list[0]?.id ?? null
       )
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setFacetsError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setFacetsLoading(false)
     }
   }, [])
 
@@ -48,9 +56,15 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
     if (selectedFacetId === null) {
       setProbes([])
       setRows([])
+      setDetailLoading(false)
+      setDetailError('')
       return
     }
     let cancelled = false
+    setDetailLoading(true)
+    setDetailError('')
+    setProbes([])
+    setRows([])
     Promise.all([
       window.electronAPI.listConceptProbes(selectedFacetId),
       window.electronAPI.listConceptRows(selectedFacetId),
@@ -60,20 +74,25 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
         setProbes(probeList)
         setRows(conceptList)
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : String(error)))
+      .catch((error) => {
+        if (!cancelled) setDetailError(error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false)
+      })
     return () => {
       cancelled = true
     }
   }, [selectedFacetId, facets])
 
   const { listboxProps, getOptionProps } = useListbox<HTMLDivElement>({
-    ids: (facets ?? []).map((f) => String(f.id)),
+    ids: facets.map((f) => String(f.id)),
     selectedId: selectedFacetId !== null ? String(selectedFacetId) : null,
     onSelect: (id) => setSelectedFacetId(Number(id)),
     activation: 'follows-focus',
   })
 
-  const selectedFacet = facets?.find((f) => f.id === selectedFacetId) ?? null
+  const selectedFacet = facets.find((f) => f.id === selectedFacetId) ?? null
 
   // Domain sections, filtered: the search needle matches a concept's value or
   // its domain text; the use filter narrows rows; a section with no surviving
@@ -149,7 +168,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
   }, [confirm, selectedFacet, withRefresh])
 
   const totals = useMemo(() => {
-    if (!facets || facets.length === 0) return null
+    if (facets.length === 0) return null
     return {
       facets: facets.length,
       domains: facets.reduce((n, f) => n + f.probeCount, 0),
@@ -178,16 +197,20 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
     >
       <div className="concept-library-body">
         {message && <div className="concept-library-message">{message}</div>}
-        {facets === null ? (
-          <div className="concept-library-empty">Loading…</div>
-        ) : facets.length === 0 ? (
-          <div className="concept-library-empty">
-            No concepts yet. They accumulate as Advanced Prompting elaborates prompts; every value
-            the AI finds is recorded here with how often and how recently it was used.
-          </div>
-        ) : (
-          <div className="concept-library-columns">
-            <div className="concept-library-facets" aria-label="Facets" {...listboxProps}>
+        {facetsError && facets.length > 0 && (
+          <div className="concept-library-message">Couldn’t refresh concepts: {facetsError}</div>
+        )}
+        <div className={`concept-library-columns${facets.length === 0 ? ' concept-library-columns-empty' : ''}`}>
+            <div className="concept-library-facets" aria-label="Facets" aria-busy={facetsLoading} {...listboxProps}>
+              {facets.length === 0 && (
+                <div className="concept-library-empty" role="presentation">
+                  {facetsLoading
+                    ? 'Loading concepts…'
+                    : facetsError
+                      ? `Couldn’t load concepts: ${facetsError}`
+                      : 'No concepts yet. They accumulate as Advanced Prompting elaborates prompts; every value the AI finds is recorded here with how often and how recently it was used.'}
+                </div>
+              )}
               {facets.map((facet) => (
                 <div
                   key={facet.id}
@@ -234,7 +257,11 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                     </button>
                   </div>
 
-                  {sections.length === 0 ? (
+                  {detailLoading ? (
+                    <div className="concept-library-empty">Loading facet…</div>
+                  ) : detailError ? (
+                    <div className="concept-library-empty">Couldn’t load this facet: {detailError}</div>
+                  ) : sections.length === 0 ? (
                     <div className="concept-library-empty">
                       {rows.length === 0
                         ? 'No concepts in this facet yet.'
@@ -303,7 +330,6 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
               )}
             </div>
           </div>
-        )}
       </div>
     </Modal>
   )

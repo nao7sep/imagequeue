@@ -136,18 +136,18 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
       }
     >
       <div className="elaborated-prompts-body">
-        {elaboratedPrompts.length === 0 ? (
-          <div className="elaborated-prompts-empty">
-            No prompts elaborated in this session yet. Open Advanced Prompting and click Elaborate, or queue with a fresh-elaboration mode, to produce some.
-          </div>
-        ) : (
-          <ol
-            {...listboxProps}
-            onKeyDown={onListKeyDown}
-            className="elaborated-prompts-list"
-            reversed
-            start={elaboratedPrompts.length}
-          >
+        <ol
+          {...listboxProps}
+          onKeyDown={onListKeyDown}
+          className="elaborated-prompts-list"
+          reversed
+          start={elaboratedPrompts.length}
+        >
+          {elaboratedPrompts.length === 0 && (
+            <li className="elaborated-prompts-empty" role="presentation">
+              No prompts elaborated in this session yet. Open Advanced Prompting and click Elaborate, or queue with a fresh-elaboration mode, to produce some.
+            </li>
+          )}
             {rows.map((row, index) => {
               const displayNumber = elaboratedPrompts.length - index
               return (
@@ -187,8 +187,7 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
                 </li>
               )
             })}
-          </ol>
-        )}
+        </ol>
       </div>
     </Modal>
   )

@@ -81,6 +81,7 @@ beforeEach(() => {
   }
   queueValue = {
     tasks: emptyTasks(),
+    loadState: 'ready',
     showKeptImages: false,
     toggleShowKeptImages: vi.fn(),
     enqueue: vi.fn(),
@@ -203,6 +204,30 @@ describe('cloud columns: saved defaults at launch', () => {
 })
 
 describe('task status presentation', () => {
+  it('keeps an empty queue keyboard-reachable and distinguishes loading and failure', () => {
+    queueValue.loadState = 'loading'
+    const { container, rerender } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    const list = container.querySelector<HTMLElement>('.task-list')!
+    expect(list.tabIndex).toBe(0)
+    expect(screen.getByText('Loading queue…')).toBeTruthy()
+
+    queueValue.loadState = 'failed'
+    rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    expect(screen.getByText('Couldn’t load queued tasks.')).toBeTruthy()
+    expect(screen.queryByText('No tasks queued')).toBeNull()
+
+    queueValue.loadState = 'ready'
+    queueValue.tasks.openai = [task('queued')]
+    rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    expect(list.tabIndex).toBe(-1)
+    expect(container.querySelector<HTMLElement>('[role="option"]')?.tabIndex).toBe(0)
+
+    queueValue.tasks.openai = []
+    rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    expect(list.tabIndex).toBe(0)
+    expect(screen.getByText('No tasks queued')).toBeTruthy()
+  })
+
   it('capitalizes a status label and its failure prefix without changing the stored state', () => {
     queueValue.tasks.openai = [task('failed', 'provider refused the image')]
 

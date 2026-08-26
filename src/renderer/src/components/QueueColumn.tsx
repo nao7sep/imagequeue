@@ -38,7 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
-  const { tasks } = useQueue()
+  const { tasks, loadState } = useQueue()
   const {
     selection,
     select,
@@ -268,12 +268,19 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       <div
         className="task-list"
         role="listbox"
+        tabIndex={columnTasks.length === 0 ? 0 : -1}
         aria-label={`${label} queue`}
         onKeyDown={handleListKeyDown}
         onClick={(e) => { if (e.target === e.currentTarget) clear() }}
       >
         {columnTasks.length === 0 ? (
-          <div className="task-list-empty">No tasks queued</div>
+          <div className="task-list-empty" role="presentation">
+            {loadState === 'loading'
+              ? 'Loading queue…'
+              : loadState === 'failed'
+                ? 'Couldn’t load queued tasks.'
+                : 'No tasks queued'}
+          </div>
         ) : (
           columnTasks.map((task) => (
             <TaskItem

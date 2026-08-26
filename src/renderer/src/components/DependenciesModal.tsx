@@ -74,7 +74,9 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
   const anyBusy = busy.size > 0
 
   useEffect(() => {
-    void window.electronAPI.getDependenciesState().then(setState)
+    void window.electronAPI.getDependenciesState()
+      .then(setState)
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [])
 
   useEffect(() => {
@@ -176,6 +178,11 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
         </p>
 
         {error && <div className="dependencies-error">{error}</div>}
+
+        {!state && !error && <div className="dependencies-intro">Loading managed tools…</div>}
+        {!state && error && (
+          <div className="dependencies-intro">Couldn’t load managed-tool status.</div>
+        )}
 
         {state && (
           <>

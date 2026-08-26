@@ -48,6 +48,7 @@ interface UseListboxResult<T extends HTMLElement> {
   listboxProps: {
     ref: React.RefObject<T | null>
     role: 'listbox'
+    tabIndex: 0 | -1
     onKeyDown: (e: KeyboardEvent) => void
   }
   getOptionProps: (id: string) => OptionProps
@@ -62,11 +63,12 @@ interface UseListboxResult<T extends HTMLElement> {
  * restructuring the markup.
  *
  * One tab stop: the selected row (or the first when nothing is selected) is the
- * only tabbable option, so Tab enters the list at the active row and Tab leaves
- * it. Up/Down move the active row, Home/End and PageUp/PageDown jump, all stopping
- * at the ends. In 'follows-focus' mode moving the cursor selects; in 'manual' mode
- * Enter/Space on the active row runs the primary action. Type-ahead jumps by
- * visible label (IME-guarded), unless ceded.
+ * only tabbable option; while there are no rows, the listbox itself owns that tab
+ * stop. Thus Tab can always reach the control, including its loading, failure,
+ * and ordinary-empty states. Up/Down move the active row, Home/End and
+ * PageUp/PageDown jump, all stopping at the ends. In 'follows-focus' mode moving
+ * the cursor selects; in 'manual' mode Enter/Space on the active row runs the
+ * primary action. Type-ahead jumps by visible label (IME-guarded), unless ceded.
  *
  * Removal is intentionally NOT handled here: a component that deletes rows owns
  * both the selection and the post-delete focus recovery itself (see
@@ -194,7 +196,7 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
   }
 
   return {
-    listboxProps: { ref, role: 'listbox', onKeyDown },
+    listboxProps: { ref, role: 'listbox', tabIndex: ids.length === 0 ? 0 : -1, onKeyDown },
     getOptionProps: (id: string) => ({
       role: 'option',
       'aria-selected': id === selectedId,

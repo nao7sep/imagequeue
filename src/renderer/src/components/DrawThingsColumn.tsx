@@ -47,6 +47,8 @@ export interface DrawThingsColumn {
   controls: {
     cliStatus: CliStatus | null
     downloadedModels: LocalModelInfo[]
+    modelsLoadState: 'loading' | 'ready' | 'failed'
+    modelsLoadError: string
     sizeValue: string
     width: number
     height: number
@@ -90,6 +92,8 @@ export function useDrawThingsColumn({
   const [negativePrompt, setNegativePrompt] = useState('')
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
+  const [modelsLoadState, setModelsLoadState] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [modelsLoadError, setModelsLoadError] = useState('')
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
@@ -145,27 +149,34 @@ export function useDrawThingsColumn({
     setLocalHeight(preset.height)
   }, [])
 
-  const refreshDrawThingsModels = useCallback((isInitial = false): void => {
+  const refreshDrawThingsModels = useCallback(async (isInitial = false): Promise<void> => {
     if (!active) return
-    window.electronAPI.localCheckCli().then((status) => {
+    if (isInitial) setModelsLoadState('loading')
+    setModelsLoadError('')
+    try {
+      const status = await window.electronAPI.localCheckCli()
       setCliStatus(status)
       if (!status.installed) {
         setDownloadedModels([])
+        setModelsLoadState('ready')
         return
       }
-      window.electronAPI.localListDownloadedModels().then((list) => {
-        const sortedList = sortLocalModels(list)
-        setDownloadedModels((prev) => {
-          const prevFiles = prev.map((m) => m.file).join(',')
-          const nextFiles = sortedList.map((m) => m.file).join(',')
-          if (prevFiles === nextFiles) return prev
-          if (isInitial || sortedList.length > 0) {
-            setModel((cur: string) => (sortedList.find((m) => m.file === cur) ? cur : sortedList[0]?.file ?? ''))
-          }
-          return sortedList
-        })
+      const list = await window.electronAPI.localListDownloadedModels()
+      const sortedList = sortLocalModels(list)
+      setDownloadedModels((prev) => {
+        const prevFiles = prev.map((m) => m.file).join(',')
+        const nextFiles = sortedList.map((m) => m.file).join(',')
+        if (prevFiles === nextFiles) return prev
+        if (isInitial || sortedList.length > 0) {
+          setModel((cur: string) => (sortedList.find((m) => m.file === cur) ? cur : sortedList[0]?.file ?? ''))
+        }
+        return sortedList
       })
-    })
+      setModelsLoadState('ready')
+    } catch (error) {
+      setModelsLoadError(error instanceof Error ? error.message : String(error))
+      setModelsLoadState('failed')
+    }
   }, [active, setModel])
 
   const onRestoreRecommended = useCallback((): void => {
@@ -270,9 +281,9 @@ export function useDrawThingsColumn({
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
     if (!active) return
-    refreshDrawThingsModels(true)
-    const id = window.setInterval(() => refreshDrawThingsModels(false), 30000)
-    const handleFocus = (): void => refreshDrawThingsModels(false)
+    void refreshDrawThingsModels(true)
+    const id = window.setInterval(() => { void refreshDrawThingsModels(false) }, 30000)
+    const handleFocus = (): void => { void refreshDrawThingsModels(false) }
     window.addEventListener('focus', handleFocus)
     return () => {
       window.clearInterval(id)
@@ -284,7 +295,7 @@ export function useDrawThingsColumn({
     if (!active) return
     return window.electronAPI.onCliJobStatus((event) => {
       if (event.status === 'exited' || event.status === 'killed') {
-        refreshDrawThingsModels(false)
+        void refreshDrawThingsModels(false)
       }
     })
   }, [active, refreshDrawThingsModels])
@@ -298,7 +309,7 @@ export function useDrawThingsColumn({
     const openModels = (): void => setShowModelsModal(true)
     const dependenciesChanged = (): void => {
       setRecommendationRevision((value) => value + 1)
-      refreshDrawThingsModels(false)
+      void refreshDrawThingsModels(false)
     }
     window.addEventListener('open-models-modal', openModels)
     window.addEventListener('dependencies-changed', dependenciesChanged)
@@ -338,6 +349,8 @@ export function useDrawThingsColumn({
     controls: {
       cliStatus,
       downloadedModels,
+      modelsLoadState,
+      modelsLoadError,
       sizeValue,
       width: localWidth,
       height: localHeight,
@@ -371,6 +384,14 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           surface for the CLI and configs.json. It decides its own
           visibility (silent when both are fine). */}
       <DependencyPanePointer />
+      {c.modelsLoadState === 'loading' && !c.cliStatus && (
+        <div className="setting-row model-warning">Checking Draw Things…</div>
+      )}
+      {c.modelsLoadState === 'failed' && (
+        <div className="setting-row model-warning">
+          Couldn’t load Draw Things models{c.modelsLoadError ? `: ${c.modelsLoadError}` : '.'}
+        </div>
+      )}
       {c.cliStatus && c.cliStatus.installed && (
         <>
           {c.downloadedModels.length > 0 ? (
@@ -382,11 +403,11 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
                 ))}
               </select>
             </div>
-          ) : (
+          ) : c.modelsLoadState === 'ready' ? (
             <div className="setting-row model-warning">
               No models downloaded yet
             </div>
-          )}
+          ) : null}
           <div className="setting-row">
             <label>Size</label>
             <select value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
