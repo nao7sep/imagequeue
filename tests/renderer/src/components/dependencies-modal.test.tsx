@@ -110,7 +110,11 @@ describe('DependenciesModal cancellation', () => {
     } as unknown as typeof window.electronAPI
 
     render(<DependenciesModal onClose={vi.fn()} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
+    const refresh = await screen.findByRole('button', { name: 'Refresh' })
+    const recommendationsRow = refresh.closest('section')
+    fireEvent.click(refresh)
     await waitFor(() => expect(downloadRecommendations).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('dialog', { name: 'Managed tools' })).toBeTruthy()
+    expect(recommendationsRow?.textContent).not.toContain('never checked')
   })
 })

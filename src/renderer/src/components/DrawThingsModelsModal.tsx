@@ -247,7 +247,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
               onClose()
             }}
           >
-            Open Dependencies
+            Open Managed tools
           </button>
         </div>
       ) : (

@@ -178,7 +178,7 @@
 
 .shortcut-group-name {
   margin: 0 0 var(--space-2);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;

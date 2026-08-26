@@ -605,7 +605,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             A generation running longer than this is stopped and marked failed. Local renders can legitimately take minutes on large models, so the default is generous (30 minutes).
           </p>
           <p className="settings-hint settings-field-full">
-            The Draw Things CLI and its recommended parameters are managed from the Dependencies window (main menu → Dependencies).
+            The Draw Things CLI and its recommended parameters are managed in the Managed tools window (main menu → Managed tools).
           </p>
           <div className="settings-field">
             <label>Fallback Width</label>

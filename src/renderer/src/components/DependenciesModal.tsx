@@ -145,7 +145,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Dependencies"
+      title="Managed tools"
       className="dependencies-modal-box"
       onClose={requestClose}
       closeOnBackdropClick
@@ -246,10 +246,14 @@ function DependencyRow({
         <p className="dependency-desc">{description}</p>
         <p className="dependency-meta">
           {installedSummary(info)}
-          {' · '}
-          {info.lastCheckedAtUtc
-            ? `checked ${formatUiDateTime(info.lastCheckedAtUtc)}`
-            : 'never checked'}
+          {info.id === 'cli' && (
+            <>
+              {' · '}
+              {info.lastCheckedAtUtc
+                ? `checked ${formatUiDateTime(info.lastCheckedAtUtc)}`
+                : 'never checked'}
+            </>
+          )}
         </p>
         {busy && progress && (
           <div className="dependency-progress">

@@ -326,7 +326,7 @@ export function Layout(): React.JSX.Element {
             <MenuItem onSelect={() => setOverlay('settings')}>Settings</MenuItem>
             {window.electronAPI.platform === 'darwin' && (
               <MenuItem onSelect={() => setOverlay('dependencies')}>
-                Dependencies
+                Managed tools
               </MenuItem>
             )}
             {window.electronAPI.platform === 'darwin' && (

@@ -87,7 +87,7 @@ export function DependencyPanePointer(): React.JSX.Element | null {
       className={`dep-pane-pointer dep-pane-pointer-${severity}`}
       onClick={() => window.dispatchEvent(new CustomEvent('open-dependencies-modal'))}
     >
-      {summary} — open Dependencies
+      {summary} — open Managed tools
     </button>
   )
 }
