@@ -1,6 +1,7 @@
 {
   "name": "imagequeue",
   "version": "0.1.0",
+  "packageManager": "npm@12.0.2",
   "description": "Desktop application for batch image generation across multiple AI backends",
   "main": "./out/main/index.js",
   "author": {
@@ -52,12 +53,12 @@
     "vitest": "^4.1.10"
   },
   "allowScripts": {
-    "@google/genai": false,
+    "@google/genai@2.17.1": false,
     "electron-winstaller@5.4.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
-    "fsevents": false,
+    "fsevents@2.3.3": false,
     "node-pty@1.1.0": true,
-    "protobufjs": false
+    "protobufjs@7.6.5": false
   }
 }
