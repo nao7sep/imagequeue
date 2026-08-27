@@ -1,17 +1,14 @@
 .queue-column {
   /* The per-provider column width the user sets by dragging the pane splitter,
-     driven by --iq-column-width on .layout and persisted to state.json. Two
-     different numbers, both mirrored from shared/layout-metrics.ts — keep them in
+     driven by --iq-column-width on .layout and persisted to state.json. Three
+     width bounds are mirrored from shared/layout-metrics.ts — keep them in
      sync: the fallback is COLUMN_DEFAULT_PX (220), the width a column opens at
-     when nothing has been dragged, and min-width is COLUMN_MIN_PX (190), the floor
-     the window minimum reserves one of per visible backend. They are NOT the same
-     value: the default is sized to hold a column's longest real row (the model
-     name), the floor only to keep it usable on a cramped window. Below the floor
-     the model row + enqueue button stop working, so the renderer clamps
-     --iq-column-width to never display narrower than this and never so wide the
-     left fill pane loses its minimum. */
+     when nothing has been dragged; min-width is COLUMN_MIN_PX (190), the floor
+     reserved per visible backend; and max-width is COLUMN_MAX_PX (320), beyond
+     which dense queue controls only spread apart and steal useful preview room. */
   width: var(--iq-column-width, 220px);
   min-width: 190px;
+  max-width: 320px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

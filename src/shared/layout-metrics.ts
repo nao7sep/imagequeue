@@ -7,15 +7,16 @@
 // main process feeds to BrowserWindow.
 //
 // The horizontal layout is a flex left pane (prompt + preview) followed by a
-// fixed-width right column of backend panes; there are no splitters, so no
-// drag-clamp logic is needed. The binding horizontal dimension is therefore the
-// left pane's real minimum plus one column per *visible* backend (Draw Things is
-// macOS-only, so the column count is platform-dependent) plus the inter-pane
-// borders.
+// splitter and fixed-width backend panes. Each backend pane is clamped between
+// its content floor and a useful maximum; the preview is the primary content
+// pane and receives the remaining width. The binding horizontal dimension is
+// therefore the left pane's real minimum plus one column minimum per *visible*
+// backend (Draw Things is macOS-only, so the column count is platform-dependent)
+// plus the inter-pane borders.
 //
-// CSS cannot import these constants, so the matching CSS rules
-// (.left-pane min-width, .queue-column min-width) mirror them by value with a
-// comment pointing back here, and a CSS-text test keeps the two in sync.
+// CSS cannot import these constants, so the matching CSS rules mirror the left
+// minimum and the column minimum/default/maximum by value with comments pointing
+// back here; a CSS-text test keeps them in sync.
 
 import { BACKEND_IDS_IN_UI_ORDER, type BackendId, type CloudBackendId } from './types'
 import type { Platform } from './electron-api'
@@ -39,6 +40,11 @@ export const COLUMN_MIN_PX = 190
  *  The floor and the default are separate on purpose: a cramped window can still
  *  squeeze columns down to COLUMN_MIN_PX, but nobody starts there. */
 export const COLUMN_DEFAULT_PX = 220
+
+/** The widest a backend column may display. Backend panes are dense queue and
+ *  settings surfaces rather than primary image canvases; beyond this width their
+ *  controls merely spread apart while stealing useful room from the preview. */
+export const COLUMN_MAX_PX = 320
 
 /** A real minimum for the left prompt/preview pane, in CSS px — wide enough to
  *  keep the prompt textarea, the preview, and their toolbars usable rather than

@@ -4,10 +4,10 @@ import {
   displayedColumnWidth,
   NOTIFICATION_VOLUME_DEFAULT,
   maxColumnWidthForContainer,
-  leftPaneComfortWidth,
 } from '../../src/shared/ui-state'
 import {
   COLUMN_DEFAULT_PX,
+  COLUMN_MAX_PX,
   COLUMN_MIN_PX,
   LEFT_PANE_MIN_PX,
   PANE_BORDER_PX,
@@ -16,10 +16,11 @@ import {
 // The persisted intent (columnWidth) is turned into a rendered per-column width by
 // displayedColumnWidth, the single pure function the splitter, the render, and
 // these tests all share. Its contract: never below the content floor, never so
-// wide the left pane loses its minimum, and an unset/invalid intent shows the floor.
+// wider than the backend maximum or what leaves the preview usable, and an
+// unset/invalid intent shows the default.
 
 describe('defaultUiState', () => {
-  it('starts with no remembered column width (columns at their floor)', () => {
+  it('starts with no remembered column width (columns use their default)', () => {
     expect(defaultUiState().columnWidth).toBeNull()
   })
 
@@ -37,6 +38,12 @@ describe('maxColumnWidthForContainer', () => {
     // 2000 wide, 6 columns: (2000 - 360 - 6*1) / 6 = 272.33 -> floor 272.
     const expected = Math.floor((2000 - LEFT_PANE_MIN_PX - 6 * PANE_BORDER_PX) / 6)
     expect(maxColumnWidthForContainer(2000, 6)).toBe(expected)
+  })
+
+  it('never exceeds the backend-pane maximum', () => {
+    const uncapped = Math.floor((3000 - LEFT_PANE_MIN_PX - 6 * PANE_BORDER_PX) / 6)
+    expect(uncapped).toBeGreaterThan(COLUMN_MAX_PX)
+    expect(maxColumnWidthForContainer(3000, 6)).toBe(COLUMN_MAX_PX)
   })
 
   it('never drops below the column floor, even on a cramped container', () => {
@@ -64,6 +71,10 @@ describe('displayedColumnWidth', () => {
     expect(displayedColumnWidth(240, 3000, 6)).toBe(240)
   })
 
+  it('caps an intent at the backend-pane maximum on a wide window', () => {
+    expect(displayedColumnWidth(500, 3000, 6)).toBe(COLUMN_MAX_PX)
+  })
+
   it('clamps a too-wide intent down to what the container fits', () => {
     const max = maxColumnWidthForContainer(1400, 6)
     expect(displayedColumnWidth(500, 1400, 6)).toBe(max)
@@ -89,46 +100,9 @@ describe('displayedColumnWidth', () => {
   it('rounds a fractional intent', () => {
     expect(displayedColumnWidth(200.6, 3000, 6)).toBe(201)
   })
-})
 
-describe('wide-window surplus flows to the columns', () => {
-  // The left pane is flex, so before this rule it absorbed every surplus pixel
-  // and the preview grew sideways without limit. Once the left pane would pass
-  // its comfort width — the width at which the preview is square — the columns
-  // take the surplus instead.
-  it('boosts columns past the intent once the left pane would exceed comfort', () => {
-    // 900px tall → comfort = 900 - 42 - 220 = 638. Five columns at the 220
-    // intent leave 1900 - 638 - 5 = 1257 for columns → 251 each.
-    const w = displayedColumnWidth(220, 1900, 5, 900)
-    expect(w).toBe(251)
-  })
-
-  it('never narrows below the user intent', () => {
-    // A wide intent on a window whose surplus share is smaller: intent wins.
-    // 2500px: surplus share = (2500 - 638 - 5) / 5 = 371 < 400, cap = 427.
-    const w = displayedColumnWidth(400, 2500, 5, 900)
-    expect(w).toBe(400)
-  })
-
-  it('still caps at what leaves the left pane its minimum', () => {
-    // A short, wide window: comfort floors at LEFT_PANE_MIN, and the cap
-    // (which reserves LEFT_PANE_MIN) binds before the boost can exceed it.
-    const cap = maxColumnWidthForContainer(1900, 5)
-    expect(displayedColumnWidth(220, 1900, 5, 300)).toBe(cap)
-  })
-
-  it('does not boost while the container height is unknown', () => {
-    expect(displayedColumnWidth(220, 1900, 5, null)).toBe(220)
-    expect(displayedColumnWidth(220, 1900, 5)).toBe(220)
-  })
-
-  it('comfort width floors at the left-pane minimum on a short window', () => {
-    expect(leftPaneComfortWidth(300)).toBe(LEFT_PANE_MIN_PX)
-    expect(leftPaneComfortWidth(900)).toBe(900 - 42 - 220)
-  })
-
-  it('a narrow window is untouched: no surplus, no boost, cap as before', () => {
-    // At the five-pane window minimum there is nothing to distribute.
-    expect(displayedColumnWidth(220, 1315, 5, 622)).toBe(displayedColumnWidth(220, 1315, 5))
+  it('does not grow fixed-purpose columns when the window widens', () => {
+    expect(displayedColumnWidth(220, 1400, 1)).toBe(220)
+    expect(displayedColumnWidth(220, 3000, 1)).toBe(220)
   })
 })

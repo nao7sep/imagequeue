@@ -1,11 +1,12 @@
 /* The welcome pane occupies one column slot in the right-hand group, so it takes
    the same width rules as .queue-column (mirrored from shared/layout-metrics.ts:
-   COLUMN_DEFAULT_PX 220 / COLUMN_MIN_PX 190 — keep in sync). It reuses
+   COLUMN_DEFAULT_PX 220 / COLUMN_MIN_PX 190 / COLUMN_MAX_PX 320 — keep in sync). It reuses
    .column-header for its title, and falls back to the app accent rather than a
    per-backend one, because it stands for no backend. */
 .welcome-pane {
   width: var(--iq-column-width, 220px);
   min-width: 190px;
+  max-width: 320px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

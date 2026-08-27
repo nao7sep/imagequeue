@@ -7,11 +7,10 @@
 
 import {
   COLUMN_DEFAULT_PX,
+  COLUMN_MAX_PX,
   COLUMN_MIN_PX,
   LEFT_PANE_MIN_PX,
   PANE_BORDER_PX,
-  PANE_TOOLBAR_MIN_PX,
-  PROMPT_REGION_MIN_PX,
 } from './layout-metrics'
 
 export interface UiState {
@@ -45,57 +44,33 @@ export function defaultUiState(): UiState {
  * The widest a single column may display while the left pane keeps its minimum:
  * the space left after the left-pane minimum and the inter-pane borders (one per
  * visible column: left-pane↔group plus between each adjacent pair), divided among
- * the visible columns. Never below COLUMN_MIN_PX — at the window minimum this is
- * exactly the floor.
+ * the visible columns and capped at COLUMN_MAX_PX. Never below COLUMN_MIN_PX — at
+ * the window minimum this is exactly the floor.
  */
 export function maxColumnWidthForContainer(containerWidth: number, visibleCount: number): number {
   if (visibleCount <= 0) return COLUMN_MIN_PX
   const borders = visibleCount * PANE_BORDER_PX
   const usable = containerWidth - LEFT_PANE_MIN_PX - borders
-  return Math.max(COLUMN_MIN_PX, Math.floor(usable / visibleCount))
-}
-
-/**
- * The left-pane width past which extra window width serves nobody: the width at
- * which the preview renders square. The preview region's height is the container
- * minus the fixed toolbar and prompt regions — the same derivation that opens
- * the window with a square preview (computeWindowDefaultHeight, inverted).
- * Floored at the pane's minimum so a short window cannot push comfort below it.
- */
-export function leftPaneComfortWidth(containerHeight: number): number {
-  return Math.max(LEFT_PANE_MIN_PX, containerHeight - PANE_TOOLBAR_MIN_PX - PROMPT_REGION_MIN_PX)
+  return Math.min(COLUMN_MAX_PX, Math.max(COLUMN_MIN_PX, Math.floor(usable / visibleCount)))
 }
 
 /**
  * The per-column width to render: the stored intent (defaulting to
- * COLUMN_DEFAULT_PX when unset or invalid), floored at COLUMN_MIN_PX and capped at
- * what the container can show. Pure so the splitter, the render, and the tests all
- * agree. On a window too narrow to grant the default, the cap wins and columns show
- * narrower — the intent is untouched, so widening the window restores it.
- *
- * `containerHeight`, when known, turns the intent into a FLOOR on a wide window:
- * the left pane is flex, so without this it absorbed every surplus pixel and the
- * preview grew sideways without limit. Once the left pane would exceed its
- * comfort width (a square preview), the surplus flows into the columns instead —
- * the splitter's manual escape, made the default. Dragging still works: wider
- * than the automatic width wins immediately; narrower is remembered in the
- * intent and takes effect when the window no longer has surplus to distribute.
+ * COLUMN_DEFAULT_PX when unset or invalid), clamped to the backend pane's own
+ * minimum and maximum and to what the container can show. Pure so the splitter,
+ * render, and tests all agree. On a narrow window the fit cap wins without
+ * rewriting the intent; on a wide window the fixed-purpose columns stay at the
+ * user's chosen width and the primary prompt/preview pane receives the surplus.
  */
 export function displayedColumnWidth(
   intent: number | null,
   containerWidth: number,
   visibleCount: number,
-  containerHeight: number | null = null,
 ): number {
   const wanted =
-    intent != null && Number.isFinite(intent) ? Math.max(COLUMN_MIN_PX, Math.round(intent)) : COLUMN_DEFAULT_PX
+    intent != null && Number.isFinite(intent)
+      ? Math.min(COLUMN_MAX_PX, Math.max(COLUMN_MIN_PX, Math.round(intent)))
+      : COLUMN_DEFAULT_PX
   const cap = maxColumnWidthForContainer(containerWidth, visibleCount)
-  if (containerHeight == null || !Number.isFinite(containerWidth) || visibleCount <= 0) {
-    return Math.min(wanted, cap)
-  }
-  const borders = visibleCount * PANE_BORDER_PX
-  const surplusShare = Math.floor(
-    (containerWidth - leftPaneComfortWidth(containerHeight) - borders) / visibleCount,
-  )
-  return Math.min(Math.max(wanted, surplusShare), cap)
+  return Math.min(wanted, cap)
 }

@@ -19,7 +19,7 @@ import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
 import { WelcomePane } from './WelcomePane'
 import { displayedColumnWidth } from '../../../shared/ui-state'
-import { COLUMN_MIN_PX } from '../../../shared/layout-metrics'
+import { COLUMN_MAX_PX, COLUMN_MIN_PX } from '../../../shared/layout-metrics'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
@@ -50,8 +50,8 @@ export function Layout(): React.JSX.Element {
   const [viewerOpen, setViewerOpen] = useState(false)
   const [overlay, setOverlay] = useState<Overlay>(null)
 
-  // Provider-column width. The persisted INTENT (px, or null = the COLUMN_MIN_PX
-  // floor) lives in state.json; the DISPLAYED width is derived from it and the live
+  // Provider-column width. The persisted INTENT (px, or null = the default)
+  // lives in state.json; the DISPLAYED width is derived from it and the live
   // window so a narrow reopen can't clip the columns, and returns to the intent
   // when the window grows. Only a splitter drag changes the intent and persists it.
   const visibleColumnCount = PANES.length
@@ -60,7 +60,6 @@ export function Layout(): React.JSX.Element {
   const columnWidthIntentRef = useRef<number | null>(null)
   columnWidthIntentRef.current = columnWidthIntent
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
-  const [containerHeight, setContainerHeight] = useState<number | null>(null)
   const [draggingSplitter, setDraggingSplitter] = useState(false)
 
   // The width fed to the columns via the --iq-column-width CSS var. Until the
@@ -71,7 +70,6 @@ export function Layout(): React.JSX.Element {
     columnWidthIntent,
     containerWidth ?? Number.POSITIVE_INFINITY,
     visibleColumnCount,
-    containerHeight,
   )
 
   // Adopt the persisted column width. It arrives through the one UI-state
@@ -90,12 +88,9 @@ export function Layout(): React.JSX.Element {
     if (!el) return
     const rect = el.getBoundingClientRect()
     setContainerWidth(rect.width)
-    setContainerHeight(rect.height)
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width
-      const height = entries[0]?.contentRect.height
       if (width) setContainerWidth(width)
-      if (height) setContainerHeight(height)
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -104,7 +99,8 @@ export function Layout(): React.JSX.Element {
   // Drag the splitter to set the provider-column width. The splitter sits at the
   // column group's left edge, so dragging left widens the group; that extra width
   // is shared across the visible columns (delta / count per column). The result is
-  // clamped to [floor, what the window fits] on every move, and the final intent is
+  // clamped to [pane minimum, pane maximum] on every move; the display function
+  // applies the tighter fit cap when needed. The final intent is
   // persisted on release — resize and mount never reach here, so they never write.
   const startSplitterDrag = useCallback((e: ReactMouseEvent): void => {
     e.preventDefault()
@@ -112,20 +108,16 @@ export function Layout(): React.JSX.Element {
     const count = visibleColumnCount
     const rect = layoutRef.current?.getBoundingClientRect()
     const container = rect?.width ?? containerWidth ?? Number.POSITIVE_INFINITY
-    const height = rect?.height ?? containerHeight
-    const startColumn = displayedColumnWidth(columnWidthIntentRef.current, container, count, height)
+    const startColumn = displayedColumnWidth(columnWidthIntentRef.current, container, count)
     let latest = startColumn
     setDraggingSplitter(true)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
     const onMove = (ev: MouseEvent): void => {
       const raw = startColumn - (ev.clientX - startX) / count
-      // Store the INTENT, never the displayed width: displayedColumnWidth's
-      // surplus floor would otherwise be baked into the persisted value by any
-      // drag on a wide window, silently destroying a narrower preference the
-      // moment the user touched the splitter. Rendering re-derives the boosted
-      // width from this intent on every frame.
-      latest = Math.max(COLUMN_MIN_PX, Math.round(raw))
+      // Store the INTENT, never a resize-induced fit clamp. Rendering re-derives
+      // the displayed width from this preference on every frame.
+      latest = Math.min(COLUMN_MAX_PX, Math.max(COLUMN_MIN_PX, Math.round(raw)))
       setColumnWidthIntent(latest)
     }
     const onUp = (): void => {
@@ -138,7 +130,7 @@ export function Layout(): React.JSX.Element {
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
-  }, [visibleColumnCount, containerWidth, containerHeight, patchUiState])
+  }, [visibleColumnCount, containerWidth, patchUiState])
 
   // App/window chrome shortcuts. Cmd+, opens Settings, Cmd+/ opens the shortcut
   // reference, Cmd+Shift+K toggles kept images. Escape (when no Modal intercepts)

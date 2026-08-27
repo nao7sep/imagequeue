@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COLUMN_DEFAULT_PX,
+  COLUMN_MAX_PX,
   COLUMN_MIN_PX,
   LEFT_PANE_MIN_PX,
   PANE_BORDER_PX,
@@ -12,6 +14,13 @@ import {
   computeWindowMinHeight,
 } from '../../src/shared/layout-metrics'
 import { BACKEND_IDS_IN_UI_ORDER } from '../../src/shared/types'
+
+describe('backend pane width bounds', () => {
+  it('keeps the default strictly between the usable minimum and maximum', () => {
+    expect(COLUMN_MIN_PX).toBeLessThan(COLUMN_DEFAULT_PX)
+    expect(COLUMN_DEFAULT_PX).toBeLessThan(COLUMN_MAX_PX)
+  })
+})
 
 // The window minimum must be DERIVED from the pane minimums and the
 // platform-dependent visible-column count, never a hand-typed constant. These

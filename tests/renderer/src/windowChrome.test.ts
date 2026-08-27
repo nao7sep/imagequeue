@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import {
   COLUMN_DEFAULT_PX,
+  COLUMN_MAX_PX,
   COLUMN_MIN_PX,
   LEFT_PANE_MIN_PX,
 } from '../../../src/shared/layout-metrics'
@@ -87,6 +88,10 @@ describe.each(COLUMN_SLOTS)('$selector mirrors the column metrics', ({ file, sel
 
   it('min-width matches COLUMN_MIN_PX', () => {
     expect(block()).toMatch(new RegExp(`min-width:\\s*${COLUMN_MIN_PX}px`))
+  })
+
+  it('max-width matches COLUMN_MAX_PX', () => {
+    expect(block()).toMatch(new RegExp(`max-width:\\s*${COLUMN_MAX_PX}px`))
   })
 
   // The SECOND mirrored number: the --iq-column-width fallback is the default

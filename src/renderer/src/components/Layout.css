@@ -260,8 +260,8 @@
 }
 
 /* Draggable boundary between the left fill pane and the provider columns. It sets
-   the per-provider column width (--iq-column-width) so the columns — the work
-   area — can grow on a wide window instead of the preview eating all the surplus.
+   the bounded per-provider column width (--iq-column-width); provider columns are
+   fixed-purpose controls, while the prompt/preview pane takes window surplus.
    It is a 1px line that REPLACES .right-pane's old border-left, so it consumes the
    same 1px the derived window minimum already reserves as the left↔group border
    (layout-metrics PANE_BORDER_PX) — no change to the minimum. A wider invisible
