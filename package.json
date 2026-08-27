@@ -52,9 +52,12 @@
     "vitest": "^4.1.10"
   },
   "allowScripts": {
+    "@google/genai": false,
     "electron-winstaller@5.4.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
-    "node-pty@1.1.0": true
+    "fsevents": false,
+    "node-pty@1.1.0": true,
+    "protobufjs": false
   }
 }
