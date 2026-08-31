@@ -43,6 +43,13 @@ export type Platform =
   | 'cygwin'
   | 'netbsd'
 
+export type SessionDraftPersistenceState =
+  | { status: 'saved' }
+  | { status: 'failed'; message: string }
+
+export const SESSION_DRAFT_PERSISTENCE_ERROR =
+  'Recent session changes could not be saved. Keep ImageQueue open and make another edit to retry.'
+
 // The contextBridge API surface exposed to the renderer as `window.electronAPI`.
 // It is an explicit interface in `shared` — not `typeof api` from the preload —
 // so the renderer can reference the type without importing the preload module,
@@ -75,6 +82,10 @@ export interface ElectronAPI {
   openSessionFolder: (sessionId: string) => Promise<void>
   getSessionDraft: () => Promise<SessionDraft>
   saveSessionDraft: (draft: SessionDraft) => Promise<void>
+  getSessionDraftPersistenceState: () => Promise<SessionDraftPersistenceState>
+  onSessionDraftPersistenceState: (
+    callback: (state: SessionDraftPersistenceState) => void
+  ) => (() => void)
   getSessionElaboratedPrompts: () => Promise<ElaboratedPromptRecord[]>
   appendSessionElaboratedPrompts: (prompts: ElaboratedPromptRecord[]) => Promise<ElaboratedPromptRecord[]>
   deleteSessionElaboratedPromptAt: (index: number) => Promise<ElaboratedPromptRecord[]>

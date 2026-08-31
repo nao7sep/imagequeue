@@ -14,6 +14,7 @@ import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { Icon } from './Icon'
 import { QueueControlSubmenu, QueuePausedBadge } from './QueueControls'
+import { AppStatusNotices } from './AppStatusNotices'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
@@ -337,6 +338,7 @@ export function Layout(): React.JSX.Element {
           </Menu>
           </div>
         </div>
+        <AppStatusNotices />
         <PromptPane
             selectedTask={selectedTask}
             previewDataUrl={previewDataUrl}

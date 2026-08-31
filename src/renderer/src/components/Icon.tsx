@@ -24,6 +24,7 @@ export type IconName =
   | 'external-link'
   | 'plus'
   | 'menu'
+  | 'alert-triangle'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   'chevron-right': <polyline points="9 5 17 12 9 19" />,
@@ -47,6 +48,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   'external-link': <><path d="M15.90 12.50L15.90 19.00L5.50 19.00L5.50 8.60L12.00 8.60" /><path d="M13.30 5.57L18.50 5.57L18.50 10.77" /><path d="M18.50 5.57L11.13 12.93" /></>,
   plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
   menu: <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>,
+  'alert-triangle': <><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /><line x1="12" y1="8" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
 }
 
 export function Icon({ name, className }: { name: IconName; className?: string }): React.JSX.Element {

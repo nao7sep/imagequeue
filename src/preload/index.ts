@@ -24,6 +24,7 @@ import {
   ConceptProbeSummary,
   ConceptRow,
 } from '../shared/types'
+import type { SessionDraftPersistenceState } from '../shared/electron-api'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
 import type { UiState } from '../shared/ui-state'
 import type {
@@ -98,6 +99,19 @@ const api = {
 
   saveSessionDraft: (draft: SessionDraft): Promise<void> =>
     ipcRenderer.invoke('session:saveDraft', draft),
+
+  getSessionDraftPersistenceState: (): Promise<SessionDraftPersistenceState> =>
+    ipcRenderer.invoke('session:getDraftPersistenceState'),
+
+  onSessionDraftPersistenceState: (
+    callback: (state: SessionDraftPersistenceState) => void
+  ): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: SessionDraftPersistenceState): void => {
+      callback(state)
+    }
+    ipcRenderer.on('session:draftPersistenceState', handler)
+    return () => { ipcRenderer.removeListener('session:draftPersistenceState', handler) }
+  },
 
   getSessionElaboratedPrompts: (): Promise<ElaboratedPromptRecord[]> =>
     ipcRenderer.invoke('session:getElaboratedPrompts'),

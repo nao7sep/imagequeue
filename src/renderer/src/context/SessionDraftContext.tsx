@@ -2,6 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { ElaboratedPromptRecord } from '../../../shared/types'
 import { createEmptySessionDraft, type SessionDraft } from '../../../shared/session-draft'
 import { serializeError } from '../../../shared/serialize-error'
+import {
+  SESSION_DRAFT_PERSISTENCE_ERROR,
+  type SessionDraftPersistenceState,
+} from '../../../shared/electron-api'
 
 // The renderer's working state for the active session: the SessionDraft fields
 // (main prompt + Advanced Prompting selections) plus the elaborated-prompts
@@ -25,6 +29,8 @@ function extractDraft(state: SessionDraftState): SessionDraft {
 
 interface SessionDraftContextValue {
   state: SessionDraftState
+  draftPersistenceFailure: string | null
+  dismissDraftPersistenceFailure: () => void
   // Partial updates to one or more fields. Use the function form when the next
   // value depends on the previous (e.g. toggling a Set membership).
   update: (patch: Partial<SessionDraftState>) => void
@@ -36,8 +42,16 @@ interface SessionDraftContextValue {
 
 const SessionDraftContext = createContext<SessionDraftContextValue | null>(null)
 
+interface DraftPersistenceFailure {
+  message: string
+  source: 'disk' | 'ipc'
+}
+
 export function SessionDraftProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, setState] = useState<SessionDraftState>(emptyState)
+  const [draftPersistenceFailureState, setDraftPersistenceFailureState] =
+    useState<DraftPersistenceFailure | null>(null)
+  const draftPersistenceFailure = draftPersistenceFailureState?.message ?? null
   // Guards the write-through effect: stays false until the first hydrate
   // completes, and tracks the last draft we persisted so re-applying a hydrated
   // draft doesn't immediately echo back a redundant save.
@@ -47,12 +61,25 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
   useEffect(() => {
     let cancelled = false
 
+    const applyPersistenceState = (next: SessionDraftPersistenceState): void => {
+      if (cancelled) return
+      setDraftPersistenceFailureState(
+        next.status === 'failed' ? { message: next.message, source: 'disk' } : null,
+      )
+    }
+
+    const unsubscribePersistence = window.electronAPI.onSessionDraftPersistenceState(
+      applyPersistenceState,
+    )
+
     const hydrate = async (): Promise<void> => {
-      const [draft, elaboratedPrompts] = await Promise.all([
+      const [draft, elaboratedPrompts, persistenceState] = await Promise.all([
         window.electronAPI.getSessionDraft(),
         window.electronAPI.getSessionElaboratedPrompts(),
+        window.electronAPI.getSessionDraftPersistenceState(),
       ])
       if (cancelled) return
+      applyPersistenceState(persistenceState)
       lastPersistedDraftRef.current = JSON.stringify(draft)
       loadedRef.current = true
       setState({ ...draft, elaboratedPrompts })
@@ -69,6 +96,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     return () => {
       cancelled = true
       unsubscribe()
+      unsubscribePersistence()
     }
   }, [])
 
@@ -81,12 +109,29 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     if (!loadedRef.current) return
     if (draftSnapshot === lastPersistedDraftRef.current) return
     lastPersistedDraftRef.current = draftSnapshot
-    void window.electronAPI.saveSessionDraft(JSON.parse(draftSnapshot) as SessionDraft).catch((error) => {
-      void window.electronAPI.appLog('error', 'Failed to persist session draft', {
-        error: serializeError(error),
+    void window.electronAPI.saveSessionDraft(JSON.parse(draftSnapshot) as SessionDraft)
+      .then(() => {
+        // A transport failure means main never received the prior draft. Once a
+        // later IPC succeeds, main owns the write again; disk failures arrive
+        // through the persistence-state event and must not be cleared here.
+        setDraftPersistenceFailureState((current) =>
+          current?.source === 'ipc' ? null : current
+        )
       })
-    })
+      .catch((error) => {
+        setDraftPersistenceFailureState({
+          message: SESSION_DRAFT_PERSISTENCE_ERROR,
+          source: 'ipc',
+        })
+        void window.electronAPI.appLog('error', 'Failed to send session draft for persistence', {
+          error: serializeError(error),
+        })
+      })
   }, [draftSnapshot])
+
+  const dismissDraftPersistenceFailure = useCallback((): void => {
+    setDraftPersistenceFailureState(null)
+  }, [])
 
   const update = useCallback((patch: Partial<SessionDraftState>): void => {
     setState((prev) => ({ ...prev, ...patch }))
@@ -119,7 +164,16 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
 
   return (
     <SessionDraftContext.Provider
-      value={{ state, update, updateWith, appendElaboratedPrompts, deleteElaboratedPromptAt, clearElaboratedPrompts }}
+      value={{
+        state,
+        draftPersistenceFailure,
+        dismissDraftPersistenceFailure,
+        update,
+        updateWith,
+        appendElaboratedPrompts,
+        deleteElaboratedPromptAt,
+        clearElaboratedPrompts,
+      }}
     >
       {children}
     </SessionDraftContext.Provider>

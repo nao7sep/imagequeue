@@ -24,6 +24,7 @@ import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from '.
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { createCoalescedWriter } from '../utils/coalesced-writer'
 import { publishQueueState } from '../queue/publisher'
+import { markDraftPersistenceFailed, markDraftPersistenceSaved } from './draft-persistence'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -51,12 +52,17 @@ let activeSession: ActiveSessionState | null = null
 // switching sessions so nothing typed is lost.
 const DRAFT_PERSIST_DEBOUNCE_MS = 300
 const draftWriter = createCoalescedWriter({
-  flush: () => persistActiveSession(),
+  flush: () => {
+    persistActiveSession()
+    markDraftPersistenceSaved()
+  },
   debounceMs: DRAFT_PERSIST_DEBOUNCE_MS,
-  onError: (error) =>
+  onError: (error) => {
     log('error', 'Failed to persist session draft', {
       error: serializeError(error),
-    }),
+    })
+    markDraftPersistenceFailed()
+  },
   onDrain: () => log('info', 'Drained pending session draft write'),
 })
 
@@ -408,6 +414,7 @@ export async function createSession(): Promise<void> {
     lastResumedAt: null,
   })
   persistActiveSession()
+  markDraftPersistenceSaved()
   publishQueueState()
   broadcastSessionChanged(getSessionId())
 
@@ -484,6 +491,7 @@ export async function resumeSession(sessionId: string): Promise<void> {
     lastResumedAt: new Date().toISOString(),
   })
   persistActiveSession()
+  markDraftPersistenceSaved()
   publishQueueState()
   broadcastSessionChanged(getSessionId())
 

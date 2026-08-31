@@ -15,6 +15,7 @@ import {
   resumeSession,
   setActiveSessionDraft,
 } from './state'
+import { getDraftPersistenceState } from './draft-persistence'
 
 export function registerSessionIpc(): void {
   handle('session:create', async () => {
@@ -43,6 +44,10 @@ export function registerSessionIpc(): void {
 
   handle('session:saveDraft', (_event, draft: SessionDraft) => {
     setActiveSessionDraft(draft)
+  })
+
+  handle('session:getDraftPersistenceState', () => {
+    return getDraftPersistenceState()
   })
 
   handle('session:getElaboratedPrompts', () => {
