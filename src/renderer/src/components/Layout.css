@@ -64,20 +64,18 @@
 }
 
 .dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
   min-width: 160px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 200;
   padding: 4px 0;
-  /* overflow not clipped — submenu flies out to the right. Items take a flat
-     background highlight (not an outline) for both hover and the keyboard
-     cursor, so an overflow edge can never clip a focus ring into stray
-     fragments. */
+  /* The submenu is separately portalled, so this menu may scroll vertically
+     without clipping it. Items take a flat background highlight (not an
+     outline) for both hover and the keyboard cursor. */
 }
 
 /* A menu item: a flat command row. The arrow-focused item is the menu's cursor —
@@ -153,10 +151,9 @@
 }
 
 .menu-submenu {
-  position: absolute;
-  top: -5px;
-  left: 100%;
   min-width: 200px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;

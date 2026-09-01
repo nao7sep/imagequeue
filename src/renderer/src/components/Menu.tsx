@@ -4,11 +4,13 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { nextIndex } from '../utils/compositeNav'
 import { useImeGuard } from '../utils/imeGuard'
@@ -21,8 +23,10 @@ import { useImeGuard } from '../utils/imeGuard'
 // jumps by label (IME-guarded), Enter/Space activate and close, and Escape / Tab
 // / outside click close. Items are `menuitem`s navigated by the arrows, never by
 // Tab. A Submenu parent opens on Right and closes on Left/Esc; a MenuCheckboxItem
-// toggles and stays open. Mirrors tapebox's Menu, hand-rolled on the renderer's
-// own imeGuard — not imported across apps.
+// toggles and stays open. Both popup levels are portalled to the viewport and
+// collision-positioned there, beyond any pane's clipping boundary. Mirrors
+// tapebox's Menu, hand-rolled on the renderer's own imeGuard — not imported
+// across apps.
 
 type TriggerProps = {
   ref: (el: HTMLButtonElement | null) => void
@@ -46,7 +50,87 @@ const MenuContext = createContext<{
   closeAll: () => void
   activeSubmenu: string | null
   setActiveSubmenu: (id: string | null) => void
+  overlayOwner: string
 } | null>(null)
+
+type PopupPosition = {
+  left: number
+  top: number
+}
+
+const VIEWPORT_GUTTER = 8
+const ROOT_MENU_GAP = 4
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum))
+}
+
+function rootMenuPosition(anchor: DOMRect, popup: DOMRect): PopupPosition {
+  const maximumLeft = window.innerWidth - VIEWPORT_GUTTER - popup.width
+  const below = anchor.bottom + ROOT_MENU_GAP
+  const above = anchor.top - ROOT_MENU_GAP - popup.height
+  const maximumTop = window.innerHeight - VIEWPORT_GUTTER - popup.height
+
+  return {
+    left: clamp(anchor.left, VIEWPORT_GUTTER, maximumLeft),
+    top: clamp(below <= maximumTop ? below : above, VIEWPORT_GUTTER, maximumTop),
+  }
+}
+
+function submenuPosition(anchor: DOMRect, popup: DOMRect): PopupPosition {
+  const maximumLeft = window.innerWidth - VIEWPORT_GUTTER - popup.width
+  const maximumTop = window.innerHeight - VIEWPORT_GUTTER - popup.height
+  const right = anchor.right
+  const left = anchor.left - popup.width
+
+  return {
+    left: right <= maximumLeft ? right : clamp(left, VIEWPORT_GUTTER, maximumLeft),
+    top: clamp(anchor.top, VIEWPORT_GUTTER, maximumTop),
+  }
+}
+
+function isOwnedOverlayTarget(target: Node, owner: string): boolean {
+  let element: Element | null = target instanceof Element ? target : target.parentElement
+  while (element) {
+    if (element.getAttribute('data-menu-overlay-owner') === owner) return true
+    element = element.parentElement
+  }
+  return false
+}
+
+function usePopupPosition(
+  open: boolean,
+  anchorRef: React.RefObject<HTMLElement | null>,
+  popupRef: React.RefObject<HTMLElement | null>,
+  calculate: (anchor: DOMRect, popup: DOMRect) => PopupPosition,
+): PopupPosition | null {
+  const [position, setPosition] = useState<PopupPosition | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null)
+      return
+    }
+
+    const update = (): void => {
+      const anchor = anchorRef.current
+      const popup = popupRef.current
+      if (!anchor || !popup) return
+      setPosition(calculate(anchor.getBoundingClientRect(), popup.getBoundingClientRect()))
+    }
+
+    update()
+    window.addEventListener('resize', update)
+    // A fixed popup must follow its anchor if any enclosing app surface scrolls.
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [open, anchorRef, popupRef, calculate])
+
+  return position
+}
 
 // Collect the menuitems that belong directly to a given menu container, excluding
 // any nested inside a submenu popup (those belong to that submenu's own group).
@@ -98,6 +182,8 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const overlayOwner = useId()
+  const position = usePopupPosition(open, triggerRef, contentRef, rootMenuPosition)
 
   const close = useCallback((focusTrigger = true): void => {
     setOpen(false)
@@ -117,12 +203,16 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
     if (!open) return
     const onDown = (e: MouseEvent): void => {
       const t = e.target as Node
-      if (contentRef.current?.contains(t) || triggerRef.current?.contains(t)) return
+      if (
+        contentRef.current?.contains(t) ||
+        triggerRef.current?.contains(t) ||
+        isOwnedOverlayTarget(t, overlayOwner)
+      ) return
       setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+  }, [open, overlayOwner])
 
   // Escape closes from ANYWHERE, the symmetric half of the outside-click handler
   // above. The popup's own onKeyDown only sees keys aimed at the menu, so an open
@@ -170,18 +260,28 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
         'aria-expanded': open,
         onClick: () => setOpen((v) => !v),
       })}
-      {open && (
+      {open && createPortal(
         <div
           ref={contentRef}
           role="menu"
           aria-label={label}
           onKeyDown={onKeyDown}
           className={className ?? 'dropdown-menu'}
+          data-menu-overlay-owner={overlayOwner}
+          style={{
+            position: 'fixed',
+            left: position?.left,
+            top: position?.top,
+            visibility: position ? 'visible' : 'hidden',
+          }}
         >
-          <MenuContext.Provider value={{ closeAll: () => close(), activeSubmenu, setActiveSubmenu }}>
+          <MenuContext.Provider
+            value={{ closeAll: () => close(), activeSubmenu, setActiveSubmenu, overlayOwner }}
+          >
             {children}
           </MenuContext.Provider>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -283,6 +383,7 @@ export function Submenu({
   }
   const parentRef = useRef<HTMLButtonElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
+  const position = usePopupPosition(open, parentRef, popupRef, submenuPosition)
 
   const openSubmenu = (): void => {
     setOpen(true)
@@ -340,16 +441,24 @@ export function Submenu({
             chevron can never drift from the app's other chevrons. */}
         <Icon name="chevron-right" className="menu-submenu-arrow" />
       </button>
-      {open && (
+      {open && createPortal(
         <div
           ref={popupRef}
           role="menu"
           aria-label={label}
           className="menu-submenu"
           onKeyDown={onPopupKeyDown}
+          data-menu-overlay-owner={ctx?.overlayOwner}
+          style={{
+            position: 'fixed',
+            left: position?.left,
+            top: position?.top,
+            visibility: position ? 'visible' : 'hidden',
+          }}
         >
           {children}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
