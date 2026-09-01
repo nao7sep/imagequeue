@@ -35,6 +35,22 @@ export interface MainWindowOptions {
  *  behind the renderer so there is no white flash before first paint. */
 const BACKGROUND_COLOR = '#1a1a2e'
 
+export interface WorkAreaSize {
+  width: number
+  height: number
+}
+
+/** The native shell protects the full floor only while it fits the active work area. */
+export function computeNativeWindowMinimum(
+  paneCount: number,
+  workArea: WorkAreaSize,
+): { width: number; height: number } {
+  return {
+    width: capToWorkArea(computeWindowMinWidth(paneCount), workArea.width),
+    height: capToWorkArea(computeWindowMinHeight(), workArea.height),
+  }
+}
+
 /**
  * Build the chrome/sizing options for the main window, given how many panes the
  * right-hand group will show (getVisiblePanes). Both the minimum and the opening
@@ -42,15 +58,30 @@ const BACKGROUND_COLOR = '#1a1a2e'
  * silently disagree with the layout the renderer paints, and a user with one
  * provider is not forced into a window sized for five.
  */
-export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
-  const minWidth = computeWindowMinWidth(paneCount)
-  const minHeight = computeWindowMinHeight()
+export function buildMainWindowOptions(
+  paneCount: number,
+  workArea: WorkAreaSize = { width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY },
+): MainWindowOptions {
+  const { width: minWidth, height: minHeight } = computeNativeWindowMinimum(paneCount, workArea)
   return {
-    width: computeWindowDefaultWidth(paneCount),
-    height: computeWindowDefaultHeight(),
+    width: clampOpeningDimension(computeWindowDefaultWidth(paneCount), minWidth, workArea.width),
+    height: clampOpeningDimension(computeWindowDefaultHeight(), minHeight, workArea.height),
     minWidth,
     minHeight,
     backgroundColor: BACKGROUND_COLOR,
     themeSource: 'dark'
   }
+}
+
+function capToWorkArea(value: number, workArea: number): number {
+  return Number.isFinite(workArea) && workArea > 0
+    ? Math.min(value, Math.round(workArea))
+    : value
+}
+
+function clampOpeningDimension(value: number, minimum: number, workArea: number): number {
+  const capped = Number.isFinite(workArea) && workArea > 0
+    ? Math.min(value, Math.round(workArea))
+    : value
+  return Math.max(minimum, capped)
 }

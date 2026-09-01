@@ -75,6 +75,26 @@ describe('main-window layout registration and refresh', () => {
     expect(setSize).toHaveBeenCalledWith(minWidth, minHeight)
   })
 
+  it('caps a dynamic pane floor to the active work area', () => {
+    keyed.add('openai.image')
+    keyed.add('gemini.nanobanana')
+    const workArea = { width: 700, height: 500 }
+    const setMinimumSize = vi.fn()
+    const setSize = vi.fn()
+    registeredWindow = {
+      isDestroyed: () => false,
+      setMinimumSize,
+      getSize: () => [600, 400],
+      setSize,
+    } as never
+    registerMainWindowForLayout(registeredWindow, () => workArea)
+
+    refreshMainWindowMinimumSize()
+
+    expect(setMinimumSize).toHaveBeenCalledWith(workArea.width, workArea.height)
+    expect(setSize).toHaveBeenCalledWith(workArea.width, workArea.height)
+  })
+
   it('recomputes after the last occupied unkeyed task leaves', () => {
     keyed.add('openai.image')
     const task = queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)[0]
