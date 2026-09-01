@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
 import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
@@ -38,6 +38,32 @@ function renderModal(onClose = vi.fn()): ReturnType<typeof render> {
 }
 
 describe('DependenciesModal cancellation', () => {
+  it('emphasizes required absence without coloring optional absence as a warning', async () => {
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    renderModal()
+
+    const cliRow = (await screen.findByRole('heading', { name: 'Draw Things CLI' })).closest('section')
+    const recommendationsRow = screen.getByRole('heading', { name: 'Recommended parameters' }).closest('section')
+    expect(cliRow).not.toBeNull()
+    expect(recommendationsRow).not.toBeNull()
+
+    const cliStatus = within(cliRow as HTMLElement).getByText('Not installed', {
+      selector: '.dependency-badge',
+    })
+    const recommendationsStatus = within(recommendationsRow as HTMLElement).getByText(
+      'Not installed',
+      { selector: '.dependency-badge' },
+    )
+    expect(cliStatus.classList.contains('dependency-badge-required')).toBe(true)
+    expect(recommendationsStatus.classList.contains('dependency-badge-required')).toBe(false)
+    expect(recommendationsRow?.textContent).toContain('Optional')
+  })
+
   it('distinguishes an initial load failure from an empty tools list', async () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => { throw new Error('state unavailable') }),

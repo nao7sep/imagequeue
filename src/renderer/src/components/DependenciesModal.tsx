@@ -132,6 +132,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
             <DependencyRow
               title="Draw Things CLI"
               description="The image-generation engine. Downloaded from the official release and verified against its published checksum."
+              required
               info={state.cli}
               busy={busy.has('cli')}
               disabled={busy.has('cli') || busy.has('check')}
@@ -142,6 +143,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
             <DependencyRow
               title="Recommended parameters"
               description="Versionless per-model defaults (configs.json) from Draw Things. Optional — Install or Refresh fetches the current file; generation falls back to your defaults without it."
+              required={false}
               info={state.recommendations}
               busy={busy.has('recommendations')}
               disabled={busy.has('recommendations') || busy.has('check')}
@@ -169,6 +171,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
 function DependencyRow({
   title,
   description,
+  required,
   info,
   busy,
   disabled,
@@ -178,6 +181,7 @@ function DependencyRow({
 }: {
   title: string
   description: string
+  required: boolean
   info: DependencyInfo
   busy: boolean
   disabled: boolean
@@ -193,7 +197,11 @@ function DependencyRow({
       <div className="dependency-main">
         <div className="dependency-heading">
           <h3 className="dependency-title">{title}</h3>
-          <span className={`dependency-badge dependency-badge-${info.state}`}>
+          <span
+            className={`dependency-badge dependency-badge-${info.state}${
+              info.state === 'not-installed' && required ? ' dependency-badge-required' : ''
+            }`}
+          >
             {STATE_LABEL[info.state]}
           </span>
         </div>

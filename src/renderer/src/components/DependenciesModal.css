@@ -77,6 +77,11 @@
 }
 
 .dependency-badge-not-installed {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.dependency-badge-not-installed.dependency-badge-required {
   background: color-mix(in srgb, var(--warning) 14%, transparent);
   color: var(--warning);
 }
