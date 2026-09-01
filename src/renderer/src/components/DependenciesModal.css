@@ -132,6 +132,19 @@
   cursor: pointer;
 }
 
+.dependency-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dependency-terminal-outcome {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .dependency-action:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
 }

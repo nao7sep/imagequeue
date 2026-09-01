@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
+import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
+import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
 import type { DependenciesState } from '../../../../src/shared/types'
 
 afterEach(cleanup)
@@ -27,6 +29,14 @@ const initialState: DependenciesState = {
   platformSupported: true,
 }
 
+function renderModal(onClose = vi.fn()): ReturnType<typeof render> {
+  return render(
+    <DependenciesProvider>
+      <DependenciesModal onClose={onClose} />
+    </DependenciesProvider>,
+  )
+}
+
 describe('DependenciesModal cancellation', () => {
   it('distinguishes an initial load failure from an empty tools list', async () => {
     window.electronAPI = {
@@ -35,7 +45,7 @@ describe('DependenciesModal cancellation', () => {
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
-    render(<DependenciesModal onClose={vi.fn()} />)
+    renderModal()
 
     expect(await screen.findByText('state unavailable')).toBeTruthy()
     expect(screen.getByText('Couldn’t load managed-tool status.')).toBeTruthy()
@@ -55,7 +65,7 @@ describe('DependenciesModal cancellation', () => {
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
-    render(<DependenciesModal onClose={vi.fn()} />)
+    renderModal()
 
     expect(await screen.findByText(/^Version unreadable/)).toBeTruthy()
     expect(screen.queryByText(/^version unreadable/)).toBeNull()
@@ -73,7 +83,7 @@ describe('DependenciesModal cancellation', () => {
     }
     window.electronAPI = api as unknown as typeof window.electronAPI
 
-    render(<DependenciesModal onClose={onClose} />)
+    renderModal(onClose)
     const installButtons = await screen.findAllByRole('button', { name: 'Install' })
     fireEvent.click(installButtons[0])
     await waitFor(() => expect(installCli).toHaveBeenCalledTimes(1))
@@ -83,6 +93,44 @@ describe('DependenciesModal cancellation', () => {
     expect(cancelDependencyOperations).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
   }, 15_000)
+
+  it('retains cancellation across close and reopen until the matching retry', async () => {
+    let rejectInstall: ((error: Error) => void) | undefined
+    const installCli = vi.fn(() => new Promise<DependenciesState>((_resolve, reject) => {
+      rejectInstall = reject
+    }))
+    const cancelDependencyOperations = vi.fn(async () => {
+      rejectInstall?.(new Error('cancelled'))
+    })
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      installCli,
+      cancelDependencyOperations,
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    function Harness(): React.JSX.Element {
+      const [open, setOpen] = useState(true)
+      return (
+        <DependenciesProvider>
+          <button type="button" onClick={() => setOpen(true)}>Reopen</button>
+          {open && <DependenciesModal onClose={() => setOpen(false)} />}
+        </DependenciesProvider>
+      )
+    }
+
+    render(<Harness />)
+    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    fireEvent.click(installButtons[0])
+    await waitFor(() => expect(installCli).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel and close' }))
+    await waitFor(() => expect(cancelDependencyOperations).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+
+    expect(await screen.findByText('Cancelled')).toBeTruthy()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0])
+    expect(screen.queryByText('Cancelled')).toBeNull()
+  })
 
   it('shows an explicit CLI check failure and re-reads local state', async () => {
     const getDependenciesState = vi.fn(async () => initialState)
@@ -97,7 +145,7 @@ describe('DependenciesModal cancellation', () => {
     }
     window.electronAPI = api as unknown as typeof window.electronAPI
 
-    render(<DependenciesModal onClose={vi.fn()} />)
+    renderModal()
     await screen.findAllByRole('button', { name: 'Install' })
     fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
 
@@ -122,12 +170,170 @@ describe('DependenciesModal cancellation', () => {
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
-    render(<DependenciesModal onClose={vi.fn()} />)
+    renderModal()
     const refresh = await screen.findByRole('button', { name: 'Refresh' })
     const recommendationsRow = refresh.closest('section')
     fireEvent.click(refresh)
     await waitFor(() => expect(downloadRecommendations).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('dialog', { name: 'Managed tools' })).toBeTruthy()
     expect(recommendationsRow?.textContent).not.toContain('never checked')
+  })
+
+  it('keeps a terminal result when the replaceable modal unmounts mid-operation', async () => {
+    const installed: DependenciesState = {
+      ...initialState,
+      cli: {
+        ...initialState.cli,
+        state: 'up-to-date',
+        installedLabel: '1.2.3',
+        latestLabel: '1.2.3',
+      },
+    }
+    let finishInstall: ((state: DependenciesState) => void) | undefined
+    const installCli = vi.fn(() => new Promise<DependenciesState>((resolve) => {
+      finishInstall = resolve
+    }))
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      installCli,
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    function Harness(): React.JSX.Element {
+      const [open, setOpen] = useState(true)
+      return (
+        <DependenciesProvider>
+          <button type="button" onClick={() => setOpen(false)}>Replace view</button>
+          <button type="button" onClick={() => setOpen(true)}>Reopen</button>
+          {open && <DependenciesModal onClose={() => setOpen(false)} />}
+        </DependenciesProvider>
+      )
+    }
+
+    render(<Harness />)
+    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    fireEvent.click(installButtons[0])
+    await waitFor(() => expect(installCli).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Replace view' }))
+    finishInstall?.(installed)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Managed tools' })).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+
+    expect(await screen.findByText(/^1\.2\.3/)).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
+  })
+
+  it('retains a terminal operation failure across close and reopen', async () => {
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      checkDependencies: vi.fn(async (): Promise<DependenciesState> => {
+        throw new Error('CLI service unavailable')
+      }),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    function Harness(): React.JSX.Element {
+      const [open, setOpen] = useState(true)
+      return (
+        <DependenciesProvider>
+          <button type="button" onClick={() => setOpen(true)}>Reopen</button>
+          {open && <DependenciesModal onClose={() => setOpen(false)} />}
+        </DependenciesProvider>
+      )
+    }
+
+    render(<Harness />)
+    await screen.findAllByRole('button', { name: 'Install' })
+    fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
+    expect(await screen.findByText('CLI service unavailable')).toBeTruthy()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+
+    expect(await screen.findByText('CLI service unavailable')).toBeTruthy()
+  })
+
+  it('merges concurrent independent operation results without losing either fact', async () => {
+    const cliInstalled: DependenciesState = {
+      ...initialState,
+      cli: {
+        ...initialState.cli,
+        state: 'up-to-date',
+        installedLabel: '2.0.0',
+        latestLabel: '2.0.0',
+      },
+    }
+    const recommendationsInstalled: DependenciesState = {
+      ...initialState,
+      recommendations: {
+        ...initialState.recommendations,
+        state: 'installed-unchecked',
+        installedLabel: '24 entries',
+      },
+    }
+    let finishCli: ((state: DependenciesState) => void) | undefined
+    let finishRecommendations: ((state: DependenciesState) => void) | undefined
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      installCli: vi.fn(() => new Promise<DependenciesState>((resolve) => {
+        finishCli = resolve
+      })),
+      downloadRecommendations: vi.fn(() => new Promise<DependenciesState>((resolve) => {
+        finishRecommendations = resolve
+      })),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    renderModal()
+    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    fireEvent.click(installButtons[0])
+    fireEvent.click(installButtons[1])
+    finishCli?.(cliInstalled)
+    await screen.findByText(/^2\.0\.0/)
+    finishRecommendations?.(recommendationsInstalled)
+
+    expect(await screen.findByText(/^24 entries/)).toBeTruthy()
+    expect(screen.getByText(/^2\.0\.0/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
+  })
+
+  it('does not let an older focus refresh restore a stale completed action', async () => {
+    const installed: DependenciesState = {
+      ...initialState,
+      cli: {
+        ...initialState.cli,
+        state: 'up-to-date',
+        installedLabel: '3.0.0',
+        latestLabel: '3.0.0',
+      },
+    }
+    let finishStaleRefresh: ((state: DependenciesState) => void) | undefined
+    const getDependenciesState = vi.fn()
+      .mockResolvedValueOnce(initialState)
+      .mockImplementationOnce(() => new Promise<DependenciesState>((resolve) => {
+        finishStaleRefresh = resolve
+      }))
+    window.electronAPI = {
+      getDependenciesState,
+      installCli: vi.fn(async () => installed),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+
+    renderModal()
+    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    window.dispatchEvent(new Event('focus'))
+    await waitFor(() => expect(getDependenciesState).toHaveBeenCalledTimes(2))
+    fireEvent.click(installButtons[0])
+    expect(await screen.findByText(/^3\.0\.0/)).toBeTruthy()
+    finishStaleRefresh?.(initialState)
+
+    await waitFor(() => {
+      expect(screen.getByText(/^3\.0\.0/)).toBeTruthy()
+      expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
+    })
   })
 })

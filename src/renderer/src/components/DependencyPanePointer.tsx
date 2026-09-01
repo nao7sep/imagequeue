@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
 import type { DependenciesState, DependencyInfo } from '../../../shared/types'
+import { useDependencies } from '../context/DependenciesContext'
 
 // The single pane pointer to the Dependencies modal for the Draw Things column.
 // Its only job is to lead the user to the modal — it carries no actions of its
@@ -60,21 +60,7 @@ function summarize(state: DependenciesState): string {
 }
 
 export function DependencyPanePointer(): React.JSX.Element | null {
-  const [state, setState] = useState<DependenciesState | null>(null)
-
-  const refresh = useCallback((): void => {
-    void window.electronAPI.getDependenciesState().then(setState)
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    window.addEventListener('focus', refresh)
-    window.addEventListener('dependencies-changed', refresh)
-    return () => {
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('dependencies-changed', refresh)
-    }
-  }, [refresh])
+  const { state } = useDependencies()
 
   const severity = state?.platformSupported ? severityFor(state) : null
   const summary = state ? summarize(state) : ''

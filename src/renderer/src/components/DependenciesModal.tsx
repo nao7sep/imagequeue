@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { Modal } from './Modal'
+import { useDependencies } from '../context/DependenciesContext'
 import { formatUiDateTime } from '../utils/formatDateTime'
 import type {
-  DependenciesState,
-  DependencyId,
   DependencyInfo,
   DependencyProgress,
   DependencyState,
@@ -62,88 +61,29 @@ function progressLabel(progress: DependencyProgress): string {
 }
 
 export function DependenciesModal({ onClose }: Props): React.JSX.Element {
-  const [state, setState] = useState<DependenciesState | null>(null)
-  // Operations in flight, by id. A set (not a single value) so the two downloads —
-  // the CLI and configs.json — can run at the same time; they touch different
-  // files. The CLI metadata 'check' is serialized in this modal with row actions;
-  // 'toggle' is the launch checkbox.
-  const [busy, setBusy] = useState<ReadonlySet<DependencyId | 'check' | 'toggle'>>(() => new Set())
-  const [progress, setProgress] = useState<DependencyProgress | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
+  const {
+    state,
+    busy,
+    progress,
+    error,
+    terminalOutcomes,
+    check,
+    installCli,
+    installRecommendations,
+    setCheckAtLaunch,
+    cancelOperations,
+  } = useDependencies()
   const anyBusy = busy.size > 0
 
-  useEffect(() => {
-    void window.electronAPI.getDependenciesState()
-      .then(setState)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-  }, [])
-
-  useEffect(() => {
-    return window.electronAPI.onDependencyProgress(setProgress)
-  }, [])
-
-  // Closing while an operation is active cancels its main-process controller,
-  // then closes immediately. The operation owns its staging cleanup, so the user
-  // is never trapped in this modal and no partial artifact is published.
+  // The application controller outlives this replaceable modal. Closing while an
+  // operation is active explicitly asks that controller to cancel and then hides
+  // the view immediately; terminal reconciliation continues outside the modal.
   const requestClose = useCallback((): void => {
-    if (busy.size > 0) void window.electronAPI.cancelDependencyOperations()
+    // The application owner checks its live operation registry. Do not infer
+    // cancellation correctness from this replaceable view's rendered flags.
+    void cancelOperations()
     onClose()
-  }, [busy, onClose])
-
-  // After any mutation, the column and pane pointer re-read from main.
-  const broadcastChange = useCallback((): void => {
-    window.dispatchEvent(new CustomEvent('dependencies-changed'))
-  }, [])
-
-  // Run one operation: mark its id busy, apply the returned snapshot, and surface
-  // a clean error. Functional set updates so concurrent ops don't clobber each
-  // other's busy entry. Operations never partially apply (the main side leaves no
-  // half-state), so each returned snapshot is authoritative; the later of two
-  // concurrent ops reflects both effects.
-  const run = useCallback(
-    async (id: DependencyId | 'check' | 'toggle', op: () => Promise<DependenciesState>): Promise<void> => {
-      setBusy((prev) => new Set(prev).add(id))
-      setError(null)
-      try {
-        setState(await op())
-        broadcastChange()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-        // An acquisition can fail after a durable local effect (for example,
-        // binary publication before its sidecar write). Re-read local facts so
-        // the UI remains honest while retaining the actionable operation error.
-        try {
-          setState(await window.electronAPI.getDependenciesState())
-          broadcastChange()
-        } catch {
-          // Keep the operation error, which is the actionable failure.
-        }
-      } finally {
-        setBusy((prev) => {
-          const next = new Set(prev)
-          next.delete(id)
-          return next
-        })
-        // Only the CLI install drives the progress bar; don't clear it when a
-        // concurrent configs.json download finishes first.
-        if (id === 'cli') setProgress(null)
-      }
-    },
-    [broadcastChange]
-  )
-
-  const handleCheck = (): Promise<void> =>
-    run('check', () => window.electronAPI.checkDependencies())
-
-  const handleCliAction = (): Promise<void> =>
-    run('cli', () => window.electronAPI.installCli())
-
-  const handleRecommendationsAction = (): Promise<void> =>
-    run('recommendations', () => window.electronAPI.downloadRecommendations())
-
-  const handleToggleCheckAtLaunch = (value: boolean): Promise<void> =>
-    run('toggle', () => window.electronAPI.setCheckUpdatesAtLaunch(value))
+  }, [cancelOperations, onClose])
 
   return (
     <Modal
@@ -157,10 +97,13 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
             type="button"
             className="modal-btn modal-footer-lead"
             disabled={anyBusy}
-            onClick={() => { void handleCheck() }}
+            onClick={() => { void check() }}
           >
             {busy.has('check') ? 'Checking…' : 'Check for CLI updates'}
           </button>
+          {!busy.has('check') && terminalOutcomes.check === 'cancelled' && (
+            <span className="dependency-terminal-outcome">Check cancelled</span>
+          )}
           <button
             type="button"
             className="modal-btn"
@@ -193,7 +136,8 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               busy={busy.has('cli')}
               disabled={busy.has('cli') || busy.has('check')}
               progress={busy.has('cli') ? progress : null}
-              onAction={() => { void handleCliAction() }}
+              terminalOutcome={terminalOutcomes.cli}
+              onAction={() => { void installCli() }}
             />
             <DependencyRow
               title="Recommended parameters"
@@ -202,7 +146,8 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               busy={busy.has('recommendations')}
               disabled={busy.has('recommendations') || busy.has('check')}
               progress={null}
-              onAction={() => { void handleRecommendationsAction() }}
+              terminalOutcome={terminalOutcomes.recommendations}
+              onAction={() => { void installRecommendations() }}
             />
 
             <label className="dependencies-toggle">
@@ -210,7 +155,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
                 type="checkbox"
                 checked={state.checkUpdatesAtLaunch}
                 disabled={busy.has('toggle') || busy.has('check')}
-                onChange={(e) => { void handleToggleCheckAtLaunch(e.target.checked) }}
+                onChange={(e) => { void setCheckAtLaunch(e.target.checked) }}
               />
               Check for CLI updates at launch
             </label>
@@ -228,6 +173,7 @@ function DependencyRow({
   busy,
   disabled,
   progress,
+  terminalOutcome,
   onAction,
 }: {
   title: string
@@ -236,6 +182,7 @@ function DependencyRow({
   busy: boolean
   disabled: boolean
   progress: DependencyProgress | null
+  terminalOutcome: 'cancelled' | undefined
   onAction: () => void
 }): React.JSX.Element {
   const actionLabel = actionLabelFor(info)
@@ -275,14 +222,19 @@ function DependencyRow({
         )}
       </div>
       {actionLabel && (
-        <button
-          type="button"
-          className="dependency-action"
-          disabled={disabled}
-          onClick={onAction}
-        >
-          {busy ? 'Working…' : actionLabel}
-        </button>
+        <div className="dependency-actions">
+          {!busy && terminalOutcome === 'cancelled' && (
+            <span className="dependency-terminal-outcome">Cancelled</span>
+          )}
+          <button
+            type="button"
+            className="dependency-action"
+            disabled={disabled}
+            onClick={onAction}
+          >
+            {busy ? 'Working…' : actionLabel}
+          </button>
+        </div>
       )}
     </section>
   )
