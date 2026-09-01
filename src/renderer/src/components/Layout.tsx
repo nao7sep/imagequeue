@@ -30,7 +30,6 @@ import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
-import { LAYOUT_VIEWPORT_CLASS, layoutFloorStyle } from '../window-floor'
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
 
@@ -264,14 +263,10 @@ export function Layout(): React.JSX.Element {
   }, [viewerOpen, selectedTask])
 
   return (
-    <div className={LAYOUT_VIEWPORT_CLASS}>
     <div
       className="layout"
       ref={layoutRef}
-      style={{
-        ...layoutFloorStyle(visibleColumnCount),
-        '--iq-column-width': `${displayedColumn}px`,
-      } as React.CSSProperties}
+      style={{ '--iq-column-width': `${displayedColumn}px` } as React.CSSProperties}
     >
       {overlay === 'settings' && (
         <SettingsModal onClose={() => setOverlay(null)} />
@@ -375,7 +370,6 @@ export function Layout(): React.JSX.Element {
           )
         )}
       </div>
-    </div>
     </div>
   )
 }

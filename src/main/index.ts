@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, screen } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeTheme } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
@@ -27,7 +27,6 @@ import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
 import {
   getVisiblePaneCount,
-  refreshMainWindowMinimumSize,
   registerMainWindowForLayout,
   unregisterMainWindowForLayout,
 } from './main-window-layout'
@@ -96,11 +95,7 @@ function createWindow(): BrowserWindow {
   // can't be shrunk small enough to truncate a pane and doesn't open wider than
   // its panes need. themeSource is applied to nativeTheme in app.whenReady()
   // from the same source.
-  const initialWorkArea = screen.getPrimaryDisplay().workAreaSize
-  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(
-    getVisiblePaneCount(),
-    initialWorkArea,
-  )
+  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(getVisiblePaneCount())
   const win = new BrowserWindow({
     ...windowOptions,
     webPreferences: {
@@ -111,19 +106,10 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  const currentWorkArea = (): { width: number; height: number } =>
-    screen.getDisplayMatching(win.getBounds()).workAreaSize
-  registerMainWindowForLayout(win, currentWorkArea)
+  registerMainWindowForLayout(win)
   hardenWindow(win)
 
-  // Recompute the native cap after a move or display work-area change. The renderer keeps the
-  // complete pane floor, so only the native title-bar boundary changes here.
-  const syncNativeMinimum = (): void => refreshMainWindowMinimumSize()
-  win.on('move', syncNativeMinimum)
-  screen.on('display-metrics-changed', syncNativeMinimum)
-
   win.on('closed', () => {
-    screen.off('display-metrics-changed', syncNativeMinimum)
     unregisterMainWindowForLayout(win)
   })
 

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildMainWindowOptions,
-  computeNativeWindowMinimum,
-} from '../../src/main/window-options'
+import { buildMainWindowOptions } from '../../src/main/window-options'
 import {
   computeWindowDefaultWidth,
   computeWindowDefaultHeight,
@@ -32,24 +29,6 @@ describe('buildMainWindowOptions', () => {
     for (const panes of PANE_COUNTS) {
       expect(buildMainWindowOptions(panes).minHeight).toBe(computeWindowMinHeight())
     }
-  })
-
-  it('caps an impossible native minimum without changing the derived content floor', () => {
-    const workArea = { width: 900, height: 500 }
-    const opts = buildMainWindowOptions(5, workArea)
-    expect(opts.minWidth).toBe(workArea.width)
-    expect(opts.minHeight).toBe(workArea.height)
-    expect(opts.width).toBe(workArea.width)
-    expect(opts.height).toBe(workArea.height)
-    expect(computeWindowMinWidth(5)).toBeGreaterThan(opts.minWidth)
-    expect(computeWindowMinHeight()).toBeGreaterThan(opts.minHeight)
-  })
-
-  it('restores the full native minimum when the work area can hold it', () => {
-    expect(computeNativeWindowMinimum(4, { width: 2560, height: 1440 })).toEqual({
-      width: computeWindowMinWidth(4),
-      height: computeWindowMinHeight(),
-    })
   })
 
   it('paints the app surface background color', () => {
