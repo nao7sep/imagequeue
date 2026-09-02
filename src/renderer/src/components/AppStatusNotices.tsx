@@ -47,7 +47,6 @@ export function AppStatusNotices(): React.JSX.Element | null {
     <div className="app-status-notices">
       {draftPersistenceFailure && (
         <section className="app-status-notice app-status-notice-error" role="alert">
-          <Icon name="alert-triangle" className="app-status-notice-icon" />
           <div className="app-status-notice-copy">
             <strong>Session draft isn’t being saved</strong>
             <span>{draftPersistenceFailure}</span>
@@ -68,7 +67,6 @@ export function AppStatusNotices(): React.JSX.Element | null {
           className={`app-status-notice ${failed > 0 ? 'app-status-notice-error' : 'app-status-notice-warning'}`}
           role="alert"
         >
-          <Icon name="alert-triangle" className="app-status-notice-icon" />
           <div className="app-status-notice-copy">
             <strong>Queue needs attention</strong>
             <span>

@@ -28,9 +28,9 @@
 }
 
 .prompt-action-failure {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
@@ -42,16 +42,21 @@
 }
 
 .prompt-action-failure-dismiss {
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  padding: 0;
+  border-radius: var(--radius-sm);
+  padding: 4px;
   background: none;
   color: inherit;
-  font: inherit;
-  font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+}
+
+.prompt-action-failure-dismiss:hover,
+.prompt-action-failure-dismiss:focus-visible {
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .prompt-advanced-btn {

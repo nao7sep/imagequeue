@@ -198,7 +198,7 @@ export function readCustomJsonImportedFiles(): CustomJsonStatus {
     if (!Array.isArray(parsed)) {
       const reason = 'top-level value is not an array'
       log('warn', 'custom.json is not an array', { customJsonPath, reason })
-      return { kind: 'unreadable', reason }
+      return { kind: 'unreadable', category: 'invalid-format' }
     }
     const files = parsed
       .filter((entry): entry is { file: string } =>
@@ -209,8 +209,7 @@ export function readCustomJsonImportedFiles(): CustomJsonStatus {
       .map((entry) => entry.file)
     return { kind: 'present', files }
   } catch (err) {
-    const reason = (err as Error).message
     log('warn', 'custom.json failed to read or parse', { customJsonPath, error: serializeError(err) })
-    return { kind: 'unreadable', reason }
+    return { kind: 'unreadable', category: 'read-failed' }
   }
 }

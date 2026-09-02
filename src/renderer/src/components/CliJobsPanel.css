@@ -55,31 +55,51 @@
 .cli-job-row-title-success { color: var(--success); }
 .cli-job-row-title-error   { color: var(--error); }
 
-/* Row action inside a dense card: the small control, same as the task rows. */
-.cli-job-row-btn {
+/* Stop is a domain command, so it remains a labelled, button-like control. */
+.cli-job-stop {
   flex-shrink: 0;
   height: var(--control-sm);
   font-size: var(--text-sm);
   padding: var(--control-pad-sm);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
   background: var(--bg-secondary);
-  color: var(--text-primary);
+  color: var(--error);
   cursor: pointer;
   line-height: 1;
 }
 
-.cli-job-row-btn:hover {
-  background: var(--hover);
-}
-
-.cli-job-row-btn-stop {
-  border-color: color-mix(in srgb, var(--error) 50%, var(--border));
-  color: var(--error);
-}
-
-.cli-job-row-btn-stop:hover {
+.cli-job-stop:hover {
   background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+/* A completed job is a persistent result. Its close affordance is quiet at
+   rest and reveals the hit target only on hover or keyboard focus. */
+.cli-job-result-close {
+  flex-shrink: 0;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+.cli-job-result-close:hover,
+.cli-job-result-close:focus-visible {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  color: var(--text-primary);
+}
+
+.cli-job-result-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
 }
 
 .cli-job-summary {

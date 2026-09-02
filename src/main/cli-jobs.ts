@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
 import { spawn as spawnPty } from 'node-pty'
 import { log, serializeError } from './logger'
+import { cliJobStartFailurePresentation } from './failure-presentation'
 import { waitForAllSettledWithin } from './utils/bounded-wait'
 import {
   CliChunk,
@@ -222,7 +223,7 @@ function launchPipeJob(state: JobState): void {
   const { stdout, stderr } = child
   if (!stdout || !stderr) {
     log('error', 'CLI job spawned without stdout/stderr pipes', { jobId: state.jobId, ...state.logContext })
-    pushChunk(state, 'stderr', '[spawn error] missing output stream')
+    pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, null))
     finalize(state, 'exited', null)
     return
   }
@@ -243,7 +244,7 @@ function launchPipeJob(state: JobState): void {
 
   child.on('error', (err) => {
     log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
-    pushChunk(state, 'stderr', `[spawn error] ${err.message}`)
+    pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, err))
     finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
   })
 
@@ -315,9 +316,8 @@ function launchImportJob(state: JobState): void {
       ...state.logContext,
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
     log('error', 'CLI PTY spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
-    pushChunk(state, 'stderr', `[spawn error] ${message}`)
+    pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, err))
     finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
   }
 }

@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { singleLine, multiline } from '../../../shared/textCleanup'
+import { presentFailure } from '../utils/failurePresentation'
 import {
   PROMPT_FORMATS,
   PROMPT_LENGTHS,
@@ -161,7 +162,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       const defaults = await window.electronAPI.brainstormGetDefaults()
       setForm(fromConfig(defaults))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('elaboration-defaults-load', error))
     } finally {
       setBusy(false)
     }
@@ -219,7 +220,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       await saveBrainstormSettings(next)
       onClose()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('elaboration-save', error))
     } finally {
       setBusy(false)
     }

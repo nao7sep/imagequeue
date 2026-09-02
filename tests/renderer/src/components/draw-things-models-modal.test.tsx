@@ -68,7 +68,8 @@ describe('DrawThingsModelsModal empty states', () => {
     render(<DrawThingsModelsModal onClose={vi.fn()} />)
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('catalog unavailable')
+    expect(alert.textContent).toContain('Available Draw Things models could not be loaded')
+    expect(alert.textContent).not.toContain('catalog unavailable')
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     const body = alert.parentElement
     expect(body?.classList.contains('dt-modal-body')).toBe(true)

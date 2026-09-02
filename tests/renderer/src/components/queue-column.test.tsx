@@ -238,12 +238,13 @@ describe('task status presentation', () => {
     expect(screen.getByText('No tasks queued')).toBeTruthy()
   })
 
-  it('capitalizes a status label and its failure prefix without changing the stored state', () => {
+  it('shows the authored failure without a redundant severity prefix', () => {
     queueValue.tasks.openai = [task('failed', 'provider refused the image')]
 
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
 
-    expect(screen.getByText('Failed: provider refused the image')).toBeTruthy()
+    expect(screen.getByText('provider refused the image')).toBeTruthy()
+    expect(screen.queryByText('Failed: provider refused the image')).toBeNull()
     expect(queueValue.tasks.openai[0].status).toBe('failed')
   })
 })

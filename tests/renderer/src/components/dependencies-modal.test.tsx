@@ -73,7 +73,8 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
 
-    expect((await screen.findByRole('alert')).textContent).toContain('state unavailable')
+    expect((await screen.findByRole('alert')).textContent).toContain('Managed tools could not be checked')
+    expect(screen.getByRole('alert').textContent).not.toContain('state unavailable')
     expect(screen.getByText('Couldn’t load managed-tool status.')).toBeTruthy()
   })
 
@@ -175,7 +176,8 @@ describe('DependenciesModal cancellation', () => {
     await screen.findAllByRole('button', { name: 'Install' })
     fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Draw Things CLI: offline')
+    expect((await screen.findByRole('alert')).textContent).toContain('managed-tool operation could not be completed')
+    expect(screen.getByRole('alert').textContent).not.toContain('Draw Things CLI: offline')
     expect(getDependenciesState).toHaveBeenCalledTimes(2)
   })
 
@@ -273,11 +275,12 @@ describe('DependenciesModal cancellation', () => {
     render(<Harness />)
     await screen.findAllByRole('button', { name: 'Install' })
     fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
-    expect(await screen.findByText('CLI service unavailable')).toBeTruthy()
+    expect(await screen.findByText(/managed-tool operation could not be completed/)).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[1])
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
 
-    expect(await screen.findByText('CLI service unavailable')).toBeTruthy()
+    expect(await screen.findByText(/managed-tool operation could not be completed/)).toBeTruthy()
+    expect(screen.queryByText('CLI service unavailable')).toBeNull()
   })
 
   it('merges concurrent independent operation results without losing either fact', async () => {

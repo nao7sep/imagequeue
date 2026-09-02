@@ -9,6 +9,7 @@ import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
 import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
 import { localModelName, sortLocalModels } from '../utils/localModels'
+import { presentFailure } from '../utils/failurePresentation'
 import { DependencyPanePointer } from './DependencyPanePointer'
 
 // Draw Things is the one backend that is not a parameter descriptor
@@ -206,7 +207,7 @@ export function useDrawThingsColumn({
       })
       setModelsLoadState('ready')
     } catch (error) {
-      setModelsLoadError(error instanceof Error ? error.message : String(error))
+      setModelsLoadError(presentFailure('drawthings-models-load', error))
       setModelsLoadState('failed')
     }
   }, [active, setModel])

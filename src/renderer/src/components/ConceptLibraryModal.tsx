@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
 import { formatUiDateTime } from '../utils/formatDateTime'
+import { presentFailure } from '../utils/failurePresentation'
 import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../../shared/types'
 import './ConceptLibraryModal.css'
 
@@ -42,7 +43,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
         prev !== null && list.some((f) => f.id === prev) ? prev : list[0]?.id ?? null
       )
     } catch (error) {
-      setFacetsError(error instanceof Error ? error.message : String(error))
+      setFacetsError(presentFailure('concepts-load', error))
     } finally {
       setFacetsLoading(false)
     }
@@ -75,7 +76,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
         setRows(conceptList)
       })
       .catch((error) => {
-        if (!cancelled) setDetailError(error instanceof Error ? error.message : String(error))
+        if (!cancelled) setDetailError(presentFailure('concept-details-load', error))
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false)
@@ -130,7 +131,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
         await action()
         await refreshFacets()
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : String(error))
+        setMessage(presentFailure('concepts-change', error))
       }
     },
     [refreshFacets]
@@ -198,7 +199,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
       <div className="concept-library-body">
         {message && <div className="concept-library-message" role="alert">{message}</div>}
         {facetsError && (
-          <div className="concept-library-message" role="alert">Couldn’t refresh concepts: {facetsError}</div>
+          <div className="concept-library-message" role="alert">{facetsError}</div>
         )}
         <div className={`concept-library-columns${facets.length === 0 ? ' concept-library-columns-empty' : ''}`}>
             <div className="concept-library-facets" aria-label="Facets" aria-busy={facetsLoading} {...listboxProps}>

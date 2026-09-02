@@ -34,6 +34,7 @@ import {
 } from '../../../shared/types'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { isBrainstormMode } from '../utils/promptMode'
+import { presentFailure } from '../utils/failurePresentation'
 import {
   computeAdvancedGates,
   promptModeDisabledReason as promptModeDisabledReasonFor,
@@ -130,7 +131,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
           : grouped.style[0]?.id ?? null,
       })
     } catch (loadError) {
-      setElaboratorsError(loadError instanceof Error ? loadError.message : String(loadError))
+      setElaboratorsError(presentFailure('advanced-elaborators-load', loadError))
     } finally {
       setElaboratorsLoading(false)
     }
@@ -157,7 +158,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     setDtModelsError('')
     void window.electronAPI.localListDownloadedModels()
       .then((list) => setDownloadedDtModels(sortLocalModels(list)))
-      .catch((loadError) => setDtModelsError(loadError instanceof Error ? loadError.message : String(loadError)))
+      .catch((loadError) => setDtModelsError(presentFailure('advanced-models-load', loadError)))
       .finally(() => setDtModelsLoading(false))
   }, [])
 
@@ -272,7 +273,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       update({ elaborated: firstText })
       appendElaboratedPrompts([first])
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(presentFailure('advanced-elaborate', err))
     } finally {
       setActiveOperation(null)
     }
@@ -385,7 +386,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // carries the user's intent, so no separate dispatch log is needed here.
     } catch (err) {
       // Stay open so the user can read the error and retry.
-      setError(err instanceof Error ? err.message : String(err))
+      setError(presentFailure('advanced-queue', err))
     } finally {
       setActiveOperation(null)
     }
@@ -524,7 +525,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
             <div className="advanced-section-label">Elaborators</div>
             {elaboratorsError && (
               <div className="advanced-message advanced-message-error" role="alert">
-                Couldn’t load elaborators: {elaboratorsError}
+                {elaboratorsError}
               </div>
             )}
             <div className="advanced-elaborator-columns">
@@ -590,7 +591,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                       {dtModelsLoading
                         ? 'Loading models…'
                         : dtModelsError
-                          ? `Couldn’t load models: ${dtModelsError}`
+                          ? dtModelsError
                           : 'No models downloaded.'}
                     </div>
                   ) : (

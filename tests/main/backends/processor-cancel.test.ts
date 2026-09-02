@@ -150,7 +150,8 @@ describe('a stop cannot reach a task past its generation', () => {
 
     await settle()
     expect(statusOf('openai')).toBe('failed')
-    expect(queueManager.getAllStoredTasks().openai[0].error).toContain('slug service hiccup')
+    expect(queueManager.getAllStoredTasks().openai[0].error).toContain('image was generated')
+    expect(queueManager.getAllStoredTasks().openai[0].error).not.toContain('slug service hiccup')
   })
 
   // The abort itself can race a generation that succeeds anyway (the response

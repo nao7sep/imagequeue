@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { AppNoticeModal } from '../components/AppNoticeModal'
+import type { AppNotice } from '../../../shared/app-notice'
 
 export interface ConfirmOptions {
   title?: string
@@ -24,7 +26,22 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
   const [pending, setPending] = useState<PendingConfirm | null>(null)
   const pendingRef = useRef<PendingConfirm | null>(null)
   const queueRef = useRef<PendingConfirm[]>([])
+  const [notice, setNotice] = useState<AppNotice | null>(null)
+  const noticeRef = useRef<AppNotice | null>(null)
+  const noticeQueueRef = useRef<AppNotice[]>([])
   pendingRef.current = pending
+  noticeRef.current = notice
+
+  useEffect(() => {
+    return window.electronAPI.onAppNotice((next) => {
+      if (noticeRef.current) {
+        noticeQueueRef.current.push(next)
+      } else {
+        noticeRef.current = next
+        setNotice(next)
+      }
+    })
+  }, [])
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
@@ -47,6 +64,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
     p.resolve(value)
   }, [])
 
+  const closeNotice = useCallback((): void => {
+    const next = noticeQueueRef.current.shift() ?? null
+    noticeRef.current = next
+    setNotice(next)
+  }, [])
+
   // If the host unmounts (app teardown), settle every outstanding dialog —
   // current and queued — through the cancel path so no awaiting caller hangs.
   useEffect(() => {
@@ -54,6 +77,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
       pendingRef.current?.resolve(false)
       pendingRef.current = null
       for (const queued of queueRef.current.splice(0)) queued.resolve(false)
+      noticeRef.current = null
+      noticeQueueRef.current.length = 0
     }
   }, [])
 
@@ -63,6 +88,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
       {pending && (
         <ConfirmModal options={pending.options} onSettle={settle} />
       )}
+      {notice && <AppNoticeModal notice={notice} onClose={closeNotice} />}
     </ConfirmContext.Provider>
   )
 }

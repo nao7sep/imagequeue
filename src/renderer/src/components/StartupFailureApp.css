@@ -1,0 +1,48 @@
+.startup-failure-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.startup-failure-app h1 {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-lg);
+}
+
+.startup-failure-app p {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-5);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.startup-failure-app footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.startup-failure-app button {
+  min-width: 76px;
+  height: var(--control-md);
+  padding: var(--control-pad-md);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+
+.startup-failure-app button:hover,
+.startup-failure-app button:focus-visible {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
@@ -31,6 +31,7 @@ import {
   unregisterMainWindowForLayout,
 } from './main-window-layout'
 import { startupFailureMessage } from './startup-error'
+import { createStartupFailureWindow } from './startup-failure-window'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
 import { openOutputFolder } from './session/open-output-folder'
@@ -39,6 +40,7 @@ import { installStatusIconAcceptanceFixture } from './status-icon-acceptance'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
+let startupFailureWindow: BrowserWindow | null = null
 
 // Every mutable app store is process-owned. Letting a second ImageQueue process
 // open the same root would turn otherwise-atomic file replacement into competing
@@ -172,11 +174,12 @@ if (ownsSingleInstance) app.whenReady().then(() => {
   try {
     startUp()
   } catch (err) {
-    dialog.showErrorBox(
-      'ImageQueue could not start',
-      startupFailureMessage(err),
-    )
-    app.exit(1)
+    log('error', 'ImageQueue startup failed', { error: serializeError(err) })
+    startupFailureWindow = createStartupFailureWindow(startupFailureMessage(err))
+    startupFailureWindow.on('closed', () => {
+      startupFailureWindow = null
+      app.exit(1)
+    })
   }
 })
 

@@ -72,9 +72,10 @@ function ActionFailures({
             type="button"
             className="prompt-action-failure-dismiss"
             aria-label={`Dismiss ${message}`}
+            title="Dismiss"
             onClick={() => onDismiss(action)}
           >
-            Dismiss
+            <Icon name="close" />
           </button>
         </div>
       ))}

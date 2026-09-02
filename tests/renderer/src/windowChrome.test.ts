@@ -64,6 +64,18 @@ describe('no scoped scroll-bar styling (CliJobsPanel.css)', () => {
   })
 })
 
+describe('completed CLI-job result close', () => {
+  it('is borderless and transparent at rest, with hover and focus treatment', () => {
+    const close = rule('components/CliJobsPanel.css', '.cli-job-result-close')
+    const css = read('components/CliJobsPanel.css')
+
+    expect(close).toMatch(/border:\s*0/)
+    expect(close).toMatch(/background:\s*transparent/)
+    expect(css).toContain('.cli-job-result-close:hover,')
+    expect(css).toContain('.cli-job-result-close:focus-visible')
+  })
+})
+
 describe('pane min-widths mirror the shared constants', () => {
   it('.left-pane min-width matches LEFT_PANE_MIN_PX', () => {
     expect(rule('components/Layout.css', '.left-pane')).toMatch(

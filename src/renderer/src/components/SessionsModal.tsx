@@ -7,6 +7,7 @@ import { useListbox } from '../hooks/useListbox'
 import { useImeGuard } from '../utils/imeGuard'
 import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from '../../../shared'
 import { formatUiDateTime } from '../utils/formatDateTime'
+import { presentFailure } from '../utils/failurePresentation'
 import './SessionsModal.css'
 
 interface Props {
@@ -107,7 +108,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
       const next = await window.electronAPI.listSessions()
       setSessions(next)
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error))
+      setLoadError(presentFailure('sessions-load', error))
     } finally {
       setLoading(false)
     }
@@ -142,7 +143,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
       await window.electronAPI.resumeSession(session.sessionId)
       onClose()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('session-resume', error))
     } finally {
       setBusySessionId(null)
     }
@@ -165,7 +166,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
       await window.electronAPI.createSession()
       onClose()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('session-create', error))
     } finally {
       setCreatingSession(false)
     }
@@ -189,7 +190,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
       await window.electronAPI.deleteSession(session.sessionId)
       await refreshSessions()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('session-delete', error))
     } finally {
       setBusySessionId(null)
     }
@@ -201,7 +202,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     try {
       await window.electronAPI.openSessionFolder(session.sessionId)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('session-folder', error))
     } finally {
       setBusySessionId(null)
     }
