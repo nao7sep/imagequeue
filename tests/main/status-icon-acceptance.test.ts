@@ -27,8 +27,8 @@ describe('status-icon acceptance fixture', () => {
   })
 
   it('installs fake generating claims and pauses without provider work', () => {
-    expect(installStatusIconAcceptanceFixture('C:\\imagequeue-status-icon-acceptance-mixed', {
-      IMAGEQUEUE_HOME: 'C:\\isolated-imagequeue-acceptance',
+    expect(installStatusIconAcceptanceFixture('/tmp/imagequeue-status-icon-acceptance-mixed', {
+      IMAGEQUEUE_HOME: '/tmp/imagequeue-status-icon-acceptance-mixed',
       IMAGEQUEUE_STATUS_ACCEPTANCE_STATE: 'mixed',
     })).toBe(true)
     expect(isQueuePaused()).toBe(true)
@@ -47,24 +47,24 @@ describe('status-icon acceptance fixture', () => {
     ['interrupted', { paused: false, generating: 0, queued: 0, interrupted: 2 }],
     ['mixed', { paused: true, generating: 2, queued: 5, interrupted: 2 }],
   ] as const)('drives the authoritative %s control state', (state, expected) => {
-    installStatusIconAcceptanceFixture(`C:\\imagequeue-status-icon-acceptance-${state}`, {
-      IMAGEQUEUE_HOME: 'C:\\isolated-imagequeue-acceptance',
+    installStatusIconAcceptanceFixture(`/tmp/imagequeue-status-icon-acceptance-${state}`, {
+      IMAGEQUEUE_HOME: `/tmp/imagequeue-status-icon-acceptance-${state}`,
       IMAGEQUEUE_STATUS_ACCEPTANCE_STATE: state,
     })
     expect(buildControlState()).toEqual(expected)
   })
 
   it('does nothing without an explicit state and refuses the ordinary profile', () => {
-    expect(installStatusIconAcceptanceFixture('C:\\ordinary-profile', {})).toBe(false)
-    expect(() => installStatusIconAcceptanceFixture('C:\\imagequeue-status-icon-acceptance-queued', {
+    expect(installStatusIconAcceptanceFixture('/tmp/ordinary-profile', {})).toBe(false)
+    expect(() => installStatusIconAcceptanceFixture('/tmp/imagequeue-status-icon-acceptance-queued', {
       IMAGEQUEUE_STATUS_ACCEPTANCE_STATE: 'queued',
     })).toThrow('requires an isolated IMAGEQUEUE_HOME')
-    expect(() => installStatusIconAcceptanceFixture('C:\\imagequeue-status-icon-acceptance-surprise', {
-      IMAGEQUEUE_HOME: 'C:\\isolated-imagequeue-acceptance',
+    expect(() => installStatusIconAcceptanceFixture('/tmp/imagequeue-status-icon-acceptance-surprise', {
+      IMAGEQUEUE_HOME: '/tmp/imagequeue-status-icon-acceptance-surprise',
       IMAGEQUEUE_STATUS_ACCEPTANCE_STATE: 'surprise',
     })).toThrow('must be one of')
-    expect(() => installStatusIconAcceptanceFixture('C:\\ordinary-profile', {
-      IMAGEQUEUE_HOME: 'C:\\ordinary-profile',
+    expect(() => installStatusIconAcceptanceFixture('/tmp/ordinary-profile', {
+      IMAGEQUEUE_HOME: '/tmp/ordinary-profile',
       IMAGEQUEUE_STATUS_ACCEPTANCE_STATE: 'idle',
     })).toThrow('refuses a profile outside')
   })
