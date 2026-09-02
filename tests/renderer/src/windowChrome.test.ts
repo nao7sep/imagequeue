@@ -88,13 +88,14 @@ describe('queue-owned result geometry', () => {
   it('aligns the quiet close mark to the first line without squeezing wrapped copy', () => {
     expect(css).toMatch(/\.column-save-result,\s*\.task-action-result\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*align-items:\s*flex-start;/s)
     expect(css).toMatch(/\.column-save-result-close,\s*\.task-action-result-close\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s)
-    expect(css).toContain('.task-item-has-action-results')
+    expect(css).toContain('.task-entry')
     expect(css).toMatch(/\.task-list\s*\{[^}]*min-height:\s*0;/s)
   })
 
-  it('keeps the row close pointer-only inside the one-tab-stop listbox', () => {
+  it('keeps the focusable result close outside the selectable option', () => {
     const component = read('components/QueueColumn.tsx')
-    expect(component).toMatch(/tabIndex=\{-1\}\s*className="task-action-result-close"/)
+    expect(component).not.toMatch(/tabIndex=\{-1\}\s*className="task-action-result-close"/)
+    expect(component).toMatch(/<div className="task-entry">[\s\S]*role="option"[\s\S]*<div className="task-action-results">/)
   })
 })
 

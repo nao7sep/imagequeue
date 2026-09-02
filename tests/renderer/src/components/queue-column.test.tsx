@@ -257,6 +257,7 @@ describe('task status presentation', () => {
 
   it('renders independent task-action results only inside their affected rows', () => {
     queueValue.tasks.openai = [task('failed'), { ...task('completed'), id: 'task-complete' }]
+    selectionValue.selection = { backend: 'openai', taskId: 'task-failed' }
     selectionValue.taskActionResults = {
       'task-failed': { retry: 'This retry stayed with the failed task.' },
       'task-complete': { export: 'This export stayed with the completed task.' },
@@ -265,11 +266,22 @@ describe('task status presentation', () => {
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     const failedRow = container.querySelector<HTMLElement>('[data-task-id="task-failed"]')!
     const completedRow = container.querySelector<HTMLElement>('[data-task-id="task-complete"]')!
+    const failedEntry = failedRow.closest<HTMLElement>('.task-entry')!
+    const completedEntry = completedRow.closest<HTMLElement>('.task-entry')!
 
-    expect(failedRow.textContent).toContain('This retry stayed with the failed task.')
-    expect(failedRow.textContent).not.toContain('This export stayed with the completed task.')
-    expect(completedRow.textContent).toContain('This export stayed with the completed task.')
-    expect(within(failedRow).getByRole('button', { name: 'Close retry result' }).tabIndex).toBe(-1)
+    expect(failedEntry.textContent).toContain('This retry stayed with the failed task.')
+    expect(failedEntry.textContent).not.toContain('This export stayed with the completed task.')
+    expect(completedEntry.textContent).toContain('This export stayed with the completed task.')
+    const retryResult = within(failedEntry).getByRole('alert')
+    const close = within(retryResult).getByRole('button', { name: 'Close retry result' })
+    expect(failedRow.contains(retryResult)).toBe(false)
+    expect(close.tabIndex).toBe(0)
+
+    close.focus()
+    fireEvent.keyDown(close, { key: 'Backspace' })
+    expect(selectionValue.removeSelected).not.toHaveBeenCalled()
+    fireEvent.keyDown(failedRow, { key: 'ArrowDown' })
+    expect(selectionValue.navigate).toHaveBeenCalledWith('down')
   })
 
   it('maps thumbnail, retry, and export rejections to the affected task owner', async () => {

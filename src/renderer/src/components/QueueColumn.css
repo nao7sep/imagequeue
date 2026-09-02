@@ -121,6 +121,10 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
+.task-entry {
+  margin-bottom: var(--space-2);
+}
+
 .task-item {
   position: relative;
   --task-bg: var(--bg-secondary);
@@ -128,7 +132,6 @@
   padding: var(--space-3) var(--space-3) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-2);
   background: var(--task-bg);
   cursor: pointer;
 }
@@ -158,10 +161,6 @@
 .task-item-kept {
   --task-bg: hsl(225 10% 16%);
   --task-actions-bg: var(--task-bg);
-}
-
-.task-item-has-action-results {
-  padding-bottom: calc(var(--control-sm) + var(--space-2));
 }
 
 .task-item-kept .task-status {
@@ -198,7 +197,7 @@
 .task-action-results {
   display: grid;
   gap: var(--space-1);
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .task-action-result {
