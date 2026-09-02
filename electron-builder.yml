@@ -76,6 +76,10 @@ win:
 nsis:
   oneClick: false
   perMachine: false
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: true
   allowToChangeInstallationDirectory: true
   artifactName: ${name}-${version}-setup.${ext}
 
