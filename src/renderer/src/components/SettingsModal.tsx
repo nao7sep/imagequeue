@@ -8,6 +8,7 @@ import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS } from '../../../shared/mod
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
+import { presentFailure } from '../utils/failurePresentation'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -117,7 +118,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       }
       onClose()
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : String(e))
+      setErrorMessage(presentFailure('settings-save', e))
     }
   }
 

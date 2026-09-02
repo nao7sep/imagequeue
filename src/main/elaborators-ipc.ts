@@ -1,4 +1,4 @@
-import { dialog } from 'electron'
+import type { WebContents } from 'electron'
 import { handle } from './ipc-boundary'
 import { brainstormPrompts, cancelBrainstorm } from './brainstorm'
 import { createDefaultConfig } from './config/defaults'
@@ -13,61 +13,39 @@ import {
 import { log } from './logger'
 import type { ElaboratorKind } from '../shared/types'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
+import { elaboratorRecoveryPresentation } from './failure-presentation'
 
 export function registerElaboratorsIpc(): void {
-  const reportRecovery = (): void => {
+  const reportRecovery = (target: WebContents): void => {
     for (const notice of drainElaboratorRecoveryNotices()) {
-      if (notice.kind === 'recovered') {
-        dialog.showErrorBox(
-          'Elaborator settings were reset',
-          'Your elaborator settings file was unreadable and has been set aside here:\n\n' +
-            notice.path +
-            '\n\nImageQueue restored the shipped defaults. Your edited templates remain in the file above.'
-        )
-      } else if (notice.kind === 'quarantine-failed') {
-        dialog.showErrorBox(
-          'Elaborator settings could not be read',
-          'ImageQueue left the unreadable file in place because it could not set it aside:\n\n' +
-            notice.path +
-            '\n\n' + notice.error +
-            '\n\nNo replacement file was written.'
-        )
-      } else {
-        dialog.showErrorBox(
-          'Elaborator defaults could not be restored',
-          'ImageQueue preserved the unreadable elaborator settings here:\n\n' +
-            notice.path +
-            '\n\nIt could not write the replacement defaults:\n\n' + notice.error +
-            '\n\nCorrect the reported problem, then try again.'
-        )
-      }
+      target.send('app:notice', elaboratorRecoveryPresentation(notice))
     }
   }
 
-  const withRecoveryReport = async <T>(operation: () => T | Promise<T>): Promise<T> => {
+  const withRecoveryReport = async <T>(target: WebContents, operation: () => T | Promise<T>): Promise<T> => {
     try {
       const result = operation()
       // Async functions run synchronously until their first await, which covers
       // the store read at the start of brainstormPrompts.
-      reportRecovery()
+      reportRecovery(target)
       return await result
     } finally {
-      reportRecovery()
+      reportRecovery(target)
     }
   }
 
-  handle('elaborators:list', () => withRecoveryReport(listElaborators))
+  handle('elaborators:list', (event) => withRecoveryReport(event.sender, listElaborators))
 
-  handle('elaborators:create', (_event, input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => {
-    return withRecoveryReport(() => {
+  handle('elaborators:create', (event, input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => {
+    return withRecoveryReport(event.sender, () => {
       const created = createElaborator(input)
       log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
       return created
     })
   })
 
-  handle('elaborators:update', (_event, id: string, patch: { name?: string; description?: string; template?: string }) => {
-    return withRecoveryReport(() => {
+  handle('elaborators:update', (event, id: string, patch: { name?: string; description?: string; template?: string }) => {
+    return withRecoveryReport(event.sender, () => {
       const updated = updateElaborator(id, patch)
       if (updated) {
         log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
@@ -76,24 +54,26 @@ export function registerElaboratorsIpc(): void {
     })
   })
 
-  handle('elaborators:delete', (_event, id: string) => {
-    return withRecoveryReport(() => {
+  handle('elaborators:delete', (event, id: string) => {
+    return withRecoveryReport(event.sender, () => {
       const ok = deleteElaborator(id)
       if (ok) log('info', 'Elaborator deleted', { id })
       return ok
     })
   })
 
-  handle('elaborators:reset', (_event, kind?: ElaboratorKind) => {
-    const items = resetElaborators(kind)
-    log('info', 'Elaborators reset to defaults', { kind: kind ?? 'all', count: items.length })
-    return items
+  handle('elaborators:reset', (event, kind?: ElaboratorKind) => {
+    return withRecoveryReport(event.sender, () => {
+      const items = resetElaborators(kind)
+      log('info', 'Elaborators reset to defaults', { kind: kind ?? 'all', count: items.length })
+      return items
+    })
   })
 
   handle(
     'elaborators:brainstorm',
     async (
-      _event,
+      event,
       req: {
         requestId: string
             compositionElaboratorId: string
@@ -104,7 +84,7 @@ export function registerElaboratorsIpc(): void {
         length: PromptLength
       }
     ) => {
-      return withRecoveryReport(() => brainstormPrompts(req))
+      return withRecoveryReport(event.sender, () => brainstormPrompts(req))
     }
   )
 

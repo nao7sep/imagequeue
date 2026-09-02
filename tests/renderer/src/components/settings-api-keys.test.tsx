@@ -179,7 +179,8 @@ describe('Settings save result', () => {
     fireEvent.click(saveButton())
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('settings disk unavailable')
+    expect(alert.textContent).toContain('Settings could not be saved')
+    expect(alert.textContent).not.toContain('settings disk unavailable')
     expect(alert.closest('.settings-overlay')).toBeTruthy()
     const footer = document.querySelector('.modal-footer')
     expect(footer).toBeTruthy()

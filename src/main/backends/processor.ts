@@ -15,6 +15,7 @@ import { generateGrok } from './grok'
 import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
+import { generationFailurePresentation } from '../failure-presentation'
 
 // Every generator takes the queue's cancellation signal. It is a parameter
 // rather than something each backend registers for itself: registration lived
@@ -224,9 +225,9 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       log('info', 'Generation stopped by request', { taskId: task.id, backend })
     } else {
       task.status = 'failed'
-      // task.error stays a short string for the UI and the persisted manifest;
-      // the log captures the full error (type, message, stack, cause).
-      task.error = message
+      // The task and manifest keep deliberately authored presentation copy. The
+      // complete diagnostic (type, message, stack, cause) remains in the log.
+      task.error = generationFailurePresentation(backend, err, generated)
       drainTracker.recordFailed()
       logGenerationFailed(task.id, err, {
         backend,

@@ -5,6 +5,7 @@ import { useListbox } from '../hooks/useListbox'
 import type { CustomJsonStatus, LocalModelInfo } from '../../../shared/types'
 import { Modal } from './Modal'
 import { partitionDrawThingsModels } from '../utils/localModels'
+import { presentFailure } from '../utils/failurePresentation'
 import './DrawThingsModelsModal.css'
 
 interface Props {
@@ -133,7 +134,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       setDownloadedModels(list)
       setCustomJsonStatus(status)
     } catch (error) {
-      setDownloadedError(error instanceof Error ? error.message : String(error))
+      setDownloadedError(presentFailure('drawthings-models-load', error))
     } finally {
       setLoadingDownloaded(false)
     }
@@ -142,7 +143,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   useEffect(() => {
     void window.electronAPI.localCheckCli()
       .then((status) => setCliInstalled(status.installed))
-      .catch((error) => setCliError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setCliError(presentFailure('drawthings-cli-load', error)))
   }, [])
 
   useEffect(() => {
@@ -152,7 +153,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     setAvailableError('')
     void window.electronAPI.localListAvailableModels()
       .then(setAvailableModels)
-      .catch((error) => setAvailableError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setAvailableError(presentFailure('drawthings-catalog-load', error)))
       .finally(() => setLoadingAvailable(false))
   }, [cliInstalled, loadDownloaded])
 
@@ -251,7 +252,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         <div className="dt-modal-body dt-cli-required">
           <p className="dt-hint" role={cliError ? 'alert' : undefined}>
             {cliError
-              ? `Couldn’t check the Draw Things CLI: ${cliError}`
+              ? cliError
               : cliInstalled === null
                 ? 'Checking the Draw Things CLI…'
                 : "The Draw Things CLI is required to list, download, or import models, and it isn't installed yet."}
@@ -269,7 +270,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       ) : (
       <div className="dt-modal-body">
         {modelsError && (
-          <div className="dt-model-error" role="alert">Couldn’t load models: {modelsError}</div>
+          <div className="dt-model-error" role="alert">{modelsError}</div>
         )}
         <div className="dt-model-columns">
           <section className="dt-model-column">
@@ -333,7 +334,10 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
                 <h4 className="dt-section-title">Local Imports</h4>
                 {customJsonStatus.kind === 'unreadable' && (
                   <p className="dt-hint" role="alert">
-                    Couldn&apos;t read <code>custom.json</code> ({customJsonStatus.reason}). Any imported models may currently be listed under Official Models until this file can be parsed.
+                    {customJsonStatus.category === 'invalid-format'
+                      ? <>Draw Things&apos; <code>custom.json</code> has an unsupported format.</>
+                      : <>Draw Things&apos; <code>custom.json</code> could not be read.</>}
+                    {' '}Any imported models may currently be listed under Official Models until this file is repaired.
                   </p>
                 )}
                 {renderModelList(

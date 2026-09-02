@@ -13,6 +13,7 @@ import type {
   DependencyId,
   DependencyProgress,
 } from '../../../shared/types'
+import { presentFailure } from '../utils/failurePresentation'
 
 export type DependencyOperation = DependencyId | 'check' | 'toggle'
 export type DependencyTerminalOutcome = 'cancelled'
@@ -45,10 +46,6 @@ const INITIAL_STATE: ControllerState = {
   progress: null,
   errors: {},
   terminalOutcomes: {},
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function withoutError(
@@ -190,7 +187,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
         && revision === operationRevision.current
         && active.current.size === 0
       ) {
-        dispatch({ type: 'load-failure', error: messageOf(error) })
+        dispatch({ type: 'load-failure', error: presentFailure('dependencies-load', error) })
       }
     }
   }, [])
@@ -221,7 +218,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     try {
       snapshot = await invoke()
     } catch (operationError) {
-      if (!cancelled.current.has(operation)) error = messageOf(operationError)
+      if (!cancelled.current.has(operation)) error = presentFailure('dependencies-change', operationError)
       try {
         snapshot = await window.electronAPI.getDependenciesState()
       } catch {
@@ -270,7 +267,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
       await window.electronAPI.cancelDependencyOperations()
     } catch (error) {
       cancelled.current.clear()
-      dispatch({ type: 'cancel-failure', error: messageOf(error) })
+      dispatch({ type: 'cancel-failure', error: presentFailure('dependencies-cancel', error) })
     }
   }, [])
 

@@ -26,6 +26,7 @@ import {
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
 import type { UiState } from './ui-state'
 import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
+import type { AppNotice } from './app-notice'
 
 // The Node platform string (member set of NodeJS.Platform), spelled out as a
 // portable union so this shared contract carries no @types/node dependency — it
@@ -65,6 +66,7 @@ export const DRAW_THINGS_PARAMS_PERSISTENCE_ERROR =
 // via `satisfies ElectronAPI`, so the two can never drift.
 export interface ElectronAPI {
   platform: Platform
+  onAppNotice: (callback: (notice: AppNotice) => void) => (() => void)
 
   // Queue operations
   enqueue: (request: EnqueueRequest) => Promise<Task[]>

@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { startupFailureMessage } from '../../src/main/startup-error'
 
 describe('startupFailureMessage', () => {
-  it('keeps the original failure and gives guidance that is true for non-file failures', () => {
-    const message = startupFailureMessage(new Error('Window creation failed'))
+  it('keeps hostile startup diagnostics out of the user-facing dialog', () => {
+    const hostile = 'EACCES Error invoking remote method IPC /private/tmp/hostile-sentinel'
+    const message = startupFailureMessage(new Error(hostile))
 
-    expect(message).toContain('Window creation failed')
-    expect(message).toContain('stopped before opening its window')
-    expect(message).not.toContain('file has been left')
-    expect(message).not.toContain('Fix or remove it')
+    expect(message).toContain('stopped before opening its main window')
+    expect(message).not.toContain(hostile)
+    expect(message).not.toContain('EACCES')
   })
 
-  it('stringifies non-Error failures', () => {
-    expect(startupFailureMessage('startup failed')).toContain('startup failed')
+  it('uses the same stable fallback for non-Error failures', () => {
+    expect(startupFailureMessage('hostile sentinel')).not.toContain('hostile sentinel')
   })
 })

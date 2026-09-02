@@ -6,6 +6,7 @@ import { useImeGuard } from '../utils/imeGuard'
 import { singleLine, multiline } from '../../../shared/textCleanup'
 import type { Elaborator, ElaboratorKind } from '../../../shared/types'
 import { ELABORATOR_KIND_LABELS } from '../../../shared/types'
+import { presentFailure } from '../utils/failurePresentation'
 import './ElaboratorsModal.css'
 
 interface Props {
@@ -63,7 +64,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         style: grouped.style.some((item) => item.id === prev.style) ? prev.style : grouped.style[0]?.id ?? null,
       }))
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error))
+      setLoadError(presentFailure('elaborators-load', error))
     } finally {
       setLoading(false)
     }
@@ -163,7 +164,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         setSelectedIds((prev) => ({ ...prev, [draftTarget.kind]: savedId }))
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('elaborators-change', error))
     } finally {
       setBusy(false)
     }
@@ -186,7 +187,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       await window.electronAPI.deleteElaborator(item.id)
       await refresh()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('elaborators-change', error))
     } finally {
       setBusy(false)
     }
@@ -207,7 +208,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       if (draftTarget?.kind === kind) cancelDraft()
       await refresh()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(presentFailure('elaborators-change', error))
     } finally {
       setBusy(false)
     }

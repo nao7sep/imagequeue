@@ -98,7 +98,7 @@ export interface LocalModelInfo {
 export type CustomJsonStatus =
   | { kind: 'present'; files: string[] }
   | { kind: 'absent' }
-  | { kind: 'unreadable'; reason: string }
+  | { kind: 'unreadable'; category: 'invalid-format' | 'read-failed' }
 
 // Only the fields the dependency surface actually reads. The recommendations
 // file (configs.json) is otherwise versionless and is refreshed explicitly.

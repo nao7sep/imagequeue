@@ -36,6 +36,7 @@ import type {
   CliStatusEvent,
 } from '../shared/cli-jobs'
 import type { ElectronAPI } from '../shared/electron-api'
+import type { AppNotice } from '../shared/app-notice'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
@@ -43,6 +44,11 @@ export type { ElectronAPI } from '../shared/electron-api'
 
 const api = {
   platform: process.platform,
+  onAppNotice: (callback: (notice: AppNotice) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, notice: AppNotice): void => callback(notice)
+    ipcRenderer.on('app:notice', handler)
+    return () => { ipcRenderer.removeListener('app:notice', handler) }
+  },
 
   // Queue operations
   enqueue: (request: EnqueueRequest): Promise<Task[]> =>

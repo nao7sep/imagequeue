@@ -421,7 +421,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             title={task.status === 'failed' && task.error ? task.error : undefined}
           >
             {task.status === 'failed'
-              ? `Failed: ${task.error || 'unknown error'}`
+              ? (task.error || 'This image could not be generated. Retry it; if the problem continues, check the session log.')
               : statusLabel}
           </span>
         </div>
