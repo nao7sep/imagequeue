@@ -19,5 +19,7 @@ describe('modal presentation contracts', () => {
   it('keeps modal and startup message bodies scrollable between fixed bands', () => {
     expect(modalCss).toMatch(/\.confirm-body\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s)
     expect(startupCss).toMatch(/\.startup-failure-app p\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s)
+    expect(startupCss).toMatch(/\[data-measuring='true'\]\s*\{[^}]*height:\s*auto;/s)
+    expect(startupCss).toMatch(/\[data-measuring='true'\] p\s*\{[^}]*flex:\s*none;[^}]*overflow:\s*visible;/s)
   })
 })

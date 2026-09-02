@@ -15,6 +15,7 @@ import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { Icon } from './Icon'
 import { QueueControlSubmenu, QueuePausedBadge } from './QueueControls'
 import { AppStatusNotices } from './AppStatusNotices'
+import { Modal } from './Modal'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
@@ -30,6 +31,7 @@ import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
+import { reportOperationalFailure } from '../utils/operationalFailure'
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
 
@@ -43,7 +45,7 @@ export function Layout(): React.JSX.Element {
   // The main prompt lives in the session draft: persisted per session and
   // re-hydrated on session change (new/resume), alongside the Advanced
   // Prompting state. No local reset is needed — the context handles it.
-  const { state: draft, update: updateDraft } = useSessionDraft()
+  const { state: draft, update: updateDraft, draftUnavailable, retryDraftHydration } = useSessionDraft()
   const { uiState, patchUiState } = useUiState()
   const prompt = draft.prompt
   const setPrompt = useCallback((value: string): void => updateDraft({ prompt: value }), [updateDraft])
@@ -200,6 +202,9 @@ export function Layout(): React.JSX.Element {
       } else {
         setPreviewDataUrl(null)
       }
+    }).catch((error) => {
+      setPreviewDataUrl(null)
+      reportOperationalFailure(`preview-${selectedTask.id}`, 'The selected image could not be loaded. Select it again to retry.', 'Failed to load selected image', error)
     })
   }, [selectedTask])
 
@@ -208,9 +213,9 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     const handler = (): void => {
       if (viewerOpen) {
-        void window.electronAPI.closeViewer()
+        void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be closed. Try again.', 'Failed to close image viewer', error))
       } else if (previewDataUrl) {
-        void window.electronAPI.openViewer(previewDataUrl)
+        void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be opened. The selected image is unchanged; try again.', 'Failed to open image viewer', error))
       }
     }
     window.addEventListener('viewer:toggle', handler)
@@ -249,7 +254,7 @@ export function Layout(): React.JSX.Element {
   // showing, so swaps are flash-free.
   useEffect(() => {
     if (!viewerOpen || !previewDataUrl) return
-    void window.electronAPI.openViewer(previewDataUrl)
+    void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be updated. Close it and try again.', 'Failed to update image viewer', error))
   }, [viewerOpen, previewDataUrl])
 
   // While the viewer is open, close it if navigation lands on a task without
@@ -259,7 +264,7 @@ export function Layout(): React.JSX.Element {
     if (!viewerOpen) return
     const status = selectedTask?.status
     const canShow = (status === 'completed' || status === 'kept') && !!selectedTask?.baseName
-    if (!canShow) void window.electronAPI.closeViewer()
+    if (!canShow) void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be closed. Try again.', 'Failed to close image viewer after selection change', error))
   }, [viewerOpen, selectedTask])
 
   return (
@@ -268,6 +273,17 @@ export function Layout(): React.JSX.Element {
       ref={layoutRef}
       style={{ '--iq-column-width': `${displayedColumn}px` } as React.CSSProperties}
     >
+      {draftUnavailable && (
+        <Modal
+          title="Session draft needs to be reloaded"
+          onClose={retryDraftHydration}
+          dismissable={false}
+          closeOnBackdropClick={false}
+          footer={<button className="modal-btn" autoFocus onClick={retryDraftHydration}>Retry</button>}
+        >
+          <div className="modal-body"><p role="alert">{draftUnavailable}</p></div>
+        </Modal>
+      )}
       {overlay === 'settings' && (
         <SettingsModal onClose={() => setOverlay(null)} />
       )}
@@ -310,7 +326,7 @@ export function Layout(): React.JSX.Element {
               </button>
             )}
           >
-            <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder() }}>Open Output Folder</MenuItem>
+            <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder().catch((error) => reportOperationalFailure('output-folder', 'The output folder could not be opened. Check that it is still available.', 'Failed to open output folder', error)) }}>Open Output Folder</MenuItem>
             <MenuItem onSelect={() => setOverlay('sessions')}>Sessions</MenuItem>
             <QueueControlSubmenu />
             <MenuCheckboxItem checked={showKeptImages} onToggle={toggleShowKeptImages}>

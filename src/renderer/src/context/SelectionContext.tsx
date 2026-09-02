@@ -14,6 +14,7 @@ import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { nextSelectionAfterRemoval } from '../utils/selection-recovery'
+import { reportOperationalFailure } from '../utils/operationalFailure'
 
 export interface Selection {
   backend: BackendId
@@ -152,7 +153,12 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     // `kept` and computeNextAfterRemoval still picks the correct neighbor
     // because it runs before the IPC against the pre-update task list.
     transitionSelectionForRemoval(backend, taskId)
-    await window.electronAPI.removeTask(backend, taskId)
+    try {
+      await window.electronAPI.removeTask(backend, taskId)
+    } catch (error) {
+      setSelectionInternal({ backend, taskId }, { userInitiated: false })
+      reportOperationalFailure(`task-${taskId}`, 'The task could not be removed. It remains in the queue; try again.', 'Failed to remove selected task', error)
+    }
   }, [confirm, settings, setSelectionInternal])
 
   // Deletes any task that is not mid-generation, whether or not it ever produced
@@ -185,7 +191,12 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     }
 
     transitionSelectionForRemoval(backend, taskId)
-    await window.electronAPI.deleteWithFiles(backend, taskId)
+    try {
+      await window.electronAPI.deleteWithFiles(backend, taskId)
+    } catch (error) {
+      setSelectionInternal({ backend, taskId }, { userInitiated: false })
+      reportOperationalFailure(`task-${taskId}`, 'The task could not be deleted. Its queue entry and files are unchanged; try again.', 'Failed to delete selected task', error)
+    }
   }, [confirm, settings, setSelectionInternal])
 
   const restoreTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {

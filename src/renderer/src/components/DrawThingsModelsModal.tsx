@@ -100,6 +100,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const [downloadedError, setDownloadedError] = useState('')
   const [availableError, setAvailableError] = useState('')
   const [importPath, setImportPath] = useState('')
+  const [importError, setImportError] = useState('')
   const [officialFilter, setOfficialFilter] = useState('')
   const [communityFilter, setCommunityFilter] = useState('')
   // null while the check is in flight. Every operation in this modal runs the
@@ -179,20 +180,35 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }, [cliInstalled, loadDownloaded])
 
   const handleStartDownload = async (modelFile: string): Promise<void> => {
-    const jobId = await window.electronAPI.cliStartDownload(modelFile)
-    addJob(jobId, 'download', modelFile)
+    setImportError('')
+    try {
+      const jobId = await window.electronAPI.cliStartDownload(modelFile)
+      addJob(jobId, 'download', modelFile)
+    } catch (error) {
+      setImportError(presentFailure('drawthings-download', error))
+    }
   }
 
   const handleBrowse = async (): Promise<void> => {
-    const picked = await window.electronAPI.openFileDialog([])
-    if (picked) setImportPath(picked)
+    setImportError('')
+    try {
+      const picked = await window.electronAPI.openFileDialog([])
+      if (picked) setImportPath(picked)
+    } catch (error) {
+      setImportError(presentFailure('drawthings-browse', error))
+    }
   }
 
   const handleImport = async (): Promise<void> => {
     if (!importPath) return
-    const jobId = await window.electronAPI.cliStartImport(importPath)
-    addJob(jobId, 'import', importPath.split(/[\\/]/).pop() ?? importPath)
-    setImportPath('')
+    setImportError('')
+    try {
+      const jobId = await window.electronAPI.cliStartImport(importPath)
+      addJob(jobId, 'import', importPath.split(/[\\/]/).pop() ?? importPath)
+      setImportPath('')
+    } catch (error) {
+      setImportError(presentFailure('drawthings-import', error))
+    }
   }
 
   const loadingModels = loadingDownloaded || loadingAvailable
@@ -317,7 +333,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
                   <input
                     placeholder="Model file path"
                     value={importPath}
-                    onChange={(e) => setImportPath(e.target.value)}
+                    onChange={(e) => { setImportError(''); setImportPath(e.target.value) }}
                   />
                   <button className="dt-action-btn dt-browse-btn" onClick={handleBrowse}>Browse...</button>
                   <button
@@ -328,6 +344,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
                     Import
                   </button>
                 </div>
+                {importError && <div className="dt-model-error" role="alert">{importError}</div>}
               </section>
 
               <section className="dt-section">

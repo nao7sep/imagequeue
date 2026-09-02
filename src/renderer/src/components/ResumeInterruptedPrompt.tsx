@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
+import { reportOperationalFailure } from '../utils/operationalFailure'
 
 // Listens for the main-process signal fired after a session is resumed that
 // still has tasks left unfinished when it was last open, and asks whether to
@@ -33,7 +34,9 @@ export function ResumeInterruptedPrompt(): null {
         confirmLabel: 'Retry All Stopped',
         cancelLabel: 'Not Now'
       }).then((ok) => {
-        if (ok) void window.electronAPI.resumeInterruptedTasks()
+        if (ok) void window.electronAPI.resumeInterruptedTasks().catch((error) => {
+          reportOperationalFailure('queue-controls', 'Stopped tasks could not be retried. They remain stopped; try again.', 'Failed to resume interrupted tasks', error)
+        })
       })
     })
   }, [confirm])

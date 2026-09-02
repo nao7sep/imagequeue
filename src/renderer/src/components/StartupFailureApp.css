@@ -1,9 +1,18 @@
 .startup-failure-app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.startup-failure-app[data-measuring='true'] {
+  height: auto;
+}
+
+.startup-failure-app[data-measuring='true'] p {
+  flex: none;
+  overflow: visible;
 }
 
 .startup-failure-app h1 {

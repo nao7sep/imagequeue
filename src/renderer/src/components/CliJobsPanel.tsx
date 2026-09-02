@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-jobs'
 import { useCliJobs } from '../context/CliJobsContext'
 import { Icon, type IconName } from './Icon'
+import { serializeError } from '../../../shared/serialize-error'
 import './CliJobsPanel.css'
 
 function jobTitle(
@@ -76,6 +77,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   const [chunks, setChunks] = useState<CliChunk[]>([])
   const [status, setStatus] = useState<CliJobStatus>('running')
   const [exitCode, setExitCode] = useState<number | null>(null)
+  const [rowError, setRowError] = useState('')
   const tailRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -107,13 +109,21 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
       setChunks(snap.chunks)
       setStatus(snap.status)
       setExitCode(snap.exitCode)
+    }).catch((error) => {
+      if (cancelled) return
+      setRowError('This job’s current progress could not be loaded. New progress will still appear here.')
+      void window.electronAPI.appLog('error', 'Failed to subscribe to CLI job', { jobId, error: serializeError(error) })
+        .catch((logError) => console.error('Failed to record CLI subscription diagnostic', logError))
     })
 
     return () => {
       cancelled = true
       offChunk()
       offStatus()
-      void window.electronAPI.cliUnsubscribeJob(jobId)
+      void window.electronAPI.cliUnsubscribeJob(jobId).catch((error) => {
+        void window.electronAPI.appLog('error', 'Failed to unsubscribe from CLI job', { jobId, error: serializeError(error) })
+          .catch((logError) => console.error('Failed to record CLI unsubscription diagnostic', logError))
+      })
     }
   }, [jobId])
 
@@ -128,7 +138,14 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   const summary = jobSummary(kind, status, exitCode, chunks)
   const icon = jobIcon(kind, status, exitCode)
 
-  const handleStop = (): void => { void window.electronAPI.cliKillJob(jobId) }
+  const handleStop = (): void => {
+    setRowError('')
+    void window.electronAPI.cliKillJob(jobId).catch((error) => {
+      setRowError('This job could not be stopped. It may still be running; try again.')
+      void window.electronAPI.appLog('error', 'Failed to stop CLI job', { jobId, error: serializeError(error) })
+        .catch((logError) => console.error('Failed to record CLI stop diagnostic', logError))
+    })
+  }
 
   const titleClass = !isActive
     ? status === 'exited' && exitCode === 0
@@ -154,6 +171,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
           {summary.text}
         </div>
       )}
+      {rowError && <div className="cli-job-summary cli-job-summary-error" role="alert">{rowError}</div>}
       <div className="cli-job-log-tail" ref={tailRef}>
         {chunks.length === 0 && isActive ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">

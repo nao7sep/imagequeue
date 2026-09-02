@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import type { UiState } from '../../../shared/ui-state'
 import { defaultUiState } from '../../../shared/ui-state'
+import { Modal } from '../components/Modal'
+import { reportOperationalFailure } from '../utils/operationalFailure'
 
 // The renderer's view of state.json — the adjustments the app remembers on the
 // user's behalf (column width, notification volume), as opposed to the settings
@@ -22,24 +24,36 @@ const UiStateContext = createContext<UiStateContextValue | null>(null)
 
 export function UiStateProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [uiState, setUiState] = useState<UiState>(defaultUiState)
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const [loadRevision, setLoadRevision] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     void window.electronAPI.getUiState().then((state) => {
-      if (!cancelled) setUiState(state)
+      if (!cancelled) { setUiState(state); setLoaded(true); setLoadError(false) }
+    }).catch((error) => {
+      if (!cancelled) { setLoadError(true); reportOperationalFailure('ui-state', 'Window preferences could not be loaded. Nothing was changed; try again.', 'Failed to load UI state', error) }
     })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadRevision])
 
   const patchUiState = useCallback((patch: Partial<UiState>): void => {
-    setUiState((prev) => ({ ...prev, ...patch }))
     void window.electronAPI.updateUiState(patch)
+      .then(() => setUiState((prev) => ({ ...prev, ...patch })))
+      .catch((error) => reportOperationalFailure('ui-state', 'Window preferences could not be saved. The previous values are still active; try again.', 'Failed to persist UI state', error))
   }, [])
 
   return (
-    <UiStateContext.Provider value={{ uiState, patchUiState }}>{children}</UiStateContext.Provider>
+    <UiStateContext.Provider value={{ uiState, patchUiState }}>
+      {loaded ? children : loadError ? (
+        <Modal title="Window preferences could not be loaded" onClose={() => setLoadRevision((value) => value + 1)} dismissable={false} closeOnBackdropClick={false} footer={<button className="modal-btn" autoFocus onClick={() => setLoadRevision((value) => value + 1)}>Retry</button>}>
+          <div className="modal-body"><p role="alert">Window preferences could not be loaded. Nothing was changed; try again.</p></div>
+        </Modal>
+      ) : null}
+    </UiStateContext.Provider>
   )
 }
 

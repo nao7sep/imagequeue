@@ -36,6 +36,10 @@ function installApi(availableModels: LocalModelInfo[], availableError?: Error): 
       ? vi.fn(async () => { throw availableError })
       : vi.fn(async () => availableModels),
     onCliJobStatus: vi.fn(() => () => undefined),
+    openFileDialog: vi.fn(async () => null),
+    cliStartImport: vi.fn(async () => 'job-1'),
+    cliStartDownload: vi.fn(async () => 'job-2'),
+    appLog: vi.fn(async () => undefined),
   } as unknown as typeof window.electronAPI
 }
 
@@ -75,5 +79,29 @@ describe('DrawThingsModelsModal empty states', () => {
     expect(body?.classList.contains('dt-modal-body')).toBe(true)
     expect(body?.querySelector('.dt-model-columns')).toBeTruthy()
     expect(body?.firstElementChild).toBe(alert)
+  })
+})
+
+describe('DrawThingsModelsModal operation failures', () => {
+  it('retains the selected import path, authors the result, and logs hostile diagnostics', async () => {
+    installApi([])
+    const hostile = new Error('EACCES /private/tmp/IMAGEQUEUE_IMPORT_SENTINEL')
+    vi.mocked(window.electronAPI.cliStartImport).mockRejectedValue(hostile)
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    await screen.findByText('No official models available.')
+
+    const input = screen.getByPlaceholderText('Model file path')
+    fireEvent.change(input, { target: { value: '/chosen/model.ckpt' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('selected path is unchanged')
+    expect(alert.textContent).not.toContain('IMAGEQUEUE_IMPORT_SENTINEL')
+    expect((input as HTMLInputElement).value).toBe('/chosen/model.ckpt')
+    expect(window.electronAPI.appLog).toHaveBeenCalledWith(
+      'error',
+      'Renderer operation failed',
+      expect.objectContaining({ operation: 'drawthings-import', error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_IMPORT_SENTINEL') }) }),
+    )
   })
 })

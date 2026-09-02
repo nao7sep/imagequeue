@@ -307,6 +307,12 @@ export function useDrawThingsColumn({
       setLocalSeed(resolved.seed)
       setNegativePrompt(resolved.negativePrompt)
       setLoadedModel(model)
+      setParamsSaveError('')
+    }).catch((error) => {
+      if (cancelled) return
+      setLoadedModel('')
+      setParamsSaveError('The selected model’s saved parameters could not be loaded. Choose the model again to retry; no parameters were changed.')
+      logSaveError('load Draw Things model parameters and recommendation', error, { model })
     })
 
     return () => { cancelled = true }

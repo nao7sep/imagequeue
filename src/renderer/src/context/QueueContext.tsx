@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
 import type { BackendId, Task, EnqueueRequest } from '../../../shared/types'
+import { reportOperationalFailure } from '../utils/operationalFailure'
+import { serializeError } from '../../../shared/serialize-error'
 
 interface QueueContextValue {
   tasks: Record<BackendId, Task[]>
@@ -54,8 +56,14 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
         setStoredTasks(initial)
         setLoadState('ready')
       })
-      .catch(() => {
+      .catch((error) => {
         if (!disposed && !receivedLiveUpdate) setLoadState('failed')
+        try {
+          const logging = window.electronAPI.appLog?.('error', 'Failed to load the initial queue snapshot', { error: serializeError(error) })
+          void logging?.catch((logError) => console.error('Failed to record queue hydration diagnostic', logError))
+        } catch (logError) {
+          console.error('Failed to record queue hydration diagnostic', logError)
+        }
       })
 
     // Subscribe to updates from main process
@@ -76,15 +84,21 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
   }, [])
 
   const enqueue = useCallback(async (request: EnqueueRequest) => {
-    await window.electronAPI.enqueue(request)
+    try { await window.electronAPI.enqueue(request) } catch (error) {
+      reportOperationalFailure('queue-enqueue', 'The task could not be queued. Nothing was added; try again.', 'Failed to enqueue task', error)
+    }
   }, [])
 
   const removeTask = useCallback(async (backend: BackendId, taskId: string) => {
-    await window.electronAPI.removeTask(backend, taskId)
+    try { await window.electronAPI.removeTask(backend, taskId) } catch (error) {
+      reportOperationalFailure(`task-${taskId}`, 'The task could not be removed. The queue is unchanged; try again.', 'Failed to remove task', error)
+    }
   }, [])
 
   const restoreTask = useCallback(async (backend: BackendId, taskId: string) => {
-    await window.electronAPI.restoreTask(backend, taskId)
+    try { await window.electronAPI.restoreTask(backend, taskId) } catch (error) {
+      reportOperationalFailure(`task-${taskId}`, 'The kept task could not be restored. It remains kept; try again.', 'Failed to restore task', error)
+    }
   }, [])
 
   return (

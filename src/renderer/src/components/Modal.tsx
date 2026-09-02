@@ -17,6 +17,7 @@ interface ModalProps {
    */
   footer?: ReactNode
   closeOnBackdropClick?: boolean
+  dismissable?: boolean
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -38,7 +39,8 @@ export function Modal({
   className,
   children,
   footer,
-  closeOnBackdropClick = true
+  closeOnBackdropClick = true,
+  dismissable = true,
 }: ModalProps): React.JSX.Element {
   const modalId = useId()
   const titleId = `${modalId}-title`
@@ -86,7 +88,7 @@ export function Modal({
       // the guard every other dispatch in the renderer carries.
       if (isImeComposing(e)) return
 
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && dismissable) {
         e.preventDefault()
         e.stopPropagation()
         onClose()
@@ -116,14 +118,14 @@ export function Modal({
     }
     document.addEventListener('keydown', handler, true)
     return () => document.removeEventListener('keydown', handler, true)
-  }, [modalId, onClose, isImeComposing])
+  }, [modalId, onClose, isImeComposing, dismissable])
 
   const content = (
     <div
       className="modal-backdrop"
       data-modal-id={modalId}
       onClick={() => {
-        if (!isTopmostModal(modalId) || !closeOnBackdropClick) return
+        if (!dismissable || !isTopmostModal(modalId) || !closeOnBackdropClick) return
         onClose()
       }}
     >
@@ -139,9 +141,7 @@ export function Modal({
         {title !== undefined && (
           <div className="modal-header">
             <span id={titleId}>{title}</span>
-            <button className="modal-close" onClick={onClose} aria-label="Close">
-              <Icon name="close" />
-            </button>
+            {dismissable && <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>}
           </div>
         )}
         {children}

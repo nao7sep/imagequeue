@@ -9,6 +9,7 @@ import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import { presentFailure } from '../utils/failurePresentation'
+import { serializeError } from '../../../shared/serialize-error'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -57,6 +58,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
+  const handleBrowseFailure = useCallback((error: unknown): void => {
+    setErrorMessage('A file or folder could not be selected. Your current setting is unchanged; try again.')
+    void window.electronAPI.appLog('error', 'Settings picker failed', { error: serializeError(error) })
+      .catch((logError) => console.error('Failed to record a settings picker diagnostic', logError))
+  }, [])
   const tablist = useTablist<SettingsTab>({
     tabs: SETTINGS_TABS,
     selected: activeTab,
@@ -296,7 +302,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 onClick={() => {
                   void window.electronAPI.openDirectoryDialog().then((dir) => {
                     if (dir) updateGeneral('export_dir', dir)
-                  })
+                  }).catch(handleBrowseFailure)
                 }}
               >
                 Browse
@@ -442,7 +448,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 onClick={() => {
                   void window.electronAPI.openFileDialog([
                     { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
-                  ]).then((f) => { if (f) updateNotificationFile('success_file', f) })
+                  ]).then((f) => { if (f) updateNotificationFile('success_file', f) }).catch(handleBrowseFailure)
                 }}
               >Browse</button>
             </div>
@@ -462,7 +468,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 onClick={() => {
                   void window.electronAPI.openFileDialog([
                     { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
-                  ]).then((f) => { if (f) updateNotificationFile('failure_file', f) })
+                  ]).then((f) => { if (f) updateNotificationFile('failure_file', f) }).catch(handleBrowseFailure)
                 }}
               >Browse</button>
             </div>

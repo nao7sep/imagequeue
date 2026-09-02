@@ -1,9 +1,12 @@
+import { serializeError } from '../../../shared/serialize-error'
+
 export type FailureOperation =
   | 'settings-save'
   | 'sessions-load' | 'session-resume' | 'session-create' | 'session-delete' | 'session-folder'
   | 'concepts-load' | 'concept-details-load' | 'concepts-change'
   | 'elaborators-load' | 'elaborators-change'
   | 'drawthings-models-load' | 'drawthings-cli-load' | 'drawthings-catalog-load'
+  | 'drawthings-download' | 'drawthings-browse' | 'drawthings-import'
   | 'advanced-elaborators-load' | 'advanced-models-load' | 'advanced-elaborate' | 'advanced-queue'
   | 'elaboration-defaults-load' | 'elaboration-save'
   | 'dependencies-load' | 'dependencies-change' | 'dependencies-cancel'
@@ -23,6 +26,9 @@ const COPY: Record<FailureOperation, string> = {
   'drawthings-models-load': 'Downloaded Draw Things models could not be loaded. Try refreshing them.',
   'drawthings-cli-load': 'Draw Things CLI status could not be loaded. Try again.',
   'drawthings-catalog-load': 'Available Draw Things models could not be loaded. Try again.',
+  'drawthings-download': 'The model download could not be started. Nothing was added; try again.',
+  'drawthings-browse': 'A model file could not be selected. The current path is unchanged; try again.',
+  'drawthings-import': 'The model import could not be started. The selected path is unchanged; try again.',
   'advanced-elaborators-load': 'Elaborators could not be loaded. Close Advanced Prompting and try again.',
   'advanced-models-load': 'Draw Things models could not be loaded. Close Advanced Prompting and try again.',
   'advanced-elaborate': 'The prompt could not be elaborated. Your current prompt is unchanged; try again.',
@@ -35,6 +41,15 @@ const COPY: Record<FailureOperation, string> = {
 }
 
 /** Arbitrary renderer/IPC exceptions are diagnostic-only; callers render only this authored copy. */
-export function presentFailure(operation: FailureOperation, _error: unknown): string {
+export function presentFailure(operation: FailureOperation, error: unknown): string {
+  try {
+    const logging = window.electronAPI.appLog?.('error', 'Renderer operation failed', {
+      operation,
+      error: serializeError(error),
+    })
+    void logging?.catch((logError) => console.error('Failed to record a renderer operation diagnostic', logError))
+  } catch (logError) {
+    console.error('Failed to record a renderer operation diagnostic', logError)
+  }
   return COPY[operation]
 }

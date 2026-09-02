@@ -11,8 +11,8 @@ const context = vi.hoisted(() => ({
 
 vi.mock('../../../../src/renderer/src/context/SessionDraftContext', () => ({
   useSessionDraft: () => ({
-    draftPersistenceFailure: context.draftFailure,
-    dismissDraftPersistenceFailure: context.dismiss,
+    draftIssue: context.draftFailure ? { title: 'Session draft isn’t being saved', message: context.draftFailure } : null,
+    dismissDraftIssue: context.dismiss,
   }),
 }))
 
@@ -22,6 +22,9 @@ vi.mock('../../../../src/renderer/src/context/QueueContext', () => ({
 
 const { AppStatusNotices } = await import(
   '../../../../src/renderer/src/components/AppStatusNotices'
+)
+const { reportOperationalFailure } = await import(
+  '../../../../src/renderer/src/utils/operationalFailure'
 )
 
 function task(id: string, status: TaskStatus): Task {
@@ -52,6 +55,7 @@ beforeEach(() => {
   context.tasks = queues()
   window.electronAPI = {
     resumeInterruptedTasks: vi.fn(async () => 0),
+    appLog: vi.fn(async () => undefined),
   } as unknown as typeof window.electronAPI
 })
 
@@ -63,7 +67,7 @@ describe('AppStatusNotices', () => {
     render(<AppStatusNotices />)
 
     expect(screen.getByRole('alert').textContent).toContain('Session draft isn’t being saved')
-    fireEvent.click(screen.getByRole('button', { name: 'Close session draft save result' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close session draft result' }))
     expect(context.dismiss).toHaveBeenCalledOnce()
   })
 
@@ -87,5 +91,32 @@ describe('AppStatusNotices', () => {
   it('renders nothing when persistence and every queue are healthy', () => {
     const { container } = render(<AppStatusNotices />)
     expect(container.innerHTML).toBe('')
+  })
+
+  it('owns background mutation failures without exposing hostile diagnostics', async () => {
+    render(<AppStatusNotices />)
+    reportOperationalFailure(
+      'task-sentinel',
+      'The task could not be removed. The queue is unchanged; try again.',
+      'Failed to remove task',
+      new Error('EACCES /private/tmp/IMAGEQUEUE_QUEUE_SENTINEL'),
+    )
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('queue is unchanged')
+    expect(alert.textContent).not.toContain('IMAGEQUEUE_QUEUE_SENTINEL')
+    expect(window.electronAPI.appLog).toHaveBeenCalledWith(
+      'error',
+      'Failed to remove task',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_QUEUE_SENTINEL') }) }),
+    )
+  })
+
+  it('retains independent task results instead of replacing the earlier failure', async () => {
+    render(<AppStatusNotices />)
+    reportOperationalFailure('task-a', 'Task A could not be removed.', 'remove a failed', new Error('a'))
+    reportOperationalFailure('task-b', 'Task B could not be retried.', 'retry b failed', new Error('b'))
+    expect(await screen.findAllByRole('alert')).toHaveLength(2)
+    expect(screen.getByText('Task A could not be removed.')).toBeTruthy()
+    expect(screen.getByText('Task B could not be retried.')).toBeTruthy()
   })
 })

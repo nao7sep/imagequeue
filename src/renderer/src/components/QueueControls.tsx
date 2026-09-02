@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { MenuItem, Submenu } from './Menu'
 import { useConfirm } from '../context/ConfirmContext'
 import type { QueueControlState } from '../../../shared/types'
+import { reportOperationalFailure } from '../utils/operationalFailure'
+
+const QUEUE_CONTROL_FAILURE = 'The queue command could not be completed. The current queue is unchanged; try again.'
 
 // The queue's control surface: a submenu in the app menu, plus the one piece of
 // it that has to be visible without opening anything.
@@ -20,14 +23,18 @@ function useQueueControlState(): { state: QueueControlState | null; refresh: () 
   const [state, setState] = useState<QueueControlState | null>(null)
 
   useEffect(() => {
-    void window.electronAPI.getQueueControlState().then(setState)
+    void window.electronAPI.getQueueControlState().then(setState).catch((error) => {
+      reportOperationalFailure('queue-controls', 'Queue controls could not be loaded. Reopen the menu to try again.', 'Failed to load queue control state', error)
+    })
     return window.electronAPI.onQueueControlState(setState)
   }, [])
 
   // Every action refreshes the state it just changed, so counts in the menu
   // never lag the queue.
   const refresh = useCallback(async (): Promise<void> => {
-    setState(await window.electronAPI.getQueueControlState())
+    try { setState(await window.electronAPI.getQueueControlState()) } catch (error) {
+      reportOperationalFailure('queue-controls', 'Queue controls could not be refreshed. Reopen the menu to try again.', 'Failed to refresh queue control state', error)
+    }
   }, [])
 
   return { state, refresh }
@@ -60,8 +67,9 @@ export function QueueControlSubmenu(): React.JSX.Element {
   const pending = queued + interrupted
 
   const handlePause = useCallback(async (): Promise<void> => {
-    await window.electronAPI.setQueuePaused(!paused)
-    await refresh()
+    try { await window.electronAPI.setQueuePaused(!paused); await refresh() } catch (error) {
+      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to change queue pause state', error)
+    }
   }, [paused, refresh])
 
   // Stop is an ACT on the work, orthogonal to Pause (a MODE): it interrupts
@@ -85,8 +93,9 @@ export function QueueControlSubmenu(): React.JSX.Element {
       danger: true,
     })
     if (!ok) return
-    await window.electronAPI.stopAllQueueWork()
-    await refresh()
+    try { await window.electronAPI.stopAllQueueWork(); await refresh() } catch (error) {
+      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to stop queue work', error)
+    }
   }, [confirm, generating, queued, refresh])
 
   // No pause manipulation here: Stop never pauses, so the common stop-then-retry
@@ -94,8 +103,9 @@ export function QueueControlSubmenu(): React.JSX.Element {
   // own standing choice, and retrying must not silently revoke it — the retried
   // tasks simply wait, exactly as the Paused badge says they will.
   const handleRetryAll = useCallback(async (): Promise<void> => {
-    await window.electronAPI.resumeInterruptedTasks()
-    await refresh()
+    try { await window.electronAPI.resumeInterruptedTasks(); await refresh() } catch (error) {
+      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to retry stopped queue work', error)
+    }
   }, [refresh])
 
   const handleClearPending = useCallback(async (): Promise<void> => {
@@ -110,8 +120,9 @@ export function QueueControlSubmenu(): React.JSX.Element {
       danger: true,
     })
     if (!ok) return
-    await window.electronAPI.clearPendingTasks()
-    await refresh()
+    try { await window.electronAPI.clearPendingTasks(); await refresh() } catch (error) {
+      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to clear pending queue work', error)
+    }
   }, [confirm, queued, interrupted, pending, refresh])
 
   return (

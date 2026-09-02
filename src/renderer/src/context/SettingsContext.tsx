@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import type { ApiKeyPresence, CloudBackendId, SecretId } from '../../../shared/types'
+import { serializeError } from '../../../shared/serialize-error'
+import { Modal } from '../components/Modal'
 
 interface SettingsContextValue {
   settings: Record<string, unknown> | null
@@ -27,12 +29,29 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
   const [apiKeyPresence, setApiKeyPresence] = useState<ApiKeyPresence | null>(null)
   const [apiKeys, setApiKeys] = useState<Record<SecretId, string> | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [loadRevision, setLoadRevision] = useState(0)
 
   useEffect(() => {
-    window.electronAPI.getSettings().then((cfg) => setSettings(cfg as Record<string, unknown>))
-    void window.electronAPI.getApiKeyPresence().then(setApiKeyPresence)
-    void window.electronAPI.getApiKeys().then(setApiKeys)
-  }, [])
+    let cancelled = false
+    void Promise.all([
+      window.electronAPI.getSettings(),
+      window.electronAPI.getApiKeyPresence(),
+      window.electronAPI.getApiKeys(),
+    ]).then(([cfg, presence, keys]) => {
+      if (cancelled) return
+      setSettings(cfg as Record<string, unknown>)
+      setApiKeyPresence(presence)
+      setApiKeys(keys)
+      setLoadError(false)
+    }).catch((error) => {
+      if (cancelled) return
+      setLoadError(true)
+      void window.electronAPI.appLog('error', 'Failed to hydrate required settings', { error: serializeError(error) })
+        .catch((logError) => console.error('Failed to record settings hydration diagnostic', logError))
+    })
+    return () => { cancelled = true }
+  }, [loadRevision])
 
   // Apply the configured UI font by overriding the `--font-ui` CSS variable on :root; blank reverts
   // to the styles.css default. The string is handed to CSS verbatim (engine-resolved, graceful
@@ -111,7 +130,17 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
         saveNotificationField,
       }}
     >
-      {children}
+      {settings && apiKeyPresence && apiKeys ? children : loadError ? (
+        <Modal
+          title="Settings could not be loaded"
+          onClose={() => setLoadRevision((value) => value + 1)}
+          dismissable={false}
+          closeOnBackdropClick={false}
+          footer={<button className="modal-btn" autoFocus onClick={() => setLoadRevision((value) => value + 1)}>Retry</button>}
+        >
+          <div className="modal-body"><p role="alert">Required settings could not be loaded. Nothing was changed; try again.</p></div>
+        </Modal>
+      ) : null}
     </SettingsContext.Provider>
   )
 }

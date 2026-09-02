@@ -19,6 +19,7 @@ import { isFreshCompletion } from '../utils/taskScroll'
 import { taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
+import { reportOperationalFailure } from '../utils/operationalFailure'
 import './QueueColumn.css'
 
 interface Props {
@@ -324,6 +325,9 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
         const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
         setThumbUrl(`data:${mime};base64,${result.data}`)
       }
+    }).catch((error) => {
+      setThumbUrl(null)
+      reportOperationalFailure(`task-${task.id}`, 'This task’s thumbnail could not be loaded. The task is unchanged.', 'Failed to load task thumbnail', error)
     })
   }, [task.status, task.baseName])
 
@@ -357,13 +361,17 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   }
   const handleRetry = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    window.electronAPI.retryTask(backendId, task.id)
+    void window.electronAPI.retryTask(backendId, task.id).catch((error) => {
+      reportOperationalFailure(`task-${task.id}`, 'The task could not be retried. It remains stopped; try again.', 'Failed to retry task', error)
+    })
   }
   const getExt = (): string => task.imagePath?.split('.').pop() ?? 'png'
   const handleExport = (e: React.MouseEvent): void => {
     e.stopPropagation()
     if (!task.baseName) return
-    void window.electronAPI.exportImage(task.baseName, getExt())
+    void window.electronAPI.exportImage(task.baseName, getExt()).catch((error) => {
+      reportOperationalFailure(`task-${task.id}`, 'The image could not be exported. The original is unchanged; try again.', 'Failed to export task image', error)
+    })
   }
   // Keeping and removing are the same gesture at different ends of a task's
   // life — file a finished image away, or drop one that never ran — so they
