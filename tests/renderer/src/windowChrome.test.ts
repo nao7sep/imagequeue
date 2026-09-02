@@ -89,13 +89,15 @@ describe('queue-owned result geometry', () => {
     expect(css).toMatch(/\.column-save-result,\s*\.task-action-result\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*align-items:\s*flex-start;/s)
     expect(css).toMatch(/\.column-save-result-close,\s*\.task-action-result-close\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s)
     expect(css).toContain('.task-entry')
+    expect(css).toMatch(/\.task-row-owner\s*\{[^}]*position:\s*relative;/s)
+    expect(css).not.toMatch(/\.task-entry\s*\{[^}]*position:\s*relative;/s)
     expect(css).toMatch(/\.task-list\s*\{[^}]*min-height:\s*0;/s)
   })
 
   it('keeps the focusable result close outside the selectable option', () => {
     const component = read('components/QueueColumn.tsx')
     expect(component).not.toMatch(/tabIndex=\{-1\}\s*className="task-action-result-close"/)
-    expect(component).toMatch(/className={`task-entry[\s\S]*role="listitem"[\s\S]*<button[\s\S]*className=\{\[[\s\S]*'task-item'[\s\S]*<div className="task-action-results">/)
+    expect(component).toMatch(/className={`task-entry[\s\S]*role="listitem"[\s\S]*className="task-row-owner"[\s\S]*<button[\s\S]*className=\{\[[\s\S]*'task-item'[\s\S]*<div className="task-action-results">/)
   })
 })
 

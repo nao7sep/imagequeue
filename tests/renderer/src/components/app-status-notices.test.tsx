@@ -107,6 +107,28 @@ describe('AppStatusNotices', () => {
     )
   })
 
+  it('keeps the prior retry result until a matching retry succeeds', async () => {
+    context.tasks = queues([task('stopped', 'interrupted')])
+    let resolveRetry!: (value: number) => void
+    vi.mocked(window.electronAPI.resumeInterruptedTasks)
+      .mockRejectedValueOnce(new Error('first retry failed'))
+      .mockImplementationOnce(() => new Promise<number>((resolve) => { resolveRetry = resolve }))
+    render(<AppStatusNotices />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry stopped' }))
+    })
+    expect(screen.getByRole('alert').textContent).toContain('Retrying the stopped tasks failed.')
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry stopped' }))
+    })
+    expect(screen.getByRole('alert').textContent).toContain('Retrying the stopped tasks failed.')
+
+    await act(async () => resolveRetry(1))
+    expect(screen.getByRole('alert').textContent).not.toContain('Retrying the stopped tasks failed.')
+  })
+
   it('renders nothing when persistence and every queue are healthy', () => {
     const { container } = render(<AppStatusNotices />)
     expect(container.innerHTML).toBe('')

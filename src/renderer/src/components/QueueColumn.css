@@ -122,10 +122,13 @@
 }
 
 .task-entry {
-  position: relative;
   --task-bg: var(--bg-secondary);
   --task-actions-bg: var(--task-bg);
   margin-bottom: var(--space-2);
+}
+
+.task-row-owner {
+  position: relative;
 }
 
 .task-entry-kept {
@@ -384,7 +387,7 @@
   opacity: 0;
   transition: opacity 0.15s;
 }
-.task-item:hover + .task-actions,
+.task-row-owner > .task-item:hover + .task-actions,
 .task-actions:hover {
   opacity: 1;
 }

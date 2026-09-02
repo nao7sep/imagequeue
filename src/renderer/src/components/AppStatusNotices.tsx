@@ -40,9 +40,9 @@ export function AppStatusNotices(): React.JSX.Element | null {
 
   const retryStopped = async (): Promise<void> => {
     setRetryingStopped(true)
-    setRetryFailure(false)
     try {
       await window.electronAPI.resumeInterruptedTasks()
+      setRetryFailure(false)
     } catch (error) {
       recordOperationalDiagnostic('Failed to retry stopped tasks', error)
       setRetryFailure(true)

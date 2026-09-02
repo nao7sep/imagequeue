@@ -431,10 +431,11 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const promptPreview = truncate(task.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text
 
   return (
-    // The selectable button, pointer action strip, and retained results are
-    // list-item siblings. Result dismissal stays keyboard reachable without
-    // adding an interactive descendant to a one-tab-stop composite.
+    // The selectable button and its pointer strip share one positioned owner.
+    // Retained results are siblings below it, so their focusable close controls
+    // stay outside the one-tab-stop option and never become an overlay anchor.
     <div className={`task-entry${task.status === 'kept' ? ' task-entry-kept' : ''}`} role="listitem">
+      <div className="task-row-owner">
       <button
         type="button"
         className={[
@@ -512,6 +513,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             <Icon name="trash" />
           </button>
         )}
+      </div>
       </div>
       {visibleActionResults.length > 0 && (
         <div className="task-action-results">
