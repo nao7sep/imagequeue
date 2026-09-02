@@ -80,6 +80,12 @@ describe('completed CLI-job result close', () => {
     expect(component).toContain('aria-label="Close job result"')
     expect(component).not.toContain('title="Dismiss"')
   })
+
+  it('does not reserve an empty icon column for text-only terminal results', () => {
+    const component = read('components/CliJobsPanel.tsx')
+    expect(component).toMatch(/\{icon && \(\s*<span className="cli-job-row-icon"/s)
+    expect(component).not.toMatch(/<span className="cli-job-row-icon"[^>]*>\{icon &&/)
+  })
 })
 
 describe('queue-owned result geometry', () => {

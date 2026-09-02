@@ -54,8 +54,8 @@ function jobSummary(
 
 // Status as a drawn icon rather than a typed glyph: ■ and ✗ in particular
 // rendered at wildly different weights across fonts, and this row is scanned,
-// not read. `null` keeps the queued state deliberately empty — a job that has
-// not started yet has nothing to report, and a placeholder would read as one.
+// not read. `null` omits both the mark and its layout slot: terminal titles carry
+// their own outcome, and a job that has not started has nothing to illustrate.
 export function jobIcon(kind: CliJobKind, status: CliJobStatus, exitCode: number | null): IconName | null {
   if (status === 'queued') return null
   if (status === 'running' || status === 'stalled') return kind === 'import' ? 'upload' : 'download'
@@ -156,7 +156,9 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   return (
     <div className="cli-job-row">
       <div className="cli-job-row-header">
-        <span className="cli-job-row-icon" aria-hidden="true">{icon && <Icon name={icon} />}</span>
+        {icon && (
+          <span className="cli-job-row-icon" aria-hidden="true"><Icon name={icon} /></span>
+        )}
         <span className={titleClass} title={title}>{title}</span>
         {isActive ? (
           <button className="cli-job-stop" onClick={handleStop}>Stop</button>
