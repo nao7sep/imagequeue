@@ -1,11 +1,25 @@
 import { Modal } from './Modal'
 import { Icon } from './Icon'
+import { InlineFailureResult } from './InlineFailureResult'
+import { useExternalLinkResults } from '../hooks/useExternalLinkResults'
 
 interface Props {
   onClose: () => void
 }
 
 export function AboutModal({ onClose }: Props): React.JSX.Element {
+  const links = useExternalLinkResults()
+  const openLink = (key: 'github' | 'issues', url: string): void => {
+    void links.open({
+      key,
+      url,
+      message: key === 'github'
+        ? 'The ImageQueue GitHub page could not be opened. Try the link again.'
+        : 'The ImageQueue issue page could not be opened. Try the link again.',
+      diagnosticMessage: 'Failed to open an About link',
+    })
+  }
+
   return (
     <Modal
       title="About"
@@ -30,7 +44,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
             className="about-link"
             onClick={(e) => {
               e.preventDefault()
-              window.electronAPI.openExternal(e.currentTarget.href)
+              openLink('github', e.currentTarget.href)
             }}
           >
             GitHub <Icon name="external-link" />
@@ -41,12 +55,20 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
             className="about-link"
             onClick={(e) => {
               e.preventDefault()
-              window.electronAPI.openExternal(e.currentTarget.href)
+              openLink('issues', e.currentTarget.href)
             }}
           >
             Report Issue <Icon name="external-link" />
           </a>
         </div>
+        {Object.entries(links.results).map(([key, message]) => message ? (
+          <InlineFailureResult
+            key={key}
+            message={message}
+            closeLabel={`Close ${key} link result`}
+            onClose={() => links.dismiss(key)}
+          />
+        ) : null)}
         <p className="about-copyright">
           &copy; 2026 Yoshinao Inoguchi &mdash; MIT License
         </p>

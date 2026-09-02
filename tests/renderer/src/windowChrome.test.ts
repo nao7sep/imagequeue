@@ -95,7 +95,7 @@ describe('queue-owned result geometry', () => {
   it('keeps the focusable result close outside the selectable option', () => {
     const component = read('components/QueueColumn.tsx')
     expect(component).not.toMatch(/tabIndex=\{-1\}\s*className="task-action-result-close"/)
-    expect(component).toMatch(/<div className="task-entry">[\s\S]*role="option"[\s\S]*<div className="task-action-results">/)
+    expect(component).toMatch(/className={`task-entry[\s\S]*role="listitem"[\s\S]*<button[\s\S]*className=\{\[[\s\S]*'task-item'[\s\S]*<div className="task-action-results">/)
   })
 })
 

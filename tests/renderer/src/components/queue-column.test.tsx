@@ -110,6 +110,14 @@ beforeEach(() => {
     taskActionResults: {},
     reportTaskActionFailure: vi.fn(),
     clearTaskActionResult: vi.fn(),
+    runTaskAction: vi.fn(async (options: { invoke: () => Promise<unknown> }) => {
+      try {
+        await options.invoke()
+        return 'succeeded'
+      } catch {
+        return 'failed'
+      }
+    }),
   }
   enqueueValue = {
     snapshots: {},
@@ -221,11 +229,12 @@ describe('cloud columns: saved defaults at launch', () => {
 })
 
 describe('task status presentation', () => {
-  it('keeps an empty queue keyboard-reachable and distinguishes loading and failure', () => {
+  it('uses a normal list with roving selectable buttons and truthful empty states', () => {
     queueValue.loadState = 'loading'
     const { container, rerender } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     const list = container.querySelector<HTMLElement>('.task-list')!
-    expect(list.tabIndex).toBe(0)
+    expect(list.getAttribute('role')).toBe('list')
+    expect(list.tabIndex).toBe(-1)
     expect(screen.getByText('Loading queue…')).toBeTruthy()
 
     queueValue.loadState = 'failed'
@@ -237,11 +246,14 @@ describe('task status presentation', () => {
     queueValue.tasks.openai = [task('queued')]
     rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     expect(list.tabIndex).toBe(-1)
-    expect(container.querySelector<HTMLElement>('[role="option"]')?.tabIndex).toBe(0)
+    const row = container.querySelector<HTMLElement>('[role="listitem"]')!
+    const selector = within(row).getByRole('button', { pressed: false })
+    expect(selector.tabIndex).toBe(0)
+    expect(selector.closest('[role="listitem"]')).toBe(row)
 
     queueValue.tasks.openai = []
     rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
-    expect(list.tabIndex).toBe(0)
+    expect(list.tabIndex).toBe(-1)
     expect(screen.getByText('No tasks queued')).toBeTruthy()
   })
 
@@ -275,7 +287,10 @@ describe('task status presentation', () => {
     const retryResult = within(failedEntry).getByRole('alert')
     const close = within(retryResult).getByRole('button', { name: 'Close retry result' })
     expect(failedRow.contains(retryResult)).toBe(false)
+    expect(failedRow.tagName).toBe('BUTTON')
+    expect(failedEntry.getAttribute('role')).toBe('listitem')
     expect(close.tabIndex).toBe(0)
+    expect(failedRow.contains(close)).toBe(false)
 
     close.focus()
     fireEvent.keyDown(close, { key: 'Backspace' })
@@ -309,20 +324,20 @@ describe('task status presentation', () => {
       'Failed to load task thumbnail',
       expect.objectContaining({ message: 'IMAGEQUEUE_THUMBNAIL_SENTINEL' }),
     )
-    expect(selectionValue.reportTaskActionFailure).toHaveBeenCalledWith(
-      'task-failed',
-      'retry',
-      'The task could not be retried. It remains stopped; try again.',
-      'Failed to retry task',
-      expect.objectContaining({ message: 'IMAGEQUEUE_RETRY_SENTINEL' }),
-    )
-    expect(selectionValue.reportTaskActionFailure).toHaveBeenCalledWith(
-      'task-complete',
-      'export',
-      'The image could not be exported. The original is unchanged; try again.',
-      'Failed to export task image',
-      expect.objectContaining({ message: 'IMAGEQUEUE_EXPORT_SENTINEL' }),
-    )
+    expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'task-failed',
+      action: 'retry',
+      message: 'The task could not be retried. It remains stopped; try again.',
+      diagnosticMessage: 'Failed to retry task',
+    }))
+    expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'task-complete',
+      action: 'export',
+      message: 'The image could not be exported. The original is unchanged; try again.',
+      diagnosticMessage: 'Failed to export task image',
+    }))
+    expect(electronAPI.retryTask).toHaveBeenCalledWith('openai', 'task-failed')
+    expect(electronAPI.exportImage).toHaveBeenCalledWith('image-1', 'png')
   })
 })
 

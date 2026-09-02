@@ -7,6 +7,8 @@ import { Modal } from './Modal'
 import { partitionDrawThingsModels } from '../utils/localModels'
 import { presentFailure } from '../utils/failurePresentation'
 import './DrawThingsModelsModal.css'
+import { InlineFailureResult } from './InlineFailureResult'
+import { useExternalLinkResults } from '../hooks/useExternalLinkResults'
 
 interface Props {
   onClose: () => void
@@ -108,6 +110,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   // nothing — it shows a pointer to the Dependencies window instead of empty lists.
   const [cliInstalled, setCliInstalled] = useState<boolean | null>(null)
   const [cliError, setCliError] = useState('')
+  const externalLinks = useExternalLinkResults()
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
     if (importPath.trim() === '') {
@@ -246,6 +249,14 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         loading={loadingModels}
         emptyText={modelsError ? 'Models unavailable.' : emptyText}
         onDownload={(file) => { void handleStartDownload(file) }}
+        onOpenExternal={(key, url) => {
+          void externalLinks.open({
+            key,
+            url,
+            message: 'The model page could not be opened in your browser. Try the link again.',
+            diagnosticMessage: 'Failed to open a Draw Things model link',
+          })
+        }}
       />
     )
   }
@@ -288,6 +299,14 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         {modelsError && (
           <div className="dt-model-error" role="alert">{modelsError}</div>
         )}
+        {Object.entries(externalLinks.results).map(([key, message]) => message ? (
+          <InlineFailureResult
+            key={key}
+            message={message}
+            closeLabel="Close model link result"
+            onClose={() => externalLinks.dismiss(key)}
+          />
+        ) : null)}
         <div className="dt-model-columns">
           <section className="dt-model-column">
             <div className="dt-column-header">
@@ -399,6 +418,7 @@ function DtModelList({
   loading,
   emptyText,
   onDownload,
+  onOpenExternal,
 }: {
   models: LocalModelInfo[]
   kind: 'catalog' | 'local'
@@ -406,6 +426,7 @@ function DtModelList({
   loading: boolean
   emptyText: string
   onDownload: (file: string) => void
+  onOpenExternal: (key: string, url: string) => void
 }): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const { listboxProps, getOptionProps } = useListbox<HTMLUListElement>({
@@ -440,7 +461,7 @@ function DtModelList({
                   tabIndex={-1}
                   className="dt-text-link"
                   title={`Open on Hugging Face: ${model.huggingFace}`}
-                  onClick={() => window.electronAPI.openExternal(hfUrl(model.huggingFace!))}
+                  onClick={() => onOpenExternal(`hugging-face:${model.file}`, hfUrl(model.huggingFace!))}
                 >
                   Hugging Face
                 </button>
@@ -449,7 +470,7 @@ function DtModelList({
                 tabIndex={-1}
                 className="dt-text-link dt-text-link-google"
                 title={`Search Google for ${modelName(model)}`}
-                onClick={() => window.electronAPI.openExternal(googleSearchUrl(model))}
+                onClick={() => onOpenExternal(`google:${model.file}`, googleSearchUrl(model))}
               >
                 Google
               </button>

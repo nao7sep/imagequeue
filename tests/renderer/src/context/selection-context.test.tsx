@@ -49,6 +49,20 @@ const { SelectionProvider, useSelection } = await import(
 
 type Selection = ReturnType<typeof useSelection>
 
+function deferred<T = void>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 let api: {
   deleteWithFiles: ReturnType<typeof vi.fn>
   removeTask: ReturnType<typeof vi.fn>
@@ -169,5 +183,84 @@ describe('deleteTask', () => {
     expect(ctx().taskActionResults['t-failed']).toEqual({
       delete: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
     })
+  })
+})
+
+describe('task action attempt ownership', () => {
+  it('does not let an older failure overwrite a newer successful retry', async () => {
+    const older = deferred()
+    const newer = deferred()
+    const { ctx } = mountSelection()
+    let olderOutcome!: Promise<string>
+    let newerOutcome!: Promise<string>
+
+    act(() => {
+      olderOutcome = ctx().runTaskAction({
+        taskId: 't-failed', action: 'retry', message: 'retry failed',
+        diagnosticMessage: 'older retry', invoke: () => older.promise,
+      })
+      newerOutcome = ctx().runTaskAction({
+        taskId: 't-failed', action: 'retry', message: 'retry failed',
+        diagnosticMessage: 'newer retry', invoke: () => newer.promise,
+      })
+    })
+    await act(async () => { newer.resolve(); await newerOutcome })
+    await act(async () => { older.reject(new Error('IMAGEQUEUE_STALE_RETRY_SENTINEL')); await olderOutcome })
+
+    expect(ctx().taskActionResults['t-failed']).toBeUndefined()
+    expect(api.appLog).toHaveBeenCalledWith(
+      'error', 'older retry',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_STALE_RETRY_SENTINEL') }) }),
+    )
+  })
+
+  it('does not let an older success clear the newer failed export result', async () => {
+    const older = deferred()
+    const newer = deferred()
+    const { ctx } = mountSelection()
+    let olderOutcome!: Promise<string>
+    let newerOutcome!: Promise<string>
+
+    act(() => {
+      olderOutcome = ctx().runTaskAction({
+        taskId: 't-done', action: 'export', message: 'The current export failed.',
+        diagnosticMessage: 'older export', invoke: () => older.promise,
+      })
+      newerOutcome = ctx().runTaskAction({
+        taskId: 't-done', action: 'export', message: 'The current export failed.',
+        diagnosticMessage: 'newer export', invoke: () => newer.promise,
+      })
+    })
+    await act(async () => { newer.reject(new Error('IMAGEQUEUE_CURRENT_EXPORT_SENTINEL')); await newerOutcome })
+    await act(async () => { older.resolve(); await olderOutcome })
+
+    expect(ctx().taskActionResults['t-done']).toEqual({ export: 'The current export failed.' })
+  })
+
+  it('shares task mutation ownership so an older remove failure cannot restore stale selection', async () => {
+    settingsValue = { settings: { general: { confirm_delete: false, confirm_remove: false } } }
+    const remove = deferred()
+    const deletion = deferred()
+    api.removeTask.mockImplementationOnce(() => remove.promise)
+    api.deleteWithFiles.mockImplementationOnce(() => deletion.promise)
+    const { ctx } = mountSelection()
+    act(() => ctx().select('openai', 't-failed'))
+
+    let removeOutcome!: Promise<void>
+    let deleteOutcome!: Promise<void>
+    act(() => { removeOutcome = ctx().removeTask('openai', 't-failed') })
+    act(() => { deleteOutcome = ctx().deleteTask('openai', 't-failed') })
+    await act(async () => { deletion.resolve(); await deleteOutcome })
+    await act(async () => {
+      remove.reject(new Error('IMAGEQUEUE_STALE_REMOVE_SENTINEL'))
+      await removeOutcome
+    })
+
+    expect(ctx().selection?.taskId).not.toBe('t-failed')
+    expect(ctx().taskActionResults['t-failed']).toBeUndefined()
+    expect(api.appLog).toHaveBeenCalledWith(
+      'error', 'Failed to remove selected task',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_STALE_REMOVE_SENTINEL') }) }),
+    )
   })
 })

@@ -155,8 +155,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     return () => { setSnapshot(backendId, null) }
   }, [backendId, setSnapshot])
 
-  // This column is the board's listbox: its `.task-list` is one tab stop, and
-  // while it has focus it owns all four arrows plus Home/End for navigation and
+  // This column is a semantic list of roving selectable buttons. While one of
+  // those buttons has focus, the list owns all four arrows plus Home/End and
   // the scoped command keys for the selected task. Navigation (Up/Down within,
   // Left/Right to the adjacent column) is delegated to SelectionContext, which
   // keeps the single source of truth and follows focus to the moved-to row.
@@ -164,8 +164,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // while focus is inside the queue — they read the selection from the context,
   // never from the DOM.
   const handleListKeyDown = useCallback((e: React.KeyboardEvent): void => {
-    // A retained result is a sibling of its selectable option, not part of the
-    // listbox command layer. Its focusable X owns Enter/Space and ordinary text
+    // A retained result is a sibling of its selectable button, not part of the
+    // row command layer. Its focusable X owns Enter/Space and ordinary text
     // keys must never become remove/delete/navigation commands for the row.
     if (e.target instanceof HTMLElement && e.target.closest('.task-action-results')) return
     const sel = selection
@@ -286,8 +286,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
       <div
         className="task-list"
-        role="listbox"
-        tabIndex={columnTasks.length === 0 ? 0 : -1}
+        role="list"
         aria-label={`${label} queue`}
         onKeyDown={handleListKeyDown}
         onClick={(e) => { if (e.target === e.currentTarget) clear() }}
@@ -334,9 +333,10 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     taskActionResults,
     reportTaskActionFailure,
     clearTaskActionResult,
+    runTaskAction,
   } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
-  const itemRef = useRef<HTMLDivElement>(null)
+  const itemRef = useRef<HTMLButtonElement>(null)
   // Seeded with the status at mount so an item that is *already* completed or
   // kept when it first renders — app launch restoring stored tasks, or the user
   // revealing kept images with ⌘⇧K — is not mistaken for a fresh completion.
@@ -393,17 +393,25 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   }
   const handleRetry = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    void window.electronAPI.retryTask(backendId, task.id)
-      .then(() => clearTaskActionResult(task.id, 'retry'))
-      .catch((error) => reportTaskActionFailure(task.id, 'retry', 'The task could not be retried. It remains stopped; try again.', 'Failed to retry task', error))
+    void runTaskAction({
+      taskId: task.id,
+      action: 'retry',
+      message: 'The task could not be retried. It remains stopped; try again.',
+      diagnosticMessage: 'Failed to retry task',
+      invoke: () => window.electronAPI.retryTask(backendId, task.id),
+    })
   }
   const getExt = (): string => task.imagePath?.split('.').pop() ?? 'png'
   const handleExport = (e: React.MouseEvent): void => {
     e.stopPropagation()
     if (!task.baseName) return
-    void window.electronAPI.exportImage(task.baseName, getExt())
-      .then(() => clearTaskActionResult(task.id, 'export'))
-      .catch((error) => reportTaskActionFailure(task.id, 'export', 'The image could not be exported. The original is unchanged; try again.', 'Failed to export task image', error))
+    void runTaskAction({
+      taskId: task.id,
+      action: 'export',
+      message: 'The image could not be exported. The original is unchanged; try again.',
+      diagnosticMessage: 'Failed to export task image',
+      invoke: () => window.electronAPI.exportImage(task.baseName!, getExt()),
+    })
   }
   // Keeping and removing are the same gesture at different ends of a task's
   // life — file a finished image away, or drop one that never ran — so they
@@ -423,18 +431,19 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const promptPreview = truncate(task.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text
 
   return (
-    // The option and its retained results are siblings. This keeps the quiet X
-    // focusable without nesting an interactive control inside role="option".
-    <div className="task-entry">
-      <div
+    // The selectable button, pointer action strip, and retained results are
+    // list-item siblings. Result dismissal stays keyboard reachable without
+    // adding an interactive descendant to a one-tab-stop composite.
+    <div className={`task-entry${task.status === 'kept' ? ' task-entry-kept' : ''}`} role="listitem">
+      <button
+        type="button"
         className={[
           'task-item',
           task.status === 'kept' ? 'task-item-kept' : '',
           isSelected ? 'task-item-selected' : '',
         ].filter(Boolean).join(' ')}
         ref={itemRef}
-        role="option"
-        aria-selected={isSelected}
+        aria-pressed={isSelected}
         tabIndex={isTabbable ? 0 : -1}
         onClick={onSelect}
         // Activation follows focus: Tab-ing into the column (or focusing a row any
@@ -473,41 +482,36 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             </span>
           </div>
         </div>
-        {/* Per-row actions are pointer-only affordances (tabIndex -1), never tab
-            stops inside the listbox: the keyboard reaches them via the column's
-            command keys (Backspace removes/keeps/restores, Delete deletes) on the
-            active row. This keeps the column a single tab stop. */}
-        <div className="task-actions">
-          {/* Icon buttons, not text chips: at a row's scale a word has to shrink
-              to ~11px to fit, which is where the old `keep`/`rm`/`exp` affordances
-              became unreadable. The accessible name lives on the button (the icon
-              is aria-hidden), and the title carries the same words as before. */}
-          {(task.status === 'failed' || task.status === 'interrupted') && (
-            <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title="Retry" aria-label="Retry">
-              <Icon name="retry" />
-            </button>
-          )}
-          {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
-            <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder" aria-label="Export">
-              <Icon name="export" />
-            </button>
-          )}
-          {task.status === 'kept' && (
-            <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list" aria-label="Restore">
-              <Icon name="restore" />
-            </button>
-          )}
-          {task.status !== 'generating' && task.status !== 'kept' && (
-            <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={keeping ? 'Keep' : 'Remove'}>
-              <Icon name={removeIcon} />
-            </button>
-          )}
-          {(task.status === 'completed' || task.status === 'kept') && (
-            <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files" aria-label="Delete">
-              <Icon name="trash" />
-            </button>
-          )}
-        </div>
+      </button>
+      {/* Per-row actions are pointer-only affordances (tabIndex -1). Keyboard
+          commands operate on the selected row, while these stay outside the
+          selectable button so the DOM never nests interactive controls. */}
+      <div className="task-actions">
+        {(task.status === 'failed' || task.status === 'interrupted') && (
+          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title="Retry" aria-label="Retry">
+            <Icon name="retry" />
+          </button>
+        )}
+        {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
+          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder" aria-label="Export">
+            <Icon name="export" />
+          </button>
+        )}
+        {task.status === 'kept' && (
+          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list" aria-label="Restore">
+            <Icon name="restore" />
+          </button>
+        )}
+        {task.status !== 'generating' && task.status !== 'kept' && (
+          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={keeping ? 'Keep' : 'Remove'}>
+            <Icon name={removeIcon} />
+          </button>
+        )}
+        {(task.status === 'completed' || task.status === 'kept') && (
+          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files" aria-label="Delete">
+            <Icon name="trash" />
+          </button>
+        )}
       </div>
       {visibleActionResults.length > 0 && (
         <div className="task-action-results">

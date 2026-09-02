@@ -37,10 +37,27 @@ import { StatusIconController } from './status-icon'
 import { openOutputFolder } from './session/open-output-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
 import { installStatusIconAcceptanceFixture } from './status-icon-acceptance'
+import { ownMainWindowContentLoad } from './main-window-content'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
 let startupFailureWindow: BrowserWindow | null = null
+
+function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void {
+  log('error', 'ImageQueue startup failed', { error: serializeError(error) })
+  if (startupFailureWindow && !startupFailureWindow.isDestroyed()) {
+    if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy()
+    return
+  }
+  startupFailureWindow = createStartupFailureWindow(startupFailureMessage(error))
+  // Create the recovery owner before destroying the failed primary window so
+  // its closed callback cannot turn this fatal path into an ordinary quit.
+  if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy()
+  startupFailureWindow.on('closed', () => {
+    startupFailureWindow = null
+    app.exit(1)
+  })
+}
 
 // Every mutable app store is process-owned. Letting a second ImageQueue process
 // open the same root would turn otherwise-atomic file replacement into competing
@@ -157,11 +174,14 @@ function createWindow(): BrowserWindow {
     Menu.buildFromTemplate(template).popup({ window: win })
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    win.loadFile(path.join(__dirname, '../renderer/index.html'))
-  }
+  ownMainWindowContentLoad(
+    win,
+    process.env['ELECTRON_RENDERER_URL'],
+    path.join(__dirname, '../renderer/index.html'),
+    (cause) => {
+      enterStartupFailure(new Error('ImageQueue could not load its main window.', { cause }), win)
+    },
+  )
   return win
 }
 
@@ -174,12 +194,7 @@ if (ownsSingleInstance) app.whenReady().then(() => {
   try {
     startUp()
   } catch (err) {
-    log('error', 'ImageQueue startup failed', { error: serializeError(err) })
-    startupFailureWindow = createStartupFailureWindow(startupFailureMessage(err))
-    startupFailureWindow.on('closed', () => {
-      startupFailureWindow = null
-      app.exit(1)
-    })
+    enterStartupFailure(err)
   }
 })
 
@@ -230,6 +245,7 @@ function startUp(): void {
     isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
     closeViewerWindow,
     onPrimaryWindowClosed: () => {
+      if (startupFailureWindow) return
       if (process.platform !== 'darwin') app.quit()
     },
     dock: app.dock,

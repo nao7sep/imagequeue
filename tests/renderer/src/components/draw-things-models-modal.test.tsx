@@ -40,6 +40,7 @@ function installApi(availableModels: LocalModelInfo[], availableError?: Error): 
     cliStartImport: vi.fn(async () => 'job-1'),
     cliStartDownload: vi.fn(async () => 'job-2'),
     appLog: vi.fn(async () => undefined),
+    openExternal: vi.fn(async () => undefined),
   } as unknown as typeof window.electronAPI
 }
 
@@ -103,5 +104,28 @@ describe('DrawThingsModelsModal operation failures', () => {
       'Renderer operation failed',
       expect.objectContaining({ operation: 'drawthings-import', error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_IMPORT_SENTINEL') }) }),
     )
+  })
+
+  it('owns model-link rejection locally and clears it after a matching success', async () => {
+    installApi([{ ...OFFICIAL_MODEL, huggingFace: 'org/alpha' }])
+    const hostile = new Error('EACCES /private/tmp/IMAGEQUEUE_MODEL_LINK_SENTINEL')
+    vi.mocked(window.electronAPI.openExternal)
+      .mockRejectedValueOnce(hostile)
+      .mockResolvedValueOnce(undefined)
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hugging Face' }))
+    const result = await screen.findByRole('alert')
+    expect(result.textContent).toContain('model page could not be opened')
+    expect(result.textContent).not.toMatch(/EACCES|private\/tmp|SENTINEL/i)
+    expect(window.electronAPI.appLog).toHaveBeenCalledWith(
+      'error', 'Failed to open a Draw Things model link',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_MODEL_LINK_SENTINEL') }) }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hugging Face' }))
+    await screen.findByText('Alpha')
+    await vi.waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
   })
 })

@@ -25,6 +25,7 @@ export type NavDirection = 'up' | 'down' | 'left' | 'right'
 
 export type TaskResultAction = 'thumbnail' | 'preview' | 'retry' | 'export' | 'remove' | 'restore' | 'delete'
 export type TaskActionResults = Record<string, Partial<Record<TaskResultAction, string>> | undefined>
+export type TaskActionOutcome = 'succeeded' | 'failed' | 'superseded'
 
 interface SelectionContextValue {
   selection: Selection | null
@@ -42,6 +43,14 @@ interface SelectionContextValue {
   taskActionResults: TaskActionResults
   reportTaskActionFailure: (taskId: string, action: TaskResultAction, message: string, diagnosticMessage: string, error: unknown) => void
   clearTaskActionResult: (taskId: string, action: TaskResultAction) => void
+  runTaskAction: (options: {
+    taskId: string
+    action: TaskResultAction
+    ownershipKey?: string
+    message: string
+    diagnosticMessage: string
+    invoke: () => Promise<unknown>
+  }) => Promise<TaskActionOutcome>
 }
 
 const SelectionContext = createContext<SelectionContextValue | null>(null)
@@ -52,7 +61,7 @@ function getTaskElement(taskId: string): HTMLElement | null {
 }
 
 // True when DOM focus currently sits on a task row inside one of the queue's
-// `.task-list` listboxes. Drives the never-steal-focus rule: auto-select,
+// `.task-list` selectable lists. Drives the never-steal-focus rule: auto-select,
 // recovery, and the keyboard-nav focus-follow only move DOM focus when focus
 // already lives in the queue.
 function focusIsInTaskList(): boolean {
@@ -67,6 +76,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [taskActionResults, setTaskActionResults] = useState<TaskActionResults>({})
+  const taskActionAttemptsRef = useRef(new Map<string, number>())
   const selectionRef = useRef<Selection | null>(null)
   selectionRef.current = selection
 
@@ -139,6 +149,45 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     }))
   }, [])
 
+  const runTaskAction = useCallback(async ({
+    taskId,
+    action,
+    ownershipKey,
+    message,
+    diagnosticMessage,
+    invoke,
+  }: {
+    taskId: string
+    action: TaskResultAction
+    ownershipKey?: string
+    message: string
+    diagnosticMessage: string
+    invoke: () => Promise<unknown>
+  }): Promise<TaskActionOutcome> => {
+    // Most actions own only their own latest attempt. Queue mutations share one
+    // task-scoped owner because remove/restore/delete can race each other and an
+    // older mutation must not restore selection or present over the newer one.
+    const key = `${taskId}:${ownershipKey ?? action}`
+    const attempt = (taskActionAttemptsRef.current.get(key) ?? 0) + 1
+    taskActionAttemptsRef.current.set(key, attempt)
+    try {
+      await invoke()
+      if (taskActionAttemptsRef.current.get(key) !== attempt) return 'superseded'
+      clearTaskActionResult(taskId, action)
+      return 'succeeded'
+    } catch (error) {
+      // Every failed boundary remains diagnostic even when a newer attempt owns
+      // presentation. Only the latest settlement may change the retained result.
+      recordOperationalDiagnostic(diagnosticMessage, error, { taskId, action })
+      if (taskActionAttemptsRef.current.get(key) !== attempt) return 'superseded'
+      setTaskActionResults((current) => ({
+        ...current,
+        [taskId]: { ...current[taskId], [action]: message },
+      }))
+      return 'failed'
+    }
+  }, [clearTaskActionResult])
+
   // For fallback after removal: compute next selection BEFORE removing. The pure
   // recovery algorithm (same-column next/prev, then nearest in an adjacent column)
   // lives in selection-recovery.ts; this wrapper supplies the live task lists and
@@ -156,12 +205,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // from within the queue, arm a focus-follow so the recovered row reclaims the
   // column's tab stop after the list re-renders (never-steal-focus: only when
   // focus was already in the queue).
-  const transitionSelectionForRemoval = (backend: BackendId, taskId: string): void => {
+  const transitionSelectionForRemoval = (backend: BackendId, taskId: string): boolean => {
     const sel = selectionRef.current
-    if (!sel || sel.backend !== backend || sel.taskId !== taskId) return
+    if (!sel || sel.backend !== backend || sel.taskId !== taskId) return false
     const next = computeNextAfterRemoval({ backend, taskId })
     if (focusIsInTaskList()) pendingFocusIdRef.current = next?.taskId ?? null
     setSelectionInternal(next, { userInitiated: true })
+    return true
   }
 
   const removeTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
@@ -186,15 +236,19 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     // review. When showKeptImages is on, the kept task stays in the list as
     // `kept` and computeNextAfterRemoval still picks the correct neighbor
     // because it runs before the IPC against the pre-update task list.
-    transitionSelectionForRemoval(backend, taskId)
-    try {
-      await window.electronAPI.removeTask(backend, taskId)
-      clearTaskActionResult(taskId, 'remove')
-    } catch (error) {
+    const movedSelection = transitionSelectionForRemoval(backend, taskId)
+    const outcome = await runTaskAction({
+      taskId,
+      action: 'remove',
+      ownershipKey: 'queue-mutation',
+      message: 'The task could not be removed. It remains in the queue; try again.',
+      diagnosticMessage: 'Failed to remove selected task',
+      invoke: () => window.electronAPI.removeTask(backend, taskId),
+    })
+    if (outcome === 'failed' && movedSelection) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
-      reportTaskActionFailure(taskId, 'remove', 'The task could not be removed. It remains in the queue; try again.', 'Failed to remove selected task', error)
     }
-  }, [confirm, settings, setSelectionInternal, clearTaskActionResult, reportTaskActionFailure])
+  }, [confirm, settings, setSelectionInternal, runTaskAction])
 
   // Deletes any task that is not mid-generation, whether or not it ever produced
   // an image: an unprocessed task has nothing on disk, and the main process
@@ -225,27 +279,33 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       if (!ok) return
     }
 
-    transitionSelectionForRemoval(backend, taskId)
-    try {
-      await window.electronAPI.deleteWithFiles(backend, taskId)
-      clearTaskActionResult(taskId, 'delete')
-    } catch (error) {
+    const movedSelection = transitionSelectionForRemoval(backend, taskId)
+    const outcome = await runTaskAction({
+      taskId,
+      action: 'delete',
+      ownershipKey: 'queue-mutation',
+      message: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
+      diagnosticMessage: 'Failed to delete selected task',
+      invoke: () => window.electronAPI.deleteWithFiles(backend, taskId),
+    })
+    if (outcome === 'failed' && movedSelection) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
-      reportTaskActionFailure(taskId, 'delete', 'The task could not be deleted. Its queue entry and files are unchanged; try again.', 'Failed to delete selected task', error)
     }
-  }, [confirm, settings, setSelectionInternal, clearTaskActionResult, reportTaskActionFailure])
+  }, [confirm, settings, setSelectionInternal, runTaskAction])
 
   const restoreTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task || task.status !== 'kept') return
     lastActionRef.current = Date.now()
-    try {
-      await window.electronAPI.restoreTask(backend, taskId)
-      clearTaskActionResult(taskId, 'restore')
-    } catch (error) {
-      reportTaskActionFailure(taskId, 'restore', 'The kept task could not be restored. It remains kept; try again.', 'Failed to restore selected task', error)
-    }
-  }, [clearTaskActionResult, reportTaskActionFailure])
+    await runTaskAction({
+      taskId,
+      action: 'restore',
+      ownershipKey: 'queue-mutation',
+      message: 'The kept task could not be restored. It remains kept; try again.',
+      diagnosticMessage: 'Failed to restore selected task',
+      invoke: () => window.electronAPI.restoreTask(backend, taskId),
+    })
+  }, [runTaskAction])
 
   const removeSelected = useCallback(async (): Promise<void> => {
     const sel = selectionRef.current
@@ -268,7 +328,8 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // ---- Navigation -------------------------------------------------------
 
   // Move the keyboard selection. Owns all four arrows for the queue board, which
-  // is the convention's multi-column "grid" sibling of the listbox: Up/Down move
+  // is the convention's multi-column "grid" sibling of each selectable list:
+  // Up/Down move
   // within the focused column; Left/Right move to the nearest task in the
   // adjacent column by vertical geometry (the cross-column switch the user relies
   // on), following focus to that column. Activation follows focus — selection
@@ -455,6 +516,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       taskActionResults,
       reportTaskActionFailure,
       clearTaskActionResult,
+      runTaskAction,
     }}>
       {children}
     </SelectionContext.Provider>

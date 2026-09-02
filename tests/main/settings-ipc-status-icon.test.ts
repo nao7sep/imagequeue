@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   applyChangedFields: vi.fn(),
   log: vi.fn(),
   showItemInFolder: vi.fn(),
+  openExternal: vi.fn(),
   writeImage: vi.fn(),
   createFromBuffer: vi.fn((): { isEmpty: () => boolean } => ({ isEmpty: () => false })),
 }))
@@ -25,7 +26,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   nativeImage: { createFromPath: vi.fn(), createFromBuffer: mocks.createFromBuffer },
   shell: {
-    openExternal: vi.fn(),
+    openExternal: mocks.openExternal,
     showItemInFolder: mocks.showItemInFolder,
   },
 }))
@@ -67,6 +68,7 @@ beforeEach(() => {
   mocks.applyChangedFields.mockReset()
   mocks.log.mockReset()
   mocks.showItemInFolder.mockReset()
+  mocks.openExternal.mockReset()
   mocks.writeImage.mockReset()
   mocks.createFromBuffer.mockReset()
   mocks.createFromBuffer.mockReturnValue({ isEmpty: () => false })
@@ -94,6 +96,28 @@ describe('prompt image action preconditions', () => {
 
     expect(() => handler?.({}, 'image', 'png')).toThrow('Cannot copy unreadable image')
     expect(mocks.writeImage).not.toHaveBeenCalled()
+  })
+})
+
+describe('external link transport', () => {
+  it('keeps shell.openExternal rejection observable by the renderer caller', async () => {
+    const hostile = new Error('IMAGEQUEUE_OPEN_EXTERNAL_SENTINEL')
+    mocks.openExternal.mockRejectedValueOnce(hostile)
+    mocks.handlers.clear()
+    registerSettingsIpc()
+    const handler = mocks.handlers.get('shell:openExternal')
+
+    await expect(handler?.({}, 'https://example.com/model')).rejects.toBe(hostile)
+    expect(mocks.openExternal).toHaveBeenCalledWith('https://example.com/model')
+  })
+
+  it('rejects unsupported protocols before they reach the OS shell', async () => {
+    mocks.handlers.clear()
+    registerSettingsIpc()
+    const handler = mocks.handlers.get('shell:openExternal')
+
+    await expect(handler?.({}, 'file:///private/tmp/secret')).rejects.toThrow('External URL scheme is not allowed')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
   })
 })
 

@@ -122,17 +122,27 @@
 }
 
 .task-entry {
-  margin-bottom: var(--space-2);
-}
-
-.task-item {
   position: relative;
   --task-bg: var(--bg-secondary);
   --task-actions-bg: var(--task-bg);
+  margin-bottom: var(--space-2);
+}
+
+.task-entry-kept {
+  --task-bg: hsl(225 10% 16%);
+}
+
+.task-item {
+  appearance: none;
+  display: block;
+  width: 100%;
   padding: var(--space-3) var(--space-3) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--task-bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
@@ -159,8 +169,7 @@
 }
 
 .task-item-kept {
-  --task-bg: hsl(225 10% 16%);
-  --task-actions-bg: var(--task-bg);
+  background: var(--task-bg);
 }
 
 .task-item-kept .task-status {
@@ -375,7 +384,8 @@
   opacity: 0;
   transition: opacity 0.15s;
 }
-.task-item:hover .task-actions {
+.task-item:hover + .task-actions,
+.task-actions:hover {
   opacity: 1;
 }
 .task-btn {

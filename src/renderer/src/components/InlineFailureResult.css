@@ -1,0 +1,31 @@
+.inline-failure-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.inline-failure-result button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.inline-failure-result button:hover,
+.inline-failure-result button:focus-visible {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}

@@ -231,11 +231,13 @@ export function registerSettingsIpc(
     return result.canceled ? null : result.filePaths[0]
   })
 
-  handle('shell:openExternal', (_event, url: string) => {
+  handle('shell:openExternal', async (_event, url: string) => {
     let parsed: URL
-    try { parsed = new URL(url) } catch { return }
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return
-    shell.openExternal(url)
+    try { parsed = new URL(url) } catch { throw new Error('External URL is invalid') }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error('External URL scheme is not allowed')
+    }
+    await shell.openExternal(url)
   })
 
   handle('shell:openOutputFolder', openOutputFolder)
