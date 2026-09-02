@@ -2,6 +2,7 @@ import { BrowserWindow, screen } from 'electron'
 import path from 'path'
 import { STARTUP_FAILURE_TITLE, fitStartupFailureHeight, type StartupFailureMeasurement } from '../shared/startup-failure'
 import { hardenWindow } from './utils/harden-window'
+import { log, serializeError } from './logger'
 
 /** Creates ImageQueue's app-authored fatal-startup surface without a native alert icon. */
 export function createStartupFailureWindow(message: string): BrowserWindow {
@@ -55,15 +56,20 @@ export function createStartupFailureWindow(message: string): BrowserWindow {
       })
   })
 
+  const handleLoadFailure = (error: unknown): void => {
+    log('error', 'Failed to load the startup failure surface', { error: serializeError(error) })
+    if (!win.isDestroyed()) win.close()
+  }
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     const url = new URL(process.env['ELECTRON_RENDERER_URL'])
     url.searchParams.set('surface', 'startup-failure')
     url.searchParams.set('message', message)
-    void win.loadURL(url.toString())
+    void win.loadURL(url.toString()).catch(handleLoadFailure)
   } else {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
       query: { surface: 'startup-failure', message },
-    })
+    }).catch(handleLoadFailure)
   }
 
   return win

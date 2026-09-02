@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useUiState } from '../context/UiStateContext'
 import successUrl from '../assets/success.wav'
 import failureUrl from '../assets/failure.wav'
+import { serializeError } from '../../../shared/serialize-error'
 
 // Cache loaded audio data URLs by file path.
 const audioCache: Record<string, string | null> = {}
@@ -22,6 +23,11 @@ function playAudio(src: string, volume: number, onDone: () => void): void {
   audio.addEventListener('ended', onDone)
   audio.addEventListener('error', onDone)
   void audio.play().catch(onDone)
+}
+
+function logNotificationFailure(message: string, error: unknown): void {
+  void window.electronAPI.appLog('error', message, { error: serializeError(error) })
+    .catch((logError) => console.error('Failed to record notification diagnostic', logError))
 }
 
 export function useNotifications(): void {
@@ -84,6 +90,7 @@ function triggerEvent(
 
   if (notificationsEnabled) {
     void window.electronAPI.showNotification(type)
+      .catch((error) => logNotificationFailure('Failed to show completion notification', error))
   }
 
   if (soundsEnabled && !isPlayingRef.current) {
@@ -95,10 +102,12 @@ function triggerEvent(
     if (customFile) {
       void loadAudioFile(customFile).then((dataUrl) => {
         playAudio(dataUrl ?? bundledUrl, volume, done)
+      }).catch((error) => {
+        logNotificationFailure('Failed to load custom completion sound', error)
+        playAudio(bundledUrl, volume, done)
       })
     } else {
       playAudio(bundledUrl, volume, done)
     }
   }
 }
-

@@ -68,6 +68,30 @@
   color-scheme: dark;
 }
 
+.renderer-failure {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.renderer-failure-card {
+  width: min(100%, 560px);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.renderer-failure-card h1,
+.renderer-failure-card p { margin: 0; }
+
+.renderer-failure-card button {
+  width: max-content;
+  min-height: var(--control-md);
+  padding: var(--control-pad-md);
+}
+
 /* ─── Global scroll bars (window-chrome-conventions) ──────────────────────────
    One source of truth for every overflow container — lists, modals, logs, text
    areas. A slim ~12px gutter with a fully rounded pill thumb inset from the

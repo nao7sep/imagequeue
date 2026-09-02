@@ -153,6 +153,21 @@ describe('Settings edits API keys by key id, not through the config payload', ()
   })
 })
 
+describe('Settings immediate notification writes', () => {
+  it('keeps a rejected toggle unchanged and presents authored modal-local copy', async () => {
+    const hostile = 'EACCES /Users/nao/.imagequeue/internal-config.json'
+    settingsValue.saveNotificationField.mockRejectedValueOnce(new Error(hostile))
+    render(<SettingsModal onClose={() => {}} />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Notifications' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show notifications/ }))
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Settings could not be saved.'))
+    expect(screen.getByRole('alert').textContent).not.toContain(hostile)
+    expect((screen.getByRole('checkbox', { name: /Show notifications/ }) as HTMLInputElement).checked).toBe(true)
+  })
+})
+
 describe('Settings status icon preference', () => {
   it('uses the macOS label and stages the preference with General settings', async () => {
     render(<SettingsModal onClose={() => {}} />)

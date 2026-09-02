@@ -56,12 +56,12 @@ function jobSummary(
 // rendered at wildly different weights across fonts, and this row is scanned,
 // not read. `null` keeps the queued state deliberately empty — a job that has
 // not started yet has nothing to report, and a placeholder would read as one.
-function jobIcon(kind: CliJobKind, status: CliJobStatus, exitCode: number | null): IconName | null {
+export function jobIcon(kind: CliJobKind, status: CliJobStatus, exitCode: number | null): IconName | null {
   if (status === 'queued') return null
   if (status === 'running' || status === 'stalled') return kind === 'import' ? 'upload' : 'download'
-  if (status === 'exited' && exitCode === 0) return 'check'
-  if (status === 'killed') return 'stop'
-  return 'close'
+  // Terminal titles already say Imported/Downloaded, Stopped, or Failed and use
+  // the corresponding result color. A terminal mark only repeats that meaning.
+  return null
 }
 
 // ─── CliJobRow ────────────────────────────────────────────────────────────────

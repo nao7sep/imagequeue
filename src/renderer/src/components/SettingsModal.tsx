@@ -211,10 +211,15 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   // Notification toggles save immediately (bypass staged config). Volume is not
   // among them — it is state, and patchUiState persists it on its own channel.
   const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
-    await saveNotificationField(key, value)
-    // Immediate settings are no longer dirty once the main process accepts them.
-    setConfig((prev) => withNotificationField(prev, key, value))
-    setBaseConfig((prev) => withNotificationField(prev, key, value))
+    setErrorMessage(null)
+    try {
+      await saveNotificationField(key, value)
+      // Immediate settings are no longer dirty once the main process accepts them.
+      setConfig((prev) => withNotificationField(prev, key, value))
+      setBaseConfig((prev) => withNotificationField(prev, key, value))
+    } catch (error) {
+      setErrorMessage(presentFailure('settings-save', error))
+    }
   }, [saveNotificationField])
 
   // A cloud backend's credentials and transport knobs only. Its model and generation
