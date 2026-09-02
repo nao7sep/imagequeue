@@ -125,18 +125,21 @@
   line-height: 1;
 }
 
-.modal-close:hover {
-  background: var(--bg-hover);
+.modal-close:hover,
+.modal-close:focus-visible {
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
-.modal-close:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
+.modal-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
 }
 
 /* Confirm dialog */
 .confirm-body {
+  min-height: 0;
+  overflow-y: auto;
   padding: var(--space-4) var(--space-4) var(--space-2);
   font-size: var(--text-md);
   color: var(--text-primary);
