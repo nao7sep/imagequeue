@@ -9,6 +9,10 @@ const startupCss = readFileSync(
   new URL('../../../../src/renderer/src/components/StartupFailureApp.css', import.meta.url),
   'utf8',
 )
+const layoutCss = readFileSync(
+  new URL('../../../../src/renderer/src/components/Layout.css', import.meta.url),
+  'utf8',
+)
 
 describe('modal presentation contracts', () => {
   it('reveals quiet header-close chrome for both pointer and keyboard focus', () => {
@@ -21,5 +25,9 @@ describe('modal presentation contracts', () => {
     expect(startupCss).toMatch(/\.startup-failure-app p\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s)
     expect(startupCss).toMatch(/\[data-measuring='true'\]\s*\{[^}]*height:\s*auto;/s)
     expect(startupCss).toMatch(/\[data-measuring='true'\] p\s*\{[^}]*flex:\s*none;[^}]*overflow:\s*visible;/s)
+  })
+
+  it('keeps About link results separated from the content above', () => {
+    expect(layoutCss).toMatch(/\.about-content\s*>\s*\.inline-failure-result\s*\{[^}]*margin-top:\s*var\(--space-2\);/s)
   })
 })
