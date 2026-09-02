@@ -44,8 +44,15 @@ export function createStartupFailureWindow(message: string): BrowserWindow {
     if (win.isDestroyed()) return
     const workAreaHeight = screen.getDisplayMatching(win.getBounds()).workArea.height
     const fit = fitStartupFailureHeight(measurement, workAreaHeight)
+    const beforeBounds = win.getBounds()
     win.setMinimumSize(420, fit.minimumHeight)
     win.setContentSize(520, fit.height)
+    log('debug', 'Startup failure window fitted', {
+      measurement,
+      fit,
+      beforeBounds,
+      afterBounds: win.getBounds(),
+    })
     win.show()
   }
   ipcMain.on(STARTUP_FAILURE_MEASUREMENT_CHANNEL, receiveMeasurement)

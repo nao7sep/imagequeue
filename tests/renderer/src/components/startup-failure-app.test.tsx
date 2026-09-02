@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StartupFailureApp } from '../../../../src/renderer/src/components/StartupFailureApp'
 
@@ -32,6 +32,7 @@ afterEach(() => {
 
 describe('StartupFailureApp measurement handshake', () => {
   it('reports natural content geometry only after the authored surface is committed', () => {
+    vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
     render(<StartupFailureApp message="ImageQueue could not read its configuration." />)
 
     expect(reportMeasurement).toHaveBeenCalledOnce()
@@ -40,5 +41,19 @@ describe('StartupFailureApp measurement handshake', () => {
       minimumHeight: 174,
     })
     expect(document.querySelector('.startup-failure-app')?.hasAttribute('data-measuring')).toBe(false)
+  })
+
+  it('waits for production stylesheets before reporting the committed geometry', () => {
+    vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
+    render(<StartupFailureApp message="ImageQueue could not read its configuration." />)
+    expect(reportMeasurement).not.toHaveBeenCalled()
+
+    act(() => window.dispatchEvent(new Event('load')))
+
+    expect(reportMeasurement).toHaveBeenCalledOnce()
+    expect(reportMeasurement).toHaveBeenCalledWith({
+      naturalHeight: 200,
+      minimumHeight: 174,
+    })
   })
 })
