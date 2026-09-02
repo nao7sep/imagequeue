@@ -420,6 +420,9 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const removeIcon = keeping ? 'archive' : 'close'
   const removeTitle = keeping ? 'Keep — file this image away, out of the active list' : 'Remove from queue'
   const statusLabel = taskStatusLabel(task.status)
+  const failureMessage = task.status === 'failed'
+    ? task.error || 'This image could not be generated. Retry it; if the problem continues, check the session log.'
+    : null
   const visibleActionResults = TASK_RESULT_ACTIONS.flatMap((action) => {
     const message = taskActionResults[task.id]?.[action]
     return message ? [{ action, message }] : []
@@ -475,11 +478,9 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
           <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
             <span
               className={task.status === 'failed' ? 'task-error' : undefined}
-              title={task.status === 'failed' && task.error ? task.error : undefined}
+              title={failureMessage ?? undefined}
             >
-              {task.status === 'failed'
-                ? (task.error || 'This image could not be generated. Retry it; if the problem continues, check the session log.')
-                : statusLabel}
+              {failureMessage ?? statusLabel}
             </span>
           </div>
         </div>

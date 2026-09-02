@@ -260,11 +260,21 @@ describe('task status presentation', () => {
   it('shows the authored failure without a redundant severity prefix', () => {
     queueValue.tasks.openai = [task('failed', 'provider refused the image')]
 
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+
+    expect(screen.getByText('provider refused the image').getAttribute('title')).toBe('provider refused the image')
+    expect(screen.queryByText('Failed: provider refused the image')).toBeNull()
+    expect(container.querySelector('.task-prompt')?.getAttribute('title')).toBe('a cat')
+    expect(queueValue.tasks.openai[0].status).toBe('failed')
+  })
+
+  it('keeps the full generic failure available when its compact row text ellipsizes', () => {
+    const genericFailure = 'This image could not be generated. Retry it; if the problem continues, check the session log.'
+    queueValue.tasks.openai = [task('failed')]
+
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
 
-    expect(screen.getByText('provider refused the image')).toBeTruthy()
-    expect(screen.queryByText('Failed: provider refused the image')).toBeNull()
-    expect(queueValue.tasks.openai[0].status).toBe('failed')
+    expect(screen.getByText(genericFailure).getAttribute('title')).toBe(genericFailure)
   })
 
   it('renders independent task-action results only inside their affected rows', () => {
