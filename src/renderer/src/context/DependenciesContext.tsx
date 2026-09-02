@@ -14,6 +14,7 @@ import type {
   DependencyProgress,
 } from '../../../shared/types'
 import { presentFailure } from '../utils/failurePresentation'
+import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 
 export type DependencyOperation = DependencyId | 'check' | 'toggle'
 export type DependencyTerminalOutcome = 'cancelled'
@@ -221,7 +222,8 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
       if (!cancelled.current.has(operation)) error = presentFailure('dependencies-change', operationError)
       try {
         snapshot = await window.electronAPI.getDependenciesState()
-      } catch {
+      } catch (reconciliationError) {
+        recordOperationalDiagnostic('Failed to reconcile managed-tool state after an operation', reconciliationError, { operation })
         // Retain the operation error and the prior snapshot. The operation itself
         // remains the actionable failure when reconciliation is unavailable.
       }

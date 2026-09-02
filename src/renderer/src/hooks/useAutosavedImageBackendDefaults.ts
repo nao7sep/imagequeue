@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CloudBackendId } from '../../../shared/types'
-import { serializeError } from '../../../shared/serialize-error'
 import {
   serializeImageBackendDefaults,
   type SavedImageBackendDefaults,
 } from '../utils/imageBackendDefaults'
+import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 
 interface UseAutosavedImageBackendDefaultsOptions {
   backend: CloudBackendId | null
@@ -16,6 +16,13 @@ interface UseAutosavedImageBackendDefaultsOptions {
   saveDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<unknown>
 }
 
+export interface ImageBackendDefaultsPersistence {
+  saveFailure: string | null
+  dismissSaveFailure: () => void
+}
+
+const SAVE_FAILURE = 'Model and parameter changes weren’t saved. Your current choices remain in use for this session.'
+
 export function useAutosavedImageBackendDefaults({
   backend,
   settingsLoaded,
@@ -24,10 +31,12 @@ export function useAutosavedImageBackendDefaults({
   currentParams,
   applySaved,
   saveDefaults,
-}: UseAutosavedImageBackendDefaultsOptions): void {
+}: UseAutosavedImageBackendDefaultsOptions): ImageBackendDefaultsPersistence {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistedSnapshotRef = useRef('')
   const loadedRef = useRef(false)
+  const saveAttemptRef = useRef(0)
+  const [saveFailure, setSaveFailure] = useState<string | null>(null)
   const currentSnapshot = currentModel
     ? serializeImageBackendDefaults(currentModel, currentParams)
     : ''
@@ -49,13 +58,14 @@ export function useAutosavedImageBackendDefaults({
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null
+      const attempt = ++saveAttemptRef.current
       void saveDefaults(backend, currentModel, currentParams).then(() => {
+        if (saveAttemptRef.current !== attempt) return
         persistedSnapshotRef.current = currentSnapshot
+        setSaveFailure(null)
       }).catch((error) => {
-        void window.electronAPI.appLog('error', 'Failed to persist image backend defaults', {
-          backend,
-          error: serializeError(error),
-        })
+        recordOperationalDiagnostic('Failed to persist image backend defaults', error, { backend })
+        if (saveAttemptRef.current === attempt) setSaveFailure(SAVE_FAILURE)
       })
     }, 800)
 
@@ -67,6 +77,12 @@ export function useAutosavedImageBackendDefaults({
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveAttemptRef.current += 1
     }
   }, [])
+
+  return {
+    saveFailure,
+    dismissSaveFailure: () => setSaveFailure(null),
+  }
 }

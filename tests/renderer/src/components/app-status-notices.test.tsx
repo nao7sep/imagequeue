@@ -88,35 +88,54 @@ describe('AppStatusNotices', () => {
     expect(window.electronAPI.resumeInterruptedTasks).toHaveBeenCalledOnce()
   })
 
+  it('logs the original retry diagnostic while keeping hostile details out of the result', async () => {
+    context.tasks = queues([task('stopped', 'interrupted')])
+    const hostile = new Error('EACCES /private/tmp/IMAGEQUEUE_RETRY_SENTINEL')
+    vi.mocked(window.electronAPI.resumeInterruptedTasks).mockRejectedValueOnce(hostile)
+    render(<AppStatusNotices />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry stopped' }))
+    })
+
+    expect(screen.getByRole('alert').textContent).toContain('Retrying the stopped tasks failed.')
+    expect(screen.getByRole('alert').textContent).not.toContain('IMAGEQUEUE_RETRY_SENTINEL')
+    expect(window.electronAPI.appLog).toHaveBeenCalledWith(
+      'error',
+      'Failed to retry stopped tasks',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_RETRY_SENTINEL') }) }),
+    )
+  })
+
   it('renders nothing when persistence and every queue are healthy', () => {
     const { container } = render(<AppStatusNotices />)
     expect(container.innerHTML).toBe('')
   })
 
-  it('owns background mutation failures without exposing hostile diagnostics', async () => {
+  it('owns shell-level background failures without exposing hostile diagnostics', async () => {
     render(<AppStatusNotices />)
     reportOperationalFailure(
-      'task-sentinel',
-      'The task could not be removed. The queue is unchanged; try again.',
-      'Failed to remove task',
-      new Error('EACCES /private/tmp/IMAGEQUEUE_QUEUE_SENTINEL'),
+      'output-folder',
+      'The output folder could not be opened. Check that it is still available.',
+      'Failed to open output folder',
+      new Error('EACCES /private/tmp/IMAGEQUEUE_FOLDER_SENTINEL'),
     )
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('queue is unchanged')
-    expect(alert.textContent).not.toContain('IMAGEQUEUE_QUEUE_SENTINEL')
+    expect(alert.textContent).toContain('output folder could not be opened')
+    expect(alert.textContent).not.toContain('IMAGEQUEUE_FOLDER_SENTINEL')
     expect(window.electronAPI.appLog).toHaveBeenCalledWith(
       'error',
-      'Failed to remove task',
-      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_QUEUE_SENTINEL') }) }),
+      'Failed to open output folder',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_FOLDER_SENTINEL') }) }),
     )
   })
 
-  it('retains independent task results instead of replacing the earlier failure', async () => {
+  it('retains independent shell results instead of replacing the earlier failure', async () => {
     render(<AppStatusNotices />)
-    reportOperationalFailure('task-a', 'Task A could not be removed.', 'remove a failed', new Error('a'))
-    reportOperationalFailure('task-b', 'Task B could not be retried.', 'retry b failed', new Error('b'))
+    reportOperationalFailure('ui-state', 'Window preferences could not be saved.', 'UI state failed', new Error('a'))
+    reportOperationalFailure('output-folder', 'The output folder could not be opened.', 'Folder open failed', new Error('b'))
     expect(await screen.findAllByRole('alert')).toHaveLength(2)
-    expect(screen.getByText('Task A could not be removed.')).toBeTruthy()
-    expect(screen.getByText('Task B could not be retried.')).toBeTruthy()
+    expect(screen.getByText('Window preferences could not be saved.')).toBeTruthy()
+    expect(screen.getByText('The output folder could not be opened.')).toBeTruthy()
   })
 })

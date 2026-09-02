@@ -108,6 +108,7 @@
 
 .task-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
 }
@@ -159,6 +160,10 @@
   --task-actions-bg: var(--task-bg);
 }
 
+.task-item-has-action-results {
+  padding-bottom: calc(var(--control-sm) + var(--space-2));
+}
+
 .task-item-kept .task-status {
   color: var(--warning) !important;
 }
@@ -188,6 +193,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   opacity: 0.85;
+}
+
+.task-action-results {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.task-action-result {
+  padding: var(--space-2);
+  font-size: var(--text-xs);
 }
 
 .context-menu {
@@ -225,6 +241,45 @@
   gap: 4px;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.column-save-result,
+.task-action-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  line-height: 1.4;
+}
+
+.column-save-result {
+  padding: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.column-save-result-close,
+.task-action-result-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.column-save-result-close:hover,
+.column-save-result-close:focus-visible,
+.task-action-result-close:hover,
+.task-action-result-close:focus-visible {
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .drawthings-save-error {

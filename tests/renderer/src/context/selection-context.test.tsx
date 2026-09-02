@@ -49,7 +49,12 @@ const { SelectionProvider, useSelection } = await import(
 
 type Selection = ReturnType<typeof useSelection>
 
-let api: { deleteWithFiles: ReturnType<typeof vi.fn>; removeTask: ReturnType<typeof vi.fn> }
+let api: {
+  deleteWithFiles: ReturnType<typeof vi.fn>
+  removeTask: ReturnType<typeof vi.fn>
+  restoreTask: ReturnType<typeof vi.fn>
+  appLog: ReturnType<typeof vi.fn>
+}
 
 beforeEach(() => {
   const tasks = emptyTasks()
@@ -59,11 +64,16 @@ beforeEach(() => {
     task('t-failed', 'failed'),
     task('t-done', 'completed', 'img-1'),
   ]
-  queueValue = { tasks, restoreTask: vi.fn() }
+  queueValue = { tasks }
   settingsValue = { settings: { general: { confirm_delete: true, delete_to_trash: true } } }
   confirmCalls = []
   confirmAnswer = true
-  api = { deleteWithFiles: vi.fn(async () => {}), removeTask: vi.fn(async () => {}) }
+  api = {
+    deleteWithFiles: vi.fn(async () => {}),
+    removeTask: vi.fn(async () => {}),
+    restoreTask: vi.fn(async () => {}),
+    appLog: vi.fn(async () => undefined),
+  }
   window.electronAPI = api as unknown as typeof window.electronAPI
 })
 
@@ -127,5 +137,37 @@ describe('deleteTask', () => {
     confirmAnswer = false
     await deleteById('t-queued')
     expect(api.deleteWithFiles).not.toHaveBeenCalled()
+  })
+
+  it('retains independent authored failures at the task owner and logs hostile diagnostics', async () => {
+    const hostileRemove = new Error('EACCES /private/tmp/IMAGEQUEUE_REMOVE_SENTINEL')
+    const hostileDelete = new Error('Error invoking remote method /private/tmp/IMAGEQUEUE_DELETE_SENTINEL')
+    api.removeTask.mockRejectedValueOnce(hostileRemove)
+    api.deleteWithFiles.mockRejectedValueOnce(hostileDelete)
+    const { ctx } = mountSelection()
+
+    await act(async () => { await ctx().removeTask('openai', 't-failed') })
+    await act(async () => { await ctx().deleteTask('openai', 't-failed') })
+
+    expect(ctx().taskActionResults['t-failed']).toEqual({
+      remove: 'The task could not be removed. It remains in the queue; try again.',
+      delete: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
+    })
+    expect(JSON.stringify(ctx().taskActionResults)).not.toMatch(/EACCES|private\/tmp|remote method|SENTINEL/i)
+    expect(api.appLog).toHaveBeenCalledWith(
+      'error',
+      'Failed to remove selected task',
+      expect.objectContaining({ taskId: 't-failed', action: 'remove', error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_REMOVE_SENTINEL') }) }),
+    )
+    expect(api.appLog).toHaveBeenCalledWith(
+      'error',
+      'Failed to delete selected task',
+      expect.objectContaining({ taskId: 't-failed', action: 'delete', error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_DELETE_SENTINEL') }) }),
+    )
+
+    act(() => ctx().clearTaskActionResult('t-failed', 'remove'))
+    expect(ctx().taskActionResults['t-failed']).toEqual({
+      delete: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
+    })
   })
 })

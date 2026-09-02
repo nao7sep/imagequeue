@@ -38,7 +38,16 @@ type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' |
 export function Layout(): React.JSX.Element {
   useNotifications()
   const isImeComposing = useImeGuard()
-  const { selectedTask, clear, navigate, removeSelected, restoreSelected, deleteSelected } = useSelection()
+  const {
+    selectedTask,
+    clear,
+    navigate,
+    removeSelected,
+    restoreSelected,
+    deleteSelected,
+    reportTaskActionFailure,
+    clearTaskActionResult,
+  } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   // The right-hand group's panes, reactive to key presence and task counts.
   const { panes: PANES } = useVisiblePanes()
@@ -195,7 +204,10 @@ export function Layout(): React.JSX.Element {
       return
     }
 
+    let active = true
     window.electronAPI.getImage(selectedTask.baseName).then((result) => {
+      if (!active) return
+      clearTaskActionResult(selectedTask.id, 'preview')
       if (result) {
         const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
         setPreviewDataUrl(`data:${mime};base64,${result.data}`)
@@ -203,10 +215,12 @@ export function Layout(): React.JSX.Element {
         setPreviewDataUrl(null)
       }
     }).catch((error) => {
+      if (!active) return
       setPreviewDataUrl(null)
-      reportOperationalFailure(`preview-${selectedTask.id}`, 'The selected image could not be loaded. Select it again to retry.', 'Failed to load selected image', error)
+      reportTaskActionFailure(selectedTask.id, 'preview', 'The selected image could not be loaded. Select it again to retry.', 'Failed to load selected image', error)
     })
-  }, [selectedTask])
+    return () => { active = false }
+  }, [selectedTask, clearTaskActionResult, reportTaskActionFailure])
 
   // Open the fullscreen viewer window when Space is pressed on a completed task.
   // If the viewer is already open, Space toggles it closed.

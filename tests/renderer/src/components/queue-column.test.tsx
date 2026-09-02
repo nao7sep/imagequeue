@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend } from '../../../../src/shared/models'
@@ -64,6 +64,8 @@ interface ElectronApiStub {
   resolveRecommendation: ReturnType<typeof vi.fn>
   onCliJobStatus: ReturnType<typeof vi.fn>
   getImage: ReturnType<typeof vi.fn>
+  retryTask: ReturnType<typeof vi.fn>
+  exportImage: ReturnType<typeof vi.fn>
 }
 let electronAPI: ElectronApiStub
 let paramsPersistenceListener: ((state: DrawThingsParamsPersistenceState) => void) | null
@@ -105,6 +107,9 @@ beforeEach(() => {
     removeSelected: vi.fn(),
     restoreSelected: vi.fn(),
     deleteSelected: vi.fn(),
+    taskActionResults: {},
+    reportTaskActionFailure: vi.fn(),
+    clearTaskActionResult: vi.fn(),
   }
   enqueueValue = {
     snapshots: {},
@@ -128,6 +133,8 @@ beforeEach(() => {
     resolveRecommendation: vi.fn(async () => null),
     onCliJobStatus: vi.fn(() => () => undefined),
     getImage: vi.fn(async () => null),
+    retryTask: vi.fn(async () => undefined),
+    exportImage: vi.fn(async () => undefined),
   }
   ;(window as unknown as { electronAPI: ElectronApiStub }).electronAPI = electronAPI
   paramsPersistenceListener = null
@@ -247,6 +254,64 @@ describe('task status presentation', () => {
     expect(screen.queryByText('Failed: provider refused the image')).toBeNull()
     expect(queueValue.tasks.openai[0].status).toBe('failed')
   })
+
+  it('renders independent task-action results only inside their affected rows', () => {
+    queueValue.tasks.openai = [task('failed'), { ...task('completed'), id: 'task-complete' }]
+    selectionValue.taskActionResults = {
+      'task-failed': { retry: 'This retry stayed with the failed task.' },
+      'task-complete': { export: 'This export stayed with the completed task.' },
+    }
+
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    const failedRow = container.querySelector<HTMLElement>('[data-task-id="task-failed"]')!
+    const completedRow = container.querySelector<HTMLElement>('[data-task-id="task-complete"]')!
+
+    expect(failedRow.textContent).toContain('This retry stayed with the failed task.')
+    expect(failedRow.textContent).not.toContain('This export stayed with the completed task.')
+    expect(completedRow.textContent).toContain('This export stayed with the completed task.')
+    expect(within(failedRow).getByRole('button', { name: 'Close retry result' }).tabIndex).toBe(-1)
+  })
+
+  it('maps thumbnail, retry, and export rejections to the affected task owner', async () => {
+    const completed = {
+      ...task('completed'),
+      id: 'task-complete',
+      baseName: 'image-1',
+      imagePath: '/output/image-1.png',
+    }
+    queueValue.tasks.openai = [task('failed'), completed]
+    electronAPI.getImage.mockRejectedValueOnce(new Error('IMAGEQUEUE_THUMBNAIL_SENTINEL'))
+    electronAPI.retryTask.mockRejectedValueOnce(new Error('IMAGEQUEUE_RETRY_SENTINEL'))
+    electronAPI.exportImage.mockRejectedValueOnce(new Error('IMAGEQUEUE_EXPORT_SENTINEL'))
+
+    render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await flush()
+
+    expect(selectionValue.reportTaskActionFailure).toHaveBeenCalledWith(
+      'task-complete',
+      'thumbnail',
+      'This task’s thumbnail could not be loaded. The task is unchanged.',
+      'Failed to load task thumbnail',
+      expect.objectContaining({ message: 'IMAGEQUEUE_THUMBNAIL_SENTINEL' }),
+    )
+    expect(selectionValue.reportTaskActionFailure).toHaveBeenCalledWith(
+      'task-failed',
+      'retry',
+      'The task could not be retried. It remains stopped; try again.',
+      'Failed to retry task',
+      expect.objectContaining({ message: 'IMAGEQUEUE_RETRY_SENTINEL' }),
+    )
+    expect(selectionValue.reportTaskActionFailure).toHaveBeenCalledWith(
+      'task-complete',
+      'export',
+      'The image could not be exported. The original is unchanged; try again.',
+      'Failed to export task image',
+      expect.objectContaining({ message: 'IMAGEQUEUE_EXPORT_SENTINEL' }),
+    )
+  })
 })
 
 describe('openai column', () => {
@@ -268,6 +333,34 @@ describe('openai column', () => {
       outputFormat: 'png',
       background: 'opaque',
     })
+  })
+
+  it('retains an authored cloud-default save result until a later successful save', async () => {
+    vi.useFakeTimers()
+    const hostile = new Error('EACCES /private/tmp/IMAGEQUEUE_DEFAULTS_SENTINEL')
+    settingsValue.saveImageBackendDefaults.mockRejectedValueOnce(hostile).mockResolvedValueOnce({})
+    stageSettings('openai', 'gpt-image-2')
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+
+    fireEvent.change(rowControl(container, 'Quality'), { target: { value: 'high' } })
+    await advanceAutosave()
+    await flush()
+
+    const failure = screen.getByRole('alert')
+    expect(failure.textContent).toContain('weren’t saved')
+    expect(failure.textContent).toContain('remain in use for this session')
+    expect(failure.textContent).not.toContain('IMAGEQUEUE_DEFAULTS_SENTINEL')
+    expect(electronAPI.appLog).toHaveBeenCalledWith(
+      'error',
+      'Failed to persist image backend defaults',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_DEFAULTS_SENTINEL') }) }),
+    )
+
+    fireEvent.change(rowControl(container, 'Quality'), { target: { value: 'low' } })
+    await advanceAutosave()
+    await flush()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('clamps a background the newly selected model does not offer', async () => {

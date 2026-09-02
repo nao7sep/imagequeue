@@ -82,6 +82,22 @@ describe('completed CLI-job result close', () => {
   })
 })
 
+describe('queue-owned result geometry', () => {
+  const css = read('components/QueueColumn.css')
+
+  it('aligns the quiet close mark to the first line without squeezing wrapped copy', () => {
+    expect(css).toMatch(/\.column-save-result,\s*\.task-action-result\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*align-items:\s*flex-start;/s)
+    expect(css).toMatch(/\.column-save-result-close,\s*\.task-action-result-close\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s)
+    expect(css).toContain('.task-item-has-action-results')
+    expect(css).toMatch(/\.task-list\s*\{[^}]*min-height:\s*0;/s)
+  })
+
+  it('keeps the row close pointer-only inside the one-tab-stop listbox', () => {
+    const component = read('components/QueueColumn.tsx')
+    expect(component).toMatch(/tabIndex=\{-1\}\s*className="task-action-result-close"/)
+  })
+})
+
 describe('pane min-widths mirror the shared constants', () => {
   it('.left-pane min-width matches LEFT_PANE_MIN_PX', () => {
     expect(rule('components/Layout.css', '.left-pane')).toMatch(

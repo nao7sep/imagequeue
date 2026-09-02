@@ -9,8 +9,6 @@ interface QueueContextValue {
   showKeptImages: boolean
   toggleShowKeptImages: () => void
   enqueue: (request: EnqueueRequest) => Promise<void>
-  removeTask: (backend: BackendId, taskId: string) => Promise<void>
-  restoreTask: (backend: BackendId, taskId: string) => Promise<void>
 }
 
 const QueueContext = createContext<QueueContextValue | null>(null)
@@ -89,20 +87,8 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [])
 
-  const removeTask = useCallback(async (backend: BackendId, taskId: string) => {
-    try { await window.electronAPI.removeTask(backend, taskId) } catch (error) {
-      reportOperationalFailure(`task-${taskId}`, 'The task could not be removed. The queue is unchanged; try again.', 'Failed to remove task', error)
-    }
-  }, [])
-
-  const restoreTask = useCallback(async (backend: BackendId, taskId: string) => {
-    try { await window.electronAPI.restoreTask(backend, taskId) } catch (error) {
-      reportOperationalFailure(`task-${taskId}`, 'The kept task could not be restored. It remains kept; try again.', 'Failed to restore task', error)
-    }
-  }, [])
-
   return (
-    <QueueContext.Provider value={{ tasks, loadState, showKeptImages, toggleShowKeptImages, enqueue, removeTask, restoreTask }}>
+    <QueueContext.Provider value={{ tasks, loadState, showKeptImages, toggleShowKeptImages, enqueue }}>
       {children}
     </QueueContext.Provider>
   )

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQueue } from '../context/QueueContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { Icon } from './Icon'
-import { OPERATIONAL_FAILURE_EVENT } from '../utils/operationalFailure'
+import { OPERATIONAL_FAILURE_EVENT, recordOperationalDiagnostic } from '../utils/operationalFailure'
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralForm}`
@@ -43,7 +43,8 @@ export function AppStatusNotices(): React.JSX.Element | null {
     setRetryFailure(false)
     try {
       await window.electronAPI.resumeInterruptedTasks()
-    } catch {
+    } catch (error) {
+      recordOperationalDiagnostic('Failed to retry stopped tasks', error)
       setRetryFailure(true)
     } finally {
       setRetryingStopped(false)

@@ -14,7 +14,7 @@ import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { nextSelectionAfterRemoval } from '../utils/selection-recovery'
-import { reportOperationalFailure } from '../utils/operationalFailure'
+import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 
 export interface Selection {
   backend: BackendId
@@ -22,6 +22,9 @@ export interface Selection {
 }
 
 export type NavDirection = 'up' | 'down' | 'left' | 'right'
+
+export type TaskResultAction = 'thumbnail' | 'preview' | 'retry' | 'export' | 'remove' | 'restore' | 'delete'
+export type TaskActionResults = Record<string, Partial<Record<TaskResultAction, string>> | undefined>
 
 interface SelectionContextValue {
   selection: Selection | null
@@ -36,6 +39,9 @@ interface SelectionContextValue {
   removeSelected: () => Promise<void>
   restoreSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
+  taskActionResults: TaskActionResults
+  reportTaskActionFailure: (taskId: string, action: TaskResultAction, message: string, diagnosticMessage: string, error: unknown) => void
+  clearTaskActionResult: (taskId: string, action: TaskResultAction) => void
 }
 
 const SelectionContext = createContext<SelectionContextValue | null>(null)
@@ -55,11 +61,12 @@ function focusIsInTaskList(): boolean {
 }
 
 export function SelectionProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const { tasks, restoreTask: restoreQueuedTask } = useQueue()
+  const { tasks } = useQueue()
   const { settings } = useSettings()
   const confirm = useConfirm()
 
   const [selection, setSelection] = useState<Selection | null>(null)
+  const [taskActionResults, setTaskActionResults] = useState<TaskActionResults>({})
   const selectionRef = useRef<Selection | null>(null)
   selectionRef.current = selection
 
@@ -104,6 +111,33 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   const clear = useCallback((): void => {
     setSelectionInternal(null, { userInitiated: true })
   }, [setSelectionInternal])
+
+  const clearTaskActionResult = useCallback((taskId: string, action: TaskResultAction): void => {
+    setTaskActionResults((current) => {
+      const taskResults = current[taskId]
+      if (!taskResults?.[action]) return current
+      const nextTaskResults = { ...taskResults }
+      delete nextTaskResults[action]
+      const next = { ...current }
+      if (Object.keys(nextTaskResults).length === 0) delete next[taskId]
+      else next[taskId] = nextTaskResults
+      return next
+    })
+  }, [])
+
+  const reportTaskActionFailure = useCallback((
+    taskId: string,
+    action: TaskResultAction,
+    message: string,
+    diagnosticMessage: string,
+    error: unknown,
+  ): void => {
+    recordOperationalDiagnostic(diagnosticMessage, error, { taskId, action })
+    setTaskActionResults((current) => ({
+      ...current,
+      [taskId]: { ...current[taskId], [action]: message },
+    }))
+  }, [])
 
   // For fallback after removal: compute next selection BEFORE removing. The pure
   // recovery algorithm (same-column next/prev, then nearest in an adjacent column)
@@ -155,11 +189,12 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     transitionSelectionForRemoval(backend, taskId)
     try {
       await window.electronAPI.removeTask(backend, taskId)
+      clearTaskActionResult(taskId, 'remove')
     } catch (error) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
-      reportOperationalFailure(`task-${taskId}`, 'The task could not be removed. It remains in the queue; try again.', 'Failed to remove selected task', error)
+      reportTaskActionFailure(taskId, 'remove', 'The task could not be removed. It remains in the queue; try again.', 'Failed to remove selected task', error)
     }
-  }, [confirm, settings, setSelectionInternal])
+  }, [confirm, settings, setSelectionInternal, clearTaskActionResult, reportTaskActionFailure])
 
   // Deletes any task that is not mid-generation, whether or not it ever produced
   // an image: an unprocessed task has nothing on disk, and the main process
@@ -193,18 +228,24 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     transitionSelectionForRemoval(backend, taskId)
     try {
       await window.electronAPI.deleteWithFiles(backend, taskId)
+      clearTaskActionResult(taskId, 'delete')
     } catch (error) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
-      reportOperationalFailure(`task-${taskId}`, 'The task could not be deleted. Its queue entry and files are unchanged; try again.', 'Failed to delete selected task', error)
+      reportTaskActionFailure(taskId, 'delete', 'The task could not be deleted. Its queue entry and files are unchanged; try again.', 'Failed to delete selected task', error)
     }
-  }, [confirm, settings, setSelectionInternal])
+  }, [confirm, settings, setSelectionInternal, clearTaskActionResult, reportTaskActionFailure])
 
   const restoreTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task || task.status !== 'kept') return
     lastActionRef.current = Date.now()
-    await restoreQueuedTask(backend, taskId)
-  }, [restoreQueuedTask])
+    try {
+      await window.electronAPI.restoreTask(backend, taskId)
+      clearTaskActionResult(taskId, 'restore')
+    } catch (error) {
+      reportTaskActionFailure(taskId, 'restore', 'The kept task could not be restored. It remains kept; try again.', 'Failed to restore selected task', error)
+    }
+  }, [clearTaskActionResult, reportTaskActionFailure])
 
   const removeSelected = useCallback(async (): Promise<void> => {
     const sel = selectionRef.current
@@ -398,7 +439,23 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   }, [tasks, settings, setSelectionInternal])
 
   return (
-    <SelectionContext.Provider value={{ selection, selectedTask, select, clear, navigate, selectEdge, removeTask, restoreTask, deleteTask, removeSelected, restoreSelected, deleteSelected }}>
+    <SelectionContext.Provider value={{
+      selection,
+      selectedTask,
+      select,
+      clear,
+      navigate,
+      selectEdge,
+      removeTask,
+      restoreTask,
+      deleteTask,
+      removeSelected,
+      restoreSelected,
+      deleteSelected,
+      taskActionResults,
+      reportTaskActionFailure,
+      clearTaskActionResult,
+    }}>
       {children}
     </SelectionContext.Provider>
   )

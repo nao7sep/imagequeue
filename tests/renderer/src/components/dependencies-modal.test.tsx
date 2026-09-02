@@ -181,6 +181,36 @@ describe('DependenciesModal cancellation', () => {
     expect(getDependenciesState).toHaveBeenCalledTimes(2)
   })
 
+  it('records a hostile reconciliation failure separately from the authored operation result', async () => {
+    const reconciliation = new Error('EACCES /private/tmp/IMAGEQUEUE_RECONCILE_SENTINEL')
+    const getDependenciesState = vi.fn()
+      .mockResolvedValueOnce(initialState)
+      .mockRejectedValueOnce(reconciliation)
+    const appLog = vi.fn(async () => undefined)
+    window.electronAPI = {
+      getDependenciesState,
+      checkDependencies: vi.fn(async (): Promise<DependenciesState> => {
+        throw new Error('managed tool operation failed')
+      }),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+      appLog,
+    } as unknown as typeof window.electronAPI
+
+    renderModal()
+    await screen.findAllByRole('button', { name: 'Install' })
+    fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
+
+    const result = await screen.findByRole('alert')
+    expect(result.textContent).toContain('managed-tool operation could not be completed')
+    expect(result.textContent).not.toContain('IMAGEQUEUE_RECONCILE_SENTINEL')
+    expect(appLog).toHaveBeenCalledWith(
+      'error',
+      'Failed to reconcile managed-tool state after an operation',
+      expect.objectContaining({ operation: 'check', error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_RECONCILE_SENTINEL') }) }),
+    )
+  })
+
   it('offers an explicit Refresh for installed versionless recommendations', async () => {
     const installed = {
       ...initialState,

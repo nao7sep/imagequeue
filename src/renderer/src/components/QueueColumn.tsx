@@ -19,7 +19,6 @@ import { isFreshCompletion } from '../utils/taskScroll'
 import { taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
-import { reportOperationalFailure } from '../utils/operationalFailure'
 import './QueueColumn.css'
 
 interface Props {
@@ -124,7 +123,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     setCloudParams(saved.ui)
   }, [])
 
-  useAutosavedImageBackendDefaults({
+  const cloudDefaultsPersistence = useAutosavedImageBackendDefaults({
     backend: proprietaryBackend,
     settingsLoaded,
     saved: savedProprietaryDefaults,
@@ -249,6 +248,21 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
           <cloudBackend.Controls params={cloudParams} modelDef={cloudModelDef} onChange={setCloudParams} />
         )}
 
+        {cloudDefaultsPersistence.saveFailure && (
+          <div className="column-save-result" role="alert">
+            <span>{cloudDefaultsPersistence.saveFailure}</span>
+            <button
+              type="button"
+              className="column-save-result-close"
+              aria-label="Close settings save result"
+              title="Close"
+              onClick={cloudDefaultsPersistence.dismissSaveFailure}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+        )}
+
         {backendId === 'drawthings' && (
           <DrawThingsControls model={model} column={drawThings} />
         )}
@@ -306,8 +320,17 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   )
 }
 
+const TASK_RESULT_ACTIONS = ['thumbnail', 'preview', 'retry', 'export', 'remove', 'restore', 'delete'] as const
+
 function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task: Task; backendId: BackendId; isSelected: boolean; isTabbable: boolean; onSelect: () => void }): React.JSX.Element {
-  const { removeTask, restoreTask, deleteTask } = useSelection()
+  const {
+    removeTask,
+    restoreTask,
+    deleteTask,
+    taskActionResults,
+    reportTaskActionFailure,
+    clearTaskActionResult,
+  } = useSelection()
   const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   // Seeded with the status at mount so an item that is *already* completed or
@@ -320,16 +343,21 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
 
   useEffect(() => {
     if ((task.status !== 'completed' && task.status !== 'kept') || !task.baseName) return
+    let active = true
     window.electronAPI.getImage(task.baseName).then((result) => {
+      if (!active) return
+      clearTaskActionResult(task.id, 'thumbnail')
       if (result) {
         const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
         setThumbUrl(`data:${mime};base64,${result.data}`)
       }
     }).catch((error) => {
+      if (!active) return
       setThumbUrl(null)
-      reportOperationalFailure(`task-${task.id}`, 'This task’s thumbnail could not be loaded. The task is unchanged.', 'Failed to load task thumbnail', error)
+      reportTaskActionFailure(task.id, 'thumbnail', 'This task’s thumbnail could not be loaded. The task is unchanged.', 'Failed to load task thumbnail', error)
     })
-  }, [task.status, task.baseName])
+    return () => { active = false }
+  }, [task.id, task.status, task.baseName, clearTaskActionResult, reportTaskActionFailure])
 
   // Auto-scroll only on a real queued/generating -> completed transition, so a
   // freshly generated image reveals itself. Mounting an already-completed task
@@ -361,17 +389,17 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   }
   const handleRetry = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    void window.electronAPI.retryTask(backendId, task.id).catch((error) => {
-      reportOperationalFailure(`task-${task.id}`, 'The task could not be retried. It remains stopped; try again.', 'Failed to retry task', error)
-    })
+    void window.electronAPI.retryTask(backendId, task.id)
+      .then(() => clearTaskActionResult(task.id, 'retry'))
+      .catch((error) => reportTaskActionFailure(task.id, 'retry', 'The task could not be retried. It remains stopped; try again.', 'Failed to retry task', error))
   }
   const getExt = (): string => task.imagePath?.split('.').pop() ?? 'png'
   const handleExport = (e: React.MouseEvent): void => {
     e.stopPropagation()
     if (!task.baseName) return
-    void window.electronAPI.exportImage(task.baseName, getExt()).catch((error) => {
-      reportOperationalFailure(`task-${task.id}`, 'The image could not be exported. The original is unchanged; try again.', 'Failed to export task image', error)
-    })
+    void window.electronAPI.exportImage(task.baseName, getExt())
+      .then(() => clearTaskActionResult(task.id, 'export'))
+      .catch((error) => reportTaskActionFailure(task.id, 'export', 'The image could not be exported. The original is unchanged; try again.', 'Failed to export task image', error))
   }
   // Keeping and removing are the same gesture at different ends of a task's
   // life — file a finished image away, or drop one that never ran — so they
@@ -380,6 +408,10 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const removeIcon = keeping ? 'archive' : 'close'
   const removeTitle = keeping ? 'Keep — file this image away, out of the active list' : 'Remove from queue'
   const statusLabel = taskStatusLabel(task.status)
+  const visibleActionResults = TASK_RESULT_ACTIONS.flatMap((action) => {
+    const message = taskActionResults[task.id]?.[action]
+    return message ? [{ action, message }] : []
+  })
 
   // One-line prompt preview: flatten the (possibly multiline) prompt to a single
   // line and cap the carried text at a generous grapheme budget. CSS still does
@@ -391,7 +423,8 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
       className={[
         'task-item',
         task.status === 'kept' ? 'task-item-kept' : '',
-        isSelected ? 'task-item-selected' : ''
+        isSelected ? 'task-item-selected' : '',
+        visibleActionResults.length > 0 ? 'task-item-has-action-results' : '',
       ].filter(Boolean).join(' ')}
       ref={itemRef}
       role="option"
@@ -434,6 +467,28 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
           </span>
         </div>
       </div>
+      {visibleActionResults.length > 0 && (
+        <div className="task-action-results">
+          {visibleActionResults.map(({ action, message }) => (
+            <div className="task-action-result" role="alert" key={action}>
+              <span>{message}</span>
+              <button
+                type="button"
+                tabIndex={-1}
+                className="task-action-result-close"
+                aria-label={`Close ${action} result`}
+                title="Close"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  clearTaskActionResult(task.id, action)
+                }}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Per-row actions are pointer-only affordances (tabIndex -1), never tab
           stops inside the listbox: the keyboard reaches them via the column's
           command keys (Backspace removes/keeps/restores, Delete deletes) on the
