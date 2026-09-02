@@ -74,6 +74,12 @@ describe('completed CLI-job result close', () => {
     expect(css).toContain('.cli-job-result-close:hover,')
     expect(css).toContain('.cli-job-result-close:focus-visible')
   })
+
+  it('names the drawn X as a close action rather than a severity or dismiss label', () => {
+    const component = read('components/CliJobsPanel.tsx')
+    expect(component).toContain('aria-label="Close job result"')
+    expect(component).not.toContain('title="Dismiss"')
+  })
 })
 
 describe('pane min-widths mirror the shared constants', () => {

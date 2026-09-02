@@ -174,7 +174,7 @@ describe('PromptPane presentation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy to Clipboard' }))
     const copyFailure = await screen.findByRole('alert')
     expect(copyFailure.textContent).toContain('Couldn’t copy this image')
-    fireEvent.click(screen.getByRole('button', { name: /Dismiss Couldn’t copy this image/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Close result: Couldn’t copy this image/ }))
     expect(screen.queryByRole('alert')).toBeNull()
   })
 

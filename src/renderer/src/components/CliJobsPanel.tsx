@@ -144,7 +144,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         {isActive ? (
           <button className="cli-job-stop" onClick={handleStop}>Stop</button>
         ) : (
-          <button className="cli-job-result-close" onClick={onDismiss} title="Dismiss" aria-label="Dismiss job result">
+          <button className="cli-job-result-close" onClick={onDismiss} title="Close" aria-label="Close job result">
             <Icon name="close" />
           </button>
         )}

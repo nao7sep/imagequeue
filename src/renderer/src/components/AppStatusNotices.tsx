@@ -54,7 +54,7 @@ export function AppStatusNotices(): React.JSX.Element | null {
           <button
             className="app-status-notice-dismiss"
             type="button"
-            aria-label="Dismiss session draft save error"
+            aria-label="Close session draft save result"
             onClick={dismissDraftPersistenceFailure}
           >
             <Icon name="close" />

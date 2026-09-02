@@ -63,7 +63,7 @@ describe('AppStatusNotices', () => {
     render(<AppStatusNotices />)
 
     expect(screen.getByRole('alert').textContent).toContain('Session draft isn’t being saved')
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss session draft save error' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close session draft save result' }))
     expect(context.dismiss).toHaveBeenCalledOnce()
   })
 
