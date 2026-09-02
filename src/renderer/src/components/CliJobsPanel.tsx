@@ -142,9 +142,9 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         <span className="cli-job-row-icon" aria-hidden="true">{icon && <Icon name={icon} />}</span>
         <span className={titleClass} title={title}>{title}</span>
         {isActive ? (
-          <button className="cli-job-row-btn cli-job-row-btn-stop" onClick={handleStop}>Stop</button>
+          <button className="cli-job-stop" onClick={handleStop}>Stop</button>
         ) : (
-          <button className="cli-job-row-btn" onClick={onDismiss} title="Dismiss" aria-label="Dismiss">
+          <button className="cli-job-result-close" onClick={onDismiss} title="Dismiss" aria-label="Dismiss job result">
             <Icon name="close" />
           </button>
         )}

@@ -18,7 +18,8 @@ import { elaboratorRecoveryPresentation } from './failure-presentation'
 export function registerElaboratorsIpc(): void {
   const reportRecovery = (target: WebContents): void => {
     for (const notice of drainElaboratorRecoveryNotices()) {
-      target.send('app:notice', elaboratorRecoveryPresentation(notice))
+      const presentation = elaboratorRecoveryPresentation(notice)
+      if (presentation) target.send('app:notice', presentation)
     }
   }
 

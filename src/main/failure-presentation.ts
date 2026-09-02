@@ -53,26 +53,23 @@ type ElaboratorRecovery = {
   error?: string
 }
 
-/** Maps internal recovery records to safe app-notice copy; paths and diagnostics remain in the log. */
-export function elaboratorRecoveryPresentation(recovery: ElaboratorRecovery): AppNotice {
-  if (recovery.kind === 'recovered') {
-    return {
-      title: 'Elaborator settings were reset',
-      message: 'Your elaborator settings file was unreadable, so ImageQueue preserved it and restored ' +
-        'the shipped defaults. Your edited templates remain in the preserved copy; check the ' +
-        'session log for its location.',
-    }
-  }
-  if (recovery.kind === 'quarantine-failed') {
-    return {
-      title: 'Elaborator settings could not be read',
-      message: 'ImageQueue left the unreadable settings file in place because it could not set it aside. ' +
-        'No replacement file was written. Check the session log, correct the data-folder problem, then try again.',
-    }
-  }
+/** Only successful recovery is app-wide. Failed recovery rejects to the active modal, its sole owner. */
+export function elaboratorRecoveryPresentation(recovery: ElaboratorRecovery): AppNotice | null {
+  if (recovery.kind !== 'recovered') return null
   return {
-    title: 'Elaborator defaults could not be restored',
-    message: 'ImageQueue preserved the unreadable elaborator settings, but could not write replacement defaults. ' +
-      'Check the session log, correct the data-folder problem, then try again.',
+    title: 'Elaborator settings were reset',
+    message: 'Your elaborator settings file was unreadable, so ImageQueue preserved it and restored ' +
+      'the shipped defaults. Your edited templates remain in the preserved copy; check the ' +
+      'session log for its location.',
   }
+}
+
+/** Stable terminal copy for an app-owned spawn failure; the original error remains in the log. */
+export function cliJobStartFailurePresentation(
+  kind: 'import' | 'download',
+  _error: unknown,
+): string {
+  return kind === 'import'
+    ? 'The model import could not be started. Check the session log for details.'
+    : 'The model download could not be started. Check the session log for details.'
 }

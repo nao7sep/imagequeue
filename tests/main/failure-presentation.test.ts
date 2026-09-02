@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { elaboratorRecoveryPresentation, generationFailurePresentation } from '../../src/main/failure-presentation'
+import {
+  cliJobStartFailurePresentation,
+  elaboratorRecoveryPresentation,
+  generationFailurePresentation,
+} from '../../src/main/failure-presentation'
 
 const hostile = 'EACCES Error invoking remote method IPC /private/tmp/hostile-sentinel'
 
@@ -25,11 +29,23 @@ describe('generationFailurePresentation', () => {
     expect(message).not.toContain(hostile)
   })
 
-  it('keeps recovery diagnostics and internal paths out of app notices', () => {
-    for (const kind of ['recovered', 'quarantine-failed', 'reseed-failed'] as const) {
-      const notice = elaboratorRecoveryPresentation({ kind, path: hostile, error: hostile })
-      expect(notice.title).not.toContain(hostile)
-      expect(notice.message).not.toContain(hostile)
-    }
+  it('uses an app-wide notice only for successful elaborator recovery', () => {
+    const notice = elaboratorRecoveryPresentation({ kind: 'recovered', path: hostile })
+    expect(notice?.title).toContain('settings were reset')
+    expect(notice?.message).not.toContain(hostile)
+    expect(elaboratorRecoveryPresentation({ kind: 'quarantine-failed', error: hostile })).toBeNull()
+    expect(elaboratorRecoveryPresentation({ kind: 'reseed-failed', error: hostile })).toBeNull()
+  })
+
+  it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {
+    const error = new Error(hostile, { cause: new Error('root cause') })
+    const download = cliJobStartFailurePresentation('download', error)
+    const imported = cliJobStartFailurePresentation('import', error)
+
+    expect(download).toContain('download could not be started')
+    expect(imported).toContain('import could not be started')
+    expect(download).not.toContain(hostile)
+    expect(imported).not.toContain(hostile)
+    expect(error.cause).toBeInstanceOf(Error)
   })
 })
