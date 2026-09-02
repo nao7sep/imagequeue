@@ -1,6 +1,11 @@
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
 import path from 'path'
-import { STARTUP_FAILURE_TITLE, fitStartupFailureHeight, type StartupFailureMeasurement } from '../shared/startup-failure'
+import {
+  STARTUP_FAILURE_MEASUREMENT_CHANNEL,
+  STARTUP_FAILURE_TITLE,
+  fitStartupFailureHeight,
+  isStartupFailureMeasurement,
+} from '../shared/startup-failure'
 import { hardenWindow } from './utils/harden-window'
 import { log, serializeError } from './logger'
 
@@ -23,38 +28,28 @@ export function createStartupFailureWindow(message: string): BrowserWindow {
   })
   hardenWindow(win)
 
-  win.webContents.once('dom-ready', () => {
-    void win.webContents.executeJavaScript(`(() => {
-      const root = document.querySelector('.startup-failure-app');
-      const title = root?.querySelector('h1');
-      const body = root?.querySelector('p');
-      const footer = root?.querySelector('footer');
-      if (!root || !title || !body || !footer) throw new Error('startup failure surface is incomplete');
-      root.dataset.measuring = 'true';
-      const bodyStyle = getComputedStyle(body);
-      const lineHeight = Number.parseFloat(bodyStyle.lineHeight) || 24;
-      const bodyPadding = Number.parseFloat(bodyStyle.paddingTop) + Number.parseFloat(bodyStyle.paddingBottom);
-      const naturalHeight = title.offsetHeight + body.scrollHeight + footer.offsetHeight;
-      const minimumHeight = title.offsetHeight + Math.ceil(lineHeight + bodyPadding) + footer.offsetHeight;
-      delete root.dataset.measuring;
-      return { naturalHeight, minimumHeight };
-    })()`)
-      .then((measurement: StartupFailureMeasurement) => {
-        if (win.isDestroyed()) return
-        const workAreaHeight = screen.getDisplayMatching(win.getBounds()).workArea.height
-        const fit = fitStartupFailureHeight(measurement, workAreaHeight)
-        win.setMinimumSize(420, fit.minimumHeight)
-        win.setContentSize(520, fit.height)
-        win.show()
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to measure the startup failure surface', error)
-        if (win.isDestroyed()) return
-        const workAreaHeight = screen.getDisplayMatching(win.getBounds()).workArea.height
-        win.setContentSize(520, Math.max(1, Math.floor(workAreaHeight * 0.85)))
-        win.show()
-      })
-  })
+  let measurementSettled = false
+  const removeMeasurementOwner = (): void => {
+    ipcMain.removeListener(STARTUP_FAILURE_MEASUREMENT_CHANNEL, receiveMeasurement)
+  }
+  const receiveMeasurement = (event: IpcMainEvent, measurement: unknown): void => {
+    if (event.sender !== win.webContents || measurementSettled) return
+    measurementSettled = true
+    removeMeasurementOwner()
+    if (!isStartupFailureMeasurement(measurement)) {
+      log('error', 'Startup failure surface reported an invalid measurement')
+      if (!win.isDestroyed()) win.close()
+      return
+    }
+    if (win.isDestroyed()) return
+    const workAreaHeight = screen.getDisplayMatching(win.getBounds()).workArea.height
+    const fit = fitStartupFailureHeight(measurement, workAreaHeight)
+    win.setMinimumSize(420, fit.minimumHeight)
+    win.setContentSize(520, fit.height)
+    win.show()
+  }
+  ipcMain.on(STARTUP_FAILURE_MEASUREMENT_CHANNEL, receiveMeasurement)
+  win.once('closed', removeMeasurementOwner)
 
   const handleLoadFailure = (error: unknown): void => {
     log('error', 'Failed to load the startup failure surface', { error: serializeError(error) })

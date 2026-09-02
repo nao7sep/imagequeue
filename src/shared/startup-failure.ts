@@ -1,4 +1,5 @@
 export const STARTUP_FAILURE_TITLE = 'ImageQueue could not start'
+export const STARTUP_FAILURE_MEASUREMENT_CHANNEL = 'startup-failure:measurement'
 
 export const STARTUP_FAILURE_MESSAGE =
   'ImageQueue stopped before opening its main window. Its data was left unchanged. ' +
@@ -7,6 +8,13 @@ export const STARTUP_FAILURE_MESSAGE =
 export interface StartupFailureMeasurement {
   naturalHeight: number
   minimumHeight: number
+}
+
+export function isStartupFailureMeasurement(value: unknown): value is StartupFailureMeasurement {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<StartupFailureMeasurement>
+  return Number.isFinite(candidate.naturalHeight) && Number(candidate.naturalHeight) > 0 &&
+    Number.isFinite(candidate.minimumHeight) && Number(candidate.minimumHeight) > 0
 }
 
 export function fitStartupFailureHeight(

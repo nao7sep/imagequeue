@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitStartupFailureHeight } from '../../src/shared/startup-failure'
+import { fitStartupFailureHeight, isStartupFailureMeasurement } from '../../src/shared/startup-failure'
 
 describe('startup failure window fit', () => {
   it('uses natural content height for short authored copy', () => {
@@ -14,5 +14,12 @@ describe('startup failure window fit', () => {
       height: 680,
       minimumHeight: 174,
     })
+  })
+
+  it('accepts only finite positive renderer measurements', () => {
+    expect(isStartupFailureMeasurement({ naturalHeight: 206, minimumHeight: 174 })).toBe(true)
+    expect(isStartupFailureMeasurement({ naturalHeight: 0, minimumHeight: 174 })).toBe(false)
+    expect(isStartupFailureMeasurement({ naturalHeight: 206, minimumHeight: Number.NaN })).toBe(false)
+    expect(isStartupFailureMeasurement({ naturalHeight: '206', minimumHeight: 174 })).toBe(false)
   })
 })

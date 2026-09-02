@@ -37,6 +37,10 @@ import type {
 } from '../shared/cli-jobs'
 import type { ElectronAPI } from '../shared/electron-api'
 import type { AppNotice } from '../shared/app-notice'
+import {
+  STARTUP_FAILURE_MEASUREMENT_CHANNEL,
+  type StartupFailureMeasurement,
+} from '../shared/startup-failure'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
@@ -44,6 +48,9 @@ export type { ElectronAPI } from '../shared/electron-api'
 
 const api = {
   platform: process.platform,
+  reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement): void => {
+    ipcRenderer.send(STARTUP_FAILURE_MEASUREMENT_CHANNEL, measurement)
+  },
   onAppNotice: (callback: (notice: AppNotice) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, notice: AppNotice): void => callback(notice)
     ipcRenderer.on('app:notice', handler)
