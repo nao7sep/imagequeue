@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme } from 'electron'
 import path from 'path'
-import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
+import { loadConfig, ensureDataDir, getDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
@@ -35,6 +35,7 @@ import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
 import { openOutputFolder } from './session/open-output-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
+import { installStatusIconAcceptanceFixture } from './status-icon-acceptance'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
@@ -207,6 +208,7 @@ function startUp(): void {
   materializeElaborators()
   initSession()
   resetOutputTimestampAllocators()
+  const statusIconAcceptance = installStatusIconAcceptanceFixture(getDataDir())
   log('info', 'App started', {
     version: app.getVersion(),
     packaged: app.isPackaged,
@@ -249,7 +251,7 @@ function startUp(): void {
   registerViewerIpc(() => mainWindowController?.getWindow() ?? null)
   registerNotificationIpc()
   initNotificationWindow()
-  startProcessor()
+  if (!statusIconAcceptance) startProcessor()
   startWakeLockMonitor()
 
   // Re-check the managed dependencies if the launch toggle is on and the last
