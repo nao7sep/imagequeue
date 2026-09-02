@@ -250,9 +250,9 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
             Wait for active generation to finish before resuming another session.
           </div>
         )}
-        {message && <div className="sessions-modal-message">{message}</div>}
-        {loadError && sessions.length > 0 && (
-          <div className="sessions-modal-message">Couldn’t refresh sessions: {loadError}</div>
+        {message && <div className="sessions-modal-message" role="alert">{message}</div>}
+        {loadError && (
+          <div className="sessions-modal-message" role="alert">Couldn’t refresh sessions: {loadError}</div>
         )}
         <div className="sessions-list" aria-label="Sessions" aria-busy={loading} {...listboxProps}>
           {sessions.length === 0 && (
@@ -260,7 +260,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
               {loading
                 ? 'Loading sessions…'
                 : loadError
-                  ? `Couldn’t load sessions: ${loadError}`
+                  ? 'Sessions unavailable.'
                   : 'No saved sessions yet.'}
             </div>
           )}

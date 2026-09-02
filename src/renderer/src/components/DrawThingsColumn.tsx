@@ -1,5 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
+import {
+  DRAW_THINGS_PARAMS_PERSISTENCE_ERROR,
+  type DrawThingsParamsPersistenceState,
+} from '../../../shared/electron-api'
 import { STANDARD_SIZE_PRESETS, type SizePreset } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
@@ -16,13 +20,17 @@ import { DependencyPanePointer } from './DependencyPanePointer'
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
 const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = STANDARD_SIZE_PRESETS
 
-// Sends a save error to the session log. Used by the fire-and-forget autosave
-// paths so a halted main-side write (e.g., when params.json is unreadable) is
-// recorded instead of becoming an unhandled promise rejection. The user-
-// visible symptom remains "saves don't persist", which they'll notice on
-// reload — the log entry exists for diagnosis.
+// Retains full diagnostic detail for renderer-side persistence failures. The
+// column separately owns the concise recovery result; neither surface replaces
+// the other.
 function logSaveError(context: string, err: unknown, extra?: Record<string, unknown>): void {
-  void window.electronAPI.appLog('error', 'Renderer save failed', { context, error: serializeError(err), ...extra })
+  void window.electronAPI.appLog('error', 'Renderer save failed', {
+    context,
+    error: serializeError(err),
+    ...extra,
+  }).catch((logError) => {
+    console.error('Failed to forward renderer save error to the session log', logError)
+  })
 }
 
 function buildDrawThingsParams(
@@ -49,6 +57,7 @@ export interface DrawThingsColumn {
     downloadedModels: LocalModelInfo[]
     modelsLoadState: 'loading' | 'ready' | 'failed'
     modelsLoadError: string
+    paramsSaveError: string
     sizeValue: string
     width: number
     height: number
@@ -94,6 +103,7 @@ export function useDrawThingsColumn({
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [modelsLoadState, setModelsLoadState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [modelsLoadError, setModelsLoadError] = useState('')
+  const [paramsSaveError, setParamsSaveError] = useState('')
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
@@ -103,6 +113,28 @@ export function useDrawThingsColumn({
   // the new model's load completing, so we never persist model A's params
   // under model B's key.
   const [loadedModel, setLoadedModel] = useState('')
+  const persistenceRevision = useRef(0)
+
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    const applyPersistenceState = (state: DrawThingsParamsPersistenceState): void => {
+      if (cancelled) return
+      persistenceRevision.current += 1
+      setParamsSaveError(state.status === 'failed' ? state.message : '')
+    }
+    const stop = window.electronAPI.onDrawThingsParamsPersistenceState(applyPersistenceState)
+    const revision = persistenceRevision.current
+    void window.electronAPI.getDrawThingsParamsPersistenceState()
+      .then((state) => {
+        if (!cancelled && revision === persistenceRevision.current) applyPersistenceState(state)
+      })
+      .catch((error) => logSaveError('load Draw Things parameter persistence state', error))
+    return () => {
+      cancelled = true
+      stop()
+    }
+  }, [active])
 
   // One shared derivation with Advanced Prompting (drawThingsParams.ts) — the
   // two surfaces had grown divergent copies of this precedence.
@@ -219,6 +251,7 @@ export function useDrawThingsColumn({
       })
     } catch (err) {
       logSaveError('apply parameters to all Draw Things models', err, { modelCount: modelFiles.length })
+      setParamsSaveError(DRAW_THINGS_PARAMS_PERSISTENCE_ERROR)
       return
     }
     await refreshAllModelParams()
@@ -328,7 +361,10 @@ export function useDrawThingsColumn({
     if (!active || !model) return
     if (loadedModel !== model) return
     window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
-      .catch((err) => logSaveError('autosave Draw Things model parameters', err, { model }))
+      .catch((err) => {
+        logSaveError('autosave Draw Things model parameters', err, { model })
+        setParamsSaveError(DRAW_THINGS_PARAMS_PERSISTENCE_ERROR)
+      })
   }, [active, model, loadedModel, currentDrawThingsParams])
 
   const enqueueParams = useMemo<Record<string, unknown>>(() => {
@@ -351,6 +387,7 @@ export function useDrawThingsColumn({
       downloadedModels,
       modelsLoadState,
       modelsLoadError,
+      paramsSaveError,
       sizeValue,
       width: localWidth,
       height: localHeight,
@@ -384,11 +421,14 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           surface for the CLI and configs.json. It decides its own
           visibility (silent when both are fine). */}
       <DependencyPanePointer />
+      {c.paramsSaveError && (
+        <div className="drawthings-save-error" role="alert">{c.paramsSaveError}</div>
+      )}
       {c.modelsLoadState === 'loading' && !c.cliStatus && (
         <div className="setting-row model-warning">Checking Draw Things…</div>
       )}
       {c.modelsLoadState === 'failed' && (
-        <div className="setting-row model-warning">
+        <div className="setting-row model-warning" role="alert">
           Couldn’t load Draw Things models{c.modelsLoadError ? `: ${c.modelsLoadError}` : '.'}
         </div>
       )}

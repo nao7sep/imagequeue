@@ -27,6 +27,7 @@ import {
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
 import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
+import { getModelParamsPersistenceState } from './model-params-persistence'
 import {
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
   IMAGE_BACKEND_SECRET,
@@ -243,6 +244,9 @@ export function registerSettingsIpc(
     const safeBase = assertSafeBaseName(baseName)
     const safeExt = assertImageExt(ext)
     const filePath = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Cannot reveal missing image: ${filePath}`)
+    }
     shell.showItemInFolder(filePath)
   })
 
@@ -294,7 +298,9 @@ export function registerSettingsIpc(
   handle('clipboard:copyImage', (_event, baseName: string, ext: string) => {
     const filePath = path.join(getSessionDir(), `${assertSafeBaseName(baseName)}.${assertImageExt(ext)}`)
     const buffer = fs.readFileSync(filePath)
-    clipboard.writeImage(nativeImage.createFromBuffer(buffer))
+    const image = nativeImage.createFromBuffer(buffer)
+    if (image.isEmpty()) throw new Error(`Cannot copy unreadable image: ${filePath}`)
+    clipboard.writeImage(image)
   })
 
   handle('dialog:openDirectory', async (event) => {
@@ -310,6 +316,10 @@ export function registerSettingsIpc(
 
   handle('drawthings:getAllModelParams', () => {
     return getAllModelParams()
+  })
+
+  handle('drawthings:getParamsPersistenceState', () => {
+    return getModelParamsPersistenceState()
   })
 
   handle('drawthings:setModelParams', (_event, modelFile: string, params: DrawThingsModelParams) => {

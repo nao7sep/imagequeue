@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend } from '../../../../src/shared/models'
+import type { DrawThingsParamsPersistenceState } from '../../../../src/shared/electron-api'
 
 // The column under test drives everything through four contexts plus
 // window.electronAPI. The contexts are mocked with mutable module-level values
@@ -58,11 +59,14 @@ interface ElectronApiStub {
   dtGetModelParams: ReturnType<typeof vi.fn>
   dtApplyParamsToAllModels: ReturnType<typeof vi.fn>
   dtSaveModelParams: ReturnType<typeof vi.fn>
+  getDrawThingsParamsPersistenceState: ReturnType<typeof vi.fn>
+  onDrawThingsParamsPersistenceState: ReturnType<typeof vi.fn>
   resolveRecommendation: ReturnType<typeof vi.fn>
   onCliJobStatus: ReturnType<typeof vi.fn>
   getImage: ReturnType<typeof vi.fn>
 }
 let electronAPI: ElectronApiStub
+let paramsPersistenceListener: ((state: DrawThingsParamsPersistenceState) => void) | null
 
 const CLI_OK: CliStatus = { installed: true, version: '1.0.0', path: '/usr/local/bin/drawthings', platform: 'darwin' }
 const CLI_MISSING: CliStatus = { installed: false, version: null, path: null, platform: 'darwin' }
@@ -116,11 +120,17 @@ beforeEach(() => {
     dtGetModelParams: vi.fn(async () => null),
     dtApplyParamsToAllModels: vi.fn(async () => undefined),
     dtSaveModelParams: vi.fn(async () => undefined),
+    getDrawThingsParamsPersistenceState: vi.fn(async () => ({ status: 'saved' })),
+    onDrawThingsParamsPersistenceState: vi.fn((callback) => {
+      paramsPersistenceListener = callback as (state: DrawThingsParamsPersistenceState) => void
+      return () => { paramsPersistenceListener = null }
+    }),
     resolveRecommendation: vi.fn(async () => null),
     onCliJobStatus: vi.fn(() => () => undefined),
     getImage: vi.fn(async () => null),
   }
   ;(window as unknown as { electronAPI: ElectronApiStub }).electronAPI = electronAPI
+  paramsPersistenceListener = null
 })
 
 afterEach(() => {
@@ -357,6 +367,33 @@ describe('drawthings column', () => {
       { ...SAVED_DT_PARAMS, width: 1024 }
     )
     expect((container.querySelector('.enqueue-btn') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('retains an accessible save failure until a later disk flush reports recovery', async () => {
+    electronAPI.localCheckCli.mockResolvedValue(CLI_OK)
+    electronAPI.localListDownloadedModels.mockResolvedValue([MODEL_A])
+    electronAPI.dtGetModelParams.mockResolvedValue(SAVED_DT_PARAMS)
+    const { container } = render(<QueueColumn backendId="drawthings" label="Draw Things" prompt="a cat" />)
+    await flush()
+    await flush()
+
+    act(() => {
+      paramsPersistenceListener?.({
+        status: 'failed',
+        message: 'Draw Things parameters could not be saved. Change a parameter to retry.',
+      })
+    })
+    expect(screen.getByRole('alert').textContent).toContain('could not be saved')
+
+    fireEvent.change(rowControl(container, 'Width'), { target: { value: '1024' } })
+    await flush()
+    expect(electronAPI.dtSaveModelParams).toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toBeTruthy()
+
+    act(() => {
+      paramsPersistenceListener?.({ status: 'saved' })
+    })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 

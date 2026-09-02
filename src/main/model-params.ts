@@ -5,6 +5,10 @@ import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
 import { createCoalescedWriter } from './utils/coalesced-writer'
+import {
+  markModelParamsPersistenceFailed,
+  markModelParamsPersistenceSaved,
+} from './model-params-persistence'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -58,15 +62,18 @@ function writeNow(): void {
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
   writeJsonAtomic(getParamsFilePath(), store, true)
+  markModelParamsPersistenceSaved()
 }
 
 const writer = createCoalescedWriter({
   flush: writeNow,
   debounceMs: WRITE_DEBOUNCE_MS,
-  onError: (error) =>
+  onError: (error) => {
     log('error', 'params.json: write failed', {
       error: serializeError(error),
-    }),
+    })
+    markModelParamsPersistenceFailed()
+  },
   onDrain: () => log('info', 'Drained pending model param writes on quit'),
 })
 
@@ -80,7 +87,10 @@ export function getAllModelParams(): ParamsStore {
 
 export function setModelParams(modelFile: string, params: DrawThingsModelParams): void {
   ensureLoaded()
-  if (loadFailed) throw new Error(loadFailedMessage)
+  if (loadFailed) {
+    markModelParamsPersistenceFailed()
+    throw new Error(loadFailedMessage)
+  }
   const s = store as ParamsStore
   s[modelFile] = params
   writer.schedule()
@@ -91,7 +101,10 @@ export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'he
 export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): void {
   if (modelFiles.length === 0) return
   ensureLoaded()
-  if (loadFailed) throw new Error(loadFailedMessage)
+  if (loadFailed) {
+    markModelParamsPersistenceFailed()
+    throw new Error(loadFailedMessage)
+  }
   const s = store as ParamsStore
   for (const modelFile of modelFiles) {
     const existing = s[modelFile]

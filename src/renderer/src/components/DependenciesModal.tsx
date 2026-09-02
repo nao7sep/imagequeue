@@ -102,7 +102,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
             {busy.has('check') ? 'Checking…' : 'Check for CLI updates'}
           </button>
           {!busy.has('check') && terminalOutcomes.check === 'cancelled' && (
-            <span className="dependency-terminal-outcome">Check cancelled</span>
+            <span className="dependency-terminal-outcome" role="status">Check cancelled</span>
           )}
           <button
             type="button"
@@ -120,7 +120,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
           installed or updated without your go-ahead.
         </p>
 
-        {error && <div className="dependencies-error">{error}</div>}
+        {error && <div className="dependencies-error" role="alert">{error}</div>}
 
         {!state && !error && <div className="dependencies-intro">Loading managed tools…</div>}
         {!state && error && (
@@ -219,7 +219,14 @@ function DependencyRow({
         </p>
         {busy && progress && (
           <div className="dependency-progress">
-            <div className="dependency-progress-bar">
+            <div
+              className="dependency-progress-bar"
+              role="progressbar"
+              aria-label={`${title} installation progress`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={pct ?? undefined}
+            >
               <div
                 className="dependency-progress-fill"
                 style={pct === null ? { width: '100%', opacity: 0.4 } : { width: `${pct}%` }}
@@ -232,7 +239,7 @@ function DependencyRow({
       {actionLabel && (
         <div className="dependency-actions">
           {!busy && terminalOutcome === 'cancelled' && (
-            <span className="dependency-terminal-outcome">Cancelled</span>
+            <span className="dependency-terminal-outcome" role="status">Cancelled</span>
           )}
           <button
             type="button"

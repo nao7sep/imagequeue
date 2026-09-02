@@ -456,7 +456,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               {elaboratorsLoading
                 ? 'Loading elaborators…'
                 : elaboratorsError
-                  ? `Couldn’t load elaborators: ${elaboratorsError}`
+                  ? 'Elaborators unavailable.'
                   : `No ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators.`}
             </div>
           ) : (
@@ -522,6 +522,11 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               onChange={(e) => update({ seed: e.target.value })}
             />
             <div className="advanced-section-label">Elaborators</div>
+            {elaboratorsError && (
+              <div className="advanced-message advanced-message-error" role="alert">
+                Couldn’t load elaborators: {elaboratorsError}
+              </div>
+            )}
             <div className="advanced-elaborator-columns">
               {ELABORATOR_KINDS.map((kind) => renderElaboratorColumn(kind))}
             </div>
@@ -581,7 +586,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 <>
                   <div className="advanced-targets-group-title">Draw Things</div>
                   {downloadedDtModels.length === 0 ? (
-                    <div className="advanced-empty">
+                    <div className="advanced-empty" role={dtModelsError ? 'alert' : undefined}>
                       {dtModelsLoading
                         ? 'Loading models…'
                         : dtModelsError
@@ -721,7 +726,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               {totalTasks} task{totalTasks === 1 ? '' : 's'}
             </div>
 
-            {error && <div className="advanced-message advanced-message-error">{error}</div>}
+            {error && <div className="advanced-message advanced-message-error" role="alert">{error}</div>}
 
             <button
               className="modal-btn modal-btn-primary advanced-queue-btn"

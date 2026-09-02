@@ -227,6 +227,16 @@
   align-items: flex-start;
 }
 
+.drawthings-save-error {
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
 /* The single pointer to the Dependencies modal. One full-width clickable line;
    severity tints the left edge and text without shouting. */
 .dep-pane-pointer {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../src/main/config/types'
+import fs from 'fs'
 
 type Handler = (...args: unknown[]) => unknown
 type ConfigSaved = (config: AppConfig) => Promise<void> | void
@@ -12,17 +13,20 @@ const mocks = vi.hoisted(() => ({
   saveConfig: vi.fn(),
   applyChangedFields: vi.fn(),
   log: vi.fn(),
+  showItemInFolder: vi.fn(),
+  writeImage: vi.fn(),
+  createFromBuffer: vi.fn((): { isEmpty: () => boolean } => ({ isEmpty: () => false })),
 }))
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
   BrowserWindow: { fromWebContents: vi.fn(() => null) },
-  clipboard: { readText: vi.fn(() => '') },
+  clipboard: { readText: vi.fn(() => ''), writeImage: mocks.writeImage },
   dialog: { showOpenDialog: vi.fn() },
-  nativeImage: { createFromPath: vi.fn() },
+  nativeImage: { createFromPath: vi.fn(), createFromBuffer: mocks.createFromBuffer },
   shell: {
     openExternal: vi.fn(),
-    showItemInFolder: vi.fn(),
+    showItemInFolder: mocks.showItemInFolder,
   },
 }))
 
@@ -37,6 +41,10 @@ vi.mock('../../src/main/config', () => ({
 
 vi.mock('../../src/main/settings-changes', () => ({
   applyChangedFields: mocks.applyChangedFields,
+}))
+
+vi.mock('../../src/main/session', () => ({
+  getSessionDir: () => '/session',
 }))
 
 vi.mock('../../src/main/logger', () => ({
@@ -58,6 +66,35 @@ beforeEach(() => {
   mocks.saveConfig.mockReset()
   mocks.applyChangedFields.mockReset()
   mocks.log.mockReset()
+  mocks.showItemInFolder.mockReset()
+  mocks.writeImage.mockReset()
+  mocks.createFromBuffer.mockReset()
+  mocks.createFromBuffer.mockReturnValue({ isEmpty: () => false })
+})
+
+describe('prompt image action preconditions', () => {
+  it('rejects Reveal when the selected image no longer exists', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValueOnce(false)
+    mocks.handlers.clear()
+    registerSettingsIpc()
+    const handler = mocks.handlers.get('shell:revealFile')
+    expect(handler).toBeTruthy()
+
+    expect(() => handler?.({}, 'image', 'png')).toThrow('Cannot reveal missing image')
+    expect(mocks.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('rejects Copy to Clipboard when the image bytes cannot be decoded', () => {
+    vi.spyOn(fs, 'readFileSync').mockReturnValueOnce(Buffer.from('not an image'))
+    mocks.createFromBuffer.mockReturnValueOnce({ isEmpty: () => true })
+    mocks.handlers.clear()
+    registerSettingsIpc()
+    const handler = mocks.handlers.get('clipboard:copyImage')
+    expect(handler).toBeTruthy()
+
+    expect(() => handler?.({}, 'image', 'png')).toThrow('Cannot copy unreadable image')
+    expect(mocks.writeImage).not.toHaveBeenCalled()
+  })
 })
 
 describe('status-icon reconciliation after a settings save', () => {

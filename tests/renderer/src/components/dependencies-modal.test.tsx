@@ -73,7 +73,7 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
 
-    expect(await screen.findByText('state unavailable')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toContain('state unavailable')
     expect(screen.getByText('Couldn’t load managed-tool status.')).toBeTruthy()
   })
 
@@ -153,7 +153,7 @@ describe('DependenciesModal cancellation', () => {
     await waitFor(() => expect(cancelDependencyOperations).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
 
-    expect(await screen.findByText('Cancelled')).toBeTruthy()
+    expect(await screen.findByRole('status')).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0])
     expect(screen.queryByText('Cancelled')).toBeNull()
   })
@@ -175,7 +175,7 @@ describe('DependenciesModal cancellation', () => {
     await screen.findAllByRole('button', { name: 'Install' })
     fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
 
-    expect(await screen.findByText(/Draw Things CLI: offline/)).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toContain('Draw Things CLI: offline')
     expect(getDependenciesState).toHaveBeenCalledTimes(2)
   })
 

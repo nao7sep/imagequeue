@@ -10,6 +10,7 @@ import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textClea
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
 import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
+import { serializeError } from '../../../shared/serialize-error'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import './PromptPane.css'
@@ -19,6 +20,66 @@ interface Props {
   previewDataUrl: string | null
   prompt: string
   onPromptChange: (p: string) => void
+}
+
+type PromptPaneAction =
+  | 'paste-text'
+  | 'copy-prompt'
+  | 'reveal-image'
+  | 'copy-image'
+  | 'export-image'
+  | 'save-image-as'
+
+const PROMPT_ACTIONS: readonly PromptPaneAction[] = ['paste-text']
+const PREVIEW_ACTIONS: readonly PromptPaneAction[] = [
+  'copy-prompt',
+  'reveal-image',
+  'copy-image',
+  'export-image',
+  'save-image-as',
+]
+
+function logActionFailure(action: PromptPaneAction, error: unknown): void {
+  void window.electronAPI.appLog('error', 'Prompt pane action failed', {
+    action,
+    error: serializeError(error),
+  }).catch((logError) => {
+    console.error('Failed to forward prompt pane action error to the session log', logError)
+  })
+}
+
+function ActionFailures({
+  actions,
+  failures,
+  onDismiss,
+}: {
+  actions: readonly PromptPaneAction[]
+  failures: Partial<Record<PromptPaneAction, string>>
+  onDismiss: (action: PromptPaneAction) => void
+}): React.JSX.Element | null {
+  const visible = actions.flatMap((action) => {
+    const message = failures[action]
+    return message ? [{ action, message }] : []
+  })
+  if (visible.length === 0) return null
+
+  return (
+    <div className="prompt-action-failures">
+      {visible.map(({ action, message }) => (
+        <div className="prompt-action-failure" role="alert" key={action}>
+          <span>{message}</span>
+          <button
+            type="button"
+            className="prompt-action-failure-dismiss"
+            aria-label={`Dismiss ${message}`}
+            onClick={() => onDismiss(action)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
@@ -46,6 +107,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const [imageCopied, setImageCopied] = useState(false)
   const [exported, setExported] = useState(false)
   const [clipboardTextAvailable, setClipboardTextAvailable] = useState(false)
+  const [actionFailures, setActionFailures] = useState<Partial<Record<PromptPaneAction, string>>>({})
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const detailsRef = useRef<HTMLDivElement>(null)
@@ -62,7 +124,30 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     setPromptCopied(false)
     setImageCopied(false)
     setExported(false)
+    setActionFailures((current) => {
+      const next = { ...current }
+      for (const action of PREVIEW_ACTIONS) delete next[action]
+      return next
+    })
   }, [selectedTask?.id])
+
+  const reportActionFailure = useCallback((
+    action: PromptPaneAction,
+    message: string,
+    error: unknown,
+  ): void => {
+    logActionFailure(action, error)
+    setActionFailures((current) => ({ ...current, [action]: message }))
+  }, [])
+
+  const clearActionFailure = useCallback((action: PromptPaneAction): void => {
+    setActionFailures((current) => {
+      if (!current[action]) return current
+      const next = { ...current }
+      delete next[action]
+      return next
+    })
+  }, [])
 
   const getExt = useCallback(
     () => selectedTask?.imagePath?.split('.').pop() ?? 'png',
@@ -71,58 +156,100 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
 
   const handleCopyPrompt = useCallback((): void => {
     if (!selectedTask?.prompt) return
-    void navigator.clipboard.writeText(selectedTask.prompt).then(() => {
-      setPromptCopied(true)
-      setClipboardTextAvailable(true)
-      setTimeout(() => setPromptCopied(false), 1500)
-    })
-  }, [selectedTask])
+    void navigator.clipboard.writeText(selectedTask.prompt)
+      .then(() => {
+        clearActionFailure('copy-prompt')
+        setPromptCopied(true)
+        setClipboardTextAvailable(true)
+        setTimeout(() => setPromptCopied(false), 1500)
+      })
+      .catch((error) => reportActionFailure(
+        'copy-prompt',
+        'Couldn’t copy the prompt. Try Copy Prompt again.',
+        error,
+      ))
+  }, [selectedTask, clearActionFailure, reportActionFailure])
 
   const handleReveal = useCallback((): void => {
     if (!selectedTask?.baseName) return
     void window.electronAPI.revealFile(selectedTask.baseName, getExt())
-  }, [selectedTask, getExt])
+      .then(() => clearActionFailure('reveal-image'))
+      .catch((error) => reportActionFailure(
+        'reveal-image',
+        'Couldn’t reveal this image. Try Reveal again.',
+        error,
+      ))
+  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
 
   const handleCopyImage = useCallback((): void => {
     if (!selectedTask?.baseName) return
-    void window.electronAPI.copyImageToClipboard(selectedTask.baseName, getExt()).then(() => {
-      setImageCopied(true)
-      void window.electronAPI.hasClipboardText().then((hasText) => {
-        setClipboardTextAvailable(hasText)
+    void window.electronAPI.copyImageToClipboard(selectedTask.baseName, getExt())
+      .then(() => {
+        clearActionFailure('copy-image')
+        setImageCopied(true)
+        void window.electronAPI.hasClipboardText()
+          .then(setClipboardTextAvailable)
+          .catch(() => setClipboardTextAvailable(false))
+        setTimeout(() => setImageCopied(false), 1500)
       })
-      setTimeout(() => setImageCopied(false), 1500)
-    })
-  }, [selectedTask, getExt])
+      .catch((error) => reportActionFailure(
+        'copy-image',
+        'Couldn’t copy this image. Try Copy to Clipboard again.',
+        error,
+      ))
+  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
 
   const handleExport = useCallback((): void => {
     if (!selectedTask?.baseName) return
-    void window.electronAPI.exportImage(selectedTask.baseName, getExt()).then(() => {
-      setExported(true)
-      setTimeout(() => setExported(false), 1500)
-    })
-  }, [selectedTask, getExt])
+    void window.electronAPI.exportImage(selectedTask.baseName, getExt())
+      .then(() => {
+        clearActionFailure('export-image')
+        setExported(true)
+        setTimeout(() => setExported(false), 1500)
+      })
+      .catch((error) => reportActionFailure(
+        'export-image',
+        'Couldn’t export this image. Check the export folder and try again.',
+        error,
+      ))
+  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
 
   const handleSaveAs = useCallback((): void => {
     if (!selectedTask?.baseName) return
     void window.electronAPI.exportImageAs(selectedTask.baseName, getExt())
-  }, [selectedTask, getExt])
+      .then((destination) => {
+        if (destination !== null) clearActionFailure('save-image-as')
+      })
+      .catch((error) => reportActionFailure(
+        'save-image-as',
+        'Couldn’t save this image. Choose Save As again.',
+        error,
+      ))
+  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
 
   const refreshClipboardTextAvailable = useCallback((): void => {
-    void window.electronAPI.hasClipboardText().then((hasText) => {
-      setClipboardTextAvailable(hasText)
-    })
+    void window.electronAPI.hasClipboardText()
+      .then(setClipboardTextAvailable)
+      .catch(() => setClipboardTextAvailable(false))
   }, [])
 
   const handlePasteClipboardText = useCallback((): void => {
-    void window.electronAPI.readClipboardText().then((clipboardText) => {
-      if (!clipboardText.trim()) {
-        setClipboardTextAvailable(false)
-        return
-      }
-      onPromptChange(clipboardText)
-      setClipboardTextAvailable(true)
-    })
-  }, [onPromptChange])
+    void window.electronAPI.readClipboardText()
+      .then((clipboardText) => {
+        clearActionFailure('paste-text')
+        if (!clipboardText.trim()) {
+          setClipboardTextAvailable(false)
+          return
+        }
+        onPromptChange(clipboardText)
+        setClipboardTextAvailable(true)
+      })
+      .catch((error) => reportActionFailure(
+        'paste-text',
+        'Couldn’t read text from the clipboard. Try Paste Text again.',
+        error,
+      ))
+  }, [onPromptChange, clearActionFailure, reportActionFailure])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -196,6 +323,11 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             Advanced Prompting
           </button>
         </div>
+        <ActionFailures
+          actions={PROMPT_ACTIONS}
+          failures={actionFailures}
+          onDismiss={clearActionFailure}
+        />
         <textarea
           className="prompt-textarea"
           rows={3}
@@ -253,6 +385,11 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             <button className="preview-btn preview-btn-export" onClick={handleSaveAs}>Save As…</button>
           </div>
         )}
+        <ActionFailures
+          actions={PREVIEW_ACTIONS}
+          failures={actionFailures}
+          onDismiss={clearActionFailure}
+        />
       </div>
 
       {showAdvanced && (

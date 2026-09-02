@@ -227,7 +227,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         kind={kind}
         label={label}
         loading={loadingModels}
-        emptyText={modelsError ? `Couldn’t load models: ${modelsError}` : emptyText}
+        emptyText={modelsError ? 'Models unavailable.' : emptyText}
         onDownload={(file) => { void handleStartDownload(file) }}
       />
     )
@@ -249,7 +249,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     >
       {cliInstalled !== true ? (
         <div className="dt-modal-body dt-cli-required">
-          <p className="dt-hint">
+          <p className="dt-hint" role={cliError ? 'alert' : undefined}>
             {cliError
               ? `Couldn’t check the Draw Things CLI: ${cliError}`
               : cliInstalled === null
@@ -268,6 +268,9 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         </div>
       ) : (
       <div className="dt-modal-body">
+        {modelsError && (
+          <div className="dt-model-error" role="alert">Couldn’t load models: {modelsError}</div>
+        )}
         <div className="dt-model-columns">
           <section className="dt-model-column">
             <div className="dt-column-header">
@@ -329,7 +332,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
               <section className="dt-section">
                 <h4 className="dt-section-title">Local Imports</h4>
                 {customJsonStatus.kind === 'unreadable' && (
-                  <p className="dt-hint">
+                  <p className="dt-hint" role="alert">
                     Couldn&apos;t read <code>custom.json</code> ({customJsonStatus.reason}). Any imported models may currently be listed under Official Models until this file can be parsed.
                   </p>
                 )}

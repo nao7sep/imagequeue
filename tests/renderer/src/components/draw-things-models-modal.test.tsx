@@ -27,12 +27,14 @@ const OFFICIAL_MODEL: LocalModelInfo = {
   huggingFace: null,
 }
 
-function installApi(availableModels: LocalModelInfo[]): void {
+function installApi(availableModels: LocalModelInfo[], availableError?: Error): void {
   window.electronAPI = {
     localCheckCli: vi.fn(async () => CLI_OK),
     localListDownloadedModels: vi.fn(async () => []),
     localReadCustomJsonImportedFiles: vi.fn(async () => ({ kind: 'absent' as const })),
-    localListAvailableModels: vi.fn(async () => availableModels),
+    localListAvailableModels: availableError
+      ? vi.fn(async () => { throw availableError })
+      : vi.fn(async () => availableModels),
     onCliJobStatus: vi.fn(() => () => undefined),
   } as unknown as typeof window.electronAPI
 }
@@ -59,5 +61,18 @@ describe('DrawThingsModelsModal empty states', () => {
 
     expect(screen.getByText('No official models match this search.')).toBeTruthy()
     expect(screen.queryByText('No official models available.')).toBeNull()
+  })
+
+  it('renders one accessible load failure above the bounded model columns', async () => {
+    installApi([], new Error('catalog unavailable'))
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('catalog unavailable')
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    const body = alert.parentElement
+    expect(body?.classList.contains('dt-modal-body')).toBe(true)
+    expect(body?.querySelector('.dt-model-columns')).toBeTruthy()
+    expect(body?.firstElementChild).toBe(alert)
   })
 })

@@ -238,7 +238,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       onClose={handleClose}
       footer={
         <>
-          {errorMessage && <span className="modal-footer-lead settings-error">{errorMessage}</span>}
           <button className="modal-btn" onClick={() => void handleClose()}>Cancel</button>
           <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>Save</button>
         </>
@@ -257,6 +256,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         ))}
       </div>
       <div className="settings-overlay">
+      {errorMessage && <div className="settings-error" role="alert">{errorMessage}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>
         <div className="settings-section">
           <div className="settings-field">

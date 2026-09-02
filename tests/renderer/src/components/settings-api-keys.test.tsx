@@ -170,3 +170,23 @@ describe('Settings status icon preference', () => {
     expect(screen.getByText('Show in notification area')).toBeTruthy()
   })
 })
+
+describe('Settings save result', () => {
+  it('keeps a failed save in the scrolling body without displacing footer actions', async () => {
+    settingsValue.saveChangedSettings.mockRejectedValueOnce(new Error('settings disk unavailable'))
+    render(<SettingsModal onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Confirm remove'))
+    fireEvent.click(saveButton())
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('settings disk unavailable')
+    expect(alert.closest('.settings-overlay')).toBeTruthy()
+    const footer = document.querySelector('.modal-footer')
+    expect(footer).toBeTruthy()
+    expect(footer?.querySelector('[role="alert"]') ?? null).toBeNull()
+    expect(Array.from(footer?.querySelectorAll('button') ?? []).map((button) => button.textContent)).toEqual([
+      'Cancel',
+      'Save',
+    ])
+  })
+})

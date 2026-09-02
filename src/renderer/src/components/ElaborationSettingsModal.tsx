@@ -376,7 +376,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             Reset elaboration settings
           </button>
         </div>
-        {message && <div className="elaboration-settings-message">{message}</div>}
+        {message && <div className="elaboration-settings-message" role="alert">{message}</div>}
       </div>
     </Modal>
   )

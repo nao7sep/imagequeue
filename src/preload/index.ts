@@ -24,7 +24,10 @@ import {
   ConceptProbeSummary,
   ConceptRow,
 } from '../shared/types'
-import type { SessionDraftPersistenceState } from '../shared/electron-api'
+import type {
+  DrawThingsParamsPersistenceState,
+  SessionDraftPersistenceState,
+} from '../shared/electron-api'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
 import type { UiState } from '../shared/ui-state'
 import type {
@@ -322,6 +325,20 @@ const api = {
 
   dtSaveModelParams: (modelFile: string, params: DrawThingsModelParams): Promise<void> =>
     ipcRenderer.invoke('drawthings:setModelParams', modelFile, params),
+
+  getDrawThingsParamsPersistenceState: (): Promise<DrawThingsParamsPersistenceState> =>
+    ipcRenderer.invoke('drawthings:getParamsPersistenceState'),
+
+  onDrawThingsParamsPersistenceState: (
+    callback: (state: DrawThingsParamsPersistenceState) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      state: DrawThingsParamsPersistenceState,
+    ): void => { callback(state) }
+    ipcRenderer.on('drawthings:paramsPersistenceState', handler)
+    return () => { ipcRenderer.removeListener('drawthings:paramsPersistenceState', handler) }
+  },
 
   dtApplyParamsToAllModels: (
     modelFiles: string[],

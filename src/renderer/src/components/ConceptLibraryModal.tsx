@@ -196,9 +196,9 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
       }
     >
       <div className="concept-library-body">
-        {message && <div className="concept-library-message">{message}</div>}
-        {facetsError && facets.length > 0 && (
-          <div className="concept-library-message">Couldn’t refresh concepts: {facetsError}</div>
+        {message && <div className="concept-library-message" role="alert">{message}</div>}
+        {facetsError && (
+          <div className="concept-library-message" role="alert">Couldn’t refresh concepts: {facetsError}</div>
         )}
         <div className={`concept-library-columns${facets.length === 0 ? ' concept-library-columns-empty' : ''}`}>
             <div className="concept-library-facets" aria-label="Facets" aria-busy={facetsLoading} {...listboxProps}>
@@ -207,7 +207,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                   {facetsLoading
                     ? 'Loading concepts…'
                     : facetsError
-                      ? `Couldn’t load concepts: ${facetsError}`
+                      ? 'Concepts unavailable.'
                       : 'No concepts yet. They accumulate as Advanced Prompting elaborates prompts; every value the AI finds is recorded here with how often and how recently it was used.'}
                 </div>
               )}
@@ -260,7 +260,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                   {detailLoading ? (
                     <div className="concept-library-empty">Loading facet…</div>
                   ) : detailError ? (
-                    <div className="concept-library-empty">Couldn’t load this facet: {detailError}</div>
+                    <div className="concept-library-empty" role="alert">Couldn’t load this facet: {detailError}</div>
                   ) : sections.length === 0 ? (
                     <div className="concept-library-empty">
                       {rows.length === 0

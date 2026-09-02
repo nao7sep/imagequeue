@@ -311,7 +311,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
             disabled={busy || (draftTarget !== null && !draftOpenHere)}
             loading={loading}
             emptyText={loadError
-              ? `Couldn’t load elaborators: ${loadError}`
+              ? 'Elaborators unavailable.'
               : `No ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators yet.`}
             onSelect={(id) => setSelectedIds((prev) => ({ ...prev, [kind]: id }))}
           />
@@ -351,9 +351,9 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
           elaborators in the same list could be satisfied by one sentence, they are too abstract
           to change the picture.
         </p>
-        {message && <div className="elaborators-message">{message}</div>}
-        {loadError && items.length > 0 && (
-          <div className="elaborators-message">Couldn’t refresh elaborators: {loadError}</div>
+        {message && <div className="elaborators-message" role="alert">{message}</div>}
+        {loadError && (
+          <div className="elaborators-message" role="alert">Couldn’t refresh elaborators: {loadError}</div>
         )}
         <div className="elaborators-grid">
           {ELABORATOR_KINDS.map((kind) => renderPane(kind))}

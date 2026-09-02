@@ -50,6 +50,13 @@ export type SessionDraftPersistenceState =
 export const SESSION_DRAFT_PERSISTENCE_ERROR =
   'Recent session changes could not be saved. Keep ImageQueue open and make another edit to retry.'
 
+export type DrawThingsParamsPersistenceState =
+  | { status: 'saved' }
+  | { status: 'failed'; message: string }
+
+export const DRAW_THINGS_PARAMS_PERSISTENCE_ERROR =
+  'Draw Things parameters could not be saved. Correct the storage problem, then change a parameter to retry.'
+
 // The contextBridge API surface exposed to the renderer as `window.electronAPI`.
 // It is an explicit interface in `shared` — not `typeof api` from the preload —
 // so the renderer can reference the type without importing the preload module,
@@ -180,6 +187,10 @@ export interface ElectronAPI {
   dtGetModelParams: (modelFile: string) => Promise<DrawThingsModelParams | null>
   dtGetAllModelParams: () => Promise<Record<string, DrawThingsModelParams>>
   dtSaveModelParams: (modelFile: string, params: DrawThingsModelParams) => Promise<void>
+  getDrawThingsParamsPersistenceState: () => Promise<DrawThingsParamsPersistenceState>
+  onDrawThingsParamsPersistenceState: (
+    callback: (state: DrawThingsParamsPersistenceState) => void
+  ) => (() => void)
   dtApplyParamsToAllModels: (
     modelFiles: string[],
     patch: Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
