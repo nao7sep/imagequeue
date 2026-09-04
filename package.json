@@ -54,6 +54,7 @@
   },
   "allowScripts": {
     "@google/genai@2.18.0": false,
+    "electron@43.4.1": true,
     "electron-winstaller@5.4.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
