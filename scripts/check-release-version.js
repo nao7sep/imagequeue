@@ -1,11 +1,11 @@
 const path = require('node:path')
 
 const manifest = require(path.join(__dirname, '..', 'package.json'))
-const tag = process.argv[2]
+const tag = process.env.RELEASE_TAG
 const expected = `v${manifest.version}`
 
 if (!tag) {
-  console.error('Usage: npm run check:release-version -- <tag>')
+  console.error('RELEASE_TAG is required')
   process.exit(2)
 }
 
