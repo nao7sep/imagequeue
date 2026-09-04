@@ -1,29 +1,39 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import os from 'os'
 import path from 'path'
+import type { WebContents } from 'electron'
 import {
   getCliJobSnapshot,
   killAllCliJobsAndWait,
   startCliJob,
+  subscribeCliJob,
+  unsubscribeCliJob,
 } from '../../src/main/cli-jobs'
+import type { CliJobSnapshot } from '../../src/shared/cli-jobs'
 
-async function waitUntilReady(jobId: string): Promise<void> {
-  const deadline = Date.now() + 2_000
-  while (Date.now() < deadline) {
-    if (getCliJobSnapshot(jobId)?.chunks.some((chunk) => chunk.text === 'ready')) return
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  throw new Error('test child did not become ready')
-}
-
-async function waitUntilSettled(jobId: string): Promise<void> {
-  const deadline = Date.now() + 2_000
-  while (Date.now() < deadline) {
-    const status = getCliJobSnapshot(jobId)?.status
-    if (status === 'exited' || status === 'killed') return
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  throw new Error('test child did not settle')
+function observeJob(
+  jobId: string,
+  matches: (snapshot: CliJobSnapshot) => boolean,
+): Promise<CliJobSnapshot> {
+  return new Promise((resolve) => {
+    let finished = false
+    const subscriber = {
+      isDestroyed: () => false,
+      once: () => subscriber,
+      send: () => {
+        const snapshot = getCliJobSnapshot(jobId)
+        if (snapshot && matches(snapshot)) finish(snapshot)
+      },
+    } as unknown as WebContents
+    const finish = (snapshot: CliJobSnapshot): void => {
+      if (finished) return
+      finished = true
+      unsubscribeCliJob(jobId, subscriber)
+      resolve(snapshot)
+    }
+    const initial = subscribeCliJob(jobId, subscriber)
+    if (initial && matches(initial)) finish(initial)
+  })
 }
 
 afterEach(async () => {
@@ -42,7 +52,9 @@ describe('CLI job shutdown barrier', () => {
       target: 'shutdown-test',
       logContext: { test: true },
     })
-    await waitUntilReady(jobId)
+    await observeJob(jobId, (snapshot) =>
+      snapshot.chunks.some((chunk) => chunk.text === 'ready')
+    )
 
     await expect(killAllCliJobsAndWait({ killGraceMs: 40, timeoutMs: 2_000 }))
       .resolves.toEqual({ signalled: 1, settled: true })
@@ -58,7 +70,9 @@ describe('CLI job shutdown barrier', () => {
       target: 'failure-presentation-test',
       logContext: { test: true },
     })
-    await waitUntilSettled(jobId)
+    await observeJob(jobId, (snapshot) =>
+      snapshot.status === 'exited' || snapshot.status === 'killed'
+    )
 
     const snapshot = getCliJobSnapshot(jobId)
     expect(snapshot?.chunks.map((chunk) => chunk.text).join('\n'))

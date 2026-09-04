@@ -118,10 +118,17 @@ export function addProbes(facetId: number, displays: readonly string[]): number 
   const now = new Date().toISOString()
   const stmt = d.prepare('INSERT OR IGNORE INTO probes (facet_id, key, display, expanded, created_at) VALUES (?, ?, ?, 0, ?)')
   let added = 0
-  for (const display of displays) {
-    const key = normalizeKey(display)
-    if (!key) continue
-    added += Number(stmt.run(facetId, key, cleanDisplay(display), now).changes)
+  d.exec('BEGIN')
+  try {
+    for (const display of displays) {
+      const key = normalizeKey(display)
+      if (!key) continue
+      added += Number(stmt.run(facetId, key, cleanDisplay(display), now).changes)
+    }
+    d.exec('COMMIT')
+  } catch (err) {
+    d.exec('ROLLBACK')
+    throw err
   }
   return added
 }
@@ -161,10 +168,17 @@ export function addConcepts(facetId: number, probeId: number, displays: readonly
   const now = new Date().toISOString()
   const stmt = d.prepare('INSERT OR IGNORE INTO concepts (facet_id, probe_id, key, display, created_at) VALUES (?, ?, ?, ?, ?)')
   let added = 0
-  for (const display of displays) {
-    const key = normalizeKey(display)
-    if (!key) continue
-    added += Number(stmt.run(facetId, probeId, key, cleanDisplay(display), now).changes)
+  d.exec('BEGIN')
+  try {
+    for (const display of displays) {
+      const key = normalizeKey(display)
+      if (!key) continue
+      added += Number(stmt.run(facetId, probeId, key, cleanDisplay(display), now).changes)
+    }
+    d.exec('COMMIT')
+  } catch (err) {
+    d.exec('ROLLBACK')
+    throw err
   }
   return added
 }

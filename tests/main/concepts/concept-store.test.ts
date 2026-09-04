@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addConcepts,
@@ -75,6 +76,38 @@ describe('concept store', () => {
     const [seaProbe] = unexpandedProbes(jobs.id, 1)
     expect(addConcepts(places.id, portProbe.id, ['Dock', 'dock.', 'cannery'])).toBe(2)
     expect(addConcepts(jobs.id, seaProbe.id, ['dock'])).toBe(1)
+  })
+
+  it('rolls back the whole probe batch when one insert fails', () => {
+    const facet = ensureFacet('place')
+    closeConceptStore()
+    const triggerDb = new DatabaseSync(path.join(tmpRoot, 'concepts.sqlite3'))
+    triggerDb.exec(`
+      CREATE TRIGGER reject_probe BEFORE INSERT ON probes
+      WHEN NEW.key = 'rejected'
+      BEGIN SELECT RAISE(ABORT, 'rejected probe'); END;
+    `)
+    triggerDb.close()
+
+    expect(() => addProbes(facet.id, ['harbor', 'rejected'])).toThrow('rejected probe')
+    expect(listProbeDisplays(facet.id, 10)).toEqual([])
+  })
+
+  it('rolls back the whole concept batch when one insert fails', () => {
+    const facet = ensureFacet('place')
+    addProbes(facet.id, ['ports'])
+    const [probe] = unexpandedProbes(facet.id, 1)
+    closeConceptStore()
+    const triggerDb = new DatabaseSync(path.join(tmpRoot, 'concepts.sqlite3'))
+    triggerDb.exec(`
+      CREATE TRIGGER reject_concept BEFORE INSERT ON concepts
+      WHEN NEW.key = 'rejected'
+      BEGIN SELECT RAISE(ABORT, 'rejected concept'); END;
+    `)
+    triggerDb.close()
+
+    expect(() => addConcepts(facet.id, probe.id, ['harbor', 'rejected'])).toThrow('rejected concept')
+    expect(listConceptRows(facet.id)).toEqual([])
   })
 
   it('prefers a never-used value over a stale one', () => {
