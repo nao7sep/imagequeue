@@ -4,13 +4,15 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 
 ## Backends
 
-| Backend | API key |
-|---|---|
-| OpenAI GPT Image | Required |
-| Nano Banana (Gemini) | Required |
-| Grok Imagine | Required |
-| FLUX (Black Forest Labs) | Required |
-| Draw Things (local, macOS only) | Not required |
+| Backend | Initial image model | API key |
+|---|---|---|
+| OpenAI GPT Image | GPT Image 2 | Required |
+| Nano Banana (Gemini) | Nano Banana 2 | Required |
+| Grok Imagine | Grok Imagine 2.0 | Required |
+| FLUX (Black Forest Labs) | FLUX.2 Pro | Required |
+| Draw Things (local, macOS only) | Your installed model | Not required |
+
+Each cloud column offers its currently supported model choices and model-specific size or quality controls. ImageQueue keeps image-generation credentials separate from Text AI credentials: OpenAI image and text keys use different slots, as do Nano Banana and Gemini text keys. A key is resolved from its purpose-specific environment variable first, then from the app's secured key file; it is never copied into ordinary settings.
 
 ## Features
 
@@ -22,7 +24,7 @@ ImageQueue is a desktop app for comparing image-generation backends side by side
 ## Requirements
 
 - macOS or Windows (Draw Things support is macOS-only)
-- An API key for each cloud image backend you use.
+- An API key for each cloud image backend you use. You only need keys for the columns you run.
 - Prompt elaboration (the Elaborate button and Advanced Prompting's fresh-elaboration modes) additionally needs a **Text AI** key — OpenAI or Gemini, configured in **Settings → Text AI**. It is separate from the image keys: an image key does not enable it. Without one, images still generate from your prompt as typed.
 - Draw Things needs no API key. On macOS it uses two app-managed dependencies, both installed from the **Managed tools** window (main menu → Managed tools, or the pointer in the Draw Things column):
   - The **Draw Things CLI** — currently about 170 MB, downloaded directly from its official GitHub release (no Homebrew), and verified before use; the backend stays disabled until it's installed.

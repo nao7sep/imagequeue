@@ -31,10 +31,10 @@ export const COLUMN_MIN_PX = 190
 
 /** The width a column displays when the user has never dragged the splitter.
  *
- *  Measured, not guessed: rendered in Electron's own engine, the widest setting row
- *  a column must hold is `background: transparent` at 193px and the longest model
- *  name ("Grok Imagine Quality") at 211px, so anything under ~215 truncates real
- *  content on a fresh install. This used to BE COLUMN_MIN_PX, which meant every
+ *  Measured, not guessed: rendered in Electron's own engine, provider setting
+ *  rows and the longer model labels need roughly 200px. The remaining margin
+ *  accommodates ordinary catalogue churn without making every new provider
+ *  label a layout change. This used to BE COLUMN_MIN_PX, which meant every
  *  column opened at its absolute floor and clipped a third of the longest rows.
  *
  *  The floor and the default are separate on purpose: a cramped window can still

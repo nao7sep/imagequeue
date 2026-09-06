@@ -19,12 +19,12 @@ function resolveParams(saved: Record<string, unknown>, modelDef: GrokModelDef): 
   // enqueued there, but switching back to 2.0 should restore the user's choice rather
   // than reset it (the flux steps/guidance rule).
   //
-  // The fallback is NOT the list's first entry, unlike the two above: `medium` is the API's
+  // The fallback is NOT the list's first entry, unlike the two above: `auto` is the API's
   // own default and index 0 is `low`, so clamping an unreadable saved value positionally
-  // would silently downgrade output instead of restoring the shipped state.
+  // would silently pin a tier instead of restoring the provider-selected state.
   const quality = typeof saved.quality === 'string' && (modelDef.qualities ?? GROK_QUALITY_VALUES).some((item) => item.value === saved.quality)
     ? saved.quality as GrokQuality
-    : 'medium'
+    : 'auto'
   return { aspectRatio, resolution, quality }
 }
 
@@ -65,7 +65,7 @@ export const grokBackend: BackendParamModel<GrokParams, GrokModelDef> = {
   defaults: () => ({
     aspectRatio: '1:1',
     resolution: '1k',
-    quality: 'medium',
+    quality: 'auto',
   }),
 
   clampToModel: (params, modelDef) => resolveParams(params, modelDef),

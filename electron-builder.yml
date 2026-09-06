@@ -18,6 +18,19 @@ directories:
 files:
   - 'out/**'
   - 'package.json'
+  # No runtime path consumes source maps or TypeScript declarations. Excluding
+  # them keeps provider SDK development metadata out of the reviewed artifact.
+  - '!**/*.map'
+  - '!**/*.d.ts'
+  - '!**/*.d.mts'
+  - '!**/*.d.cts'
+  # node-pty's npm tarball includes build scripts, TypeScript sources, tests,
+  # source maps, winpty sources, and typings. Runtime needs only package.json,
+  # LICENSE, compiled lib/*.js, and prebuilds; keep development material out of
+  # both app.asar and its unpacked companion.
+  - '!**/node_modules/node-pty/binding.gyp'
+  - '!**/node_modules/node-pty/{deps,scripts,src,third_party,typings}/**'
+  - '!**/node_modules/node-pty/lib/**/*.test.js'
 
 # node-pty is N-API based (node-addon-api) and ships prebuilt binaries for
 # darwin-{arm64,x64} and win32-{arm64,x64}. N-API is ABI-stable across Node and
@@ -26,10 +39,10 @@ files:
 npmRebuild: false
 
 # node-pty ships a native addon (pty.node) and a plain executable (spawn-helper).
-# The .node is unpacked automatically, but spawn-helper would be trapped inside
-# the asar and fail to exec — so unpack the whole module.
+# The .node is unpacked automatically, but spawn-helper must also be outside the
+# asar. Both live under prebuilds; compiled JavaScript remains in app.asar.
 asarUnpack:
-  - '**/node_modules/node-pty/**'
+  - '**/node_modules/node-pty/prebuilds/**'
 
 # Tahoe "Liquid Glass" icon: ship the pre-compiled asset catalog (committed in
 # company/assets, deployed here by the liquid-glass-icon tool) into Contents/Resources.

@@ -70,10 +70,9 @@ export function createDefaultConfig(): AppConfig {
         default_params: {
           aspectRatio: '1:1',
           resolution: '1k',
-          // `medium` is the API's own default, so a fresh install sends what it would
-          // have sent with the parameter omitted. Seeding `low` (first in the list)
-          // would have quietly changed everyone's output in the name of consistency.
-          quality: 'medium'
+          // `auto` is the API's own default. It currently selects low for generation
+          // and medium for editing; users can choose either tier explicitly instead.
+          quality: 'auto'
         },
         concurrency: 3,
         timeout_ms: 180000

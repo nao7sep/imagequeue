@@ -28,7 +28,7 @@ describe('defaults', () => {
       background: 'opaque',
     })
     expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K' })
-    expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'medium' })
+    expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
     expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, steps: 50, guidance: 5, seed: '' })
   })
 })
@@ -87,21 +87,19 @@ describe('grok quality — a parameter only one model declares', () => {
   const v1 = findModel('grok', 'grok-imagine-image')!
   const v1q = findModel('grok', 'grok-imagine-image-quality')!
 
-  // 2.0 takes `quality` as a request field; the 1.x pair encode the same choice in their
-  // model ids, so sending it there would be a second, contradictory way to say the same
-  // thing. Both halves are asserted — an `if` that is never observed false proves nothing.
+  // 2.0 takes `quality` as a request field; the 1.x pair encode the choice in their
+  // model ids, so sending it there would be a second, contradictory control.
   it('enqueues quality for 2.0 and omits it for both 1.x ids', () => {
     const params = grokBackend.defaults()
-    expect(grokBackend.toEnqueueParams(params, v2)).toHaveProperty('quality', 'medium')
+    expect(grokBackend.toEnqueueParams(params, v2)).toHaveProperty('quality', 'auto')
     expect(grokBackend.toEnqueueParams(params, v1)).not.toHaveProperty('quality')
     expect(grokBackend.toEnqueueParams(params, v1q)).not.toHaveProperty('quality')
   })
 
   // Only 2.0 declares the list, so only 2.0 renders the control.
   it('declares qualities on 2.0 alone', () => {
-    // NOT ['low','medium','high']: the wire enum has three, but 2.0 rejects `high` with
-    // 400 "This model only supports the following quality value(s): low, medium."
-    expect(v2.qualities?.map((q) => q.value)).toEqual(['low', 'medium'])
+    // `auto` was live-verified with a successful generation; 2.0 still rejects `high`.
+    expect(v2.qualities?.map((q) => q.value)).toEqual(['low', 'medium', 'auto'])
     expect(v1.qualities).toBeUndefined()
     expect(v1q.qualities).toBeUndefined()
   })
@@ -118,10 +116,10 @@ describe('grok quality — a parameter only one model declares', () => {
     expect(grokBackend.clampToModel(on1x, v2).quality).toBe('low')
   })
 
-  // An unreadable saved value falls to `medium` (the API's own default), NOT to the list's
-  // first entry — positional clamping here would silently downgrade output to `low`.
-  it('falls back to medium, not to the first list entry', () => {
-    expect(grokBackend.fromSaved({ quality: 'ultra' }, v2).quality).toBe('medium')
+  // An unreadable saved value falls to `auto` (the API's own default), NOT to the list's
+  // first entry — positional clamping here would silently pin output to `low`.
+  it('falls back to auto, not to the first list entry', () => {
+    expect(grokBackend.fromSaved({ quality: 'ultra' }, v2).quality).toBe('auto')
     expect(v2.qualities![0].value).toBe('low')
   })
 })

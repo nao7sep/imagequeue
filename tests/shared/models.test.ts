@@ -38,6 +38,22 @@ describe('model registry invariants', () => {
     }
   })
 
+  it('offers the approved image model ids', () => {
+    expect(OPENAI_MODELS.map((model) => model.id)).toEqual([
+      'gpt-image-2',
+      'gpt-image-1.5',
+      'gpt-image-1-mini',
+    ])
+    // Advance retirement notice is not permission to remove a still-served model.
+    // This explicit list makes an early removal a deliberate test change rather than
+    // something that can happen as incidental model-currency cleanup.
+    expect(GROK_MODELS.map((model) => model.id)).toEqual([
+      'grok-imagine-image-2.0',
+      'grok-imagine-image-quality',
+      'grok-imagine-image',
+    ])
+  })
+
   // Every option control renders from the model's own capability list, so a model
   // that declares none would render an empty dropdown the user cannot set. These
   // pin the fields each backend's panel reads — the whole point of ModelDef being

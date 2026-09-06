@@ -402,7 +402,7 @@ describe('openai column', () => {
 
   it('clamps a background the newly selected model does not offer', async () => {
     vi.useFakeTimers()
-    // gpt-image-1 offers 'transparent'; gpt-image-2 does not.
+    // gpt-image-1.5 offers 'transparent'; gpt-image-2 does not.
     stageSettings('openai', 'gpt-image-1.5', { background: 'transparent' })
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()

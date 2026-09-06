@@ -216,25 +216,26 @@ const GROK_RESOLUTIONS: { label: string; value: GrokResolution }[] = [
 // only 2.0 shows the control and sends the field — the FluxModelDef stepsRange/guidanceRange
 // idiom, for the same reason: a parameter belongs to the models that declare it.
 //
-// LOW AND MEDIUM ONLY, and the way that was established is the point of this comment.
+// `auto` was live-verified on 2026-09-06 with a successful image generation. xAI says it
+// currently resolves to low for generation and medium for editing; explicit low/medium pin
+// the requested tier.
 //
-// Sending `quality: "ultra"` makes the DESERIALIZER answer `unknown variant \`ultra\`,
-// expected one of \`low\`, \`medium\`, \`high\``, which reads like the contract and is not:
-// that is the shared wire enum for every Grok image model. Actually generating with
-// `high` on 2.0 returns 400 — *"This model only supports the following quality value(s):
-// low, medium."* The 1.x ids do accept `high`; 2.0 does not.
+// Sending `quality: "ultra"` made the DESERIALIZER answer `unknown variant \`ultra\`,
+// expected one of \`low\`, \`medium\`, \`high\``, which read like the contract and was not:
+// that is a shared wire enum, while actually generating with `high` on 2.0 returns 400.
+// `auto` was added later and is accepted even though that older error did not name it.
 //
-// So a deserializer error names the TYPE, a request names the CONTRACT, and only the
-// second one is per-model. The published docs said low/medium and were right; an
-// intermediate version of this list shipped `high` on the strength of the parse error
-// alone. Verify a value by using it, not by watching the parser refuse a different one.
-export type GrokQuality = 'low' | 'medium' | 'high'
+// So a deserializer error names a parser TYPE, while a successful request proves the
+// per-model CONTRACT. An intermediate version of this list shipped `high` on the strength
+// of the parse error alone. Verify a value by using it, not by watching the parser refuse
+// a different one.
+export type GrokQuality = 'low' | 'medium' | 'high' | 'auto'
 
-// 2.0's subset. The type stays wider because the wire enum is wider and the 1.x ids take
-// all three — this list is what 2.0 offers, not what Grok can parse.
+// This list is what 2.0 offers, not every value Grok's shared parser can name.
 export const GROK_QUALITY_VALUES: { label: string; value: GrokQuality }[] = [
   { label: 'Low',    value: 'low' },
-  { label: 'Medium', value: 'medium' }
+  { label: 'Medium', value: 'medium' },
+  { label: 'Auto',   value: 'auto' }
 ]
 
 export interface GrokModelDef extends ModelDef {
@@ -248,12 +249,11 @@ export interface GrokModelDef extends ModelDef {
 
 // --- OpenAI models ---
 
-// A high -> middle -> low band: gpt-image-2, gpt-image-1.5, gpt-image-1-mini. gpt-image-1 was
-// removed 2026-08-20 as the redundant fourth — it shuts down 2026-10-23, ahead of the other two.
+// A high -> middle -> low band: gpt-image-2, gpt-image-1.5, gpt-image-1-mini.
+// gpt-image-1 was removed separately ahead of its earlier shutdown.
 //
-// 1.5 and 1-mini both shut down 2026-12-01. Keep every working shipped id until
-// its shutdown; the routine model-currency sweep chooses successors as they
-// appear rather than treating this one date as a separate product decision.
+// 1.5 and 1-mini remain working and selectable through the developer's planned
+// late-November 2026 removal window ahead of their December shutdown.
 export const OPENAI_MODELS: OpenAIModelDef[] = [
   {
     id: 'gpt-image-2',
@@ -375,11 +375,13 @@ export const NANO_BANANA_MODELS: NanoBananaModelDef[] = [
 
 // --- Grok Imagine models ---
 
-// Newest first. 2.0 was ADDED 2026-08-20, not swapped in: both 1.x ids are still listed and
-// still generate (live-verified the same day), and a model that works is not removed merely
-// for having a successor — the same rule that keeps gpt-image-1.5 and -1-mini until their
-// shutdown dates. Only the shipped DEFAULT moves to 2.0; an existing config keeps its pick.
-// 2.0 alone declares `qualities`, because 1.x expresses that choice through the id instead.
+// Newest first. An announced retirement is not a removal date: keep a model selectable
+// while the provider still serves it, unless the developer makes an explicit product
+// decision to withdraw it earlier. xAI says `grok-imagine-image-quality` remains served
+// through 2026-11-02 and redirects to 2.0 low afterward; the registry test below pins its
+// presence during that window. The base 1.0 id is explicitly unaffected and remains a
+// lower-cost choice. 2.0 alone declares `qualities`, because 1.x expresses that choice
+// through the id instead.
 export const GROK_MODELS: GrokModelDef[] = [
   {
     id: 'grok-imagine-image-2.0',
