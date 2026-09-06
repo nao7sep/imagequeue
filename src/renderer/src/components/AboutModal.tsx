@@ -70,7 +70,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
           />
         ) : null)}
         <p className="about-copyright">
-          &copy; 2026 Yoshinao Inoguchi &mdash; MIT License
+          &copy; 2026 Yoshinao Inoguchi &mdash; GNU GPL v3 or later
         </p>
       </div>
     </Modal>
