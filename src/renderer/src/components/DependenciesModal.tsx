@@ -131,7 +131,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
           <>
             <DependencyRow
               title="Draw Things CLI"
-              description="The image-generation engine. Downloaded from the official release and verified against its published checksum."
+              description="The GPL-3.0 image-generation engine. Downloaded separately from the official Draw Things Community release and verified against its published checksum."
               required
               info={state.cli}
               busy={busy.has('cli')}
