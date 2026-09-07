@@ -5,6 +5,9 @@ const builderConfig = readFileSync(
   new URL("../../electron-builder.yml", import.meta.url),
   "utf8",
 );
+const packageJson = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+);
 
 describe("Windows installer configuration", () => {
   it("uses the assisted multi-user installer", () => {
@@ -21,6 +24,30 @@ describe("Windows installer configuration", () => {
   });
 });
 
+describe("packaged license texts", () => {
+  it("ships the app, Electron, and Chromium licenses", () => {
+    for (const line of [
+      "  - from: LICENSE",
+      "    to: LICENSE.txt",
+      "  - from: node_modules/electron/dist/LICENSE",
+      "    to: electron/LICENSE",
+      "  - from: node_modules/electron/dist/LICENSES.chromium.html",
+      "    to: electron/LICENSES.chromium.html",
+    ]) {
+      expect(builderConfig).toContain(line);
+    }
+  });
+
+  it("prepares Electron before every package-script builder invocation", () => {
+    for (const script of Object.values(packageJson.scripts) as string[]) {
+      if (script.includes("electron-builder")) {
+        expect(script.indexOf("npm run prepare:electron")).toBeLessThan(
+          script.indexOf("electron-builder"),
+        );
+      }
+    }
+  });
+});
 
 describe("node-pty package shape", () => {
   it("unpacks only runtime prebuilds and excludes development material", () => {

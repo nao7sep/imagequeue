@@ -52,6 +52,12 @@ asarUnpack:
 extraResources:
   - from: build/Assets.car
     to: Assets.car
+  - from: LICENSE
+    to: LICENSE.txt
+  - from: node_modules/electron/dist/LICENSE
+    to: electron/LICENSE
+  - from: node_modules/electron/dist/LICENSES.chromium.html
+    to: electron/LICENSES.chromium.html
   # Native status icons keep stable filenames so macOS recognizes the Template
   # + @2x pair and the main process can swap explicit Windows contrast variants.
   - from: build/status-icons
