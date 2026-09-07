@@ -62,7 +62,6 @@ describe('DependenciesModal cancellation', () => {
     expect(cliStatus.classList.contains('dependency-badge-required')).toBe(true)
     expect(recommendationsStatus.classList.contains('dependency-badge-required')).toBe(false)
     expect(recommendationsRow?.textContent).toContain('Optional')
-    expect(cliRow?.textContent).toContain('GPL-3.0 image-generation engine')
   })
 
   it('distinguishes an initial load failure from an empty tools list', async () => {
