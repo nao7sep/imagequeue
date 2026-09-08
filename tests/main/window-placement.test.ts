@@ -78,13 +78,21 @@ describe('window capture', () => {
   it('suppresses startup and non-manual geometry events', async () => {
     vi.useFakeTimers()
     const { win, saved, controller } = setup()
+    win.bounds = { x: 30, y: 40, width: 1300, height: 850 }
     win.emit('will-move')
     win.emit('move')
+    controller.flush()
+    expect(saved).toEqual([])
     controller.start()
     win.emit('move')
     win.emit('resize')
     await vi.advanceTimersByTimeAsync(500)
     expect(saved).toEqual([])
+    controller.flush()
+    expect(saved).toEqual([{
+      normalBounds: { x: 10, y: 20, width: 1200, height: 800 },
+      mode: 'normal',
+    }])
   })
 
   it('debounces manual move/resize and flushes the latest pending bounds', () => {
