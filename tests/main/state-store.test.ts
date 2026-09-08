@@ -71,4 +71,20 @@ describe('ui state store', () => {
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ notificationVolume: 'loud' }))
     expect(readUiState().notificationVolume).toBe(NOTIFICATION_VOLUME_DEFAULT)
   })
+
+  it('normalizes window geometry and stable mode independently', () => {
+    fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({
+      notificationVolume: 0.25,
+      windowPlacements: {
+        main: {
+          normalBounds: { x: 10, y: 20, width: 'wide', height: 800 },
+          mode: 'maximized',
+        },
+      },
+    }))
+    const state = readUiState()
+    expect(state.notificationVolume).toBe(0.25)
+    expect(state.windowPlacements.main).toEqual({ normalBounds: null, mode: 'maximized' })
+  })
 })

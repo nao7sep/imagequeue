@@ -58,6 +58,10 @@ describe('buildMainWindowOptions', () => {
     }
   })
 
+  it('creates the main window hidden for placement restoration', () => {
+    expect(buildMainWindowOptions(1).show).toBe(false)
+  })
+
   // The opening width tracks the panes: a window opened wider than its panes
   // need gives the surplus to the left pane, which is what leaves the preview
   // far wider than it is tall. Fewer panes must therefore mean a narrower open.

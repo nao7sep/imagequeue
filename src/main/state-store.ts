@@ -15,7 +15,7 @@ import { log, serializeError } from './logger'
 import path from 'path'
 import { writeJsonAtomic } from './utils/atomic-write'
 import { getDataDir } from './config'
-import type { UiState } from '../shared/ui-state'
+import type { UiState, WindowBounds, WindowPlacementRecord } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
 
 export function getUiStatePath(): string {
@@ -38,6 +38,7 @@ export function readUiState(): UiState {
         typeof parsed.notificationVolume === 'number' && Number.isFinite(parsed.notificationVolume)
           ? Math.min(1, Math.max(0, parsed.notificationVolume))
           : base.notificationVolume,
+      windowPlacements: normalizeWindowPlacements(parsed.windowPlacements, base.windowPlacements),
     }
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an
@@ -47,6 +48,53 @@ export function readUiState(): UiState {
     }
     return defaultUiState()
   }
+}
+
+function normalizeWindowPlacements(
+  raw: unknown,
+  fallback: UiState['windowPlacements'],
+): UiState['windowPlacements'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { main: cloneWindowPlacement(fallback.main) }
+  }
+  const source = raw as Record<string, unknown>
+  if (source.main === undefined) return { main: cloneWindowPlacement(fallback.main) }
+  if (source.main === null) return { main: null }
+  if (!source.main || typeof source.main !== 'object' || Array.isArray(source.main)) {
+    return { main: cloneWindowPlacement(fallback.main) }
+  }
+  const placement = source.main as Record<string, unknown>
+  return {
+    main: {
+      normalBounds: normalizeWindowBounds(placement.normalBounds, fallback.main?.normalBounds ?? null),
+      mode:
+        placement.mode === 'normal' || placement.mode === 'maximized'
+          ? placement.mode
+          : fallback.main?.mode ?? 'maximized',
+    },
+  }
+}
+
+function normalizeWindowBounds(raw: unknown, fallback: WindowBounds | null): WindowBounds | null {
+  if (raw === null) return null
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fallback ? { ...fallback } : null
+  const source = raw as Record<string, unknown>
+  const values = [source.x, source.y, source.width, source.height]
+  if (!values.every((value) => typeof value === 'number' && Number.isFinite(value))) {
+    return fallback ? { ...fallback } : null
+  }
+  return {
+    x: source.x as number,
+    y: source.y as number,
+    width: source.width as number,
+    height: source.height as number,
+  }
+}
+
+function cloneWindowPlacement(value: WindowPlacementRecord | null): WindowPlacementRecord | null {
+  return value
+    ? { normalBounds: value.normalBounds ? { ...value.normalBounds } : null, mode: value.mode }
+    : null
 }
 
 export function writeUiState(state: UiState): void {

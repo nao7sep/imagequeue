@@ -25,6 +25,7 @@ export interface MainWindowOptions {
   height: number
   minWidth: number
   minHeight: number
+  show: false
   backgroundColor: string
   /** Native-theme source applied to nativeTheme so the title bar matches the
    *  app's dark theme rather than following the OS appearance. */
@@ -50,6 +51,7 @@ export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
     height: computeWindowDefaultHeight(),
     minWidth,
     minHeight,
+    show: false,
     backgroundColor: BACKGROUND_COLOR,
     themeSource: 'dark'
   }
