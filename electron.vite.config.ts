@@ -15,6 +15,11 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
+    server: {
+      host: '127.0.0.1',
+      port: 20641,
+      strictPort: true
+    },
     define: {
       __APP_VERSION__: JSON.stringify(version)
     }
