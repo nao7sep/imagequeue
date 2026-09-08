@@ -28,7 +28,14 @@ export function ConfirmModal({ options, onSettle }: Props): React.JSX.Element {
         </>
       }
     >
-      <div className="confirm-body">{options.message}</div>
+      <div
+        className="confirm-body"
+        role="region"
+        aria-label={`${options.title ?? 'Confirm'} details`}
+        tabIndex={0}
+      >
+        {options.message}
+      </div>
     </Modal>
   )
 }

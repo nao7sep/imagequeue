@@ -174,7 +174,13 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         </div>
       )}
       {rowError && <div className="cli-job-summary cli-job-summary-error" role="alert">{rowError}</div>}
-      <div className="cli-job-log-tail" ref={tailRef}>
+      <div
+        className="cli-job-log-tail"
+        ref={tailRef}
+        role="region"
+        aria-label={`${title} log`}
+        tabIndex={0}
+      >
         {chunks.length === 0 && isActive ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">
             {status === 'queued'

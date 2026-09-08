@@ -156,8 +156,9 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   }, [backendId, setSnapshot])
 
   // This column is a semantic list of roving selectable buttons. While one of
-  // those buttons has focus, the list owns all four arrows plus Home/End and
-  // the scoped command keys for the selected task. Navigation (Up/Down within,
+  // those buttons has focus, the list owns all four arrows, PageUp/PageDown,
+  // Home/End, and the scoped command keys for the selected task. Navigation
+  // (Up/Down within,
   // Left/Right to the adjacent column) is delegated to SelectionContext, which
   // keeps the single source of truth and follows focus to the moved-to row.
   // Backspace/Delete/Space form the command layer, scoped here so they act only
@@ -177,6 +178,17 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         e.key === 'ArrowDown' ? 'down' :
         e.key === 'ArrowLeft' ? 'left' : 'right'
       )
+      return
+    }
+    if (e.key === 'PageUp' || e.key === 'PageDown') {
+      if (!sel) return
+      e.preventDefault()
+      const list = e.currentTarget as HTMLElement
+      const firstRow = list.querySelector<HTMLElement>('[data-task-id]')
+      const pageStep = firstRow?.offsetHeight
+        ? Math.max(1, Math.floor(list.clientHeight / firstRow.offsetHeight))
+        : 8
+      navigate(e.key === 'PageUp' ? 'up' : 'down', pageStep)
       return
     }
     if (e.key === 'Home') {

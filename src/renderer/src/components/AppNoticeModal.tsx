@@ -19,7 +19,9 @@ export function AppNoticeModal({ notice, onClose }: Props): React.JSX.Element {
         </button>
       }
     >
-      <div className="confirm-body">{notice.message}</div>
+      <div className="confirm-body" role="region" aria-label={`${notice.title} details`} tabIndex={0}>
+        {notice.message}
+      </div>
     </Modal>
   )
 }

@@ -66,7 +66,7 @@ export function StartupFailureApp({ message }: { message: string }): React.JSX.E
   return (
     <main ref={rootRef} className="startup-failure-app">
       <h1>{STARTUP_FAILURE_TITLE}</h1>
-      <p>{message}</p>
+      <p role="region" aria-label="Startup failure details" tabIndex={0}>{message}</p>
       <footer>
         <button autoFocus onClick={() => window.close()}>Close</button>
       </footer>

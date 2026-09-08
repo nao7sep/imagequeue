@@ -17,6 +17,8 @@
   --text-primary: #e0e0e0;
   --text-secondary: #b2bacb;
   --text-muted: #a1adc3;
+  --scrollbar-thumb: var(--text-muted);
+  --scrollbar-thumb-active: var(--text-secondary);
   --text-on-accent: #06121f;
   --border: #3a4470;
   --border-strong: #454f80;
@@ -94,20 +96,20 @@
 
 /* ─── Global scroll bars (window-chrome-conventions) ──────────────────────────
    One source of truth for every overflow container — lists, modals, logs, text
-   areas. A slim ~12px gutter with a fully rounded pill thumb inset from the
+   areas. A reachable 16px gutter with a 10px rounded pill thumb inset from the
    gutter edges (the transparent border + padding-box clip gives the thumb
    breathing room rather than filling the gutter edge to edge), a transparent
    track, and a thumb that brightens on hover. Colors come from the palette
    tokens so the bar matches the dark theme. No per-component scroll-bar style
    should exist alongside this. */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 *::-webkit-scrollbar-track {
@@ -115,15 +117,28 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
   border: 3px solid transparent;
   border-radius: 999px;
 }
 
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+*::-webkit-scrollbar-thumb:hover,
+*:hover::-webkit-scrollbar-thumb,
+*:focus-within::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-active);
   background-clip: padding-box;
+}
+
+*:hover,
+*:focus-within {
+  scrollbar-color: var(--scrollbar-thumb-active) transparent;
+}
+
+[role="region"][tabindex="0"],
+[role="listbox"],
+[role="grid"] {
+  scrollbar-gutter: stable;
 }
 
 *::-webkit-scrollbar-corner {

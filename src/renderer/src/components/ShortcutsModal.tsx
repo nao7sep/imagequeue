@@ -27,7 +27,7 @@ export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
         </button>
       }
     >
-      <div className="shortcuts-body">
+      <div className="shortcuts-body" role="region" aria-label="Keyboard shortcuts" tabIndex={0}>
         <div className="shortcut-group">
           <p className="shortcut-group-name">Sending</p>
           <div className="shortcut-list">

@@ -307,6 +307,8 @@ describe('task status presentation', () => {
     expect(selectionValue.removeSelected).not.toHaveBeenCalled()
     fireEvent.keyDown(failedRow, { key: 'ArrowDown' })
     expect(selectionValue.navigate).toHaveBeenCalledWith('down')
+    fireEvent.keyDown(failedRow, { key: 'PageDown' })
+    expect(selectionValue.navigate).toHaveBeenCalledWith('down', 8)
   })
 
   it('maps thumbnail, retry, and export rejections to the affected task owner', async () => {

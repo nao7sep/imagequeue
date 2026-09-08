@@ -41,6 +41,10 @@ describe('StartupFailureApp measurement handshake', () => {
       minimumHeight: 174,
     })
     expect(document.querySelector('.startup-failure-app')?.hasAttribute('data-measuring')).toBe(false)
+    const details = document.querySelector('.startup-failure-app > p')
+    expect(details?.getAttribute('role')).toBe('region')
+    expect(details?.getAttribute('aria-label')).toBe('Startup failure details')
+    expect(details?.getAttribute('tabindex')).toBe('0')
   })
 
   it('waits for production stylesheets before reporting the committed geometry', () => {

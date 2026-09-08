@@ -32,7 +32,7 @@ interface SelectionContextValue {
   selectedTask: Task | null
   select: (backend: BackendId, taskId: string) => void
   clear: () => void
-  navigate: (dir: NavDirection) => void
+  navigate: (dir: NavDirection, step?: number) => void
   selectEdge: (backend: BackendId, edge: 'first' | 'last') => void
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
@@ -340,7 +340,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // selection) and the fullscreen viewer bridge (the main window's list is not
   // focused, so we only update selection and scroll, never grabbing focus). The
   // focusIsInTaskList guard distinguishes the two without a flag.
-  const navigate = useCallback((dir: NavDirection): void => {
+  const navigate = useCallback((dir: NavDirection, pageStep = 1): void => {
     const sel = selectionRef.current
     const map = tasksRef.current
     if (!sel) return
@@ -359,8 +359,9 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       const list = map[sel.backend]
       const idx = list.findIndex((t) => t.id === sel.taskId)
       if (idx < 0) return
-      const nextIdx = dir === 'down' ? idx + 1 : idx - 1
-      if (nextIdx < 0 || nextIdx >= list.length) return
+      const distance = Math.max(1, Math.floor(pageStep))
+      const nextIdx = Math.max(0, Math.min(list.length - 1, dir === 'down' ? idx + distance : idx - distance))
+      if (nextIdx === idx) return
       commit(sel.backend, list[nextIdx].id)
       return
     }
