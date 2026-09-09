@@ -39,7 +39,7 @@ import { setQueuePausedAndPublish } from './queue/control-actions'
 import { ownMainWindowContentLoad } from './main-window-content'
 import { readUiState, updateUiState } from './state-store'
 import {
-  applyRestoredBounds,
+  initializeWindowPlacement,
   configureWindowPlacement,
   resolveWindowRestoration,
 } from './window-placement'
@@ -137,46 +137,40 @@ function createWindow(): BrowserWindow {
   } catch (error) {
     log('warn', 'Display work areas unavailable; using opening window bounds', { error: serializeError(error) })
   }
+  const savedPlacement = readUiState().windowPlacements.main
   const restoration = resolveWindowRestoration(
-    readUiState().windowPlacements.main,
+    savedPlacement,
     { width: windowOptions.minWidth, height: windowOptions.minHeight },
     workAreas,
   )
-  if (restoration.normalBounds) {
-    applyRestoredBounds(win, restoration.normalBounds, (error) => {
-      log('warn', 'Saved window bounds rejected; using opening bounds', { error: serializeError(error) })
-    })
-  }
+  registerMainWindowForLayout(win)
+  const initialized = initializeWindowPlacement(win, savedPlacement, restoration,
+    (error) => log('warn', 'Window placement restoration failed; retaining useful opening geometry and mode', { error: serializeError(error) }))
   const placement = configureWindowPlacement(
     win,
-    { normalBounds: win.getBounds(), mode: restoration.mode },
+    initialized.initial,
     (record) => { updateUiState({ windowPlacements: { main: record } }) },
     (error) => log('warn', 'Window placement operation failed', { error: serializeError(error) }),
+    initialized.windows,
   )
   const flushThisWindowPlacement = () => placement.flush()
   flushMainWindowPlacement = flushThisWindowPlacement
 
   win.once('ready-to-show', () => {
-    if (restoration.mode === 'maximized') {
-      try { win.maximize() } catch (error) {
-        placement.setInitialMode('normal')
-        log('warn', 'Window could not be maximized during restoration', { error: serializeError(error) })
-      }
-    }
-    win.show()
+    win.show();
+    // Windows requires a native event-loop turn between show and maximize.
     setTimeout(() => {
-      if (win.isDestroyed()) return
-      if (restoration.mode === 'maximized' && !win.isMaximized()) {
-        placement.setInitialMode('normal')
-        log('warn', 'Window manager rejected maximized restoration')
+      if (win.isDestroyed()) return;
+      placement.start();
+      if (restoration.mode === "maximized") {
+        try { win.maximize(); }
+        catch (error) { log('warn', 'Window could not be maximized during restoration', { error: serializeError(error) }); }
       }
-      placement.start()
-    }, 500)
-  })
+    }, 0);
+  });
   win.on('close', () => placement.flush())
   win.on('session-end', () => placement.flush())
 
-  registerMainWindowForLayout(win)
   hardenWindow(win)
 
   win.on('closed', () => {

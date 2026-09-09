@@ -21,7 +21,7 @@ import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
 import { WelcomePane } from './WelcomePane'
 import { displayedColumnWidth } from '../../../shared/ui-state'
-import { COLUMN_MAX_PX, COLUMN_MIN_PX } from '../../../shared/layout-metrics'
+import { COLUMN_MAX_PX, COLUMN_MIN_PX, computeWindowMinWidth, computeWindowMinHeight } from '../../../shared/layout-metrics'
 import './Layout.css'
 import { useSelection } from '../context/SelectionContext'
 import { useQueue } from '../context/QueueContext'
@@ -282,10 +282,11 @@ export function Layout(): React.JSX.Element {
   }, [viewerOpen, selectedTask])
 
   return (
+    <div className="layout-viewport">
     <div
       className="layout"
       ref={layoutRef}
-      style={{ '--iq-column-width': `${displayedColumn}px` } as React.CSSProperties}
+      style={{ '--iq-column-width': `${displayedColumn}px`, minWidth: computeWindowMinWidth(visibleColumnCount), minHeight: computeWindowMinHeight() } as React.CSSProperties}
     >
       {draftUnavailable && (
         <Modal
@@ -400,6 +401,7 @@ export function Layout(): React.JSX.Element {
           )
         )}
       </div>
+    </div>
     </div>
   )
 }

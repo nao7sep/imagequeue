@@ -17,6 +17,7 @@ import { writeJsonAtomic } from './utils/atomic-write'
 import { getDataDir } from './config'
 import type { UiState, WindowBounds, WindowPlacementRecord } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
+import { normalizeWindowsNormalBounds } from '../shared/windows-placement'
 
 export function getUiStatePath(): string {
   return path.join(getDataDir(), 'state.json')
@@ -67,6 +68,9 @@ function normalizeWindowPlacements(
   return {
     main: {
       normalBounds: normalizeWindowBounds(placement.normalBounds, fallback.main?.normalBounds ?? null),
+      ...(placement.windowsNormalBounds === undefined ? {} : {
+        windowsNormalBounds: normalizeWindowsNormalBounds(placement.windowsNormalBounds),
+      }),
       mode:
         placement.mode === 'normal' || placement.mode === 'maximized'
           ? placement.mode
@@ -93,7 +97,10 @@ function normalizeWindowBounds(raw: unknown, fallback: WindowBounds | null): Win
 
 function cloneWindowPlacement(value: WindowPlacementRecord | null): WindowPlacementRecord | null {
   return value
-    ? { normalBounds: value.normalBounds ? { ...value.normalBounds } : null, mode: value.mode }
+    ? { ...value, normalBounds: value.normalBounds ? { ...value.normalBounds } : null,
+      ...(value.windowsNormalBounds === undefined ? {} : {
+        windowsNormalBounds: normalizeWindowsNormalBounds(value.windowsNormalBounds),
+      }) }
     : null
 }
 

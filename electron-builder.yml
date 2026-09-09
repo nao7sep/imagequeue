@@ -43,6 +43,7 @@ npmRebuild: false
 # asar. Both live under prebuilds; compiled JavaScript remains in app.asar.
 asarUnpack:
   - '**/node_modules/node-pty/prebuilds/**'
+  - '**/node_modules/@koromix/koffi-*/**/*'
 
 # Tahoe "Liquid Glass" icon: ship the pre-compiled asset catalog (committed in
 # company/assets, deployed here by the liquid-glass-icon tool) into Contents/Resources.
@@ -50,6 +51,12 @@ asarUnpack:
 # CFBundleIconFile → build/icon.icns (mac.icon). Building does NOT need Xcode — the
 # Assets.car is prebuilt; only re-generating the icon does.
 extraResources:
+  - from: node_modules/koffi/LICENSE.txt
+    to: koffi/LICENSE.txt
+  - from: node_modules/koffi/vendor/node-addon-api/LICENSE.md
+    to: koffi/node-addon-api-LICENSE.md
+  - from: node_modules/koffi/vendor/node-api-headers/LICENSE
+    to: koffi/node-api-headers-LICENSE
   - from: build/Assets.car
     to: Assets.car
   - from: LICENSE

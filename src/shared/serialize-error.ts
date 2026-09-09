@@ -17,6 +17,7 @@ function serializeErrorInner(err: unknown, seen: Set<unknown>): Record<string, u
     }
     seen.add(err)
     const out: Record<string, unknown> = {
+      ...err,
       name: err.name,
       message: err.message,
       stack: err.stack ?? null,
@@ -24,6 +25,10 @@ function serializeErrorInner(err: unknown, seen: Set<unknown>): Record<string, u
     if (err.cause !== undefined) {
       out.cause = serializeErrorInner(err.cause, seen)
     }
+    if (err instanceof AggregateError) {
+      out.errors = err.errors.map((error: unknown) => serializeErrorInner(error, seen))
+    }
+    seen.delete(err)
     return out
   }
   if (err !== null && typeof err === 'object') {

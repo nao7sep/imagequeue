@@ -1,6 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeWindowMinHeight, computeWindowMinWidth } from '../../src/shared/layout-metrics'
 
+vi.mock('electron', () => ({
+  screen: {
+    getDisplayMatching: () => ({ workAreaSize: { width: 4000, height: 2000 } }),
+    on: vi.fn(), off: vi.fn(),
+  },
+}))
+
+const windowSurface = {
+  getBounds: () => ({ x: 0, y: 0, width: 2000, height: 1000 }),
+  getContentBounds: () => ({ x: 0, y: 0, width: 2000, height: 1000 }),
+  getMinimumSize: () => [0, 0],
+  isMaximized: () => false,
+  isMinimized: () => false,
+  isFullScreen: () => false,
+  on: vi.fn(), off: vi.fn(), once: vi.fn(), center: vi.fn(),
+}
+
 const keyed = vi.hoisted(() => new Set<string>())
 vi.mock('../../src/main/config/api-keys-store', () => ({
   hasApiKey: (id: string) => keyed.has(id),
@@ -38,6 +55,7 @@ describe('main-window layout registration and refresh', () => {
     const setMinimumSize = vi.fn()
     const setSize = vi.fn()
     registeredWindow = {
+      ...windowSurface,
       isDestroyed: () => false,
       setMinimumSize,
       getSize: () => [2000, 1000],
@@ -62,6 +80,7 @@ describe('main-window layout registration and refresh', () => {
     const setMinimumSize = vi.fn()
     const setSize = vi.fn()
     registeredWindow = {
+      ...windowSurface,
       isDestroyed: () => false,
       setMinimumSize,
       getSize: () => [minWidth - 100, minHeight - 20],
@@ -80,6 +99,7 @@ describe('main-window layout registration and refresh', () => {
     const task = queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)[0]
     const setMinimumSize = vi.fn()
     registeredWindow = {
+      ...windowSurface,
       isDestroyed: () => false,
       setMinimumSize,
       getSize: () => [2000, 1000],
