@@ -7,7 +7,7 @@
 // adding only the environment-bound bits (the preload path) and applying
 // `themeSource` to nativeTheme.
 //
-// Per the window-chrome-conventions: the app ships a single dark theme, so the
+// The app ships a single dark theme, so the
 // title bar is forced dark (themeSource), the window is framed (not frameless —
 // only the secondary viewer/notification windows are frameless), and the minimum
 // size is the sum of the panes' minimums plus chrome, derived from

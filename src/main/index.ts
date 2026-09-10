@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme, screen } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
@@ -37,17 +37,10 @@ import { StatusIconController } from './status-icon'
 import { openOutputFolder } from './session/open-output-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
 import { ownMainWindowContentLoad } from './main-window-content'
-import { readUiState, updateUiState } from './state-store'
-import {
-  initializeWindowPlacement,
-  configureWindowPlacement,
-  resolveWindowRestoration,
-} from './window-placement'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
 let startupFailureWindow: BrowserWindow | null = null
-let flushMainWindowPlacement: (() => void) | null = null
 
 function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void {
   log('error', 'ImageQueue startup failed', { error: serializeError(error) })
@@ -131,51 +124,15 @@ function createWindow(): BrowserWindow {
       sandbox: true
     }
   })
-  let workAreas: Electron.Rectangle[] = []
-  try {
-    workAreas = screen.getAllDisplays().map((display) => display.workArea)
-  } catch (error) {
-    log('warn', 'Display work areas unavailable; using opening window bounds', { error: serializeError(error) })
-  }
-  const savedPlacement = readUiState().windowPlacements.main
-  const restoration = resolveWindowRestoration(
-    savedPlacement,
-    { width: windowOptions.minWidth, height: windowOptions.minHeight },
-    workAreas,
-  )
   registerMainWindowForLayout(win)
-  const initialized = initializeWindowPlacement(win, savedPlacement, restoration,
-    (error) => log('warn', 'Window placement restoration failed; retaining useful opening geometry and mode', { error: serializeError(error) }))
-  const placement = configureWindowPlacement(
-    win,
-    initialized.initial,
-    (record) => { updateUiState({ windowPlacements: { main: record } }) },
-    (error) => log('warn', 'Window placement operation failed', { error: serializeError(error) }),
-    initialized.windows,
-  )
-  const flushThisWindowPlacement = () => placement.flush()
-  flushMainWindowPlacement = flushThisWindowPlacement
 
   win.once('ready-to-show', () => {
-    win.show();
-    // Windows requires a native event-loop turn between show and maximize.
-    setTimeout(() => {
-      if (win.isDestroyed()) return;
-      placement.start();
-      if (restoration.mode === "maximized") {
-        try { win.maximize(); }
-        catch (error) { log('warn', 'Window could not be maximized during restoration', { error: serializeError(error) }); }
-      }
-    }, 0);
-  });
-  win.on('close', () => placement.flush())
-  win.on('session-end', () => placement.flush())
+    win.show()
+  })
 
   hardenWindow(win)
 
   win.on('closed', () => {
-    placement.dispose()
-    if (flushMainWindowPlacement === flushThisWindowPlacement) flushMainWindowPlacement = null
     unregisterMainWindowForLayout(win)
   })
 
@@ -411,7 +368,6 @@ async function gracefulShutdown(reason: string): Promise<void> {
 app.on('before-quit', (event) => {
   if (mainWindowController && !mainWindowController.beginShutdown()) return
   event.preventDefault()
-  flushMainWindowPlacement?.()
   statusIconController?.dispose()
   mainWindowController?.dispose()
   gracefulShutdown('quit')

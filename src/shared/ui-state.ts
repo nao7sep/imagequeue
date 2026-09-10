@@ -32,20 +32,6 @@ export interface UiState {
    * loud this machine plays them is an adjustment to the here and now.
    */
   notificationVolume: number
-  windowPlacements: { main: WindowPlacementRecord | null }
-}
-
-export type WindowPlacementMode = 'normal' | 'maximized'
-export interface WindowBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-export interface WindowPlacementRecord {
-  normalBounds: WindowBounds | null
-  mode: WindowPlacementMode
-  windowsNormalBounds?: import('./windows-placement').WindowsNormalBounds | null
 }
 
 export const NOTIFICATION_VOLUME_DEFAULT = 0.7
@@ -54,7 +40,6 @@ export function defaultUiState(): UiState {
   return {
     columnWidth: null,
     notificationVolume: NOTIFICATION_VOLUME_DEFAULT,
-    windowPlacements: { main: null },
   }
 }
 

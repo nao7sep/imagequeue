@@ -58,7 +58,7 @@ describe('buildMainWindowOptions', () => {
     }
   })
 
-  it('creates the main window hidden for placement restoration', () => {
+  it('creates the main window hidden until its content is ready to show', () => {
     expect(buildMainWindowOptions(1).show).toBe(false)
   })
 
