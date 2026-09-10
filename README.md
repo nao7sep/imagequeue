@@ -30,7 +30,7 @@ Each cloud column offers its currently supported model choices and model-specifi
   - The **Draw Things CLI** — currently about 170 MB, downloaded directly from the official [Draw Things Community](https://github.com/drawthingsai/draw-things-community) GitHub release (no Homebrew), and verified before use; the backend stays disabled until it's installed.
   - **Recommended per-model parameters** (`configs.json`, fetched from `models.drawthings.ai`) — optional; without them the app falls back to your default parameters.
 - Both are fetched only when you ask. The CLI can check release metadata at launch (on by default, configurable in the Managed tools window) and offer an **Update** without downloading the binary. The versionless recommendations file is fetched only when you choose **Install** or **Refresh** — nothing is ever downloaded, installed, or updated silently.
-- Node.js 20.19+ (or 22.12+) — only to build or run from source
+- Node.js 22.12+ — only to build or run from source
 
 ## Download
 
