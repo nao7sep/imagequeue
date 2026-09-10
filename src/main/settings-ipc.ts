@@ -1,4 +1,4 @@
-import { BrowserWindow, shell, dialog, app, clipboard, nativeImage } from 'electron'
+import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
@@ -37,7 +37,7 @@ import {
   type SecretId,
 } from '../shared/types'
 
-function readClipboardText(): string {
+function readClipboardText(): Promise<string> {
   return clipboard.readText()
 }
 
@@ -293,16 +293,21 @@ export function registerSettingsIpc(
     return readClipboardText()
   })
 
-  handle('clipboard:hasText', () => {
-    return readClipboardText().trim().length > 0
+  handle('clipboard:hasText', async () => {
+    return (await readClipboardText()).trim().length > 0
   })
 
-  handle('clipboard:copyImage', (_event, baseName: string, ext: string) => {
+  handle('clipboard:copyImage', async (_event, baseName: string, ext: string) => {
     const filePath = path.join(getSessionDir(), `${assertSafeBaseName(baseName)}.${assertImageExt(ext)}`)
     const buffer = fs.readFileSync(filePath)
     const image = nativeImage.createFromBuffer(buffer)
     if (image.isEmpty()) throw new Error(`Cannot copy unreadable image: ${filePath}`)
-    clipboard.writeImage(image)
+    const png = new Uint8Array(image.toPNG())
+    await clipboard.write([
+      new ClipboardItem({
+        'image/png': new Blob([png], { type: 'image/png' })
+      })
+    ])
   })
 
   handle('dialog:openDirectory', async (event) => {

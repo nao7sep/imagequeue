@@ -47,7 +47,13 @@ describe('buildMainWindowOptions', () => {
     expect(buildMainWindowOptions(1).themeSource).toBe('dark')
   })
 
-  it('opens at a size that always clears the minimum (size not persisted)', () => {
+  it('persists main-window bounds without persisting its display mode', () => {
+    const opts = buildMainWindowOptions(1)
+    expect(opts.name).toBe('main-window')
+    expect(opts.windowStatePersistence).toEqual({ bounds: true, displayMode: false })
+  })
+
+  it('opens at a default size that always clears the minimum', () => {
     // The opening size must never be below the window's own minimum — otherwise
     // the OS would immediately snap it larger and the "opens at its default
     // size" guarantee would be a lie.

@@ -15,14 +15,21 @@ const mocks = vi.hoisted(() => ({
   log: vi.fn(),
   showItemInFolder: vi.fn(),
   openExternal: vi.fn(),
-  writeImage: vi.fn(),
-  createFromBuffer: vi.fn((): { isEmpty: () => boolean } => ({ isEmpty: () => false })),
+  readClipboardText: vi.fn(async () => ''),
+  writeClipboard: vi.fn(),
+  createFromBuffer: vi.fn((): { isEmpty: () => boolean; toPNG: () => Buffer } => ({
+    isEmpty: () => false,
+    toPNG: () => Buffer.from('png'),
+  })),
 }))
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
   BrowserWindow: { fromWebContents: vi.fn(() => null) },
-  clipboard: { readText: vi.fn(() => ''), writeImage: mocks.writeImage },
+  ClipboardItem: class ClipboardItem {
+    constructor(readonly items: Record<string, unknown>) {}
+  },
+  clipboard: { readText: mocks.readClipboardText, write: mocks.writeClipboard },
   dialog: { showOpenDialog: vi.fn() },
   nativeImage: { createFromPath: vi.fn(), createFromBuffer: mocks.createFromBuffer },
   shell: {
@@ -69,9 +76,14 @@ beforeEach(() => {
   mocks.log.mockReset()
   mocks.showItemInFolder.mockReset()
   mocks.openExternal.mockReset()
-  mocks.writeImage.mockReset()
+  mocks.readClipboardText.mockReset()
+  mocks.readClipboardText.mockResolvedValue('')
+  mocks.writeClipboard.mockReset()
   mocks.createFromBuffer.mockReset()
-  mocks.createFromBuffer.mockReturnValue({ isEmpty: () => false })
+  mocks.createFromBuffer.mockReturnValue({
+    isEmpty: () => false,
+    toPNG: () => Buffer.from('png'),
+  })
 })
 
 describe('prompt image action preconditions', () => {
@@ -86,16 +98,41 @@ describe('prompt image action preconditions', () => {
     expect(mocks.showItemInFolder).not.toHaveBeenCalled()
   })
 
-  it('rejects Copy to Clipboard when the image bytes cannot be decoded', () => {
+  it('rejects Copy to Clipboard when the image bytes cannot be decoded', async () => {
     vi.spyOn(fs, 'readFileSync').mockReturnValueOnce(Buffer.from('not an image'))
-    mocks.createFromBuffer.mockReturnValueOnce({ isEmpty: () => true })
+    mocks.createFromBuffer.mockReturnValueOnce({
+      isEmpty: () => true,
+      toPNG: () => Buffer.from(''),
+    })
     mocks.handlers.clear()
     registerSettingsIpc()
     const handler = mocks.handlers.get('clipboard:copyImage')
     expect(handler).toBeTruthy()
 
-    expect(() => handler?.({}, 'image', 'png')).toThrow('Cannot copy unreadable image')
-    expect(mocks.writeImage).not.toHaveBeenCalled()
+    await expect(handler?.({}, 'image', 'png')).rejects.toThrow('Cannot copy unreadable image')
+    expect(mocks.writeClipboard).not.toHaveBeenCalled()
+  })
+
+  it('writes a copied image through the MIME-based clipboard API', async () => {
+    vi.spyOn(fs, 'readFileSync').mockReturnValueOnce(Buffer.from('source image'))
+    mocks.handlers.clear()
+    registerSettingsIpc()
+    const handler = mocks.handlers.get('clipboard:copyImage')
+
+    await expect(handler?.({}, 'image', 'webp')).resolves.toBeUndefined()
+    const [items] = mocks.writeClipboard.mock.calls[0] as [{ items: Record<string, Blob> }[]]
+    const blob = items[0]?.items['image/png']
+    expect(blob?.type).toBe('image/png')
+    await expect(blob?.text()).resolves.toBe('png')
+  })
+
+  it('awaits clipboard text before deciding whether text is available', async () => {
+    mocks.readClipboardText.mockResolvedValueOnce('  copied text  ')
+    mocks.handlers.clear()
+    registerSettingsIpc()
+    const handler = mocks.handlers.get('clipboard:hasText')
+
+    await expect(handler?.({})).resolves.toBe(true)
   })
 })
 

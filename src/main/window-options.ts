@@ -21,10 +21,15 @@ import {
 } from '../shared/layout-metrics'
 
 export interface MainWindowOptions {
+  name: string
   width: number
   height: number
   minWidth: number
   minHeight: number
+  windowStatePersistence: {
+    bounds: true
+    displayMode: false
+  }
   show: false
   backgroundColor: string
   /** Native-theme source applied to nativeTheme so the title bar matches the
@@ -47,10 +52,15 @@ export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
   const minWidth = computeWindowMinWidth(paneCount)
   const minHeight = computeWindowMinHeight()
   return {
+    name: 'main-window',
     width: computeWindowDefaultWidth(paneCount),
     height: computeWindowDefaultHeight(),
     minWidth,
     minHeight,
+    windowStatePersistence: {
+      bounds: true,
+      displayMode: false
+    },
     show: false,
     backgroundColor: BACKGROUND_COLOR,
     themeSource: 'dark'
