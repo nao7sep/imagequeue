@@ -25,6 +25,7 @@ import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
+import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 import {
   getVisiblePaneCount,
   registerMainWindowForLayout,
@@ -115,7 +116,7 @@ function createWindow(): BrowserWindow {
   // its panes need. themeSource is applied to nativeTheme in app.whenReady()
   // from the same source.
   const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(getVisiblePaneCount())
-  const win = new BrowserWindow({
+  const win = createWindowWithUsablePersistedBounds('main-window', () => new BrowserWindow({
     ...windowOptions,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -123,7 +124,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true
     }
-  })
+  }))
   registerMainWindowForLayout(win)
 
   win.once('ready-to-show', () => {
