@@ -28,7 +28,7 @@ export interface MainWindowOptions {
   minHeight: number
   windowStatePersistence: {
     bounds: true
-    displayMode: false
+    displayMode: boolean
   }
   show: false
   backgroundColor: string
@@ -59,7 +59,7 @@ export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
     minHeight,
     windowStatePersistence: {
       bounds: true,
-      displayMode: false
+      displayMode: process.platform === 'win32'
     },
     show: false,
     backgroundColor: BACKGROUND_COLOR,

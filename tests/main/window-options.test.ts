@@ -47,10 +47,13 @@ describe('buildMainWindowOptions', () => {
     expect(buildMainWindowOptions(1).themeSource).toBe('dark')
   })
 
-  it('persists main-window bounds without persisting its display mode', () => {
+  it('persists main-window bounds and Windows display mode', () => {
     const opts = buildMainWindowOptions(1)
     expect(opts.name).toBe('main-window')
-    expect(opts.windowStatePersistence).toEqual({ bounds: true, displayMode: false })
+    expect(opts.windowStatePersistence).toEqual({
+      bounds: true,
+      displayMode: process.platform === 'win32'
+    })
   })
 
   it('opens at a default size that always clears the minimum', () => {
