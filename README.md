@@ -20,6 +20,7 @@ Each cloud column offers its currently supported model choices and model-specifi
 - **Sessions** — each launch is a saved session you can resume; interrupted work returns ready to retry
 - **Advanced Prompting** — batch across backends and models with AI-elaborated prompt variations, reusable elaborators, and a persistent **Concept Library** that guarantees the elaborated prompts keep varying instead of collapsing onto the model's favourite ideas
 - **Stays awake during long runs**, with optional toast and sound notifications on completion
+- **Light and dark themes** — follow the OS appearance or pick Light or Dark in Settings › General
 
 ## Requirements
 

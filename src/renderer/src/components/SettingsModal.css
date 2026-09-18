@@ -80,9 +80,25 @@
   row-gap: var(--space-1);
 }
 
-.settings-field > label {
+.settings-field > label,
+.settings-field > .settings-field-label {
   font-size: var(--text-sm);
   color: var(--text-secondary);
+}
+
+.settings-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+}
+
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
 }
 
 .settings-field-reset {

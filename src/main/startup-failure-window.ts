@@ -7,6 +7,7 @@ import {
   isStartupFailureMeasurement,
 } from '../shared/startup-failure'
 import { hardenWindow } from './utils/harden-window'
+import { trackThemedWindow, windowBackground } from './theme'
 import { log, serializeError } from './logger'
 
 /** Creates ImageQueue's app-authored fatal-startup surface without a native alert icon. */
@@ -17,7 +18,9 @@ export function createStartupFailureWindow(message: string): BrowserWindow {
     height: 1,
     show: false,
     minWidth: 420,
-    backgroundColor: '#1a1a2e',
+    // The resolved theme's app surface (the OS appearance when config.json
+    // could not be read).
+    backgroundColor: windowBackground(),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -27,6 +30,7 @@ export function createStartupFailureWindow(message: string): BrowserWindow {
     },
   })
   hardenWindow(win)
+  trackThemedWindow(win)
 
   let measurementSettled = false
   const removeMeasurementOwner = (): void => {

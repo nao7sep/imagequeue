@@ -10,6 +10,7 @@ import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import { presentFailure } from '../utils/failurePresentation'
 import { serializeError } from '../../../shared/serialize-error'
+import { normalizeThemePreference, type ThemePreference } from '../../../shared/theme'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -24,6 +25,12 @@ interface Props {
 
 // The Settings tabs: the six per-backend sections share one Image Backends tab
 // (six small same-shaped blocks, one category), the rest map one section per tab.
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
+
 const SETTINGS_TABS = ['general', 'notifications', 'textai', 'backends', 'prompts'] as const
 type SettingsTab = (typeof SETTINGS_TABS)[number]
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
@@ -271,6 +278,26 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       {errorMessage && <div className="settings-error" role="alert">{errorMessage}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>
         <div className="settings-section">
+          {/* A native radio group: one tab stop, arrow keys move and select.
+              Applied on Save with the rest of Settings, never on its own. */}
+          <div className="settings-field">
+            <span className="settings-field-label" id="settings-theme-label">Theme</span>
+            <div className="settings-radio-row" role="radiogroup" aria-labelledby="settings-theme-label">
+              {THEME_OPTIONS.map(({ value, label }) => (
+                <label key={value} className="settings-radio">
+                  <input
+                    type="radio"
+                    name="settings-theme"
+                    value={value}
+                    checked={normalizeThemePreference(general.theme) === value}
+                    onChange={() => updateGeneral('theme', value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="settings-hint">System follows the OS appearance.</p>
+          </div>
           <div className="settings-field">
             <label>UI font</label>
             <input

@@ -188,14 +188,14 @@
   padding: 1px var(--space-2);
   border-radius: var(--radius-sm);
   border: none;
-  background: color-mix(in srgb, #f59e0b 14%, transparent);
-  color: #fbbf24;
+  background: color-mix(in srgb, var(--tag-amber) 14%, transparent);
+  color: var(--tag-amber-text);
   font-weight: 500;
 }
 
 .dt-text-link-google {
-  background: color-mix(in srgb, #60a5fa 14%, transparent);
-  color: #93c5fd;
+  background: color-mix(in srgb, var(--tag-blue) 14%, transparent);
+  color: var(--tag-blue-text);
 }
 
 .dt-text-link:hover {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
@@ -25,6 +25,7 @@ import { hardenWindow } from './utils/harden-window'
 import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
+import { applyThemePreference, followOsThemeChanges, trackThemedWindow, windowBackground } from './theme'
 import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 import {
   getVisiblePaneCount,
@@ -113,11 +114,11 @@ function createWindow(): BrowserWindow {
   // minimum and opening width are DERIVED from the shared pane minimums and the
   // pane count (see shared/layout-metrics), never a magic literal, so the window
   // can't be shrunk small enough to truncate a pane and doesn't open wider than
-  // its panes need. themeSource is applied to nativeTheme in app.whenReady()
-  // from the same source.
-  const { themeSource: _themeSource, ...windowOptions } = buildMainWindowOptions(getVisiblePaneCount())
+  // its panes need. The background is the resolved theme's app surface.
+  const windowOptions = buildMainWindowOptions(getVisiblePaneCount())
   const win = createWindowWithUsablePersistedBounds('main-window', () => new BrowserWindow({
     ...windowOptions,
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -126,6 +127,7 @@ function createWindow(): BrowserWindow {
     }
   }))
   registerMainWindowForLayout(win)
+  trackThemedWindow(win)
 
   win.once('ready-to-show', () => {
     win.show()
@@ -203,11 +205,6 @@ if (ownsSingleInstance) app.whenReady().then(() => {
 })
 
 function startUp(): void {
-  // The app ships a single dark theme; force dark native chrome (title bar,
-  // menus) so it doesn't follow a light OS appearance. The value comes from the
-  // same window-options source createWindow uses, so chrome theme and window
-  // sizing stay defined in one place.
-  nativeTheme.themeSource = buildMainWindowOptions(getVisiblePaneCount()).themeSource
   // Set the renderer CSP before any window loads its content. Gate the strict
   // policy on the production-renderer signal (no dev-server URL), not
   // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
@@ -219,7 +216,12 @@ function startUp(): void {
   // lost to the console. Everything below this line has a log to write to.
   initLogger(getLogsDir())
   clearTempDir()
-  loadConfig()
+  // The saved theme reaches the title bar and the renderer's
+  // prefers-color-scheme before any window exists, so launch never shows the OS
+  // appearance and then switches. A config that cannot load leaves System, so
+  // the startup failure window follows the OS.
+  applyThemePreference(loadConfig().general.theme)
+  followOsThemeChanges()
   // Materialize the shipped elaborators the same way loadConfig materializes
   // config.json: write elaborators.json from the in-code defaults on first run,
   // only when absent, at this populated-but-not-yet-used point before any
@@ -263,6 +265,8 @@ function startUp(): void {
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc(async (config) => {
+    // Settings apply on Save, the theme included (app-chrome conventions, Theme).
+    applyThemePreference(config.general.theme)
     await statusIconController?.reconcile(config.general.show_status_icon)
   })
   registerStateIpc()

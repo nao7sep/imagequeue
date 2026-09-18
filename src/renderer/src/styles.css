@@ -5,28 +5,68 @@
      replacing the divergent per-component mono chains (CLI log, code areas, keycaps). */
   --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-surface: #0f3460;
-  --bg-input: #1a1a2e;
-  --bg-hover: #24436f;
+  /* ─── Theme tokens ───────────────────────────────────────────────────────
+     Light values here, dark values in the prefers-color-scheme block below.
+     Electron's nativeTheme.themeSource (Settings › General › Theme) decides
+     prefers-color-scheme, so that block is the only theme switch. Both themes
+     keep the app's identity: glass panes over an aurora of magenta, violet,
+     cyan, and green — white glass over a pastel aurora in light, navy glass
+     over a deep one in dark. */
+  --aurora-base-1: #f9dcef;
+  --aurora-base-2: #e8def7;
+  --aurora-base-3: #d5eef6;
+  --aurora-base-4: #d8f3e6;
+  --aurora-glow-1: rgba(248, 129, 189, 0.55);
+  --aurora-glow-2: rgba(82, 217, 244, 0.5);
+  --aurora-glow-3: rgba(250, 207, 76, 0.45);
+  --bg-primary: #f3f5fb;
+  --bg-secondary: #ffffff;
+  --bg-surface: #e9eff9;
+  --bg-input: #ffffff;
+  --bg-hover: #d7e2f4;
   --hover: var(--bg-hover);
-  --pane-bg: rgba(7, 11, 24, 0.66);
-  --pane-bg-strong: rgba(7, 11, 24, 0.86);
-  --preview-bg: rgba(7, 11, 24, 0.38);
-  --text-primary: #e0e0e0;
-  --text-secondary: #b2bacb;
-  --text-muted: #a1adc3;
+  --pane-bg: rgba(255, 255, 255, 0.66);
+  --pane-bg-strong: rgba(255, 255, 255, 0.86);
+  --preview-bg: rgba(255, 255, 255, 0.38);
+  /* A panel floating over the panes (CLI job rows). */
+  --floating-bg: rgba(255, 255, 255, 0.97);
+  /* A kept task's row: quieter than a live one. */
+  --task-kept-bg: #eceef4;
+  --text-primary: #1b2036;
+  --text-secondary: #3b4560;
+  --text-muted: #4d5874;
   --scrollbar-thumb: var(--text-muted);
   --scrollbar-thumb-active: var(--text-secondary);
-  --text-on-accent: #06121f;
-  --border: #3a4470;
-  --border-strong: #454f80;
-  --accent: #38bdf8;
-  --accent-hover: #7dd3fc;
-  --success: #22c55e;
-  --error: #f87171;
-  --warning: #f59e0b;
+  --text-on-accent: #ffffff;
+  /* Lifts placeholder text off the aurora where it sits on a thin pane. */
+  --backdrop-text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+  --border: #c5cde0;
+  --border-strong: #a8b3cd;
+  /* A text field or select sits on a fill close to its surroundings, so its
+     outline alone identifies it and stays at 3:1 against both. */
+  --field-border: #6f7b99;
+  --accent: #0369a1;
+  --accent-hover: #075985;
+  --success: #166534;
+  --error: #991b1b;
+  --warning: #8e4f10;
+  /* The Draw Things model modal's source links. */
+  --tag-amber: #d97706;
+  --tag-amber-text: #92400e;
+  --tag-blue: #3b82f6;
+  --tag-blue-text: #1d4ed8;
+  /* Per-backend accents (see QueueColumn.css): a fill or border, and text on
+     the panes. In light one darker color serves both. */
+  --backend-openai: #047857;
+  --backend-openai-text: #047857;
+  --backend-grok: #7e22ce;
+  --backend-grok-text: #7e22ce;
+  --backend-flux: #155e75;
+  --backend-flux-text: #155e75;
+  --backend-nanobanana: #746606;
+  --backend-nanobanana-text: #746606;
+  --backend-drawthings: #be185d;
+  --backend-drawthings-text: #be185d;
 
   /* ─── Control scale ──────────────────────────────────────────────────────
      One scale for every clickable thing, so controls stop being sized ad hoc
@@ -64,10 +104,60 @@
   --space-4: 16px;
   --space-5: 24px;
 
-  /* The app ships a single dark theme; declare it so native form controls and
-     any built-in browser UI render in the dark palette (the global scroll-bar
-     styling below handles the bar itself, which color-scheme alone does not). */
-  color-scheme: dark;
+  /* Native form controls and built-in browser UI follow the theme (the global
+     scroll-bar styling below handles the bar itself, which color-scheme alone
+     does not). */
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --aurora-base-1: #8a0f61;
+    --aurora-base-2: #3f147b;
+    --aurora-base-3: #10637f;
+    --aurora-base-4: #157947;
+    --aurora-glow-1: rgba(251, 35, 143, 0.72);
+    --aurora-glow-2: rgba(18, 209, 248, 0.66);
+    --aurora-glow-3: rgba(250, 195, 30, 0.45);
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-surface: #0f3460;
+    --bg-input: #1a1a2e;
+    --bg-hover: #24436f;
+    --pane-bg: rgba(7, 11, 24, 0.66);
+    --pane-bg-strong: rgba(7, 11, 24, 0.86);
+    --preview-bg: rgba(7, 11, 24, 0.38);
+    --floating-bg: rgba(7, 11, 24, 0.97);
+    --task-kept-bg: #25272d;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b2bacb;
+    --text-muted: #a1adc3;
+    --text-on-accent: #06121f;
+    --backdrop-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    --border: #3a4470;
+    --border-strong: #454f80;
+    --field-border: #8390bd;
+    --accent: #38bdf8;
+    --accent-hover: #7dd3fc;
+    --success: #4ade80;
+    --error: #fca5a5;
+    --warning: #f59e0b;
+    --tag-amber: #f59e0b;
+    --tag-amber-text: #fbbf24;
+    --tag-blue: #60a5fa;
+    --tag-blue-text: #93c5fd;
+    --backend-openai: #10b981;
+    --backend-openai-text: #34d399;
+    --backend-grok: #a855f7;
+    --backend-grok-text: #d8b4fe;
+    --backend-flux: #06b6d4;
+    --backend-flux-text: #22d3ee;
+    --backend-nanobanana: #eab308;
+    --backend-nanobanana-text: #facc15;
+    --backend-drawthings: #ec4899;
+    --backend-drawthings-text: #f9a8d4;
+  }
 }
 
 .renderer-failure {
@@ -100,7 +190,7 @@
    gutter edges (the transparent border + padding-box clip gives the thumb
    breathing room rather than filling the gutter edge to edge), a transparent
    track, and a thumb that brightens on hover. Colors come from the palette
-   tokens so the bar matches the dark theme. No per-component scroll-bar style
+   tokens so the bar matches the theme. No per-component scroll-bar style
    should exist alongside this. */
 * {
   scrollbar-width: auto;
@@ -169,27 +259,15 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(
-      ellipse 75% 65% at 15% 10%,
-      hsl(330 96% 56% / 0.72),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 80% 70% at 85% 90%,
-      hsl(190 94% 52% / 0.66),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 60% 55% at 90% 15%,
-      hsl(45 96% 55% / 0.45),
-      transparent 70%
-    ),
+    radial-gradient(ellipse 75% 65% at 15% 10%, var(--aurora-glow-1), transparent 65%),
+    radial-gradient(ellipse 80% 70% at 85% 90%, var(--aurora-glow-2), transparent 65%),
+    radial-gradient(ellipse 60% 55% at 90% 15%, var(--aurora-glow-3), transparent 70%),
     linear-gradient(
       135deg,
-      hsl(320 80% 30%) 0%,
-      hsl(265 72% 28%) 35%,
-      hsl(195 78% 28%) 70%,
-      hsl(150 70% 28%) 100%
+      var(--aurora-base-1) 0%,
+      var(--aurora-base-2) 35%,
+      var(--aurora-base-3) 70%,
+      var(--aurora-base-4) 100%
     );
 }
 

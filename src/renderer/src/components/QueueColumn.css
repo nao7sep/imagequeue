@@ -17,8 +17,10 @@
 }
 
 /* Per-backend accent colors. One hue per backend, spread around the wheel so five
-   simultaneously-visible columns stay tellable apart; validated against the app's
-   single dark surface (--bg-secondary) with the dataviz categorical checks.
+   simultaneously-visible columns stay tellable apart; validated against each
+   theme's surface (--bg-secondary) with the dataviz categorical checks. The values
+   are theme tokens in styles.css: light uses one darker color per backend for both
+   fill and text, keeping the same pairwise separation as dark.
    Two rules this set exists to hold:
      - A column accent is never one of the app's reserved status tokens. Draw Things
        used to BE --warning (#f59e0b, ΔE 0.0), so a local backend read as a warning.
@@ -28,11 +30,11 @@
    do discard every existing identity), and the checks permit the floor band when
    identity is not carried by color alone. Here every column is titled with its
    backend name, which is that secondary encoding. */
-[data-backend="openai"]     { --col-accent: #10b981; --col-accent-hover: #34d399; --col-text: #34d399; }
-[data-backend="grok"]       { --col-accent: #a855f7; --col-accent-hover: #c084fc; --col-text: #d8b4fe; }
-[data-backend="flux"]       { --col-accent: #06b6d4; --col-accent-hover: #22d3ee; --col-text: #22d3ee; }
-[data-backend="nanobanana"] { --col-accent: #eab308; --col-accent-hover: #facc15; --col-text: #facc15; }
-[data-backend="drawthings"] { --col-accent: #ec4899; --col-accent-hover: #f472b6; --col-text: #f9a8d4; }
+[data-backend="openai"]     { --col-accent: var(--backend-openai); --col-text: var(--backend-openai-text); }
+[data-backend="grok"]       { --col-accent: var(--backend-grok); --col-text: var(--backend-grok-text); }
+[data-backend="flux"]       { --col-accent: var(--backend-flux); --col-text: var(--backend-flux-text); }
+[data-backend="nanobanana"] { --col-accent: var(--backend-nanobanana); --col-text: var(--backend-nanobanana-text); }
+[data-backend="drawthings"] { --col-accent: var(--backend-drawthings); --col-text: var(--backend-drawthings-text); }
 
 .queue-column:last-child {
   border-right: none;
@@ -78,7 +80,7 @@
   flex: 1;
   min-width: 0;
   padding: 3px 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 3px;
   background: var(--bg-input);
   color: var(--text-primary);
@@ -118,7 +120,7 @@
   font-size: 12px;
   text-align: center;
   padding: 20px 10px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  text-shadow: var(--backdrop-text-shadow);
 }
 
 .task-entry {
@@ -132,7 +134,7 @@
 }
 
 .task-entry-kept {
-  --task-bg: hsl(225 10% 16%);
+  --task-bg: var(--task-kept-bg);
 }
 
 .task-item {

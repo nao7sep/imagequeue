@@ -4,14 +4,12 @@
 // env, and so the content-based window minimum is derived in one place from the
 // shared layout metrics rather than hand-typed in createWindow. The main process
 // (src/main/index.ts) spreads the result into `new BrowserWindow({ ... })`,
-// adding only the environment-bound bits (the preload path) and applying
-// `themeSource` to nativeTheme.
+// adding only the environment-bound bits (the preload path and the background of
+// the resolved theme, see mainWindowBackground).
 //
-// The app ships a single dark theme, so the
-// title bar is forced dark (themeSource), the window is framed (not frameless —
-// only the secondary viewer/notification windows are frameless), and the minimum
-// size is the sum of the panes' minimums plus chrome, derived from
-// shared/layout-metrics — never a magic literal.
+// The window is framed (not frameless — only the secondary viewer/notification
+// windows are frameless), and the minimum size is the sum of the panes' minimums
+// plus chrome, derived from shared/layout-metrics — never a magic literal.
 
 import {
   computeWindowDefaultWidth,
@@ -31,15 +29,14 @@ export interface MainWindowOptions {
     displayMode: boolean
   }
   show: false
-  backgroundColor: string
-  /** Native-theme source applied to nativeTheme so the title bar matches the
-   *  app's dark theme rather than following the OS appearance. */
-  themeSource: 'dark'
 }
 
-/** The app's primary surface color (matches --bg-primary in styles.css), painted
- *  behind the renderer so there is no white flash before first paint. */
-const BACKGROUND_COLOR = '#1a1a2e'
+/** The app's primary surface color in each theme (matches --bg-primary in
+ *  styles.css), painted behind the renderer so there is no flash of another
+ *  color before first paint. */
+export function mainWindowBackground(dark: boolean): string {
+  return dark ? '#1a1a2e' : '#f3f5fb'
+}
 
 /**
  * Build the chrome/sizing options for the main window, given how many panes the
@@ -62,7 +59,5 @@ export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
       displayMode: process.platform === 'win32'
     },
     show: false,
-    backgroundColor: BACKGROUND_COLOR,
-    themeSource: 'dark'
   }
 }

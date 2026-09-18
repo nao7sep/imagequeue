@@ -152,6 +152,10 @@ export interface BrainstormConfig {
 }
 
 export interface GeneralConfig {
+  // The app theme: 'system', 'light', or 'dark'. A `string`, not ThemePreference:
+  // the store hands back whatever the file holds, and normalizeThemePreference
+  // (shared/theme) resolves a missing or unknown value to System at use.
+  theme: string
   // The app's UI (chrome) font family. Family only; blank means the built-in default stack (the
   // renderer's `--font-ui` variable). Applied app-wide via that variable.
   ui_font_family: string

@@ -30,14 +30,14 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: transpar
   font-size: 12px;
   font-weight: 500;
   padding: 0 10px;
-  color: #e8e8e8;
+  color: #1c1c1e;
   user-select: none;
   cursor: default;
   white-space: nowrap;
   overflow: hidden;
-  background: #1c1c1e;
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.55);
+  background: #f6f6f8;
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
 .toast-app {
   flex-shrink: 0;
@@ -50,8 +50,15 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: transpar
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.toast.success { background: #0f2d1e; border-color: rgba(74,222,128,0.18); }
-.toast.failure { background: #2d0f0f; border-color: rgba(248,113,113,0.22); }
+.toast.success { background: #e3f5e9; border-color: rgba(22,163,74,0.3); }
+.toast.failure { background: #fbe6e6; border-color: rgba(220,38,38,0.3); }
+/* The toast window follows prefers-color-scheme, which follows
+   nativeTheme.themeSource like every other window. */
+@media (prefers-color-scheme: dark) {
+  .toast { color: #e8e8e8; background: #1c1c1e; border-color: rgba(255,255,255,0.08); box-shadow: 0 4px 16px rgba(0,0,0,0.55); }
+  .toast.success { background: #0f2d1e; border-color: rgba(74,222,128,0.18); }
+  .toast.failure { background: #2d0f0f; border-color: rgba(248,113,113,0.22); }
+}
 </style>
 </head>
 <body>

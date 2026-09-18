@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { buildMainWindowOptions } from '../../src/main/window-options'
+import { buildMainWindowOptions, mainWindowBackground } from '../../src/main/window-options'
 import {
   computeWindowDefaultWidth,
   computeWindowDefaultHeight,
@@ -13,8 +15,7 @@ import {
 // `new BrowserWindow({...})` and reads themeSource from. It carries no electron
 // import, so it tests in the node env. These assertions pin the conformance
 // points of the window-chrome-conventions: derived minimum size, the app's
-// surface background, a framed (not frameless) window, and a forced dark title
-// bar.
+// surface background in each theme, and a framed (not frameless) window.
 
 const PANE_COUNTS = [1, 2, 4, 5]
 
@@ -31,8 +32,13 @@ describe('buildMainWindowOptions', () => {
     }
   })
 
-  it('paints the app surface background color', () => {
-    expect(buildMainWindowOptions(5).backgroundColor).toBe('#1a1a2e')
+  it("paints each theme's app surface (--bg-primary) behind the renderer", () => {
+    const css = readFileSync(resolve('src/renderer/src/styles.css'), 'utf8')
+    const light = css.slice(css.search(/^:root\s*\{/m))
+    const dark = css.slice(css.indexOf('@media (prefers-color-scheme: dark) {'))
+    const surface = (block: string) => block.match(/--bg-primary:\s*(#[0-9a-f]{6});/i)?.[1]?.toLowerCase()
+    expect(mainWindowBackground(false)).toBe(surface(light))
+    expect(mainWindowBackground(true)).toBe(surface(dark))
   })
 
   it('is a framed window, not frameless', () => {
@@ -40,11 +46,6 @@ describe('buildMainWindowOptions', () => {
     // The main window keeps the native frame (only the secondary viewer/
     // notification windows are frameless). `frame:false` must never appear here.
     expect(opts['frame']).not.toBe(false)
-  })
-
-  it('forces the dark native title-bar theme', () => {
-    expect(buildMainWindowOptions(5).themeSource).toBe('dark')
-    expect(buildMainWindowOptions(1).themeSource).toBe('dark')
   })
 
   it('persists main-window bounds and Windows display mode', () => {
