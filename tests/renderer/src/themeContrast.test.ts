@@ -5,13 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 // Every color pair the stylesheets draw must meet WCAG AA in both themes
 // (app-chrome conventions, Theme): 4.5:1 for text, 3:1 for a text field's
 // outline. Light tokens live in styles.css's top-level :root block; dark tokens
-// in the :root block inside @media (prefers-color-scheme: dark). Text on a glass
-// pane is checked over every color the aurora behind it can show: each base
-// stop, and each glow over each base stop.
+// in the :root block inside @media (prefers-color-scheme: dark).
 const css = readFileSync(resolve('src/renderer/src/styles.css'), 'utf8')
 
 type Rgb = [number, number, number]
-type Rgba = [number, number, number, number]
 
 function themeBlock(theme: 'light' | 'dark'): string {
   if (theme === 'light') {
@@ -36,19 +33,8 @@ function hexOf(block: string, token: string): Rgb {
   return [1, 3, 5].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16)) as Rgb
 }
 
-function rgbaOf(block: string, token: string): Rgba {
-  const match = tokenValue(block, token).match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/)
-  expect(match, `${token} must be an rgba() color`).toBeTruthy()
-  return [Number(match![1]), Number(match![2]), Number(match![3]), Number(match![4])]
-}
-
-function over(top: Rgba, base: Rgb): Rgb {
-  const [r, g, b, a] = top
-  return [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)]
-}
-
 function mix(color: Rgb, base: Rgb, amount: number): Rgb {
-  return over([...color, amount] as Rgba, base)
+  return color.map((channel, index) => channel * amount + base[index]! * (1 - amount)) as Rgb
 }
 
 function luminance(rgb: Rgb): number {
@@ -65,22 +51,16 @@ function contrast(first: Rgb, second: Rgb): number {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
 }
 
-function auroraProbes(block: string): Rgb[] {
-  const bases = [1, 2, 3, 4].map((index) => hexOf(block, `--aurora-base-${index}`))
-  const glows = [1, 2, 3].map((index) => rgbaOf(block, `--aurora-glow-${index}`))
-  return [...bases, ...glows.flatMap((glow) => bases.map((base) => over(glow, base)))]
-}
-
-const SURFACES = ['--bg-primary', '--bg-secondary', '--bg-surface', '--bg-input', '--task-kept-bg']
+const SURFACES = ['--app-bg', '--bg-primary', '--bg-secondary', '--bg-surface', '--bg-input', '--task-kept-bg', '--floating-bg']
 const INKS = ['--text-primary', '--text-secondary', '--text-muted', '--accent', '--success', '--error', '--warning']
 const BACKENDS = ['openai', 'grok', 'flux', 'nanobanana', 'drawthings']
-// What each glass pane carries: the column, prompt, and welcome panes carry
-// labels, empty states, warnings, and each column's enqueue text; the metadata
-// strip carries its toggle and the model name. The preview area carries no text
-// directly: its placeholder sits on its own strong pane.
+// What each pane carries: the column, prompt, and welcome panes carry labels,
+// empty states, warnings, and each column's enqueue text; the metadata strip
+// carries its toggle and the model name; the preview well its placeholder.
 const PANE_INKS: Record<string, string[]> = {
   '--pane-bg': ['--text-primary', '--text-secondary', '--text-muted', '--warning', '--error', ...BACKENDS.map((backend) => `--backend-${backend}-text`)],
   '--pane-bg-strong': ['--text-primary', '--text-secondary', '--text-muted', '--accent'],
+  '--preview-bg': ['--text-primary', '--text-secondary'],
 }
 const FILLS = ['--accent', '--accent-hover', '--success', '--error', '--warning', ...BACKENDS.map((backend) => `--backend-${backend}`)]
 
@@ -110,12 +90,9 @@ describe('theme token contrast', () => {
       }
     })
 
-    it(`keeps text at 4.5:1 or more on the glass panes over the aurora in the ${theme} theme`, () => {
-      for (const probe of auroraProbes(block)) {
-        for (const [pane, inks] of Object.entries(PANE_INKS)) {
-          const background = over(rgbaOf(block, pane), probe)
-          for (const ink of inks) check(hexOf(block, ink), background, 4.5, `${ink} on ${pane}`)
-        }
+    it(`keeps text at 4.5:1 or more on the panes in the ${theme} theme`, () => {
+      for (const [pane, inks] of Object.entries(PANE_INKS)) {
+        for (const ink of inks) check(hexOf(block, ink), hexOf(block, pane), 4.5, `${ink} on ${pane}`)
       }
     })
 
@@ -137,7 +114,7 @@ describe('theme token contrast', () => {
     it(`keeps text-field outlines at 3:1 or more in the ${theme} theme`, () => {
       const field = hexOf(block, '--field-border')
       for (const surface of SURFACES) check(field, hexOf(block, surface), 3, `--field-border on ${surface}`)
-      for (const probe of auroraProbes(block)) check(field, over(rgbaOf(block, '--pane-bg'), probe), 3, '--field-border on --pane-bg')
+      check(field, hexOf(block, '--pane-bg'), 3, '--field-border on --pane-bg')
     })
   })
 
@@ -199,7 +176,7 @@ describe('theme token contrast', () => {
   }
 
   it('defines every light color token again in the dark block', () => {
-    const tokens = (block: string) => new Set([...block.matchAll(/(--[a-z0-9-]+)\s*:\s*(?:#|rgba\()/g)].map((match) => match[1]))
+    const tokens = (block: string) => new Set([...block.matchAll(/(--[a-z0-9-]+)\s*:\s*(?:#|\d+%)/g)].map((match) => match[1]))
     const dark = tokens(themeBlock('dark'))
     for (const token of tokens(themeBlock('light'))) expect(dark.has(token), `${token} in the dark theme`).toBe(true)
   })

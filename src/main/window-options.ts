@@ -31,11 +31,11 @@ export interface MainWindowOptions {
   show: false
 }
 
-/** The app's primary surface color in each theme (matches --bg-primary in
- *  styles.css), painted behind the renderer so there is no flash of another
- *  color before first paint. */
+/** The app's backdrop in each theme (matches --app-bg in styles.css), painted
+ *  behind the renderer so there is no flash of another color before first
+ *  paint. */
 export function mainWindowBackground(dark: boolean): string {
-  return dark ? '#1a1a2e' : '#f3f5fb'
+  return dark ? '#121628' : '#e9eef7'
 }
 
 /**

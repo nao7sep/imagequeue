@@ -174,14 +174,10 @@
   overflow: hidden;
 }
 
-/* The preview area is the thinnest glass over the aurora, so the placeholder
-   sits on a stronger pane of its own to stay legible over any aurora color. */
 .preview-placeholder {
   color: var(--text-secondary);
   text-align: center;
   padding: 20px;
-  border-radius: var(--radius-md);
-  background: var(--pane-bg-strong);
 }
 
 .preview-placeholder-hint {

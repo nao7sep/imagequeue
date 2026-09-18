@@ -46,7 +46,7 @@
   border-top: 3px solid var(--col-accent, var(--accent));
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--col-accent, var(--accent)) 18%, var(--bg-secondary)),
+    color-mix(in srgb, var(--col-accent, var(--accent)) var(--header-tint), var(--bg-secondary)),
     var(--bg-secondary)
   );
   font-weight: 600;
@@ -120,7 +120,6 @@
   font-size: 12px;
   text-align: center;
   padding: 20px 10px;
-  text-shadow: var(--backdrop-text-shadow);
 }
 
 .task-entry {

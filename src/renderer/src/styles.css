@@ -9,27 +9,24 @@
      Light values here, dark values in the prefers-color-scheme block below.
      Electron's nativeTheme.themeSource (Settings › General › Theme) decides
      prefers-color-scheme, so that block is the only theme switch. Both themes
-     keep the app's identity: glass panes over an aurora of magenta, violet,
-     cyan, and green — white glass over a pastel aurora in light, navy glass
-     over a deep one in dark. */
-  --aurora-base-1: #f9dcef;
-  --aurora-base-2: #e8def7;
-  --aurora-base-3: #d5eef6;
-  --aurora-base-4: #d8f3e6;
-  --aurora-glow-1: rgba(248, 129, 189, 0.55);
-  --aurora-glow-2: rgba(82, 217, 244, 0.5);
-  --aurora-glow-3: rgba(250, 207, 76, 0.45);
-  --bg-primary: #f3f5fb;
+     are one blue family on a plain backdrop: navy panes, cards, and blue
+     controls in dark; blue-white panes, white cards, and pale-blue controls in
+     light. The panes are solid so every pane reads the same wherever it sits. */
+  /* The window behind the panes. */
+  --app-bg: #e9eef7;
+  --bg-primary: #ffffff;
   --bg-secondary: #ffffff;
   --bg-surface: #e9eff9;
   --bg-input: #ffffff;
   --bg-hover: #d7e2f4;
   --hover: var(--bg-hover);
-  --pane-bg: rgba(255, 255, 255, 0.66);
-  --pane-bg-strong: rgba(255, 255, 255, 0.86);
-  --preview-bg: rgba(255, 255, 255, 0.38);
+  /* The panes (prompt, columns, welcome), the metadata strip, and the preview
+     well. */
+  --pane-bg: #f5f7fc;
+  --pane-bg-strong: #eef2f9;
+  --preview-bg: #eef2f9;
   /* A panel floating over the panes (CLI job rows). */
-  --floating-bg: rgba(255, 255, 255, 0.97);
+  --floating-bg: #ffffff;
   /* A kept task's row: quieter than a live one. */
   --task-kept-bg: #eceef4;
   --text-primary: #1b2036;
@@ -38,15 +35,17 @@
   --scrollbar-thumb: var(--text-muted);
   --scrollbar-thumb-active: var(--text-secondary);
   --text-on-accent: #ffffff;
-  /* Lifts placeholder text off the aurora where it sits on a thin pane. */
-  --backdrop-text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
-  --border: #c5cde0;
+  --border: #cdd5e6;
   --border-strong: #a8b3cd;
   /* A text field or select sits on a fill close to its surroundings, so its
      outline alone identifies it and stays at 3:1 against both. */
   --field-border: #6f7b99;
   --accent: #0369a1;
   --accent-hover: #075985;
+  /* How strongly a pane header takes its accent (the prompt pane's, or a
+     backend column's). Softer in light, where five tinted headers side by side
+     would read as a rainbow; the colored top line keeps each one identifiable. */
+  --header-tint: 9%;
   --success: #166534;
   --error: #991b1b;
   --warning: #8e4f10;
@@ -113,33 +112,27 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --aurora-base-1: #8a0f61;
-    --aurora-base-2: #3f147b;
-    --aurora-base-3: #10637f;
-    --aurora-base-4: #157947;
-    --aurora-glow-1: rgba(251, 35, 143, 0.72);
-    --aurora-glow-2: rgba(18, 209, 248, 0.66);
-    --aurora-glow-3: rgba(250, 195, 30, 0.45);
+    --app-bg: #121628;
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
     --bg-surface: #0f3460;
     --bg-input: #1a1a2e;
     --bg-hover: #24436f;
-    --pane-bg: rgba(7, 11, 24, 0.66);
-    --pane-bg-strong: rgba(7, 11, 24, 0.86);
-    --preview-bg: rgba(7, 11, 24, 0.38);
-    --floating-bg: rgba(7, 11, 24, 0.97);
+    --pane-bg: #151a2e;
+    --pane-bg-strong: #10142a;
+    --preview-bg: #0f1324;
+    --floating-bg: #0b0f1e;
     --task-kept-bg: #25272d;
     --text-primary: #e0e0e0;
     --text-secondary: #b2bacb;
     --text-muted: #a1adc3;
     --text-on-accent: #06121f;
-    --backdrop-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
     --border: #3a4470;
     --border-strong: #454f80;
     --field-border: #8390bd;
     --accent: #38bdf8;
     --accent-hover: #7dd3fc;
+    --header-tint: 18%;
     --success: #4ade80;
     --error: #fca5a5;
     --warning: #f59e0b;
@@ -165,7 +158,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-5);
-  background: var(--bg-primary);
+  background: var(--app-bg);
   color: var(--text-primary);
 }
 
@@ -249,26 +242,8 @@ html, body, #root {
 body {
   font-family: var(--font-ui);
   font-size: 14px;
-  background: transparent;
+  background: var(--app-bg);
   color: var(--text-primary);
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(ellipse 75% 65% at 15% 10%, var(--aurora-glow-1), transparent 65%),
-    radial-gradient(ellipse 80% 70% at 85% 90%, var(--aurora-glow-2), transparent 65%),
-    radial-gradient(ellipse 60% 55% at 90% 15%, var(--aurora-glow-3), transparent 70%),
-    linear-gradient(
-      135deg,
-      var(--aurora-base-1) 0%,
-      var(--aurora-base-2) 35%,
-      var(--aurora-base-3) 70%,
-      var(--aurora-base-4) 100%
-    );
 }
 
 button {

@@ -31,7 +31,7 @@
   border-bottom: 1px solid var(--border);
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--accent) 18%, var(--bg-secondary)),
+    color-mix(in srgb, var(--accent) var(--header-tint), var(--bg-secondary)),
     var(--bg-secondary)
   );
 }

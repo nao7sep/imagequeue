@@ -32,11 +32,11 @@ describe('buildMainWindowOptions', () => {
     }
   })
 
-  it("paints each theme's app surface (--bg-primary) behind the renderer", () => {
+  it("paints each theme's backdrop (--app-bg) behind the renderer", () => {
     const css = readFileSync(resolve('src/renderer/src/styles.css'), 'utf8')
     const light = css.slice(css.search(/^:root\s*\{/m))
     const dark = css.slice(css.indexOf('@media (prefers-color-scheme: dark) {'))
-    const surface = (block: string) => block.match(/--bg-primary:\s*(#[0-9a-f]{6});/i)?.[1]?.toLowerCase()
+    const surface = (block: string) => block.match(/--app-bg:\s*(#[0-9a-f]{6});/i)?.[1]?.toLowerCase()
     expect(mainWindowBackground(false)).toBe(surface(light))
     expect(mainWindowBackground(true)).toBe(surface(dark))
   })
