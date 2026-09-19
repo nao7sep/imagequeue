@@ -119,7 +119,7 @@ describe('DependenciesModal cancellation', () => {
 
     expect(cancelDependencyOperations).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
-  }, 15_000)
+  })
 
   it('retains cancellation across close and reopen until the matching retry', async () => {
     let rejectInstall: ((error: Error) => void) | undefined
