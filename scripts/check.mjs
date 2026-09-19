@@ -51,9 +51,11 @@ const changed = full ? [] : changedPaths()
 const plan = planChecks({
   changed,
   full,
+  // tests/live never runs in the ordinary suite, so it never joins the readers.
   repositoryReaders: testFiles(path.join(ROOT, 'tests'))
-    .filter((file) => readsRepository(readFileSync(file, 'utf8')))
-    .map(repositoryPath),
+    .map(repositoryPath)
+    .filter((file) => !file.startsWith('tests/live/'))
+    .filter((file) => readsRepository(readFileSync(path.join(ROOT, file), 'utf8'))),
 })
 
 if (!full) {
@@ -71,4 +73,11 @@ if (plan.vitest === 'all') {
   run('vitest', process.execPath, [vitest, 'run'])
 } else if (plan.vitest) {
   run('vitest related', process.execPath, [vitest, 'related', '--run', '--passWithNoTests', ...plan.vitest])
+}
+if (plan.live) {
+  run(
+    'live lane: real image and text API calls (six API keys, costs money) and, on macOS, the Draw Things CLI and a 2 GB model',
+    process.execPath,
+    [vitest, 'run', '--config', 'vitest.live.config.ts'],
+  )
 }

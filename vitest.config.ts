@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 
@@ -23,6 +23,9 @@ export default defineConfig({
     maxWorkers: 2,
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // The live lane spends money and downloads the Draw Things CLI and a model;
+    // only npm run check:full runs it, through vitest.live.config.ts.
+    exclude: [...configDefaults.exclude, 'tests/live/**'],
     coverage: {
       // V8's native coverage; `include` spans all source so the report flags
       // logic no test reaches, not just a score for what is reached.
