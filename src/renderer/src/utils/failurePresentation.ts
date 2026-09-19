@@ -5,7 +5,7 @@ export type FailureOperation =
   | 'sessions-load' | 'session-resume' | 'session-create' | 'session-delete' | 'session-folder'
   | 'concepts-load' | 'concept-details-load' | 'concepts-change'
   | 'elaborators-load' | 'elaborators-change'
-  | 'drawthings-models-load' | 'drawthings-cli-load' | 'drawthings-catalog-load'
+  | 'drawthings-models-load' | 'drawthings-models-poll' | 'drawthings-cli-load' | 'drawthings-catalog-load'
   | 'drawthings-download' | 'drawthings-browse' | 'drawthings-import'
   | 'advanced-elaborators-load' | 'advanced-models-load' | 'advanced-elaborate' | 'advanced-queue'
   | 'elaboration-defaults-load' | 'elaboration-save'
@@ -24,6 +24,7 @@ const COPY: Record<FailureOperation, string> = {
   'elaborators-load': 'Elaborators could not be loaded. Close this window and try again.',
   'elaborators-change': 'The elaborator change could not be saved. Nothing was changed; try again.',
   'drawthings-models-load': 'Downloaded Draw Things models could not be loaded. Try refreshing them.',
+  'drawthings-models-poll': 'Downloaded Draw Things models could not be loaded. ImageQueue tries again shortly.',
   'drawthings-cli-load': 'Draw Things CLI status could not be loaded. Try again.',
   'drawthings-catalog-load': 'Available Draw Things models could not be loaded. Try again.',
   'drawthings-download': 'The model download could not be started. Nothing was added; try again.',

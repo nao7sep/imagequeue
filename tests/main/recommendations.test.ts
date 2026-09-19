@@ -1,9 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+
+const network = vi.hoisted(() => ({ fetchBytesWithHeaders: vi.fn() }))
+vi.mock('../../src/main/dependencies/download', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/main/dependencies/download')>()),
+  fetchBytesWithHeaders: network.fetchBytesWithHeaders,
+}))
+
 import {
+  downloadLatestRecommendations,
   getRecommendationsStatus,
+  lastModifiedOf,
   resolveRecommendedParams,
 } from '../../src/main/recommendations'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
@@ -58,5 +67,37 @@ describe('getRecommendationsStatus', () => {
 describe('resolveRecommendedParams', () => {
   it('returns null when no configs.json is present', () => {
     expect(resolveRecommendedParams('any-model.ckpt')).toBeNull()
+  })
+})
+
+describe('lastModifiedOf', () => {
+  it('reads an HTTP date as ISO-8601 UTC', () => {
+    expect(lastModifiedOf({ 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' })).toBe('2026-09-11T20:46:05.000Z')
+  })
+
+  it('is null when the header is absent or unreadable', () => {
+    expect(lastModifiedOf({})).toBeNull()
+    expect(lastModifiedOf({ 'last-modified': 'yesterday-ish' })).toBeNull()
+  })
+})
+
+describe('downloadLatestRecommendations', () => {
+  const body = Buffer.from(JSON.stringify([{ name: 'a', configuration: { model: 'm' } }]))
+
+  it('stamps the file with the server time it was served with', async () => {
+    network.fetchBytesWithHeaders.mockResolvedValueOnce({
+      body,
+      headers: { 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' },
+    })
+    const status = await downloadLatestRecommendations()
+    expect(status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
+    expect(fs.statSync(configsPath()).mtime.toISOString()).toBe('2026-09-11T20:46:05.000Z')
+  })
+
+  it('keeps the write time when the server gives no time', async () => {
+    network.fetchBytesWithHeaders.mockResolvedValueOnce({ body, headers: {} })
+    const before = Date.now()
+    const status = await downloadLatestRecommendations()
+    expect(Date.parse(status.updatedAt as string)).toBeGreaterThanOrEqual(before - 1000)
   })
 })

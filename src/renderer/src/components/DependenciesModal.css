@@ -1,5 +1,5 @@
 .dependencies-modal-box {
-  width: min(560px, 92vw);
+  width: min(600px, 92vw);
   /* Override .modal-box's max-width: 480px, which would otherwise clamp the
      intended width back down to 480. */
   max-width: 92vw;
@@ -30,39 +30,42 @@
   background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
+/* Each tool is drawn like a Settings section: a titled card whose state reads
+   as labelled lines, each with the action that changes it at its end. */
 .dependency-row {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  border: 1px solid var(--border);
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
-}
-
-.dependency-main {
-  flex: 1;
-  min-width: 0;
+  padding: var(--space-4);
+  background: var(--bg-secondary);
 }
 
 .dependency-heading {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-2);
 }
 
 .dependency-title {
   margin: 0;
   font-size: var(--text-md);
-  color: var(--text-primary);
+  color: var(--accent);
+}
+
+.dependency-optional {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .dependency-badge {
+  margin-left: auto;
+  flex-shrink: 0;
   font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
   padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
   color: var(--text-secondary);
 }
 
@@ -78,11 +81,13 @@
 
 .dependency-badge-not-installed {
   background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   color: var(--text-secondary);
 }
 
 .dependency-badge-not-installed.dependency-badge-required {
   background: color-mix(in srgb, var(--warning) 14%, transparent);
+  box-shadow: none;
   color: var(--warning);
 }
 
@@ -92,14 +97,56 @@
   color: var(--text-muted);
 }
 
-.dependency-meta {
-  margin: var(--space-1) 0 0;
+.dependency-facts {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* Label, value, action. The label and the value's first line take a control's
+   height, so they sit level with the button however many lines follow. */
+.dependency-fact {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.dependency-fact + .dependency-fact {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.dependency-fact-label,
+.dependency-fact-line {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-md);
   font-size: var(--text-sm);
+}
+
+.dependency-fact-label {
   color: var(--text-secondary);
 }
 
+.dependency-fact-value {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.dependency-fact-line {
+  color: var(--text-primary);
+}
+
+.dependency-fact-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .dependency-progress {
-  margin-top: var(--space-2);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -109,7 +156,7 @@
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: var(--bg-primary);
+  background: var(--bg-surface);
   overflow: hidden;
 }
 
@@ -125,38 +172,10 @@
   white-space: nowrap;
 }
 
-.dependency-action {
-  flex-shrink: 0;
-  height: var(--control-md);
-  padding: var(--control-pad-md);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.dependency-actions {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 .dependency-terminal-outcome {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
-}
-
-.dependency-action:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
-}
-
-.dependency-action:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .dependencies-toggle {
@@ -165,4 +184,5 @@
   gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  cursor: pointer;
 }

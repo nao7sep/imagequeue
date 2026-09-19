@@ -7,6 +7,7 @@ import { useListbox } from '../hooks/useListbox'
 import { useImeGuard } from '../utils/imeGuard'
 import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from '../../../shared'
 import { formatUiDateTime } from '../utils/formatDateTime'
+import { sessionDisplayName } from '../utils/sessionName'
 import { presentFailure } from '../utils/failurePresentation'
 import './SessionsModal.css'
 
@@ -278,7 +279,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                 >
                   <div className="session-card-header">
                     <div className="session-card-title-row">
-                      <div className="session-card-title">{session.sessionId}</div>
+                      <div className="session-card-title">{sessionDisplayName(session.sessionId)}</div>
                       {session.isCurrent && <span className="session-card-badge">Current</span>}
                     </div>
                     <div className="session-card-summary">{summarizeSession(session)}</div>

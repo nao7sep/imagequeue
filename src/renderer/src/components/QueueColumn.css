@@ -54,12 +54,15 @@
   text-align: center;
 }
 
+/* The fields keep their full height for easy use, but the rows sit closer than
+   the app's 8px sibling gap: a deliberate exception so the images below keep
+   the space. */
 .column-settings {
   padding: var(--space-3);
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   font-size: 13px;
 }
 
@@ -135,6 +138,10 @@
   font-size: 12px;
   text-align: center;
   padding: 20px 10px;
+}
+
+.task-list-empty-error {
+  color: var(--error);
 }
 
 .task-entry {
@@ -228,11 +235,6 @@
   margin-top: var(--space-1);
 }
 
-.task-action-result {
-  padding: var(--space-2);
-  font-size: var(--text-xs);
-}
-
 .context-menu {
   position: absolute;
   right: 4px;
@@ -263,6 +265,12 @@
   color: var(--text-on-accent);
 }
 
+/* A neutral state line among the settings, such as a load in progress. */
+.model-status {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .model-warning {
   color: var(--warning);
   font-size: 11px;
@@ -284,8 +292,9 @@
   line-height: 1.4;
 }
 
-.column-save-result {
-  padding: var(--space-2);
+.column-save-result,
+.task-action-result {
+  padding: var(--space-2) 10px;
   font-size: var(--text-xs);
 }
 
@@ -311,7 +320,7 @@
 }
 
 .drawthings-save-error {
-  padding: var(--space-2);
+  padding: var(--space-2) 10px;
   border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--error) 10%, transparent);
@@ -320,34 +329,42 @@
   line-height: 1.4;
 }
 
-/* The single pointer to the Dependencies modal. One full-width clickable line;
-   severity tints the left edge and text without shouting. */
+/* The single pointer to the Dependencies modal: one full-width clickable line,
+   drawn like the app's other notices, with its edge and fill tinted by
+   severity. */
 .dep-pane-pointer {
   display: block;
   width: 100%;
   text-align: left;
-  font-size: 11px;
-  line-height: 1.3;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-left-width: 3px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  padding: var(--space-2) 10px;
+  border: 1px solid;
   border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
   cursor: pointer;
-}
-
-.dep-pane-pointer:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  transition:
+    background-color var(--motion) ease,
+    border-color var(--motion) ease;
 }
 
 .dep-pane-pointer-warn {
   color: var(--warning);
-  border-left-color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.dep-pane-pointer-warn:hover {
+  border-color: var(--warning);
 }
 
 .dep-pane-pointer-info {
   color: var(--text-secondary);
-  border-left-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.dep-pane-pointer-info:hover {
+  border-color: var(--accent);
 }
 
 .open-models-btn {

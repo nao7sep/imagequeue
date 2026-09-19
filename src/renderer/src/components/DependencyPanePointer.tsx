@@ -43,20 +43,21 @@ function severityFor(state: DependenciesState): Severity | null {
   return null
 }
 
-// The single most important thing to say — the pointer names it, the modal owns
-// the detail. Order is by urgency: a missing CLI blocks the backend entirely.
+// The single most important thing to say, as one sentence — the pointer names
+// it, the modal owns the detail. Order is by urgency: a missing CLI blocks the
+// backend entirely.
 function summarize(state: DependenciesState): string {
-  if (state.cli.state === 'not-installed') return 'Draw Things CLI is not installed'
-  if (state.cli.state === 'update-available') return 'Draw Things CLI update available'
-  if (state.recommendations.state === 'update-available') return 'Recommended parameters update available'
-  if (state.recommendations.state === 'not-installed') return 'Recommended parameters not downloaded'
+  if (state.cli.state === 'not-installed') return 'The Draw Things CLI is not installed.'
+  if (state.cli.state === 'update-available') return 'A Draw Things CLI update is available.'
+  if (state.recommendations.state === 'update-available') return 'A recommended parameters update is available.'
+  if (state.recommendations.state === 'not-installed') return 'Recommended parameters are not downloaded.'
   // Two different informational stories, told apart: a present CLI whose version
   // could not be read needs re-acquiring (the modal's Update), where a
   // merely-unchecked one only needs a check.
   if (state.cli.state === 'installed-unchecked' && !state.cli.installedLabel) {
-    return 'Draw Things CLI version unreadable'
+    return 'The Draw Things CLI version can’t be read.'
   }
-  return 'Draw Things dependencies not checked'
+  return 'The Draw Things tools haven’t been checked.'
 }
 
 export function DependencyPanePointer(): React.JSX.Element | null {
@@ -73,7 +74,7 @@ export function DependencyPanePointer(): React.JSX.Element | null {
       className={`dep-pane-pointer dep-pane-pointer-${severity}`}
       onClick={() => window.dispatchEvent(new CustomEvent('open-dependencies-modal'))}
     >
-      {summary} — open Managed tools
+      {summary} Open Managed tools.
     </button>
   )
 }

@@ -184,7 +184,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         {chunks.length === 0 && isActive ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">
             {status === 'queued'
-              ? 'Waiting for earlier import to finish\u2026'
+              ? 'No output yet\u2026'
               : status === 'stalled'
                 ? 'No new output yet\u2026'
                 : kind === 'import'

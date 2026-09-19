@@ -130,7 +130,7 @@ describe('PromptPane presentation', () => {
     await waitFor(() => expect(paste.hasAttribute('disabled')).toBe(false))
     fireEvent.click(paste)
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t read text from the clipboard')
+    expect((await screen.findByRole('alert')).textContent).toContain('The clipboard text could not be read')
     expect(appLog).toHaveBeenCalledWith(
       'error',
       'Prompt pane action failed',
@@ -159,11 +159,11 @@ describe('PromptPane presentation', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Reveal' }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t reveal this image')
+    expect((await screen.findByRole('alert')).textContent).toContain('The image could not be revealed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
     await waitFor(() => expect(exportImage).toHaveBeenCalledTimes(1))
-    expect(screen.getByRole('alert').textContent).toContain('Couldn’t reveal this image')
+    expect(screen.getByRole('alert').textContent).toContain('The image could not be revealed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Reveal' }))
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
@@ -173,8 +173,8 @@ describe('PromptPane presentation', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Copy to Clipboard' }))
     const copyFailure = await screen.findByRole('alert')
-    expect(copyFailure.textContent).toContain('Couldn’t copy this image')
-    fireEvent.click(screen.getByRole('button', { name: /Close result: Couldn’t copy this image/ }))
+    expect(copyFailure.textContent).toContain('The image could not be copied')
+    fireEvent.click(screen.getByRole('button', { name: /Close result: The image could not be copied/ }))
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
@@ -196,9 +196,9 @@ describe('PromptPane presentation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save As…' }))
 
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(3))
-    expect(screen.getByText(/Couldn’t copy the prompt/)).toBeTruthy()
-    expect(screen.getByText(/Couldn’t export this image/)).toBeTruthy()
-    expect(screen.getByText(/Couldn’t save this image/)).toBeTruthy()
+    expect(screen.getByText(/The prompt could not be copied/)).toBeTruthy()
+    expect(screen.getByText(/The image could not be exported/)).toBeTruthy()
+    expect(screen.getByText(/The image could not be saved/)).toBeTruthy()
     expect(appLog.mock.calls.map((call) => call[2]?.action)).toEqual(expect.arrayContaining([
       'copy-prompt',
       'export-image',

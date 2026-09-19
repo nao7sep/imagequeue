@@ -25,13 +25,22 @@ interface CliMeta {
   tag: string
   sha256: string
   installedAt: string
-  /** Device/inode identity of the verified binary this sidecar describes. */
+  /** Inode of the verified binary this sidecar describes. Sidecars written
+   * before it dropped the device number hold `device:inode`. */
   binaryId?: string
 }
 
+// The binary's identity is its inode alone. macOS numbers devices as volumes
+// mount, so a device number can change across restarts and OS updates while
+// the file stays the same, which left every installed version unreadable. An
+// install renames a fresh file into place, so a new binary always has a new
+// inode.
 function cliBinaryId(): string {
-  const stat = fs.statSync(getCliBinaryPath(), { bigint: true })
-  return `${stat.dev}:${stat.ino}`
+  return String(fs.statSync(getCliBinaryPath(), { bigint: true }).ino)
+}
+
+function isRecordedBinary(binaryId: string): boolean {
+  return binaryId.slice(binaryId.lastIndexOf(':') + 1) === cliBinaryId()
 }
 
 function readCliMeta(): CliMeta | null {
@@ -62,7 +71,7 @@ export function readInstalledCliTag(): string | null {
   try {
     const meta = readCliMeta()
     if (!meta) return null
-    return meta.binaryId === undefined || meta.binaryId === cliBinaryId() ? meta.tag : null
+    return meta.binaryId === undefined || isRecordedBinary(meta.binaryId) ? meta.tag : null
   } catch {
     return null
   }

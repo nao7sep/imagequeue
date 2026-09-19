@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  compareRecommendations,
   deriveDependencyState,
   isCheckFresh,
   STALENESS_CAP_MS,
@@ -38,5 +39,32 @@ describe('isCheckFresh', () => {
 
   it('uses a 24-hour cap', () => {
     expect(STALENESS_CAP_MS).toBe(24 * 60 * 60 * 1000)
+  })
+})
+
+describe('compareRecommendations', () => {
+  const server = '2026-09-11T20:46:05.000Z'
+
+  it('reads a file stamped with the server time as current', () => {
+    expect(compareRecommendations(server, server)).toBe('current')
+  })
+
+  it('reads a file from before the server last changed it as outdated', () => {
+    expect(compareRecommendations('2026-08-22T20:13:13.000Z', server)).toBe('outdated')
+  })
+
+  it('reads a file written after the server last changed it as current', () => {
+    // A download from before stamping began keeps its own write time.
+    expect(compareRecommendations('2026-09-19T11:29:40.512Z', server)).toBe('current')
+  })
+
+  it('ignores the milliseconds an HTTP date cannot carry', () => {
+    expect(compareRecommendations('2026-09-11T20:46:05.000Z', '2026-09-11T20:46:05.900Z')).toBe('current')
+  })
+
+  it('is unknown before any check, or when either time is unreadable', () => {
+    expect(compareRecommendations(server, null)).toBe('unknown')
+    expect(compareRecommendations(null, server)).toBe('unknown')
+    expect(compareRecommendations('not a date', server)).toBe('unknown')
   })
 })

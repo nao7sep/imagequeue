@@ -35,7 +35,8 @@ export function registerDependenciesIpc(): void {
   handle('dependencies:getState', () => getDependenciesState())
 
   handle('dependencies:check', (event) =>
-    runWindowDependencyOperation(event.sender, ['cli'], (signal) =>
+    // Check covers every tool, so it holds both slots while it runs.
+    runWindowDependencyOperation(event.sender, ['cli', 'recommendations'], (signal) =>
       checkAllDependencies(signal)
     )
   )

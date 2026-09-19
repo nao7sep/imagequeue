@@ -1,17 +1,21 @@
 // The recommended-parameters file (configs.json) — one of the two managed Draw
-// Things dependencies. It is versionless, so it has no honest metadata-only
-// update check: launch and the Dependencies modal's Check never fetch its bytes.
-// Install/Refresh is an explicit acquisition that validates and atomically
-// publishes configs.json. The generation path reads it via
-// resolveRecommendedParams; everything else is dependency management.
+// Things dependencies. It has no version, but the server reports when it last
+// changed (Last-Modified), and that time is its identity: Install/Refresh
+// validates and atomically publishes the file, then stamps it with that time,
+// and a check asks the server for its time alone (an HTTP HEAD) without fetching
+// the bytes. The generation path reads it via resolveRecommendedParams;
+// everything else is dependency management.
 
 import fs from 'fs'
 import path from 'path'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { resolveModelsDir, ensureModelsDir } from './local-cli'
+import type { IncomingHttpHeaders } from 'http'
 import {
-  fetchBytes,
+  fetchBytesWithHeaders,
+  fetchHeaders,
   RECOMMENDATIONS_LIMITS,
+  RELEASE_METADATA_LIMITS,
   withWholeOperationTimeout,
 } from './dependencies/download'
 import {
@@ -59,7 +63,11 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
     3 * 60 * 1000,
     'Recommendations acquisition',
     async (boundedSignal) => {
-      const data = await fetchBytes(RECOMMENDATIONS_URL, RECOMMENDATIONS_LIMITS, boundedSignal)
+      const { body: data, headers } = await fetchBytesWithHeaders(
+        RECOMMENDATIONS_URL,
+        RECOMMENDATIONS_LIMITS,
+        boundedSignal
+      )
       validateRecommendationBytes(data)
       boundedSignal.throwIfAborted()
 
@@ -70,9 +78,31 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
       // (not under ~/.imagequeue/) — re-acquirable content the app reads, not durable user-authored text
       // (data-backup conventions: re-fetchable dependencies are not recorded).
       await writeFileAtomicAsync(filePath, data, false, boundedSignal)
+      // The file carries the server's time as its own, so a later check can tell
+      // whether the server has changed it since. Without that header it keeps
+      // its write time, which is later than any change it was fetched after.
+      const serverModified = lastModifiedOf(headers)
+      if (serverModified) fs.utimesSync(filePath, new Date(), new Date(serverModified))
       return getRecommendationsStatus()
     }
   )
+}
+
+/** When the server's configs.json last changed, asked for with its headers
+ * alone. Throws when the server cannot be reached or does not say. */
+export async function fetchLatestRecommendationsModified(signal?: AbortSignal): Promise<string> {
+  const headers = await fetchHeaders(RECOMMENDATIONS_URL, RELEASE_METADATA_LIMITS, signal)
+  const modified = lastModifiedOf(headers)
+  if (!modified) throw new Error('The recommended parameters server did not report when the file changed')
+  return modified
+}
+
+/** A response's Last-Modified as ISO-8601 UTC, or null when absent or invalid. */
+export function lastModifiedOf(headers: IncomingHttpHeaders): string | null {
+  const raw = headers['last-modified']
+  if (typeof raw !== 'string') return null
+  const time = Date.parse(raw)
+  return Number.isNaN(time) ? null : new Date(time).toISOString()
 }
 
 export function resolveRecommendedParams(model: string): RecommendedParams | null {

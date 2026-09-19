@@ -239,7 +239,7 @@ describe('task status presentation', () => {
 
     queueValue.loadState = 'failed'
     rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
-    expect(screen.getByText('Couldn’t load queued tasks.')).toBeTruthy()
+    expect(screen.getByText('Queued tasks could not be loaded.')).toBeTruthy()
     expect(screen.queryByText('No tasks queued')).toBeNull()
 
     queueValue.loadState = 'ready'
@@ -345,7 +345,7 @@ describe('task status presentation', () => {
     expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({
       taskId: 'task-complete',
       action: 'export',
-      message: 'The image could not be exported. The original is unchanged; try again.',
+      message: 'The image could not be exported. Check the export folder, then try again.',
       diagnosticMessage: 'Failed to export task image',
     }))
     expect(electronAPI.retryTask).toHaveBeenCalledWith('openai', 'task-failed')
@@ -387,7 +387,7 @@ describe('openai column', () => {
     await flush()
 
     const failure = screen.getByRole('alert')
-    expect(failure.textContent).toContain('weren’t saved')
+    expect(failure.textContent).toContain('could not be saved')
     expect(failure.textContent).toContain('remain in use for this session')
     expect(failure.textContent).not.toContain('IMAGEQUEUE_DEFAULTS_SENTINEL')
     expect(electronAPI.appLog).toHaveBeenCalledWith(

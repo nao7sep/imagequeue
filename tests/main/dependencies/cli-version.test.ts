@@ -22,6 +22,13 @@ describe('isCliReleaseTag', () => {
     expect(isCliReleaseTag('1.20260430.0')).toBe(true)
     expect(isCliReleaseTag('garbage-v1.20260430.0')).toBe(false)
   })
+
+  it('accepts the year-based tags upstream adopted in September 2026', () => {
+    expect(isCliReleaseTag('v26.0910.1')).toBe(true)
+    expect(isCliReleaseTag('26.0910.1')).toBe(true)
+    expect(isCliReleaseTag('draw-things-cli 26.0910.1')).toBe(false)
+    expect(isCliReleaseTag('dev')).toBe(false)
+  })
 })
 
 describe('compareCliVersions', () => {
@@ -29,6 +36,13 @@ describe('compareCliVersions', () => {
     expect(compareCliVersions('v1.20260430.0', 'v1.20260501.0')).toBe('outdated')
     expect(compareCliVersions('v1.20260430.0', 'v1.20260430.1')).toBe('outdated')
     expect(compareCliVersions('v1.20260430.0', 'v2.20260101.0')).toBe('outdated')
+  })
+
+  it('orders the year-based scheme after the date-based one and within itself', () => {
+    expect(compareCliVersions('v1.20260716.0', 'v26.0910.1')).toBe('outdated')
+    expect(compareCliVersions('v26.0910.1', 'v1.20260716.0')).toBe('current')
+    expect(compareCliVersions('v26.0910.1', 'v26.1001.0')).toBe('outdated')
+    expect(compareCliVersions('v26.1231.0', 'v27.0105.0')).toBe('outdated')
   })
 
   it('reports current when installed equals or exceeds the latest', () => {

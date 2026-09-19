@@ -3,10 +3,11 @@
 // cache: deleting it just makes the next launch re-check.
 //
 // Nothing here describes an artifact on disk, deliberately: the installed CLI's
-// identity (its release tag) lives in the binary's sidecar, so it cannot drift
-// from the artifact it describes (managed-runtime-dependencies-conventions).
-// What is left is only the latest CLI release observed on the network and when,
-// which have no on-disk source at all.
+// identity (its release tag) lives in the binary's sidecar, and configs.json
+// carries its own as its modification time, so neither can drift from the
+// artifact it describes (managed-runtime-dependencies-conventions). What is left
+// is only what each check observed on the network and when, which have no
+// on-disk source at all.
 
 import fs from 'fs'
 import { log, serializeError } from '../logger'
@@ -21,11 +22,18 @@ export interface DependenciesCache {
     lastKnownLatest: string | null
     lastCheckedAtUtc: string | null
   }
+  recommendations: {
+    // When the server's configs.json last changed (its Last-Modified), as seen
+    // by a successful check. ISO-8601 UTC.
+    lastKnownModifiedUtc: string | null
+    lastCheckedAtUtc: string | null
+  }
 }
 
 function emptyCache(): DependenciesCache {
   return {
     cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
+    recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
   }
 }
 
@@ -36,6 +44,12 @@ export function readDependenciesCache(): DependenciesCache {
     const base = emptyCache()
     return {
       cli: { ...base.cli, ...parsed.cli },
+      // A pre-release store kept a bare check time here with no server time;
+      // that fact is obsolete, and trusting it would skip a due check.
+      recommendations:
+        typeof parsed.recommendations?.lastKnownModifiedUtc === 'string'
+          ? { ...base.recommendations, ...parsed.recommendations }
+          : base.recommendations,
     }
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an
@@ -49,8 +63,9 @@ export function readDependenciesCache(): DependenciesCache {
 
 export function writeDependenciesCache(cache: DependenciesCache): void {
   fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-  // not recorded: dependencies.json is a re-derivable CLI network-facts cache (last-known-latest
-  // release tag and last-successful-check time), not durable user-authored data — deleting it just
+  // not recorded: dependencies.json is a re-derivable network-facts cache (the last-known-latest
+  // CLI release tag, configs.json's last-known server time, and last-successful-check times), not
+  // durable user-authored data — deleting it just
   // makes the next launch re-check (data-backup conventions: re-fetchable caches are not recorded).
   writeJsonAtomic(getDependenciesStatePath(), cache, false)
 }

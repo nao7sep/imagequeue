@@ -21,7 +21,7 @@ export interface ImageBackendDefaultsPersistence {
   dismissSaveFailure: () => void
 }
 
-const SAVE_FAILURE = 'Model and parameter changes weren’t saved. Your current choices remain in use for this session.'
+const SAVE_FAILURE = 'Model and parameter changes could not be saved. Your current choices remain in use for this session.'
 
 export function useAutosavedImageBackendDefaults({
   backend,

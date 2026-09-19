@@ -661,13 +661,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <div className="settings-field">
             <label>Timeout (s)</label>
             <input type="number" min={1} value={Math.round(((backends.drawthings.timeout_ms as number) ?? 1800000) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <p className="settings-hint">
+              A generation running longer than this is stopped and marked failed. Local renders can legitimately take minutes on large models, so the default is generous (30 minutes).
+            </p>
           </div>
-          <p className="settings-hint settings-field-full">
-            A generation running longer than this is stopped and marked failed. Local renders can legitimately take minutes on large models, so the default is generous (30 minutes).
-          </p>
-          <p className="settings-hint settings-field-full">
-            The Draw Things CLI and its recommended parameters are managed in the Managed tools window (main menu → Managed tools).
-          </p>
           <div className="settings-field">
             <label>Fallback Width</label>
             <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />

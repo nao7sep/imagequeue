@@ -184,7 +184,7 @@ describe('dependency IPC operation ownership', () => {
     await expect(recommendationsDownload).resolves.toBe(state)
   })
 
-  it('reserves only the CLI while its metadata check is running', async () => {
+  it('reserves both tools while the set-wide check is running', async () => {
     const checkOwner = new FakeSender(1)
     const otherWindow = new FakeSender(2)
     let check!: DeferredOperation
@@ -199,9 +199,13 @@ describe('dependency IPC operation ownership', () => {
       'Dependency cli operation is already running'
     )
     mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
-    await expect(invoke('dependencies:downloadRecommendations', otherWindow)).resolves.toBe(state)
+    await expect(invoke('dependencies:downloadRecommendations', otherWindow)).rejects.toThrow(
+      'Dependency recommendations operation is already running'
+    )
+    expect(mocks.downloadLatestRecommendations).not.toHaveBeenCalled()
 
     check.resolve()
     await expect(checking).resolves.toBe(state)
+    await expect(invoke('dependencies:downloadRecommendations', otherWindow)).resolves.toBe(state)
   })
 })

@@ -36,3 +36,23 @@ export function isCheckFresh(lastCheckedAtUtc: string | null, nowMs: number): bo
   if (Number.isNaN(checkedMs)) return false
   return nowMs - checkedMs < STALENESS_CAP_MS
 }
+
+/**
+ * Compare the local configs.json with the server's by modification time.
+ * Install/Refresh stamps the file with the server's Last-Modified, so a current
+ * copy carries exactly that time and a copy from before the server's last change
+ * carries an earlier one. A file written before stamping began carries its
+ * download time instead, which is later than any server change it was fetched
+ * after, so it too reads current. 'unknown' when either time is missing.
+ */
+export function compareRecommendations(
+  localModifiedUtc: string | null,
+  latestModifiedUtc: string | null
+): DependencyComparison {
+  if (!localModifiedUtc || !latestModifiedUtc) return 'unknown'
+  const local = Date.parse(localModifiedUtc)
+  const latest = Date.parse(latestModifiedUtc)
+  if (Number.isNaN(local) || Number.isNaN(latest)) return 'unknown'
+  // HTTP dates carry whole seconds; a stamped file's milliseconds are zero.
+  return Math.floor(local / 1000) >= Math.floor(latest / 1000) ? 'current' : 'outdated'
+}

@@ -27,6 +27,7 @@ describe('dependencies cache', () => {
   it('returns empty defaults when no file exists', () => {
     expect(readDependenciesCache()).toEqual({
       cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
+      recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })
   })
 
@@ -40,12 +41,24 @@ describe('dependencies cache', () => {
     expect(reread.cli.lastCheckedAtUtc).toBe('2026-06-30T00:00:00.000Z')
   })
 
-  // The cache holds CLI NETWORK knowledge only. The CLI's installed tag is in
-  // its sidecar, and versionless recommendations have no latest/check facts.
+  // The cache holds NETWORK knowledge only. The CLI's installed tag is in its
+  // sidecar, and configs.json's installed identity is its own modification time.
   it('records nothing about the artifacts themselves', () => {
     const cache = readDependenciesCache()
+    expect(Object.keys(cache)).toEqual(['cli', 'recommendations'])
     expect(Object.keys(cache.cli).sort()).toEqual(['lastCheckedAtUtc', 'lastKnownLatest'])
-    expect(Object.keys(cache)).toEqual(['cli'])
+    expect(Object.keys(cache.recommendations).sort()).toEqual(['lastCheckedAtUtc', 'lastKnownModifiedUtc'])
+  })
+
+  it('persists what a configs.json check learned', () => {
+    updateDependenciesCache((cache) => {
+      cache.recommendations.lastKnownModifiedUtc = '2026-09-11T20:46:05.000Z'
+      cache.recommendations.lastCheckedAtUtc = '2026-09-19T12:00:00.000Z'
+    })
+    expect(readDependenciesCache().recommendations).toEqual({
+      lastKnownModifiedUtc: '2026-09-11T20:46:05.000Z',
+      lastCheckedAtUtc: '2026-09-19T12:00:00.000Z',
+    })
   })
 
   it('falls back to defaults (not a throw) on a malformed file', () => {
@@ -53,6 +66,7 @@ describe('dependencies cache', () => {
     fs.writeFileSync(getDependenciesStatePath(), '{ not valid json')
     expect(readDependenciesCache()).toEqual({
       cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
+      recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })
   })
 
@@ -75,6 +89,7 @@ describe('dependencies cache', () => {
     )
     expect(readDependenciesCache()).toEqual({
       cli: { lastKnownLatest: 'v1.0.0', lastCheckedAtUtc: null },
+      recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })
   })
 })

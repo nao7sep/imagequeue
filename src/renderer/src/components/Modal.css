@@ -181,7 +181,9 @@
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-weight: 500;
-  line-height: 1;
+  /* The font's own line height. A tighter one leaves negative leading that is
+     rounded upward, lifting the label about a pixel above centre. */
+  line-height: normal;
   cursor: pointer;
   transition:
     background-color var(--motion) ease,

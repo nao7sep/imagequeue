@@ -354,21 +354,23 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) 10px;
   border: 1px solid;
   border-radius: var(--radius-sm);
 }
 
+/* Every notice in the main window shares one shape: an even 1px edge and a
+   light fill in its severity colour, 8 by 10px of padding, 11px text. */
 .app-status-notice-error {
   color: var(--error);
-  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
-  background: color-mix(in srgb, var(--error) 10%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--error) 50%, var(--border));
+  background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
 .app-status-notice-warning {
   color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
-  background: color-mix(in srgb, var(--warning) 10%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
 }
 
 .app-status-notice-copy {
@@ -382,8 +384,10 @@
   font-size: var(--text-sm);
 }
 
+/* The message takes the notice's severity colour, like every other notice; the
+   title stays neutral above it. */
 .app-status-notice-copy span {
-  color: var(--text-secondary);
+  color: inherit;
   font-size: var(--text-xs);
   line-height: 1.4;
 }

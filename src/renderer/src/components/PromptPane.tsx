@@ -166,7 +166,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'copy-prompt',
-        'Couldn’t copy the prompt. Try Copy Prompt again.',
+        'The prompt could not be copied. Try Copy Prompt again.',
         error,
       ))
   }, [selectedTask, clearActionFailure, reportActionFailure])
@@ -177,7 +177,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       .then(() => clearActionFailure('reveal-image'))
       .catch((error) => reportActionFailure(
         'reveal-image',
-        'Couldn’t reveal this image. Try Reveal again.',
+        'The image could not be revealed. Try Reveal again.',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -195,7 +195,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'copy-image',
-        'Couldn’t copy this image. Try Copy to Clipboard again.',
+        'The image could not be copied. Try Copy to Clipboard again.',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -210,7 +210,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'export-image',
-        'Couldn’t export this image. Check the export folder and try again.',
+        'The image could not be exported. Check the export folder, then try again.',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -223,7 +223,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'save-image-as',
-        'Couldn’t save this image. Choose Save As again.',
+        'The image could not be saved. Choose Save As again.',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -247,7 +247,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'paste-text',
-        'Couldn’t read text from the clipboard. Try Paste Text again.',
+        'The clipboard text could not be read. Try Paste Text again.',
         error,
       ))
   }, [onPromptChange, clearActionFailure, reportActionFailure])
@@ -371,7 +371,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             <div className="preview-placeholder">
               <p>No image selected</p>
               <p className="preview-placeholder-hint">
-                Generate an image and click its thumbnail to preview
+                Generate an image and click its thumbnail to preview it.
               </p>
             </div>
           )}

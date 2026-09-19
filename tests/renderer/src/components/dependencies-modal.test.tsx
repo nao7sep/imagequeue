@@ -174,7 +174,7 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
     await screen.findAllByRole('button', { name: 'Install' })
-    fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
 
     expect((await screen.findByRole('alert')).textContent).toContain('managed-tool operation could not be completed')
     expect(screen.getByRole('alert').textContent).not.toContain('Draw Things CLI: offline')
@@ -199,7 +199,7 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
     await screen.findAllByRole('button', { name: 'Install' })
-    fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
 
     const result = await screen.findByRole('alert')
     expect(result.textContent).toContain('managed-tool operation could not be completed')
@@ -304,7 +304,7 @@ describe('DependenciesModal cancellation', () => {
 
     render(<Harness />)
     await screen.findAllByRole('button', { name: 'Install' })
-    fireEvent.click(screen.getByRole('button', { name: 'Check for CLI updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
     expect(await screen.findByText(/managed-tool operation could not be completed/)).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[1])
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
@@ -394,5 +394,57 @@ describe('DependenciesModal cancellation', () => {
       expect(screen.getByText(/^3\.0\.0/)).toBeTruthy()
       expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
     })
+  })
+})
+
+describe('DependenciesModal checking', () => {
+  function stateWith(patch: {
+    cli?: Partial<DependenciesState['cli']>
+    recommendations?: Partial<DependenciesState['recommendations']>
+  }): DependenciesState {
+    return {
+      ...initialState,
+      cli: { ...initialState.cli, ...patch.cli },
+      recommendations: { ...initialState.recommendations, ...patch.recommendations },
+    }
+  }
+
+  function mockState(state: DependenciesState): void {
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => state),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+  }
+
+  it('offers Update for recommended parameters the server has changed since', async () => {
+    mockState(stateWith({
+      cli: { state: 'up-to-date', installedLabel: 'v26.0910.1', lastCheckedAtUtc: '2026-09-19T09:00:00.000Z' },
+      recommendations: {
+        state: 'update-available',
+        installedLabel: '54 entries',
+        updatedAtUtc: '2026-08-22T20:13:13.000Z',
+        lastCheckedAtUtc: '2026-09-19T09:00:00.000Z',
+      },
+    }))
+    renderModal()
+
+    const row = (await screen.findByRole('heading', { name: 'Recommended parameters' })).closest('section')
+    expect(within(row as HTMLElement).getByText('Update available', { selector: '.dependency-badge' })).toBeTruthy()
+    expect(within(row as HTMLElement).getByRole('button', { name: 'Update' })).toBeTruthy()
+    expect(within(row as HTMLElement).queryByRole('button', { name: 'Refresh' })).toBeNull()
+  })
+
+  it('dates the set by its least recently checked tool, and reads Never while one is unchecked', async () => {
+    mockState(stateWith({
+      cli: { state: 'up-to-date', installedLabel: 'v26.0910.1', lastCheckedAtUtc: '2026-09-19T09:00:00.000Z' },
+      recommendations: { state: 'installed-unchecked', installedLabel: '54 entries', lastCheckedAtUtc: null },
+    }))
+    renderModal()
+
+    const updates = (await screen.findByRole('heading', { name: 'Updates' })).closest('section') as HTMLElement
+    expect(within(updates).getByText('Never')).toBeTruthy()
+    expect(within(updates).getByRole('button', { name: 'Check for updates' })).toBeTruthy()
+    expect(within(updates).getByRole('checkbox', { name: 'Check for updates at launch' })).toBeTruthy()
   })
 })

@@ -91,7 +91,7 @@ export function AppStatusNotices(): React.JSX.Element | null {
           <div className="app-status-notice-copy">
             <strong>Queue needs attention</strong>
             <span>
-              {queueParts.join(' and ')}. Review the highlighted rows for details and retry options.
+              {queueParts.join(' and ')}. Their rows in the queue show details and retry options.
               {retryFailure && interrupted > 0 ? ' Retrying the stopped tasks failed.' : ''}
             </span>
           </div>

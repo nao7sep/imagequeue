@@ -8,12 +8,20 @@ vi.mock('../../../src/main/dependencies/cli-release', () => ({
   resolveLatestCliRelease: vi.fn(),
 }))
 
+// And the configs.json server-time request, so no test reaches the network.
+vi.mock('../../../src/main/recommendations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/main/recommendations')>()),
+  fetchLatestRecommendationsModified: vi.fn(),
+}))
+
 import { resolveLatestCliRelease } from '../../../src/main/dependencies/cli-release'
+import { fetchLatestRecommendationsModified } from '../../../src/main/recommendations'
 import { checkAllDependencies, getDependenciesState } from '../../../src/main/dependencies/service'
 import { readDependenciesCache } from '../../../src/main/dependencies/store'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 
 const resolveMock = resolveLatestCliRelease as unknown as ReturnType<typeof vi.fn>
+const serverTimeMock = fetchLatestRecommendationsModified as unknown as ReturnType<typeof vi.fn>
 
 let home: string
 let prevHome: string | undefined
@@ -27,6 +35,8 @@ beforeEach(() => {
   // isolated dependency-service test.
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(createDefaultConfig()))
   resolveMock.mockReset()
+  serverTimeMock.mockReset()
+  serverTimeMock.mockResolvedValue('2026-09-11T20:46:05.000Z')
 })
 
 afterEach(() => {
@@ -108,18 +118,48 @@ describe('a present CLI whose version cannot be read', () => {
   })
 })
 
-describe('versionless recommendations lifecycle', () => {
-  it('keeps a present file installed-unchecked with no synthetic latest/check facts', () => {
+describe('recommendations lifecycle', () => {
+  const server = '2026-09-11T20:46:05.000Z'
+
+  function writeFile(modifiedUtc: string): void {
     const models = path.join(home, 'models')
     fs.mkdirSync(models, { recursive: true })
-    fs.writeFileSync(
-      path.join(models, 'configs.json'),
-      JSON.stringify([{ name: 'current', configuration: { model: 'm' } }])
-    )
+    const file = path.join(models, 'configs.json')
+    fs.writeFileSync(file, JSON.stringify([{ name: 'current', configuration: { model: 'm' } }]))
+    fs.utimesSync(file, new Date(), new Date(modifiedUtc))
+  }
 
+  it('keeps a present file installed-unchecked with no synthetic latest/check facts before any check', () => {
+    writeFile(server)
     const info = getDependenciesState().recommendations
     expect(info.state).toBe('installed-unchecked')
     expect(info.latestLabel).toBeNull()
     expect(info.lastCheckedAtUtc).toBeNull()
+  })
+
+  it('reads up to date once a check finds the server time the file carries', async () => {
+    writeFile(server)
+    resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
+    const state = await checkAllDependencies()
+    expect(state.recommendations.state).toBe('up-to-date')
+    expect(state.recommendations.lastCheckedAtUtc).not.toBeNull()
+  })
+
+  it('reads update available when the server changed the file after this copy', async () => {
+    writeFile('2026-08-22T20:13:13.000Z')
+    resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
+    const state = await checkAllDependencies()
+    expect(state.recommendations.state).toBe('update-available')
+  })
+
+  it('records the CLI result and no file facts when only the file check fails', async () => {
+    writeFile(server)
+    resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
+    serverTimeMock.mockRejectedValue(new Error('offline'))
+    await expect(checkAllDependencies()).rejects.toThrow('offline')
+    const cache = readDependenciesCache()
+    expect(cache.cli.lastKnownLatest).toBe('v26.0910.1')
+    expect(cache.recommendations).toEqual({ lastKnownModifiedUtc: null, lastCheckedAtUtc: null })
+    expect(getDependenciesState().recommendations.state).toBe('installed-unchecked')
   })
 })

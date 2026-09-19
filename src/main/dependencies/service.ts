@@ -6,7 +6,7 @@
 
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
-import { getRecommendationsStatus } from '../recommendations'
+import { fetchLatestRecommendationsModified, getRecommendationsStatus } from '../recommendations'
 import { isCliInstalled, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
 import { compareCliVersions } from './cli-version'
@@ -15,8 +15,14 @@ import {
   APP_DEPENDENCY_OPERATION_OWNER,
   DependencyOperationBusyError,
   runDependencyOperation,
+  type MutableDependency,
 } from './operations'
-import { deriveDependencyState, isCheckFresh, type DependencyComparison } from './state'
+import {
+  compareRecommendations,
+  deriveDependencyState,
+  isCheckFresh,
+  type DependencyComparison,
+} from './state'
 import { readDependenciesCache, updateDependenciesCache } from './store'
 import type { DependenciesState, DependencyInfo, DependencyProgress } from '../../shared/types'
 
@@ -43,6 +49,7 @@ function cliInfo(): DependencyInfo {
 }
 
 function recommendationsInfo(): DependencyInfo {
+  const cache = readDependenciesCache()
   const status = getRecommendationsStatus()
   const present = status.exists
   const installedLabel = !present
@@ -50,16 +57,18 @@ function recommendationsInfo(): DependencyInfo {
     : status.valid
       ? `${status.entryCount} ${status.entryCount === 1 ? 'entry' : 'entries'}`
       : 'file unreadable'
+  // configs.json has no version; its identity is when the server last changed
+  // it, which the file carries as its modification time (see recommendations).
+  const comparison: DependencyComparison = present
+    ? compareRecommendations(status.updatedAt, cache.recommendations.lastKnownModifiedUtc)
+    : 'unknown'
   return {
     id: 'recommendations',
-    // configs.json is mutable and versionless. Without upstream metadata there
-    // is no honest read-only latest comparison, so presence remains unchecked
-    // and the user may explicitly Refresh it whenever wanted.
-    state: deriveDependencyState(present, 'unknown'),
+    state: deriveDependencyState(present, comparison),
     installedLabel,
     latestLabel: null,
     updatedAtUtc: status.updatedAt,
-    lastCheckedAtUtc: null,
+    lastCheckedAtUtc: cache.recommendations.lastCheckedAtUtc,
   }
 }
 
@@ -86,15 +95,52 @@ async function checkCliForUpdate(force: boolean, signal?: AbortSignal): Promise<
   })
 }
 
-/** Check the CLI metadata now. The versionless recommendations file has no
- * metadata-only check and is acquired only by its explicit Install/Refresh. */
+/** Ask the server when configs.json last changed, and record it with the
+ * check time. A failed request records nothing (invariant I3). */
+async function checkRecommendationsForUpdate(signal?: AbortSignal): Promise<void> {
+  const modified = await fetchLatestRecommendationsModified(signal)
+  updateDependenciesCache((cache) => {
+    cache.recommendations.lastCheckedAtUtc = new Date().toISOString()
+    cache.recommendations.lastKnownModifiedUtc = modified
+  })
+}
+
+/** Check every managed tool now, without installing anything. Each success is
+ * recorded even when the other check fails; any failure is then reported. */
 export async function checkAllDependencies(signal?: AbortSignal): Promise<DependenciesState> {
-  await checkCliForUpdate(true, signal)
+  const results = await Promise.allSettled([
+    checkCliForUpdate(true, signal),
+    checkRecommendationsForUpdate(signal),
+  ])
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure) throw failure.reason
   return getDependenciesState()
 }
 
-/** The launch path: when the toggle is on, re-check CLI release metadata when
- * stale. Never fetches recommendation bytes and never throws. */
+// One best-effort launch check in its own slot, so an explicit operation on the
+// other tool still runs. A busy slot skips the check; a failure is logged.
+async function checkAtLaunch(
+  dependency: MutableDependency,
+  name: string,
+  run: (signal: AbortSignal) => Promise<void>
+): Promise<void> {
+  try {
+    await runDependencyOperation(APP_DEPENDENCY_OPERATION_OWNER, [dependency], run)
+  } catch (error) {
+    if (error instanceof DependencyOperationBusyError) {
+      log('info', 'Launch dependency check skipped; operation already running', { dependency: name })
+    } else {
+      log('warn', 'Launch dependency check failed', {
+        dependency: name,
+        error: serializeError(error),
+      })
+    }
+  }
+}
+
+/** The launch path: when the toggle is on, re-check whatever is stale — the
+ * CLI's release metadata, and configs.json's server time when the file is
+ * present. Never fetches recommendation bytes and never throws. */
 export async function checkDependenciesAtLaunch(): Promise<void> {
   // The CLI is macOS-only; on any other platform this would fetch GitHub
   // releases for a binary the machine cannot run and cache an "update
@@ -103,23 +149,15 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
   if (!checkUpdatesAtLaunch()) return
   const cache = readDependenciesCache()
   const now = Date.now()
-  if (isCheckFresh(cache.cli.lastCheckedAtUtc, now)) return
-  try {
-    await runDependencyOperation(
-      APP_DEPENDENCY_OPERATION_OWNER,
-      ['cli'],
-      (signal) => checkCliForUpdate(false, signal)
-    )
-  } catch (error) {
-    if (error instanceof DependencyOperationBusyError) {
-      log('info', 'Launch dependency check skipped; CLI operation already running')
-    } else {
-      log('warn', 'Launch dependency check failed', {
-        dependency: 'Draw Things CLI',
-        error: serializeError(error),
-      })
-    }
+  const checks: Promise<void>[] = []
+  if (!isCheckFresh(cache.cli.lastCheckedAtUtc, now)) {
+    checks.push(checkAtLaunch('cli', 'Draw Things CLI', (signal) => checkCliForUpdate(false, signal)))
   }
+  // An absent optional file reads "Not installed" whatever the server holds.
+  if (getRecommendationsStatus().exists && !isCheckFresh(cache.recommendations.lastCheckedAtUtc, now)) {
+    checks.push(checkAtLaunch('recommendations', 'Recommended parameters', checkRecommendationsForUpdate))
+  }
+  await Promise.all(checks)
 }
 
 /**

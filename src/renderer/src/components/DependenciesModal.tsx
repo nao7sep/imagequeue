@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { useDependencies } from '../context/DependenciesContext'
 import { formatUiDateTime } from '../utils/formatDateTime'
 import type {
+  DependenciesState,
   DependencyInfo,
   DependencyProgress,
   DependencyState,
@@ -28,7 +29,8 @@ const STATE_LABEL: Record<DependencyState, string> = {
 // unchecked with its version in hand, offers no button — Check is that move.
 function actionLabelFor(info: DependencyInfo): string | null {
   if (info.id === 'recommendations') {
-    return info.state === 'not-installed' ? 'Install' : 'Refresh'
+    if (info.state === 'not-installed') return 'Install'
+    return info.state === 'update-available' ? 'Update' : 'Refresh'
   }
   if (info.state === 'not-installed') return 'Install'
   if (info.state === 'update-available') return 'Update'
@@ -36,8 +38,18 @@ function actionLabelFor(info: DependencyInfo): string | null {
   return null
 }
 
+// Check covers every tool, so the set was last checked when its least recently
+// checked tool was. A present tool never checked leaves the set unchecked; an
+// absent file has nothing to check against.
+function lastSetCheck(state: DependenciesState): string | null {
+  const times = [state.cli.lastCheckedAtUtc]
+  if (state.recommendations.state !== 'not-installed') times.push(state.recommendations.lastCheckedAtUtc)
+  if (times.some((time) => !time)) return null
+  return (times as string[]).sort()[0]
+}
+
 function installedSummary(info: DependencyInfo): string {
-  if (info.state === 'not-installed') return 'Not installed'
+  if (info.state === 'not-installed') return 'None'
   const updated = info.updatedAtUtc ? ` · updated ${formatUiDateTime(info.updatedAtUtc)}` : ''
   const latest =
     info.state === 'update-available' && info.latestLabel ? ` → ${info.latestLabel}` : ''
@@ -74,6 +86,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
     cancelOperations,
   } = useDependencies()
   const anyBusy = busy.size > 0
+  const lastChecked = state ? lastSetCheck(state) : null
 
   // The application controller outlives this replaceable modal. Closing while an
   // operation is active explicitly asks that controller to cancel and then hides
@@ -92,26 +105,13 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
       onClose={requestClose}
       closeOnBackdropClick
       footer={
-        <>
-          <button
-            type="button"
-            className="modal-btn modal-footer-lead"
-            disabled={anyBusy}
-            onClick={() => { void check() }}
-          >
-            {busy.has('check') ? 'Checking…' : 'Check for CLI updates'}
-          </button>
-          {!busy.has('check') && terminalOutcomes.check === 'cancelled' && (
-            <span className="dependency-terminal-outcome" role="status">Check cancelled</span>
-          )}
-          <button
-            type="button"
-            className="modal-btn"
-            onClick={requestClose}
-          >
-            {anyBusy ? 'Cancel and close' : 'Close'}
-          </button>
-        </>
+        <button
+          type="button"
+          className="modal-btn"
+          onClick={requestClose}
+        >
+          {anyBusy ? 'Cancel and close' : 'Close'}
+        </button>
       }
     >
       <div className="dependencies-body">
@@ -129,9 +129,9 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
 
         {state && (
           <>
-            <DependencyRow
+            <DependencySection
               title="Draw Things CLI"
-              description="The image-generation engine. Downloaded from the official Draw Things Community release and verified against its published checksum."
+              description="The image-generation engine, from the official Draw Things Community release and verified against its published checksum."
               required
               info={state.cli}
               busy={busy.has('cli')}
@@ -140,9 +140,9 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               terminalOutcome={terminalOutcomes.cli}
               onAction={() => { void installCli() }}
             />
-            <DependencyRow
+            <DependencySection
               title="Recommended parameters"
-              description="Versionless per-model defaults (configs.json) from Draw Things. Optional — Install or Refresh fetches the current file; generation falls back to your defaults without it."
+              description="Per-model default settings (configs.json) from Draw Things. Without them, generation uses your own defaults."
               required={false}
               info={state.recommendations}
               busy={busy.has('recommendations')}
@@ -151,16 +151,47 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               terminalOutcome={terminalOutcomes.recommendations}
               onAction={() => { void installRecommendations() }}
             />
-
-            <label className="dependencies-toggle">
-              <input
-                type="checkbox"
-                checked={state.checkUpdatesAtLaunch}
-                disabled={busy.has('toggle') || busy.has('check')}
-                onChange={(e) => { void setCheckAtLaunch(e.target.checked) }}
-              />
-              Check for CLI updates at launch
-            </label>
+            <section className="dependency-row">
+              <div className="dependency-heading">
+                <h3 className="dependency-title">Updates</h3>
+              </div>
+              <p className="dependency-desc">
+                Checking asks each tool’s source what is current. Nothing is downloaded.
+              </p>
+              <div className="dependency-facts">
+                <DependencyFact
+                  label="Last checked"
+                  actions={
+                    <>
+                      {!busy.has('check') && terminalOutcomes.check === 'cancelled' && (
+                        <span className="dependency-terminal-outcome" role="status">Check cancelled</span>
+                      )}
+                      <button
+                        type="button"
+                        className="modal-btn"
+                        disabled={anyBusy}
+                        onClick={() => { void check() }}
+                      >
+                        {busy.has('check') ? 'Checking…' : 'Check for updates'}
+                      </button>
+                    </>
+                  }
+                >
+                  <span className="dependency-fact-line">
+                    {lastChecked ? formatUiDateTime(lastChecked) : 'Never'}
+                  </span>
+                  <label className="dependencies-toggle">
+                    <input
+                      type="checkbox"
+                      checked={state.checkUpdatesAtLaunch}
+                      disabled={busy.has('toggle') || busy.has('check')}
+                      onChange={(e) => { void setCheckAtLaunch(e.target.checked) }}
+                    />
+                    Check for updates at launch
+                  </label>
+                </DependencyFact>
+              </div>
+            </section>
           </>
         )}
       </div>
@@ -168,7 +199,27 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
   )
 }
 
-function DependencyRow({
+// One labelled line of a dependency's state, with the action that changes it
+// at the line's end.
+function DependencyFact({
+  label,
+  actions,
+  children,
+}: {
+  label: string
+  actions?: React.ReactNode
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="dependency-fact">
+      <span className="dependency-fact-label">{label}</span>
+      <div className="dependency-fact-value">{children}</div>
+      {actions && <div className="dependency-fact-actions">{actions}</div>}
+    </div>
+  )
+}
+
+function DependencySection({
   title,
   description,
   required,
@@ -191,66 +242,67 @@ function DependencyRow({
 }): React.JSX.Element {
   const actionLabel = actionLabelFor(info)
   const pct = progress ? progressPercent(progress) : null
+  // The action carries the accent only when it is the step the user is owed:
+  // a required tool that is missing, or a newer version waiting.
+  const emphasized =
+    (required && info.state === 'not-installed') || info.state === 'update-available'
 
   return (
     <section className="dependency-row">
-      <div className="dependency-main">
-        <div className="dependency-heading">
-          <h3 className="dependency-title">{title}</h3>
-          <span
-            className={`dependency-badge dependency-badge-${info.state}${
-              info.state === 'not-installed' && required ? ' dependency-badge-required' : ''
-            }`}
-          >
-            {STATE_LABEL[info.state]}
-          </span>
-        </div>
-        <p className="dependency-desc">{description}</p>
-        <p className="dependency-meta">
-          {installedSummary(info)}
-          {info.id === 'cli' && (
-            <>
-              {' · '}
-              {info.lastCheckedAtUtc
-                ? `checked ${formatUiDateTime(info.lastCheckedAtUtc)}`
-                : 'never checked'}
-            </>
-          )}
-        </p>
-        {busy && progress && (
-          <div className="dependency-progress">
-            <div
-              className="dependency-progress-bar"
-              role="progressbar"
-              aria-label={`${title} installation progress`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={pct ?? undefined}
-            >
-              <div
-                className="dependency-progress-fill"
-                style={pct === null ? { width: '100%', opacity: 0.4 } : { width: `${pct}%` }}
-              />
-            </div>
-            <span className="dependency-progress-label">{progressLabel(progress)}</span>
-          </div>
-        )}
+      <div className="dependency-heading">
+        <h3 className="dependency-title">{title}</h3>
+        {!required && <span className="dependency-optional">Optional</span>}
+        <span
+          className={`dependency-badge dependency-badge-${info.state}${
+            info.state === 'not-installed' && required ? ' dependency-badge-required' : ''
+          }`}
+        >
+          {STATE_LABEL[info.state]}
+        </span>
       </div>
-      {actionLabel && (
-        <div className="dependency-actions">
-          {!busy && terminalOutcome === 'cancelled' && (
-            <span className="dependency-terminal-outcome" role="status">Cancelled</span>
+      <p className="dependency-desc">{description}</p>
+      <div className="dependency-facts">
+        <DependencyFact
+          label="Installed"
+          actions={
+            actionLabel && (
+              <>
+                {!busy && terminalOutcome === 'cancelled' && (
+                  <span className="dependency-terminal-outcome" role="status">Cancelled</span>
+                )}
+                <button
+                  type="button"
+                  className={`modal-btn${emphasized ? ' modal-btn-primary' : ''}`}
+                  disabled={disabled}
+                  onClick={onAction}
+                >
+                  {busy ? 'Working…' : actionLabel}
+                </button>
+              </>
+            )
+          }
+        >
+          <span className="dependency-fact-line dependency-meta">{installedSummary(info)}</span>
+          {busy && progress && (
+            <div className="dependency-progress">
+              <div
+                className="dependency-progress-bar"
+                role="progressbar"
+                aria-label={`${title} installation progress`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={pct ?? undefined}
+              >
+                <div
+                  className="dependency-progress-fill"
+                  style={pct === null ? { width: '100%', opacity: 0.4 } : { width: `${pct}%` }}
+                />
+              </div>
+              <span className="dependency-progress-label">{progressLabel(progress)}</span>
+            </div>
           )}
-          <button
-            type="button"
-            className="dependency-action"
-            disabled={disabled}
-            onClick={onAction}
-          >
-            {busy ? 'Working…' : actionLabel}
-          </button>
-        </div>
-      )}
+        </DependencyFact>
+      </div>
     </section>
   )
 }

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
-import type { IncomingMessage } from 'node:http'
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import https from 'node:https'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -104,12 +104,13 @@ function requestResponse(
   url: string,
   limits: TransferLimits,
   signal: AbortSignal,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  method: 'GET' | 'HEAD' = 'GET'
 ): Promise<IncomingMessage> {
   validateHttpsUrl(url)
   return new Promise((resolve, reject) => {
     let settled = false
-    const request = https.get(url, { signal, headers }, (response) => {
+    const request = https.request(url, { method, signal, headers }, (response) => {
       if (settled) {
         response.destroy()
         return
@@ -131,6 +132,7 @@ function requestResponse(
         reject(error)
       }
     })
+    request.end()
   })
 }
 
@@ -147,13 +149,18 @@ function assertSuccessfulResponse(response: IncomingMessage): void {
   }
 }
 
+export interface FetchedBytes {
+  body: Buffer
+  headers: IncomingHttpHeaders
+}
+
 async function fetchBytesHop(
   url: string,
   limits: TransferLimits,
   signal: AbortSignal,
   headers: Record<string, string>,
   redirectsLeft: number
-): Promise<Buffer> {
+): Promise<FetchedBytes> {
   const response = await requestResponse(url, limits, signal, headers)
   const next = redirectTarget(response, url)
   if (next) {
@@ -179,22 +186,66 @@ async function fetchBytesHop(
       total = nextTotal
       chunks.push(chunk)
     }
-    return Buffer.concat(chunks, total)
+    return { body: Buffer.concat(chunks, total), headers: response.headers }
   } finally {
     response.destroy()
   }
 }
 
-/** Fetch a small metadata or structured-data body with HTTPS, redirect, size,
- * idle, and whole-operation bounds. */
-export function fetchBytes(
+/** Fetch a small metadata or structured-data body, with the final response's
+ * headers, under HTTPS, redirect, size, idle, and whole-operation bounds. */
+export function fetchBytesWithHeaders(
+  url: string,
+  limits: TransferLimits,
+  signal?: AbortSignal,
+  headers: Record<string, string> = { 'User-Agent': 'ImageQueue' }
+): Promise<FetchedBytes> {
+  return withWholeOperationTimeout(signal, limits.wholeTimeoutMs, 'Network transfer', (boundedSignal) =>
+    fetchBytesHop(url, limits, boundedSignal, headers, MAX_REDIRECTS)
+  )
+}
+
+/** Fetch a small metadata or structured-data body under the same bounds. */
+export async function fetchBytes(
   url: string,
   limits: TransferLimits,
   signal?: AbortSignal,
   headers: Record<string, string> = { 'User-Agent': 'ImageQueue' }
 ): Promise<Buffer> {
-  return withWholeOperationTimeout(signal, limits.wholeTimeoutMs, 'Network transfer', (boundedSignal) =>
-    fetchBytesHop(url, limits, boundedSignal, headers, MAX_REDIRECTS)
+  return (await fetchBytesWithHeaders(url, limits, signal, headers)).body
+}
+
+async function fetchHeadersHop(
+  url: string,
+  limits: TransferLimits,
+  signal: AbortSignal,
+  headers: Record<string, string>,
+  redirectsLeft: number
+): Promise<IncomingHttpHeaders> {
+  const response = await requestResponse(url, limits, signal, headers, 'HEAD')
+  try {
+    const next = redirectTarget(response, url)
+    if (next) {
+      if (redirectsLeft <= 0) throw new Error('Request failed: too many redirects')
+      return fetchHeadersHop(next, limits, signal, headers, redirectsLeft - 1)
+    }
+    assertSuccessfulResponse(response)
+    return response.headers
+  } finally {
+    response.destroy()
+  }
+}
+
+/** Ask for a resource's headers alone (an HTTP HEAD), following redirects under
+ * the same HTTPS, idle, and whole-operation bounds. No body is transferred. */
+export function fetchHeaders(
+  url: string,
+  limits: TransferLimits,
+  signal?: AbortSignal,
+  headers: Record<string, string> = { 'User-Agent': 'ImageQueue' }
+): Promise<IncomingHttpHeaders> {
+  return withWholeOperationTimeout(signal, limits.wholeTimeoutMs, 'Network request', (boundedSignal) =>
+    fetchHeadersHop(url, limits, boundedSignal, headers, MAX_REDIRECTS)
   )
 }
 

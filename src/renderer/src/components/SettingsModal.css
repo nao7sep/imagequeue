@@ -31,6 +31,9 @@
   padding: var(--control-pad-md);
   font-size: var(--text-md);
   font-weight: 500;
+  /* Trimmed to cap height and baseline, so the tab centres the letters rather
+     than the font's box, which sat them about a pixel low. */
+  text-box: trim-both cap alphabetic;
   color: var(--text-secondary);
   background: transparent;
   cursor: pointer;

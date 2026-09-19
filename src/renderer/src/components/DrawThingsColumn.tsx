@@ -207,7 +207,7 @@ export function useDrawThingsColumn({
       })
       setModelsLoadState('ready')
     } catch (error) {
-      setModelsLoadError(presentFailure('drawthings-models-load', error))
+      setModelsLoadError(presentFailure('drawthings-models-poll', error))
       setModelsLoadState('failed')
     }
   }, [active, setModel])
@@ -432,11 +432,11 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
         <div className="drawthings-save-error" role="alert">{c.paramsSaveError}</div>
       )}
       {c.modelsLoadState === 'loading' && !c.cliStatus && (
-        <div className="setting-row model-warning">Checking Draw Things…</div>
+        <div className="setting-row model-status">Checking Draw Things…</div>
       )}
       {c.modelsLoadState === 'failed' && (
-        <div className="setting-row model-warning" role="alert">
-          Couldn’t load Draw Things models{c.modelsLoadError ? `: ${c.modelsLoadError}` : '.'}
+        <div className="drawthings-save-error" role="alert">
+          {c.modelsLoadError || 'Downloaded Draw Things models could not be loaded.'}
         </div>
       )}
       {c.cliStatus && c.cliStatus.installed && (

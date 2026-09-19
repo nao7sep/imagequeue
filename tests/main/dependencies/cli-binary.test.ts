@@ -98,3 +98,32 @@ describe('publishCliBinary', () => {
     expect(readInstalledCliTag()).toBe('v1.20260101.0')
   })
 })
+
+describe('readInstalledCliTag', () => {
+  function installWithSidecar(binaryId: (ino: bigint, dev: bigint) => string): void {
+    fs.mkdirSync(getBinDir(), { recursive: true })
+    fs.writeFileSync(getCliBinaryPath(), 'binary')
+    const { ino, dev } = fs.statSync(getCliBinaryPath(), { bigint: true })
+    fs.writeFileSync(getCliMetaPath(), JSON.stringify({
+      tag: 'v1.20260716.0',
+      sha256: 'c'.repeat(64),
+      installedAt: '2026-08-22T20:13:13.750Z',
+      binaryId: binaryId(ino, dev),
+    }))
+  }
+
+  it('still knows the binary after macOS renumbers its device', () => {
+    installWithSidecar((ino, dev) => `${dev + 1n}:${ino}`)
+    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+  })
+
+  it('reads a sidecar that records the inode alone', () => {
+    installWithSidecar((ino) => String(ino))
+    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+  })
+
+  it('does not name a different file with the recorded tag', () => {
+    installWithSidecar((ino, dev) => `${dev}:${ino + 1n}`)
+    expect(readInstalledCliTag()).toBeNull()
+  })
+})

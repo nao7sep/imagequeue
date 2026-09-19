@@ -304,11 +304,14 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         onClick={(e) => { if (e.target === e.currentTarget) clear() }}
       >
         {columnTasks.length === 0 ? (
-          <div className="task-list-empty" role="presentation">
+          <div
+            className={`task-list-empty${loadState === 'failed' ? ' task-list-empty-error' : ''}`}
+            role="presentation"
+          >
             {loadState === 'loading'
               ? 'Loading queue…'
               : loadState === 'failed'
-                ? 'Couldn’t load queued tasks.'
+                ? 'Queued tasks could not be loaded.'
                 : 'No tasks queued'}
           </div>
         ) : (
@@ -420,7 +423,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     void runTaskAction({
       taskId: task.id,
       action: 'export',
-      message: 'The image could not be exported. The original is unchanged; try again.',
+      message: 'The image could not be exported. Check the export folder, then try again.',
       diagnosticMessage: 'Failed to export task image',
       invoke: () => window.electronAPI.exportImage(task.baseName!, getExt()),
     })
@@ -430,7 +433,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   // share a button and differ only in icon and wording.
   const keeping = task.status === 'completed'
   const removeIcon = keeping ? 'archive' : 'close'
-  const removeTitle = keeping ? 'Keep — file this image away, out of the active list' : 'Remove from queue'
+  const removeTitle = keeping ? 'Keep this image, filed away out of the active list' : 'Remove from queue'
   const statusLabel = taskStatusLabel(task.status)
   const failureMessage = task.status === 'failed'
     ? task.error || 'This image could not be generated. Retry it; if the problem continues, check the session log.'

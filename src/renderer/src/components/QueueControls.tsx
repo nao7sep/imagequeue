@@ -49,7 +49,7 @@ export function QueuePausedBadge(): React.JSX.Element | null {
   const { state } = useQueueControlState()
   if (!state?.paused) return null
   return (
-    <span className="queue-paused-badge" title="The queue is paused; nothing new will start">
+    <span className="queue-paused-badge" title="The queue is paused, so nothing new will start.">
       Paused
     </span>
   )

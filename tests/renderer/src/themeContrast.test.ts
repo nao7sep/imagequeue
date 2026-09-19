@@ -101,11 +101,14 @@ describe('theme token contrast', () => {
       for (const fill of FILLS) check(onAccent, hexOf(block, fill), 4.5, `--text-on-accent on ${fill}`)
       check(onAccent, mix(hexOf(block, '--accent'), [0, 0, 0], 0.8), 4.5, '--text-on-accent on the darkened accent')
       for (const status of ['--error', '--warning', '--success']) {
-        for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary']) {
+        // Main-window notices tint the pane they sit on.
+        for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary', '--pane-bg']) {
           // The strongest status tint the stylesheets use is 14% (the dependency badges).
           check(hexOf(block, status), mix(hexOf(block, status), hexOf(block, surface), 0.14), 4.5, `${status} on its tint over ${surface}`)
         }
       }
+      // The informational notice: secondary text on a 10% accent tint over the pane.
+      check(hexOf(block, '--text-secondary'), mix(hexOf(block, '--accent'), hexOf(block, '--pane-bg'), 0.1), 4.5, 'info notice text')
       for (const tag of ['amber', 'blue']) {
         check(hexOf(block, `--tag-${tag}-text`), mix(hexOf(block, `--tag-${tag}`), hexOf(block, '--bg-secondary'), 0.14), 4.5, `${tag} tag`)
       }
