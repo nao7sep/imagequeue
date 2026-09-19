@@ -5,7 +5,7 @@
 // providers' naming model is called. The lane proves the code paths, not image
 // quality, so each image uses the smallest size and lowest quality the model
 // offers, saved as the backend's defaults and resolved by the renderer's own
-// code. Run only by npm run check:full, through vitest.live.config.ts.
+// code. Run only by npm run test:full, through vitest.live.config.ts.
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'

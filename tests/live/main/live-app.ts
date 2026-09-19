@@ -180,7 +180,7 @@ export function requireKeys(names: string[]): void {
   const missing = names.filter((name) => !process.env[name]?.trim())
   if (missing.length > 0) {
     throw new Error(
-      `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set. The full check calls the real APIs; export ${missing.join(', ')} and run it again.`,
+      `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set. The full run calls the real APIs; export ${missing.join(', ')} and run it again.`,
     )
   }
 }

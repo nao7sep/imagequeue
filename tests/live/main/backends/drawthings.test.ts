@@ -2,7 +2,7 @@
 // renderer calls, with nothing substituted but Electron's window glue: the CLI
 // and its recommendations, acquired through the app's own dependency handlers,
 // and one locked model, downloaded through the CLI's own model job. Run only by
-// npm run check:full, through vitest.live.config.ts.
+// npm run test:full, through vitest.live.config.ts.
 //
 // The CLI, recommendations, and model are acquired into a home that persists
 // between runs and follow the app's rule: install what is missing, and update

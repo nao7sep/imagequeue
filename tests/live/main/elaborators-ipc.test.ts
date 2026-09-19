@@ -1,7 +1,7 @@
 // Brainstorming end to end, driven through the elaborators IPC the renderer
 // calls, with nothing substituted but Electron's window glue: the shipped
 // elaborators and the concept ledger turn a seed into prompts through each text
-// AI provider's main model. Run only by npm run check:full, through
+// AI provider's main model. Run only by npm run test:full, through
 // vitest.live.config.ts.
 
 import { randomUUID } from 'node:crypto'
