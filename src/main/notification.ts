@@ -26,7 +26,7 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: transpar
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   border-radius: 4px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 12px;
   font-weight: 500;
   padding: 0 10px;
