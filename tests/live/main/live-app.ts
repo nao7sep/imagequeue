@@ -205,7 +205,10 @@ const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
 }
 
 /** Reads a completed task's image and sidecar, proving the image is what its extension says. */
-export async function readOutput(app: App, task: Task): Promise<{ bytes: Buffer; metadata: { slug: string; model: string } }> {
+export async function readOutput(
+  app: App,
+  task: Task,
+): Promise<{ bytes: Buffer; metadata: { slug: string; model: string; params: Record<string, unknown> } }> {
   const ext = task.imagePath!.slice(task.imagePath!.lastIndexOf('.') + 1)
   const bytes = await readFile(join(app.sessionDir(), task.imagePath!))
   expect(bytes.length, 'the image is not a stub').toBeGreaterThan(1024)
@@ -213,6 +216,7 @@ export async function readOutput(app: App, task: Task): Promise<{ bytes: Buffer;
   const metadata = JSON.parse(await readFile(join(app.sessionDir(), `${task.baseName}.json`), 'utf8')) as {
     slug: string
     model: string
+    params: Record<string, unknown>
   }
   return { bytes, metadata }
 }
