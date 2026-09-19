@@ -49,23 +49,27 @@
   position: relative;
 }
 
+/* A quiet icon button: its hit area shows on hover and focus. */
 .hamburger-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-surface);
+  width: var(--control-md);
+  height: var(--control-md);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--text-primary);
   font-size: 19px;
   cursor: pointer;
   line-height: 1;
+  transition: background-color var(--motion) ease;
 }
 
 .hamburger-btn:hover {
   color: var(--text-primary);
-  border-color: var(--accent);
+  background: var(--bg-hover);
 }
 
 .dropdown-menu {
@@ -74,10 +78,10 @@
   overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 200;
-  padding: 4px 0;
+  padding: 4px;
   /* The submenu is separately portalled, so this menu may scroll vertically
      without clipping it. Items take a flat background highlight (not an
      outline) for both hover and the keyboard cursor. */
@@ -90,7 +94,8 @@
 .menu-item {
   display: block;
   width: 100%;
-  padding: 8px 14px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
   text-align: left;
   background: none;
   border: none;
@@ -161,9 +166,9 @@
   overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  padding: 4px 0;
+  padding: 4px;
   z-index: 201;
 }
 
@@ -187,9 +192,10 @@
   color: var(--text-muted);
 }
 
+/* Rows are separated by space, not boxed one by one. */
 .shortcut-list {
   display: grid;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
 .shortcut-item {
@@ -197,10 +203,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
+  padding: var(--space-2) 0;
 }
 
 .shortcut-item span {

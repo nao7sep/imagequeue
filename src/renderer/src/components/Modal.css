@@ -85,7 +85,7 @@
   height: var(--control-md);
   padding: var(--control-pad-md);
   border: 1px solid var(--field-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
   font-family: inherit;
@@ -176,13 +176,17 @@
   height: var(--control-md);
   padding: var(--control-pad-md);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
+  transition:
+    background-color var(--motion) ease,
+    border-color var(--motion) ease,
+    color var(--motion) ease;
 }
 
 .modal-btn:hover:not(:disabled) {

@@ -55,11 +55,11 @@
 }
 
 .column-settings {
-  padding: 10px;
+  padding: var(--space-3);
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   font-size: 13px;
 }
 
@@ -67,7 +67,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .setting-row label {
@@ -79,20 +79,35 @@
 .setting-row input {
   flex: 1;
   min-width: 0;
-  padding: 3px 6px;
+  height: var(--control-sm);
+  padding: 0 8px;
   border: 1px solid var(--field-border);
-  border-radius: 3px;
-  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  /* background-color, not the shorthand: a select's chevron is its image. */
+  background-color: var(--bg-input);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-sm);
+}
+
+.setting-row select {
+  padding-right: 26px;
+  background-position: right 8px center;
 }
 
 .enqueue-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   width: 100%;
-  padding: 8px;
+  height: var(--control-md);
+  padding: 0 12px;
   margin-top: 4px;
   border: 1px solid var(--col-accent, var(--accent));
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--motion) ease,
+    color var(--motion) ease;
   background: transparent;
   color: var(--col-text, var(--col-accent, var(--accent)));
   font-weight: 600;
@@ -225,16 +240,17 @@
   z-index: 50;
   background: var(--bg-primary);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 0;
+  border-radius: var(--radius-lg);
+  padding: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .context-menu button {
   display: block;
   width: 100%;
-  padding: 6px 12px;
+  padding: 7px 10px;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-primary);
   font-size: 12px;
@@ -315,7 +331,7 @@
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-left-width: 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   cursor: pointer;
 }
@@ -337,7 +353,7 @@
 .open-models-btn {
   padding: 2px 8px;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -357,9 +373,10 @@
 }
 
 .download-btn {
-  padding: 1px 6px;
+  height: var(--control-sm);
+  padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--col-text, var(--col-accent, var(--accent)));
   font-size: 12px;
@@ -381,7 +398,8 @@
   bottom: var(--space-1);
   right: var(--space-1);
   display: flex;
-  gap: 2px;
+  /* Separate controls keep the 8px minimum between them. */
+  gap: var(--space-2);
   padding: 2px;
   border-radius: var(--radius-md);
   background: var(--task-actions-bg);
@@ -472,7 +490,7 @@
 .task-thumbnail-frame {
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   margin-bottom: 6px;
   overflow: hidden;
   background: transparent;
@@ -482,6 +500,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: block;
 }

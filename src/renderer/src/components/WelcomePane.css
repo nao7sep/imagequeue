@@ -59,9 +59,14 @@
 
 .welcome-btn {
   align-self: flex-start;
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-md);
+  padding: var(--control-pad-md);
+  line-height: 1;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 12px;
