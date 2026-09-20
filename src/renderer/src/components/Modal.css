@@ -54,8 +54,26 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--bg-hover);
+  border-bottom: 1px solid var(--border);
   color: var(--text-primary);
+}
+
+/* A hidden title leaves the close control alone up there: it keeps its corner,
+   and the band needs no line, since there is no title to divide from the
+   content (modal-dialog conventions). */
+.modal-header:has(> .visually-hidden) {
+  border-bottom: 0;
+}
+
+.modal-header > .visually-hidden + .modal-close {
+  margin-left: auto;
+}
+
+/* A strip between the header and the body — the Settings tabs — is its own
+   band, with space on either side of its controls. */
+.modal-strip {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-header span {
@@ -140,7 +158,7 @@
 .confirm-body {
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-4) var(--space-4) var(--space-2);
+  padding: var(--space-4);
   font-size: var(--text-md);
   color: var(--text-primary);
   line-height: 1.5;
@@ -156,7 +174,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border);
   font-size: var(--text-sm);
 }

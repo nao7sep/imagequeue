@@ -22,7 +22,8 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="About"
+      title="About ImageQueue"
+      titleHidden
       onClose={onClose}
       footer={
         <button className="modal-btn" onClick={onClose}>

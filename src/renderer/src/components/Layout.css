@@ -226,13 +226,16 @@
 
 
 .about-content {
-  padding: var(--space-5) var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-4) var(--space-5);
   text-align: center;
   color: var(--text-primary);
 }
 
 .about-name {
-  font-size: 18px;
+  font-size: 26px;
+  line-height: 1.15;
   font-weight: 700;
   margin-bottom: var(--space-1);
 }

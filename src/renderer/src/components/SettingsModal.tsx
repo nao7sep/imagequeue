@@ -262,6 +262,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         </>
       }
     >
+      <div className="modal-strip">
       <div className="app-tabs" {...tablist.tablistProps} aria-label="Settings sections">
         {SETTINGS_TABS.map((sectionTab) => (
           <button
@@ -273,6 +274,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             {SETTINGS_TAB_LABELS[sectionTab]}
           </button>
         ))}
+      </div>
       </div>
       <div className="settings-overlay">
       {errorMessage && <div className="settings-error" role="alert">{errorMessage}</div>}

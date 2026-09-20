@@ -7,6 +7,9 @@ import './Modal.css'
 
 interface ModalProps {
   title?: string
+  /** Keeps the title as the dialog's spoken name but takes it off the screen,
+   * for a surface whose own content already says what it is (About). */
+  titleHidden?: boolean
   onClose: () => void
   className?: string
   children: ReactNode
@@ -35,6 +38,7 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
 
 export function Modal({
   title,
+  titleHidden = false,
   onClose,
   className,
   children,
@@ -140,7 +144,7 @@ export function Modal({
       >
         {title !== undefined && (
           <div className="modal-header">
-            <span id={titleId}>{title}</span>
+            <span id={titleId} className={titleHidden ? 'visually-hidden' : undefined}>{title}</span>
             {dismissable && <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>}
           </div>
         )}

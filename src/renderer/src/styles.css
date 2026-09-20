@@ -279,6 +279,19 @@ button:active:not(:disabled) {
   filter: var(--pressed-filter);
 }
 
+/* Off the screen, still spoken: for a heading a surface names itself. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* One keyboard focus ring for the app's buttons, clear of the edge and
    following its corners. Rows, tabs and menu items keep their own fill-based
    cursors. */
