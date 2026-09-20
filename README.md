@@ -51,7 +51,7 @@ npm run dev
 
 ## Tests
 
-`npm test` runs the type check and the whole ordinary suite, the same set every time; [`tests/README.md`](tests/README.md) says which areas it covers. `npm run test:full` runs that, then the live lane: one image from each cloud backend with its default model, named by both text AI providers, and a brainstorm through each; on macOS it also acquires the Draw Things CLI, its recommendations, and the locked Stable Diffusion v1.5 model (about 2 GB on the first run) into `node_modules/.cache` and generates with them. Export `OPENAI_IMAGE_API_KEY`, `GEMINI_NANOBANANA_API_KEY`, `XAI_API_KEY`, `BFL_API_KEY`, `GEMINI_TEXT_API_KEY`, and `OPENAI_TEXT_API_KEY` first; the lane makes paid calls, and the full run fails without them.
+`npm test` runs the type check and the whole ordinary suite, the same set every time. `npm run test:full` runs that, then the live lane: one image from each cloud backend with its default model, named by both text AI providers, and a brainstorm through each; on macOS it also acquires the Draw Things CLI, its recommendations, and the locked Stable Diffusion v1.5 model (about 2 GB on the first run) into `node_modules/.cache` and generates with them. Export `OPENAI_IMAGE_API_KEY`, `GEMINI_NANOBANANA_API_KEY`, `XAI_API_KEY`, `BFL_API_KEY`, `GEMINI_TEXT_API_KEY`, and `OPENAI_TEXT_API_KEY` first; the lane makes paid calls, and the full run fails without them.
 
 ## License
 
