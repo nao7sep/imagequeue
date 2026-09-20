@@ -62,7 +62,7 @@ const PANE_INKS: Record<string, string[]> = {
   '--pane-bg-strong': ['--text-primary', '--text-secondary', '--text-muted', '--accent'],
   '--preview-bg': ['--text-primary', '--text-secondary'],
 }
-const FILLS = ['--accent', '--accent-hover', '--success', '--error', '--warning', ...BACKENDS.map((backend) => `--backend-${backend}`)]
+const FILLS = ['--accent', '--accent-hover', '--success', '--error', '--error-hover', '--warning', ...BACKENDS.map((backend) => `--backend-${backend}`)]
 
 describe('theme token contrast', () => {
   for (const theme of ['light', 'dark'] as const) describe(`${theme} theme`, () => {
@@ -103,9 +103,14 @@ describe('theme token contrast', () => {
       for (const status of ['--error', '--warning', '--success']) {
         // Main-window notices tint the pane they sit on.
         for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary', '--pane-bg']) {
-          // The strongest status tint the stylesheets use is 14% (the dependency badges).
+          // The strongest tint a status badge uses is 14% (the dependency badges).
           check(hexOf(block, status), mix(hexOf(block, status), hexOf(block, surface), 0.14), 4.5, `${status} on its tint over ${surface}`)
         }
+      }
+      // A destructive trigger rests on an 8% error tint and deepens it to 18% under
+      // the pointer, so its letters are read on the deeper one too.
+      for (const amount of [0.08, 0.18]) {
+        check(hexOf(block, '--error'), mix(hexOf(block, '--error'), hexOf(block, '--bg-surface'), amount), 4.5, `--error on its ${amount * 100}% tint`)
       }
       // The informational notice: secondary text on a 10% accent tint over the pane.
       check(hexOf(block, '--text-secondary'), mix(hexOf(block, '--accent'), hexOf(block, '--pane-bg'), 0.1), 4.5, 'info notice text')

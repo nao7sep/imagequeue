@@ -239,8 +239,22 @@
   font-weight: 600;
 }
 
+/* The trigger deepens its own tint; it never fills. A filled red is reserved for
+   the confirming button of the dialog that asks, so that solid red always means
+   this is the last step. */
 .modal-btn-danger:hover:not(:disabled) {
-  background: var(--error);
+  background: color-mix(in srgb, var(--error) 18%, var(--bg-surface));
+}
+
+.modal-btn-danger-confirm {
   border-color: var(--error);
+  background: var(--error);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+
+.modal-btn-danger-confirm:hover:not(:disabled) {
+  border-color: var(--error-hover);
+  background: var(--error-hover);
   color: var(--text-on-accent);
 }

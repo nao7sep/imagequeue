@@ -20,7 +20,7 @@ export function ConfirmModal({ options, onSettle }: Props): React.JSX.Element {
             {options.cancelLabel ?? 'Cancel'}
           </button>
           <button
-            className={options.danger ? 'modal-btn modal-btn-danger' : 'modal-btn modal-btn-primary'}
+            className={options.danger ? 'modal-btn modal-btn-danger-confirm' : 'modal-btn modal-btn-primary'}
             onClick={() => onSettle(true)}
           >
             {options.confirmLabel ?? 'Confirm'}

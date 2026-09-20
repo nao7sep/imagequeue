@@ -48,6 +48,9 @@
   --header-tint: 9%;
   --success: #166534;
   --error: #991b1b;
+  /* The confirming button of a destructive dialog fills with --error; this is
+     its hovered fill, darker in light and lighter in dark, as the accent does. */
+  --error-hover: #7f1616;
   --warning: #8e4f10;
   /* The Draw Things model modal's source links. */
   --tag-amber: #d97706;
@@ -144,6 +147,7 @@
     --header-tint: 18%;
     --success: #4ade80;
     --error: #fca5a5;
+    --error-hover: #fdbdbd;
     --warning: #f59e0b;
     --tag-amber: #f59e0b;
     --tag-amber-text: #fbbf24;
