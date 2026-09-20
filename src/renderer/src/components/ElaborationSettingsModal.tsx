@@ -354,7 +354,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <label className="elaboration-settings-template" key={`format-${format}`}>
               <span>{`Format — ${PROMPT_FORMAT_LABELS[format]}`}</span>
               <textarea
-                rows={2}
+                rows={3}
                 value={form.format_directives.formats[format]}
                 onChange={(e) => setForm(setFormatPart(form, format, e.target.value))}
               />
@@ -364,7 +364,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <label className="elaboration-settings-template" key={`length-${length}`}>
               <span>{`Length — ${PROMPT_LENGTH_LABELS[length]}`}</span>
               <textarea
-                rows={2}
+                rows={3}
                 value={form.format_directives.lengths[length]}
                 onChange={(e) => setForm(setLengthPart(form, length, e.target.value))}
               />
