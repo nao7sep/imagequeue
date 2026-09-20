@@ -44,9 +44,16 @@
   max-height: 85vh;
 }
 
-/* Shortcuts modal: wider to avoid wrapping on Windows */
+/* Shortcuts modal: wide enough for the three groups to stand side by side, which
+   is what keeps the list inside the window's own minimum height. Clamped to the
+   viewport because the window minimum width follows the visible backend count
+   and is far narrower than this with one column. */
 .shortcuts-modal-box {
-  max-width: 600px;
+  /* A definite width, not a cap: the body's column track is fractional, and a
+     shrink-to-fit box would resolve it to a single column however much room the
+     window has. */
+  width: 1080px;
+  max-width: 92vw;
 }
 
 .modal-header {

@@ -174,12 +174,19 @@
 
 /* Shared modal styles live in Modal.css */
 
-/* Shortcuts */
+/* Shortcuts. The groups stand side by side wherever the width allows, and fall
+   back to fewer columns in a narrow window; the height bound is the shell's
+   (.modal-box), so this body only claims the room left between header and
+   footer. It carried its own 60vh, which was the tighter of two bounds and cost
+   the list a sixth of the height the shell would have given it. */
 .shortcuts-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 60vh;
   padding: var(--space-4);
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-content: start;
   gap: var(--space-5);
 }
 
