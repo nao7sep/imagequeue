@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { hasApiKey, setStoredApiKey, getStoredApiKey } from '../../../src/main/config/api-keys-store'
+import { SECRET_IDS } from '../../../src/shared/types'
 
 // The split that caused the env-only-key bug, pinned at its source: what the
 // settings form reads (the STORED value, deliberately blind to the environment)
@@ -12,23 +13,29 @@ import { hasApiKey, setStoredApiKey, getStoredApiKey } from '../../../src/main/c
 
 const ENV_VAR = 'IMAGEQUEUE_HOME'
 const KEY_ENV = 'OPENAI_IMAGE_API_KEY'
+// Every variable resolution consults. The full gate exports the real ones, so
+// these cases clear them all and restore them afterwards: what a machine
+// happens to have in its environment must not decide what they prove.
+const KEY_ENV_VARS = SECRET_IDS.map((id) => `${id.split('.').map((s) => s.toUpperCase()).join('_')}_API_KEY`)
 
 describe('api key presence vs stored value', () => {
   let tmpRoot: string
   const originalHome = process.env[ENV_VAR]
-  const originalKey = process.env[KEY_ENV]
+  const originalKeys = new Map(KEY_ENV_VARS.map((name) => [name, process.env[name]]))
 
   beforeEach(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-presence-'))
     process.env[ENV_VAR] = tmpRoot
-    delete process.env[KEY_ENV]
+    for (const name of KEY_ENV_VARS) delete process.env[name]
   })
 
   afterEach(() => {
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
-    if (originalKey === undefined) delete process.env[KEY_ENV]
-    else process.env[KEY_ENV] = originalKey
+    for (const [name, value] of originalKeys) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+    }
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
