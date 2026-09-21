@@ -8,6 +8,9 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 
 export default defineConfig({
   main: {
+    define: {
+      __APP_VERSION__: JSON.stringify(version)
+    },
     plugins: [externalizeDepsPlugin()]
   },
   preload: {

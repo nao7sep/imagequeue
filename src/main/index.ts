@@ -233,7 +233,7 @@ function startUp(): void {
   initSession()
   resetOutputTimestampAllocators()
   log('info', 'App started', {
-    version: app.getVersion(),
+    version: __APP_VERSION__,
     packaged: app.isPackaged,
     debug: DEBUG_ENABLED,
     config: summarizeConfig(loadConfig()),
