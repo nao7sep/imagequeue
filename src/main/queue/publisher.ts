@@ -4,6 +4,7 @@ import { log, serializeError } from '../logger'
 import { buildControlState } from './control-state'
 import { queueManager } from './queue-manager'
 import type { QueueControlState } from '../../shared/types'
+import type { AppNotice } from '../../shared/app-notice'
 
 type QueueControlListener = (state: QueueControlState) => void
 const controlListeners = new Set<QueueControlListener>()
@@ -49,4 +50,11 @@ export function publishQueueState(): void {
   }
   notifyControlListeners(controlState)
   refreshMainWindowMinimumSize()
+}
+
+/** An app-wide notice from queue work no renderer request is waiting on. */
+export function publishAppNotice(notice: AppNotice): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('app:notice', notice)
+  }
 }

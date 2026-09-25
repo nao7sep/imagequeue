@@ -47,6 +47,16 @@ export function generationFailurePresentation(backend: BackendId, error: unknown
   return `${name} could not generate this image. Retry it; if the problem continues, check the session log.`
 }
 
+/** The session file could not be written while the queue ran, so the queue paused. */
+export function queueStorageFailurePresentation(): AppNotice {
+  return {
+    title: 'Queue paused',
+    message: 'ImageQueue could not save this session\u2019s progress, so it paused the queue ' +
+      'before starting anything else. Images already generating will finish. Check that the ' +
+      'output location is available and has enough free space, then choose Resume.',
+  }
+}
+
 type ElaboratorRecovery = {
   kind: 'recovered' | 'quarantine-failed' | 'reseed-failed'
   path?: string

@@ -7,15 +7,15 @@ import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
-import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, shutdownSignal } from './cancellation'
-import { publishQueueState } from '../queue/publisher'
+import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, setQueuePaused, shutdownSignal } from './cancellation'
+import { publishAppNotice, publishQueueState } from '../queue/publisher'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
 import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
-import { generationFailurePresentation } from '../failure-presentation'
+import { generationFailurePresentation, queueStorageFailurePresentation } from '../failure-presentation'
 
 // Every generator takes the queue's cancellation signal. It is a parameter
 // rather than something each backend registers for itself: registration lived
@@ -117,12 +117,23 @@ export function processQueues(): void {
       if (activeCounts[backend] >= maxConcurrency) break
       if (task.status !== 'queued') continue
 
-      drainTracker.begin(Date.now())
-      activeCounts[backend]++
+      // The manifest records the task as generating before anything is paid
+      // for, so a crash leaves it interrupted rather than silently lost. If
+      // that write fails, nothing starts: the task stays queued and the queue
+      // pauses until the user resumes it.
       task.status = 'generating'
       task.startedAt = new Date().toISOString()
+      try {
+        persistActiveSession()
+      } catch (err) {
+        task.status = 'queued'
+        task.startedAt = null
+        pauseForStorageFailure('start', err)
+        return
+      }
+      drainTracker.begin(Date.now())
+      activeCounts[backend]++
       logGenerationStart(task.id, backend, task.model)
-      persistActiveSession()
       // Registration happens synchronously before processTask's first await.
       // Start it before publishing so the menu count includes this task.
       const processing = processTask(backend, task)
@@ -246,10 +257,30 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
   try {
     persistActiveSession()
+  } catch (err) {
+    pauseForStorageFailure('finish', err)
+  }
+  try {
     publishQueueState()
   } finally {
     // The shutdown barrier covers the task's final state publication too, not
     // merely the backend request/child exiting.
     resolveSettled()
   }
+}
+
+// The session manifest could not be written (a full or unavailable disk). The
+// processor owns this failure: it pauses the queue so nothing further starts
+// and gets billed while progress cannot be recorded, and tells the user once,
+// when the pause begins. It never reaches the process-level crash handler.
+function pauseForStorageFailure(phase: 'start' | 'finish', err: unknown): void {
+  log('error', 'Session manifest could not be saved; queue paused', {
+    phase,
+    error: serializeError(err),
+  })
+  if (!isQueuePaused()) {
+    setQueuePaused(true)
+    publishAppNotice(queueStorageFailurePresentation())
+  }
+  publishQueueState()
 }
