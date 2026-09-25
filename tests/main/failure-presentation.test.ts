@@ -23,6 +23,15 @@ describe('generationFailurePresentation', () => {
     expect(generationFailurePresentation('drawthings', { code: 'EACCES', message: hostile }, false)).toContain('file permissions')
   })
 
+  it('names a provider’s own terminal status, reduced to a short plain label', () => {
+    expect(generationFailurePresentation('flux', { providerStatus: 'Request Moderated', message: hostile }, false))
+      .toContain('“Request Moderated”')
+    const shown = generationFailurePresentation('flux', { providerStatus: '<b>/private/tmp/x</b>' + 'y'.repeat(80) }, false)
+    expect(shown).not.toContain('<')
+    expect(shown).not.toContain('/private')
+    expect(shown).not.toContain('y'.repeat(41))
+  })
+
   it('distinguishes a paid generation whose local save failed', () => {
     const message = generationFailurePresentation('nanobanana', new Error(hostile), true)
     expect(message).toContain('image was generated')

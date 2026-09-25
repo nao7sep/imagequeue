@@ -21,6 +21,15 @@ function structuredString(error: unknown, field: 'code' | 'name'): string | null
   return typeof value === 'string' ? value : null
 }
 
+/** The provider's own terminal status (ProviderStatusError), reduced to a short plain label. */
+function structuredProviderStatus(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const value = (error as Record<string, unknown>).providerStatus
+  if (typeof value !== 'string') return null
+  const label = value.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 40)
+  return label || null
+}
+
 /** Maps generation diagnostics to stable task copy without exposing provider, IPC, or filesystem detail. */
 export function generationFailurePresentation(backend: BackendId, error: unknown, generated: boolean): string {
   if (generated) {
@@ -32,6 +41,11 @@ export function generationFailurePresentation(backend: BackendId, error: unknown
   const code = structuredString(error, 'code')
   const errorName = structuredString(error, 'name')
 
+  const providerStatus = structuredProviderStatus(error)
+  if (providerStatus) {
+    return `${name} ended this request without an image and reported \u201c${providerStatus}\u201d. ` +
+      'Retry it; if the same status returns, change the prompt.'
+  }
   if (status === 401 || status === 403) {
     return `${name} rejected the configured credentials. Check the API key in Settings, then retry.`
   }

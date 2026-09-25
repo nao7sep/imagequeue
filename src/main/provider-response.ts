@@ -53,3 +53,13 @@ export function assertUsableOpenAIResponse(response: OpenAILike, what: string): 
     throw new Error(`The model stopped at its output limit, so this ${what} is truncated rather than complete.`)
   }
 }
+
+/** A provider ended a request with its own terminal status — FLUX's "Request Moderated", for
+ *  one. The status is the provider's stated outcome, kept structured so presentation can name
+ *  it instead of reporting a timeout the provider never had. */
+export class ProviderStatusError extends Error {
+  constructor(provider: string, readonly providerStatus: string) {
+    super(`${provider} ended the request with status "${providerStatus}"`)
+    this.name = 'ProviderStatusError'
+  }
+}

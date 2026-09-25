@@ -5,6 +5,7 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { abortableDelay } from '../utils/abortable-delay'
+import { ProviderStatusError } from '../provider-response'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
@@ -120,12 +121,13 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
         }
       }
 
-      if (pollData.status === 'Error' || pollData.status === 'Failed') {
-        log('error', 'FLUX generation returned error status', { model: task.model, status: pollData.status })
-        throw new Error(`FLUX generation failed with status ${pollData.status}`)
-      }
+      if (pollData.status === 'Pending' || pollData.status === 'Processing') continue
 
-      // Otherwise status is "Pending" or "Processing" — keep polling
+      // Every other status is BFL's final word — "Request Moderated", "Content
+      // Moderated", "Task not found", "Error", "Failed" — and polling on would
+      // only turn it into a timeout the provider never had.
+      log('error', 'FLUX generation ended without an image', { model: task.model, status: pollData.status, jobId: submitData.id })
+      throw new ProviderStatusError('FLUX', String(pollData.status))
     }
   } catch (err) {
     // The queue's signal and the timeout share one controller, so the abort
