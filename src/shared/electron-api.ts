@@ -145,7 +145,6 @@ export interface ElectronAPI {
 
   // Preview operations
   getImage: (baseName: string) => Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null>
-  getSessionImage: (sessionId: string, baseName: string) => Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null>
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>

@@ -5,6 +5,7 @@ import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSes
 import { registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
 import { registerPreviewIpc } from './preview-ipc'
+import { registerImageProtocol, registerImageSchemeAsPrivileged } from './image-protocol'
 import { registerSettingsIpc } from './settings-ipc'
 import { registerStateIpc } from './state-ipc'
 import { registerDependenciesIpc } from './dependencies-ipc'
@@ -191,6 +192,9 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+// Scheme privileges can only be granted before the app is ready.
+registerImageSchemeAsPrivileged()
+
 if (ownsSingleInstance) app.whenReady().then(() => {
   // The startup body throws on a corrupt config.json (loadConfig deliberately
   // does not fall back to defaults — see config-store.ts). Without this catch
@@ -210,6 +214,7 @@ function startUp(): void {
   // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
   // unpackaged) still exercise the strict production CSP.
   installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
+  registerImageProtocol()
   ensureDataDir()
   // Open this launch's log immediately after the storage root exists and before
   // any other startup step, so a failure in one of them is logged rather than

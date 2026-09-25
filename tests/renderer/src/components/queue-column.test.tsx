@@ -63,7 +63,6 @@ interface ElectronApiStub {
   onDrawThingsParamsPersistenceState: ReturnType<typeof vi.fn>
   resolveRecommendation: ReturnType<typeof vi.fn>
   onCliJobStatus: ReturnType<typeof vi.fn>
-  getImage: ReturnType<typeof vi.fn>
   retryTask: ReturnType<typeof vi.fn>
   exportImage: ReturnType<typeof vi.fn>
 }
@@ -140,7 +139,6 @@ beforeEach(() => {
     }),
     resolveRecommendation: vi.fn(async () => null),
     onCliJobStatus: vi.fn(() => () => undefined),
-    getImage: vi.fn(async () => null),
     retryTask: vi.fn(async () => undefined),
     exportImage: vi.fn(async () => undefined),
   }
@@ -319,12 +317,13 @@ describe('task status presentation', () => {
       imagePath: '/output/image-1.png',
     }
     queueValue.tasks.openai = [task('failed'), completed]
-    electronAPI.getImage.mockRejectedValueOnce(new Error('IMAGEQUEUE_THUMBNAIL_SENTINEL'))
     electronAPI.retryTask.mockRejectedValueOnce(new Error('IMAGEQUEUE_RETRY_SENTINEL'))
     electronAPI.exportImage.mockRejectedValueOnce(new Error('IMAGEQUEUE_EXPORT_SENTINEL'))
 
-    render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
+    const thumbnail = container.querySelector<HTMLImageElement>('img.task-thumbnail')!
+    fireEvent.error(thumbnail)
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
     await flush()
@@ -334,7 +333,7 @@ describe('task status presentation', () => {
       'thumbnail',
       'This task’s thumbnail could not be loaded. The task is unchanged.',
       'Failed to load task thumbnail',
-      expect.objectContaining({ message: 'IMAGEQUEUE_THUMBNAIL_SENTINEL' }),
+      expect.any(Error),
     )
     expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({
       taskId: 'task-failed',
@@ -350,6 +349,20 @@ describe('task status presentation', () => {
     }))
     expect(electronAPI.retryTask).toHaveBeenCalledWith('openai', 'task-failed')
     expect(electronAPI.exportImage).toHaveBeenCalledWith('image-1', 'png')
+  })
+})
+
+describe('task thumbnails', () => {
+  // Thumbnails used to be every completed image read whole on the main
+  // process and sent as base64 on mount. They now stream from the app's image
+  // scheme and load lazily, so only rows on screen fetch and decode.
+  it('loads a completed task’s image lazily from the image scheme, not over IPC', async () => {
+    queueValue.tasks.openai = [{ ...task('completed'), id: 'task-complete', baseName: 'image-1', imagePath: 'image-1.png' }]
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    const thumbnail = container.querySelector<HTMLImageElement>('img.task-thumbnail')!
+    expect(thumbnail.getAttribute('src')).toBe('iq-image://output/current/image-1')
+    expect(thumbnail.getAttribute('loading')).toBe('lazy')
   })
 })
 

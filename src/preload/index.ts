@@ -223,9 +223,6 @@ const api = {
   getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
     ipcRenderer.invoke('preview:getImage', baseName),
 
-  getSessionImage: (sessionId: string, baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
-    ipcRenderer.invoke('preview:getSessionImage', sessionId, baseName),
-
   // Settings operations
   getSettings: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('settings:get'),

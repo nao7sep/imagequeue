@@ -9,6 +9,7 @@ import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from 
 import { formatUiDateTime } from '../utils/formatDateTime'
 import { sessionDisplayName } from '../utils/sessionName'
 import { presentFailure } from '../utils/failurePresentation'
+import { sessionImageUrl } from '../../../shared/image-url'
 import './SessionsModal.css'
 
 interface Props {
@@ -25,51 +26,28 @@ function summarizeSession(session: SessionSummary): string {
   return parts.join(' · ')
 }
 
+// Each thumbnail streams from the app's image scheme and loads lazily, so a long
+// session list reads only the previews scrolled into view.
 function SessionPreviewStrip({ sessionId, thumbnails }: { sessionId: string; thumbnails: SessionThumbnail[] }): React.JSX.Element | null {
-  const [images, setImages] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    let disposed = false
-
-    if (thumbnails.length === 0) {
-      setImages({})
-      return
-    }
-
-    void Promise.all(
-      thumbnails.map(async ({ baseName }) => {
-        const result = await window.electronAPI.getSessionImage(sessionId, baseName)
-        if (!result) return null
-        const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
-        return [baseName, `data:${mime};base64,${result.data}`] as const
-      })
-    ).then((entries) => {
-      if (disposed) return
-      const next: Record<string, string> = {}
-      for (const entry of entries) {
-        if (!entry) continue
-        next[entry[0]] = entry[1]
-      }
-      setImages(next)
-    })
-
-    return () => {
-      disposed = true
-    }
-  }, [sessionId, thumbnails])
+  const [missing, setMissing] = useState<ReadonlySet<string>>(() => new Set())
 
   if (thumbnails.length === 0) return null
 
   return (
     <div className="session-preview-strip">
-      {thumbnails.map(({ baseName }) => {
-        const src = images[baseName]
-        return src ? (
-          <img key={baseName} className="session-preview-thumb" src={src} alt="" />
-        ) : (
-          <div key={baseName} className="session-preview-thumb session-preview-thumb-placeholder" aria-hidden="true" />
-        )
-      })}
+      {thumbnails.map(({ baseName }) => missing.has(baseName) ? (
+        <div key={baseName} className="session-preview-thumb session-preview-thumb-placeholder" aria-hidden="true" />
+      ) : (
+        <img
+          key={baseName}
+          className="session-preview-thumb"
+          src={sessionImageUrl(sessionId, baseName)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setMissing((current) => new Set(current).add(baseName))}
+        />
+      ))}
     </div>
   )
 }

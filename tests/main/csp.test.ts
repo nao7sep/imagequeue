@@ -50,7 +50,7 @@ const EXPECTED_PRODUCTION_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: iq-image:",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

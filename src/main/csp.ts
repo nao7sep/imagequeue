@@ -6,7 +6,8 @@ import { session } from 'electron'
 // server being absent), NOT app.isPackaged — so an unpackaged production run via
 // electron-vite preview (run-built/rebuild) still gets the strict policy. The
 // renderer makes no network requests of its own (all I/O goes through IPC to
-// main) and loads images as data: URLs, so the production policy is strict:
+// main) and loads images as data: URLs or from the app's own iq-image: scheme
+// (image-protocol.ts), so the production policy is strict:
 // scripts only from the app bundle, no eval, no remote connections. Development
 // relaxes script/connect for Vite's inline refresh preamble and its HMR websocket.
 //
@@ -20,7 +21,7 @@ export function installContentSecurityPolicy(isProductionRenderer: boolean): voi
           "default-src 'self'",
           "script-src 'self'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob:",
+          "img-src 'self' data: blob: iq-image:",
           "font-src 'self'",
           "connect-src 'self'",
           "object-src 'none'",
@@ -31,7 +32,7 @@ export function installContentSecurityPolicy(isProductionRenderer: boolean): voi
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob:",
+          "img-src 'self' data: blob: iq-image:",
           "font-src 'self' data:",
           "connect-src 'self' ws: http: https:",
           "object-src 'none'",

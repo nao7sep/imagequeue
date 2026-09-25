@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import type { BackendId, CloudBackendId, Task } from '../../../shared/types'
 import { getModelsForBackend, findModel } from '../../../shared/models'
+import { currentSessionImageUrl } from '../../../shared/image-url'
 import { CLOUD_BACKENDS } from '../backends'
 import { useDrawThingsColumn, DrawThingsControls } from './DrawThingsColumn'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
@@ -350,7 +351,6 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     clearTaskActionResult,
     runTaskAction,
   } = useSelection()
-  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const itemRef = useRef<HTMLButtonElement>(null)
   // Seeded with the status at mount so an item that is *already* completed or
   // kept when it first renders — app launch restoring stored tasks, or the user
@@ -360,23 +360,11 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   // onLoad so the scroll runs against the item's final height.
   const justCompletedRef = useRef(false)
 
-  useEffect(() => {
-    if ((task.status !== 'completed' && task.status !== 'kept') || !task.baseName) return
-    let active = true
-    window.electronAPI.getImage(task.baseName).then((result) => {
-      if (!active) return
-      clearTaskActionResult(task.id, 'thumbnail')
-      if (result) {
-        const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
-        setThumbUrl(`data:${mime};base64,${result.data}`)
-      }
-    }).catch((error) => {
-      if (!active) return
-      setThumbUrl(null)
-      reportTaskActionFailure(task.id, 'thumbnail', 'This task’s thumbnail could not be loaded. The task is unchanged.', 'Failed to load task thumbnail', error)
-    })
-    return () => { active = false }
-  }, [task.id, task.status, task.baseName, clearTaskActionResult, reportTaskActionFailure])
+  // The thumbnail streams from the app's image scheme and loads lazily, so only
+  // rows on screen read and decode their image, off the main process's thread.
+  const thumbUrl = (task.status === 'completed' || task.status === 'kept') && task.baseName
+    ? currentSessionImageUrl(task.baseName)
+    : null
 
   // Auto-scroll only on a real queued/generating -> completed transition, so a
   // freshly generated image reveals itself. Mounting an already-completed task
@@ -478,7 +466,13 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
               className="task-thumbnail"
               src={thumbUrl}
               alt=""
+              loading="lazy"
+              decoding="async"
+              onError={() => {
+                reportTaskActionFailure(task.id, 'thumbnail', 'This task’s thumbnail could not be loaded. The task is unchanged.', 'Failed to load task thumbnail', new Error(`Thumbnail request failed for ${task.baseName}`))
+              }}
               onLoad={() => {
+                clearTaskActionResult(task.id, 'thumbnail')
                 if (!justCompletedRef.current) return
                 justCompletedRef.current = false
                 itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
