@@ -4,6 +4,7 @@ import {
   cancelAllInFlightAndWait,
   cancelInFlight,
   clearInFlight,
+  shutdownSignal,
   inFlightCount,
   isQueuePaused,
   registerInFlight,
@@ -55,6 +56,27 @@ describe('in-flight registry', () => {
 
     resolveSettled()
     await expect(waiting).resolves.toEqual({ signalled: 1, settled: true })
+  })
+
+  // Clearing drops only the canceller: a task naming and saving its finished
+  // image is past a Stop's reach but still inside the shutdown barrier.
+  it('keeps a cleared task in the shutdown barrier until it settles', async () => {
+    let resolveSettled!: () => void
+    const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
+    const cancel = vi.fn()
+    registerInFlight('t1', cancel, settled)
+    clearInFlight('t1')
+
+    const waiting = cancelAllInFlightAndWait(1_000)
+    let finished = false
+    void waiting.then(() => { finished = true })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(cancel).not.toHaveBeenCalled()
+    expect(shutdownSignal().aborted).toBe(true)
+    expect(finished).toBe(false)
+
+    resolveSettled()
+    await expect(waiting).resolves.toEqual({ signalled: 0, settled: true })
   })
 
   // A generation that finishes normally must not stay cancellable: a later

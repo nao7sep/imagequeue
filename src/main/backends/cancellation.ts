@@ -21,13 +21,18 @@ export const CANCELLED_MESSAGE = 'Generation stopped.'
  *  request; Draw Things kills its child process. */
 type CancelFn = () => void
 
-interface InFlightEntry {
-  cancel: CancelFn
-  /** Resolves only after the owning processor task has left all cleanup paths. */
-  settled: Promise<void>
-}
+// Two registries, because a task outlives its cancellable part. A Stop can
+// reach only the generation itself; once the image bytes arrive (and, on a
+// cloud backend, are paid for) the canceller is dropped. Shutdown, though, must
+// still wait for the naming/write/persist tail, or quitting in that window
+// throws the paid image away and a resume buys it again.
+const cancellers = new Map<string, CancelFn>()
+/** Every processor task until its outcome is persisted: the shutdown barrier. */
+const barrier = new Map<string, Promise<void>>()
 
-const inFlight = new Map<string, InFlightEntry>()
+/** Aborted when shutdown begins, so post-generation work that waits on the
+ *  network (the file-name slug) gives up at once instead of holding the quit. */
+let shutdownController = new AbortController()
 
 /** Set while the queue is paused: the processor starts nothing new, but work
  *  already running is left alone to finish and save normally. This is the
@@ -42,30 +47,42 @@ export function isQueuePaused(): boolean {
 export function setQueuePaused(next: boolean): void {
   if (paused === next) return
   paused = next
-  log('info', next ? 'Queue paused' : 'Queue resumed', { inFlight: inFlight.size })
+  log('info', next ? 'Queue paused' : 'Queue resumed', { inFlight: cancellers.size })
 }
 
-/** Register a running generation's canceller and its full settlement barrier. */
+/** Register a running generation's canceller, and hold the task in the
+ *  shutdown barrier until `settled` resolves (after its outcome is persisted). */
 export function registerInFlight(
   taskId: string,
   cancel: CancelFn,
   settled: Promise<void>,
 ): void {
-  inFlight.set(taskId, { cancel, settled })
+  cancellers.set(taskId, cancel)
+  barrier.set(taskId, settled)
+  void settled.then(() => {
+    if (barrier.get(taskId) === settled) barrier.delete(taskId)
+  })
 }
 
+/** The generation phase is over: a Stop no longer reaches this task. The task
+ *  stays in the shutdown barrier until its `settled` promise resolves. */
 export function clearInFlight(taskId: string): void {
-  inFlight.delete(taskId)
+  cancellers.delete(taskId)
+}
+
+/** Aborted once shutdown begins. */
+export function shutdownSignal(): AbortSignal {
+  return shutdownController.signal
 }
 
 /** Stop one running generation. The generation's own failure path then marks the
  *  task — a cancelled request rejects exactly like a failed one, and the caller
  *  decides what status it lands in. Returns false when the task was not running. */
 export function cancelInFlight(taskId: string): boolean {
-  const entry = inFlight.get(taskId)
-  if (!entry) return false
+  const cancel = cancellers.get(taskId)
+  if (!cancel) return false
   try {
-    entry.cancel()
+    cancel()
   } catch (err) {
     // A canceller that throws must not stop the others being cancelled.
     log('warn', 'Cancelling a generation threw', { taskId, error: String(err) })
@@ -76,42 +93,34 @@ export function cancelInFlight(taskId: string): boolean {
 /** Stop every running generation. Returns how many were signalled. */
 export function cancelAllInFlight(): number {
   let count = 0
-  for (const taskId of [...inFlight.keys()]) {
+  for (const taskId of [...cancellers.keys()]) {
     if (cancelInFlight(taskId)) count++
   }
   return count
 }
 
-/** Signal every generation, then wait for the processor-owned tasks to settle. */
+/** Begin shutdown: abort post-generation network waits, signal every
+ *  generation, then wait for every processor task to persist its outcome. */
 export async function cancelAllInFlightAndWait(timeoutMs: number): Promise<{
   signalled: number
   settled: boolean
 }> {
-  // Snapshot before signalling: generation itself leaves the registry as soon
-  // as bytes arrive, but shutdown must still await its slug/write/persist tail.
-  const entries = [...inFlight.entries()]
-  let signalled = 0
-  for (const [taskId, entry] of entries) {
-    try {
-      entry.cancel()
-    } catch (err) {
-      log('warn', 'Cancelling a generation threw', { taskId, error: String(err) })
-    }
-    signalled++
-  }
-
+  shutdownController.abort()
+  const signalled = cancelAllInFlight()
   return {
     signalled,
-    settled: await waitForAllSettledWithin(entries.map(([, entry]) => entry.settled), timeoutMs),
+    settled: await waitForAllSettledWithin([...barrier.values()], timeoutMs),
   }
 }
 
 export function inFlightCount(): number {
-  return inFlight.size
+  return cancellers.size
 }
 
 /** Test seam: drop all state between cases. */
 export function resetCancellationState(): void {
-  inFlight.clear()
+  cancellers.clear()
+  barrier.clear()
+  shutdownController = new AbortController()
   paused = false
 }

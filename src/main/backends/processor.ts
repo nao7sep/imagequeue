@@ -7,7 +7,7 @@ import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
-import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight } from './cancellation'
+import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, shutdownSignal } from './cancellation'
 import { publishQueueState } from '../queue/publisher'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
@@ -138,18 +138,21 @@ export function processQueues(): void {
 async function processTask(backend: BackendId, task: Task): Promise<void> {
   const generate = generators[backend]
 
-  // The processor owns the canceller for the whole run, so the registry holds an
-  // entry for every generating task whatever backend it belongs to — which is
-  // also what makes the menu's "generating" count the real one.
+  // The processor owns the canceller for the whole generation, so the registry
+  // holds an entry for every generating task whatever backend it belongs to —
+  // which is also what makes the menu's "generating" count the real one.
+  // `settled` keeps the task in the shutdown barrier until its outcome is
+  // persisted, past the point where the canceller is dropped.
   const controller = new AbortController()
   let resolveSettled!: () => void
   const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
   registerInFlight(task.id, () => controller.abort(), settled)
 
   // Only generate() is cancellable work. Once it resolves, the image exists
-  // (and, on a cloud backend, is paid for) — so the task leaves the registry
-  // RIGHT THEN, not in the finally: a Stop arriving during the slug/write
-  // phase must neither count this task as cancelled nor reach it.
+  // (and, on a cloud backend, is paid for) — so the canceller is dropped RIGHT
+  // THEN, not in the finally: a Stop arriving during the slug/write phase must
+  // neither count this task as cancelled nor reach it. Shutdown still waits for
+  // it, and aborts the slug call so the image is saved under a random name.
   let generated = false
 
   try {
@@ -162,7 +165,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     task.durationMs = completedAt.getTime() - new Date(task.startedAt!).getTime()
 
     // Generate slug and allocate timestamp
-    const slug = await generateSlug(task.prompt)
+    const slug = await generateSlug(task.prompt, shutdownSignal())
     const { timestamp, ordinal } = allocateOutputTimestamp(backend)
 
     const metadata: ImageMetadata = {

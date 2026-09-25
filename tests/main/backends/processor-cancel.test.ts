@@ -36,12 +36,21 @@ vi.mock('../../../src/main/backends/nanobanana', () => ({ generateNanoBanana: ge
 vi.mock('../../../src/main/backends/grok', () => ({ generateGrok: generate }))
 vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
-const slugState = vi.hoisted(() => ({ failNext: false }))
+const slugState = vi.hoisted(() => ({ failNext: false, hangUntilAborted: false, sawAbort: false }))
 vi.mock('../../../src/main/backends/slug', () => ({
-  generateSlug: async () => {
+  generateSlug: async (_prompt: string, signal: AbortSignal) => {
     if (slugState.failNext) {
       slugState.failNext = false
       throw new Error('slug service hiccup')
+    }
+    if (slugState.hangUntilAborted) {
+      // A slow text-AI call: it ends only when shutdown aborts it, and then
+      // falls back to a random name as the real generateSlug does.
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
+      slugState.sawAbort = true
+      // The SDK's rejection lands a little after the abort.
+      await new Promise((r) => setTimeout(r, 20))
+      return 'random-name'
     }
     return 'slug'
   },
@@ -65,7 +74,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { cancelAllInFlight, inFlightCount, resetCancellationState } = await import(
+const { cancelAllInFlight, cancelAllInFlightAndWait, inFlightCount, resetCancellationState } = await import(
   '../../../src/main/backends/cancellation'
 )
 
@@ -89,6 +98,8 @@ beforeEach(() => {
   generate.mockClear()
   captured = null
   slugState.failNext = false
+  slugState.hangUntilAborted = false
+  slugState.sawAbort = false
   sentEvents.length = 0
   resetCancellationState()
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
@@ -168,6 +179,26 @@ describe('a stop cannot reach a task past its generation', () => {
     captured!.resolve({ buffer: Buffer.from([1]) })
     await settle()
     expect(statusOf('grok')).toBe('failed')
+  })
+})
+
+describe('quitting while a finished image is being named', () => {
+  // The paid bytes are in memory while the slug call runs. Shutdown used to
+  // snapshot only the cancel registry, which the task had already left, so it
+  // waited for nothing, marked the task interrupted and exited — dropping the
+  // image, and a resume then bought it again.
+  it('waits for the image to be saved, cutting the slug call short', async () => {
+    slugState.hangUntilAborted = true
+    queueOne('openai')
+    processQueues()
+    captured!.resolve({ buffer: Buffer.from([1]) })
+    await Promise.resolve()
+    expect(inFlightCount()).toBe(0)
+
+    const result = await cancelAllInFlightAndWait(1_000)
+    expect(result).toEqual({ signalled: 0, settled: true })
+    expect(slugState.sawAbort).toBe(true)
+    expect(statusOf('openai')).toBe('completed')
   })
 })
 
