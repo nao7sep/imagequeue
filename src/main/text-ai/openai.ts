@@ -22,6 +22,9 @@ export class OpenAIProvider implements TextAIProvider {
       apiKey: this.apiKey,
       baseURL: this.endpoint || OFFICIAL_OPENAI_ENDPOINT,
       timeout: opts.timeoutMs,
+      // Every request is paid; the caller (askJsonWithRetry, or none for the
+      // slug) owns the retry policy, so the SDK adds no hidden attempts.
+      maxRetries: 0,
     })
 
     // NO capability-dependent parameters — no temperature, top_p, max_tokens, or

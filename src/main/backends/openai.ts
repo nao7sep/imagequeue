@@ -16,7 +16,10 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
     throw new Error('OpenAI API key not configured')
   }
 
-  const client = new OpenAI({ apiKey, timeout: config.image_backends.openai.timeout_ms })
+  // maxRetries: 0 — a generation is paid and not idempotent, so the SDK must
+  // never resend one on a timeout or 5xx. The queue's failed → Retry path is the
+  // only retry authority.
+  const client = new OpenAI({ apiKey, timeout: config.image_backends.openai.timeout_ms, maxRetries: 0 })
 
   const params = buildOpenAIImageParams(task)
 
