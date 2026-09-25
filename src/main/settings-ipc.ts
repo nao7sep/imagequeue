@@ -2,7 +2,7 @@ import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard, nativeImag
 import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
-import { loadConfig, saveConfig } from './config'
+import { loadConfig, updateConfig } from './config'
 import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { refreshMainWindowMinimumSize } from './main-window-layout'
@@ -61,9 +61,9 @@ export function registerSettingsIpc(
   })
 
   handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig) => {
-    const config = loadConfig()
-    applyChangedFields(config as unknown as Record<string, unknown>, base, next)
-    saveConfig(config)
+    const config = updateConfig((draft) => {
+      applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
+    })
     if (onConfigSaved) {
       try {
         await onConfigSaved(config)
@@ -117,9 +117,9 @@ export function registerSettingsIpc(
   })
 
   handle('settings:saveBrainstorm', (_event, brainstorm: AppConfig['brainstorm']) => {
-    const config = loadConfig()
-    config.brainstorm = brainstorm
-    saveConfig(config)
+    updateConfig((draft) => {
+      draft.brainstorm = brainstorm
+    })
     return { success: true }
   })
 
@@ -130,22 +130,21 @@ export function registerSettingsIpc(
         throw new Error(`Cannot save image backend defaults for unsupported backend: ${backend}`)
       }
 
-      const config = loadConfig()
-      const backends = config.image_backends as unknown as Record<
-        CloudBackendId,
-        { model: string; default_params: Record<string, unknown> } & Record<string, unknown>
-      >
-      const current = backends[backend]
-      backends[backend] = {
-        ...current,
-        model,
-        default_params: {
-          ...current.default_params,
-          ...params,
-        },
-      }
-
-      saveConfig(config)
+      updateConfig((draft) => {
+        const backends = draft.image_backends as unknown as Record<
+          CloudBackendId,
+          { model: string; default_params: Record<string, unknown> } & Record<string, unknown>
+        >
+        const current = backends[backend]
+        backends[backend] = {
+          ...current,
+          model,
+          default_params: {
+            ...current.default_params,
+            ...params,
+          },
+        }
+      })
       return { success: true }
     }
   )
@@ -155,10 +154,10 @@ export function registerSettingsIpc(
       throw new Error(`Cannot save unsupported notification setting: ${field}`)
     }
 
-    const config = loadConfig()
-    const notifications = config.notifications as unknown as Record<string, unknown>
-    notifications[field] = value
-    saveConfig(config)
+    updateConfig((draft) => {
+      const notifications = draft.notifications as unknown as Record<string, unknown>
+      notifications[field] = value
+    })
     return { success: true }
   })
 

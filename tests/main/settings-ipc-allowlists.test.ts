@@ -36,7 +36,16 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/ipc-boundary', () => ({
   handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler),
 }))
-vi.mock('../../src/main/config', () => ({ loadConfig: () => mocks.config, saveConfig: mocks.saveConfig }))
+// updateConfig's copy-then-swap is the config store's own contract (tested
+// there); here it applies to the shared object so the handlers' edits are visible.
+vi.mock('../../src/main/config', () => ({
+  loadConfig: () => mocks.config,
+  updateConfig: (apply: (draft: AppConfig) => void) => {
+    apply(mocks.config)
+    mocks.saveConfig(mocks.config)
+    return mocks.config
+  },
+}))
 vi.mock('../../src/main/config/api-keys-store', () => ({
   getStoredApiKey: (id: string) => mocks.storedKeys.get(id) ?? '',
   setStoredApiKey: mocks.setStoredApiKey,

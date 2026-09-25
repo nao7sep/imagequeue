@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadConfig, saveConfig, getConfigPath } from '../../../src/main/config'
+import { loadConfig, saveConfig, updateConfig, getConfigPath } from '../../../src/main/config'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
 import { writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
@@ -95,6 +95,30 @@ describe('config store (atomic write of config.json)', () => {
     expect(() => saveConfig(createDefaultConfig())).toThrow('simulated rename failure')
     rename.mockRestore()
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  // The cached config is what the processor and backends read. A save that
+  // fails must not leave the new values running in memory, where the next
+  // unrelated save would also write them to disk unnoticed.
+  it('keeps the running settings when an update cannot be written', () => {
+    // The cache outlives each test's data root; write it into this one first.
+    const before = updateConfig(() => undefined)
+    const timeout = before.image_backends.openai.timeout_ms
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+      throw new Error('simulated disk full')
+    })
+    expect(() => updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1 })).toThrow('simulated disk full')
+    rename.mockRestore()
+
+    expect(loadConfig().image_backends.openai.timeout_ms).toBe(timeout)
+    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(timeout)
+  })
+
+  it('applies an update once it is written', () => {
+    loadConfig()
+    const saved = updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1234 })
+    expect(loadConfig()).toBe(saved)
+    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(1234)
   })
 
   it('publishes async acquisition bytes and leaves no staging file', async () => {

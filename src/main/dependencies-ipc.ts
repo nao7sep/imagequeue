@@ -4,7 +4,7 @@
 // progress to the requesting window over 'dependencies:progress'.
 
 import { handle } from './ipc-boundary'
-import { loadConfig, saveConfig } from './config'
+import { updateConfig } from './config'
 import {
   getDependenciesState,
   checkAllDependencies,
@@ -57,9 +57,9 @@ export function registerDependenciesIpc(): void {
   )
 
   handle('dependencies:setCheckAtLaunch', (_event, value: boolean) => {
-    const config = loadConfig()
-    config.image_backends.drawthings.check_updates_at_launch = value
-    saveConfig(config)
+    updateConfig((draft) => {
+      draft.image_backends.drawthings.check_updates_at_launch = value
+    })
     return getDependenciesState()
   })
 

@@ -16,8 +16,11 @@ vi.mock('../../src/main/ipc-boundary', () => ({
 }))
 
 vi.mock('../../src/main/config', () => ({
-  loadConfig: () => ({ image_backends: { drawthings: { check_updates_at_launch: true } } }),
-  saveConfig: vi.fn(),
+  updateConfig: (apply: (draft: unknown) => void) => {
+    const draft = { image_backends: { drawthings: { check_updates_at_launch: true } } }
+    apply(draft)
+    return draft
+  },
 }))
 
 const state: DependenciesState = {

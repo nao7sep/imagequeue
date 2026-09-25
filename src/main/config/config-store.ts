@@ -131,6 +131,19 @@ function dropLegacyConfigKeys(config: AppConfig): void {
   }
 }
 
+/**
+ * The one way to change settings. The cached config is what the processor and
+ * backends read, so a change is applied to a copy, the copy is written, and it
+ * becomes the cached config only once the write succeeded — a failed save
+ * leaves the running app on the settings that are on disk.
+ */
+export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
+  const draft = structuredClone(loadConfig())
+  apply(draft)
+  saveConfig(draft)
+  return draft
+}
+
 export function saveConfig(config: AppConfig): void {
   ensureDataDir()
   dropLegacyConfigKeys(config)
