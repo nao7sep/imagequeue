@@ -71,3 +71,18 @@ describe("packaged development metadata", () => {
     }
   });
 });
+
+/** One top-level block of electron-builder.yml, from its key to the next top-level key. */
+function section(key: string): string {
+  const match = builderConfig.match(new RegExp(`^${key}:\\n((?:[ #\\n].*\\n?)*)`, "m"));
+  return match ? match[1] : "";
+}
+
+describe("release artifact names", () => {
+  it("names every artifact per the release naming contract, with no arch suffix", () => {
+    expect(section("mac")).toContain("  artifactName: ${name}-${version}-mac.${ext}");
+    expect(section("win")).toContain("  artifactName: ${name}-${version}-win.${ext}");
+    expect(section("dmg")).toContain("  artifactName: ${name}-${version}.${ext}");
+    expect(section("nsis")).toContain("  artifactName: ${name}-${version}-setup.${ext}");
+  });
+});

@@ -85,12 +85,17 @@ mac:
   # notarization are added via CI secrets.
   identity: "-"
   notarize: false
+  # The portable zip's name; the dmg sets its own below. Without it electron-builder
+  # adds the arch (`-arm64-mac.zip`), off the release naming contract.
+  artifactName: ${name}-${version}-mac.${ext}
 
 win:
   icon: build/icon.ico
   target:
     - nsis
     - zip
+  # The portable zip's name; the installer sets its own under nsis.
+  artifactName: ${name}-${version}-win.${ext}
 
 nsis:
   oneClick: false
