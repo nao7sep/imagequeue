@@ -7,7 +7,7 @@ import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-s
 import { applyChangedFields } from './settings-changes'
 import { refreshMainWindowMinimumSize } from './main-window-layout'
 import { getSessionDir } from './session'
-import { assertSafeBaseName, assertImageExt } from './utils/file-output'
+import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter } from './utils/file-output'
 import { AppConfig } from './config/types'
 import { openOutputFolder } from './session/open-output-folder'
 import { log, serializeError } from './logger'
@@ -279,13 +279,14 @@ export function registerSettingsIpc(
     const owner = BrowserWindow.fromWebContents(event.sender)
     const options = {
       defaultPath: path.join(exportDir, `${safeBase}.${safeExt}`),
-      filters: [{ name: 'Images', extensions: [safeExt, 'png', 'jpg', 'webp'] }]
+      filters: [imageFormatFilter(safeExt)]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
-    fs.mkdirSync(path.dirname(result.filePath), { recursive: true })
-    fs.copyFileSync(src, result.filePath)
-    return result.filePath
+    const destPath = exportPathForFormat(result.filePath, safeExt)
+    fs.mkdirSync(path.dirname(destPath), { recursive: true })
+    fs.copyFileSync(src, destPath)
+    return destPath
   })
 
   handle('clipboard:readText', () => {

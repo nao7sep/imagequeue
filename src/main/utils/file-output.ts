@@ -46,6 +46,27 @@ export function imageExtFromPath(imagePath: string | null | undefined): ImageExt
   return null
 }
 
+const IMAGE_FORMATS: Record<ImageExt, { name: string; extensions: string[] }> = {
+  png: { name: 'PNG image', extensions: ['png'] },
+  jpg: { name: 'JPEG image', extensions: ['jpg', 'jpeg'] },
+  webp: { name: 'WebP image', extensions: ['webp'] },
+}
+
+// The save-dialog filter for an image of this format, and nothing else: an
+// export is a byte copy, so any other extension would label the file wrongly.
+export function imageFormatFilter(ext: ImageExt): { name: string; extensions: string[] } {
+  return IMAGE_FORMATS[ext]
+}
+
+// The path an export of this format is written to. Some platforms' save dialogs
+// keep an extension the user types even when the filter excludes it, so a path
+// not ending in this format's extension gets it appended, never replaced: the
+// user's name stays whole and the file is labelled by what it contains.
+export function exportPathForFormat(filePath: string, ext: ImageExt): string {
+  const typed = path.extname(filePath).slice(1).toLowerCase()
+  return IMAGE_FORMATS[ext].extensions.includes(typed) ? filePath : `${filePath}.${ext}`
+}
+
 // Composes the base filename (without extension) for an output. The ordinal
 // disambiguates multiple outputs that landed in the same second; ordinal 0 (the
 // first of its second) gets no suffix so the common case stays

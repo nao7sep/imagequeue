@@ -117,6 +117,26 @@ describe('exporting an image to a chosen place', () => {
     expect(fs.readFileSync(chosen, 'utf-8')).toBe('image bytes')
   })
 
+  it('offers only the image’s own format, since the export is a byte copy', async () => {
+    mocks.showSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined })
+
+    await invoke('shell:exportImageAs', BASE, 'png')
+
+    expect(mocks.showSaveDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ filters: [{ name: 'PNG image', extensions: ['png'] }] }),
+    )
+  })
+
+  it('never writes the image under another format’s extension', async () => {
+    const typed = path.join(root, 'poster.jpg')
+    mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath: typed })
+
+    await expect(invoke('shell:exportImageAs', BASE, 'png')).resolves.toBe(`${typed}.png`)
+
+    expect(fs.existsSync(typed)).toBe(false)
+    expect(fs.readFileSync(`${typed}.png`, 'utf-8')).toBe('image bytes')
+  })
+
   it('offers the configured folder and the image’s own name', async () => {
     mocks.config.general.export_dir = path.join(root, 'Exports')
     mocks.showSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined })
