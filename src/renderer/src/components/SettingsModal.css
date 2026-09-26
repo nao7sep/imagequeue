@@ -11,6 +11,7 @@
    platform :focus-visible ring. */
 .app-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   width: fit-content;
   max-width: calc(100% - 2 * var(--space-5));
