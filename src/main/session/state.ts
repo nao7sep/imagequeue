@@ -434,8 +434,11 @@ export function listSessions(): SessionSummary[] {
     const manifest = readManifestFromDir(path.join(outputDir, entry.name))
     if (!manifest) continue
     const displayCounts = createSessionDisplayCounts(manifest.tasks)
+    // The folder is the session's identity: resume, delete and thumbnails all
+    // resolve the folder by this id. The manifest's own sessionId goes stale when
+    // the user copies or renames a folder, so it never names one here.
     summaries.push({
-      sessionId: manifest.sessionId,
+      sessionId: entry.name,
       createdAt: manifest.createdAt,
       updatedAt: manifest.updatedAt,
       lastResumedAt: manifest.lastResumedAt,
@@ -444,7 +447,7 @@ export function listSessions(): SessionSummary[] {
       retryCount: displayCounts.retryCount,
       keptCount: displayCounts.keptCount,
       thumbnails: collectSessionThumbnails(manifest.tasks),
-      isCurrent: manifest.sessionId === currentSessionId,
+      isCurrent: entry.name === currentSessionId,
     })
   }
 

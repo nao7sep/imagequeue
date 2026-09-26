@@ -212,6 +212,20 @@ describe('listing sessions', () => {
     expect(summaries[1].thumbnails.map((thumbnail) => thumbnail.baseName)).toEqual(['base-a'])
   })
 
+  it('identifies a copied or renamed folder by its folder, so acting on it never touches the original', async () => {
+    const original = stageSession('20260106-000000-utc', { updatedAt: '2026-01-06T00:00:00.000Z' })
+    const copy = path.join(getOutputDir(), '20260106-000000-utc copy')
+    fs.cpSync(original, copy, { recursive: true })
+
+    const ids = listSessions().map((summary) => summary.sessionId)
+    expect(ids).toContain('20260106-000000-utc')
+    expect(ids).toContain('20260106-000000-utc copy')
+
+    await deleteSession('20260106-000000-utc copy')
+    expect(fs.existsSync(copy)).toBe(false)
+    expect(fs.existsSync(original), 'the original survives deleting its copy').toBe(true)
+  })
+
   it('passes over a folder with no manifest and one it cannot read', () => {
     fs.mkdirSync(path.join(getOutputDir(), 'not-a-session'), { recursive: true })
     const broken = path.join(getOutputDir(), '20260104-000000-utc')
