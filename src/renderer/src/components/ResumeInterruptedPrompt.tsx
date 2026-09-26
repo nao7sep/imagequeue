@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
 import { reportOperationalFailure } from '../utils/operationalFailure'
+import { useI18n } from '../i18n/I18nContext'
 
 // Listens for the main-process signal fired after a session is resumed that
 // still has tasks left unfinished when it was last open, and asks whether to
@@ -19,27 +20,22 @@ import { reportOperationalFailure } from '../utils/operationalFailure'
 // of a task row's own `retry` button, so it takes that verb.
 export function ResumeInterruptedPrompt(): null {
   const confirm = useConfirm()
+  const { t } = useI18n()
 
   useEffect(() => {
     return window.electronAPI.onInterruptedTasksOnResume(({ count }) => {
-      const label = count === 1 ? 'task' : 'tasks'
-      const message =
-        `This session has ${count} ${label} that ${count === 1 ? 'was' : 'were'} left unfinished ` +
-        `when it was last open. Retry ${count === 1 ? 'it' : 'them all'} to re-queue for generation, ` +
-        `or leave ${count === 1 ? 'it' : 'them'} stopped to retry individually later.`
-
       void confirm({
-        title: 'Retry Interrupted Tasks',
-        message,
-        confirmLabel: 'Retry All Stopped',
-        cancelLabel: 'Not Now'
+        title: t('resumeInterrupted.title'),
+        message: t('resumeInterrupted.message', { count }),
+        confirmLabel: t('resumeInterrupted.confirm'),
+        cancelLabel: t('resumeInterrupted.notNow'),
       }).then((ok) => {
         if (ok) void window.electronAPI.resumeInterruptedTasks().catch((error) => {
-          reportOperationalFailure('queue-controls', 'Stopped tasks could not be retried. They remain stopped; try again.', 'Failed to resume interrupted tasks', error)
+          reportOperationalFailure('queue-controls', 'operation.retryStoppedFailed', 'Failed to resume interrupted tasks', error)
         })
       })
     })
-  }, [confirm])
+  }, [confirm, t])
 
   return null
 }

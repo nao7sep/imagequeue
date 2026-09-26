@@ -3,6 +3,8 @@ import path from 'path'
 import type { QueueControlState } from '../shared/types'
 import { log, serializeError } from './logger'
 import { subscribeQueueControlState } from './queue/publisher'
+import { message, type Message, type Translator } from '../shared/i18n/translate'
+import { mainTranslator, onLanguageChanged } from './i18n'
 
 export type StatusIconAppearance = 'light' | 'dark'
 
@@ -15,13 +17,17 @@ export function statusIconAssetName(
   return appearance === 'dark' ? 'ImageQueueStatusDark.ico' : 'ImageQueueStatusLight.ico'
 }
 
-export function buildStatusIconTooltip(state: QueueControlState): string {
-  const parts: string[] = []
-  if (state.paused) parts.push('paused')
-  if (state.generating > 0) parts.push(`${state.generating} generating`)
-  if (state.queued > 0) parts.push(`${state.queued} queued`)
-  if (state.interrupted > 0) parts.push(`${state.interrupted} interrupted`)
-  return parts.length > 0 ? `ImageQueue — ${parts.join(' · ')}` : 'ImageQueue — idle'
+export function buildStatusIconTooltip(state: QueueControlState, translator: Translator): string {
+  const parts: Message[] = []
+  if (state.paused) parts.push(message('statusIcon.paused'))
+  if (state.generating > 0) parts.push(message('statusIcon.generating', { count: state.generating }))
+  if (state.queued > 0) parts.push(message('statusIcon.queued', { count: state.queued }))
+  if (state.interrupted > 0) parts.push(message('statusIcon.interrupted', { count: state.interrupted }))
+  // Parts stack through one join entry, so the language chooses the separator.
+  const summary = parts.length === 0
+    ? message('statusIcon.idle')
+    : parts.reduceRight((rest, first) => message('statusIcon.join', { first, rest }))
+  return translator.t('statusIcon.tooltip', { app: 'ImageQueue', state: summary })
 }
 
 interface StatusIconControllerOptions {
@@ -44,6 +50,7 @@ export class StatusIconController {
   private readonly platform: NodeJS.Platform
   private tray: Tray | null = null
   private unsubscribeQueue: (() => void) | null = null
+  private unsubscribeLanguage: (() => void) | null = null
   private controlState = EMPTY_CONTROL_STATE
   private reconcileGeneration = 0
 
@@ -104,6 +111,7 @@ export class StatusIconController {
         this.controlState = state
         this.rebuildPresentation()
       })
+      this.unsubscribeLanguage = onLanguageChanged(() => this.rebuildPresentation())
       log('info', 'Status icon enabled', { platform: this.platform, asset: assetName })
       return true
     } catch (err) {
@@ -111,6 +119,8 @@ export class StatusIconController {
       this.tray = null
       this.unsubscribeQueue?.()
       this.unsubscribeQueue = null
+      this.unsubscribeLanguage?.()
+      this.unsubscribeLanguage = null
       nativeTheme.off('updated', this.handleThemeUpdated)
       log('error', 'Status icon could not be initialized; using ordinary window lifecycle', {
         platform: this.platform,
@@ -124,6 +134,8 @@ export class StatusIconController {
   private destroyIcon(): void {
     this.unsubscribeQueue?.()
     this.unsubscribeQueue = null
+    this.unsubscribeLanguage?.()
+    this.unsubscribeLanguage = null
     nativeTheme.off('updated', this.handleThemeUpdated)
     const tray = this.tray
     this.tray = null
@@ -134,18 +146,20 @@ export class StatusIconController {
     const tray = this.tray
     if (!tray || tray.isDestroyed()) return
     const state = this.controlState
+    const translator = mainTranslator()
+    const { t } = translator
     const template: MenuItemConstructorOptions[] = [
       {
-        label: 'Open ImageQueue',
+        label: t('statusIcon.open', { app: 'ImageQueue' }),
         click: () => { this.runAction('restore main window', this.options.restoreMainWindow) },
       },
       {
-        label: 'Open Output Folder',
+        label: t('statusIcon.openOutputFolder'),
         click: () => { this.runAction('open output folder', this.options.openOutputFolder) },
       },
       { type: 'separator' },
       {
-        label: state.paused ? 'Resume' : 'Pause',
+        label: state.paused ? t('statusIcon.resume') : t('statusIcon.pause'),
         click: () => {
           this.runAction(state.paused ? 'resume queue' : 'pause queue', () =>
             this.options.setQueuePaused(!state.paused))
@@ -153,11 +167,11 @@ export class StatusIconController {
       },
       { type: 'separator' },
       {
-        label: this.platform === 'darwin' ? 'Quit ImageQueue' : 'Exit ImageQueue',
+        label: t(this.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: 'ImageQueue' }),
         click: this.options.requestQuit,
       },
     ]
-    tray.setToolTip(buildStatusIconTooltip(state))
+    tray.setToolTip(buildStatusIconTooltip(state, translator))
     tray.setContextMenu(Menu.buildFromTemplate(template))
   }
 

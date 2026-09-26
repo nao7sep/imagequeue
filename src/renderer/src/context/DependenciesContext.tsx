@@ -15,6 +15,8 @@ import type {
 } from '../../../shared/types'
 import { presentFailure } from '../utils/failurePresentation'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
+import { message, type Message } from '../../../shared/i18n/translate'
 
 export type DependencyOperation = DependencyId | 'check' | 'toggle'
 export type DependencyTerminalOutcome = 'cancelled'
@@ -23,23 +25,23 @@ interface ControllerState {
   snapshot: DependenciesState | null
   busy: ReadonlySet<DependencyOperation>
   progress: DependencyProgress | null
-  errors: Partial<Record<DependencyOperation | 'load' | 'cancel', string>>
+  errors: Partial<Record<DependencyOperation | 'load' | 'cancel', MessageKey>>
   terminalOutcomes: Partial<Record<DependencyOperation, DependencyTerminalOutcome>>
 }
 
 type Action =
   | { type: 'load-success'; snapshot: DependenciesState }
-  | { type: 'load-failure'; error: string }
+  | { type: 'load-failure'; error: MessageKey }
   | { type: 'start'; operation: DependencyOperation }
   | {
       type: 'settle'
       operation: DependencyOperation
       snapshot: DependenciesState | null
-      error: string | null
+      error: MessageKey | null
       cancelled: boolean
     }
   | { type: 'progress'; progress: DependencyProgress }
-  | { type: 'cancel-failure'; error: string }
+  | { type: 'cancel-failure'; error: MessageKey }
 
 const INITIAL_STATE: ControllerState = {
   snapshot: null,
@@ -144,7 +146,7 @@ interface DependenciesController {
   state: DependenciesState | null
   busy: ReadonlySet<DependencyOperation>
   progress: DependencyProgress | null
-  error: string | null
+  error: Message | null
   terminalOutcomes: Partial<Record<DependencyOperation, DependencyTerminalOutcome>>
   check: () => Promise<void>
   installCli: () => Promise<void>
@@ -215,7 +217,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     operationRevision.current += 1
     dispatch({ type: 'start', operation })
     let snapshot: DependenciesState | null = null
-    let error: string | null = null
+    let error: MessageKey | null = null
     try {
       snapshot = await invoke()
     } catch (operationError) {
@@ -273,10 +275,11 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     }
   }, [])
 
-  const errorMessages = Object.values(controller.errors)
-  const error = errorMessages.length === 1
-    ? errorMessages[0] ?? null
-    : errorMessages.join('; ') || null
+  // Several failures stack line by line through one entry, never a joined string.
+  const errorMessages = Object.values(controller.errors).map((key) => message(key))
+  const error: Message | null = errorMessages.length === 0
+    ? null
+    : errorMessages.reduceRight((rest, first) => message('common.lines', { first, rest }))
 
   const value = useMemo<DependenciesController>(() => ({
     state: controller.snapshot,

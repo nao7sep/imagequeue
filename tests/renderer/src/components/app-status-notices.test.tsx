@@ -138,7 +138,7 @@ describe('AppStatusNotices', () => {
     render(<AppStatusNotices />)
     reportOperationalFailure(
       'output-folder',
-      'The output folder could not be opened. Check that it is still available.',
+      'operation.outputFolderFailed',
       'Failed to open output folder',
       new Error('EACCES /private/tmp/IMAGEQUEUE_FOLDER_SENTINEL'),
     )
@@ -154,10 +154,10 @@ describe('AppStatusNotices', () => {
 
   it('retains independent shell results instead of replacing the earlier failure', async () => {
     render(<AppStatusNotices />)
-    reportOperationalFailure('ui-state', 'Window preferences could not be saved.', 'UI state failed', new Error('a'))
-    reportOperationalFailure('output-folder', 'The output folder could not be opened.', 'Folder open failed', new Error('b'))
+    reportOperationalFailure('ui-state', 'operation.uiStateSaveFailed', 'UI state failed', new Error('a'))
+    reportOperationalFailure('output-folder', 'operation.outputFolderFailed', 'Folder open failed', new Error('b'))
     expect(await screen.findAllByRole('alert')).toHaveLength(2)
-    expect(screen.getByText('Window preferences could not be saved.')).toBeTruthy()
-    expect(screen.getByText('The output folder could not be opened.')).toBeTruthy()
+    expect(screen.getByText(/Window preferences could not be saved\./)).toBeTruthy()
+    expect(screen.getByText(/The output folder could not be opened\./)).toBeTruthy()
   })
 })

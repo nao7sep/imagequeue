@@ -5,24 +5,28 @@ import { useCliJobs } from '../context/CliJobsContext'
 import { Icon, type IconName } from './Icon'
 import { serializeError } from '../../../shared/serialize-error'
 import './CliJobsPanel.css'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
+import { message, type Message } from '../../../shared/i18n/translate'
 
 function jobTitle(
   kind: CliJobKind,
   target: string,
   status: CliJobStatus,
   exitCode: number | null
-): string {
+): Message {
+  const title = (key: MessageKey): Message => message(key, { target })
   if (status === 'queued') {
-    return kind === 'import' ? `Queued import: ${target}` : `Queued download: ${target}`
+    return title(kind === 'import' ? 'cliJob.queuedImport' : 'cliJob.queuedDownload')
   }
   if (status === 'running' || status === 'stalled') {
-    return kind === 'import' ? `Importing ${target}` : `Downloading ${target}`
+    return title(kind === 'import' ? 'cliJob.importing' : 'cliJob.downloading')
   }
   if (status === 'exited' && exitCode === 0) {
-    return kind === 'import' ? `Imported ${target}` : `Downloaded ${target}`
+    return title(kind === 'import' ? 'cliJob.imported' : 'cliJob.downloaded')
   }
-  if (status === 'killed') return `Stopped: ${target}`
-  return `Failed: ${target}`
+  if (status === 'killed') return title('cliJob.stopped')
+  return title('cliJob.failed')
 }
 
 function jobSummary(
@@ -30,25 +34,25 @@ function jobSummary(
   status: CliJobStatus,
   exitCode: number | null,
   chunks: CliChunk[]
-): { tone: 'warning' | 'error'; text: string } | null {
+): { tone: 'warning' | 'error'; text: MessageKey } | null {
   if (status === 'queued') {
-    return { tone: 'warning', text: 'Waiting for the previous import to finish.' }
+    return { tone: 'warning', text: 'cliJob.waiting' }
   }
   if (status === 'stalled') {
-    return { tone: 'warning', text: 'No progress has appeared for a while. Stop and retry if it stays stuck.' }
+    return { tone: 'warning', text: 'cliJob.stalled' }
   }
   if (status === 'killed') {
-    return { tone: 'warning', text: 'Stopped before completion.' }
+    return { tone: 'warning', text: 'cliJob.stoppedEarly' }
   }
   if (status !== 'exited' || exitCode === 0) return null
 
   const lines = chunks.map((chunk) => chunk.text.trim()).filter(Boolean)
   if (lines.some((line) => line.includes('Usage: draw-things-cli'))) {
-    return { tone: 'error', text: 'The CLI rejected the command. See the log below.' }
+    return { tone: 'error', text: 'cliJob.rejected' }
   }
   return {
     tone: 'error',
-    text: kind === 'import' ? 'Import failed. See the log below.' : 'Download failed. See the log below.',
+    text: kind === 'import' ? 'cliJob.importFailed' : 'cliJob.downloadFailed',
   }
 }
 
@@ -77,7 +81,8 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   const [chunks, setChunks] = useState<CliChunk[]>([])
   const [status, setStatus] = useState<CliJobStatus>('running')
   const [exitCode, setExitCode] = useState<number | null>(null)
-  const [rowError, setRowError] = useState('')
+  const { t, text } = useI18n()
+  const [rowError, setRowError] = useState<MessageKey | null>(null)
   const tailRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -111,7 +116,7 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
       setExitCode(snap.exitCode)
     }).catch((error) => {
       if (cancelled) return
-      setRowError('This job’s current progress could not be loaded. New progress will still appear here.')
+      setRowError('cliJob.subscribeFailed')
       void window.electronAPI.appLog('error', 'Failed to subscribe to CLI job', { jobId, error: serializeError(error) })
         .catch((logError) => console.error('Failed to record CLI subscription diagnostic', logError))
     })
@@ -134,14 +139,14 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
   }, [chunks])
 
   const isActive = status === 'queued' || status === 'running' || status === 'stalled'
-  const title = jobTitle(kind, target, status, exitCode)
+  const title = text(jobTitle(kind, target, status, exitCode))
   const summary = jobSummary(kind, status, exitCode, chunks)
   const icon = jobIcon(kind, status, exitCode)
 
   const handleStop = (): void => {
-    setRowError('')
+    setRowError(null)
     void window.electronAPI.cliKillJob(jobId).catch((error) => {
-      setRowError('This job could not be stopped. It may still be running; try again.')
+      setRowError('cliJob.stopFailed')
       void window.electronAPI.appLog('error', 'Failed to stop CLI job', { jobId, error: serializeError(error) })
         .catch((logError) => console.error('Failed to record CLI stop diagnostic', logError))
     })
@@ -161,35 +166,35 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         )}
         <span className={titleClass} title={title}>{title}</span>
         {isActive ? (
-          <button className="cli-job-stop" onClick={handleStop}>Stop</button>
+          <button className="cli-job-stop" onClick={handleStop}>{t('queueControls.stop')}</button>
         ) : (
-          <button className="cli-job-result-close" onClick={onDismiss} title="Close" aria-label="Close job result">
+          <button className="cli-job-result-close" onClick={onDismiss} title={t('common.close')} aria-label={t('cliJob.closeResult')}>
             <Icon name="close" />
           </button>
         )}
       </div>
       {summary && (
         <div className={`cli-job-summary cli-job-summary-${summary.tone}`}>
-          {summary.text}
+          {t(summary.text)}
         </div>
       )}
-      {rowError && <div className="cli-job-summary cli-job-summary-error" role="alert">{rowError}</div>}
+      {rowError && <div className="cli-job-summary cli-job-summary-error" role="alert">{t(rowError)}</div>}
       <div
         className="cli-job-log-tail"
         ref={tailRef}
         role="region"
-        aria-label={`${title} log`}
+        aria-label={t('cliJob.logLabel', { title })}
         tabIndex={0}
       >
         {chunks.length === 0 && isActive ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">
-            {status === 'queued'
-              ? 'No output yet\u2026'
+            {t(status === 'queued'
+              ? 'cliJob.noOutput'
               : status === 'stalled'
-                ? 'No new output yet\u2026'
+                ? 'cliJob.noNewOutput'
                 : kind === 'import'
-                  ? 'Conversion in progress\u2026'
-                  : 'Starting\u2026'}
+                  ? 'cliJob.converting'
+                  : 'cliJob.starting')}
           </div>
         ) : (
           chunks.map((c) => (

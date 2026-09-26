@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
-import {
-  DRAW_THINGS_PARAMS_PERSISTENCE_ERROR,
-  type DrawThingsParamsPersistenceState,
-} from '../../../shared/electron-api'
+import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-api'
 import { STANDARD_SIZE_PRESETS, type SizePreset } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
@@ -11,6 +8,9 @@ import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { presentFailure } from '../utils/failurePresentation'
 import { DependencyPanePointer } from './DependencyPanePointer'
+import { useI18n } from '../i18n/I18nContext'
+import { sizePresetLabel } from '../i18n/optionLabels'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 // Draw Things is the one backend that is not a parameter descriptor
 // (src/renderer/src/backends): it drives a local CLI with per-model persisted
@@ -57,8 +57,8 @@ export interface DrawThingsColumn {
     cliStatus: CliStatus | null
     downloadedModels: LocalModelInfo[]
     modelsLoadState: 'loading' | 'ready' | 'failed'
-    modelsLoadError: string
-    paramsSaveError: string
+    modelsLoadError: MessageKey | null
+    paramsSaveError: MessageKey | null
     sizeValue: string
     width: number
     height: number
@@ -103,8 +103,8 @@ export function useDrawThingsColumn({
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [modelsLoadState, setModelsLoadState] = useState<'loading' | 'ready' | 'failed'>('loading')
-  const [modelsLoadError, setModelsLoadError] = useState('')
-  const [paramsSaveError, setParamsSaveError] = useState('')
+  const [modelsLoadError, setModelsLoadError] = useState<MessageKey | null>(null)
+  const [paramsSaveError, setParamsSaveError] = useState<MessageKey | null>(null)
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
@@ -122,7 +122,7 @@ export function useDrawThingsColumn({
     const applyPersistenceState = (state: DrawThingsParamsPersistenceState): void => {
       if (cancelled) return
       persistenceRevision.current += 1
-      setParamsSaveError(state.status === 'failed' ? state.message : '')
+      setParamsSaveError(state.status === 'failed' ? 'drawThings.paramsSaveFailed' : null)
     }
     const stop = window.electronAPI.onDrawThingsParamsPersistenceState(applyPersistenceState)
     const revision = persistenceRevision.current
@@ -185,7 +185,7 @@ export function useDrawThingsColumn({
   const refreshDrawThingsModels = useCallback(async (isInitial = false): Promise<void> => {
     if (!active) return
     if (isInitial) setModelsLoadState('loading')
-    setModelsLoadError('')
+    setModelsLoadError(null)
     try {
       const status = await window.electronAPI.localCheckCli()
       setCliStatus(status)
@@ -252,7 +252,7 @@ export function useDrawThingsColumn({
       })
     } catch (err) {
       logSaveError('apply parameters to all Draw Things models', err, { modelCount: modelFiles.length })
-      setParamsSaveError(DRAW_THINGS_PARAMS_PERSISTENCE_ERROR)
+      setParamsSaveError('drawThings.paramsSaveFailed')
       return
     }
     await refreshAllModelParams()
@@ -307,11 +307,11 @@ export function useDrawThingsColumn({
       setLocalSeed(resolved.seed)
       setNegativePrompt(resolved.negativePrompt)
       setLoadedModel(model)
-      setParamsSaveError('')
+      setParamsSaveError(null)
     }).catch((error) => {
       if (cancelled) return
       setLoadedModel('')
-      setParamsSaveError('The selected model’s saved parameters could not be loaded. Choose the model again to retry; no parameters were changed.')
+      setParamsSaveError('drawThings.paramsLoadFailed')
       logSaveError('load Draw Things model parameters and recommendation', error, { model })
     })
 
@@ -370,7 +370,7 @@ export function useDrawThingsColumn({
     window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
       .catch((err) => {
         logSaveError('autosave Draw Things model parameters', err, { model })
-        setParamsSaveError(DRAW_THINGS_PARAMS_PERSISTENCE_ERROR)
+        setParamsSaveError('drawThings.paramsSaveFailed')
       })
   }, [active, model, loadedModel, currentDrawThingsParams])
 
@@ -422,6 +422,7 @@ export function useDrawThingsColumn({
 
 export function DrawThingsControls({ model, column }: { model: string; column: DrawThingsColumn }): React.JSX.Element {
   const c = column.controls
+  const { t } = useI18n()
   return (
     <>
       {/* The single pointer to the Dependencies modal — the only attention
@@ -429,21 +430,21 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           visibility (silent when both are fine). */}
       <DependencyPanePointer />
       {c.paramsSaveError && (
-        <div className="drawthings-save-error" role="alert">{c.paramsSaveError}</div>
+        <div className="drawthings-save-error" role="alert">{t(c.paramsSaveError)}</div>
       )}
       {c.modelsLoadState === 'loading' && !c.cliStatus && (
-        <div className="setting-row model-status">Checking Draw Things…</div>
+        <div className="setting-row model-status">{t('drawThings.checking')}</div>
       )}
       {c.modelsLoadState === 'failed' && (
         <div className="drawthings-save-error" role="alert">
-          {c.modelsLoadError || 'Downloaded Draw Things models could not be loaded.'}
+          {t(c.modelsLoadError ?? 'drawThings.modelsLoadFailed')}
         </div>
       )}
       {c.cliStatus && c.cliStatus.installed && (
         <>
           {c.downloadedModels.length > 0 ? (
             <div className="setting-row">
-              <label>Model</label>
+              <label>{t('column.model')}</label>
               <select value={model} onChange={(e) => c.onModelChange(e.target.value)}>
                 {c.downloadedModels.map((m) => (
                   <option key={m.file} value={m.file}>{localModelName(m)}</option>
@@ -452,60 +453,60 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </div>
           ) : c.modelsLoadState === 'ready' ? (
             <div className="setting-row model-warning">
-              No models downloaded yet
+              {t('drawThings.noModels')}
             </div>
           ) : null}
           <div className="setting-row">
-            <label>Size</label>
+            <label>{t('backend.size')}</label>
             <select value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
               {DRAWTHINGS_SIZE_PRESETS.map((s) => (
-                <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>{s.label}</option>
+                <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>{sizePresetLabel(t, s)}</option>
               ))}
-              <option value={CUSTOM_DRAWTHINGS_SIZE}>Custom width/height</option>
+              <option value={CUSTOM_DRAWTHINGS_SIZE}>{t('backend.customSize')}</option>
             </select>
           </div>
           <div className="setting-row">
-            <label>Width</label>
+            <label>{t('backend.width')}</label>
             <input type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
-            <label>Height</label>
+            <label>{t('backend.height')}</label>
             <input type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
-            <label>Steps</label>
+            <label>{t('backend.steps')}</label>
             <input type="number" value={c.steps} onChange={(e) => c.setSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
           </div>
           <div className="setting-row">
-            <label>Guidance</label>
+            <label>{t('backend.guidance')}</label>
             <input type="number" value={c.guidance} onChange={(e) => c.setGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
           </div>
           {c.canApplyToAllModels && (
             <button
               type="button"
               className="open-models-btn drawthings-recommendation-btn"
-              title="Copy width, height, steps, and guidance to every downloaded Draw Things model. Each model's seed and negative prompt are preserved."
+              title={t('drawThings.applyToAllHint')}
               onClick={() => { void c.onApplyToAllModels() }}
             >
-              Apply to all models
+              {t('drawThings.applyToAll')}
             </button>
           )}
           <div className="setting-row">
-            <label>Seed</label>
-            <input type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder="random" />
+            <label>{t('backend.seed')}</label>
+            <input type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
           </div>
           <div className="setting-row">
-            <label>Neg.</label>
-            <input type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder="negative prompt" />
+            <label>{t('drawThings.negative')}</label>
+            <input type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder={t('drawThings.negativePlaceholder')} />
           </div>
           {c.canRestoreRecommended && c.effectiveRecommendation && (
             <button
               type="button"
               className="open-models-btn drawthings-recommendation-btn"
-              title={`Restore Draw Things recommended parameters for ${c.selectedRecommendation?.matchName ?? model}`}
+              title={t('drawThings.useRecommendedHint', { model: c.selectedRecommendation?.matchName ?? model })}
               onClick={c.onRestoreRecommended}
             >
-              Use recommended
+              {t('drawThings.useRecommended')}
             </button>
           )}
         </>

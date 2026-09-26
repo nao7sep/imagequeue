@@ -28,6 +28,7 @@ import type { UiState } from './ui-state'
 import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
 import type { AppNotice } from './app-notice'
 import type { StartupFailureMeasurement } from './startup-failure'
+import type { LanguageEnvironment } from './i18n/languages'
 
 // The Node platform string (member set of NodeJS.Platform), spelled out as a
 // portable union so this shared contract carries no @types/node dependency — it
@@ -45,19 +46,14 @@ export type Platform =
   | 'cygwin'
   | 'netbsd'
 
+// The renderer words each failed state itself, in the interface language.
 export type SessionDraftPersistenceState =
   | { status: 'saved' }
-  | { status: 'failed'; message: string }
-
-export const SESSION_DRAFT_PERSISTENCE_ERROR =
-  'Recent session changes could not be saved. Keep ImageQueue open and make another edit to retry.'
+  | { status: 'failed' }
 
 export type DrawThingsParamsPersistenceState =
   | { status: 'saved' }
-  | { status: 'failed'; message: string }
-
-export const DRAW_THINGS_PARAMS_PERSISTENCE_ERROR =
-  'Draw Things parameters could not be saved. Correct the storage problem, then change a parameter to retry.'
+  | { status: 'failed' }
 
 // The contextBridge API surface exposed to the renderer as `window.electronAPI`.
 // It is an explicit interface in `shared` — not `typeof api` from the preload —
@@ -67,6 +63,9 @@ export const DRAW_THINGS_PARAMS_PERSISTENCE_ERROR =
 // via `satisfies ElectronAPI`, so the two can never drift.
 export interface ElectronAPI {
   platform: Platform
+  // The interface language main settled on, and each saved change to it.
+  getLanguageEnvironment: () => Promise<LanguageEnvironment>
+  onLanguageChanged: (callback: (environment: LanguageEnvironment) => void) => (() => void)
   onAppNotice: (callback: (notice: AppNotice) => void) => (() => void)
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement) => void
 

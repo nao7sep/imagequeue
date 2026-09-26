@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
-export type ExternalLinkResults = Record<string, string | undefined>
+// Each failure is held as its catalogue key and worded where it is shown.
+export type ExternalLinkResults = Record<string, MessageKey | undefined>
 
 /** Retain each external-link failure at its modal owner with latest-attempt settlement. */
 export function useExternalLinkResults(): {
@@ -9,7 +11,7 @@ export function useExternalLinkResults(): {
   open: (options: {
     key: string
     url: string
-    message: string
+    message: MessageKey
     diagnosticMessage: string
   }) => Promise<void>
   dismiss: (key: string) => void
@@ -29,7 +31,7 @@ export function useExternalLinkResults(): {
   const open = useCallback(async ({ key, url, message, diagnosticMessage }: {
     key: string
     url: string
-    message: string
+    message: MessageKey
     diagnosticMessage: string
   }): Promise<void> => {
     const attempt = (attemptsRef.current.get(key) ?? 0) + 1

@@ -1,4 +1,6 @@
-import { ELABORATOR_KIND_LABELS, type BrainstormPhase, type ElaboratorKind } from '../../../shared/types'
+import type { BrainstormPhase, ElaboratorKind } from '../../../shared/types'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
+import { message, type Message } from '../../../shared/i18n/translate'
 import { isBrainstormMode } from './promptMode'
 import type { PromptMode } from '../../../shared/session-draft'
 
@@ -24,8 +26,14 @@ export function firstMissingElaboratorKind(picks: ElaboratorPicks): ElaboratorKi
   return null
 }
 
-function pickElaboratorReason(missingKind: ElaboratorKind): string {
-  return `Pick a ${ELABORATOR_KIND_LABELS[missingKind].toLowerCase()} elaborator first.`
+// Every reason is a catalogue key, worded where the tooltip shows it.
+const PICK_ELABORATOR_REASON: Record<ElaboratorKind, MessageKey> = {
+  composition: 'gates.pickComposition',
+  style: 'gates.pickStyle',
+}
+
+function pickElaboratorReason(missingKind: ElaboratorKind): MessageKey {
+  return PICK_ELABORATOR_REASON[missingKind]
 }
 
 // Why the Elaborate (single-prompt preview) action is unavailable, or null when
@@ -34,8 +42,8 @@ function pickElaboratorReason(missingKind: ElaboratorKind): string {
 export function elaborateDisabledReason(
   seedFilled: boolean,
   missingKind: ElaboratorKind | null,
-): string | null {
-  if (!seedFilled) return 'Enter a seed prompt above.'
+): MessageKey | null {
+  if (!seedFilled) return 'gates.enterSeedAbove'
   if (missingKind) return pickElaboratorReason(missingKind)
   return null
 }
@@ -47,8 +55,8 @@ export function promptModeDisabledReason(
   which: PromptMode,
   elaboratedFilled: boolean,
   missingKind: ElaboratorKind | null,
-): string | null {
-  if (which === 'elaborated' && !elaboratedFilled) return 'Run Elaborate first.'
+): MessageKey | null {
+  if (which === 'elaborated' && !elaboratedFilled) return 'gates.runElaborateFirst'
   if (isBrainstormMode(which) && missingKind) return pickElaboratorReason(missingKind)
   return null
 }
@@ -61,12 +69,12 @@ export function queueDisabledReason(
   elaboratedFilled: boolean,
   missingKind: ElaboratorKind | null,
   totalTasks: number,
-): string | null {
-  if (totalTasks === 0) return 'Select at least one target.'
-  if (promptMode === 'as-is' && !seedFilled) return 'Seed prompt is empty.'
-  if (promptMode === 'elaborated' && !elaboratedFilled) return 'Elaborated prompt is empty.'
+): MessageKey | null {
+  if (totalTasks === 0) return 'gates.selectTarget'
+  if (promptMode === 'as-is' && !seedFilled) return 'gates.seedEmpty'
+  if (promptMode === 'elaborated' && !elaboratedFilled) return 'gates.elaboratedEmpty'
   if (isBrainstormMode(promptMode) && missingKind) return pickElaboratorReason(missingKind)
-  if (isBrainstormMode(promptMode) && !seedFilled) return 'Enter a seed prompt for elaboration.'
+  if (isBrainstormMode(promptMode) && !seedFilled) return 'gates.seedForElaboration'
   return null
 }
 
@@ -84,7 +92,7 @@ export interface ControlGate {
   // The precondition reason to surface as a tooltip, or null. Null while busy:
   // a mid-operation disable is self-explanatory and should not show a stale
   // precondition hint.
-  reason: string | null
+  reason: MessageKey | null
 }
 
 export interface AdvancedGates {
@@ -134,25 +142,25 @@ export function computeAdvancedGates(input: AdvancedGatesInput): AdvancedGates {
  * names the stage it is in; the wording is the UI's, which is why it lives here
  * and not in main.
  *
- * Returns '' when nothing is running, so the caller can omit the element.
+ * Returns null when nothing is running, so the caller can omit the element.
  */
 export function describeBrainstormProgress(
   operation: ActiveOperation,
   progress: { done: number; total: number; phase: BrainstormPhase } | null,
-): string {
-  if (!operation) return ''
+): Message | null {
+  if (!operation) return null
   // The engine has stopped reporting but the operation has not returned: the
   // tasks are being queued, or the single Elaborate result is being accepted.
-  if (!progress) return operation === 'queue' ? 'Queueing tasks…' : 'Finishing…'
+  if (!progress) return message(operation === 'queue' ? 'progress.queueing' : 'progress.finishing')
   switch (progress.phase) {
     case 'facets':
-      return 'Choosing which aspects to vary…'
+      return message('progress.facets')
     case 'concepts':
-      return 'Gathering concepts…'
+      return message('progress.concepts')
     case 'prompts':
     default:
       return progress.total === 1
-        ? 'Writing the prompt…'
-        : `Writing prompts… ${progress.done} / ${progress.total}`
+        ? message('progress.writingOne')
+        : message('progress.writingMany', { done: progress.done, total: progress.total })
   }
 }

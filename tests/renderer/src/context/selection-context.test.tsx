@@ -164,8 +164,8 @@ describe('deleteTask', () => {
     await act(async () => { await ctx().deleteTask('openai', 't-failed') })
 
     expect(ctx().taskActionResults['t-failed']).toEqual({
-      remove: 'The task could not be removed. It remains in the queue; try again.',
-      delete: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
+      remove: 'task.removeFailed',
+      delete: 'task.deleteFailed',
     })
     expect(JSON.stringify(ctx().taskActionResults)).not.toMatch(/EACCES|private\/tmp|remote method|SENTINEL/i)
     expect(api.appLog).toHaveBeenCalledWith(
@@ -181,7 +181,7 @@ describe('deleteTask', () => {
 
     act(() => ctx().clearTaskActionResult('t-failed', 'remove'))
     expect(ctx().taskActionResults['t-failed']).toEqual({
-      delete: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
+      delete: 'task.deleteFailed',
     })
   })
 })
@@ -196,11 +196,11 @@ describe('task action attempt ownership', () => {
 
     act(() => {
       olderOutcome = ctx().runTaskAction({
-        taskId: 't-failed', action: 'retry', message: 'retry failed',
+        taskId: 't-failed', action: 'retry', message: 'task.retryFailed',
         diagnosticMessage: 'older retry', invoke: () => older.promise,
       })
       newerOutcome = ctx().runTaskAction({
-        taskId: 't-failed', action: 'retry', message: 'retry failed',
+        taskId: 't-failed', action: 'retry', message: 'task.retryFailed',
         diagnosticMessage: 'newer retry', invoke: () => newer.promise,
       })
     })
@@ -223,18 +223,18 @@ describe('task action attempt ownership', () => {
 
     act(() => {
       olderOutcome = ctx().runTaskAction({
-        taskId: 't-done', action: 'export', message: 'The current export failed.',
+        taskId: 't-done', action: 'export', message: 'task.exportFailed',
         diagnosticMessage: 'older export', invoke: () => older.promise,
       })
       newerOutcome = ctx().runTaskAction({
-        taskId: 't-done', action: 'export', message: 'The current export failed.',
+        taskId: 't-done', action: 'export', message: 'task.exportFailed',
         diagnosticMessage: 'newer export', invoke: () => newer.promise,
       })
     })
     await act(async () => { newer.reject(new Error('IMAGEQUEUE_CURRENT_EXPORT_SENTINEL')); await newerOutcome })
     await act(async () => { older.resolve(); await olderOutcome })
 
-    expect(ctx().taskActionResults['t-done']).toEqual({ export: 'The current export failed.' })
+    expect(ctx().taskActionResults['t-done']).toEqual({ export: 'task.exportFailed' })
   })
 
   it('shares task mutation ownership so an older remove failure cannot restore stale selection', async () => {

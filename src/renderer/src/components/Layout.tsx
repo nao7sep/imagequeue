@@ -32,10 +32,12 @@ import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { reportOperationalFailure } from '../utils/operationalFailure'
+import { useI18n } from '../i18n/I18nContext'
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
 
 export function Layout(): React.JSX.Element {
+  const { t } = useI18n()
   useNotifications()
   const isImeComposing = useImeGuard()
   const {
@@ -217,7 +219,7 @@ export function Layout(): React.JSX.Element {
     }).catch((error) => {
       if (!active) return
       setPreviewDataUrl(null)
-      reportTaskActionFailure(selectedTask.id, 'preview', 'The selected image could not be loaded. Select it again to retry.', 'Failed to load selected image', error)
+      reportTaskActionFailure(selectedTask.id, 'preview', 'task.previewFailed', 'Failed to load selected image', error)
     })
     return () => { active = false }
   }, [selectedTask, clearTaskActionResult, reportTaskActionFailure])
@@ -227,9 +229,9 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     const handler = (): void => {
       if (viewerOpen) {
-        void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be closed. Try again.', 'Failed to close image viewer', error))
+        void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'operation.viewerCloseFailed', 'Failed to close image viewer', error))
       } else if (previewDataUrl) {
-        void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be opened. The selected image is unchanged; try again.', 'Failed to open image viewer', error))
+        void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'operation.viewerOpenFailed', 'Failed to open image viewer', error))
       }
     }
     window.addEventListener('viewer:toggle', handler)
@@ -268,7 +270,7 @@ export function Layout(): React.JSX.Element {
   // showing, so swaps are flash-free.
   useEffect(() => {
     if (!viewerOpen || !previewDataUrl) return
-    void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be updated. Close it and try again.', 'Failed to update image viewer', error))
+    void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'operation.viewerUpdateFailed', 'Failed to update image viewer', error))
   }, [viewerOpen, previewDataUrl])
 
   // While the viewer is open, close it if navigation lands on a task without
@@ -278,7 +280,7 @@ export function Layout(): React.JSX.Element {
     if (!viewerOpen) return
     const status = selectedTask?.status
     const canShow = (status === 'completed' || status === 'kept') && !!selectedTask?.baseName
-    if (!canShow) void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'The image viewer could not be closed. Try again.', 'Failed to close image viewer after selection change', error))
+    if (!canShow) void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'operation.viewerCloseFailed', 'Failed to close image viewer after selection change', error))
   }, [viewerOpen, selectedTask])
 
   return (
@@ -290,13 +292,13 @@ export function Layout(): React.JSX.Element {
     >
       {draftUnavailable && (
         <Modal
-          title="Session draft needs to be reloaded"
+          title={t('draft.reloadTitle')}
           onClose={retryDraftHydration}
           dismissable={false}
           closeOnBackdropClick={false}
-          footer={<button className="modal-btn" autoFocus onClick={retryDraftHydration}>Retry</button>}
+          footer={<button className="modal-btn" autoFocus onClick={retryDraftHydration}>{t('common.retry')}</button>}
         >
-          <div className="modal-body"><p role="alert">{draftUnavailable}</p></div>
+          <div className="modal-body"><p role="alert">{t(draftUnavailable)}</p></div>
         </Modal>
       )}
       {overlay === 'settings' && (
@@ -334,38 +336,38 @@ export function Layout(): React.JSX.Element {
           </div>
           <div className="pane-toolbar-actions">
           <Menu
-            label="Main menu"
+            label={t('menu.main')}
             trigger={(props) => (
-              <button className="hamburger-btn" aria-label="Main menu" {...props}>
+              <button className="hamburger-btn" aria-label={t('menu.main')} {...props}>
                 <Icon name="menu" />
               </button>
             )}
           >
-            <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder().catch((error) => reportOperationalFailure('output-folder', 'The output folder could not be opened. Check that it is still available.', 'Failed to open output folder', error)) }}>Open Output Folder</MenuItem>
-            <MenuItem onSelect={() => setOverlay('sessions')}>Sessions</MenuItem>
+            <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder().catch((error) => reportOperationalFailure('output-folder', 'operation.outputFolderFailed', 'Failed to open output folder', error)) }}>{t('menu.openOutputFolder')}</MenuItem>
+            <MenuItem onSelect={() => setOverlay('sessions')}>{t('menu.sessions')}</MenuItem>
             <QueueControlSubmenu />
             <MenuCheckboxItem checked={showKeptImages} onToggle={toggleShowKeptImages}>
-              Show Kept Images
+              {t('menu.showKeptImages')}
             </MenuCheckboxItem>
-            <MenuItem onSelect={() => setOverlay('settings')}>Settings</MenuItem>
+            <MenuItem onSelect={() => setOverlay('settings')}>{t('menu.settings')}</MenuItem>
             {window.electronAPI.platform === 'darwin' && (
               <MenuItem onSelect={() => setOverlay('dependencies')}>
-                Managed tools
+                {t('menu.managedTools')}
               </MenuItem>
             )}
             {window.electronAPI.platform === 'darwin' && (
               <MenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-models-modal'))}>
-                Draw Things Models
+                {t('menu.drawThingsModels')}
               </MenuItem>
             )}
-            <Submenu label="Elaboration">
-              <MenuItem onSelect={() => setOverlay('elaborators')}>Elaborators</MenuItem>
-              <MenuItem onSelect={() => setOverlay('elaboration-settings')}>Settings</MenuItem>
-              <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>Prompts</MenuItem>
-              <MenuItem onSelect={() => setOverlay('concept-library')}>Concept Library</MenuItem>
+            <Submenu label={t('menu.elaboration')}>
+              <MenuItem onSelect={() => setOverlay('elaborators')}>{t('menu.elaborators')}</MenuItem>
+              <MenuItem onSelect={() => setOverlay('elaboration-settings')}>{t('menu.elaborationSettings')}</MenuItem>
+              <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>{t('menu.elaborationPrompts')}</MenuItem>
+              <MenuItem onSelect={() => setOverlay('concept-library')}>{t('menu.conceptLibrary')}</MenuItem>
             </Submenu>
-            <MenuItem onSelect={() => setOverlay('shortcuts')}>Keyboard Shortcuts</MenuItem>
-            <MenuItem onSelect={() => setOverlay('about')}>About</MenuItem>
+            <MenuItem onSelect={() => setOverlay('shortcuts')}>{t('menu.keyboardShortcuts')}</MenuItem>
+            <MenuItem onSelect={() => setOverlay('about')}>{t('menu.about')}</MenuItem>
           </Menu>
           </div>
         </div>
@@ -381,7 +383,7 @@ export function Layout(): React.JSX.Element {
         className={`pane-splitter${draggingSplitter ? ' dragging' : ''}`}
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize provider columns"
+        aria-label={t('layout.resizeColumns')}
         onMouseDown={startSplitterDrag}
       />
       <div className="right-pane">

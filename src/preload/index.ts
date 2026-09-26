@@ -37,6 +37,7 @@ import type {
 } from '../shared/cli-jobs'
 import type { ElectronAPI } from '../shared/electron-api'
 import type { AppNotice } from '../shared/app-notice'
+import type { LanguageEnvironment } from '../shared/i18n/languages'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
   type StartupFailureMeasurement,
@@ -50,6 +51,13 @@ const api = {
   platform: process.platform,
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement): void => {
     ipcRenderer.send(STARTUP_FAILURE_MEASUREMENT_CHANNEL, measurement)
+  },
+  getLanguageEnvironment: (): Promise<LanguageEnvironment> =>
+    ipcRenderer.invoke('language:environment'),
+  onLanguageChanged: (callback: (environment: LanguageEnvironment) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, environment: LanguageEnvironment): void => callback(environment)
+    ipcRenderer.on('language:changed', handler)
+    return () => { ipcRenderer.removeListener('language:changed', handler) }
   },
   onAppNotice: (callback: (notice: AppNotice) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, notice: AppNotice): void => callback(notice)

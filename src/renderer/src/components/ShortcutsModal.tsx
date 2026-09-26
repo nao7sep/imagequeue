@@ -1,6 +1,7 @@
 import { Modal } from './Modal'
 import { BACKEND_LABELS } from '../../../shared/types'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
+import { useI18n } from '../i18n/I18nContext'
 
 // Mirror the actual column shortcuts: each visible backend maps to mod+(index+1).
 // Read at render, not at import: hiding an unkeyed provider renumbers the
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
+  const { t } = useI18n()
   const isMac = window.electronAPI.platform === 'darwin'
   const mod = isMac ? 'Cmd+' : 'Ctrl+'
   const { backends } = useVisiblePanes()
@@ -18,48 +20,48 @@ export function ShortcutsModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Keyboard Shortcuts"
+      title={t('shortcuts.title')}
       className="shortcuts-modal-box"
       onClose={onClose}
       footer={
         <button className="modal-btn" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
-      <div className="shortcuts-body" role="region" aria-label="Keyboard shortcuts" tabIndex={0}>
+      <div className="shortcuts-body" role="region" aria-label={t('shortcuts.regionLabel')} tabIndex={0}>
         <div className="shortcut-group">
-          <p className="shortcut-group-name">Sending</p>
+          <p className="shortcut-group-name">{t('shortcuts.sending')}</p>
           <div className="shortcut-list">
-            <div className="shortcut-item"><span>Replace prompt with clipboard text</span><kbd>{mod}P</kbd></div>
-            <div className="shortcut-item"><span>Send to all backends</span><kbd>{mod}Enter</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.pasteReplace')}</span><kbd>{mod}P</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.sendAll')}</span><kbd>{mod}Enter</kbd></div>
             {BACKENDS.map((backend, index) => (
               <div key={backend.id} className="shortcut-item">
-                <span>Send to {backend.label}</span>
+                <span>{t('shortcuts.sendTo', { backend: backend.label })}</span>
                 <kbd>{mod}{index + 1}</kbd>
               </div>
             ))}
           </div>
         </div>
         <div className="shortcut-group">
-          <p className="shortcut-group-name">Queue Navigation</p>
+          <p className="shortcut-group-name">{t('shortcuts.queueNavigation')}</p>
           <div className="shortcut-list">
-            <div className="shortcut-item"><span>Enter / leave the queue; step between columns (one tab stop per column)</span><kbd>Tab / Shift+Tab</kbd></div>
-            <div className="shortcut-item"><span>Move up / down within the focused column (also in fullscreen viewer)</span><kbd>Up/Down</kbd></div>
-            <div className="shortcut-item"><span>Switch to nearest task in adjacent column (also in fullscreen viewer)</span><kbd>Left/Right</kbd></div>
-            <div className="shortcut-item"><span>First / last task in the focused column</span><kbd>Home/End</kbd></div>
-            <div className="shortcut-item"><span>Open fullscreen image viewer (Space or Escape to close)</span><kbd>Space</kbd></div>
-            <div className="shortcut-item"><span>Remove task, keep selected completed image, or restore selected kept image</span><kbd>Backspace</kbd></div>
-            <div className="shortcut-item"><span>Delete task and its files</span><kbd>Delete / {mod}Backspace</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.tab')}</span><kbd>Tab / Shift+Tab</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.upDown')}</span><kbd>Up/Down</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.leftRight')}</span><kbd>Left/Right</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.homeEnd')}</span><kbd>Home/End</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.space')}</span><kbd>Space</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.backspace')}</span><kbd>Backspace</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.delete')}</span><kbd>Delete / {mod}Backspace</kbd></div>
           </div>
         </div>
         <div className="shortcut-group">
-          <p className="shortcut-group-name">App</p>
+          <p className="shortcut-group-name">{t('shortcuts.app')}</p>
           <div className="shortcut-list">
-            <div className="shortcut-item"><span>Settings</span><kbd>{mod}Comma</kbd></div>
-            <div className="shortcut-item"><span>Keyboard shortcuts</span><kbd>{mod}Slash</kbd></div>
-            <div className="shortcut-item"><span>Show / hide kept images</span><kbd>{mod}Shift+K</kbd></div>
-            <div className="shortcut-item"><span>Close open panel / clear selection</span><kbd>Escape</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.settings')}</span><kbd>{mod}Comma</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.shortcuts')}</span><kbd>{mod}Slash</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.showKept')}</span><kbd>{mod}Shift+K</kbd></div>
+            <div className="shortcut-item"><span>{t('shortcuts.escape')}</span><kbd>Escape</kbd></div>
           </div>
         </div>
       </div>

@@ -14,6 +14,8 @@ import { serializeError } from '../../../shared/serialize-error'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import './PromptPane.css'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 interface Props {
   selectedTask: Task | null
@@ -54,12 +56,13 @@ function ActionFailures({
   onDismiss,
 }: {
   actions: readonly PromptPaneAction[]
-  failures: Partial<Record<PromptPaneAction, string>>
+  failures: Partial<Record<PromptPaneAction, MessageKey>>
   onDismiss: (action: PromptPaneAction) => void
 }): React.JSX.Element | null {
+  const { t } = useI18n()
   const visible = actions.flatMap((action) => {
-    const message = failures[action]
-    return message ? [{ action, message }] : []
+    const key = failures[action]
+    return key ? [{ action, message: t(key) }] : []
   })
   if (visible.length === 0) return null
 
@@ -71,8 +74,8 @@ function ActionFailures({
           <button
             type="button"
             className="prompt-action-failure-dismiss"
-            aria-label={`Close result: ${message}`}
-            title="Close"
+            aria-label={t('prompt.closeResult', { message })}
+            title={t('common.close')}
             onClick={() => onDismiss(action)}
           >
             <Icon name="close" />
@@ -85,6 +88,8 @@ function ActionFailures({
 
 export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
   const { settings, saveNotificationField } = useSettings()
+  const i18n = useI18n()
+  const { t } = i18n
   // Column shortcuts follow what is drawn: Cmd+2 is the second VISIBLE column.
   const { backends: visibleBackends } = useVisiblePanes()
   const { enqueueToBackend, enqueueToAll } = useEnqueueConfigs()
@@ -108,10 +113,16 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
   const [imageCopied, setImageCopied] = useState(false)
   const [exported, setExported] = useState(false)
   const [clipboardTextAvailable, setClipboardTextAvailable] = useState(false)
-  const [actionFailures, setActionFailures] = useState<Partial<Record<PromptPaneAction, string>>>({})
+  const [actionFailures, setActionFailures] = useState<Partial<Record<PromptPaneAction, MessageKey>>>({})
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const detailsRef = useRef<HTMLDivElement>(null)
+
+  // A details row: its label in bold with the language's own punctuation, then
+  // the value. Values are the task's own data, shown as stored.
+  const detailRow = (label: string, value: string): React.ReactNode =>
+    <><strong>{t('details.label', { label })}</strong> {value}</>
+  const oneDecimal = new Intl.NumberFormat(i18n.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
   // Scroll expanded details into view
   useEffect(() => {
@@ -134,7 +145,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
 
   const reportActionFailure = useCallback((
     action: PromptPaneAction,
-    message: string,
+    message: MessageKey,
     error: unknown,
   ): void => {
     logActionFailure(action, error)
@@ -166,7 +177,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'copy-prompt',
-        'The prompt could not be copied. Try Copy Prompt again.',
+        'prompt.copyPromptFailed',
         error,
       ))
   }, [selectedTask, clearActionFailure, reportActionFailure])
@@ -177,7 +188,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       .then(() => clearActionFailure('reveal-image'))
       .catch((error) => reportActionFailure(
         'reveal-image',
-        'The image could not be revealed. Try Reveal again.',
+        'prompt.revealFailed',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -195,7 +206,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'copy-image',
-        'The image could not be copied. Try Copy to Clipboard again.',
+        'prompt.copyImageFailed',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -210,7 +221,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'export-image',
-        'The image could not be exported. Check the export folder, then try again.',
+        'task.exportFailed',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -223,7 +234,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'save-image-as',
-        'The image could not be saved. Choose Save As again.',
+        'prompt.saveAsFailed',
         error,
       ))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
@@ -247,7 +258,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       })
       .catch((error) => reportActionFailure(
         'paste-text',
-        'The clipboard text could not be read. Try Paste Text again.',
+        'prompt.pasteFailed',
         error,
       ))
   }, [onPromptChange, clearActionFailure, reportActionFailure])
@@ -318,10 +329,10 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             disabled={!clipboardTextAvailable}
             onClick={handlePasteClipboardText}
           >
-            Paste Text
+            {t('prompt.pasteText')}
           </button>
           <button className="prompt-advanced-btn" onClick={() => setShowAdvanced(true)}>
-            Advanced Prompting
+            {t('prompt.advancedPrompting')}
           </button>
         </div>
         <ActionFailures
@@ -332,7 +343,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         <textarea
           className="prompt-textarea"
           rows={3}
-          placeholder="Enter your image prompt..."
+          placeholder={t('prompt.placeholder')}
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
         />
@@ -344,7 +355,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
               checked={notificationsEnabled}
               onChange={(e) => persistNotificationField('notifications_enabled', e.target.checked)}
             />
-            Notify
+            {t('prompt.notify')}
           </label>
           <label className="notification-check">
             <input
@@ -352,7 +363,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
               checked={soundsEnabled}
               onChange={(e) => persistNotificationField('sounds_enabled', e.target.checked)}
             />
-            Sound
+            {t('prompt.sound')}
           </label>
           <NotificationVolumeSlider
             className="notification-volume"
@@ -360,30 +371,28 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
           />
           <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
-            Send to All
+            {t('prompt.sendToAll')}
           </button>
         </div>
 
         <div className="preview-area">
           {previewDataUrl ? (
-            <img className="preview-image" src={previewDataUrl} alt="Generated" />
+            <img className="preview-image" src={previewDataUrl} alt={t('prompt.previewAlt')} />
           ) : (
             <div className="preview-placeholder">
-              <p>No image selected</p>
-              <p className="preview-placeholder-hint">
-                Generate an image and click its thumbnail to preview it.
-              </p>
+              <p>{t('prompt.noImage')}</p>
+              <p className="preview-placeholder-hint">{t('prompt.noImageHint')}</p>
             </div>
           )}
         </div>
 
         {(selectedTask?.status === 'completed' || selectedTask?.status === 'kept') && selectedTask?.baseName && (
           <div className="preview-toolbar">
-            <button className="preview-btn preview-btn-neutral" onClick={handleCopyPrompt}>{promptCopied ? <><Icon name="check" /> Copied</> : 'Copy Prompt'}</button>
-            <button className="preview-btn preview-btn-neutral" onClick={handleReveal}>Reveal</button>
-            <button className="preview-btn preview-btn-neutral" onClick={handleCopyImage}>{imageCopied ? <><Icon name="check" /> Copied</> : 'Copy to Clipboard'}</button>
-            <button className="preview-btn preview-btn-export" onClick={handleExport}>{exported ? <><Icon name="check" /> Exported</> : 'Export'}</button>
-            <button className="preview-btn preview-btn-export" onClick={handleSaveAs}>Save As…</button>
+            <button className="preview-btn preview-btn-neutral" onClick={handleCopyPrompt}>{promptCopied ? <><Icon name="check" /> {t('prompt.copied')}</> : t('prompt.copyPrompt')}</button>
+            <button className="preview-btn preview-btn-neutral" onClick={handleReveal}>{t('prompt.reveal')}</button>
+            <button className="preview-btn preview-btn-neutral" onClick={handleCopyImage}>{imageCopied ? <><Icon name="check" /> {t('prompt.copied')}</> : t('prompt.copyImage')}</button>
+            <button className="preview-btn preview-btn-export" onClick={handleExport}>{exported ? <><Icon name="check" /> {t('prompt.exported')}</> : t('prompt.export')}</button>
+            <button className="preview-btn preview-btn-export" onClick={handleSaveAs}>{t('prompt.saveAs')}</button>
           </div>
         )}
         <ActionFailures
@@ -414,22 +423,22 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             </button>
           ) : (
             <div className="preview-metadata" onClick={() => setDetailsOpen(false)}>
-              <div><strong>Model:</strong> {selectedTask.model}</div>
-              <div><strong>Status:</strong> {taskStatusLabel(selectedTask.status)}</div>
-              <div><strong>Prompt:</strong> {selectedTask.prompt}</div>
+              <div>{detailRow(t('details.model'), selectedTask.model)}</div>
+              <div>{detailRow(t('details.status'), taskStatusLabel(t, selectedTask.status))}</div>
+              <div>{detailRow(t('details.prompt'), selectedTask.prompt)}</div>
               {selectedTask.durationMs !== null && (
-                <div><strong>Time:</strong> {(selectedTask.durationMs / 1000).toFixed(1)}s</div>
+                <div>{detailRow(t('details.time'), t('details.seconds', { seconds: oneDecimal.format(selectedTask.durationMs / 1000) }))}</div>
               )}
               {(() => {
                 const p = selectedTask.params
                 const rows: React.ReactNode[] = []
                 if (p.width != null && p.height != null) {
-                  rows.push(<div key="size"><strong>Size:</strong> {String(p.width)}×{String(p.height)}</div>)
+                  rows.push(<div key="size">{detailRow(t('details.size'), t('details.dimensions', { width: String(p.width), height: String(p.height) }))}</div>)
                 }
                 const skip = new Set(['width', 'height'])
                 for (const [k, v] of Object.entries(p)) {
                   if (skip.has(k) || v == null || v === '') continue
-                  rows.push(<div key={k}><strong>{taskParameterLabel(k)}:</strong> {String(v)}</div>)
+                  rows.push(<div key={k}>{detailRow(taskParameterLabel(t, k), String(v))}</div>)
                 }
                 return rows
               })()}

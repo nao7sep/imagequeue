@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import type { ApiKeyPresence, CloudBackendId, SecretId } from '../../../shared/types'
 import { serializeError } from '../../../shared/serialize-error'
 import { Modal } from '../components/Modal'
+import { useI18n } from '../i18n/I18nContext'
 
 interface SettingsContextValue {
   settings: Record<string, unknown> | null
@@ -26,6 +27,7 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
 export function SettingsProvider({ children }: { children: ReactNode }): React.JSX.Element {
+  const { t } = useI18n()
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
   const [apiKeyPresence, setApiKeyPresence] = useState<ApiKeyPresence | null>(null)
   const [apiKeys, setApiKeys] = useState<Record<SecretId, string> | null>(null)
@@ -132,13 +134,13 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     >
       {settings && apiKeyPresence && apiKeys ? children : loadError ? (
         <Modal
-          title="Settings could not be loaded"
+          title={t('settingsLoad.title')}
           onClose={() => setLoadRevision((value) => value + 1)}
           dismissable={false}
           closeOnBackdropClick={false}
-          footer={<button className="modal-btn" autoFocus onClick={() => setLoadRevision((value) => value + 1)}>Retry</button>}
+          footer={<button className="modal-btn" autoFocus onClick={() => setLoadRevision((value) => value + 1)}>{t('common.retry')}</button>}
         >
-          <div className="modal-body"><p role="alert">Required settings could not be loaded. Nothing was changed; try again.</p></div>
+          <div className="modal-body"><p role="alert">{t('settingsLoad.message')}</p></div>
         </Modal>
       ) : null}
     </SettingsContext.Provider>

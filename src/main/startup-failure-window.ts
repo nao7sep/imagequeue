@@ -2,18 +2,22 @@ import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
 import path from 'path'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
-  STARTUP_FAILURE_TITLE,
   fitStartupFailureHeight,
   isStartupFailureMeasurement,
 } from '../shared/startup-failure'
 import { hardenWindow } from './utils/harden-window'
 import { trackThemedWindow, windowBackground } from './theme'
 import { log, serializeError } from './logger'
+import { mainTranslator } from './i18n'
 
-/** Creates ImageQueue's app-authored fatal-startup surface without a native alert icon. */
-export function createStartupFailureWindow(message: string): BrowserWindow {
+/**
+ * Creates ImageQueue's app-authored fatal-startup surface without a native alert
+ * icon. It shows only authored copy in the interface language; the diagnostic
+ * stays in the log.
+ */
+export function createStartupFailureWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    title: STARTUP_FAILURE_TITLE,
+    title: mainTranslator().t('startupFailure.title'),
     width: 520,
     height: 1,
     show: false,
@@ -70,11 +74,10 @@ export function createStartupFailureWindow(message: string): BrowserWindow {
   if (process.env['ELECTRON_RENDERER_URL']) {
     const url = new URL(process.env['ELECTRON_RENDERER_URL'])
     url.searchParams.set('surface', 'startup-failure')
-    url.searchParams.set('message', message)
     void win.loadURL(url.toString()).catch(handleLoadFailure)
   } else {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
-      query: { surface: 'startup-failure', message },
+      query: { surface: 'startup-failure' },
     }).catch(handleLoadFailure)
   }
 

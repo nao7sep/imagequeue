@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { serializeError } from '../../../shared/serialize-error'
+import { documentTranslator } from '../i18n/I18nContext'
 
 interface Props { children: ReactNode }
 interface State { failed: boolean }
@@ -25,12 +26,15 @@ export class RendererErrorBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     if (!this.state.failed) return this.props.children
+    // This boundary sits outside the language provider, so it speaks the
+    // language the document last declared.
+    const { t } = documentTranslator()
     return (
       <main className="renderer-failure" role="alert">
         <div className="renderer-failure-card">
-          <h1>ImageQueue could not keep this window open.</h1>
-          <p>Reload the window to recover. Your saved sessions and generated images are unchanged.</p>
-          <button type="button" onClick={() => window.location.reload()}>Reload window</button>
+          <h1>{t('rendererFailure.title')}</h1>
+          <p>{t('rendererFailure.message')}</p>
+          <button type="button" onClick={() => window.location.reload()}>{t('rendererFailure.reload')}</button>
         </div>
       </main>
     )

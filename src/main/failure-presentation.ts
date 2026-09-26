@@ -1,5 +1,7 @@
 import type { BackendId } from '../shared/types'
 import type { AppNotice } from '../shared/app-notice'
+import { message, type Message } from '../shared/i18n/translate'
+import { mainTranslator } from './i18n'
 import { httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
 
 const BACKEND_NAMES: Record<BackendId, string> = {
@@ -22,10 +24,14 @@ function plainLabel(value: string): string | null {
   return label || null
 }
 
-/** Maps generation diagnostics to stable task copy without exposing provider, IPC, or filesystem detail. */
-export function generationFailurePresentation(backend: BackendId, error: unknown, generated: boolean): string {
+/**
+ * Maps generation diagnostics to stable task copy without exposing provider,
+ * IPC, or filesystem detail. The task keeps the message, not its words, so the
+ * row reads in whatever language is current.
+ */
+export function generationFailurePresentation(backend: BackendId, error: unknown, generated: boolean): Message {
   if (generated) {
-    return 'The image was generated, but ImageQueue could not save it. Check that the output location is available and has enough free space, then retry.'
+    return message('taskFailure.notSaved')
   }
 
   const name = BACKEND_NAMES[backend]
@@ -34,40 +40,38 @@ export function generationFailurePresentation(backend: BackendId, error: unknown
   const errorName = structuredString(error, 'name')
 
   if (error instanceof MissingApiKeyError) {
-    return `No ${name} API key is set. Add it in Settings, then retry.`
+    return message('taskFailure.missingKey', { name })
   }
   if (error instanceof ProviderRefusalError) {
     const reason = plainLabel(error.reason)
-    return `${name} refused this prompt${reason ? ` (\u201c${reason}\u201d)` : ''}. ` +
-      'Change the prompt, then retry.'
+    return reason
+      ? message('taskFailure.refusedWithReason', { name, reason })
+      : message('taskFailure.refused', { name })
   }
   const providerStatus = error instanceof ProviderStatusError ? plainLabel(error.providerStatus) : null
   if (providerStatus) {
-    return `${name} ended this request without an image and reported \u201c${providerStatus}\u201d. ` +
-      'Retry it; if the same status returns, change the prompt.'
+    return message('taskFailure.providerStatus', { name, status: providerStatus })
   }
   if (status === 401 || status === 403) {
-    return `${name} rejected the configured credentials. Check the API key in Settings, then retry.`
+    return message('taskFailure.credentials', { name })
   }
   if (status === 429) {
-    return `${name} is rate-limiting requests. Wait a moment, then retry.`
+    return message('taskFailure.rateLimited', { name })
   }
   if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT' || errorName === 'TimeoutError') {
-    return `${name} did not respond in time. Check the connection, then retry.`
+    return message('taskFailure.timedOut', { name })
   }
   if (code === 'EACCES' || code === 'EPERM') {
-    return 'ImageQueue could not access a required local file. Check the app’s file permissions, then retry.'
+    return message('taskFailure.fileAccess')
   }
-  return `${name} could not generate this image. Retry it; if the problem continues, check the session log.`
+  return message('taskFailure.generic', { name })
 }
 
 /** The session file could not be written while the queue ran, so the queue paused. */
 export function queueStorageFailurePresentation(): AppNotice {
   return {
-    title: 'Queue paused',
-    message: 'ImageQueue could not save this session\u2019s progress, so it paused the queue ' +
-      'before starting anything else. Images already generating will finish. Check that the ' +
-      'output location is available and has enough free space, then choose Resume.',
+    title: message('notice.queuePausedTitle'),
+    message: message('notice.queuePausedMessage'),
   }
 }
 
@@ -81,19 +85,19 @@ type ElaboratorRecovery = {
 export function elaboratorRecoveryPresentation(recovery: ElaboratorRecovery): AppNotice | null {
   if (recovery.kind !== 'recovered') return null
   return {
-    title: 'Elaborator settings were reset',
-    message: 'Your elaborator settings file was unreadable, so ImageQueue preserved it and restored ' +
-      'the shipped defaults. Your edited templates remain in the preserved copy; check the ' +
-      'session log for its location.',
+    title: message('notice.elaboratorsResetTitle'),
+    message: message('notice.elaboratorsResetMessage'),
   }
 }
 
-/** Stable terminal copy for an app-owned spawn failure; the original error remains in the log. */
+/**
+ * Stable terminal copy for an app-owned spawn failure; the original error
+ * remains in the log. It joins the CLI's own output lines, so it is written in
+ * the language current when the job failed.
+ */
 export function cliJobStartFailurePresentation(
   kind: 'import' | 'download',
   _error: unknown,
 ): string {
-  return kind === 'import'
-    ? 'The model import could not be started. Check the session log for details.'
-    : 'The model download could not be started. Check the session log for details.'
+  return mainTranslator().t(kind === 'import' ? 'cliJob.importStartFailed' : 'cliJob.downloadStartFailed')
 }

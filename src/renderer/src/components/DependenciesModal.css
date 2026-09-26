@@ -22,6 +22,8 @@
 }
 
 .dependencies-error {
+  /* Several failures stack one per line (the common.lines entry). */
+  white-space: pre-line;
   font-size: var(--text-sm);
   color: var(--error);
   border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));

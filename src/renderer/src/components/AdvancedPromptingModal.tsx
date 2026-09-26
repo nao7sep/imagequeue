@@ -44,6 +44,8 @@ import {
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import { useBrainstormOperation } from '../hooks/useBrainstormOperation'
 import './AdvancedPromptingModal.css'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 // How long the "Queued N tasks." receipt stays on screen before the modal
 // closes. Long enough to register, short enough not to feel like a stall.
@@ -56,6 +58,15 @@ interface Props {
 const isMacPlatform = typeof window !== 'undefined' && window.electronAPI?.platform === 'darwin'
 const ELABORATOR_KINDS: ElaboratorKind[] = ['composition', 'style']
 
+const ELABORATOR_LIST_LABELS: Record<ElaboratorKind, MessageKey> = {
+  composition: 'advanced.compositionList',
+  style: 'advanced.styleList',
+}
+const NO_ELABORATORS: Record<ElaboratorKind, MessageKey> = {
+  composition: 'advanced.noComposition',
+  style: 'advanced.noStyle',
+}
+
 function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborator[]> {
   return {
     composition: items.filter((item) => item.kind === 'composition'),
@@ -66,6 +77,8 @@ function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborato
 export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const { settings, apiKeyPresence } = useSettings()
   const confirm = useConfirm()
+  const i18n = useI18n()
+  const { t } = i18n
   const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useSessionDraft()
   const {
@@ -88,7 +101,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   const [elaborators, setElaborators] = useState<Elaborator[]>([])
   const [elaboratorsLoading, setElaboratorsLoading] = useState(true)
-  const [elaboratorsError, setElaboratorsError] = useState('')
+  const [elaboratorsError, setElaboratorsError] = useState<MessageKey | null>(null)
   // Elaborate and Queue are mutually exclusive: both drive the single brainstorm
   // engine, so at most one runs at a time. One value (not a boolean per action)
   // means there is no second flag a control can read by mistake.
@@ -96,17 +109,17 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // The footer's terminal line, held briefly before the modal closes. The prose
   // wave lands in a burst, so the live counter can jump from a low number
   // straight to done — closing at that instant reads as a half-finished run.
-  const [completionNote, setCompletionNote] = useState('')
+  const [completionNote, setCompletionNote] = useState<string | null>(null)
   // True only during the post-queue receipt hold: everything is already
   // committed, so a close during it must neither warn about discarding work
   // (nothing will be discarded) nor cancel anything — just close.
   const holdingRef = useRef(false)
   const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
   const [dtModelsLoading, setDtModelsLoading] = useState(isMacPlatform)
-  const [dtModelsError, setDtModelsError] = useState('')
+  const [dtModelsError, setDtModelsError] = useState<MessageKey | null>(null)
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
-  const [error, setError] = useState('')
+  const [error, setError] = useState<MessageKey | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const elaboratorRowRefs = useRef(new Map<string, HTMLLabelElement>())
   // Set to true when the user confirms closing mid-operation, so that any still-
@@ -117,7 +130,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   const refreshElaborators = useCallback(async (): Promise<void> => {
     setElaboratorsLoading(true)
-    setElaboratorsError('')
+    setElaboratorsError(null)
     try {
       const next = await window.electronAPI.listElaborators()
       setElaborators(next)
@@ -155,7 +168,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       return
     }
     setDtModelsLoading(true)
-    setDtModelsError('')
+    setDtModelsError(null)
     void window.electronAPI.localListDownloadedModels()
       .then((list) => setDownloadedDtModels(sortLocalModels(list)))
       .catch((loadError) => setDtModelsError(presentFailure('advanced-models-load', loadError)))
@@ -236,20 +249,23 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     length: promptLength,
   })
   const busy = gates.busy
-  const statusText = completionNote || describeBrainstormProgress(activeOperation, brainstorm.progress)
+  const progressNote = describeBrainstormProgress(activeOperation, brainstorm.progress)
+  const statusText = completionNote ?? (progressNote ? i18n.text(progressNote) : '')
 
   // Note: we do NOT auto-reset promptMode when preconditions go away. On
   // modal open, one or more category selections can transiently read as
   // missing before elaborators load, which would silently wipe a persisted
   // fresh-* mode. The radio disabled state and the queue gate already signal a
   // problem.
-  const promptModeDisabledReason = (which: PromptMode): string | null =>
-    promptModeDisabledReasonFor(which, elaborated.trim().length > 0, gates.missingElaboratorKind)
+  const promptModeDisabledReason = (which: PromptMode): string | null => {
+    const reason = promptModeDisabledReasonFor(which, elaborated.trim().length > 0, gates.missingElaboratorKind)
+    return reason ? t(reason) : null
+  }
 
   const handleElaborate = useCallback(async (): Promise<void> => {
     if (gates.elaborate.disabled) return
     setActiveOperation('elaborate')
-    setError('')
+    setError(null)
     void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
       compositionElaborator: elaboratorsByKind.composition.find((e) => e.id === selectedCompositionElaboratorId)?.name ?? null,
       styleElaborator: elaboratorsByKind.style.find((e) => e.id === selectedStyleElaboratorId)?.name ?? null,
@@ -261,7 +277,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       if (cancelledRef.current) return
       const first = newPrompts[0]
       if (!first) {
-        setError('Text AI returned no prompt.')
+        setError('advanced.noPromptReturned')
         return
       }
       const firstText = first.text
@@ -299,8 +315,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const handleQueue = useCallback(async (): Promise<void> => {
     if (gates.queue.disabled) return
     setActiveOperation('queue')
-    setError('')
-    setCompletionNote('')
+    setError(null)
+    setCompletionNote(null)
     const targets = effectiveTargets
     const copies = Math.max(1, count)
     const allTargetCount = targetCount
@@ -375,7 +391,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // Let the finish be SEEN before the modal goes: a receipt with the final
       // count, held just long enough to register. It replaces the surprise of
       // closing on "2 / 12" — the missing ten completed in the same burst.
-      setCompletionNote(`Queued ${units.length} task${units.length === 1 ? '' : 's'}.`)
+      setCompletionNote(t('advanced.queued', { count: units.length }))
       holdingRef.current = true
       await new Promise((resolve) => setTimeout(resolve, QUEUE_COMPLETION_HOLD_MS))
       holdingRef.current = false
@@ -394,7 +410,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [
     gates.queue.disabled, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, brainstorm, buildDtParams, elaboratedPrompts.length,
-    snapshots, appendElaboratedPrompts, onClose,
+    snapshots, appendElaboratedPrompts, onClose, t,
   ])
 
   // Esc / outside-click / X all route through here. The only time we ask the
@@ -409,9 +425,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     }
     if (busy) {
       const ok = await confirm({
-        title: 'Operation in progress',
-        message: 'An elaboration or queue operation is still running. Close anyway? The prompts generated by this run will be discarded along with any unfinished work.',
-        confirmLabel: 'Close',
+        title: t('advanced.inProgressTitle'),
+        message: t('advanced.inProgressMessage'),
+        confirmLabel: t('common.close'),
         danger: true,
       })
       if (!ok) return
@@ -422,7 +438,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       brainstorm.cancel()
     }
     onClose()
-  }, [busy, confirm, onClose, brainstorm])
+  }, [busy, confirm, onClose, brainstorm, t])
 
   const selectElaborator = useCallback((kind: ElaboratorKind, id: string): void => {
     switch (kind) {
@@ -444,21 +460,21 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     const items = elaboratorsByKind[kind]
     return (
       <div className="advanced-elaborator-column" key={kind}>
-        <div className="advanced-elaborator-column-title">{ELABORATOR_KIND_LABELS[kind]}</div>
+        <div className="advanced-elaborator-column-title">{t(ELABORATOR_KIND_LABELS[kind])}</div>
         <div
           className="advanced-elaborator-column-list"
           role="radiogroup"
-          aria-label={`${ELABORATOR_KIND_LABELS[kind]} elaborators`}
+          aria-label={t(ELABORATOR_LIST_LABELS[kind])}
           aria-busy={elaboratorsLoading}
           tabIndex={items.length === 0 ? 0 : -1}
         >
           {items.length === 0 ? (
             <div className="advanced-empty">
               {elaboratorsLoading
-                ? 'Loading elaborators…'
+                ? t('advanced.loadingElaborators')
                 : elaboratorsError
-                  ? 'Elaborators unavailable.'
-                  : `No ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators.`}
+                  ? t('advanced.elaboratorsUnavailable')
+                  : t(NO_ELABORATORS[kind])}
             </div>
           ) : (
             items.map((el) => (
@@ -493,7 +509,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Advanced Prompting"
+      title={t('prompt.advancedPrompting')}
       className="advanced-modal-box"
       closeOnBackdropClick={false}
       onClose={() => void handleRequestClose()}
@@ -507,25 +523,25 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
             </span>
           )}
           <button className="modal-btn" onClick={() => void handleRequestClose()}>
-            Cancel
+            {t('common.cancel')}
           </button>
         </>
       }
     >
       <div className={`advanced-body${isMacPlatform ? '' : ' advanced-body-no-dt'}`}>
         <div className="advanced-pane">
-          <div className="advanced-pane-title">Prompt</div>
+          <div className="advanced-pane-title">{t('advanced.prompt')}</div>
           <div className="advanced-pane-scroll advanced-pane-scroll-prompt">
             <textarea
               className="advanced-seed"
-              placeholder="Seed prompt or full prompt..."
+              placeholder={t('advanced.seedPlaceholder')}
               value={seed}
               onChange={(e) => update({ seed: e.target.value })}
             />
-            <div className="advanced-section-label">Elaborators</div>
+            <div className="advanced-section-label">{t('advanced.elaborators')}</div>
             {elaboratorsError && (
               <div className="advanced-message advanced-message-error" role="alert">
-                {elaboratorsError}
+                {t(elaboratorsError)}
               </div>
             )}
             <div className="advanced-elaborator-columns">
@@ -536,14 +552,14 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 className="modal-btn modal-btn-primary"
                 onClick={() => void handleElaborate()}
                 disabled={gates.elaborate.disabled}
-                title={gates.busy ? '' : (gates.elaborate.reason ?? 'Generate one elaborated prompt')}
+                title={gates.busy ? '' : t(gates.elaborate.reason ?? 'advanced.elaborateHint')}
               >
-                {activeOperation === 'elaborate' ? 'Elaborating…' : 'Elaborate'}
+                {activeOperation === 'elaborate' ? t('advanced.elaborating') : t('advanced.elaborate')}
               </button>
             </div>
             <textarea
               className="advanced-elaborated"
-              placeholder="Elaborated prompt will appear here. You can edit before queueing."
+              placeholder={t('advanced.elaboratedPlaceholder')}
               value={elaborated}
               onChange={(e) => update({ elaborated: e.target.value })}
             />
@@ -553,20 +569,20 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 className="modal-btn"
                 onClick={() => setShowHistory(true)}
                 disabled={gates.history.disabled}
-                title="View prompts elaborated this session"
+                title={t('advanced.historyHint')}
               >
-                Elaborated ({elaboratedPrompts.length})
+                {t('advanced.history', { count: elaboratedPrompts.length })}
               </button>
             </div>
           </div>
         </div>
 
         <div className="advanced-pane">
-          <div className="advanced-pane-title">Targets</div>
+          <div className="advanced-pane-title">{t('advanced.targets')}</div>
           <div className="advanced-pane-scroll">
             <div className="advanced-targets-list">
               {isMacPlatform && (
-                <div className="advanced-targets-group-title">Proprietary</div>
+                <div className="advanced-targets-group-title">{t('advanced.proprietary')}</div>
               )}
               {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
                 const hasKey = proprietaryApiKeyByBackend[id]
@@ -579,7 +595,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                       onChange={() => toggleProprietary(id)}
                     />
                     <span>{BACKEND_LABELS[id]}</span>
-                    {!hasKey && <span className="advanced-target-hint">No API key</span>}
+                    {!hasKey && <span className="advanced-target-hint">{t('advanced.noApiKey')}</span>}
                   </label>
                 )
               })}
@@ -589,10 +605,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                   {downloadedDtModels.length === 0 ? (
                     <div className="advanced-empty" role={dtModelsError ? 'alert' : undefined}>
                       {dtModelsLoading
-                        ? 'Loading models…'
+                        ? t('advanced.loadingModels')
                         : dtModelsError
-                          ? dtModelsError
-                          : 'No models downloaded.'}
+                          ? t(dtModelsError)
+                          : t('advanced.noModels')}
                     </div>
                   ) : (
                     downloadedDtModels.map((m) => (
@@ -613,39 +629,39 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         </div>
 
         <div className="advanced-pane advanced-pane-execution">
-          <div className="advanced-pane-title">Execution</div>
+          <div className="advanced-pane-title">{t('advanced.execution')}</div>
           <div className="advanced-pane-scroll">
             {/* Target scope leads: "who takes what" — choose the targets (middle
                 pane) the run covers before deciding how the prompt is sourced. */}
-            <div className="advanced-section-label">Target scope</div>
+            <div className="advanced-section-label">{t('advanced.targetScope')}</div>
             <div className="advanced-radio-group">
               <label className="advanced-radio">
                 <input type="radio" name="target-scope" checked={targetScope === 'selected'} onChange={() => update({ targetScope: 'selected' })} />
-                <span>Selected</span>
+                <span>{t('advanced.scopeSelected')}</span>
               </label>
               {isMacPlatform && (
                 <>
                   <label className="advanced-radio">
                     <input type="radio" name="target-scope" checked={targetScope === 'all-proprietary'} onChange={() => update({ targetScope: 'all-proprietary' })} />
-                    <span>All proprietary</span>
+                    <span>{t('advanced.scopeAllProprietary')}</span>
                   </label>
                   <label className="advanced-radio">
                     <input type="radio" name="target-scope" checked={targetScope === 'all-drawthings'} onChange={() => update({ targetScope: 'all-drawthings' })} />
-                    <span>All Draw Things</span>
+                    <span>{t('advanced.scopeAllDrawThings')}</span>
                   </label>
                 </>
               )}
               <label className="advanced-radio">
                 <input type="radio" name="target-scope" checked={targetScope === 'all'} onChange={() => update({ targetScope: 'all' })} />
-                <span>All</span>
+                <span>{t('advanced.scopeAll')}</span>
               </label>
             </div>
 
-            <div className="advanced-section-label">Prompt source</div>
+            <div className="advanced-section-label">{t('advanced.promptSource')}</div>
             <div className="advanced-radio-group">
               <label className="advanced-radio">
                 <input type="radio" name="prompt-mode" checked={promptMode === 'as-is'} onChange={() => update({ promptMode: 'as-is' })} />
-                <span>User prompt as-is</span>
+                <span>{t('advanced.modeAsIs')}</span>
               </label>
               <label className={`advanced-radio${promptModeDisabledReason('elaborated') ? ' disabled' : ''}`} title={promptModeDisabledReason('elaborated') ?? ''}>
                 <input
@@ -655,7 +671,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                   disabled={promptModeDisabledReason('elaborated') !== null}
                   onChange={() => update({ promptMode: 'elaborated' })}
                 />
-                <span>Elaborated prompt (same for all)</span>
+                <span>{t('advanced.modeElaborated')}</span>
               </label>
               <label className={`advanced-radio${promptModeDisabledReason('fresh-iteration') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-iteration') ?? ''}>
                 <input
@@ -665,7 +681,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                   disabled={promptModeDisabledReason('fresh-iteration') !== null}
                   onChange={() => update({ promptMode: 'fresh-iteration' })}
                 />
-                <span>Fresh elaboration per iteration</span>
+                <span>{t('advanced.modeFreshIteration')}</span>
               </label>
               <label className={`advanced-radio${promptModeDisabledReason('fresh-task') ? ' disabled' : ''}`} title={promptModeDisabledReason('fresh-task') ?? ''}>
                 <input
@@ -675,13 +691,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                   disabled={promptModeDisabledReason('fresh-task') !== null}
                   onChange={() => update({ promptMode: 'fresh-task' })}
                 />
-                <span>Fresh elaboration per task</span>
+                <span>{t('advanced.modeFreshTask')}</span>
               </label>
             </div>
 
             {/* Format/Length shape the generated text. They always apply, since
                 the Elaborate preview brainstorms regardless of the prompt source. */}
-            <div className="advanced-section-label">Prompt format</div>
+            <div className="advanced-section-label">{t('advanced.promptFormat')}</div>
             <div className="advanced-radio-group">
               {PROMPT_FORMATS.map((format) => (
                 <label key={format} className="advanced-radio">
@@ -691,12 +707,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                     checked={promptFormat === format}
                     onChange={() => update({ promptFormat: format })}
                   />
-                  <span>{PROMPT_FORMAT_LABELS[format]}</span>
+                  <span>{t(PROMPT_FORMAT_LABELS[format])}</span>
                 </label>
               ))}
             </div>
 
-            <div className="advanced-section-label">Prompt length</div>
+            <div className="advanced-section-label">{t('advanced.promptLength')}</div>
             <div className="advanced-radio-group">
               {PROMPT_LENGTHS.map((length) => (
                 <label key={length} className="advanced-radio">
@@ -706,12 +722,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                     checked={promptLength === length}
                     onChange={() => update({ promptLength: length })}
                   />
-                  <span>{PROMPT_LENGTH_LABELS[length]}</span>
+                  <span>{t(PROMPT_LENGTH_LABELS[length])}</span>
                 </label>
               ))}
             </div>
 
-            <div className="advanced-section-label">How many iterations</div>
+            <div className="advanced-section-label">{t('advanced.iterations')}</div>
             <input
               className="advanced-count"
               type="number"
@@ -724,18 +740,18 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
           <div className="advanced-pane-footer">
             <div className="advanced-total">
-              {totalTasks} task{totalTasks === 1 ? '' : 's'}
+              {t('advanced.totalTasks', { count: totalTasks })}
             </div>
 
-            {error && <div className="advanced-message advanced-message-error" role="alert">{error}</div>}
+            {error && <div className="advanced-message advanced-message-error" role="alert">{t(error)}</div>}
 
             <button
               className="modal-btn modal-btn-primary advanced-queue-btn"
               onClick={() => void handleQueue()}
               disabled={gates.queue.disabled}
-              title={gates.queue.reason ?? ''}
+              title={gates.queue.reason ? t(gates.queue.reason) : ''}
             >
-              {activeOperation === 'queue' ? 'Queueing…' : 'Queue Tasks'}
+              {activeOperation === 'queue' ? t('advanced.queueing') : t('advanced.queueTasks')}
             </button>
           </div>
         </div>

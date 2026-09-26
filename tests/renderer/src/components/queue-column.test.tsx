@@ -331,20 +331,20 @@ describe('task status presentation', () => {
     expect(selectionValue.reportTaskActionFailure).toHaveBeenCalledWith(
       'task-complete',
       'thumbnail',
-      'This task’s thumbnail could not be loaded. The task is unchanged.',
+      'task.thumbnailFailed',
       'Failed to load task thumbnail',
       expect.any(Error),
     )
     expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({
       taskId: 'task-failed',
       action: 'retry',
-      message: 'The task could not be retried. It remains stopped; try again.',
+      message: 'task.retryFailed',
       diagnosticMessage: 'Failed to retry task',
     }))
     expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({
       taskId: 'task-complete',
       action: 'export',
-      message: 'The image could not be exported. Check the export folder, then try again.',
+      message: 'task.exportFailed',
       diagnosticMessage: 'Failed to export task image',
     }))
     expect(electronAPI.retryTask).toHaveBeenCalledWith('openai', 'task-failed')
@@ -524,10 +524,7 @@ describe('drawthings column', () => {
     await flush()
 
     act(() => {
-      paramsPersistenceListener?.({
-        status: 'failed',
-        message: 'Draw Things parameters could not be saved. Change a parameter to retry.',
-      })
+      paramsPersistenceListener?.({ status: 'failed' })
     })
     expect(screen.getByRole('alert').textContent).toContain('could not be saved')
 

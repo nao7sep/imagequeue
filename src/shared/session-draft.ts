@@ -6,6 +6,7 @@
 // This lives in shared/ because both sides need it: the renderer owns and edits
 // the draft, while the main process persists it and normalizes it on read.
 
+import type { MessageKey } from './i18n/catalogues'
 import { BACKEND_IDS_IN_UI_ORDER, type BackendId } from './types'
 
 export type PromptMode = 'as-is' | 'elaborated' | 'fresh-iteration' | 'fresh-task'
@@ -25,14 +26,15 @@ export const PROMPT_LENGTHS: readonly PromptLength[] = ['short', 'medium', 'long
 // Display labels, kept beside the enums (as the codebase does for backends and
 // elaborator kinds) so a new tier can't be added without one, and so the
 // Advanced Prompting picker and the Elaboration Settings editor never disagree.
-export const PROMPT_FORMAT_LABELS: Record<PromptFormat, string> = {
-  sentences: 'Natural sentences',
-  phrases: 'Comma phrases',
+// Each option's name, as the catalogue key the interface shows it by.
+export const PROMPT_FORMAT_LABELS: Record<PromptFormat, MessageKey> = {
+  sentences: 'promptFormat.sentences',
+  phrases: 'promptFormat.phrases',
 }
-export const PROMPT_LENGTH_LABELS: Record<PromptLength, string> = {
-  short: 'Short',
-  medium: 'Medium',
-  long: 'Long',
+export const PROMPT_LENGTH_LABELS: Record<PromptLength, MessageKey> = {
+  short: 'promptLength.short',
+  medium: 'promptLength.medium',
+  long: 'promptLength.long',
 }
 
 // The editable pieces of the {{FORMAT}} directive: one sentence per format and

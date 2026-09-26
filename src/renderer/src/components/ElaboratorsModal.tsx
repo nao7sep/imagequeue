@@ -8,6 +8,8 @@ import type { Elaborator, ElaboratorKind } from '../../../shared/types'
 import { ELABORATOR_KIND_LABELS } from '../../../shared/types'
 import { presentFailure } from '../utils/failurePresentation'
 import './ElaboratorsModal.css'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 interface Props {
   onClose: () => void
@@ -28,6 +30,40 @@ interface DraftTarget {
 const EMPTY_DRAFT: DraftState = { name: '', description: '', template: '' }
 const ELABORATOR_KINDS: ElaboratorKind[] = ['composition', 'style']
 
+// Phrases that name a kind are whole entries per kind, so each language can
+// inflect the kind as its grammar needs.
+const KIND_PHRASES: Record<ElaboratorKind, {
+  deleteTitle: MessageKey
+  resetTitle: MessageKey
+  resetMessage: MessageKey
+  newTitle: MessageKey
+  editTitle: MessageKey
+  empty: MessageKey
+  reset: MessageKey
+  list: MessageKey
+}> = {
+  composition: {
+    deleteTitle: 'elaborators.composition.deleteTitle',
+    resetTitle: 'elaborators.composition.resetTitle',
+    resetMessage: 'elaborators.composition.resetMessage',
+    newTitle: 'elaborators.composition.newTitle',
+    editTitle: 'elaborators.composition.editTitle',
+    empty: 'elaborators.composition.empty',
+    reset: 'elaborators.composition.reset',
+    list: 'advanced.compositionList',
+  },
+  style: {
+    deleteTitle: 'elaborators.style.deleteTitle',
+    resetTitle: 'elaborators.style.resetTitle',
+    resetMessage: 'elaborators.style.resetMessage',
+    newTitle: 'elaborators.style.newTitle',
+    editTitle: 'elaborators.style.editTitle',
+    empty: 'elaborators.style.empty',
+    reset: 'elaborators.style.reset',
+    list: 'advanced.styleList',
+  },
+}
+
 function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborator[]> {
   return {
     composition: items.filter((item) => item.kind === 'composition'),
@@ -37,11 +73,12 @@ function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborato
 
 export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
+  const { t } = useI18n()
   const [items, setItems] = useState<Elaborator[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
+  const [loadError, setLoadError] = useState<MessageKey | null>(null)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<MessageKey | null>(null)
   const [selectedIds, setSelectedIds] = useState<Record<ElaboratorKind, string | null>>({
     composition: null,
     style: null,
@@ -54,7 +91,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
-    setLoadError('')
+    setLoadError(null)
     try {
       const next = await window.electronAPI.listElaborators()
       setItems(next)
@@ -95,7 +132,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     if (busy || draftTarget) return
     setDraftTarget({ kind, mode: 'new' })
     setDraft({ ...EMPTY_DRAFT })
-    setMessage('')
+    setMessage(null)
   }
 
   const startEdit = (kind: ElaboratorKind): void => {
@@ -109,27 +146,27 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       description: item.description ?? '',
       template: item.template,
     })
-    setMessage('')
+    setMessage(null)
   }
 
   const cancelDraft = (): void => {
     setDraftTarget(null)
     setDraft(EMPTY_DRAFT)
-    setMessage('')
+    setMessage(null)
   }
 
   const saveDraft = useCallback(async (): Promise<void> => {
     if (!draftTarget) return
     if (!draft.name.trim()) {
-      setMessage('Name is required.')
+      setMessage('elaborators.nameRequired')
       return
     }
     if (!draft.template.trim()) {
-      setMessage('Template is required.')
+      setMessage('elaborators.templateRequired')
       return
     }
     setBusy(true)
-    setMessage('')
+    setMessage(null)
     try {
       // Clean at this commit point: name/description are scalar single-line
       // fields (flatten pasted line breaks, keep horizontal spacing); the
@@ -175,14 +212,14 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     const item = selectedId ? items.find((candidate) => candidate.id === selectedId) : null
     if (!item) return
     const ok = await confirm({
-      title: `Delete ${ELABORATOR_KIND_LABELS[kind]} Elaborator`,
-      message: `Delete "${item.name}"?`,
-      confirmLabel: 'Delete',
+      title: t(KIND_PHRASES[kind].deleteTitle),
+      message: t('elaborators.deleteMessage', { name: item.name }),
+      confirmLabel: t('task.delete'),
       danger: true,
     })
     if (!ok) return
     setBusy(true)
-    setMessage('')
+    setMessage(null)
     try {
       await window.electronAPI.deleteElaborator(item.id)
       await refresh()
@@ -191,18 +228,18 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [confirm, items, refresh, selectedIds])
+  }, [confirm, items, refresh, selectedIds, t])
 
   const handleReset = useCallback(async (kind: ElaboratorKind): Promise<void> => {
     const ok = await confirm({
-      title: `Reset ${ELABORATOR_KIND_LABELS[kind]} Elaborators`,
-      message: `Replace all ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators with the shipped defaults?`,
-      confirmLabel: 'Reset',
+      title: t(KIND_PHRASES[kind].resetTitle),
+      message: t(KIND_PHRASES[kind].resetMessage),
+      confirmLabel: t('settings.reset'),
       danger: true,
     })
     if (!ok) return
     setBusy(true)
-    setMessage('')
+    setMessage(null)
     try {
       await window.electronAPI.resetElaborators(kind)
       if (draftTarget?.kind === kind) cancelDraft()
@@ -212,57 +249,57 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [confirm, draftTarget, refresh])
+  }, [confirm, draftTarget, refresh, t])
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
     if (dirty) {
       const ok = await confirm({
-        title: 'Discard changes?',
-        message: 'You have an unsaved elaborator draft. Close without saving?',
-        confirmLabel: 'Discard',
+        title: t('elabSettings.discardTitle'),
+        message: t('elaborators.discardMessage'),
+        confirmLabel: t('settings.discard'),
         danger: true,
       })
       if (!ok) return
     }
     onClose()
-  }, [dirty, confirm, onClose])
+  }, [dirty, confirm, onClose, t])
 
   const renderEditor = (kind: ElaboratorKind): React.JSX.Element => (
     <div className="elaborator-editor" ref={editorRef}>
       <div className="elaborator-editor-title">
-        {draftTarget?.mode === 'new' ? `New ${ELABORATOR_KIND_LABELS[kind]} Elaborator` : `Edit ${ELABORATOR_KIND_LABELS[kind]} Elaborator`}
+        {t(draftTarget?.mode === 'new' ? KIND_PHRASES[kind].newTitle : KIND_PHRASES[kind].editTitle)}
       </div>
       <label className="elaborator-field">
-        <span>Name</span>
+        <span>{t('elaborators.name')}</span>
         <input
           type="text"
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          placeholder="Short name shown in the list"
+          placeholder={t('elaborators.namePlaceholder')}
         />
       </label>
       <label className="elaborator-field">
-        <span>Description (optional)</span>
+        <span>{t('elaborators.description')}</span>
         <input
           type="text"
           value={draft.description}
           onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-          placeholder="Short hint shown under the name"
+          placeholder={t('elaborators.descriptionPlaceholder')}
         />
       </label>
       <label className="elaborator-field">
-        <span>Template</span>
+        <span>{t('elaborators.template')}</span>
         <textarea
           rows={10}
           value={draft.template}
           onChange={(e) => setDraft({ ...draft, template: e.target.value })}
-          placeholder="System instruction sent to the text AI."
+          placeholder={t('elaborators.templatePlaceholder')}
         />
       </label>
       <div className="elaborator-editor-actions">
-        <button className="modal-btn" onClick={cancelDraft} disabled={busy}>Cancel</button>
+        <button className="modal-btn" onClick={cancelDraft} disabled={busy}>{t('common.cancel')}</button>
         <button className="modal-btn modal-btn-primary" onClick={() => void saveDraft()} disabled={busy || !dirty}>
-          Save
+          {t('common.save')}
         </button>
       </div>
     </div>
@@ -276,28 +313,28 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     return (
       <section key={kind} className="elaborators-pane">
         <div className="elaborators-pane-header">
-          <div className="elaborators-pane-title">{ELABORATOR_KIND_LABELS[kind]}</div>
+          <div className="elaborators-pane-title">{t(ELABORATOR_KIND_LABELS[kind])}</div>
           <div className="elaborators-pane-actions">
             <button
               className="modal-btn modal-btn-primary"
               onClick={() => startNew(kind)}
               disabled={busy || draftTarget !== null}
             >
-              New
+              {t('elaborators.new')}
             </button>
             <button
               className="modal-btn"
               onClick={() => startEdit(kind)}
               disabled={busy || draftTarget !== null || !selectedId}
             >
-              Edit
+              {t('elaborators.edit')}
             </button>
             <button
               className="modal-btn modal-btn-danger"
               onClick={() => void handleDelete(kind)}
               disabled={busy || draftTarget !== null || !selectedId}
             >
-              Delete
+              {t('task.delete')}
             </button>
           </div>
         </div>
@@ -306,14 +343,14 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
           {draftOpenHere && renderEditor(kind)}
 
           <ElaboratorList
-            label={ELABORATOR_KIND_LABELS[kind]}
+            label={t(KIND_PHRASES[kind].list)}
             items={itemsForKind}
             selectedId={selectedId}
             disabled={busy || (draftTarget !== null && !draftOpenHere)}
             loading={loading}
             emptyText={loadError
-              ? 'Elaborators unavailable.'
-              : `No ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators yet.`}
+              ? t('advanced.elaboratorsUnavailable')
+              : t(KIND_PHRASES[kind].empty)}
             onSelect={(id) => setSelectedIds((prev) => ({ ...prev, [kind]: id }))}
           />
         </div>
@@ -324,7 +361,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
             onClick={() => void handleReset(kind)}
             disabled={busy || draftTarget !== null}
           >
-            {`Reset ${ELABORATOR_KIND_LABELS[kind].toLowerCase()} elaborators`}
+            {t(KIND_PHRASES[kind].reset)}
           </button>
         </div>
       </section>
@@ -333,12 +370,12 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Elaborators"
+      title={t('menu.elaborators')}
       className="elaborators-modal-box"
       onClose={() => void handleRequestClose()}
       footer={
         <button className="modal-btn" onClick={() => void handleRequestClose()}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
@@ -346,15 +383,10 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         {/* The one rule that decides whether an elaborator works. Measured, not
             style advice: prose guidance scored 5.9/10 for how differently the
             resulting images looked, concrete specifics 8.1. */}
-        <p className="elaborators-help">
-          Write concrete visual specifics — light, lens, palette, framing — not qualities like
-          “professional” or “believable”, which an image model cannot draw. Test: if two
-          elaborators in the same list could be satisfied by one sentence, they are too abstract
-          to change the picture.
-        </p>
-        {message && <div className="elaborators-message" role="alert">{message}</div>}
+        <p className="elaborators-help">{t('elaborators.help')}</p>
+        {message && <div className="elaborators-message" role="alert">{t(message)}</div>}
         {loadError && (
-          <div className="elaborators-message" role="alert">Couldn’t refresh elaborators: {loadError}</div>
+          <div className="elaborators-message" role="alert">{t('elaborators.refreshFailed', { reason: t(loadError) })}</div>
         )}
         <div className="elaborators-grid">
           {ELABORATOR_KINDS.map((kind) => renderPane(kind))}
@@ -385,6 +417,7 @@ function ElaboratorList({
   onSelect: (id: string) => void
 }): React.JSX.Element {
   const isComposing = useImeGuard()
+  const { t } = useI18n()
   const { listboxProps, getOptionProps } = useListbox({
     ids: items.map((item) => item.id),
     selectedId,
@@ -394,9 +427,9 @@ function ElaboratorList({
   })
 
   return (
-    <div className="elaborators-list" aria-label={`${label} elaborators`} aria-busy={loading} {...listboxProps}>
+    <div className="elaborators-list" aria-label={label} aria-busy={loading} {...listboxProps}>
       {items.length === 0 && (
-        <div className="elaborators-empty" role="presentation">{loading ? 'Loading…' : emptyText}</div>
+        <div className="elaborators-empty" role="presentation">{loading ? t('common.loading') : emptyText}</div>
       )}
       {items.map((item) => {
         const optionProps = getOptionProps(item.id)

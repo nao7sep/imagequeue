@@ -43,6 +43,7 @@ function cliInfo(): DependencyInfo {
     state: deriveDependencyState(present, comparison),
     installedLabel: installedTag,
     latestLabel: latest,
+    entryCount: null,
     updatedAtUtc: null,
     lastCheckedAtUtc: cache.cli.lastCheckedAtUtc,
   }
@@ -52,11 +53,6 @@ function recommendationsInfo(): DependencyInfo {
   const cache = readDependenciesCache()
   const status = getRecommendationsStatus()
   const present = status.exists
-  const installedLabel = !present
-    ? null
-    : status.valid
-      ? `${status.entryCount} ${status.entryCount === 1 ? 'entry' : 'entries'}`
-      : 'file unreadable'
   // configs.json has no version; its identity is when the server last changed
   // it, which the file carries as its modification time (see recommendations).
   const comparison: DependencyComparison = present
@@ -65,8 +61,9 @@ function recommendationsInfo(): DependencyInfo {
   return {
     id: 'recommendations',
     state: deriveDependencyState(present, comparison),
-    installedLabel,
+    installedLabel: null,
     latestLabel: null,
+    entryCount: present && status.valid ? status.entryCount : null,
     updatedAtUtc: status.updatedAt,
     lastCheckedAtUtc: cache.recommendations.lastCheckedAtUtc,
   }

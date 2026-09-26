@@ -27,7 +27,12 @@ const { generateGrok } = await import('../../../src/main/backends/grok')
 const { generateFlux } = await import('../../../src/main/backends/flux')
 const { generateOpenAI } = await import('../../../src/main/backends/openai')
 const { assertUsableGeminiResponse } = await import('../../../src/main/provider-response')
-const { generationFailurePresentation } = await import('../../../src/main/failure-presentation')
+const failurePresentation = await import('../../../src/main/failure-presentation')
+const { createTranslator } = await import('../../../src/shared/i18n/translate')
+// The task keeps a message; these read it as English shows it.
+const english = createTranslator('en')
+const generationFailurePresentation = (...args: Parameters<typeof failurePresentation.generationFailurePresentation>): string =>
+  english.text(failurePresentation.generationFailurePresentation(...args))
 
 function task(backend: Task['backend'], model: string): Task {
   return {

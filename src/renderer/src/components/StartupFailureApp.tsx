@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { STARTUP_FAILURE_TITLE } from '../../../shared/startup-failure'
+import { useI18n } from '../i18n/I18nContext'
 import './StartupFailureApp.css'
 
 /** Plain fatal-startup surface used when the main application cannot be initialized. */
-export function StartupFailureApp({ message }: { message: string }): React.JSX.Element {
+export function StartupFailureApp(): React.JSX.Element {
+  const { t } = useI18n()
   const rootRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -65,10 +66,10 @@ export function StartupFailureApp({ message }: { message: string }): React.JSX.E
 
   return (
     <main ref={rootRef} className="startup-failure-app">
-      <h1>{STARTUP_FAILURE_TITLE}</h1>
-      <p role="region" aria-label="Startup failure details" tabIndex={0}>{message}</p>
+      <h1>{t('startupFailure.title')}</h1>
+      <p role="region" aria-label={t('startupFailure.detailsLabel')} tabIndex={0}>{t('startupFailure.message')}</p>
       <footer>
-        <button autoFocus onClick={() => window.close()}>Close</button>
+        <button autoFocus onClick={() => window.close()}>{t('common.close')}</button>
       </footer>
     </main>
   )

@@ -20,6 +20,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // Every test that mounts the interface also fails if a catalogue key, not
+    // its words, reaches the screen (localization-conventions, Gates).
+    setupFiles: ['tests/setup/rendered-keys.ts'],
     // The live lane spends money and downloads the Draw Things CLI and a model;
     // only npm run test:full runs it, through vitest.live.config.ts.
     exclude: [...configDefaults.exclude, 'tests/live/**'],

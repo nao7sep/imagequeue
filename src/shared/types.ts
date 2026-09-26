@@ -1,6 +1,8 @@
 // Shared types between main and renderer processes.
 
 import type { SessionDraft } from './session-draft'
+import type { Message } from './i18n/translate'
+import type { MessageKey } from './i18n/catalogues'
 
 export type BackendId = 'openai' | 'nanobanana' | 'grok' | 'flux' | 'drawthings'
 export type CloudBackendId = Exclude<BackendId, 'drawthings'>
@@ -49,14 +51,16 @@ export type DependencyState =
   | 'installed-unchecked'
 
 // One dependency's surface state for the modal and the pane pointer. The labels
-// are presentation-ready strings derived in main: for the CLI they are release
-// tags; for configs.json the installed label summarizes the file (entry count +
-// date) and there is no latest label because it is versionless.
+// are the CLI's release tags, shown as they are; configs.json is versionless, so
+// it has neither label and the renderer words its entry count instead.
 export interface DependencyInfo {
   id: DependencyId
   state: DependencyState
   installedLabel: string | null
   latestLabel: string | null
+  // configs.json only: how many entries the installed file holds, or null when
+  // it is present but unreadable. Null for the CLI and for an absent file.
+  entryCount: number | null
   // When the installed artifact was last written (configs.json's mtime); null for
   // the CLI, whose identity is its tag. ISO-8601 UTC; the renderer formats it.
   updatedAtUtc: string | null
@@ -139,9 +143,10 @@ export type TaskStatus = 'queued' | 'generating' | 'completed' | 'kept' | 'faile
 // concepts, so a template asking for them was describing what was already there.
 export type ElaboratorKind = 'composition' | 'style'
 
-export const ELABORATOR_KIND_LABELS: Record<ElaboratorKind, string> = {
-  composition: 'Composition',
-  style: 'Style',
+// Each kind's name, as the catalogue key the interface shows it by.
+export const ELABORATOR_KIND_LABELS: Record<ElaboratorKind, MessageKey> = {
+  composition: 'elaborator.kind.composition',
+  style: 'elaborator.kind.style',
 }
 
 export interface Elaborator {
@@ -165,7 +170,10 @@ export interface Task {
   durationMs: number | null
   imagePath: string | null
   baseName: string | null
-  error: string | null
+  // Why the task failed, as a message rendered in the current language. A plain
+  // string is copy a session recorded before failures were kept as messages,
+  // shown as it was written.
+  error: Message | string | null
 }
 
 export interface EnqueueRequest {

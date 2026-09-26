@@ -3,6 +3,7 @@ import { Icon } from './Icon'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { isTopmostModal, popModal, pushModal } from './modalStack'
 import { useImeGuard } from '../utils/imeGuard'
+import { useI18n } from '../i18n/I18nContext'
 import './Modal.css'
 
 interface ModalProps {
@@ -46,6 +47,7 @@ export function Modal({
   closeOnBackdropClick = true,
   dismissable = true,
 }: ModalProps): React.JSX.Element {
+  const { t } = useI18n()
   const modalId = useId()
   const titleId = `${modalId}-title`
   const boxRef = useRef<HTMLDivElement>(null)
@@ -145,7 +147,7 @@ export function Modal({
         {title !== undefined && (
           <div className="modal-header">
             <span id={titleId} className={titleHidden ? 'visually-hidden' : undefined}>{title}</span>
-            {dismissable && <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>}
+            {dismissable && <button className="modal-close" onClick={onClose} aria-label={t('common.close')}><Icon name="close" /></button>}
           </div>
         )}
         {children}

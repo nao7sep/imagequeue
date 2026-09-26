@@ -31,6 +31,7 @@ export function createDefaultConfig(): AppConfig {
     },
     general: {
       theme: 'system',
+      language: 'system',
       ui_font_family: '',
       auto_preview_idle_seconds: 30,
       export_dir: '',

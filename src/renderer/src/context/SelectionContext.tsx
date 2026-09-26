@@ -15,6 +15,8 @@ import { useConfirm } from './ConfirmContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { nextSelectionAfterRemoval } from '../utils/selection-recovery'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export interface Selection {
   backend: BackendId
@@ -24,7 +26,8 @@ export interface Selection {
 export type NavDirection = 'up' | 'down' | 'left' | 'right'
 
 export type TaskResultAction = 'thumbnail' | 'preview' | 'retry' | 'export' | 'remove' | 'restore' | 'delete'
-export type TaskActionResults = Record<string, Partial<Record<TaskResultAction, string>> | undefined>
+// Each retained result is the catalogue key of its failure, worded where it is shown.
+export type TaskActionResults = Record<string, Partial<Record<TaskResultAction, MessageKey>> | undefined>
 export type TaskActionOutcome = 'succeeded' | 'failed' | 'superseded'
 
 interface SelectionContextValue {
@@ -41,13 +44,13 @@ interface SelectionContextValue {
   restoreSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   taskActionResults: TaskActionResults
-  reportTaskActionFailure: (taskId: string, action: TaskResultAction, message: string, diagnosticMessage: string, error: unknown) => void
+  reportTaskActionFailure: (taskId: string, action: TaskResultAction, message: MessageKey, diagnosticMessage: string, error: unknown) => void
   clearTaskActionResult: (taskId: string, action: TaskResultAction) => void
   runTaskAction: (options: {
     taskId: string
     action: TaskResultAction
     ownershipKey?: string
-    message: string
+    message: MessageKey
     diagnosticMessage: string
     invoke: () => Promise<unknown>
   }) => Promise<TaskActionOutcome>
@@ -73,6 +76,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   const { tasks } = useQueue()
   const { settings } = useSettings()
   const confirm = useConfirm()
+  const { t } = useI18n()
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [taskActionResults, setTaskActionResults] = useState<TaskActionResults>({})
@@ -138,7 +142,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   const reportTaskActionFailure = useCallback((
     taskId: string,
     action: TaskResultAction,
-    message: string,
+    message: MessageKey,
     diagnosticMessage: string,
     error: unknown,
   ): void => {
@@ -160,7 +164,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     taskId: string
     action: TaskResultAction
     ownershipKey?: string
-    message: string
+    message: MessageKey
     diagnosticMessage: string
     invoke: () => Promise<unknown>
   }): Promise<TaskActionOutcome> => {
@@ -223,11 +227,9 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     if (general?.confirm_remove) {
       const keepingCompleted = task.status === 'completed'
       const ok = await confirm({
-        title: keepingCompleted ? 'Keep Image' : 'Remove Task',
-        message: keepingCompleted
-          ? 'Mark this completed image as kept and take it out of the active list?'
-          : 'Remove this task from the queue?',
-        confirmLabel: keepingCompleted ? 'Keep' : 'Remove'
+        title: t(keepingCompleted ? 'task.keepTitle' : 'task.removeTitle'),
+        message: t(keepingCompleted ? 'task.keepConfirm' : 'task.removeConfirm'),
+        confirmLabel: t(keepingCompleted ? 'task.keep' : 'task.remove'),
       })
       if (!ok) return
     }
@@ -241,14 +243,14 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       taskId,
       action: 'remove',
       ownershipKey: 'queue-mutation',
-      message: 'The task could not be removed. It remains in the queue; try again.',
+      message: 'task.removeFailed',
       diagnosticMessage: 'Failed to remove selected task',
       invoke: () => window.electronAPI.removeTask(backend, taskId),
     })
     if (outcome === 'failed' && movedSelection) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
     }
-  }, [confirm, settings, setSelectionInternal, runTaskAction])
+  }, [confirm, settings, setSelectionInternal, runTaskAction, t])
 
   // Deletes any task that is not mid-generation, whether or not it ever produced
   // an image: an unprocessed task has nothing on disk, and the main process
@@ -267,13 +269,13 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       // baseName is what the main process itself checks before touching disk.
       const toTrash = shouldDeleteToTrash(general.delete_to_trash)
       const ok = await confirm({
-        title: 'Delete Task',
-        message: !task.baseName
-          ? 'Delete this task? It has no generated image, so nothing is removed from disk.'
+        title: t('task.deleteTitle'),
+        message: t(!task.baseName
+          ? 'task.deleteConfirmNoFiles'
           : toTrash
-            ? 'Delete this task and move its files to the Trash?'
-            : 'Delete this task and permanently delete its files?',
-        confirmLabel: 'Delete',
+            ? 'task.deleteConfirmTrash'
+            : 'task.deleteConfirmPermanent'),
+        confirmLabel: t('task.delete'),
         danger: true
       })
       if (!ok) return
@@ -284,14 +286,14 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       taskId,
       action: 'delete',
       ownershipKey: 'queue-mutation',
-      message: 'The task could not be deleted. Its queue entry and files are unchanged; try again.',
+      message: 'task.deleteFailed',
       diagnosticMessage: 'Failed to delete selected task',
       invoke: () => window.electronAPI.deleteWithFiles(backend, taskId),
     })
     if (outcome === 'failed' && movedSelection) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
     }
-  }, [confirm, settings, setSelectionInternal, runTaskAction])
+  }, [confirm, settings, setSelectionInternal, runTaskAction, t])
 
   const restoreTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
@@ -301,7 +303,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       taskId,
       action: 'restore',
       ownershipKey: 'queue-mutation',
-      message: 'The kept task could not be restored. It remains kept; try again.',
+      message: 'task.restoreFailed',
       diagnosticMessage: 'Failed to restore selected task',
       invoke: () => window.electronAPI.restoreTask(backend, taskId),
     })

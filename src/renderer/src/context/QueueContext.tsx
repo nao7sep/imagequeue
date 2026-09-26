@@ -83,7 +83,7 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
 
   const enqueue = useCallback(async (request: EnqueueRequest) => {
     try { await window.electronAPI.enqueue(request) } catch (error) {
-      reportOperationalFailure('queue-enqueue', 'The task could not be queued. Nothing was added; try again.', 'Failed to enqueue task', error)
+      reportOperationalFailure('queue-enqueue', 'operation.enqueueFailed', 'Failed to enqueue task', error)
     }
   }, [])
 

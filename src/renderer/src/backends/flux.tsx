@@ -1,5 +1,7 @@
 import type { FluxModelDef } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
+import { useI18n } from '../i18n/I18nContext'
+import { sizePresetLabel } from '../i18n/optionLabels'
 
 // The UI keeps steps/guidance values even for a model that declares no range
 // (the fields are hidden and never enqueued); these are the numbers a fresh
@@ -32,19 +34,20 @@ function resolveRangedParam(
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParams, FluxModelDef>): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <>
       <div className="setting-row">
-        <label>Size</label>
+        <label>{t('backend.size')}</label>
         <select value={params.sizeIdx} onChange={(e) => onChange({ ...params, sizeIdx: Number.parseInt(e.target.value, 10) })}>
           {modelDef.sizes.map((s, i) => (
-            <option key={i} value={i}>{s.label}</option>
+            <option key={i} value={i}>{sizePresetLabel(t, s)}</option>
           ))}
         </select>
       </div>
       {modelDef.stepsRange && (
         <div className="setting-row">
-          <label>Steps</label>
+          <label>{t('backend.steps')}</label>
           <input
             type="number"
             value={params.steps}
@@ -62,7 +65,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
       )}
       {modelDef.guidanceRange && (
         <div className="setting-row">
-          <label>Guidance</label>
+          <label>{t('backend.guidance')}</label>
           <input
             type="number"
             value={params.guidance}
@@ -80,8 +83,8 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
         </div>
       )}
       <div className="setting-row">
-        <label>Seed</label>
-        <input type="text" value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder="random" />
+        <label>{t('backend.seed')}</label>
+        <input type="text" value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder={t('backend.seedPlaceholder')} />
       </div>
     </>
   )

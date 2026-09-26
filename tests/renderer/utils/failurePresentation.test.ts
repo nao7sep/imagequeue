@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { presentFailure, type FailureOperation } from '../../../src/renderer/src/utils/failurePresentation'
+import { createTranslator } from '../../../src/shared/i18n/translate'
+
+const { t } = createTranslator('en')
 
 const hostile = 'EACCES Error invoking remote method IPC /private/tmp/hostile-sentinel'
 
@@ -16,7 +19,7 @@ describe('presentFailure', () => {
     const error = new Error(hostile, { cause: new Error('root cause') })
 
     for (const operation of operations) {
-      const message = presentFailure(operation, error)
+      const message = t(presentFailure(operation, error))
       expect(message).not.toContain(hostile)
       expect(message.length).toBeGreaterThan(20)
     }

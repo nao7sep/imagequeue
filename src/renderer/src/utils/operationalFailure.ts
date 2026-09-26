@@ -1,4 +1,5 @@
 import { serializeError } from '../../../shared/serialize-error'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export const OPERATIONAL_FAILURE_EVENT = 'imagequeue-operational-failure'
 
@@ -21,7 +22,7 @@ export function recordOperationalDiagnostic(
 /** Routes background/action failures to the persistent app-shell result owner. */
 export function reportOperationalFailure(
   key: string,
-  userMessage: string,
+  userMessage: MessageKey,
   diagnosticMessage: string,
   error: unknown,
 ): void {

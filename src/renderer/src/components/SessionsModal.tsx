@@ -6,7 +6,9 @@ import { useSettings } from '../context/SettingsContext'
 import { useListbox } from '../hooks/useListbox'
 import { useImeGuard } from '../utils/imeGuard'
 import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from '../../../shared'
-import { formatUiDateTime } from '../utils/formatDateTime'
+import { useI18n, type Translator } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
+import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { sessionDisplayName } from '../utils/sessionName'
 import { presentFailure } from '../utils/failurePresentation'
 import { sessionImageUrl } from '../../../shared/image-url'
@@ -16,14 +18,15 @@ interface Props {
   onClose: () => void
 }
 
-function summarizeSession(session: SessionSummary): string {
-  const parts = [
-    `${session.completedCount} complete`,
-    ...(session.keptCount > 0 ? [`${session.keptCount} kept`] : []),
-    ...(session.retryCount > 0 ? [`${session.retryCount} retry`] : []),
-    `${session.taskCounts.total} total`,
+function summarizeSession(session: SessionSummary, { text }: Translator): string {
+  const parts: Message[] = [
+    msg('sessions.complete', { count: session.completedCount }),
+    ...(session.keptCount > 0 ? [msg('sessions.kept', { count: session.keptCount })] : []),
+    ...(session.retryCount > 0 ? [msg('sessions.retry', { count: session.retryCount })] : []),
+    msg('sessions.total', { count: session.taskCounts.total }),
   ]
-  return parts.join(' · ')
+  // Counts stack through one join entry, so the language chooses the separator.
+  return text(parts.reduceRight((rest, first) => msg('common.dotJoin', { first, rest })))
 }
 
 // Each thumbnail streams from the app's image scheme and loads lazily, so a long
@@ -55,13 +58,16 @@ function SessionPreviewStrip({ sessionId, thumbnails }: { sessionId: string; thu
 export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const { tasks } = useQueue()
   const confirm = useConfirm()
+  const i18n = useI18n()
+  const { t } = i18n
+  const date = (iso: string): string => i18n.dateTime(iso)
   const { settings } = useSettings()
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
+  const [loadError, setLoadError] = useState<MessageKey | null>(null)
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
   const [creatingSession, setCreatingSession] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<MessageKey | null>(null)
   // The active row of the sessions listbox (single source of truth). Manual
   // activation: arrowing only moves this; Enter resumes the active session.
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
@@ -82,7 +88,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
 
   const refreshSessions = useCallback(async (): Promise<void> => {
     setLoading(true)
-    setLoadError('')
+    setLoadError(null)
     try {
       const next = await window.electronAPI.listSessions()
       setSessions(next)
@@ -109,15 +115,15 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     if (session.isCurrent || hasGeneratingTasks || creatingSession) return
     if (currentTaskCount > 0) {
       const ok = await confirm({
-        title: 'Resume Session',
-        message: 'Replace the current queue with this session? The current session is kept if it contains any tasks; if it is empty, it is dropped per the "Drop empty sessions" setting.',
-        confirmLabel: 'Resume',
+        title: t('sessions.resumeTitle'),
+        message: t('sessions.resumeMessage', { setting: msg('settings.dropEmptySessions') }),
+        confirmLabel: t('sessions.resume'),
       })
       if (!ok) return
     }
 
     setBusySessionId(session.sessionId)
-    setMessage('')
+    setMessage(null)
     try {
       await window.electronAPI.resumeSession(session.sessionId)
       onClose()
@@ -126,21 +132,21 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusySessionId(null)
     }
-  }, [confirm, creatingSession, currentTaskCount, hasGeneratingTasks, onClose])
+  }, [confirm, creatingSession, currentTaskCount, hasGeneratingTasks, onClose, t])
 
   const handleCreateSession = useCallback(async (): Promise<void> => {
     if (hasGeneratingTasks || creatingSession) return
     if (currentTaskCount > 0) {
       const ok = await confirm({
-        title: 'Start New Session',
-        message: 'Start a new session? The current session is kept if it contains any tasks; if it is empty, it is dropped per the "Drop empty sessions" setting.',
-        confirmLabel: 'Start',
+        title: t('sessions.newTitle'),
+        message: t('sessions.newMessage', { setting: msg('settings.dropEmptySessions') }),
+        confirmLabel: t('sessions.start'),
       })
       if (!ok) return
     }
 
     setCreatingSession(true)
-    setMessage('')
+    setMessage(null)
     try {
       await window.electronAPI.createSession()
       onClose()
@@ -149,22 +155,20 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setCreatingSession(false)
     }
-  }, [confirm, creatingSession, currentTaskCount, hasGeneratingTasks, onClose])
+  }, [confirm, creatingSession, currentTaskCount, hasGeneratingTasks, onClose, t])
 
   const handleDelete = useCallback(async (session: SessionSummary): Promise<void> => {
     if (session.isCurrent) return
     const ok = await confirm({
-      title: 'Delete Session',
-      message: deleteToTrash
-        ? 'Move this session folder to the Trash? The session and everything in it — images, metadata, and task records — will be removed from ImageQueue history.'
-        : 'Permanently delete this session folder? The session and everything in it — images, metadata, and task records — will be removed from ImageQueue history.',
-      confirmLabel: 'Delete',
+      title: t('sessions.deleteTitle'),
+      message: t(deleteToTrash ? 'sessions.deleteTrashMessage' : 'sessions.deletePermanentMessage'),
+      confirmLabel: t('task.delete'),
       danger: true,
     })
     if (!ok) return
 
     setBusySessionId(session.sessionId)
-    setMessage('')
+    setMessage(null)
     try {
       await window.electronAPI.deleteSession(session.sessionId)
       await refreshSessions()
@@ -173,11 +177,11 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusySessionId(null)
     }
-  }, [confirm, deleteToTrash, refreshSessions])
+  }, [confirm, deleteToTrash, refreshSessions, t])
 
   const handleOpenFolder = useCallback(async (session: SessionSummary): Promise<void> => {
     setBusySessionId(session.sessionId)
-    setMessage('')
+    setMessage(null)
     try {
       await window.electronAPI.openSessionFolder(session.sessionId)
     } catch (error) {
@@ -203,45 +207,45 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Sessions"
+      title={t('menu.sessions')}
       className="sessions-modal-box"
       onClose={onClose}
       footer={
         <button className="modal-btn" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
       <div className="sessions-modal-body">
         <div className="sessions-modal-topbar">
           <p className="sessions-modal-note">
-            New Session and Resume keep the current session if it contains any tasks; an empty session is dropped per the &ldquo;Drop empty sessions&rdquo; setting.
+            {t('sessions.note', { setting: msg('settings.dropEmptySessions') })}
           </p>
           <button
             className="modal-btn modal-btn-primary"
             onClick={() => void handleCreateSession()}
             disabled={creatingSession || hasGeneratingTasks || busySessionId !== null}
           >
-            New Session
+            {t('sessions.newSession')}
           </button>
         </div>
         {hasGeneratingTasks && (
           <div className="sessions-modal-warning">
-            Wait for active generation to finish before resuming another session.
+            {t('sessions.waitForGeneration')}
           </div>
         )}
-        {message && <div className="sessions-modal-message" role="alert">{message}</div>}
+        {message && <div className="sessions-modal-message" role="alert">{t(message)}</div>}
         {loadError && (
-          <div className="sessions-modal-message" role="alert">Couldn’t refresh sessions: {loadError}</div>
+          <div className="sessions-modal-message" role="alert">{t('sessions.refreshFailed', { reason: t(loadError) })}</div>
         )}
-        <div className="sessions-list" aria-label="Sessions" aria-busy={loading} {...listboxProps}>
+        <div className="sessions-list" aria-label={t('menu.sessions')} aria-busy={loading} {...listboxProps}>
           {sessions.length === 0 && (
             <div className="sessions-modal-empty" role="presentation">
               {loading
-                ? 'Loading sessions…'
+                ? t('sessions.loading')
                 : loadError
-                  ? 'Sessions unavailable.'
-                  : 'No saved sessions yet.'}
+                  ? t('sessions.unavailable')
+                  : t('sessions.empty')}
             </div>
           )}
           {sessions.length > 0 && (
@@ -258,14 +262,14 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                   <div className="session-card-header">
                     <div className="session-card-title-row">
                       <div className="session-card-title">{sessionDisplayName(session.sessionId)}</div>
-                      {session.isCurrent && <span className="session-card-badge">Current</span>}
+                      {session.isCurrent && <span className="session-card-badge">{t('sessions.current')}</span>}
                     </div>
-                    <div className="session-card-summary">{summarizeSession(session)}</div>
+                    <div className="session-card-summary">{summarizeSession(session, i18n)}</div>
                   </div>
                   <div className="session-card-meta">
-                    <span>Updated {formatUiDateTime(session.updatedAt)}</span>
-                    <span>Created {formatUiDateTime(session.createdAt)}</span>
-                    {session.lastResumedAt && <span>Resumed {formatUiDateTime(session.lastResumedAt)}</span>}
+                    <span>{t('sessions.updated', { date: date(session.updatedAt) })}</span>
+                    <span>{t('sessions.created', { date: date(session.createdAt) })}</span>
+                    {session.lastResumedAt && <span>{t('sessions.resumed', { date: date(session.lastResumedAt) })}</span>}
                   </div>
                   <SessionPreviewStrip sessionId={session.sessionId} thumbnails={session.thumbnails} />
                   {/* Per-row actions are pointer-only (tabIndex -1), never tab
@@ -278,7 +282,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                       onClick={() => void handleOpenFolder(session)}
                       disabled={busy || creatingSession}
                     >
-                      Open Folder
+                      {t('sessions.openFolder')}
                     </button>
                     <button
                       tabIndex={-1}
@@ -286,7 +290,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                       onClick={() => void handleResume(session)}
                       disabled={busy || session.isCurrent || hasGeneratingTasks || creatingSession}
                     >
-                      Resume
+                      {t('sessions.resume')}
                     </button>
                     <button
                       tabIndex={-1}
@@ -294,7 +298,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                       onClick={() => void handleDelete(session)}
                       disabled={busy || session.isCurrent || creatingSession}
                     >
-                      Delete
+                      {t('task.delete')}
                     </button>
                   </div>
                 </div>

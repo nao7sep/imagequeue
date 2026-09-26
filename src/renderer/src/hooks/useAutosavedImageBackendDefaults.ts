@@ -5,6 +5,7 @@ import {
   type SavedImageBackendDefaults,
 } from '../utils/imageBackendDefaults'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 interface UseAutosavedImageBackendDefaultsOptions {
   backend: CloudBackendId | null
@@ -17,11 +18,11 @@ interface UseAutosavedImageBackendDefaultsOptions {
 }
 
 export interface ImageBackendDefaultsPersistence {
-  saveFailure: string | null
+  saveFailure: MessageKey | null
   dismissSaveFailure: () => void
 }
 
-const SAVE_FAILURE = 'Model and parameter changes could not be saved. Your current choices remain in use for this session.'
+const SAVE_FAILURE = 'column.defaultsSaveFailed'
 
 export function useAutosavedImageBackendDefaults({
   backend,
@@ -36,7 +37,7 @@ export function useAutosavedImageBackendDefaults({
   const persistedSnapshotRef = useRef('')
   const loadedRef = useRef(false)
   const saveAttemptRef = useRef(0)
-  const [saveFailure, setSaveFailure] = useState<string | null>(null)
+  const [saveFailure, setSaveFailure] = useState<MessageKey | null>(null)
   const currentSnapshot = currentModel
     ? serializeImageBackendDefaults(currentModel, currentParams)
     : ''

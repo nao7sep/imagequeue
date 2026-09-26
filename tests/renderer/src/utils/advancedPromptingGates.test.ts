@@ -9,6 +9,16 @@ import {
   type ElaboratorPicks,
   describeBrainstormProgress,
 } from '../../../../src/renderer/src/utils/advancedPromptingGates'
+import { createTranslator } from '../../../../src/shared/i18n/translate'
+import type { MessageKey } from '../../../../src/shared/i18n/catalogues'
+
+// Reasons and progress are catalogue text; these read them as English shows them.
+const en = createTranslator('en')
+const said = (key: MessageKey | null): string | null => (key === null ? null : en.t(key))
+const progressText = (...args: Parameters<typeof describeBrainstormProgress>): string => {
+  const note = describeBrainstormProgress(...args)
+  return note ? en.text(note) : ''
+}
 
 const allPicked: ElaboratorPicks = { composition: true, style: true }
 
@@ -26,11 +36,11 @@ describe('firstMissingElaboratorKind', () => {
 
 describe('elaborateDisabledReason', () => {
   it('requires a seed first', () => {
-    expect(elaborateDisabledReason(false, null)).toBe('Enter a seed prompt above.')
+    expect(said(elaborateDisabledReason(false, null))).toBe('Enter a seed prompt above.')
   })
 
   it('requires an elaborator once the seed is present', () => {
-    expect(elaborateDisabledReason(true, 'composition')).toBe('Pick a composition elaborator first.')
+    expect(said(elaborateDisabledReason(true, 'composition'))).toBe('Pick a composition elaborator first.')
   })
 
   it('is null when seed and elaborators are ready', () => {
@@ -40,13 +50,13 @@ describe('elaborateDisabledReason', () => {
 
 describe('promptModeDisabledReason', () => {
   it('blocks the elaborated mode until an elaborated prompt exists', () => {
-    expect(promptModeDisabledReason('elaborated', false, null)).toBe('Run Elaborate first.')
+    expect(said(promptModeDisabledReason('elaborated', false, null))).toBe('Run Elaborate first.')
     expect(promptModeDisabledReason('elaborated', true, null)).toBeNull()
   })
 
   it('blocks brainstorm modes until elaborators are picked', () => {
-    expect(promptModeDisabledReason('fresh-iteration', false, 'style')).toBe('Pick a style elaborator first.')
-    expect(promptModeDisabledReason('fresh-task', false, 'composition')).toBe('Pick a composition elaborator first.')
+    expect(said(promptModeDisabledReason('fresh-iteration', false, 'style'))).toBe('Pick a style elaborator first.')
+    expect(said(promptModeDisabledReason('fresh-task', false, 'composition'))).toBe('Pick a composition elaborator first.')
     expect(promptModeDisabledReason('fresh-iteration', false, null)).toBeNull()
   })
 
@@ -57,20 +67,20 @@ describe('promptModeDisabledReason', () => {
 
 describe('queueDisabledReason', () => {
   it('requires at least one target before anything else', () => {
-    expect(queueDisabledReason('as-is', true, true, null, 0)).toBe('Select at least one target.')
+    expect(said(queueDisabledReason('as-is', true, true, null, 0))).toBe('Select at least one target.')
   })
 
   it('requires a seed in as-is mode', () => {
-    expect(queueDisabledReason('as-is', false, true, null, 1)).toBe('Seed prompt is empty.')
+    expect(said(queueDisabledReason('as-is', false, true, null, 1))).toBe('Seed prompt is empty.')
   })
 
   it('requires elaborated text in elaborated mode', () => {
-    expect(queueDisabledReason('elaborated', true, false, null, 1)).toBe('Elaborated prompt is empty.')
+    expect(said(queueDisabledReason('elaborated', true, false, null, 1))).toBe('Elaborated prompt is empty.')
   })
 
   it('requires elaborators then a seed in brainstorm modes', () => {
-    expect(queueDisabledReason('fresh-task', false, false, 'composition', 1)).toBe('Pick a composition elaborator first.')
-    expect(queueDisabledReason('fresh-iteration', false, false, null, 1)).toBe('Enter a seed prompt for elaboration.')
+    expect(said(queueDisabledReason('fresh-task', false, false, 'composition', 1))).toBe('Pick a composition elaborator first.')
+    expect(said(queueDisabledReason('fresh-iteration', false, false, null, 1))).toBe('Enter a seed prompt for elaboration.')
   })
 
   it('is null when the run is ready', () => {
@@ -120,8 +130,8 @@ describe('computeAdvancedGates', () => {
   it('suppresses precondition tooltips while busy', () => {
     // Idle: the precondition reason surfaces as a tooltip.
     const idle = computeAdvancedGates({ ...ready, seedFilled: false, totalTasks: 0, activeOperation: null })
-    expect(idle.elaborate.reason).toBe('Enter a seed prompt above.')
-    expect(idle.queue.reason).toBe('Select at least one target.')
+    expect(said(idle.elaborate.reason)).toBe('Enter a seed prompt above.')
+    expect(said(idle.queue.reason)).toBe('Select at least one target.')
     // Busy: a mid-operation disable is self-explanatory, so no stale hint.
     const busy = computeAdvancedGates({ ...ready, seedFilled: false, totalTasks: 0, activeOperation: 'queue' })
     expect(busy.elaborate.reason).toBeNull()
@@ -139,9 +149,9 @@ describe('computeAdvancedGates', () => {
     })
     expect(gates.missingElaboratorKind).toBe('composition')
     expect(gates.elaborate.disabled).toBe(true)
-    expect(gates.elaborate.reason).toBe('Pick a composition elaborator first.')
+    expect(said(gates.elaborate.reason)).toBe('Pick a composition elaborator first.')
     expect(gates.queue.disabled).toBe(true)
-    expect(gates.queue.reason).toBe('Elaborated prompt is empty.')
+    expect(said(gates.queue.reason)).toBe('Elaborated prompt is empty.')
     expect(gates.history.disabled).toBe(false)
   })
 })
@@ -152,20 +162,20 @@ describe('describeBrainstormProgress', () => {
   // only the prompt counter left that stretch silent, which is what made a long
   // elaboration read as a hang.
   it('names the stage before any prompt exists', () => {
-    expect(describeBrainstormProgress('elaborate', { done: 0, total: 12, phase: 'facets' }))
+    expect(progressText('elaborate', { done: 0, total: 12, phase: 'facets' }))
       .toBe('Choosing which aspects to vary…')
-    expect(describeBrainstormProgress('queue', { done: 0, total: 12, phase: 'concepts' }))
+    expect(progressText('queue', { done: 0, total: 12, phase: 'concepts' }))
       .toBe('Gathering concepts…')
   })
 
   it('counts prompts once they are being written', () => {
-    expect(describeBrainstormProgress('queue', { done: 3, total: 12, phase: 'prompts' }))
+    expect(progressText('queue', { done: 3, total: 12, phase: 'prompts' }))
       .toBe('Writing prompts… 3 / 12')
   })
 
   // Elaborate asks for exactly one, where "0 / 1" reads as a stalled counter.
   it('drops the counter for a single prompt', () => {
-    expect(describeBrainstormProgress('elaborate', { done: 0, total: 1, phase: 'prompts' }))
+    expect(progressText('elaborate', { done: 0, total: 1, phase: 'prompts' }))
       .toBe('Writing the prompt…')
   })
 
@@ -173,12 +183,12 @@ describe('describeBrainstormProgress', () => {
   // real work left — the tasks it enqueues. Saying nothing there would put the
   // silence back at the end instead of the beginning.
   it('keeps saying something after the engine goes quiet', () => {
-    expect(describeBrainstormProgress('queue', null)).toBe('Queueing tasks…')
-    expect(describeBrainstormProgress('elaborate', null)).toBe('Finishing…')
+    expect(progressText('queue', null)).toBe('Queueing tasks…')
+    expect(progressText('elaborate', null)).toBe('Finishing…')
   })
 
   it('says nothing when nothing is running, so the element is omitted', () => {
-    expect(describeBrainstormProgress(null, null)).toBe('')
-    expect(describeBrainstormProgress(null, { done: 3, total: 12, phase: 'prompts' })).toBe('')
+    expect(progressText(null, null)).toBe('')
+    expect(progressText(null, { done: 3, total: 12, phase: 'prompts' })).toBe('')
   })
 })

@@ -20,6 +20,9 @@ import { isFreshCompletion } from '../utils/taskScroll'
 import { taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
+import { useI18n } from '../i18n/I18nContext'
+import { isMessage } from '../../../shared/i18n/translate'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 import './QueueColumn.css'
 
 interface Props {
@@ -39,6 +42,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
+  const { t } = useI18n()
   const { tasks, loadState } = useQueue()
   const {
     selection,
@@ -250,7 +254,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       <div className="column-settings">
         {backendId !== 'drawthings' && (
           <div className="setting-row">
-            <label>Model</label>
+            <label>{t('column.model')}</label>
             <select value={model} onChange={(e) => setModel(e.target.value)}>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>{m.label}</option>
@@ -267,12 +271,12 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
         {cloudDefaultsPersistence.saveFailure && (
           <div className="column-save-result" role="alert">
-            <span>{cloudDefaultsPersistence.saveFailure}</span>
+            <span>{t(cloudDefaultsPersistence.saveFailure)}</span>
             <button
               type="button"
               className="column-save-result-close"
-              aria-label="Close settings save result"
-              title="Close"
+              aria-label={t('column.closeSaveResult')}
+              title={t('common.close')}
               onClick={cloudDefaultsPersistence.dismissSaveFailure}
             >
               <Icon name="close" />
@@ -285,7 +289,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         )}
 
         {apiKeyMissing && (
-          <div className="setting-row model-warning">API key not set</div>
+          <div className="setting-row model-warning">{t('column.apiKeyNotSet')}</div>
         )}
 
         <button
@@ -293,14 +297,14 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
           disabled={!hasPrompt || !readyToEnqueue}
           onClick={() => enqueueToBackend(backendId, prompt)}
         >
-          <Icon name="plus" /> Queue
+          <Icon name="plus" /> {t('column.queue')}
         </button>
       </div>
 
       <div
         className="task-list"
         role="list"
-        aria-label={`${label} queue`}
+        aria-label={t('column.queueLabel', { backend: label })}
         onKeyDown={handleListKeyDown}
         onClick={(e) => { if (e.target === e.currentTarget) clear() }}
       >
@@ -310,10 +314,10 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
             role="presentation"
           >
             {loadState === 'loading'
-              ? 'Loading queue…'
+              ? t('column.loadingQueue')
               : loadState === 'failed'
-                ? 'Queued tasks could not be loaded.'
-                : 'No tasks queued'}
+                ? t('column.loadFailed')
+                : t('column.noTasks')}
           </div>
         ) : (
           columnTasks.map((task) => (
@@ -341,6 +345,16 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
 const TASK_RESULT_ACTIONS = ['thumbnail', 'preview', 'retry', 'export', 'remove', 'restore', 'delete'] as const
 
+const CLOSE_RESULT_LABELS: Record<(typeof TASK_RESULT_ACTIONS)[number], MessageKey> = {
+  thumbnail: 'task.closeResult.thumbnail',
+  preview: 'task.closeResult.preview',
+  retry: 'task.closeResult.retry',
+  export: 'task.closeResult.export',
+  remove: 'task.closeResult.remove',
+  restore: 'task.closeResult.restore',
+  delete: 'task.closeResult.delete',
+}
+
 function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task: Task; backendId: BackendId; isSelected: boolean; isTabbable: boolean; onSelect: () => void }): React.JSX.Element {
   const {
     removeTask,
@@ -351,6 +365,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     clearTaskActionResult,
     runTaskAction,
   } = useSelection()
+  const { t, text } = useI18n()
   const itemRef = useRef<HTMLButtonElement>(null)
   // Seeded with the status at mount so an item that is *already* completed or
   // kept when it first renders — app launch restoring stored tasks, or the user
@@ -399,7 +414,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     void runTaskAction({
       taskId: task.id,
       action: 'retry',
-      message: 'The task could not be retried. It remains stopped; try again.',
+      message: 'task.retryFailed',
       diagnosticMessage: 'Failed to retry task',
       invoke: () => window.electronAPI.retryTask(backendId, task.id),
     })
@@ -411,7 +426,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     void runTaskAction({
       taskId: task.id,
       action: 'export',
-      message: 'The image could not be exported. Check the export folder, then try again.',
+      message: 'task.exportFailed',
       diagnosticMessage: 'Failed to export task image',
       invoke: () => window.electronAPI.exportImage(task.baseName!, getExt()),
     })
@@ -421,14 +436,16 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   // share a button and differ only in icon and wording.
   const keeping = task.status === 'completed'
   const removeIcon = keeping ? 'archive' : 'close'
-  const removeTitle = keeping ? 'Keep this image, filed away out of the active list' : 'Remove from queue'
-  const statusLabel = taskStatusLabel(task.status)
+  const removeTitle = t(keeping ? 'task.keepHint' : 'task.removeHint')
+  const statusLabel = taskStatusLabel(t, task.status)
+  // A failure recorded as a message reads in the current language; older copy a
+  // session stored as words shows as it was written.
   const failureMessage = task.status === 'failed'
-    ? task.error || 'This image could not be generated. Retry it; if the problem continues, check the session log.'
+    ? isMessage(task.error) ? text(task.error) : task.error || t('taskFailure.unknown')
     : null
   const visibleActionResults = TASK_RESULT_ACTIONS.flatMap((action) => {
     const message = taskActionResults[task.id]?.[action]
-    return message ? [{ action, message }] : []
+    return message ? [{ action, message: t(message) }] : []
   })
 
   // One-line prompt preview: flatten the (possibly multiline) prompt to a single
@@ -469,7 +486,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
               loading="lazy"
               decoding="async"
               onError={() => {
-                reportTaskActionFailure(task.id, 'thumbnail', 'This task’s thumbnail could not be loaded. The task is unchanged.', 'Failed to load task thumbnail', new Error(`Thumbnail request failed for ${task.baseName}`))
+                reportTaskActionFailure(task.id, 'thumbnail', 'task.thumbnailFailed', 'Failed to load task thumbnail', new Error(`Thumbnail request failed for ${task.baseName}`))
               }}
               onLoad={() => {
                 clearTaskActionResult(task.id, 'thumbnail')
@@ -499,27 +516,27 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
           selectable button so the DOM never nests interactive controls. */}
       <div className="task-actions">
         {(task.status === 'failed' || task.status === 'interrupted') && (
-          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title="Retry" aria-label="Retry">
+          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title={t('task.retry')} aria-label={t('task.retry')}>
             <Icon name="retry" />
           </button>
         )}
         {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
-          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title="Export to export folder" aria-label="Export">
+          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title={t('task.exportHint')} aria-label={t('task.export')}>
             <Icon name="export" />
           </button>
         )}
         {task.status === 'kept' && (
-          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title="Restore to active list" aria-label="Restore">
+          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title={t('task.restoreHint')} aria-label={t('task.restore')}>
             <Icon name="restore" />
           </button>
         )}
         {task.status !== 'generating' && task.status !== 'kept' && (
-          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={keeping ? 'Keep' : 'Remove'}>
+          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={t(keeping ? 'task.keep' : 'task.remove')}>
             <Icon name={removeIcon} />
           </button>
         )}
         {(task.status === 'completed' || task.status === 'kept') && (
-          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title="Delete with files" aria-label="Delete">
+          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title={t('task.deleteHint')} aria-label={t('task.delete')}>
             <Icon name="trash" />
           </button>
         )}
@@ -533,8 +550,8 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
               <button
                 type="button"
                 className="task-action-result-close"
-                aria-label={`Close ${action} result`}
-                title="Close"
+                aria-label={t(CLOSE_RESULT_LABELS[action])}
+                title={t('common.close')}
                 onClick={(event) => {
                   event.stopPropagation()
                   clearTaskActionResult(task.id, action)

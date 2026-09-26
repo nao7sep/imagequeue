@@ -12,6 +12,7 @@ function info(id: DependencyInfo['id'], patch: Partial<DependencyInfo>): Depende
     id,
     state: 'up-to-date',
     installedLabel: null,
+    entryCount: null,
     latestLabel: null,
     updatedAtUtc: null,
     lastCheckedAtUtc: null,
@@ -36,7 +37,7 @@ describe('DependencyPanePointer', () => {
   it('states the problem and where to go as one plain paragraph', async () => {
     renderPointer({
       cli: info('cli', { state: 'update-available', installedLabel: 'v1.20260716.0', latestLabel: 'v26.0910.1' }),
-      recommendations: info('recommendations', { state: 'up-to-date', installedLabel: '56 entries' }),
+      recommendations: info('recommendations', { state: 'up-to-date', entryCount: 56 }),
       checkUpdatesAtLaunch: true,
       platformSupported: true,
     })

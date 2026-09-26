@@ -9,6 +9,9 @@ import { presentFailure } from '../utils/failurePresentation'
 import './DrawThingsModelsModal.css'
 import { InlineFailureResult } from './InlineFailureResult'
 import { useExternalLinkResults } from '../hooks/useExternalLinkResults'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
+import type { Translator } from '../../../shared/i18n/translate'
 
 interface Props {
   onClose: () => void
@@ -49,9 +52,10 @@ function isOfficialModel(model: LocalModelInfo): boolean {
   return normalizedSource(model) === 'official'
 }
 
-function sourceLabel(model: LocalModelInfo): string {
+// The CLI's own source value, shown as it names it; only the fallback is ours.
+function sourceLabel(model: LocalModelInfo, t: Translator['t']): string {
   const source = model.source.trim()
-  if (!source || source.toLowerCase() === 'unknown') return 'Catalog'
+  if (!source || source.toLowerCase() === 'unknown') return t('dtModels.catalog')
   return source.replace(/[_-]/g, ' ')
 }
 
@@ -93,23 +97,24 @@ function mergeModels(availableModels: LocalModelInfo[], downloadedModels: LocalM
 
 export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
+  const { t, rich } = useI18n()
   const { addJob } = useCliJobs()
   const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
   const [customJsonStatus, setCustomJsonStatus] = useState<CustomJsonStatus>({ kind: 'absent' })
   const [loadingDownloaded, setLoadingDownloaded] = useState(true)
   const [loadingAvailable, setLoadingAvailable] = useState(true)
-  const [downloadedError, setDownloadedError] = useState('')
-  const [availableError, setAvailableError] = useState('')
+  const [downloadedError, setDownloadedError] = useState<MessageKey | null>(null)
+  const [availableError, setAvailableError] = useState<MessageKey | null>(null)
   const [importPath, setImportPath] = useState('')
-  const [importError, setImportError] = useState('')
+  const [importError, setImportError] = useState<MessageKey | null>(null)
   const [officialFilter, setOfficialFilter] = useState('')
   const [communityFilter, setCommunityFilter] = useState('')
   // null while the check is in flight. Every operation in this modal runs the
   // CLI (list/import/download all shell out), so without it the modal can do
   // nothing — it shows a pointer to the Dependencies window instead of empty lists.
   const [cliInstalled, setCliInstalled] = useState<boolean | null>(null)
-  const [cliError, setCliError] = useState('')
+  const [cliError, setCliError] = useState<MessageKey | null>(null)
   const externalLinks = useExternalLinkResults()
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
@@ -118,18 +123,18 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       return
     }
     const ok = await confirm({
-      title: 'Unsaved changes',
-      message: 'You have an unimported model path. Discard and close?',
-      confirmLabel: 'Discard',
-      cancelLabel: 'Keep Editing',
+      title: t('settings.unsavedTitle'),
+      message: t('dtModels.unimportedMessage'),
+      confirmLabel: t('settings.discard'),
+      cancelLabel: t('settings.keepEditing'),
       danger: true
     })
     if (ok) onClose()
-  }, [importPath, confirm, onClose])
+  }, [importPath, confirm, onClose, t])
 
   const loadDownloaded = useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) setLoadingDownloaded(true)
-    setDownloadedError('')
+    setDownloadedError(null)
     try {
       const [list, status] = await Promise.all([
         window.electronAPI.localListDownloadedModels(),
@@ -154,7 +159,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     if (cliInstalled !== true) return
     void loadDownloaded()
     setLoadingAvailable(true)
-    setAvailableError('')
+    setAvailableError(null)
     void window.electronAPI.localListAvailableModels()
       .then(setAvailableModels)
       .catch((error) => setAvailableError(presentFailure('drawthings-catalog-load', error)))
@@ -183,7 +188,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }, [cliInstalled, loadDownloaded])
 
   const handleStartDownload = async (modelFile: string): Promise<void> => {
-    setImportError('')
+    setImportError(null)
     try {
       const jobId = await window.electronAPI.cliStartDownload(modelFile)
       addJob(jobId, 'download', modelFile)
@@ -193,7 +198,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }
 
   const handleBrowse = async (): Promise<void> => {
-    setImportError('')
+    setImportError(null)
     try {
       const picked = await window.electronAPI.openFileDialog([])
       if (picked) setImportPath(picked)
@@ -204,7 +209,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
   const handleImport = async (): Promise<void> => {
     if (!importPath) return
-    setImportError('')
+    setImportError(null)
     try {
       const jobId = await window.electronAPI.cliStartImport(importPath)
       addJob(jobId, 'import', importPath.split(/[\\/]/).pop() ?? importPath)
@@ -215,7 +220,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }
 
   const loadingModels = loadingDownloaded || loadingAvailable
-  const modelsError = downloadedError || availableError
+  const modelsError = downloadedError ?? availableError
   const allModels = mergeModels(availableModels, downloadedModels)
 
   // custom.json is the import ground truth (the CLI mislabels every import as
@@ -247,13 +252,13 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         kind={kind}
         label={label}
         loading={loadingModels}
-        emptyText={modelsError ? 'Models unavailable.' : emptyText}
+        emptyText={modelsError ? t('dtModels.unavailable') : emptyText}
         onDownload={(file) => { void handleStartDownload(file) }}
         onOpenExternal={(key, url) => {
           void externalLinks.open({
             key,
             url,
-            message: 'The model page could not be opened in your browser. Try the link again.',
+            message: 'dtModels.linkFailed',
             diagnosticMessage: 'Failed to open a Draw Things model link',
           })
         }}
@@ -263,7 +268,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Draw Things Models"
+      title={t('menu.drawThingsModels')}
       // The wide fixed width is for the two model columns. The CLI-required
       // blocked state is just a sentence and a button, so it drops that class and
       // takes the shell's natural (narrower) modal sizing.
@@ -271,7 +276,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
       onClose={() => { void handleRequestClose() }}
       footer={
         <button className="modal-btn" onClick={() => { void handleRequestClose() }}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
@@ -279,10 +284,10 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
         <div className="dt-modal-body dt-cli-required">
           <p className="dt-hint" role={cliError ? 'alert' : undefined}>
             {cliError
-              ? cliError
+              ? t(cliError)
               : cliInstalled === null
-                ? 'Checking the Draw Things CLI…'
-                : "The Draw Things CLI is required to list, download, or import models, and it isn't installed yet."}
+                ? t('dtModels.checkingCli')
+                : t('dtModels.cliRequired')}
           </p>
           {cliInstalled === false && <button
             className="dt-action-btn"
@@ -291,30 +296,30 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
               onClose()
             }}
           >
-            Open Managed tools
+            {t('dtModels.openManagedTools')}
           </button>}
         </div>
       ) : (
       <div className="dt-modal-body">
         {modelsError && (
-          <div className="dt-model-error" role="alert">{modelsError}</div>
+          <div className="dt-model-error" role="alert">{t(modelsError)}</div>
         )}
         {Object.entries(externalLinks.results).map(([key, message]) => message ? (
           <InlineFailureResult
             key={key}
-            message={message}
-            closeLabel="Close model link result"
+            message={t(message)}
+            closeLabel={t('dtModels.closeLinkResult')}
             onClose={() => externalLinks.dismiss(key)}
           />
         ) : null)}
         <div className="dt-model-columns">
           <section className="dt-model-column">
             <div className="dt-column-header">
-              <h3 className="dt-column-title">Official Models</h3>
-              <p className="dt-column-desc">Install models from the Draw Things official catalog.</p>
+              <h3 className="dt-column-title">{t('dtModels.official')}</h3>
+              <p className="dt-column-desc">{t('dtModels.officialDesc')}</p>
               <input
                 className="dt-search-input"
-                placeholder="Search official models..."
+                placeholder={t('dtModels.searchOfficial')}
                 value={officialFilter}
                 onChange={(e) => setOfficialFilter(e.target.value)}
               />
@@ -323,78 +328,75 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
               {renderModelList(
                 filteredOfficialModels,
                 'catalog',
-                'Official models',
+                t('dtModels.officialList'),
                 officialModels.length === 0
-                  ? 'No official models available.'
-                  : 'No official models match this search.'
+                  ? t('dtModels.officialEmpty')
+                  : t('dtModels.officialNoMatch')
               )}
             </div>
           </section>
 
           <section className="dt-model-column">
             <div className="dt-column-header">
-              <h3 className="dt-column-title">Community Models</h3>
-              <p className="dt-column-desc">Download community catalog models or import local files.</p>
+              <h3 className="dt-column-title">{t('dtModels.community')}</h3>
+              <p className="dt-column-desc">{t('dtModels.communityDesc')}</p>
               <input
                 className="dt-search-input"
-                placeholder="Search community models..."
+                placeholder={t('dtModels.searchCommunity')}
                 value={communityFilter}
                 onChange={(e) => setCommunityFilter(e.target.value)}
               />
             </div>
             <div className="dt-column-scroll">
               <section className="dt-section dt-import-section">
-                <h4 className="dt-section-title">Import Local Model</h4>
-                <p className="dt-hint dt-import-hint">
-                  Import a model artifact from this computer into the Draw Things models directory.
-                </p>
+                <h4 className="dt-section-title">{t('dtModels.importTitle')}</h4>
+                <p className="dt-hint dt-import-hint">{t('dtModels.importHint')}</p>
                 <div className="dt-import-row">
                   <input
-                    placeholder="Model file path"
+                    placeholder={t('dtModels.importPlaceholder')}
                     value={importPath}
-                    onChange={(e) => { setImportError(''); setImportPath(e.target.value) }}
+                    onChange={(e) => { setImportError(null); setImportPath(e.target.value) }}
                   />
-                  <button className="dt-action-btn dt-browse-btn" onClick={handleBrowse}>Browse...</button>
+                  <button className="dt-action-btn dt-browse-btn" onClick={handleBrowse}>{t('dtModels.browse')}</button>
                   <button
                     className="dt-action-btn dt-import-btn"
                     disabled={!importPath}
                     onClick={() => { void handleImport() }}
                   >
-                    Import
+                    {t('dtModels.import')}
                   </button>
                 </div>
-                {importError && <div className="dt-model-error" role="alert">{importError}</div>}
+                {importError && <div className="dt-model-error" role="alert">{t(importError)}</div>}
               </section>
 
               <section className="dt-section">
-                <h4 className="dt-section-title">Local Imports</h4>
+                <h4 className="dt-section-title">{t('dtModels.localImports')}</h4>
                 {customJsonStatus.kind === 'unreadable' && (
                   <p className="dt-hint" role="alert">
-                    {customJsonStatus.category === 'invalid-format'
-                      ? <>Draw Things&apos; <code>custom.json</code> has an unsupported format.</>
-                      : <>Draw Things&apos; <code>custom.json</code> could not be read.</>}
-                    {' '}Any imported models may currently be listed under Official Models until this file is repaired.
+                    {rich(customJsonStatus.category === 'invalid-format' ? 'dtModels.customJsonInvalid' : 'dtModels.customJsonUnreadable', {
+                      file: <code>custom.json</code>,
+                    })}
                   </p>
                 )}
                 {renderModelList(
                   filteredLocalImportModels,
                   'local',
-                  'Local imports',
+                  t('dtModels.localImportsList'),
                   localImportModels.length === 0
-                    ? 'No local imports detected.'
-                    : 'No local imports match this search.'
+                    ? t('dtModels.localEmpty')
+                    : t('dtModels.localNoMatch')
                 )}
               </section>
 
               <section className="dt-section">
-                <h4 className="dt-section-title">Community Catalog</h4>
+                <h4 className="dt-section-title">{t('dtModels.communityCatalog')}</h4>
                 {renderModelList(
                   filteredCommunityCatalogModels,
                   'catalog',
-                  'Community catalog',
+                  t('dtModels.communityCatalogList'),
                   communityCatalogModels.length === 0
-                    ? 'No community catalog models available.'
-                    : 'No community models match this search.'
+                    ? t('dtModels.communityEmpty')
+                    : t('dtModels.communityNoMatch')
                 )}
               </section>
             </div>
@@ -429,6 +431,7 @@ function DtModelList({
   onOpenExternal: (key: string, url: string) => void
 }): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { t } = useI18n()
   const { listboxProps, getOptionProps } = useListbox<HTMLUListElement>({
     ids: models.map((m) => m.file),
     selectedId,
@@ -444,7 +447,7 @@ function DtModelList({
   return (
     <ul className="dt-model-list" aria-label={label} aria-busy={loading} {...listboxProps}>
       {models.length === 0 && (
-        <li className="dt-hint" role="presentation">{loading ? 'Loading models…' : emptyText}</li>
+        <li className="dt-hint" role="presentation">{loading ? t('advanced.loadingModels') : emptyText}</li>
       )}
       {models.map((model) => (
         <li
@@ -455,12 +458,12 @@ function DtModelList({
           <div className="dt-model-info">
             <span className="dt-model-name" title={model.file}>{modelName(model)}</span>
             <div className="dt-model-meta">
-              <span className="dt-source-badge">{kind === 'local' ? 'local import' : sourceLabel(model)}</span>
+              <span className="dt-source-badge">{kind === 'local' ? t('dtModels.localImport') : sourceLabel(model, t)}</span>
               {model.huggingFace && (
                 <button
                   tabIndex={-1}
                   className="dt-text-link"
-                  title={`Open on Hugging Face: ${model.huggingFace}`}
+                  title={t('dtModels.openHuggingFace', { repo: model.huggingFace })}
                   onClick={() => onOpenExternal(`hugging-face:${model.file}`, hfUrl(model.huggingFace!))}
                 >
                   Hugging Face
@@ -469,7 +472,7 @@ function DtModelList({
               <button
                 tabIndex={-1}
                 className="dt-text-link dt-text-link-google"
-                title={`Search Google for ${modelName(model)}`}
+                title={t('dtModels.searchGoogle', { model: modelName(model) })}
                 onClick={() => onOpenExternal(`google:${model.file}`, googleSearchUrl(model))}
               >
                 Google
@@ -482,10 +485,10 @@ function DtModelList({
               className="dt-action-btn dt-download-btn"
               onClick={() => onDownload(model.file)}
             >
-              Download
+              {t('dtModels.download')}
             </button>
           ) : (
-            <span className="dt-status-badge">Installed</span>
+            <span className="dt-status-badge">{t('dependencies.installed')}</span>
           )}
         </li>
       ))}

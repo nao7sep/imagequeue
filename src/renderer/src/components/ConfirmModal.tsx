@@ -1,15 +1,20 @@
 import { Modal } from './Modal'
 import type { ConfirmOptions } from '../context/ConfirmContext'
+import { useI18n } from '../i18n/I18nContext'
 
 interface Props {
   options: ConfirmOptions
   onSettle: (value: boolean) => void
 }
 
+// The caller words the confirmation as it asks; the language cannot change
+// while the dialog is up.
 export function ConfirmModal({ options, onSettle }: Props): React.JSX.Element {
+  const { t } = useI18n()
+  const title = options.title ?? t('confirm.title')
   return (
     <Modal
-      title={options.title ?? 'Confirm'}
+      title={title}
       onClose={() => onSettle(false)}
       footer={
         <>
@@ -17,13 +22,13 @@ export function ConfirmModal({ options, onSettle }: Props): React.JSX.Element {
               confirmation exists because something could go wrong, so the action a
               reflexive Enter reaches must be the one that costs nothing. */}
           <button className="modal-btn" autoFocus onClick={() => onSettle(false)}>
-            {options.cancelLabel ?? 'Cancel'}
+            {options.cancelLabel ?? t('common.cancel')}
           </button>
           <button
             className={options.danger ? 'modal-btn modal-btn-danger-confirm' : 'modal-btn modal-btn-primary'}
             onClick={() => onSettle(true)}
           >
-            {options.confirmLabel ?? 'Confirm'}
+            {options.confirmLabel ?? t('confirm.confirm')}
           </button>
         </>
       }
@@ -31,7 +36,7 @@ export function ConfirmModal({ options, onSettle }: Props): React.JSX.Element {
       <div
         className="confirm-body"
         role="region"
-        aria-label={`${options.title ?? 'Confirm'} details`}
+        aria-label={t('common.detailsOf', { title })}
         tabIndex={0}
       >
         {options.message}

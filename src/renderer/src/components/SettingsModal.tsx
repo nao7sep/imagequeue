@@ -11,6 +11,9 @@ import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import { presentFailure } from '../utils/failurePresentation'
 import { serializeError } from '../../../shared/serialize-error'
 import { normalizeThemePreference, type ThemePreference } from '../../../shared/theme'
+import { LANGUAGES, normalizeLanguagePreference } from '../../../shared/i18n/languages'
+import { CATALOGUES, type MessageKey } from '../../../shared/i18n/catalogues'
+import { useI18n } from '../i18n/I18nContext'
 import './SettingsModal.css'
 
 // The Model selects offer this closed list; the fallback <option> for an
@@ -25,20 +28,20 @@ interface Props {
 
 // The Settings tabs: the six per-backend sections share one Image Backends tab
 // (six small same-shaped blocks, one category), the rest map one section per tab.
-const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: MessageKey }> = [
+  { value: 'system', label: 'settings.themeSystem' },
+  { value: 'light', label: 'settings.themeLight' },
+  { value: 'dark', label: 'settings.themeDark' },
 ]
 
 const SETTINGS_TABS = ['general', 'notifications', 'textai', 'backends', 'prompts'] as const
 type SettingsTab = (typeof SETTINGS_TABS)[number]
-const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
-  general: 'General',
-  notifications: 'Notifications',
-  textai: 'Text AI',
-  backends: 'Image Backends',
-  prompts: 'Prompts',
+const SETTINGS_TAB_LABELS: Record<SettingsTab, MessageKey> = {
+  general: 'settings.tab.general',
+  notifications: 'settings.tab.notifications',
+  textai: 'settings.tab.textAi',
+  backends: 'settings.tab.backends',
+  prompts: 'settings.tab.prompts',
 }
 
 function cloneSettings(value: Record<string, unknown> | null): Record<string, unknown> | null {
@@ -56,6 +59,7 @@ function withNotificationField(config: Record<string, unknown> | null, key: stri
 export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const { settings, apiKeys, saveChangedSettings, saveApiKeys, saveNotificationField } = useSettings()
   const confirm = useConfirm()
+  const { t } = useI18n()
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
@@ -63,10 +67,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   // config.json cannot hold one. Same edit-then-Save shape, its own diff on save.
   const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<MessageKey | null>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const handleBrowseFailure = useCallback((error: unknown): void => {
-    setErrorMessage('A file or folder could not be selected. Your current setting is unchanged; try again.')
+    setErrorMessage('settings.browseFailed')
     void window.electronAPI.appLog('error', 'Settings picker failed', { error: serializeError(error) })
       .catch((logError) => console.error('Failed to record a settings picker diagnostic', logError))
   }, [])
@@ -138,29 +142,29 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const handleClose = useCallback(async (): Promise<void> => {
     if (dirty) {
       const ok = await confirm({
-        title: 'Unsaved changes',
-        message: 'Close Settings without saving?',
-        confirmLabel: 'Discard',
-        cancelLabel: 'Keep Editing',
+        title: t('settings.unsavedTitle'),
+        message: t('settings.unsavedMessage'),
+        confirmLabel: t('settings.discard'),
+        cancelLabel: t('settings.keepEditing'),
         danger: true
       })
       if (!ok) return
     }
     onClose()
-  }, [dirty, confirm, onClose])
+  }, [dirty, confirm, onClose, t])
 
   if (!config) return (
     <Modal
-      title="Settings"
+      title={t('settings.title')}
       className="settings-modal-box"
       onClose={handleClose}
       footer={
         <button className="modal-btn" onClick={() => void handleClose()}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
-      <div className="settings-overlay">Loading…</div>
+      <div className="settings-overlay">{t('common.loading')}</div>
     </Modal>
   )
 
@@ -172,8 +176,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const general = (config.general ?? {}) as Record<string, unknown>
   const supportsStatusIcon = window.electronAPI.platform === 'darwin' || window.electronAPI.platform === 'win32'
   const statusIconLabel = window.electronAPI.platform === 'darwin'
-    ? 'Show in menu bar'
-    : 'Show in notification area'
+    ? t('settings.statusIconMenuBar')
+    : t('settings.statusIconNotificationArea')
   const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
   // The two tier selections into the closed GEMINI_TEXT_MODELS list. Reads the untyped
   // draft config, so it defends against a missing key. There is no stored list and no
@@ -252,18 +256,18 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title="Settings"
+      title={t('settings.title')}
       className="settings-modal-box"
       onClose={handleClose}
       footer={
         <>
-          <button className="modal-btn" onClick={() => void handleClose()}>Cancel</button>
-          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>Save</button>
+          <button className="modal-btn" onClick={() => void handleClose()}>{t('common.cancel')}</button>
+          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>{t('common.save')}</button>
         </>
       }
     >
       <div className="modal-strip">
-      <div className="app-tabs" {...tablist.tablistProps} aria-label="Settings sections">
+      <div className="app-tabs" {...tablist.tablistProps} aria-label={t('settings.sectionsLabel')}>
         {SETTINGS_TABS.map((sectionTab) => (
           <button
             key={sectionTab}
@@ -271,19 +275,38 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             className={`app-tab${activeTab === sectionTab ? ' app-tab--active' : ''}`}
             {...tablist.getTabProps(sectionTab)}
           >
-            {SETTINGS_TAB_LABELS[sectionTab]}
+            {t(SETTINGS_TAB_LABELS[sectionTab])}
           </button>
         ))}
       </div>
       </div>
       <div className="settings-overlay">
-      {errorMessage && <div className="settings-error" role="alert">{errorMessage}</div>}
+      {errorMessage && <div className="settings-error" role="alert">{t(errorMessage)}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>
         <div className="settings-section">
+          {/* Each language is listed by its own name, in its own script, so a
+              reader of any of them can find it whatever language is showing.
+              Applied on Save with the rest of Settings. */}
+          <div className="settings-field">
+            <label htmlFor="settings-language">{t('settings.language')}</label>
+            <select
+              id="settings-language"
+              value={normalizeLanguagePreference(general.language)}
+              onChange={(e) => updateGeneral('language', normalizeLanguagePreference(e.target.value))}
+            >
+              <option value="system">{t('settings.languageSystem')}</option>
+              {LANGUAGES.map((language) => (
+                <option key={language} value={language} lang={language}>
+                  {CATALOGUES[language]['language.name'] as string}
+                </option>
+              ))}
+            </select>
+            <p className="settings-hint">{t('settings.languageHint')}</p>
+          </div>
           {/* A native radio group: one tab stop, arrow keys move and select.
               Applied on Save with the rest of Settings, never on its own. */}
           <div className="settings-field">
-            <span className="settings-field-label" id="settings-theme-label">Theme</span>
+            <span className="settings-field-label" id="settings-theme-label">{t('settings.theme')}</span>
             <div className="settings-radio-row" role="radiogroup" aria-labelledby="settings-theme-label">
               {THEME_OPTIONS.map(({ value, label }) => (
                 <label key={value} className="settings-radio">
@@ -294,24 +317,24 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                     checked={normalizeThemePreference(general.theme) === value}
                     onChange={() => updateGeneral('theme', value)}
                   />
-                  {label}
+                  {t(label)}
                 </label>
               ))}
             </div>
-            <p className="settings-hint">System follows the OS appearance.</p>
+            <p className="settings-hint">{t('settings.themeHint')}</p>
           </div>
           <div className="settings-field">
-            <label>UI font</label>
+            <label>{t('settings.uiFont')}</label>
             <input
               type="text"
-              placeholder="Default"
+              placeholder={t('settings.uiFontPlaceholder')}
               value={(general.ui_font_family as string) ?? ''}
               onChange={(e) => updateGeneral('ui_font_family', e.target.value)}
             />
-            <p className="settings-hint">The app interface font. Comma-separated families; the first one your system has is used. Blank uses the built-in default.</p>
+            <p className="settings-hint">{t('settings.uiFontHint')}</p>
           </div>
           <div className="settings-field">
-            <label>Auto-preview (s)</label>
+            <label>{t('settings.autoPreview')}</label>
             <input
               type="number"
               min={0}
@@ -319,14 +342,14 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               value={(general.auto_preview_idle_seconds as number) ?? 30}
               onChange={(e) => updateGeneral('auto_preview_idle_seconds', Math.max(0, parseInt(e.target.value) || 0))}
             />
-            <p className="settings-hint">Seconds of inactivity before the latest completed image is automatically selected and previewed. Set to 0 to disable.</p>
+            <p className="settings-hint">{t('settings.autoPreviewHint')}</p>
           </div>
           <div className="settings-field">
-            <label>Export folder</label>
+            <label>{t('settings.exportFolder')}</label>
             <div className="settings-browse">
               <input
                 type="text"
-                placeholder="Leave empty to use Desktop"
+                placeholder={t('settings.exportFolderPlaceholder')}
                 value={(general.export_dir as string) ?? ''}
                 onChange={(e) => updateGeneral('export_dir', e.target.value)}
               />
@@ -339,14 +362,14 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   }).catch(handleBrowseFailure)
                 }}
               >
-                Browse
+                {t('settings.browse')}
               </button>
             </div>
-            <p className="settings-hint">Where exported images are saved.</p>
+            <p className="settings-hint">{t('settings.exportFolderHint')}</p>
           </div>
           <div className="settings-field settings-field-full settings-panel-after-hint">
             <div className="settings-option-panel">
-              <div className="settings-option-title">Deletion</div>
+              <div className="settings-option-title">{t('settings.deletion')}</div>
               <label className="settings-panel-check">
                 <input
                   type="checkbox"
@@ -354,8 +377,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => updateGeneral('confirm_remove', e.target.checked)}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Confirm remove</span>
-                  <span className="settings-panel-check-desc">Before removing a task from the queue or marking a completed image as kept.</span>
+                  <span>{t('settings.confirmRemove')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.confirmRemoveHint')}</span>
                 </span>
               </label>
               <label className="settings-panel-check">
@@ -365,8 +388,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => updateGeneral('confirm_delete', e.target.checked)}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Confirm delete</span>
-                  <span className="settings-panel-check-desc">Before deleting a task and its files.</span>
+                  <span>{t('settings.confirmDelete')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.confirmDeleteHint')}</span>
                 </span>
               </label>
               <label className="settings-panel-check">
@@ -376,8 +399,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => updateGeneral('delete_to_trash', e.target.checked)}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Delete to Trash</span>
-                  <span className="settings-panel-check-desc">Move deleted task files and session folders to Trash instead of permanently deleting them.</span>
+                  <span>{t('settings.deleteToTrash')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.deleteToTrashHint')}</span>
                 </span>
               </label>
               <label className="settings-panel-check">
@@ -387,15 +410,15 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => updateGeneral('drop_empty_sessions', e.target.checked)}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Drop empty sessions</span>
-                  <span className="settings-panel-check-desc">Automatically delete the session folder when leaving or quitting if no tasks remain. Honors Delete to Trash.</span>
+                  <span>{t('settings.dropEmptySessions')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.dropEmptySessionsHint')}</span>
                 </span>
               </label>
             </div>
           </div>
           <div className="settings-field settings-field-full">
             <div className="settings-option-panel">
-              <div className="settings-option-title">Power</div>
+              <div className="settings-option-title">{t('settings.power')}</div>
               <label className="settings-panel-check">
                 <input
                   type="checkbox"
@@ -403,8 +426,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => updateGeneral('keep_awake_during_work', e.target.checked)}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Keep system awake during work</span>
-                  <span className="settings-panel-check-desc">Prevent the computer from sleeping during long-running work like image generation, model downloads, and prompt elaboration. The display may still turn off.</span>
+                  <span>{t('settings.keepAwake')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.keepAwakeHint')}</span>
                 </span>
               </label>
             </div>
@@ -412,7 +435,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           {supportsStatusIcon && (
             <div className="settings-field settings-field-full">
               <div className="settings-option-panel">
-                <div className="settings-option-title">Background access</div>
+                <div className="settings-option-title">{t('settings.backgroundAccess')}</div>
                 <label className="settings-panel-check">
                   <input
                     type="checkbox"
@@ -421,7 +444,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   />
                   <span className="settings-panel-check-copy">
                     <span>{statusIconLabel}</span>
-                    <span className="settings-panel-check-desc">Keep ImageQueue running there when the main window is closed. Use the icon to reopen or quit the app.</span>
+                    <span className="settings-panel-check-desc">{t('settings.statusIconHint')}</span>
                   </span>
                 </label>
               </div>
@@ -432,10 +455,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
 
       <div className="app-tabpanel" {...tablist.getPanelProps('notifications')} hidden={activeTab !== 'notifications'}>
         <div className="settings-section">
-          <p className="settings-hint">Alerts and sounds only fire when the app is not focused.</p>
+          <p className="settings-hint">{t('settings.notificationsHint')}</p>
           <div className="settings-field settings-field-full settings-panel-after-hint">
             <div className="settings-option-panel">
-              <div className="settings-option-title">Alerts</div>
+              <div className="settings-option-title">{t('settings.alerts')}</div>
               <label className="settings-panel-check">
                 <input
                   type="checkbox"
@@ -443,8 +466,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => { void saveNotificationImmediate('notifications_enabled', e.target.checked) }}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Show notifications</span>
-                  <span className="settings-panel-check-desc">Display a small popup when generation completes or fails.</span>
+                  <span>{t('settings.showNotifications')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.showNotificationsHint')}</span>
                 </span>
               </label>
               <label className="settings-panel-check">
@@ -454,25 +477,25 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   onChange={(e) => { void saveNotificationImmediate('sounds_enabled', e.target.checked) }}
                 />
                 <span className="settings-panel-check-copy">
-                  <span>Play sounds</span>
-                  <span className="settings-panel-check-desc">Play a sound when generation completes or fails.</span>
+                  <span>{t('settings.playSounds')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.playSoundsHint')}</span>
                 </span>
               </label>
             </div>
           </div>
           <div className="settings-field">
-            <label>Volume</label>
+            <label>{t('settings.volume')}</label>
             <NotificationVolumeSlider
               value={uiState.notificationVolume}
               onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
             />
           </div>
           <div className="settings-field">
-            <label>Success sound</label>
+            <label>{t('settings.successSound')}</label>
             <div className="settings-browse">
               <input
                 type="text"
-                placeholder="Leave empty to use built-in chime"
+                placeholder={t('settings.successSoundPlaceholder')}
                 value={(notificationCfg.success_file as string) ?? ''}
                 onChange={(e) => updateNotificationFile('success_file', e.target.value)}
               />
@@ -481,18 +504,18 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 className="settings-browse-btn"
                 onClick={() => {
                   void window.electronAPI.openFileDialog([
-                    { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
+                    { name: t('settings.audioFilter'), extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
                   ]).then((f) => { if (f) updateNotificationFile('success_file', f) }).catch(handleBrowseFailure)
                 }}
-              >Browse</button>
+              >{t('settings.browse')}</button>
             </div>
           </div>
           <div className="settings-field">
-            <label>Failure sound</label>
+            <label>{t('settings.failureSound')}</label>
             <div className="settings-browse">
               <input
                 type="text"
-                placeholder="Leave empty to use built-in tone"
+                placeholder={t('settings.failureSoundPlaceholder')}
                 value={(notificationCfg.failure_file as string) ?? ''}
                 onChange={(e) => updateNotificationFile('failure_file', e.target.value)}
               />
@@ -501,10 +524,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 className="settings-browse-btn"
                 onClick={() => {
                   void window.electronAPI.openFileDialog([
-                    { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
+                    { name: t('settings.audioFilter'), extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
                   ]).then((f) => { if (f) updateNotificationFile('failure_file', f) }).catch(handleBrowseFailure)
                 }}
-              >Browse</button>
+              >{t('settings.browse')}</button>
             </div>
           </div>
         </div>
@@ -513,7 +536,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       <div className="app-tabpanel" {...tablist.getPanelProps('textai')} hidden={activeTab !== 'textai'}>
         <div className="settings-section">
           <div className="settings-field">
-            <label>Backend</label>
+            <label>{t('settings.textAiBackend')}</label>
             <select value={textAi.backend as string} onChange={(e) => updateTextAi('backend', e.target.value)}>
               {TEXT_AI_BACKEND_OPTIONS.map((b) => (
                 <option key={b.id} value={b.id}>{b.label}</option>
@@ -524,11 +547,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <div className="settings-subsection">
             <h4>Gemini</h4>
             <div className="settings-field">
-              <label>API Key</label>
+              <label>{t('settings.apiKey')}</label>
               {keyField('gemini.text')}
             </div>
             <div className="settings-field">
-              <label>Main model</label>
+              <label>{t('settings.mainModel')}</label>
               <select value={geminiMainModel} onChange={(e) => updateGemini('main_model', e.target.value)}>
                 {GEMINI_TEXT_MODELS.map((id) => (
                   <option key={id} value={id}>{id}</option>
@@ -538,23 +561,23 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                     so a <select> whose value matches no <option> doesn't go blank; the id is
                     kept, and the API refuses it at call time if Google has retired it. */}
                 {geminiMainModel && !isGeminiTextModel(geminiMainModel) ? (
-                  <option value={geminiMainModel}>{geminiMainModel} — no longer offered</option>
+                  <option value={geminiMainModel}>{t('settings.modelNoLongerOffered', { model: geminiMainModel })}</option>
                 ) : null}
               </select>
             </div>
             <div className="settings-field">
-              <label>Light model</label>
+              <label>{t('settings.lightModel')}</label>
               <select value={geminiLightModel} onChange={(e) => updateGemini('light_model', e.target.value)}>
                 {GEMINI_TEXT_MODELS.map((id) => (
                   <option key={id} value={id}>{id}</option>
                 ))}
                 {geminiLightModel && !isGeminiTextModel(geminiLightModel) ? (
-                  <option value={geminiLightModel}>{geminiLightModel} — no longer offered</option>
+                  <option value={geminiLightModel}>{t('settings.modelNoLongerOffered', { model: geminiLightModel })}</option>
                 ) : null}
               </select>
             </div>
             <div className="settings-field">
-              <label>Timeout (s)</label>
+              <label>{t('settings.timeout')}</label>
               <input type="number" min={1} step={1} value={(gemini.timeout_ms as number) / 1000} onChange={(e) => updateGemini('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
             </div>
           </div>
@@ -562,24 +585,24 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <div className="settings-subsection">
             <h4>OpenAI</h4>
             <div className="settings-field">
-              <label>Endpoint</label>
+              <label>{t('settings.endpoint')}</label>
               <input type="text" placeholder="https://api.openai.com/v1" value={openai.endpoint as string} onChange={(e) => updateOpenai('endpoint', e.target.value)} />
-              <p className="settings-hint">Leave empty for the official OpenAI endpoint.</p>
+              <p className="settings-hint">{t('settings.endpointHint')}</p>
             </div>
             <div className="settings-field">
-              <label>API Key</label>
+              <label>{t('settings.apiKey')}</label>
               {keyField('openai.text')}
             </div>
             <div className="settings-field">
-              <label>Main model</label>
+              <label>{t('settings.mainModel')}</label>
               <input type="text" value={openai.main_model as string} onChange={(e) => updateOpenai('main_model', e.target.value)} />
             </div>
             <div className="settings-field">
-              <label>Light model</label>
+              <label>{t('settings.lightModel')}</label>
               <input type="text" value={openai.light_model as string} onChange={(e) => updateOpenai('light_model', e.target.value)} />
             </div>
             <div className="settings-field">
-              <label>Timeout (s)</label>
+              <label>{t('settings.timeout')}</label>
               <input type="number" min={1} step={1} value={(openai.timeout_ms as number) / 1000} onChange={(e) => updateOpenai('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
             </div>
           </div>
@@ -590,15 +613,15 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>GPT Image</h3>
           <div className="settings-field">
-            <label>API Key</label>
+            <label>{t('settings.apiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.openai)}
           </div>
           <div className="settings-field">
-            <label>Concurrency</label>
+            <label>{t('settings.concurrency')}</label>
             <input type="number" min={1} max={10} value={backends.openai.concurrency as number} onChange={(e) => updateBackend('openai', 'concurrency', parseInt(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
-            <label>Timeout (s)</label>
+            <label>{t('settings.timeout')}</label>
             <input type="number" min={1} step={1} value={(backends.openai.timeout_ms as number) / 1000} onChange={(e) => updateBackend('openai', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
@@ -606,15 +629,15 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>Nano Banana</h3>
           <div className="settings-field">
-            <label>Gemini API Key</label>
+            <label>{t('settings.geminiApiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.nanobanana)}
           </div>
           <div className="settings-field">
-            <label>Concurrency</label>
+            <label>{t('settings.concurrency')}</label>
             <input type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
           </div>
           <div className="settings-field">
-            <label>Timeout (s)</label>
+            <label>{t('settings.timeout')}</label>
             <input type="number" min={1} step={1} value={(backends.nanobanana.timeout_ms as number) / 1000} onChange={(e) => updateBackend('nanobanana', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
@@ -622,15 +645,15 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>Grok Imagine</h3>
           <div className="settings-field">
-            <label>API Key</label>
+            <label>{t('settings.apiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.grok)}
           </div>
           <div className="settings-field">
-            <label>Concurrency</label>
+            <label>{t('settings.concurrency')}</label>
             <input type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 3)} />
           </div>
           <div className="settings-field">
-            <label>Timeout (s)</label>
+            <label>{t('settings.timeout')}</label>
             <input type="number" min={1} step={1} value={(backends.grok.timeout_ms as number) / 1000} onChange={(e) => updateBackend('grok', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
@@ -638,15 +661,15 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>FLUX</h3>
           <div className="settings-field">
-            <label>API Key</label>
+            <label>{t('settings.apiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.flux)}
           </div>
           <div className="settings-field">
-            <label>Concurrency</label>
+            <label>{t('settings.concurrency')}</label>
             <input type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />
           </div>
           <div className="settings-field">
-            <label>Timeout (s)</label>
+            <label>{t('settings.timeout')}</label>
             <input type="number" min={1} step={1} value={(backends.flux.timeout_ms as number) / 1000} onChange={(e) => updateBackend('flux', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
@@ -655,36 +678,34 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>Draw Things</h3>
           <div className="settings-field">
-            <label>Models Directory</label>
+            <label>{t('settings.modelsDirectory')}</label>
             {/* The placeholder names no literal path: the real default lives
                 under the app's data directory, which IMAGEQUEUE_HOME moves. */}
-            <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder="leave empty to use the app data models folder" />
+            <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder={t('settings.modelsDirectoryPlaceholder')} />
           </div>
           <div className="settings-field">
-            <label>Timeout (s)</label>
+            <label>{t('settings.timeout')}</label>
             <input type="number" min={1} value={Math.round(((backends.drawthings.timeout_ms as number) ?? 1800000) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
-            <p className="settings-hint">
-              A generation running longer than this is stopped and marked failed. Local renders can legitimately take minutes on large models, so the default is generous (30 minutes).
-            </p>
+            <p className="settings-hint">{t('settings.drawThingsTimeoutHint')}</p>
           </div>
           <div className="settings-field">
-            <label>Fallback Width</label>
+            <label>{t('settings.fallbackWidth')}</label>
             <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />
           </div>
           <div className="settings-field">
-            <label>Fallback Height</label>
+            <label>{t('settings.fallbackHeight')}</label>
             <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_height as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_height', parseInt(e.target.value) || 1024)} />
           </div>
           <div className="settings-field">
-            <label>Fallback Steps</label>
+            <label>{t('settings.fallbackSteps')}</label>
             <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_steps', parseInt(e.target.value) || 4)} />
           </div>
           <div className="settings-field">
-            <label>Fallback Guidance</label>
+            <label>{t('settings.fallbackGuidance')}</label>
             <input type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_guidance as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_guidance', parseFloat(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
-            <label>Fallback Negative</label>
+            <label>{t('settings.fallbackNegative')}</label>
             <input type="text" value={(backends.drawthings.default_params as Record<string, unknown>).fallback_negative_prompt as string} onChange={(e) => updateBackendParam('drawthings', 'fallback_negative_prompt', e.target.value)} />
           </div>
         </div>
@@ -694,7 +715,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       <div className="app-tabpanel" {...tablist.getPanelProps('prompts')} hidden={activeTab !== 'prompts'}>
         <div className="settings-section">
           <div className="settings-field">
-            <label>Slug template</label>
+            <label>{t('settings.slugTemplate')}</label>
             <textarea rows={5} value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
           </div>
           <div className="settings-field-reset">
@@ -703,9 +724,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               className="modal-btn modal-btn-danger"
               onClick={async () => {
                 const ok = await confirm({
-                  title: 'Reset slug template',
-                  message: 'Replace the slug template with the shipped default?',
-                  confirmLabel: 'Reset',
+                  title: t('settings.resetSlug'),
+                  message: t('settings.resetSlugMessage'),
+                  confirmLabel: t('settings.reset'),
                   danger: true,
                 })
                 if (!ok) return
@@ -713,7 +734,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 setConfig({ ...config, prompts: { ...prompts, slug: def } })
               }}
             >
-              Reset slug template
+              {t('settings.resetSlug')}
             </button>
           </div>
         </div>

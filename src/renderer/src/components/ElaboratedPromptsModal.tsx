@@ -4,6 +4,7 @@ import { useSessionDraft } from '../context/SessionDraftContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
 import './ElaboratedPromptsModal.css'
+import { useI18n } from '../i18n/I18nContext'
 
 interface Props {
   onClose: () => void
@@ -21,6 +22,7 @@ interface Props {
 export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const { state, deleteElaboratedPromptAt, clearElaboratedPrompts } = useSessionDraft()
   const confirm = useConfirm()
+  const { t, rich } = useI18n()
   const { elaboratedPrompts } = state
 
   // Rows newest-first, each with a STABLE content-derived id (prompt text plus its
@@ -107,18 +109,18 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const handleClearAll = useCallback(async (): Promise<void> => {
     if (elaboratedPrompts.length === 0) return
     const ok = await confirm({
-      title: 'Delete all prompts',
-      message: `Remove all ${elaboratedPrompts.length} prompt${elaboratedPrompts.length === 1 ? '' : 's'} from this session's list?`,
-      confirmLabel: 'Delete all',
+      title: t('elaborated.deleteAllTitle'),
+      message: t('elaborated.deleteAllMessage', { count: elaboratedPrompts.length }),
+      confirmLabel: t('elaborated.deleteAllConfirm'),
       danger: true,
     })
     if (!ok) return
     clearElaboratedPrompts()
-  }, [confirm, clearElaboratedPrompts, elaboratedPrompts.length])
+  }, [confirm, clearElaboratedPrompts, elaboratedPrompts.length, t])
 
   return (
     <Modal
-      title="Elaborated Prompts"
+      title={t('elaborated.title')}
       className="elaborated-prompts-modal-box"
       onClose={onClose}
       footer={
@@ -129,9 +131,9 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
             onClick={() => void handleClearAll()}
             disabled={elaboratedPrompts.length === 0}
           >
-            Delete All
+            {t('elaborated.deleteAll')}
           </button>
-          <button type="button" className="modal-btn" onClick={onClose}>Close</button>
+          <button type="button" className="modal-btn" onClick={onClose}>{t('common.close')}</button>
         </>
       }
     >
@@ -145,14 +147,14 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
         >
           {elaboratedPrompts.length === 0 && (
             <li className="elaborated-prompts-empty" role="presentation">
-              No prompts elaborated in this session yet. Open Advanced Prompting and click Elaborate, or queue with a fresh-elaboration mode, to produce some.
+              {t('elaborated.empty')}
             </li>
           )}
             {rows.map((row, index) => {
               const displayNumber = elaboratedPrompts.length - index
               return (
                 <li key={row.id} className="elaborated-prompts-row" {...getOptionProps(row.id)}>
-                  <div className="elaborated-prompts-number" aria-hidden="true">{displayNumber}.</div>
+                  <div className="elaborated-prompts-number" aria-hidden="true">{t('elaborated.number', { number: displayNumber })}</div>
                   <div className="elaborated-prompts-main">
                     {/* The full prompt, unabridged: showing these is this modal's
                         entire job, so nothing here previews or truncates — the
@@ -169,7 +171,10 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
                         {row.concepts.map((c, i) => (
                           <span key={`${c.facet} ${c.concept}`}>
                             {i > 0 && <span className="elaborated-prompts-concept-sep" aria-hidden="true"> · </span>}
-                            <span className="elaborated-prompts-concept-facet">{c.facet}:</span> {c.concept}
+                            {rich('elaborated.credit', {
+                              facet: <span className="elaborated-prompts-concept-facet">{c.facet}</span>,
+                              concept: c.concept,
+                            })}
                           </span>
                         ))}
                       </div>
@@ -180,9 +185,9 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
                     tabIndex={-1}
                     className="modal-btn modal-btn-danger"
                     onClick={() => deleteRow(index)}
-                    title="Remove this prompt from the session list (or press Delete on the row)"
+                    title={t('elaborated.deleteHint')}
                   >
-                    Delete
+                    {t('task.delete')}
                   </button>
                 </li>
               )

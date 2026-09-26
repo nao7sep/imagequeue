@@ -11,6 +11,7 @@ import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFil
 import { AppConfig } from './config/types'
 import { openOutputFolder } from './session/open-output-folder'
 import { log, serializeError } from './logger'
+import { mainTranslator } from './i18n'
 import {
   checkCli,
   listDownloadedModels,
@@ -279,7 +280,7 @@ export function registerSettingsIpc(
     const owner = BrowserWindow.fromWebContents(event.sender)
     const options = {
       defaultPath: path.join(exportDir, `${safeBase}.${safeExt}`),
-      filters: [imageFormatFilter(safeExt)]
+      filters: [imageFormatFilter(safeExt, mainTranslator())]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null

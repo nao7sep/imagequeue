@@ -5,6 +5,7 @@ import { handle } from './ipc-boundary'
 import { loadConfig } from './config'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
+import { mainTranslator } from './i18n'
 
 let notificationWin: BrowserWindow | null = null
 let dismissTimeout: ReturnType<typeof setTimeout> | null = null
@@ -126,7 +127,8 @@ function showNotification(type: 'success' | 'failure'): void {
   const MARK_SVG = type === 'success'
     ? '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><polyline points="4 12 10 18 20 6"/></svg>'
     : '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>'
-  const label = type === 'success' ? 'Complete' : 'Failed'
+  const translator = mainTranslator()
+  const label = translator.t(type === 'success' ? 'toast.complete' : 'toast.failed')
   const cssClass = type === 'success' ? 'toast success' : 'toast failure'
 
   // Lock immediately so a second rapid call is rejected while executeJavaScript is in-flight.
@@ -139,6 +141,8 @@ function showNotification(type: 'success' | 'failure'): void {
 
   void win.webContents.executeJavaScript(
     `(function(){
+      // lang picks the right Chinese, Japanese or Korean glyphs for the label.
+      document.documentElement.lang = ${JSON.stringify(translator.language)};
       var t = document.getElementById('toast');
       var m = document.getElementById('toast-message');
       t.className = ${JSON.stringify(cssClass)};

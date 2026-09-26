@@ -1,5 +1,6 @@
 import type { NanoBananaModelDef } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
+import { useI18n } from '../i18n/I18nContext'
 
 export type NanoBananaParams = {
   aspectRatio: string
@@ -17,11 +18,12 @@ function resolveParams(saved: Record<string, unknown>, modelDef: NanoBananaModel
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBananaParams, NanoBananaModelDef>): React.JSX.Element {
+  const { t } = useI18n()
   if (!modelDef.supportsImageConfig) return <></>
   return (
     <>
       <div className="setting-row">
-        <label>Aspect</label>
+        <label>{t('backend.aspect')}</label>
         <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
           {modelDef.aspectRatios.map((ar) => (
             <option key={ar.value} value={ar.value}>{ar.label}</option>
@@ -29,7 +31,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
         </select>
       </div>
       <div className="setting-row">
-        <label>Size</label>
+        <label>{t('backend.size')}</label>
         <select value={params.imageSize} onChange={(e) => onChange({ ...params, imageSize: e.target.value })}>
           {modelDef.imageSizes.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>

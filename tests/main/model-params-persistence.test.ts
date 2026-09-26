@@ -22,10 +22,7 @@ describe('Draw Things parameter persistence publication', () => {
     markModelParamsPersistenceFailed()
     markModelParamsPersistenceFailed()
 
-    expect(getModelParamsPersistenceState()).toEqual(expect.objectContaining({
-      status: 'failed',
-      message: expect.stringContaining('change a parameter to retry'),
-    }))
+    expect(getModelParamsPersistenceState()).toEqual({ status: 'failed' })
     expect(send).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith(
       'drawthings:paramsPersistenceState',

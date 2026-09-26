@@ -13,6 +13,7 @@ const initialState: DependenciesState = {
     id: 'cli',
     state: 'not-installed',
     installedLabel: null,
+    entryCount: null,
     latestLabel: null,
     updatedAtUtc: null,
     lastCheckedAtUtc: null,
@@ -21,6 +22,7 @@ const initialState: DependenciesState = {
     id: 'recommendations',
     state: 'not-installed',
     installedLabel: null,
+    entryCount: null,
     latestLabel: null,
     updatedAtUtc: null,
     lastCheckedAtUtc: null,
@@ -217,7 +219,7 @@ describe('DependenciesModal cancellation', () => {
       recommendations: {
         ...initialState.recommendations,
         state: 'installed-unchecked' as const,
-        installedLabel: '42 entries',
+        entryCount: 42,
       },
     }
     const downloadRecommendations = vi.fn(async () => installed)
@@ -328,7 +330,7 @@ describe('DependenciesModal cancellation', () => {
       recommendations: {
         ...initialState.recommendations,
         state: 'installed-unchecked',
-        installedLabel: '24 entries',
+        entryCount: 24,
       },
     }
     let finishCli: ((state: DependenciesState) => void) | undefined
@@ -422,7 +424,7 @@ describe('DependenciesModal checking', () => {
       cli: { state: 'up-to-date', installedLabel: 'v26.0910.1', lastCheckedAtUtc: '2026-09-19T09:00:00.000Z' },
       recommendations: {
         state: 'update-available',
-        installedLabel: '54 entries',
+        entryCount: 54,
         updatedAtUtc: '2026-08-22T20:13:13.000Z',
         lastCheckedAtUtc: '2026-09-19T09:00:00.000Z',
       },
@@ -438,7 +440,7 @@ describe('DependenciesModal checking', () => {
   it('dates the set by its least recently checked tool, and reads Never while one is unchecked', async () => {
     mockState(stateWith({
       cli: { state: 'up-to-date', installedLabel: 'v26.0910.1', lastCheckedAtUtc: '2026-09-19T09:00:00.000Z' },
-      recommendations: { state: 'installed-unchecked', installedLabel: '54 entries', lastCheckedAtUtc: null },
+      recommendations: { state: 'installed-unchecked', entryCount: 54, lastCheckedAtUtc: null },
     }))
     renderModal()
 

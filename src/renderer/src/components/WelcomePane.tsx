@@ -1,4 +1,5 @@
 import './WelcomePane.css'
+import { useI18n } from '../i18n/I18nContext'
 
 interface Props {
   onOpenSettings: () => void
@@ -13,22 +14,18 @@ interface Props {
 // is unreachable there; the only users who see it are on a platform Draw Things
 // does not run on, and offering them a Mac-only backend would be noise.
 export function WelcomePane({ onOpenSettings }: Props): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <div className="welcome-pane">
-      <div className="column-header">Getting started</div>
+      <div className="column-header">{t('welcome.title')}</div>
       <div className="welcome-body">
-        <p className="welcome-lead">
-          ImageQueue generates images through providers you supply. Nothing is configured yet.
-        </p>
+        <p className="welcome-lead">{t('welcome.lead')}</p>
 
         <div className="welcome-step">
-          <div className="welcome-step-title">Add a provider key</div>
-          <p>
-            OpenAI, Nano Banana, Grok, and FLUX each need their own API key from that provider.
-            A column appears here for every key you add.
-          </p>
+          <div className="welcome-step-title">{t('welcome.addKey')}</div>
+          <p>{t('welcome.addKeyBody')}</p>
           <button className="welcome-btn welcome-btn-primary" onClick={onOpenSettings}>
-            Open Settings
+            {t('welcome.openSettings')}
           </button>
         </div>
 

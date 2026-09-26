@@ -2,10 +2,12 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionDraftProvider, useSessionDraft } from '../../../../src/renderer/src/context/SessionDraftContext'
+import { useI18n } from '../../../../src/renderer/src/i18n/I18nContext'
 
 function Probe(): React.JSX.Element {
   const { draftUnavailable, retryDraftHydration } = useSessionDraft()
-  return <div>{draftUnavailable && <><span role="alert">{draftUnavailable}</span><button onClick={retryDraftHydration}>Retry</button></>}</div>
+  const { t } = useI18n()
+  return <div>{draftUnavailable && <><span role="alert">{t(draftUnavailable)}</span><button onClick={retryDraftHydration}>Retry</button></>}</div>
 }
 
 afterEach(cleanup)

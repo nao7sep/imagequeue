@@ -33,7 +33,7 @@ afterEach(() => {
 describe('StartupFailureApp measurement handshake', () => {
   it('reports natural content geometry only after the authored surface is committed', () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
-    render(<StartupFailureApp message="ImageQueue could not read its configuration." />)
+    render(<StartupFailureApp />)
 
     expect(reportMeasurement).toHaveBeenCalledOnce()
     expect(reportMeasurement).toHaveBeenCalledWith({
@@ -49,7 +49,7 @@ describe('StartupFailureApp measurement handshake', () => {
 
   it('waits for production stylesheets before reporting the committed geometry', () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
-    render(<StartupFailureApp message="ImageQueue could not read its configuration." />)
+    render(<StartupFailureApp />)
     expect(reportMeasurement).not.toHaveBeenCalled()
 
     act(() => window.dispatchEvent(new Event('load')))

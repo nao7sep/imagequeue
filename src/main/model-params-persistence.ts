@@ -1,8 +1,5 @@
 import { BrowserWindow } from 'electron'
-import {
-  DRAW_THINGS_PARAMS_PERSISTENCE_ERROR,
-  type DrawThingsParamsPersistenceState,
-} from '../shared/electron-api'
+import { type DrawThingsParamsPersistenceState } from '../shared/electron-api'
 
 let persistenceState: DrawThingsParamsPersistenceState = { status: 'saved' }
 
@@ -18,10 +15,7 @@ export function getModelParamsPersistenceState(): DrawThingsParamsPersistenceSta
 
 export function markModelParamsPersistenceFailed(): void {
   if (persistenceState.status === 'failed') return
-  persistenceState = {
-    status: 'failed',
-    message: DRAW_THINGS_PARAMS_PERSISTENCE_ERROR,
-  }
+  persistenceState = { status: 'failed' }
   broadcast(persistenceState)
 }
 

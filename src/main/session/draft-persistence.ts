@@ -1,8 +1,5 @@
 import { BrowserWindow } from 'electron'
-import {
-  SESSION_DRAFT_PERSISTENCE_ERROR,
-  type SessionDraftPersistenceState,
-} from '../../shared/electron-api'
+import { type SessionDraftPersistenceState } from '../../shared/electron-api'
 
 let persistenceState: SessionDraftPersistenceState = { status: 'saved' }
 
@@ -21,10 +18,7 @@ export function getDraftPersistenceState(): SessionDraftPersistenceState {
 // flush ends the episode and lets the next distinct failure announce itself.
 export function markDraftPersistenceFailed(): void {
   if (persistenceState.status === 'failed') return
-  persistenceState = {
-    status: 'failed',
-    message: SESSION_DRAFT_PERSISTENCE_ERROR,
-  }
+  persistenceState = { status: 'failed' }
   broadcast(persistenceState)
 }
 

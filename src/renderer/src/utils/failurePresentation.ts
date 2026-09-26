@@ -1,4 +1,5 @@
 import { serializeError } from '../../../shared/serialize-error'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export type FailureOperation =
   | 'settings-save'
@@ -11,38 +12,40 @@ export type FailureOperation =
   | 'elaboration-defaults-load' | 'elaboration-save'
   | 'dependencies-load' | 'dependencies-change' | 'dependencies-cancel'
 
-const COPY: Record<FailureOperation, string> = {
-  'settings-save': 'Settings could not be saved. Nothing was changed; try again.',
-  'sessions-load': 'Sessions could not be loaded. Close this window and try again.',
-  'session-resume': 'This session could not be resumed. The current queue is unchanged; try again.',
-  'session-create': 'A new session could not be started. The current session is unchanged; try again.',
-  'session-delete': 'This session could not be deleted. It remains in ImageQueue; try again.',
-  'session-folder': 'This session folder could not be opened. Check that it is still available.',
-  'concepts-load': 'Concepts could not be loaded. Close this window and try again.',
-  'concept-details-load': 'The selected concept details could not be loaded. Select the facet again to retry.',
-  'concepts-change': 'The concept library could not be changed. Nothing was deleted; try again.',
-  'elaborators-load': 'Elaborators could not be loaded. Close this window and try again.',
-  'elaborators-change': 'The elaborator change could not be saved. Nothing was changed; try again.',
-  'drawthings-models-load': 'Downloaded Draw Things models could not be loaded. Try refreshing them.',
-  'drawthings-models-poll': 'Downloaded Draw Things models could not be loaded. ImageQueue tries again shortly.',
-  'drawthings-cli-load': 'Draw Things CLI status could not be loaded. Try again.',
-  'drawthings-catalog-load': 'Available Draw Things models could not be loaded. Try again.',
-  'drawthings-download': 'The model download could not be started. Nothing was added; try again.',
-  'drawthings-browse': 'A model file could not be selected. The current path is unchanged; try again.',
-  'drawthings-import': 'The model import could not be started. The selected path is unchanged; try again.',
-  'advanced-elaborators-load': 'Elaborators could not be loaded. Close Advanced Prompting and try again.',
-  'advanced-models-load': 'Draw Things models could not be loaded. Close Advanced Prompting and try again.',
-  'advanced-elaborate': 'The prompt could not be elaborated. Your current prompt is unchanged; try again.',
-  'advanced-queue': 'The tasks could not be queued. Nothing was added; try again.',
-  'elaboration-defaults-load': 'The shipped elaboration defaults could not be loaded. Your settings are unchanged.',
-  'elaboration-save': 'Elaboration settings could not be saved. Nothing was changed; try again.',
-  'dependencies-load': 'Managed tools could not be checked. Close this window and try again.',
-  'dependencies-change': 'The managed-tool operation could not be completed. The previous state is still shown; try again.',
-  'dependencies-cancel': 'The managed-tool operation could not be stopped. It may still be running.',
+// Each operation's authored copy is the catalogue entry failure.<operation in
+// camel case>, rendered where it is shown.
+const COPY: Record<FailureOperation, MessageKey> = {
+  'settings-save': 'failure.settingsSave',
+  'sessions-load': 'failure.sessionsLoad',
+  'session-resume': 'failure.sessionResume',
+  'session-create': 'failure.sessionCreate',
+  'session-delete': 'failure.sessionDelete',
+  'session-folder': 'failure.sessionFolder',
+  'concepts-load': 'failure.conceptsLoad',
+  'concept-details-load': 'failure.conceptDetailsLoad',
+  'concepts-change': 'failure.conceptsChange',
+  'elaborators-load': 'failure.elaboratorsLoad',
+  'elaborators-change': 'failure.elaboratorsChange',
+  'drawthings-models-load': 'failure.drawthingsModelsLoad',
+  'drawthings-models-poll': 'failure.drawthingsModelsPoll',
+  'drawthings-cli-load': 'failure.drawthingsCliLoad',
+  'drawthings-catalog-load': 'failure.drawthingsCatalogLoad',
+  'drawthings-download': 'failure.drawthingsDownload',
+  'drawthings-browse': 'failure.drawthingsBrowse',
+  'drawthings-import': 'failure.drawthingsImport',
+  'advanced-elaborators-load': 'failure.advancedElaboratorsLoad',
+  'advanced-models-load': 'failure.advancedModelsLoad',
+  'advanced-elaborate': 'failure.advancedElaborate',
+  'advanced-queue': 'failure.advancedQueue',
+  'elaboration-defaults-load': 'failure.elaborationDefaultsLoad',
+  'elaboration-save': 'failure.elaborationSave',
+  'dependencies-load': 'failure.dependenciesLoad',
+  'dependencies-change': 'failure.dependenciesChange',
+  'dependencies-cancel': 'failure.dependenciesCancel',
 }
 
-/** Arbitrary renderer/IPC exceptions are diagnostic-only; callers render only this authored copy. */
-export function presentFailure(operation: FailureOperation, error: unknown): string {
+/** Arbitrary renderer/IPC exceptions are diagnostic-only; callers render only this authored copy's key. */
+export function presentFailure(operation: FailureOperation, error: unknown): MessageKey {
   try {
     const logging = window.electronAPI.appLog?.('error', 'Renderer operation failed', {
       operation,

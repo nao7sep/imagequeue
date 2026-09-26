@@ -1,6 +1,8 @@
 import { GROK_QUALITY_VALUES } from '../../../shared/models'
 import type { GrokAspectRatio, GrokModelDef, GrokQuality, GrokResolution } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
+import { useI18n } from '../i18n/I18nContext'
+import { optionLabel } from '../i18n/optionLabels'
 
 export type GrokParams = {
   aspectRatio: GrokAspectRatio
@@ -29,18 +31,19 @@ function resolveParams(saved: Record<string, unknown>, modelDef: GrokModelDef): 
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<GrokParams, GrokModelDef>): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <>
       <div className="setting-row">
-        <label>Aspect</label>
+        <label>{t('backend.aspect')}</label>
         <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value as GrokAspectRatio })}>
           {modelDef.aspectRatios.map((ar) => (
-            <option key={ar.value} value={ar.value}>{ar.label}</option>
+            <option key={ar.value} value={ar.value}>{optionLabel(t, ar.value)}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>Size</label>
+        <label>{t('backend.size')}</label>
         <select value={params.resolution} onChange={(e) => onChange({ ...params, resolution: e.target.value as GrokResolution })}>
           {modelDef.resolutions.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
@@ -49,10 +52,10 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<GrokParam
       </div>
       {modelDef.qualities && (
         <div className="setting-row">
-          <label>Quality</label>
+          <label>{t('backend.quality')}</label>
           <select value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as GrokQuality })}>
             {modelDef.qualities.map((q) => (
-              <option key={q.value} value={q.value}>{q.label}</option>
+              <option key={q.value} value={q.value}>{optionLabel(t, q.value)}</option>
             ))}
           </select>
         </div>

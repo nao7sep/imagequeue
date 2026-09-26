@@ -2,10 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { ElaboratedPromptRecord } from '../../../shared/types'
 import { createEmptySessionDraft, type SessionDraft } from '../../../shared/session-draft'
 import { serializeError } from '../../../shared/serialize-error'
-import {
-  SESSION_DRAFT_PERSISTENCE_ERROR,
-  type SessionDraftPersistenceState,
-} from '../../../shared/electron-api'
+import type { SessionDraftPersistenceState } from '../../../shared/electron-api'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 // The renderer's working state for the active session: the SessionDraft fields
 // (main prompt + Advanced Prompting selections) plus the elaborated-prompts
@@ -29,9 +27,10 @@ function extractDraft(state: SessionDraftState): SessionDraft {
 
 interface SessionDraftContextValue {
   state: SessionDraftState
-  draftIssue: { title: string; message: string } | null
+  // Catalogue keys, rendered where they are shown.
+  draftIssue: { title: MessageKey; message: MessageKey } | null
   dismissDraftIssue: () => void
-  draftUnavailable: string | null
+  draftUnavailable: MessageKey | null
   retryDraftHydration: () => void
   // Partial updates to one or more fields. Use the function form when the next
   // value depends on the previous (e.g. toggling a Set membership).
@@ -45,12 +44,9 @@ interface SessionDraftContextValue {
 const SessionDraftContext = createContext<SessionDraftContextValue | null>(null)
 
 interface DraftPersistenceFailure {
-  message: string
+  message: MessageKey
   source: 'disk' | 'ipc' | 'hydrate' | 'mutation'
 }
-
-const SESSION_DRAFT_HYDRATION_ERROR =
-  'The active session’s draft could not be loaded. Switch sessions and return, or restart ImageQueue; no saved session data was changed.'
 
 function logDraftFailure(message: string, error: unknown): void {
   void window.electronAPI.appLog('error', message, { error: serializeError(error) })
@@ -67,7 +63,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     : null
   const draftIssue = draftPersistenceFailureState && draftPersistenceFailureState.source !== 'hydrate' && draftPersistenceFailureState.source !== 'mutation'
     ? {
-        title: 'Session draft isn’t being saved',
+        title: 'draft.issueTitle' as const,
         message: draftPersistenceFailureState.message,
       }
     : null
@@ -86,7 +82,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
       setDraftPersistenceFailureState(
         (current) => current?.source === 'hydrate' || current?.source === 'mutation'
           ? current
-          : next.status === 'failed' ? { message: next.message, source: 'disk' } : null,
+          : next.status === 'failed' ? { message: 'draft.persistenceFailed', source: 'disk' } : null,
       )
     }
 
@@ -114,7 +110,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
         setState(emptyState())
         lastPersistedDraftRef.current = ''
         setDraftPersistenceFailureState({
-          message: SESSION_DRAFT_HYDRATION_ERROR,
+          message: 'draft.hydrationFailed',
           source: 'hydrate',
         })
         logDraftFailure('Failed to hydrate the active session draft', error)
@@ -156,7 +152,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
       })
       .catch((error) => {
         setDraftPersistenceFailureState({
-          message: SESSION_DRAFT_PERSISTENCE_ERROR,
+          message: 'draft.persistenceFailed',
           source: 'ipc',
         })
         logDraftFailure('Failed to send session draft for persistence', error)
@@ -173,7 +169,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     loadedRef.current = false
     setDraftPersistenceFailureState({
       source: 'mutation',
-      message: 'A session draft change could not be saved. Reload the saved draft before continuing; no stored data was replaced.',
+      message: 'draft.mutationFailed',
     })
     logDraftFailure(operation, error)
   }, [])

@@ -20,5 +20,5 @@
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "electron.vite.config.ts"]
+  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "src/shared/i18n/locales/*.json", "electron.vite.config.ts"]
 }

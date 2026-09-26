@@ -1,5 +1,7 @@
 import type { DependenciesState, DependencyInfo } from '../../../shared/types'
 import { useDependencies } from '../context/DependenciesContext'
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 // The single pane pointer to the Dependencies modal for the Draw Things column.
 // Its only job is to lead the user to the modal — it carries no actions of its
@@ -46,27 +48,26 @@ function severityFor(state: DependenciesState): Severity | null {
 // The single most important thing to say, as one sentence — the pointer names
 // it, the modal owns the detail. Order is by urgency: a missing CLI blocks the
 // backend entirely.
-function summarize(state: DependenciesState): string {
-  if (state.cli.state === 'not-installed') return 'The Draw Things CLI is not installed.'
-  if (state.cli.state === 'update-available') return 'A Draw Things CLI update is available.'
-  if (state.recommendations.state === 'update-available') return 'A recommended parameters update is available.'
-  if (state.recommendations.state === 'not-installed') return 'Recommended parameters are not downloaded.'
+function summarize(state: DependenciesState): MessageKey {
+  if (state.cli.state === 'not-installed') return 'dependencyPointer.cliMissing'
+  if (state.cli.state === 'update-available') return 'dependencyPointer.cliUpdate'
+  if (state.recommendations.state === 'update-available') return 'dependencyPointer.recommendationsUpdate'
+  if (state.recommendations.state === 'not-installed') return 'dependencyPointer.recommendationsMissing'
   // Two different informational stories, told apart: a present CLI whose version
   // could not be read needs re-acquiring (the modal's Update), where a
   // merely-unchecked one only needs a check.
   if (state.cli.state === 'installed-unchecked' && !state.cli.installedLabel) {
-    return 'The Draw Things CLI version can’t be read.'
+    return 'dependencyPointer.cliUnreadable'
   }
-  return 'The Draw Things tools haven’t been checked.'
+  return 'dependencyPointer.unchecked'
 }
 
 export function DependencyPanePointer(): React.JSX.Element | null {
   const { state } = useDependencies()
+  const { t } = useI18n()
 
   const severity = state?.platformSupported ? severityFor(state) : null
-  const summary = state ? summarize(state) : ''
-
-  if (!severity) return null
+  if (!state || !severity) return null
 
   return (
     <button
@@ -74,7 +75,7 @@ export function DependencyPanePointer(): React.JSX.Element | null {
       className={`dep-pane-pointer dep-pane-pointer-${severity}`}
       onClick={() => window.dispatchEvent(new CustomEvent('open-dependencies-modal'))}
     >
-      {summary} Open Managed tools.
+      {t('dependencyPointer.pointer', { summary: t(summarize(state)) })}
     </button>
   )
 }

@@ -4,8 +4,16 @@ import { BackendId, TextAIBackendId } from './types'
 
 // --- Size presets ---
 
+// A preset's shape: its aspect ratio ('3:2'), or a named format the renderer
+// words in the interface language (see sizePresetLabel).
+export type SizeShape =
+  | 'square' | 'squareLarge'
+  | 'a4Wide' | 'letterWide' | 'qhdWide' | 'uhdWide'
+  | 'a4Tall' | 'letterTall' | 'qhdTall' | 'uhdTall'
+  | `${number}:${number}`
+
 export interface SizePreset {
-  label: string
+  shape: SizeShape
   width: number
   height: number
 }
@@ -30,9 +38,9 @@ export const OPENAI_GPT2_MAX_PIXELS = 8_294_400
 
 // Sizes for GPT Image 1.x models (exactly these three)
 const OPENAI_SIZES: SizePreset[] = [
-  { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '1536×1024 (3:2)', width: 1536, height: 1024 },
-  { label: '1024×1536 (2:3)', width: 1024, height: 1536 }
+  { shape: 'square', width: 1024, height: 1024 },
+  { shape: '3:2', width: 1536, height: 1024 },
+  { shape: '2:3', width: 1024, height: 1536 }
 ]
 
 // The app's general-purpose size ladder, shared by every surface that offers free
@@ -41,24 +49,24 @@ const OPENAI_SIZES: SizePreset[] = [
 // — editing an entry moves all three, which is the intent; a backend needing its
 // own ladder gets its own constant rather than a divergent copy of this one.
 export const STANDARD_SIZE_PRESETS: SizePreset[] = [
-  { label: '1024×1024 (Square)', width: 1024, height: 1024 },
-  { label: '2048×2048 (Square Large)', width: 2048, height: 2048 },
-  { label: '2048×1024 (2:1)', width: 2048, height: 1024 },
-  { label: '2048×1152 (16:9)', width: 2048, height: 1152 },
-  { label: '2048×1360 (3:2)', width: 2048, height: 1360 },
-  { label: '2048×1456 (A4 Wide)', width: 2048, height: 1456 },
-  { label: '2048×1536 (4:3)', width: 2048, height: 1536 },
-  { label: '2048×1584 (Letter Wide)', width: 2048, height: 1584 },
-  { label: '2560×1440 (QHD Wide)', width: 2560, height: 1440 },
-  { label: '3840×2160 (4K Wide)', width: 3840, height: 2160 },
-  { label: '1024×2048 (1:2)', width: 1024, height: 2048 },
-  { label: '1152×2048 (9:16)', width: 1152, height: 2048 },
-  { label: '1360×2048 (2:3)', width: 1360, height: 2048 },
-  { label: '1456×2048 (A4 Tall)', width: 1456, height: 2048 },
-  { label: '1536×2048 (3:4)', width: 1536, height: 2048 },
-  { label: '1584×2048 (Letter Tall)', width: 1584, height: 2048 },
-  { label: '1440×2560 (QHD Tall)', width: 1440, height: 2560 },
-  { label: '2160×3840 (4K Tall)', width: 2160, height: 3840 }
+  { shape: 'square', width: 1024, height: 1024 },
+  { shape: 'squareLarge', width: 2048, height: 2048 },
+  { shape: '2:1', width: 2048, height: 1024 },
+  { shape: '16:9', width: 2048, height: 1152 },
+  { shape: '3:2', width: 2048, height: 1360 },
+  { shape: 'a4Wide', width: 2048, height: 1456 },
+  { shape: '4:3', width: 2048, height: 1536 },
+  { shape: 'letterWide', width: 2048, height: 1584 },
+  { shape: 'qhdWide', width: 2560, height: 1440 },
+  { shape: 'uhdWide', width: 3840, height: 2160 },
+  { shape: '1:2', width: 1024, height: 2048 },
+  { shape: '9:16', width: 1152, height: 2048 },
+  { shape: '2:3', width: 1360, height: 2048 },
+  { shape: 'a4Tall', width: 1456, height: 2048 },
+  { shape: '3:4', width: 1536, height: 2048 },
+  { shape: 'letterTall', width: 1584, height: 2048 },
+  { shape: 'qhdTall', width: 1440, height: 2560 },
+  { shape: 'uhdTall', width: 2160, height: 3840 }
 ]
 
 // FLUX.2's dimension limits, named here beside the OpenAI equivalents above and

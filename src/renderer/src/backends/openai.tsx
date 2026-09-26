@@ -11,6 +11,8 @@ import {
   type SizePreset,
 } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
+import { useI18n } from '../i18n/I18nContext'
+import { optionLabel, sizePresetLabel } from '../i18n/optionLabels'
 
 const CUSTOM_OPENAI_SIZE = 'custom'
 
@@ -30,7 +32,7 @@ export function normalizeOpenAiDimension(value: number): number {
 }
 
 export function resolveOpenAiSize(modelDef: OpenAIModelDef, width: unknown, height: unknown): { width: number; height: number } {
-  const fallback = modelDef.sizes[0] ?? { label: '1024×1024', width: 1024, height: 1024 }
+  const fallback = modelDef.sizes[0] ?? { shape: 'square', width: 1024, height: 1024 }
   const matchingPreset = typeof width === 'number' && typeof height === 'number'
     ? modelDef.sizes.find((size) => size.width === width && size.height === height)
     : null
@@ -92,6 +94,7 @@ function resolveParams(saved: Record<string, unknown>, modelDef: OpenAIModelDef)
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIParams, OpenAIModelDef>): React.JSX.Element {
+  const { t } = useI18n()
   const sizeValue = findPresetValue(modelDef.sizes, params.width, params.height)
     ?? (modelDef.supportsCustomSizes
       ? CUSTOM_OPENAI_SIZE
@@ -107,20 +110,20 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
   return (
     <>
       <div className="setting-row">
-        <label>Size</label>
+        <label>{t('backend.size')}</label>
         <select value={sizeValue} onChange={(e) => handleSizeChange(e.target.value)}>
           {modelDef.sizes.map((size) => (
-            <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>{size.label}</option>
+            <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>{sizePresetLabel(t, size)}</option>
           ))}
           {modelDef.supportsCustomSizes && (
-            <option value={CUSTOM_OPENAI_SIZE}>Custom width/height</option>
+            <option value={CUSTOM_OPENAI_SIZE}>{t('backend.customSize')}</option>
           )}
         </select>
       </div>
       {modelDef.supportsCustomSizes && (
         <>
           <div className="setting-row">
-            <label>Width</label>
+            <label>{t('backend.width')}</label>
             <input
               type="number"
               min={OPENAI_GPT2_MIN_EDGE}
@@ -131,7 +134,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
             />
           </div>
           <div className="setting-row">
-            <label>Height</label>
+            <label>{t('backend.height')}</label>
             <input
               type="number"
               min={OPENAI_GPT2_MIN_EDGE}
@@ -144,23 +147,23 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </>
       )}
       <div className="setting-row">
-        <label>Moderation</label>
+        <label>{t('backend.moderation')}</label>
         <select value={params.moderation} onChange={(e) => onChange({ ...params, moderation: e.target.value as OpenAIModeration })}>
           {modelDef.moderations.map((value) => (
-            <option key={value} value={value}>{value}</option>
+            <option key={value} value={value}>{optionLabel(t, value)}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>Quality</label>
+        <label>{t('backend.quality')}</label>
         <select value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as OpenAIQuality })}>
           {modelDef.qualities.map((q) => (
-            <option key={q} value={q}>{q}</option>
+            <option key={q} value={q}>{optionLabel(t, q)}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>Format</label>
+        <label>{t('backend.format')}</label>
         <select value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as OpenAIOutputFormat })}>
           {modelDef.outputFormats.map((fmt) => (
             <option key={fmt} value={fmt}>{OPENAI_OUTPUT_FORMAT_LABELS[fmt]}</option>
@@ -168,10 +171,10 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </select>
       </div>
       <div className="setting-row">
-        <label>Background</label>
+        <label>{t('backend.background')}</label>
         <select value={params.background} onChange={(e) => onChange({ ...params, background: e.target.value as OpenAIBackground })}>
           {modelDef.backgrounds.map((bg) => (
-            <option key={bg} value={bg}>{bg.charAt(0).toUpperCase() + bg.slice(1)}</option>
+            <option key={bg} value={bg}>{optionLabel(t, bg)}</option>
           ))}
         </select>
       </div>

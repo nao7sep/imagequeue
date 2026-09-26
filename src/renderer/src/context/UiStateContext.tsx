@@ -3,6 +3,7 @@ import type { UiState } from '../../../shared/ui-state'
 import { defaultUiState } from '../../../shared/ui-state'
 import { Modal } from '../components/Modal'
 import { reportOperationalFailure } from '../utils/operationalFailure'
+import { useI18n } from '../i18n/I18nContext'
 
 // The renderer's view of state.json — the adjustments the app remembers on the
 // user's behalf (column width, notification volume), as opposed to the settings
@@ -23,6 +24,7 @@ interface UiStateContextValue {
 const UiStateContext = createContext<UiStateContextValue | null>(null)
 
 export function UiStateProvider({ children }: { children: ReactNode }): React.JSX.Element {
+  const { t } = useI18n()
   const [uiState, setUiState] = useState<UiState>(defaultUiState)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState(false)
@@ -33,7 +35,7 @@ export function UiStateProvider({ children }: { children: ReactNode }): React.JS
     void window.electronAPI.getUiState().then((state) => {
       if (!cancelled) { setUiState(state); setLoaded(true); setLoadError(false) }
     }).catch((error) => {
-      if (!cancelled) { setLoadError(true); reportOperationalFailure('ui-state', 'Window preferences could not be loaded. Nothing was changed; try again.', 'Failed to load UI state', error) }
+      if (!cancelled) { setLoadError(true); reportOperationalFailure('ui-state', 'operation.uiStateLoadFailed', 'Failed to load UI state', error) }
     })
     return () => {
       cancelled = true
@@ -43,14 +45,14 @@ export function UiStateProvider({ children }: { children: ReactNode }): React.JS
   const patchUiState = useCallback((patch: Partial<UiState>): void => {
     void window.electronAPI.updateUiState(patch)
       .then(() => setUiState((prev) => ({ ...prev, ...patch })))
-      .catch((error) => reportOperationalFailure('ui-state', 'Window preferences could not be saved. The previous values are still active; try again.', 'Failed to persist UI state', error))
+      .catch((error) => reportOperationalFailure('ui-state', 'operation.uiStateSaveFailed', 'Failed to persist UI state', error))
   }, [])
 
   return (
     <UiStateContext.Provider value={{ uiState, patchUiState }}>
       {loaded ? children : loadError ? (
-        <Modal title="Window preferences could not be loaded" onClose={() => setLoadRevision((value) => value + 1)} dismissable={false} closeOnBackdropClick={false} footer={<button className="modal-btn" autoFocus onClick={() => setLoadRevision((value) => value + 1)}>Retry</button>}>
-          <div className="modal-body"><p role="alert">Window preferences could not be loaded. Nothing was changed; try again.</p></div>
+        <Modal title={t('uiState.loadFailedTitle')} onClose={() => setLoadRevision((value) => value + 1)} dismissable={false} closeOnBackdropClick={false} footer={<button className="modal-btn" autoFocus onClick={() => setLoadRevision((value) => value + 1)}>{t('common.retry')}</button>}>
+          <div className="modal-body"><p role="alert">{t('operation.uiStateLoadFailed')}</p></div>
         </Modal>
       ) : null}
     </UiStateContext.Provider>

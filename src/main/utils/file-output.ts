@@ -1,3 +1,4 @@
+import type { Translator } from '../../shared/i18n/translate'
 import fs from 'fs'
 import path from 'path'
 import { shell } from 'electron'
@@ -46,16 +47,18 @@ export function imageExtFromPath(imagePath: string | null | undefined): ImageExt
   return null
 }
 
-const IMAGE_FORMATS: Record<ImageExt, { name: string; extensions: string[] }> = {
-  png: { name: 'PNG image', extensions: ['png'] },
-  jpg: { name: 'JPEG image', extensions: ['jpg', 'jpeg'] },
-  webp: { name: 'WebP image', extensions: ['webp'] },
+const IMAGE_FORMATS: Record<ImageExt, { format: string; extensions: string[] }> = {
+  png: { format: 'PNG', extensions: ['png'] },
+  jpg: { format: 'JPEG', extensions: ['jpg', 'jpeg'] },
+  webp: { format: 'WebP', extensions: ['webp'] },
 }
 
 // The save-dialog filter for an image of this format, and nothing else: an
 // export is a byte copy, so any other extension would label the file wrongly.
-export function imageFormatFilter(ext: ImageExt): { name: string; extensions: string[] } {
-  return IMAGE_FORMATS[ext]
+// The filter's name is the dialog's words, in the interface language.
+export function imageFormatFilter(ext: ImageExt, translator: Translator): { name: string; extensions: string[] } {
+  const { format, extensions } = IMAGE_FORMATS[ext]
+  return { name: translator.t('fileFilter.image', { format }), extensions }
 }
 
 // The path an export of this format is written to. Some platforms' save dialogs

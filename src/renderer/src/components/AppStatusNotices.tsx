@@ -3,21 +3,21 @@ import { useQueue } from '../context/QueueContext'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { Icon } from './Icon'
 import { OPERATIONAL_FAILURE_EVENT, recordOperationalDiagnostic } from '../utils/operationalFailure'
-
-function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : pluralForm}`
-}
+import { useI18n } from '../i18n/I18nContext'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
+import { message, type Message } from '../../../shared/i18n/translate'
 
 export function AppStatusNotices(): React.JSX.Element | null {
   const { tasks } = useQueue()
   const { draftIssue, dismissDraftIssue } = useSessionDraft()
+  const { t, text } = useI18n()
   const [retryingStopped, setRetryingStopped] = useState(false)
   const [retryFailure, setRetryFailure] = useState(false)
-  const [operationalFailures, setOperationalFailures] = useState<Record<string, string>>({})
+  const [operationalFailures, setOperationalFailures] = useState<Record<string, MessageKey>>({})
 
   useEffect(() => {
     const handle = (event: Event): void => {
-      const { key, message } = (event as CustomEvent<{ key: string; message: string }>).detail
+      const { key, message } = (event as CustomEvent<{ key: string; message: MessageKey }>).detail
       setOperationalFailures((current) => ({ ...current, [key]: message }))
     }
     window.addEventListener(OPERATIONAL_FAILURE_EVENT, handle)
@@ -51,22 +51,25 @@ export function AppStatusNotices(): React.JSX.Element | null {
     }
   }
 
-  const queueParts: string[] = []
-  if (failed > 0) queueParts.push(`${plural(failed, 'task')} failed`)
-  if (interrupted > 0) queueParts.push(`${plural(interrupted, 'task')} stopped before completion`)
+  const queueParts: Message[] = []
+  if (failed > 0) queueParts.push(message('statusNotices.failed', { count: failed }))
+  if (interrupted > 0) queueParts.push(message('statusNotices.stopped', { count: interrupted }))
+  const summary = queueParts.length > 0
+    ? queueParts.reduceRight((rest, first) => message('statusNotices.and', { first, rest }))
+    : null
 
   return (
     <div className="app-status-notices">
       {draftIssue && (
         <section className="app-status-notice app-status-notice-error" role="alert">
           <div className="app-status-notice-copy">
-            <strong>{draftIssue.title}</strong>
-            <span>{draftIssue.message}</span>
+            <strong>{t(draftIssue.title)}</strong>
+            <span>{t(draftIssue.message)}</span>
           </div>
           <button
             className="app-status-notice-dismiss"
             type="button"
-            aria-label="Close session draft result"
+            aria-label={t('statusNotices.closeDraftResult')}
             onClick={dismissDraftIssue}
           >
             <Icon name="close" />
@@ -76,8 +79,8 @@ export function AppStatusNotices(): React.JSX.Element | null {
 
       {Object.entries(operationalFailures).map(([key, message]) => (
         <section key={key} className="app-status-notice app-status-notice-error" role="alert">
-          <div className="app-status-notice-copy"><span>{message}</span></div>
-          <button className="app-status-notice-dismiss" type="button" aria-label="Close operation result" onClick={() => setOperationalFailures((current) => { const next = { ...current }; delete next[key]; return next })}>
+          <div className="app-status-notice-copy"><span>{t(message)}</span></div>
+          <button className="app-status-notice-dismiss" type="button" aria-label={t('statusNotices.closeOperationResult')} onClick={() => setOperationalFailures((current) => { const next = { ...current }; delete next[key]; return next })}>
             <Icon name="close" />
           </button>
         </section>
@@ -89,10 +92,12 @@ export function AppStatusNotices(): React.JSX.Element | null {
           role="alert"
         >
           <div className="app-status-notice-copy">
-            <strong>Queue needs attention</strong>
+            <strong>{t('statusNotices.queueTitle')}</strong>
             <span>
-              {queueParts.join(' and ')}. Their rows in the queue show details and retry options.
-              {retryFailure && interrupted > 0 ? ' Retrying the stopped tasks failed.' : ''}
+              {summary && text(message(
+                retryFailure && interrupted > 0 ? 'statusNotices.queueBodyRetryFailed' : 'statusNotices.queueBody',
+                { summary },
+              ))}
             </span>
           </div>
           {interrupted > 0 && (
@@ -102,7 +107,7 @@ export function AppStatusNotices(): React.JSX.Element | null {
               disabled={retryingStopped}
               onClick={() => void retryStopped()}
             >
-              {retryingStopped ? 'Retrying…' : 'Retry stopped'}
+              {retryingStopped ? t('statusNotices.retrying') : t('statusNotices.retryStopped')}
             </button>
           )}
         </section>

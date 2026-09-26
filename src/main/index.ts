@@ -33,13 +33,14 @@ import {
   registerMainWindowForLayout,
   unregisterMainWindowForLayout,
 } from './main-window-layout'
-import { startupFailureMessage } from './startup-error'
 import { createStartupFailureWindow } from './startup-failure-window'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
 import { openOutputFolder } from './session/open-output-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
 import { ownMainWindowContentLoad } from './main-window-content'
+import { applyLanguagePreference, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
+import { buildAppMenuTemplate, buildTextContextMenuTemplate } from './app-menu'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
@@ -51,7 +52,8 @@ function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void
     if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy()
     return
   }
-  startupFailureWindow = createStartupFailureWindow(startupFailureMessage(error))
+  // The window shows authored copy only; the diagnostic stays in the log.
+  startupFailureWindow = createStartupFailureWindow()
   // Create the recovery owner before destroying the failed primary window so
   // its closed callback cannot turn this fatal path into an ordinary quit.
   if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy()
@@ -141,44 +143,8 @@ function createWindow(): BrowserWindow {
   })
 
   win.webContents.on('context-menu', (_event, params) => {
-    const { isEditable, selectionText, editFlags, misspelledWord, dictionarySuggestions } = params
-    const hasSelection = selectionText.length > 0
-
-    if (!isEditable && !hasSelection) return
-
-    const template: Electron.MenuItemConstructorOptions[] = []
-
-    if (misspelledWord) {
-      if (dictionarySuggestions.length > 0) {
-        for (const word of dictionarySuggestions) {
-          template.push({ label: word, click: () => win.webContents.replaceMisspelling(word) })
-        }
-      } else {
-        template.push({ label: 'No suggestions', enabled: false })
-      }
-      template.push({ type: 'separator' })
-    }
-
-    if (isEditable) {
-      if (editFlags.canUndo || editFlags.canRedo) {
-        template.push(
-          { label: 'Undo', role: 'undo', enabled: editFlags.canUndo },
-          { label: 'Redo', role: 'redo', enabled: editFlags.canRedo },
-          { type: 'separator' }
-        )
-      }
-      template.push(
-        { label: 'Cut', role: 'cut', enabled: editFlags.canCut },
-        { label: 'Copy', role: 'copy', enabled: editFlags.canCopy },
-        { label: 'Paste', role: 'paste', enabled: editFlags.canPaste },
-        { type: 'separator' },
-        { label: 'Select All', role: 'selectAll', enabled: editFlags.canSelectAll }
-      )
-    } else if (hasSelection) {
-      template.push({ label: 'Copy', role: 'copy' })
-    }
-
-    Menu.buildFromTemplate(template).popup({ window: win })
+    const template = buildTextContextMenuTemplate(mainTranslator(), params, (word) => win.webContents.replaceMisspelling(word))
+    if (template) Menu.buildFromTemplate(template).popup({ window: win })
   })
 
   ownMainWindowContentLoad(
@@ -196,6 +162,11 @@ function createWindow(): BrowserWindow {
 registerImageSchemeAsPrivileged()
 
 if (ownsSingleInstance) app.whenReady().then(() => {
+  // The language is settled before any window or native menu exists, so the
+  // first words on every surface, a startup failure included, are already in it.
+  settleLanguage()
+  registerLanguageIpc()
+  installAppMenu()
   // The startup body throws on a corrupt config.json (loadConfig deliberately
   // does not fall back to defaults — see config-store.ts). Without this catch
   // the rejection lands in the unhandledRejection hook, which logs and does NOT
@@ -207,6 +178,14 @@ if (ownsSingleInstance) app.whenReady().then(() => {
     enterStartupFailure(err)
   }
 })
+
+function installAppMenu(): void {
+  const apply = (): void => {
+    Menu.setApplicationMenu(Menu.buildFromTemplate(buildAppMenuTemplate(mainTranslator(), process.platform)))
+  }
+  apply()
+  onLanguageChanged(apply)
+}
 
 function startUp(): void {
   // Set the renderer CSP before any window loads its content. Gate the strict
@@ -270,8 +249,10 @@ function startUp(): void {
   registerQueueIpc()
   registerPreviewIpc()
   registerSettingsIpc(async (config) => {
-    // Settings apply on Save, the theme included (app-chrome conventions, Theme).
+    // Settings apply on Save, the theme and language included (app-chrome
+    // conventions, Theme; localization conventions).
     applyThemePreference(config.general.theme)
+    applyLanguagePreference(config.general.language)
     await statusIconController?.reconcile(config.general.show_status_icon)
   })
   registerStateIpc()
