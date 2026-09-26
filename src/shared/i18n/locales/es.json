@@ -344,7 +344,7 @@
   "option.low": "Baja",
   "option.medium": "Media",
   "option.high": "Alta",
-  "option.auto": "Automática",
+  "option.auto": "Auto",
   "option.opaque": "Opaco",
   "option.transparent": "Transparente",
   "size.preset": "{width}×{height} ({shape})",
@@ -711,12 +711,12 @@
   "common.dotJoin": "{first} · {rest}",
   "sessions.complete": {
     "one": "{count} completada",
-    "many": "{count} de completadas",
+    "many": "{count} completadas",
     "other": "{count} completadas"
   },
   "sessions.kept": {
     "one": "{count} conservada",
-    "many": "{count} de conservadas",
+    "many": "{count} conservadas",
     "other": "{count} conservadas"
   },
   "sessions.retry": {

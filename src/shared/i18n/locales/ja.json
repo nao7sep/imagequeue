@@ -40,7 +40,7 @@
   "nativeMenu.zoomOut": "縮小",
   "nativeMenu.fullscreen": "フルスクリーンを切り替え",
   "nativeMenu.window": "ウインドウ",
-  "nativeMenu.minimize": "しまう",
+  "nativeMenu.minimize": "最小化",
   "nativeMenu.zoom": "拡大/縮小",
   "nativeMenu.bringAllToFront": "すべてを手前に移動",
   "nativeMenu.close": "閉じる",
