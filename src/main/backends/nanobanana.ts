@@ -6,6 +6,7 @@ import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 import { assertUsableGeminiResponse } from '../provider-response'
 import { CANCELLED_MESSAGE } from './cancellation'
+import { MissingApiKeyError, ProviderTimeoutError } from '../provider-errors'
 
 // Calls the Gemini native image generation API (generateContent) and returns
 // the first image part as a Buffer along with its MIME-type hint. The Gemini
@@ -17,7 +18,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   const apiKey = resolveApiKey('gemini.nanobanana')
 
   if (!apiKey) {
-    throw new Error('Nano Banana API key not configured')
+    throw new MissingApiKeyError('Nano Banana')
   }
 
   const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms } })
@@ -51,7 +52,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
-      throw new Error(`Nano Banana API timed out after ${config.image_backends.nanobanana.timeout_ms / 1000}s`)
+      throw new ProviderTimeoutError('Nano Banana API', config.image_backends.nanobanana.timeout_ms)
     }
     log('error', 'Nano Banana API call failed', {
       model: task.model,

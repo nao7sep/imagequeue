@@ -4,6 +4,7 @@ import {
   elaboratorRecoveryPresentation,
   generationFailurePresentation,
 } from '../../src/main/failure-presentation'
+import { ProviderHttpError, ProviderStatusError } from '../../src/main/provider-errors'
 
 const hostile = 'EACCES Error invoking remote method IPC /private/tmp/hostile-sentinel'
 
@@ -18,15 +19,15 @@ describe('generationFailurePresentation', () => {
   })
 
   it('classifies known recovery from structured fields rather than message text', () => {
-    expect(generationFailurePresentation('grok', { status: 401, message: 'unrelated' }, false)).toContain('API key')
-    expect(generationFailurePresentation('flux', { statusCode: 429, message: 'unrelated' }, false)).toContain('rate-limiting')
+    expect(generationFailurePresentation('grok', new ProviderHttpError('unrelated', 401), false)).toContain('API key')
+    expect(generationFailurePresentation('flux', new ProviderHttpError('unrelated', 429), false)).toContain('rate-limiting')
     expect(generationFailurePresentation('drawthings', { code: 'EACCES', message: hostile }, false)).toContain('file permissions')
   })
 
   it('names a provider’s own terminal status, reduced to a short plain label', () => {
-    expect(generationFailurePresentation('flux', { providerStatus: 'Request Moderated', message: hostile }, false))
+    expect(generationFailurePresentation('flux', new ProviderStatusError('FLUX', 'Request Moderated', hostile), false))
       .toContain('“Request Moderated”')
-    const shown = generationFailurePresentation('flux', { providerStatus: '<b>/private/tmp/x</b>' + 'y'.repeat(80) }, false)
+    const shown = generationFailurePresentation('flux', new ProviderStatusError('FLUX', '<b>/private/tmp/x</b>' + 'y'.repeat(80)), false)
     expect(shown).not.toContain('<')
     expect(shown).not.toContain('/private')
     expect(shown).not.toContain('y'.repeat(41))

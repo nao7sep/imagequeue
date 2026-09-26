@@ -3,6 +3,7 @@ import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
+import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
 
 const BASE_URL = 'https://api.x.ai/v1'
 
@@ -14,7 +15,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
   const apiKey = resolveApiKey('xai')
 
   if (!apiKey) {
-    throw new Error('Grok Imagine API key not configured')
+    throw new MissingApiKeyError('Grok Imagine')
   }
 
   // A signal that is ALREADY aborted never fires its listener — today no await
@@ -61,7 +62,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
     if (!response.ok) {
       const text = await response.text()
       log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
-      throw new Error(`Grok API error ${response.status}: ${text.slice(0, 200)}`)
+      throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status)
     }
 
     logApiResponse('grok', 'ok', Date.now() - startTime)
@@ -81,9 +82,9 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Grok Imagine timed out', { model: task.model, timeoutMs: timeout_ms })
-      throw new Error(`Grok API timed out after ${timeout_ms / 1000}s`)
+      throw new ProviderTimeoutError('Grok API', timeout_ms)
     }
-    if (!(err instanceof Error && err.message.startsWith('Grok API'))) {
+    if (!(err instanceof ProviderHttpError)) {
       log('error', 'Grok Imagine API call failed', {
         model: task.model,
         error: serializeError(err)

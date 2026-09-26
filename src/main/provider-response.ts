@@ -13,7 +13,12 @@
  *
  * Two providers, two vocabularies, one rule. Anything else a response carries is each caller's
  * own call — this module is the floor, not the ceiling.
+ *
+ * Each outcome is thrown as its type from provider-errors, so the task row and the retry
+ * policy can tell a refusal from a truncation without reading the message.
  */
+
+import { ProviderRefusalError, ProviderStatusError, ProviderTruncationError } from './provider-errors'
 
 interface GeminiLike {
   promptFeedback?: { blockReason?: string }
@@ -23,15 +28,15 @@ interface GeminiLike {
 export function assertUsableGeminiResponse(response: GeminiLike, what: string): void {
   const blockReason = response.promptFeedback?.blockReason
   if (blockReason) {
-    throw new Error(`Gemini refused this ${what} (${blockReason}). The input was rejected, not lost.`)
+    throw new ProviderRefusalError(`Gemini refused this ${what} (${blockReason}). The input was rejected, not lost.`, blockReason)
   }
   const finishReason = response.candidates?.[0]?.finishReason
   if (finishReason === 'MAX_TOKENS') {
-    throw new Error(`Gemini stopped at its output limit, so this ${what} is truncated rather than complete.`)
+    throw new ProviderTruncationError(`Gemini stopped at its output limit, so this ${what} is truncated rather than complete.`)
   }
   // Absent is normal — not every response carries one; only a stated non-STOP reason is a signal.
   if (finishReason && finishReason !== 'STOP') {
-    throw new Error(`Gemini stopped early (${finishReason}), so this ${what} is incomplete.`)
+    throw new ProviderStatusError('Gemini', finishReason, `Gemini stopped early (${finishReason}), so this ${what} is incomplete.`)
   }
 }
 
@@ -44,22 +49,12 @@ export function assertUsableOpenAIResponse(response: OpenAILike, what: string): 
   // A refusal arrives as a `refusal` string with null content — reading only `content` reports
   // our own emptiness instead of the model's stated reason.
   if (choice?.message?.refusal) {
-    throw new Error(`The model declined this ${what}: ${choice.message.refusal}`)
+    throw new ProviderRefusalError(`The model declined this ${what}: ${choice.message.refusal}`, choice.message.refusal)
   }
   if (choice?.finish_reason === 'content_filter') {
-    throw new Error(`The provider's content filter rejected this ${what}. The input was rejected, not lost.`)
+    throw new ProviderRefusalError(`The provider's content filter rejected this ${what}. The input was rejected, not lost.`, 'content_filter')
   }
   if (choice?.finish_reason === 'length') {
-    throw new Error(`The model stopped at its output limit, so this ${what} is truncated rather than complete.`)
-  }
-}
-
-/** A provider ended a request with its own terminal status — FLUX's "Request Moderated", for
- *  one. The status is the provider's stated outcome, kept structured so presentation can name
- *  it instead of reporting a timeout the provider never had. */
-export class ProviderStatusError extends Error {
-  constructor(provider: string, readonly providerStatus: string) {
-    super(`${provider} ended the request with status "${providerStatus}"`)
-    this.name = 'ProviderStatusError'
+    throw new ProviderTruncationError(`The model stopped at its output limit, so this ${what} is truncated rather than complete.`)
   }
 }

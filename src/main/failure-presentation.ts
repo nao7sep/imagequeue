@@ -1,5 +1,6 @@
 import type { BackendId } from '../shared/types'
 import type { AppNotice } from '../shared/app-notice'
+import { httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
 
 const BACKEND_NAMES: Record<BackendId, string> = {
   openai: 'OpenAI',
@@ -9,23 +10,14 @@ const BACKEND_NAMES: Record<BackendId, string> = {
   drawthings: 'Draw Things',
 }
 
-function structuredNumber(error: unknown, field: 'status' | 'statusCode'): number | null {
-  if (!error || typeof error !== 'object') return null
-  const value = (error as Record<string, unknown>)[field]
-  return typeof value === 'number' ? value : null
-}
-
 function structuredString(error: unknown, field: 'code' | 'name'): string | null {
   if (!error || typeof error !== 'object') return null
   const value = (error as Record<string, unknown>)[field]
   return typeof value === 'string' ? value : null
 }
 
-/** The provider's own terminal status (ProviderStatusError), reduced to a short plain label. */
-function structuredProviderStatus(error: unknown): string | null {
-  if (!error || typeof error !== 'object') return null
-  const value = (error as Record<string, unknown>).providerStatus
-  if (typeof value !== 'string') return null
+/** A provider's own code or status, reduced to a short plain label safe to show. */
+function plainLabel(value: string): string | null {
   const label = value.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 40)
   return label || null
 }
@@ -37,11 +29,19 @@ export function generationFailurePresentation(backend: BackendId, error: unknown
   }
 
   const name = BACKEND_NAMES[backend]
-  const status = structuredNumber(error, 'status') ?? structuredNumber(error, 'statusCode')
+  const status = httpStatus(error)
   const code = structuredString(error, 'code')
   const errorName = structuredString(error, 'name')
 
-  const providerStatus = structuredProviderStatus(error)
+  if (error instanceof MissingApiKeyError) {
+    return `No ${name} API key is set. Add it in Settings, then retry.`
+  }
+  if (error instanceof ProviderRefusalError) {
+    const reason = plainLabel(error.reason)
+    return `${name} refused this prompt${reason ? ` (\u201c${reason}\u201d)` : ''}. ` +
+      'Change the prompt, then retry.'
+  }
+  const providerStatus = error instanceof ProviderStatusError ? plainLabel(error.providerStatus) : null
   if (providerStatus) {
     return `${name} ended this request without an image and reported \u201c${providerStatus}\u201d. ` +
       'Retry it; if the same status returns, change the prompt.'

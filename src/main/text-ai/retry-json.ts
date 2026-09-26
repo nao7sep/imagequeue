@@ -2,6 +2,7 @@ import type { ConversationMessage, TextAIProvider } from './types'
 import { log, serializeError } from '../logger'
 import { truncate } from '../../shared/textCleanup'
 import { abortableDelay } from '../utils/abortable-delay'
+import { isRetryableProviderFailure } from '../provider-errors'
 
 const REJECTED_PAYLOAD_PREVIEW_GRAPHEMES = 200
 const STRICT_JSON_NUDGE = 'Reply with valid JSON only — no prose, no markdown fences.'
@@ -13,6 +14,7 @@ export type JsonCallLabel = 'aspects' | 'domains' | 'clusters' | 'prose'
  * One schema-forced provider call with bounded, abort-aware retries.
  * Validation is supplied by the caller so transport and payload failures share
  * one retry policy without coupling this helper to concepts or prompt prose.
+ * Only failures that may pass on another attempt are retried.
  */
 export async function askJsonWithRetry<T>(options: {
   provider: TextAIProvider
@@ -75,6 +77,9 @@ export async function askJsonWithRetry<T>(options: {
       }
       return value
     } catch (err) {
+      // A refusal, truncation, bad key or unknown model is the provider's settled
+      // answer: another paid attempt returns it again, so it is reported now.
+      if (!isRetryableProviderFailure(err)) throw err
       lastError = err
     }
   }

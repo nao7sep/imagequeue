@@ -5,7 +5,7 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { abortableDelay } from '../utils/abortable-delay'
-import { ProviderStatusError } from '../provider-response'
+import { MissingApiKeyError, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
@@ -17,7 +17,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
   const apiKey = resolveApiKey('bfl')
 
   if (!apiKey) {
-    throw new Error('FLUX API key not configured')
+    throw new MissingApiKeyError('FLUX')
   }
 
   const width = (task.params.width as number) || 1024
@@ -74,7 +74,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     if (!submitResponse.ok) {
       const text = await submitResponse.text()
       log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
-      throw new Error(`FLUX submit failed (${submitResponse.status}): ${text}`)
+      throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status)
     }
 
     const submitData = await submitResponse.json() as { id: string; polling_url?: string }
@@ -91,7 +91,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
 
       if (!pollResponse.ok) {
         log('error', 'FLUX poll request failed', { model: task.model, status: pollResponse.status, jobId: submitData.id })
-        throw new Error(`FLUX poll failed (${pollResponse.status})`)
+        throw new ProviderHttpError(`FLUX poll failed (${pollResponse.status})`, pollResponse.status)
       }
 
       const pollData = await pollResponse.json() as {
@@ -112,6 +112,8 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
         const imageResponse = await fetch(imageUrl, { signal: controller.signal })
         if (!imageResponse.ok) {
           log('error', 'FLUX image download failed', { model: task.model, status: imageResponse.status })
+          // A plain Error, not ProviderHttpError: this status is the signed download
+          // URL's, not an answer about the user's key or rate limit.
           throw new Error(`Failed to download FLUX image (${imageResponse.status})`)
         }
 
@@ -135,7 +137,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'FLUX generation timed out', { model: task.model, timeoutMs: timeout_ms, elapsedMs: Date.now() - startTime })
-      throw new Error(`FLUX generation timed out after ${timeout_ms / 1000}s`)
+      throw new ProviderTimeoutError('FLUX generation', timeout_ms)
     }
     throw err
   } finally {

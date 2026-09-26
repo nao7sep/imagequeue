@@ -1,10 +1,11 @@
-import OpenAI from 'openai'
+import OpenAI, { APIConnectionTimeoutError } from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { buildOpenAIImageParams } from './openai-request'
 import { CANCELLED_MESSAGE } from './cancellation'
+import { MissingApiKeyError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
 
 // Calls OpenAI image generation API and returns the image bytes plus a
 // MIME-type hint derived from the user-selected output_format.
@@ -13,7 +14,7 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
   const apiKey = resolveApiKey('openai.image')
 
   if (!apiKey) {
-    throw new Error('OpenAI API key not configured')
+    throw new MissingApiKeyError('OpenAI')
   }
 
   // maxRetries: 0 — a generation is paid and not idempotent, so the SDK must
@@ -35,17 +36,14 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
     // A stop the user asked for is not a timeout and not a failure; checked
     // first so the log does not claim otherwise.
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
-    if (
-      err instanceof Error &&
-      (err.name === 'AbortError' ||
-        err.name === 'APITimeoutError' ||
-        err.name === 'APIConnectionTimeoutError')
-    ) {
+    // The SDK's timeout error keeps the plain name 'Error', so it is known by
+    // its class, not its name.
+    if (err instanceof APIConnectionTimeoutError || (err instanceof Error && err.name === 'AbortError')) {
       log('error', 'OpenAI API timed out', {
         model: task.model,
         timeoutMs: config.image_backends.openai.timeout_ms
       })
-      throw new Error(`OpenAI API timed out after ${config.image_backends.openai.timeout_ms / 1000}s`)
+      throw new ProviderTimeoutError('OpenAI API', config.image_backends.openai.timeout_ms)
     }
     log('error', 'OpenAI API call failed', {
       model: task.model,
@@ -55,6 +53,11 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
       errorBody: (err as Record<string, unknown>).error,
       error: serializeError(err)
     })
+    // A moderation block is a 400 like any bad parameter, told apart only by its
+    // code; it is the provider refusing this prompt, so retrying it cannot help.
+    if ((err as Record<string, unknown>).code === 'moderation_blocked') {
+      throw new ProviderRefusalError('OpenAI blocked this prompt (moderation_blocked).', 'moderation_blocked')
+    }
     throw err
   })
 

@@ -6,6 +6,7 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { getTempDir } from '../dependencies/paths'
 import { CANCELLED_MESSAGE } from './cancellation'
+import { ProviderTimeoutError } from '../provider-errors'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
@@ -116,7 +117,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
       }
       if (timedOut) {
         log('error', 'draw-things-cli timed out', { model: task.model, timeoutMs: timeout_ms })
-        reject(new Error(`Draw Things generation timed out after ${Math.round(timeout_ms / 1000)}s`))
+        reject(new ProviderTimeoutError('Draw Things generation', timeout_ms))
         return
       }
       if (code === 0) resolve()
