@@ -34,7 +34,7 @@ export class GeminiProvider implements TextAIProvider {
   async ask(opts: AskOptions): Promise<AskResult> {
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      httpOptions: { timeout: opts.timeoutMs },
+      httpOptions: { timeout: opts.timeoutMs, retryOptions: { attempts: 1 } },
     })
 
     const config = {

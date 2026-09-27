@@ -21,7 +21,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     throw new MissingApiKeyError('Nano Banana')
   }
 
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms } })
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 } } })
 
   const modelDef = findModel('nanobanana', task.model)
   const supportsImageConfig = modelDef?.supportsImageConfig ?? false
