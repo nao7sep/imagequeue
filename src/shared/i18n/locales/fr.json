@@ -205,7 +205,7 @@
   "operation.outputFolderFailed": "Le dossier de sortie n’a pas pu être ouvert. Vérifiez qu’il est toujours disponible.",
   "operation.queueControlsLoadFailed": "Les commandes de la file n’ont pas pu être chargées. Rouvrez le menu pour réessayer.",
   "operation.queueControlsRefreshFailed": "Les commandes de la file n’ont pas pu être actualisées. Rouvrez le menu pour réessayer.",
-  "operation.retryStoppedFailed": "Les tâches arrêtées n’ont pas pu être relancées. Elles restent arrêtées\u00a0; réessayez.",
+  "operation.retryStoppedFailed": "Les tâches arrêtées n’ont pas pu être réessayées. Elles restent arrêtées\u00a0; réessayez.",
   "operation.enqueueFailed": "La tâche n’a pas pu être mise en file. Rien n’a été ajouté\u00a0; réessayez.",
   "operation.uiStateLoadFailed": "Les préférences de fenêtre n’ont pas pu être chargées. Rien n’a été modifié\u00a0; réessayez.",
   "operation.uiStateSaveFailed": "Les préférences de fenêtre n’ont pas pu être enregistrées. Les valeurs précédentes restent actives\u00a0; réessayez.",
@@ -228,7 +228,7 @@
     "other": "{count} tâches en attente"
   },
   "queueControls.stopTasksBoth": "les tâches ({generating} en génération, {waiting} en attente)",
-  "queueControls.stopConfirm": "Arrêter {tasks}\u00a0? Le travail en cours est abandonné et chaque tâche arrêtée pourra être relancée, mais un moteur payant peut tout de même facturer les appels déjà envoyés.",
+  "queueControls.stopConfirm": "Arrêter {tasks}\u00a0? Le travail en cours est abandonné et chaque tâche arrêtée pourra être réessayée, mais un moteur payant peut tout de même facturer les appels déjà envoyés.",
   "queueControls.clearTitle": "Vider les tâches en attente",
   "queueControls.clear": "Vider",
   "queueControls.clearTasksWaiting": {
@@ -242,7 +242,7 @@
     "other": "{count} tâches arrêtées"
   },
   "queueControls.clearTasksBoth": "les tâches ({waiting} en attente, {stopped} arrêtées)",
-  "queueControls.clearConfirm": "Retirer {tasks}\u00a0? Contrairement à l’arrêt, elles ne pourront pas être relancées\u00a0: elles sont retirées. Les tâches en génération et terminées ne sont pas touchées.",
+  "queueControls.clearConfirm": "Retirer {tasks}\u00a0? Contrairement à l’arrêt, elles ne pourront pas être réessayées\u00a0: elles sont retirées. Les tâches en génération et terminées ne sont pas touchées.",
   "queueControls.allQueues": "Toutes les files",
   "queueControls.pause": "Mettre en pause",
   "queueControls.resume": "Reprendre",
@@ -252,9 +252,9 @@
   "queueControls.clearPendingCount": "Vider les tâches en attente ({count})",
   "resumeInterrupted.title": "Réessayer les tâches interrompues",
   "resumeInterrupted.message": {
-    "one": "Cette session contient {count} tâche restée inachevée lors de sa dernière ouverture. Réessayez-la pour la remettre en file de génération, ou laissez-la arrêtée pour la relancer plus tard.",
-    "many": "Cette session contient {count} de tâches restées inachevées lors de sa dernière ouverture. Réessayez-les toutes pour les remettre en file de génération, ou laissez-les arrêtées pour les relancer une à une plus tard.",
-    "other": "Cette session contient {count} tâches restées inachevées lors de sa dernière ouverture. Réessayez-les toutes pour les remettre en file de génération, ou laissez-les arrêtées pour les relancer une à une plus tard."
+    "one": "Cette session contient {count} tâche restée inachevée lors de sa dernière ouverture. Réessayez-la pour la remettre en file de génération, ou laissez-la arrêtée pour la réessayer plus tard.",
+    "many": "Cette session contient {count} de tâches restées inachevées lors de sa dernière ouverture. Réessayez-les toutes pour les remettre en file de génération, ou laissez-les arrêtées pour les réessayer une à une plus tard.",
+    "other": "Cette session contient {count} tâches restées inachevées lors de sa dernière ouverture. Réessayez-les toutes pour les remettre en file de génération, ou laissez-les arrêtées pour les réessayer une à une plus tard."
   },
   "resumeInterrupted.confirm": "Réessayer toutes les tâches arrêtées",
   "resumeInterrupted.notNow": "Plus tard",
@@ -395,7 +395,7 @@
   "task.delete": "Supprimer",
   "task.deleteFailed": "La tâche n’a pas pu être supprimée. Son entrée dans la file et ses fichiers sont inchangés\u00a0; réessayez.",
   "task.restoreFailed": "La tâche conservée n’a pas pu être restaurée. Elle reste conservée\u00a0; réessayez.",
-  "task.retryFailed": "La tâche n’a pas pu être relancée. Elle reste arrêtée\u00a0; réessayez.",
+  "task.retryFailed": "La tâche n’a pas pu être réessayée. Elle reste arrêtée\u00a0; réessayez.",
   "task.exportFailed": "L’image n’a pas pu être exportée. Vérifiez le dossier d’exportation, puis réessayez.",
   "task.thumbnailFailed": "La vignette de cette tâche n’a pas pu être chargée. La tâche est inchangée.",
   "task.keepHint": "Conserver cette image, rangée hors de la liste active",

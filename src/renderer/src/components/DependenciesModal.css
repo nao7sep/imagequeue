@@ -105,10 +105,14 @@
 }
 
 /* Label, value, action. The label and the value's first line take a control's
-   height, so they sit level with the button however many lines follow. */
+   height, so they sit level with the button however many lines follow. The
+   label column sizes to its own content (max-content) and never wraps, since
+   some locales' labels (e.g. Japanese "インストール済み", French "Dernière
+   vérification") are longer than the old fixed 88px track; a long value wraps
+   onto further lines instead. */
 .dependency-fact {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) auto;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
   align-items: start;
   column-gap: var(--space-3);
   padding-top: var(--space-3);
@@ -129,6 +133,7 @@
 
 .dependency-fact-label {
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .dependency-fact-value {

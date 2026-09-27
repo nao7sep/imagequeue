@@ -576,7 +576,7 @@
   "elabSettings.resetMessage": "Vorlagen, Formatanweisungen und Zahlenwerte durch die mitgelieferten Standardwerte ersetzen?",
   "elabSettings.batchSizeRange": "Die Stapelgröße muss eine ganze Zahl zwischen {min} und {max} sein.",
   "elabSettings.concurrencyRange": "Die Parallelität muss eine ganze Zahl zwischen {min} und {max} sein.",
-  "elabSettings.retriesRange": "Die maximale Anzahl an Wiederholungen muss eine ganze Zahl zwischen {min} und {max} sein.",
+  "elabSettings.retriesRange": "Die maximale Anzahl an Versuchen muss eine ganze Zahl zwischen {min} und {max} sein.",
   "elabSettings.saveAnywayTitle": "Trotzdem speichern?",
   "elabSettings.saveAnywayMessage": "{warning} Das Brainstorming funktioniert dann möglicherweise nicht wie erwartet. Trotzdem speichern?",
   "elabSettings.discardTitle": "Änderungen verwerfen?",
@@ -584,10 +584,10 @@
   "elabSettings.batchSize": "Stapelgröße",
   "elabSettings.batchSizeHint": "Prompts pro Erweiterungsaufruf ({min}–{max})",
   "elabSettings.concurrencyHint": "gleichzeitig laufende Erweiterungsaufrufe ({min}–{max}) – verringern Sie den Wert, wenn Ihr Anbieter die Anfragen begrenzt",
-  "elabSettings.maxRetries": "Max. Wiederholungen pro Durchlauf",
+  "elabSettings.maxRetries": "Max. Versuche pro Durchlauf",
   "elabSettings.maxRetriesHint": "zusätzliche Versuche nach einem vorübergehenden Fehler ({min}–{max})",
-  "elabSettings.backoff": "Wartezeit vor Wiederholung (ms)",
-  "elabSettings.backoffHint": "durch Kommas getrennt; gibt es mehr Wiederholungen als Werte, wird der letzte wiederholt",
+  "elabSettings.backoff": "Wartezeit zwischen Versuchen (ms)",
+  "elabSettings.backoffHint": "durch Kommas getrennt; gibt es mehr Versuche als Werte, wird der letzte wiederholt",
   "elabSettings.preferNew": "Neue Konzepte bevorzugen",
   "elabSettings.preferNewHint": "die KI nach neuen Konzepten fragen, statt solche wiederzuverwenden, deren letzte Nutzung außerhalb des Wiederverwendungsfensters liegt",
   "elabSettings.templates": "Vorlagen",
@@ -698,8 +698,8 @@
     "other": "{count} behalten"
   },
   "sessions.retry": {
-    "one": "{count} zu wiederholen",
-    "other": "{count} zu wiederholen"
+    "one": "{count} erneut zu versuchen",
+    "other": "{count} erneut zu versuchen"
   },
   "sessions.total": {
     "one": "{count} gesamt",
