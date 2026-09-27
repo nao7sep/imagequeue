@@ -132,4 +132,22 @@ describe('resolveStorageRoot (IMAGEQUEUE_HOME)', () => {
       expect(() => resolveStorageRoot()).toThrow(/expands to an empty path/)
     })
   })
+
+  describe.skipIf(process.platform === 'win32')('owner-only permissions (POSIX)', () => {
+    it('creates a fresh root as owner-only (0700)', () => {
+      const target = path.join(tmpBase, 'fresh-root')
+      process.env[ENV_VAR] = target
+      const root = resolveStorageRoot()
+      expect(fs.statSync(root).mode & 0o777).toBe(0o700)
+    })
+
+    it('tightens an existing broader root (0755) to 0700 at launch', () => {
+      const target = path.join(tmpBase, 'existing-root')
+      fs.mkdirSync(target, { mode: 0o755 })
+      expect(fs.statSync(target).mode & 0o777).toBe(0o755)
+      process.env[ENV_VAR] = target
+      const root = resolveStorageRoot()
+      expect(fs.statSync(root).mode & 0o777).toBe(0o700)
+    })
+  })
 })

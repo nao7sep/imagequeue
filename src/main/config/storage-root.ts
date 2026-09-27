@@ -71,10 +71,11 @@ export function resolveStorageRoot(): string {
   }
 
   try {
-    fs.mkdirSync(root, { recursive: true })
+    fs.mkdirSync(root, { recursive: true, mode: 0o700 })
     if (!fs.statSync(root).isDirectory()) {
       throw new Error(`path exists but is not a directory: ${root}`)
     }
+    tightenRootPermissions(root)
   } catch (error) {
     const source = fromOverride ? `${HOME_ENV_VAR} (${override})` : 'default storage root'
     throw new Error(
@@ -84,4 +85,23 @@ export function resolveStorageRoot(): string {
   }
 
   return root
+}
+
+// Tightens the storage root to owner-only (0700) when an existing root is
+// broader — mkdirSync's `mode` only applies to a freshly created directory and
+// is masked by umask, so a pre-existing 0755 root (or one created before this
+// check existed) would otherwise stay group/other-readable, letting accounts
+// that cannot read the app's own data read its derived logs and caches. POSIX
+// only; Windows uses its own permission model. A failure to tighten is logged
+// and never stops the app.
+function tightenRootPermissions(root: string): void {
+  if (process.platform === 'win32') return
+  try {
+    const mode = fs.statSync(root).mode
+    if ((mode & 0o077) !== 0) {
+      fs.chmodSync(root, 0o700)
+    }
+  } catch (error) {
+    console.error(`Failed to tighten permissions on the ImageQueue storage root "${root}":`, error)
+  }
 }
