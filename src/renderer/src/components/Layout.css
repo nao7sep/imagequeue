@@ -74,6 +74,7 @@
 
 .dropdown-menu {
   min-width: 160px;
+  max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   background: var(--bg-surface);
@@ -104,6 +105,8 @@
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .menu-item:hover,
@@ -117,6 +120,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* The flex layouts (checkbox item, submenu parent) put the label in its own
+   child span, so the ellipsis has to live on that span rather than on the
+   flex container: `min-width: 0` lets it shrink below its text's natural
+   width instead of forcing the row wider or wrapping. */
+.menu-checkbox-item > span:last-child,
+.menu-submenu-parent > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menu-check-mark {
@@ -162,6 +177,7 @@
 
 .menu-submenu {
   min-width: 200px;
+  max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   background: var(--bg-surface);
