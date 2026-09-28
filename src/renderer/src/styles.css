@@ -35,7 +35,14 @@
   --scrollbar-thumb: var(--text-muted);
   --scrollbar-thumb-active: var(--text-secondary);
   --text-on-accent: #ffffff;
-  --border: #cdd5e6;
+  /* The quiet line keeps one step from the surface it is drawn on: one value
+     for the page-like fills (white in light, navy in dark) and one for the
+     tinted --bg-surface, which sits close to --border-on-page. --border is the
+     line a component draws; the rule after this block re-scopes it by the
+     surface each container paints. */
+  --border-on-page: #cdd5e6;
+  --border-on-surface: #bfc7d7;
+  --border: var(--border-on-page);
   --border-strong: #a8b3cd;
   /* A text field or select sits on a fill close to its surroundings, so its
      outline alone identifies it and stays at 3:1 against both. */
@@ -139,7 +146,8 @@
     --text-secondary: #b2bacb;
     --text-muted: #a1adc3;
     --text-on-accent: #06121f;
-    --border: #3a4470;
+    --border-on-page: #3a4470;
+    --border-on-surface: #46517e;
     --border-strong: #454f80;
     --field-border: #8390bd;
     --accent: #38bdf8;
@@ -172,6 +180,42 @@
   :root {
     --motion: 0ms;
   }
+}
+
+/* Containers and controls that paint --bg-surface draw their lines with
+   --border-on-surface; a page-filled card, pane or row inside one of them
+   returns to --border-on-page. */
+.modal-box,
+.dropdown-menu,
+.menu-submenu,
+.advanced-elaborator-column,
+.elaborated-prompts-row,
+.modal-btn,
+.prompt-actions button,
+.preview-btn,
+.open-models-btn,
+.download-btn,
+.welcome-btn,
+.settings-browse-btn,
+.session-preview-thumb {
+  --border: var(--border-on-surface);
+}
+
+.dt-modal-box,
+.dt-model-column,
+.dt-model-row,
+.dt-action-btn,
+.advanced-pane,
+.concept-library-facet,
+.concept-library-section,
+.concept-library-row,
+.elaboration-settings-section,
+.elaborators-pane,
+.elaborator-row,
+.session-card,
+.app-tabs,
+.settings-option-panel {
+  --border: var(--border-on-page);
 }
 
 .renderer-failure {
