@@ -83,7 +83,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('PromptPane presentation', () => {
-  it('shows a failed task\'s whole reason in the preview: the authored lead-in, then the provider\'s words', () => {
+  it('shows a failed task\'s whole reason in its own strip under the preview: the authored lead-in, then the provider\'s words', () => {
     const said = 'Your request was rejected by the safety system. '.repeat(8).trim()
     const failedTask: Task = {
       ...selectedTask,
@@ -94,10 +94,20 @@ describe('PromptPane presentation', () => {
     const { container } = render(
       <PromptPane selectedTask={failedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
     )
-    const failure = container.querySelector('.preview-area .preview-failure') as HTMLElement
+    const failure = container.querySelector('.preview-failure') as HTMLElement
     expect(failure.textContent).toContain('OpenAI refused this prompt (“moderation_blocked”)')
     expect(failure.querySelector('.preview-failure-provider')?.textContent).toBe(said)
-    expect(container.querySelector('.preview-placeholder')).toBeNull()
+    // The strip follows the preview, which keeps its placeholder.
+    expect(container.querySelector('.preview-area .preview-failure')).toBeNull()
+    expect(container.querySelector('.preview-area')?.nextElementSibling).toBe(failure)
+    expect(container.querySelector('.preview-area .preview-placeholder')).not.toBeNull()
+  })
+
+  it('shows no failure strip for a task that has not failed', () => {
+    const { container } = render(
+      <PromptPane selectedTask={selectedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
+    )
+    expect(container.querySelector('.preview-failure')).toBeNull()
   })
 
   it('shows the lead-in alone when the provider said nothing', () => {

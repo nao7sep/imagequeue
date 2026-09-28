@@ -380,15 +380,6 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         <div className="preview-area">
           {previewDataUrl ? (
             <img className="preview-image" src={previewDataUrl} alt={t('prompt.previewAlt')} />
-          ) : failureText !== null ? (
-            // A failed task has no image; why it failed is the one thing worth
-            // showing, whole — the authored lead-in, then the provider's own words.
-            <div className="preview-failure">
-              <p>{failureText}</p>
-              {selectedTask?.providerMessage && (
-                <p className="preview-failure-provider">{selectedTask.providerMessage}</p>
-              )}
-            </div>
           ) : (
             <div className="preview-placeholder">
               <p>{t('prompt.noImage')}</p>
@@ -396,6 +387,18 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
             </div>
           )}
         </div>
+
+        {failureText !== null && (
+          // Why the selected task failed, whole: the authored lead-in, then the
+          // provider's reason. Its own strip under the preview, which gives up
+          // the height, so nothing above moves.
+          <div className="preview-failure">
+            <p>{failureText}</p>
+            {selectedTask?.providerMessage && (
+              <p className="preview-failure-provider">{selectedTask.providerMessage}</p>
+            )}
+          </div>
+        )}
 
         {(selectedTask?.status === 'completed' || selectedTask?.status === 'kept') && selectedTask?.baseName && (
           <div className="preview-toolbar">

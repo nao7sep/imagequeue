@@ -92,6 +92,8 @@
 .prompt-textarea {
   width: 100%;
   min-height: 72px;
+  /* Never shrinks for what sits below it: the preview gives up the height. */
+  flex-shrink: 0;
   resize: vertical;
   padding: 10px 12px;
   border: 1px solid var(--field-border);
@@ -189,7 +191,10 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--preview-bg);
-  min-height: 200px;
+  /* The one flexible block: whatever varies with the selection below it (the
+     completed task's toolbar, the failure strip) takes its height from here,
+     down to this floor, so the controls above never move. */
+  min-height: 120px;
   overflow: hidden;
 }
 
@@ -204,14 +209,16 @@
   font-size: 11px;
 }
 
-/* A failed task's reason, in the app's error style. It fills the preview's
-   width and scrolls within it when long; the text is selectable and wraps,
-   keeping any line breaks the provider sent. */
+/* A failed task's reason, in the app's error style, in its own strip between
+   the preview and Details. It never shrinks; the preview above gives up the
+   height. A long reason scrolls within the strip's cap rather than squeezing
+   the preview. The text is selectable and wraps, keeping any line breaks the
+   provider sent. */
 .preview-failure {
-  align-self: stretch;
-  max-height: 100%;
+  flex-shrink: 0;
+  /* Five lines, plus the padding and border. */
+  max-height: calc(1.4em * 5 + 2 * var(--space-2) + 2px);
   overflow-y: auto;
-  margin: var(--space-3);
   padding: var(--space-2) 10px;
   border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
   border-radius: var(--radius-sm);
