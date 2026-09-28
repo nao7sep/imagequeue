@@ -2,19 +2,19 @@ import type { ConversationMessage, TextAIProvider } from './types'
 import { log, serializeError } from '../logger'
 import { truncate } from '../../shared/textCleanup'
 import { abortableDelay } from '../utils/abortable-delay'
-import { isRetryableProviderFailure } from '../provider-errors'
+import { provedNotProcessed } from '../provider-errors'
 
 const REJECTED_PAYLOAD_PREVIEW_GRAPHEMES = 200
-const STRICT_JSON_NUDGE = 'Reply with valid JSON only — no prose, no markdown fences.'
 
 /** Which boundary a retry belongs to, for useful diagnostics. */
 export type JsonCallLabel = 'aspects' | 'domains' | 'clusters' | 'prose'
 
 /**
- * One schema-forced provider call with bounded, abort-aware retries.
- * Validation is supplied by the caller so transport and payload failures share
- * one retry policy without coupling this helper to concepts or prompt prose.
- * Only failures that may pass on another attempt are retried.
+ * One schema-forced provider call the user waits on, with bounded, abort-aware
+ * retries. Validation is supplied by the caller so this helper stays free of
+ * concepts and prompt prose. Only a failure that proves the provider did no work
+ * is sent again; any other outcome, including a timeout, a 5xx and a reply with no
+ * usable payload, may have been billed and is reported for the user to retry.
  */
 export async function askJsonWithRetry<T>(options: {
   provider: TextAIProvider
@@ -49,15 +49,8 @@ export async function askJsonWithRetry<T>(options: {
     }
 
     try {
-      const effectiveMessages = attempt === 0
-        ? messages
-        : messages.map((message, index) =>
-            index === messages.length - 1 && message.role === 'user'
-              ? { ...message, text: `${STRICT_JSON_NUDGE}\n\n${message.text}` }
-              : message
-          )
       const result = await provider.ask({
-        messages: effectiveMessages,
+        messages,
         schema,
         timeoutMs,
         signal,
@@ -77,9 +70,8 @@ export async function askJsonWithRetry<T>(options: {
       }
       return value
     } catch (err) {
-      // A refusal, truncation, bad key or unknown model is the provider's settled
-      // answer: another paid attempt returns it again, so it is reported now.
-      if (!isRetryableProviderFailure(err)) throw err
+      // Anything that may have been processed is the user's to resend, not ours.
+      if (!provedNotProcessed(err)) throw err
       lastError = err
     }
   }

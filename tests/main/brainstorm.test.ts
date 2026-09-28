@@ -352,7 +352,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     installScriptedProvider({
       onProseCall: () => {
         proseAttempts++
-        if (proseAttempts === 1) throw new Error('retry me')
+        if (proseAttempts === 1) throw Object.assign(new Error('rate limited'), { status: 429 })
       },
     })
 
@@ -363,6 +363,25 @@ describe('brainstormPrompts (concept-driven)', () => {
     await expect(pending).resolves.toEqual({ prompts: [] })
     expect(proseAttempts).toBe(1)
     expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  // The user waits on elaboration, so a timeout or a 5xx may have been billed:
+  // it is reported for the user to retry, never resent by the app.
+  it.each([
+    ['a timeout', Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' })],
+    ['a server error', Object.assign(new Error('internal error'), { status: 500 })],
+  ])('reports %s without resending the call', async (_label, error) => {
+    mockKnobs.maxRetries = 3
+    let proseAttempts = 0
+    installScriptedProvider({
+      onProseCall: () => {
+        proseAttempts++
+        throw error
+      },
+    })
+
+    await expect(brainstormPrompts(request({ requestId: 'no-resend', count: 1 }))).rejects.toBe(error)
+    expect(proseAttempts).toBe(1)
   })
 
   it('clears the active flag on success, failure, and cancellation', async () => {
@@ -466,14 +485,14 @@ describe('brainstormPrompts (concept-driven)', () => {
     // Planning and prose share one retry path. Without the label a retry line
     // cannot say whether an aspects ask or a prose turn is the one struggling,
     // and those have entirely different causes.
-    it('says which call is being retried, and summarizes the reply it rejected', async () => {
+    it('says which call is being retried', async () => {
       mockKnobs.maxRetries = 1
       let proseAttempts = 0
       installScriptedProvider({
         onProseCall: () => {
           proseAttempts++
-          // First prose attempt returns something the schema cannot use.
-          if (proseAttempts === 1) throw new Error('boom')
+          // First prose attempt is a rate limit, which proves nothing was processed.
+          if (proseAttempts === 1) throw Object.assign(new Error('rate limited'), { status: 429 })
         },
       })
       await brainstormPrompts(request({ requestId: 'log7', count: 1 })).catch(() => undefined)

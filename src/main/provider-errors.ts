@@ -5,7 +5,7 @@
  * again) read the type and never parse a message.
  *
  * Anything not listed here is an unclassified failure: it is shown as a generic failure and,
- * in elaboration, retried as possibly transient.
+ * in elaboration, reported to the user, who decides whether to send it again.
  */
 
 /** No API key is stored for the backend a task was queued on. */
@@ -63,20 +63,21 @@ export class ProviderStatusError extends Error {
   }
 }
 
-/** Whether sending the same request again could produce a different outcome. A refusal, a
- *  truncation, a terminal status, a missing key and a 4xx other than 408/429 are the
- *  provider's settled answer to this input; everything else (network, timeout, 5xx, 429,
- *  an unusable payload) may pass on another attempt. */
-export function isRetryableProviderFailure(error: unknown): boolean {
-  if (
-    error instanceof ProviderRefusalError ||
-    error instanceof ProviderTruncationError ||
-    error instanceof ProviderStatusError ||
-    error instanceof MissingApiKeyError
-  ) return false
+/** Whether a failure proves the provider did no work on the request, so sending it again cannot
+ *  charge twice: the provider answered 408, 429 or 503, or the connection was refused or
+ *  never resolved. A timeout, a dropped connection, a 5xx from a gateway, an unusable reply
+ *  and every settled answer (a refusal, a truncation, a terminal status, a missing key, any
+ *  other 4xx) may follow processing or repeat exactly, so elaboration the user waits on
+ *  reports them and the user decides whether to resend. */
+export function provedNotProcessed(error: unknown): boolean {
   const status = httpStatus(error)
-  if (status !== null && status >= 400 && status < 500) return status === 408 || status === 429
-  return true
+  if (status !== null) return status === 408 || status === 429 || status === 503
+  for (let e: unknown = error, depth = 0; e && typeof e === 'object' && depth < 5; depth++) {
+    const code = (e as { code?: unknown }).code
+    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
 }
 
 /** The provider's human-readable reason for a failure — the message field of its error

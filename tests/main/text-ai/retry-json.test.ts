@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TextAIProvider } from '../../../src/main/text-ai/types'
 
-// Every elaboration attempt is paid. A refusal, a truncated reply, a bad key or
-// an unknown model is the same on every attempt, so only a failure that may pass
-// on another try is sent again.
+// Every elaboration attempt is paid, and the user waits on it. Only a failure that
+// proves the provider did no work is sent again; a timeout, a 5xx or an unusable
+// reply may have been billed, so it is reported and the user decides to retry.
 
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (e: unknown) => e }))
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
@@ -46,18 +46,33 @@ describe('askJsonWithRetry', () => {
   })
 
   it.each([
-    ['a network failure', new Error('fetch failed')],
     ['a rate limit', new ProviderHttpError('rate limited', 429)],
-    ['a server error', Object.assign(new Error('overloaded'), { status: 503 })],
-  ])('retries %s', async (_label, error) => {
+    ['a request timeout answer', Object.assign(new Error('request timeout'), { status: 408 })],
+    ['an unavailable service', Object.assign(new Error('unavailable'), { status: 503 })],
+    ['a refused connection', Object.assign(new Error('Connection error.'), { cause: { code: 'ECONNREFUSED' } })],
+    ['an unresolved host', Object.assign(new Error('Connection error.'), { cause: { cause: { code: 'ENOTFOUND' } } })],
+  ])('resends %s, which proves nothing was processed', async (_label, error) => {
     const { provider, ask } = failingProvider(error)
     await expect(run(provider)).rejects.toBe(error)
     expect(ask).toHaveBeenCalledTimes(4)
   })
 
-  it('retries a reply with no usable payload', async () => {
+  it.each([
+    ['a timeout', Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' })],
+    ['a dropped connection', new Error('fetch failed')],
+    ['a reset connection', Object.assign(new Error('Connection error.'), { cause: { code: 'ECONNRESET' } })],
+    ['a server error', Object.assign(new Error('internal error'), { status: 500 })],
+    ['a bad gateway', Object.assign(new Error('bad gateway'), { status: 502 })],
+    ['a gateway timeout', Object.assign(new Error('gateway timeout'), { status: 504 })],
+  ])('reports %s at once, leaving the resend to the user', async (_label, error) => {
+    const { provider, ask } = failingProvider(error)
+    await expect(run(provider)).rejects.toBe(error)
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a reply with no usable payload at once', async () => {
     const ask = vi.fn(async () => ({ text: 'not json', parsed: null }))
     await expect(run({ ask } as unknown as TextAIProvider)).rejects.toThrow('no usable payload')
-    expect(ask).toHaveBeenCalledTimes(4)
+    expect(ask).toHaveBeenCalledTimes(1)
   })
 })
