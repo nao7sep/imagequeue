@@ -133,12 +133,78 @@ describe('backend failures reach the task row by kind', () => {
     expect(providerMessage(rejected)).toBe('Invalid size.')
     expect(generationFailurePresentation('openai', rejected, false)).toContain('could not generate')
 
-    const longBody = { error: 'x'.repeat(600) }
-    stubStatus(400, longBody)
+    const long = 'x'.repeat(600)
+    stubStatus(400, { error: long })
     const grok = await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)
-    expect(providerMessage(grok)).toBe(JSON.stringify(longBody))
+    expect(providerMessage(grok)).toBe(long)
 
     expect(providerMessage(new Error('socket hang up'))).toBeNull()
+  })
+
+  it('keeps only the reason from a Grok error body, never its code or usage', async () => {
+    stubStatus(400, {
+      code: 'imagine:content-moderated',
+      error: 'Generated image rejected by content moderation.',
+      usage: { cost_in_usd_ticks: 600000000 },
+    })
+    const grok = await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(grok)).toBe('Generated image rejected by content moderation.')
+  })
+
+  it('keeps only the reason from a FLUX error body', async () => {
+    stubStatus(422, { detail: [{ loc: ['body', 'width'], msg: 'Input should be a multiple of 16', type: 'multiple_of' }] })
+    const flux = await generateFlux(task('flux', 'flux-2-pro'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(flux)).toBe('Input should be a multiple of 16')
+
+    stubStatus(402, { detail: 'Insufficient credits.' })
+    const credits = await generateFlux(task('flux', 'flux-2-pro'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(credits)).toBe('Insufficient credits.')
+  })
+
+  it('takes a body that is not JSON as the provider\'s plain answer', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('  Service temporarily unavailable\n', { status: 503 })))
+    const grok = await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(grok)).toBe('Service temporarily unavailable')
+  })
+
+  it('shows no reason for a JSON body without its message field', async () => {
+    stubStatus(500, { code: 'internal', usage: { cost_in_usd_ticks: 1 } })
+    const grok = await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(grok)).toBeNull()
+  })
+
+  describe('a hostile error body leaks no secret, path or raw field', () => {
+    const SENTINEL = 'SENTINEL_7f3a'
+    const KEY = 'xai-AbCdEf0123456789GhIjKlMn'
+    const PATH = '/Users/someone/.imagequeue/api-keys.json'
+    const reason = `Request rejected. key=${KEY} Bearer ${KEY} at ${PATH} see https://api.example.com/v1/x?token=${SENTINEL}`
+
+    function expectSafe(said: string | null): void {
+      expect(said).toContain('Request rejected.')
+      expect(said).toContain('https://api.example.com/v1/x?[redacted]')
+      for (const leak of [SENTINEL, KEY, PATH, 'TypeError', 'cost_in_usd_ticks', 'internal_code']) {
+        expect(said).not.toContain(leak)
+      }
+    }
+    const extra = { code: `internal_code ${SENTINEL}`, type: 'TypeError', usage: { cost_in_usd_ticks: SENTINEL } }
+
+    it('from Grok', async () => {
+      stubStatus(400, { ...extra, error: reason })
+      expectSafe(providerMessage(await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)))
+    })
+
+    it('from FLUX', async () => {
+      stubStatus(400, { ...extra, detail: reason })
+      expectSafe(providerMessage(await generateFlux(task('flux', 'flux-2-pro'), signal()).catch((e: unknown) => e)))
+    })
+
+    it('from OpenAI, refused or rejected', async () => {
+      stubStatus(400, { error: { ...extra, code: 'moderation_blocked', message: `${reason} sk-proj-${SENTINEL}abcd` } })
+      expectSafe(providerMessage(await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)))
+
+      stubStatus(400, { error: { ...extra, message: `${reason} C:\\Users\\someone\\${SENTINEL}.txt` } })
+      expectSafe(providerMessage(await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)))
+    })
   })
 
   it('names a Gemini finish reason as the provider status', () => {

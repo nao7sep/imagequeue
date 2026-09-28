@@ -6,6 +6,7 @@ import { log, logApiRequest, logApiResponse } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { abortableDelay } from '../utils/abortable-delay'
 import { MissingApiKeyError, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
+import { fluxReasonField, reasonFromBody } from '../provider-reason'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
@@ -74,7 +75,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     if (!submitResponse.ok) {
       const text = await submitResponse.text()
       log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
-      throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, text)
+      throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, reasonFromBody(text, fluxReasonField))
     }
 
     const submitData = await submitResponse.json() as { id: string; polling_url?: string }

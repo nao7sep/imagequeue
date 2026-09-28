@@ -18,7 +18,7 @@ export class MissingApiKeyError extends Error {
 
 /** The provider answered with an HTTP error status. `status` is the same field the SDKs'
  *  own errors carry, so SDK and fetch failures are classified alike. `providerMessage` is
- *  the provider's own answer, whole and in its own words (see providerMessage below). */
+ *  the provider's human-readable reason (see providerMessage below). */
 export class ProviderHttpError extends Error {
   constructor(message: string, readonly status: number, readonly providerMessage: string | null = null) {
     super(message)
@@ -36,8 +36,8 @@ export class ProviderTimeoutError extends Error {
 
 /** The provider refused the input — a block reason, a refusal string, a content filter or a
  *  moderation block. Sending the same input again gets the same refusal. `reason` is the
- *  provider's own short code or statement; `providerMessage` is its full explanation, when
- *  it gave one. */
+ *  provider's own short code or statement; `providerMessage` is its human-readable
+ *  explanation, when it gave one. */
 export class ProviderRefusalError extends Error {
   constructor(message: string, readonly reason: string, readonly providerMessage: string | null = null) {
     super(message)
@@ -79,13 +79,13 @@ export function isRetryableProviderFailure(error: unknown): boolean {
   return true
 }
 
-/** What the provider itself said about a failure, verbatim and untruncated — OpenAI's
- *  moderation explanation, or a fetch backend's whole error body — or null when the failure
- *  is not a provider answer or the provider said nothing. The backend that received the
- *  answer records it on the classified error; this never parses an SDK or transport message. */
+/** The provider's human-readable reason for a failure — the message field of its error
+ *  body, cleaned and redacted (see provider-reason) — or null when the failure is not a
+ *  provider answer or the provider gave no reason. The backend that received the answer
+ *  records it on the classified error; this never parses an SDK or transport message. */
 export function providerMessage(error: unknown): string | null {
   if (error instanceof ProviderRefusalError || error instanceof ProviderHttpError) {
-    return error.providerMessage?.trim() ? error.providerMessage : null
+    return error.providerMessage
   }
   return null
 }

@@ -4,6 +4,7 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
+import { grokReasonField, reasonFromBody } from '../provider-reason'
 
 const BASE_URL = 'https://api.x.ai/v1'
 
@@ -62,7 +63,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
     if (!response.ok) {
       const text = await response.text()
       log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
-      throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, text)
+      throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, reasonFromBody(text, grokReasonField))
     }
 
     logApiResponse('grok', 'ok', Date.now() - startTime)

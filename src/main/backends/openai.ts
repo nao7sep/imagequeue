@@ -6,6 +6,7 @@ import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { buildOpenAIImageParams } from './openai-request'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { MissingApiKeyError, ProviderHttpError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
+import { openaiReasonField, reasonFromParsed } from '../provider-reason'
 
 // Calls OpenAI image generation API and returns the image bytes plus a
 // MIME-type hint derived from the user-selected output_format.
@@ -55,8 +56,7 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
     })
     // The API's own explanation is the `message` of the error body the SDK
     // keeps on `error` — the provider's words, without the SDK's status prefix.
-    const body = err instanceof APIError ? err.error as Record<string, unknown> | undefined : undefined
-    const said = typeof body?.message === 'string' ? body.message : null
+    const said = err instanceof APIError ? reasonFromParsed(err.error, openaiReasonField) : null
     // A moderation block is a 400 like any bad parameter, told apart only by its
     // code; it is the provider refusing this prompt, so retrying it cannot help.
     if ((err as Record<string, unknown>).code === 'moderation_blocked') {

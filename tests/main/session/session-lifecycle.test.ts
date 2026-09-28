@@ -257,6 +257,20 @@ describe('resuming a session', () => {
     expect(readManifest(staged).lastResumedAt, 'the resume is stamped on disk').not.toBeNull()
   })
 
+  it('brings back no raw provider body from a failed task an older build saved', async () => {
+    const raw = '{"code":"imagine:content-moderated","error":"Generated image rejected by content moderation.","usage":{"cost_in_usd_ticks":600000000}}'
+    const staged = stageSession('20260111-000000-utc', {
+      tasks: withTasks([makeTask('old', 'failed', { backend: 'grok', error: 'Grok failed.', providerMessage: raw })]),
+    })
+
+    await resumeSession('20260111-000000-utc')
+
+    const [resumed] = queueManager.getAllStoredTasks().grok
+    expect(resumed.status).toBe('interrupted')
+    expect(resumed.providerMessage).toBeNull()
+    expect(fs.readFileSync(path.join(staged, 'session.json'), 'utf-8')).not.toContain('cost_in_usd_ticks')
+  })
+
   it('says nothing about interruptions when everything had finished', async () => {
     stageSession('20260106-000000-utc', { tasks: withTasks([makeTask('done', 'completed')]) })
 

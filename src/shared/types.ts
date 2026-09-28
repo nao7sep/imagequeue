@@ -174,9 +174,9 @@ export interface Task {
   // string is copy a session recorded before failures were kept as messages,
   // shown as it was written.
   error: Message | string | null
-  // What the provider itself answered when this attempt failed, verbatim and
-  // whole (OpenAI's moderation explanation, a fetch backend's error body); null
-  // when the failure was not a provider answer. Absent on tasks a session
+  // The provider's human-readable reason when this attempt failed — the message
+  // field of its error body, cleaned and redacted, never the raw body; null when
+  // the failure was not a provider answer or it gave no reason. Absent on tasks a session
   // recorded before this was kept — unknown, not inferred.
   providerMessage?: string | null
 }
