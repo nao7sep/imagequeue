@@ -24,6 +24,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
     <Modal
       title={t('nativeMenu.about', { app: 'ImageQueue' })}
       titleHidden
+      className="about-modal-box"
       onClose={onClose}
       footer={
         <button className="modal-btn" onClick={onClose}>

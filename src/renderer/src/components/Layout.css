@@ -252,8 +252,17 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-4) var(--space-4) var(--space-5);
-  text-align: center;
+  text-align: left;
   color: var(--text-primary);
+}
+
+/* Sized for the About dialog (its only user): the default modal-box shrinks to
+   fit its content, which left the introduction line too cramped in ja/ru at
+   the 480px cap it shared with every other unsized dialog. Balanced by eye
+   against en/de/ja/ru so the paragraph reads as full lines, not a tower. */
+.modal-box.about-modal-box {
+  width: 340px;
+  max-width: min(340px, calc(100vw - 80px));
 }
 
 .about-name {
@@ -281,7 +290,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  justify-content: center;
 }
 
 .about-content > .inline-failure-result {
