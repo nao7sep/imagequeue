@@ -171,7 +171,7 @@
   "about.githubFailed": "ImageQueue の GitHub ページを開けませんでした。もう一度リンクをクリックしてください。",
   "about.issuesFailed": "ImageQueue の問題報告ページを開けませんでした。もう一度リンクをクリックしてください。",
   "about.version": "バージョン {version}",
-  "about.description": "複数のバックエンドに対応した AI 画像生成キュー。",
+  "about.description": "一つのアイデアを詳細化して多様で具体的なプロンプトに広げ、複数の画像モデルへ一度に送り、結果を並べて比較しましょう。",
   "about.reportIssue": "問題を報告",
   "about.closeGithubResult": "GitHub リンクの結果を閉じる",
   "about.closeIssuesResult": "問題報告リンクの結果を閉じる",

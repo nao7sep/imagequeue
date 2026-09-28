@@ -171,7 +171,7 @@
   "about.githubFailed": "无法打开 ImageQueue 的 GitHub 页面。请重新点按链接。",
   "about.issuesFailed": "无法打开 ImageQueue 的问题反馈页面。请重新点按链接。",
   "about.version": "版本 {version}",
-  "about.description": "支持多个后端的 AI 图像生成队列。",
+  "about.description": "把一个想法扩写成多种具体的提示词，一次性发送给多个图像模型，并排比较结果。",
   "about.reportIssue": "报告问题",
   "about.closeGithubResult": "关闭 GitHub 链接结果",
   "about.closeIssuesResult": "关闭问题反馈链接结果",

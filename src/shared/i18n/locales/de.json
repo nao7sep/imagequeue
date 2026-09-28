@@ -175,7 +175,7 @@
   "about.githubFailed": "Die GitHub-Seite von ImageQueue konnte nicht geöffnet werden. Versuchen Sie den Link erneut.",
   "about.issuesFailed": "Die Seite für Problemmeldungen zu ImageQueue konnte nicht geöffnet werden. Versuchen Sie den Link erneut.",
   "about.version": "Version {version}",
-  "about.description": "Warteschlange für KI-Bilderzeugung mit mehreren Backends.",
+  "about.description": "Arbeiten Sie eine Idee zu mehreren vielfältigen, konkreten Prompts aus, senden Sie sie gleichzeitig an mehrere Bildmodelle, und vergleichen Sie die Ergebnisse nebeneinander.",
   "about.reportIssue": "Problem melden",
   "about.closeGithubResult": "Ergebnis des GitHub-Links schließen",
   "about.closeIssuesResult": "Ergebnis des Problemmelde-Links schließen",

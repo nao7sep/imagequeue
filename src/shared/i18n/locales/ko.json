@@ -171,7 +171,7 @@
   "about.githubFailed": "ImageQueue GitHub 페이지를 열 수 없습니다. 링크를 다시 시도하십시오.",
   "about.issuesFailed": "ImageQueue 문제 신고 페이지를 열 수 없습니다. 링크를 다시 시도하십시오.",
   "about.version": "버전 {version}",
-  "about.description": "여러 백엔드를 지원하는 AI 이미지 생성 대기열.",
+  "about.description": "하나의 아이디어를 다양하고 구체적인 프롬프트로 구체화하여 여러 이미지 모델에 한 번에 보내고, 결과를 나란히 비교하세요.",
   "about.reportIssue": "문제 신고",
   "about.closeGithubResult": "GitHub 링크 결과 닫기",
   "about.closeIssuesResult": "문제 신고 링크 결과 닫기",

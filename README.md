@@ -1,6 +1,6 @@
 # ImageQueue
 
-ImageQueue is a desktop app for comparing image-generation backends side by side. Write one prompt, queue it to a single backend or all of them at once, then review, export, and compare the results in one place. It's for anyone evaluating or mixing image models — cloud services (OpenAI GPT Image, Nano Banana, Grok, FLUX) and local Draw Things on macOS — without juggling separate tools. An Electron app for macOS and Windows, with a queue, saved sessions, and optional AI prompt elaboration.
+Elaborate one idea into varied, concrete prompts, send them to several image models at once, and compare the results side by side. ImageQueue is an Electron desktop app for macOS and Windows: queue one prompt to a single backend or all of them at once, then review, export, and compare the results in one place, with saved sessions. It's for anyone evaluating or mixing image models — cloud services (OpenAI GPT Image, Nano Banana, Grok, FLUX) and local Draw Things on macOS — without juggling separate tools.
 
 ## Backends
 

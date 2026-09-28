@@ -179,7 +179,7 @@
   "about.githubFailed": "Impossibile aprire la pagina GitHub di ImageQueue. Riprova il link.",
   "about.issuesFailed": "Impossibile aprire la pagina delle segnalazioni di ImageQueue. Riprova il link.",
   "about.version": "Versione {version}",
-  "about.description": "Coda di generazione di immagini con IA per più motori.",
+  "about.description": "Elabora un’idea in più prompt vari e concreti, inviali contemporaneamente a più modelli di immagini e confronta i risultati fianco a fianco.",
   "about.reportIssue": "Segnala un problema",
   "about.closeGithubResult": "Chiudi il risultato del link GitHub",
   "about.closeIssuesResult": "Chiudi il risultato del link delle segnalazioni",

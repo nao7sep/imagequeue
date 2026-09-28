@@ -179,7 +179,7 @@
   "about.githubFailed": "No se pudo abrir la página de GitHub de ImageQueue. Vuelve a probar el enlace.",
   "about.issuesFailed": "No se pudo abrir la página para informar de problemas de ImageQueue. Vuelve a probar el enlace.",
   "about.version": "Versión {version}",
-  "about.description": "Cola de generación de imágenes con IA para varios motores.",
+  "about.description": "Elabora una idea en varios prompts distintos y concretos, envíalos a varios modelos de imagen a la vez y compara los resultados uno junto al otro.",
   "about.reportIssue": "Informar de un problema",
   "about.closeGithubResult": "Cerrar el resultado del enlace de GitHub",
   "about.closeIssuesResult": "Cerrar el resultado del enlace para informar de problemas",

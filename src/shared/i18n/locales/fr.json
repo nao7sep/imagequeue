@@ -179,7 +179,7 @@
   "about.githubFailed": "La page GitHub d’ImageQueue n’a pas pu être ouverte. Réessayez le lien.",
   "about.issuesFailed": "La page de signalement d’ImageQueue n’a pas pu être ouverte. Réessayez le lien.",
   "about.version": "Version {version}",
-  "about.description": "File de génération d’images par IA, avec plusieurs moteurs.",
+  "about.description": "Enrichissez une idée en plusieurs prompts variés et concrets, envoyez-les à plusieurs modèles d’image à la fois, et comparez les résultats côte à côte.",
   "about.reportIssue": "Signaler un problème",
   "about.closeGithubResult": "Fermer le résultat du lien GitHub",
   "about.closeIssuesResult": "Fermer le résultat du lien de signalement",

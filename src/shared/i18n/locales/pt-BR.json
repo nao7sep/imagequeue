@@ -179,7 +179,7 @@
   "about.githubFailed": "Não foi possível abrir a página do ImageQueue no GitHub. Tente o link novamente.",
   "about.issuesFailed": "Não foi possível abrir a página de problemas do ImageQueue. Tente o link novamente.",
   "about.version": "Versão {version}",
-  "about.description": "Fila de geração de imagens com IA para vários mecanismos.",
+  "about.description": "Elabore uma ideia em vários prompts variados e concretos, envie-os a vários modelos de imagem de uma vez e compare os resultados lado a lado.",
   "about.reportIssue": "Relatar problema",
   "about.closeGithubResult": "Fechar o resultado do link do GitHub",
   "about.closeIssuesResult": "Fechar o resultado do link de problemas",

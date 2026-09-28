@@ -175,7 +175,7 @@
   "about.githubFailed": "The ImageQueue GitHub page could not be opened. Try the link again.",
   "about.issuesFailed": "The ImageQueue issue page could not be opened. Try the link again.",
   "about.version": "Version {version}",
-  "about.description": "Multi-backend AI image generation queue.",
+  "about.description": "Elaborate one idea into varied, concrete prompts, send them to several image models at once, and compare the results side by side.",
   "about.reportIssue": "Report Issue",
   "about.closeGithubResult": "Close GitHub link result",
   "about.closeIssuesResult": "Close issue link result",
