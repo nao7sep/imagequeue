@@ -404,7 +404,7 @@
   "menu.elaborationPrompts": "提示词",
   "menu.conceptLibrary": "概念库",
   "menu.keyboardShortcuts": "键盘快捷键",
-  "menu.about": "关于",
+  "menu.about": "关于 ImageQueue",
   "layout.resizeColumns": "调整服务商列宽",
   "welcome.title": "入门",
   "welcome.lead": "ImageQueue 通过你自己提供的服务商生成图像。目前尚未进行任何配置。",

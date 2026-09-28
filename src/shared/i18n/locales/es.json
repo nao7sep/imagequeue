@@ -422,7 +422,7 @@
   "menu.elaborationPrompts": "Prompts",
   "menu.conceptLibrary": "Biblioteca de conceptos",
   "menu.keyboardShortcuts": "Atajos de teclado",
-  "menu.about": "Acerca de",
+  "menu.about": "Acerca de ImageQueue",
   "layout.resizeColumns": "Cambiar el tamaño de las columnas de proveedores",
   "welcome.title": "Primeros pasos",
   "welcome.lead": "ImageQueue genera imágenes a través de los proveedores que tú configures. Todavía no hay nada configurado.",

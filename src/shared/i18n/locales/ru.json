@@ -431,7 +431,7 @@
   "menu.elaborationPrompts": "Промпты",
   "menu.conceptLibrary": "Библиотека концепций",
   "menu.keyboardShortcuts": "Сочетания клавиш",
-  "menu.about": "О программе",
+  "menu.about": "О программе ImageQueue",
   "layout.resizeColumns": "Изменить ширину столбцов поставщиков",
   "welcome.title": "С чего начать",
   "welcome.lead": "ImageQueue создаёт изображения через поставщиков, которых вы подключаете сами. Пока ничего не настроено.",

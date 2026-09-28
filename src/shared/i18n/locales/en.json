@@ -413,7 +413,7 @@
   "menu.elaborationPrompts": "Prompts",
   "menu.conceptLibrary": "Concept Library",
   "menu.keyboardShortcuts": "Keyboard Shortcuts",
-  "menu.about": "About",
+  "menu.about": "About ImageQueue",
   "layout.resizeColumns": "Resize provider columns",
   "welcome.title": "Getting started",
   "welcome.lead": "ImageQueue generates images through providers you supply. Nothing is configured yet.",
