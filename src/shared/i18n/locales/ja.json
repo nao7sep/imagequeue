@@ -176,20 +176,9 @@
   "about.closeGithubResult": "GitHub リンクの結果を閉じる",
   "about.closeIssuesResult": "問題報告リンクの結果を閉じる",
   "about.copyright": "© {year} {author} — {license} 以降",
-  "statusNotices.failed": {
-    "other": "{count} 件のタスクが失敗しました"
-  },
-  "statusNotices.stopped": {
-    "other": "{count} 件のタスクが完了前に停止しました"
-  },
-  "statusNotices.and": "{first}。{rest}",
-  "statusNotices.queueTitle": "キューの確認が必要です",
-  "statusNotices.queueBody": "{summary}。キューの各行に詳細と再試行の方法が表示されます。",
-  "statusNotices.queueBodyRetryFailed": "{summary}。キューの各行に詳細と再試行の方法が表示されます。停止したタスクの再試行に失敗しました。",
-  "statusNotices.retrying": "再試行中…",
-  "statusNotices.retryStopped": "停止したタスクを再試行",
   "statusNotices.closeDraftResult": "セッションの下書きの結果を閉じる",
   "statusNotices.closeOperationResult": "操作の結果を閉じる",
+  "toasts.region": "通知",
   "operation.outputFolderFailed": "出力フォルダを開けませんでした。フォルダがまだ存在するか確認してください。",
   "operation.queueControlsLoadFailed": "キューの操作を読み込めませんでした。メニューを開き直して、もう一度お試しください。",
   "operation.queueControlsRefreshFailed": "キューの操作を更新できませんでした。メニューを開き直して、もう一度お試しください。",

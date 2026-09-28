@@ -188,26 +188,9 @@
   "about.closeGithubResult": "Закрыть результат ссылки на GitHub",
   "about.closeIssuesResult": "Закрыть результат ссылки для сообщений о проблемах",
   "about.copyright": "© {year} {author} — {license} или новее",
-  "statusNotices.failed": {
-    "one": "{count} задача завершилась с ошибкой",
-    "few": "{count} задачи завершились с ошибкой",
-    "many": "{count} задач завершились с ошибкой",
-    "other": "{count} задачи завершились с ошибкой"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} задача остановлена до завершения",
-    "few": "{count} задачи остановлены до завершения",
-    "many": "{count} задач остановлены до завершения",
-    "other": "{count} задачи остановлены до завершения"
-  },
-  "statusNotices.and": "{first}, и {rest}",
-  "statusNotices.queueTitle": "Очередь требует внимания",
-  "statusNotices.queueBody": "{summary}. В их строках в очереди показаны подробности и варианты повтора.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. В их строках в очереди показаны подробности и варианты повтора. Не удалось повторить остановленные задачи.",
-  "statusNotices.retrying": "Повтор…",
-  "statusNotices.retryStopped": "Повторить остановленные",
   "statusNotices.closeDraftResult": "Закрыть результат черновика сеанса",
   "statusNotices.closeOperationResult": "Закрыть результат операции",
+  "toasts.region": "Уведомления",
   "operation.outputFolderFailed": "Не удалось открыть папку результатов. Проверьте, что она всё ещё доступна.",
   "operation.queueControlsLoadFailed": "Не удалось загрузить управление очередью. Откройте меню заново, чтобы повторить попытку.",
   "operation.queueControlsRefreshFailed": "Не удалось обновить управление очередью. Откройте меню заново, чтобы повторить попытку.",

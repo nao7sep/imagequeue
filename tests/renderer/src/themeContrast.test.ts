@@ -101,8 +101,8 @@ describe('theme token contrast', () => {
       for (const fill of FILLS) check(onAccent, hexOf(block, fill), 4.5, `--text-on-accent on ${fill}`)
       check(onAccent, mix(hexOf(block, '--accent'), [0, 0, 0], 0.8), 4.5, '--text-on-accent on the darkened accent')
       for (const status of ['--error', '--warning', '--success']) {
-        // Main-window notices tint the pane they sit on.
-        for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary', '--pane-bg']) {
+        // Main-window notices tint the pane they sit on; toasts tint the floating surface.
+        for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary', '--pane-bg', '--floating-bg']) {
           // The strongest tint a status badge uses is 14% (the dependency badges).
           check(hexOf(block, status), mix(hexOf(block, status), hexOf(block, surface), 0.14), 4.5, `${status} on its tint over ${surface}`)
         }

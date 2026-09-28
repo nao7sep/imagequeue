@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import type { UiState } from '../../../shared/ui-state'
 import { defaultUiState } from '../../../shared/ui-state'
 import { Modal } from '../components/Modal'
-import { reportOperationalFailure } from '../utils/operationalFailure'
+import { clearOperationalFailure, recordOperationalDiagnostic, reportOperationalFailure } from '../utils/operationalFailure'
 import { useI18n } from '../i18n/I18nContext'
 
 // The renderer's view of state.json — the adjustments the app remembers on the
@@ -35,7 +35,9 @@ export function UiStateProvider({ children }: { children: ReactNode }): React.JS
     void window.electronAPI.getUiState().then((state) => {
       if (!cancelled) { setUiState(state); setLoaded(true); setLoadError(false) }
     }).catch((error) => {
-      if (!cancelled) { setLoadError(true); reportOperationalFailure('ui-state', 'operation.uiStateLoadFailed', 'Failed to load UI state', error) }
+      // The load gate below presents this failure and owns its retry; the
+      // shell (and its toast stack) is not mounted while it shows.
+      if (!cancelled) { setLoadError(true); recordOperationalDiagnostic('Failed to load UI state', error) }
     })
     return () => {
       cancelled = true
@@ -44,8 +46,12 @@ export function UiStateProvider({ children }: { children: ReactNode }): React.JS
 
   const patchUiState = useCallback((patch: Partial<UiState>): void => {
     void window.electronAPI.updateUiState(patch)
-      .then(() => setUiState((prev) => ({ ...prev, ...patch })))
-      .catch((error) => reportOperationalFailure('ui-state', 'operation.uiStateSaveFailed', 'Failed to persist UI state', error))
+      .then(() => {
+        setUiState((prev) => ({ ...prev, ...patch }))
+        // A later successful save supersedes an earlier failed one.
+        clearOperationalFailure('ui-state-save')
+      })
+      .catch((error) => reportOperationalFailure('ui-state-save', 'operation.uiStateSaveFailed', 'Failed to persist UI state', error))
   }, [])
 
   return (

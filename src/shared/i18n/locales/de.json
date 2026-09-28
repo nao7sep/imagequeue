@@ -180,22 +180,9 @@
   "about.closeGithubResult": "Ergebnis des GitHub-Links schließen",
   "about.closeIssuesResult": "Ergebnis des Problemmelde-Links schließen",
   "about.copyright": "© {year} {author} — {license} oder neuer",
-  "statusNotices.failed": {
-    "one": "{count} Aufgabe ist fehlgeschlagen",
-    "other": "{count} Aufgaben sind fehlgeschlagen"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} Aufgabe wurde vor dem Abschluss gestoppt",
-    "other": "{count} Aufgaben wurden vor dem Abschluss gestoppt"
-  },
-  "statusNotices.and": "{first} und {rest}",
-  "statusNotices.queueTitle": "Die Warteschlange braucht Aufmerksamkeit",
-  "statusNotices.queueBody": "{summary}. Ihre Zeilen in der Warteschlange zeigen Details und Optionen zum erneuten Versuch.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. Ihre Zeilen in der Warteschlange zeigen Details und Optionen zum erneuten Versuch. Der erneute Versuch der gestoppten Aufgaben ist fehlgeschlagen.",
-  "statusNotices.retrying": "Neuer Versuch …",
-  "statusNotices.retryStopped": "Gestoppte erneut versuchen",
   "statusNotices.closeDraftResult": "Ergebnis zum Sitzungsentwurf schließen",
   "statusNotices.closeOperationResult": "Ergebnis des Vorgangs schließen",
+  "toasts.region": "Benachrichtigungen",
   "operation.outputFolderFailed": "Der Ausgabeordner konnte nicht geöffnet werden. Prüfen Sie, ob er noch vorhanden ist.",
   "operation.queueControlsLoadFailed": "Die Steuerung der Warteschlange konnte nicht geladen werden. Öffnen Sie das Menü erneut, um es noch einmal zu versuchen.",
   "operation.queueControlsRefreshFailed": "Die Steuerung der Warteschlange konnte nicht aktualisiert werden. Öffnen Sie das Menü erneut, um es noch einmal zu versuchen.",

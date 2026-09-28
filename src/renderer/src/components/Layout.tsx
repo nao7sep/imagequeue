@@ -14,7 +14,6 @@ import { DependenciesModal } from './DependenciesModal'
 import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { Icon } from './Icon'
 import { QueueControlSubmenu, QueuePausedBadge } from './QueueControls'
-import { AppStatusNotices } from './AppStatusNotices'
 import { Modal } from './Modal'
 import { isAnyModalOpen } from './modalStack'
 import { BACKEND_LABELS } from '../../../shared/types'
@@ -31,7 +30,7 @@ import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
-import { reportOperationalFailure } from '../utils/operationalFailure'
+import { clearOperationalFailure, reportOperationalFailure } from '../utils/operationalFailure'
 import { useI18n } from '../i18n/I18nContext'
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
@@ -229,9 +228,9 @@ export function Layout(): React.JSX.Element {
   useEffect(() => {
     const handler = (): void => {
       if (viewerOpen) {
-        void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'operation.viewerCloseFailed', 'Failed to close image viewer', error))
+        void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer-close', 'operation.viewerCloseFailed', 'Failed to close image viewer', error))
       } else if (previewDataUrl) {
-        void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'operation.viewerOpenFailed', 'Failed to open image viewer', error))
+        void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer-open', 'operation.viewerOpenFailed', 'Failed to open image viewer', error))
       }
     }
     window.addEventListener('viewer:toggle', handler)
@@ -270,7 +269,10 @@ export function Layout(): React.JSX.Element {
   // showing, so swaps are flash-free.
   useEffect(() => {
     if (!viewerOpen || !previewDataUrl) return
-    void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer', 'operation.viewerUpdateFailed', 'Failed to update image viewer', error))
+    // A later successful update proves the viewer is current again.
+    void window.electronAPI.openViewer(previewDataUrl)
+      .then(() => clearOperationalFailure('viewer-update'))
+      .catch((error) => reportOperationalFailure('viewer-update', 'operation.viewerUpdateFailed', 'Failed to update image viewer', error))
   }, [viewerOpen, previewDataUrl])
 
   // While the viewer is open, close it if navigation lands on a task without
@@ -280,7 +282,7 @@ export function Layout(): React.JSX.Element {
     if (!viewerOpen) return
     const status = selectedTask?.status
     const canShow = (status === 'completed' || status === 'kept') && !!selectedTask?.baseName
-    if (!canShow) void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer', 'operation.viewerCloseFailed', 'Failed to close image viewer after selection change', error))
+    if (!canShow) void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer-close', 'operation.viewerCloseFailed', 'Failed to close image viewer after selection change', error))
   }, [viewerOpen, selectedTask])
 
   return (
@@ -371,7 +373,6 @@ export function Layout(): React.JSX.Element {
           </Menu>
           </div>
         </div>
-        <AppStatusNotices />
         <PromptPane
             selectedTask={selectedTask}
             previewDataUrl={previewDataUrl}

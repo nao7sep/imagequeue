@@ -176,20 +176,9 @@
   "about.closeGithubResult": "关闭 GitHub 链接结果",
   "about.closeIssuesResult": "关闭问题反馈链接结果",
   "about.copyright": "© {year} {author} — {license} 或更高版本",
-  "statusNotices.failed": {
-    "other": "{count} 个任务失败"
-  },
-  "statusNotices.stopped": {
-    "other": "{count} 个任务在完成前停止"
-  },
-  "statusNotices.and": "{first}，{rest}",
-  "statusNotices.queueTitle": "队列需要处理",
-  "statusNotices.queueBody": "{summary}。队列中相应的行会显示详情和重试选项。",
-  "statusNotices.queueBodyRetryFailed": "{summary}。队列中相应的行会显示详情和重试选项。重试已停止的任务失败。",
-  "statusNotices.retrying": "正在重试…",
-  "statusNotices.retryStopped": "重试已停止的任务",
   "statusNotices.closeDraftResult": "关闭会话草稿结果",
   "statusNotices.closeOperationResult": "关闭操作结果",
+  "toasts.region": "通知",
   "operation.outputFolderFailed": "无法打开输出文件夹。请检查它是否仍然存在。",
   "operation.queueControlsLoadFailed": "无法载入队列控制。请重新打开菜单以重试。",
   "operation.queueControlsRefreshFailed": "无法刷新队列控制。请重新打开菜单以重试。",

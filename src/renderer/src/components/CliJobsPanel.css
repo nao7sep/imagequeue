@@ -1,17 +1,5 @@
-.cli-jobs-panel {
-  position: fixed;
-  bottom: var(--space-4);
-  right: var(--space-4);
-  /* Above the in-window chrome (menus at 200/201), BELOW every modal (300):
-     a transient notice must never cover a modal's footer actions — at 400 the
-     card stack sat over Queue Tasks / Cancel in the wide modals and ate the
-     clicks. */
-  z-index: 250;
-  width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
+/* Download and import cards. They render inside the app's toast stack
+   (ToastStack.css), which owns placement, width and layering. */
 
 /* ─── Job card ───────────────────────────────────────────────────────────── */
 

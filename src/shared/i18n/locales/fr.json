@@ -184,24 +184,9 @@
   "about.closeGithubResult": "Fermer le résultat du lien GitHub",
   "about.closeIssuesResult": "Fermer le résultat du lien de signalement",
   "about.copyright": "© {year} {author} — {license} ou ultérieure",
-  "statusNotices.failed": {
-    "one": "{count} tâche a échoué",
-    "many": "{count} de tâches ont échoué",
-    "other": "{count} tâches ont échoué"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} tâche s’est arrêtée avant la fin",
-    "many": "{count} de tâches se sont arrêtées avant la fin",
-    "other": "{count} tâches se sont arrêtées avant la fin"
-  },
-  "statusNotices.and": "{first} et {rest}",
-  "statusNotices.queueTitle": "La file demande votre attention",
-  "statusNotices.queueBody": "{summary}. Leurs lignes dans la file indiquent les détails et les options pour réessayer.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. Leurs lignes dans la file indiquent les détails et les options pour réessayer. La nouvelle tentative des tâches arrêtées a échoué.",
-  "statusNotices.retrying": "Nouvelle tentative…",
-  "statusNotices.retryStopped": "Réessayer les tâches arrêtées",
   "statusNotices.closeDraftResult": "Fermer le résultat du brouillon de session",
   "statusNotices.closeOperationResult": "Fermer le résultat de l’opération",
+  "toasts.region": "Notifications",
   "operation.outputFolderFailed": "Le dossier de sortie n’a pas pu être ouvert. Vérifiez qu’il est toujours disponible.",
   "operation.queueControlsLoadFailed": "Les commandes de la file n’ont pas pu être chargées. Rouvrez le menu pour réessayer.",
   "operation.queueControlsRefreshFailed": "Les commandes de la file n’ont pas pu être actualisées. Rouvrez le menu pour réessayer.",

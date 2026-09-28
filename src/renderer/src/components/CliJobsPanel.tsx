@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-jobs'
-import { useCliJobs } from '../context/CliJobsContext'
 import { Icon, type IconName } from './Icon'
 import { serializeError } from '../../../shared/serialize-error'
 import './CliJobsPanel.css'
@@ -77,7 +75,7 @@ interface RowProps {
   onDismiss: () => void
 }
 
-function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Element {
+export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Element {
   const [chunks, setChunks] = useState<CliChunk[]>([])
   const [status, setStatus] = useState<CliJobStatus>('running')
   const [exitCode, setExitCode] = useState<number | null>(null)
@@ -205,28 +203,5 @@ function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.JSX.Elem
         )}
       </div>
     </div>
-  )
-}
-
-// ─── CliJobsPanel ─────────────────────────────────────────────────────────────
-
-export function CliJobsPanel(): React.JSX.Element | null {
-  const { jobs, removeJob } = useCliJobs()
-
-  if (jobs.size === 0) return null
-
-  return createPortal(
-    <div className="cli-jobs-panel">
-      {[...jobs.entries()].map(([jobId, meta]) => (
-        <CliJobRow
-          key={jobId}
-          jobId={jobId}
-          kind={meta.kind}
-          target={meta.target}
-          onDismiss={() => removeJob(jobId)}
-        />
-      ))}
-    </div>,
-    document.body
   )
 }

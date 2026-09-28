@@ -364,93 +364,9 @@
   text-transform: uppercase;
 }
 
-/* Persistent, consequence-based status belongs in the app shell rather than a
-   toast: it remains discoverable while the user works, never multiplies on
-   repeated failures, and leaves only when the condition resolves (or, for the
-   draft warning, the user explicitly dismisses it). */
-.app-status-notices {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3) 0;
-  background: var(--pane-bg);
-}
-
-.app-status-notice {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--space-2);
-  padding: var(--space-2) 10px;
-  border: 1px solid;
-  border-radius: var(--radius-sm);
-}
-
-/* Every notice in the main window shares one shape: an even 1px edge and a
-   light fill in its severity colour, 8 by 10px of padding, 11px text. */
-.app-status-notice-error {
-  color: var(--error);
-  border-color: color-mix(in srgb, var(--error) 50%, var(--border));
-  background: color-mix(in srgb, var(--error) 10%, transparent);
-}
-
-.app-status-notice-warning {
-  color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
-  background: color-mix(in srgb, var(--warning) 10%, transparent);
-}
-
-.app-status-notice-copy {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.app-status-notice-copy strong {
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
-/* The message takes the notice's severity colour, like every other notice; the
-   title stays neutral above it. */
-.app-status-notice-copy span {
-  color: inherit;
-  font-size: var(--text-xs);
-  line-height: 1.4;
-}
-
-.app-status-notice-dismiss,
-.app-status-notice-action {
-  border: 1px solid currentColor;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, currentColor 8%, var(--bg-surface));
-  color: inherit;
-  cursor: pointer;
-}
-
-.app-status-notice-dismiss {
-  display: inline-flex;
-  border: 0;
-  background: transparent;
-  padding: 3px;
-  font-size: 14px;
-}
-
-.app-status-notice-dismiss:hover,
-.app-status-notice-dismiss:focus-visible {
-  background: color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.app-status-notice-action {
-  padding: 4px var(--space-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.app-status-notice-action:disabled {
-  opacity: 0.65;
-  cursor: default;
-}
+/* App-shell results (operation failures, the draft-save warning, the queue
+   summary) live in the toast stack, not in the left pane: ToastStack.css owns
+   their placement, lifetime and coalescing. */
 
 .menu-item:disabled {
   color: var(--text-muted);

@@ -1,0 +1,113 @@
+/* The app's one in-window toast stack: app-level operation failures that have
+   no other home, above the download/import cards, anchored bottom-right with
+   the cards nearest the corner.
+
+   A toast here is not an ephemeral flash. Each stays until the user closes it
+   or the same operation later succeeds; a repeat replaces its operation's toast
+   instead of adding another. There is no count limit: the stack grows upward
+   as far as the window allows and scrolls within itself only past that. */
+.toast-stack {
+  --toast-line-height: 1.4;
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  /* Above the in-window chrome (menus at 200/201), BELOW every modal (300): a
+     notice must never cover a modal's footer actions. */
+  z-index: 250;
+  /* Capped so that in a narrow window the stack covers about one and a half
+     queue columns (190-220px each) instead of all of them: 42% of the window,
+     never under 300px for readable wrapping, never over 400px, and never off
+     the left edge. */
+  width: min(400px, max(300px, 42vw), calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Cards and toasts keep their own height inside a scrolling stack rather than
+   being squeezed by it. */
+.toast-stack > * {
+  flex-shrink: 0;
+}
+
+.toast {
+  /* The height of the toast's first line: the message's line, or the title's
+     when there is one. The X is centred on it by one rule — margin-block =
+     (first line - own height) / 2 from an align-start top — so it overflows
+     that line symmetrically instead of growing the row, and stays on it when
+     the text wraps (interface-styling-conventions). */
+  --toast-first-line: calc(var(--text-xs) * var(--toast-line-height));
+  --toast-close-size: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: var(--radius-md);
+  /* An opaque floating surface with a light error fill: the toast sits over
+     content, so the tint mixes into --floating-bg, not into transparency. */
+  background: color-mix(in srgb, var(--error) 10%, var(--floating-bg));
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  color: var(--error);
+  font-size: var(--text-sm);
+}
+
+.toast-titled {
+  --toast-first-line: calc(var(--text-sm) * var(--toast-line-height));
+}
+
+.toast-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.toast-copy strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--toast-line-height);
+}
+
+/* The message takes the error colour; the title stays neutral. */
+.toast-copy span {
+  color: inherit;
+  font-size: var(--text-xs);
+  line-height: var(--toast-line-height);
+  overflow-wrap: anywhere;
+}
+
+/* A result's close affordance is quiet at rest and reveals its hit target only
+   on hover or keyboard focus (app-chrome-conventions). */
+.toast-close {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--toast-close-size);
+  height: var(--toast-close-size);
+  margin-block: calc((var(--toast-first-line) - var(--toast-close-size)) / 2);
+  /* The hit target's transparent inset, so the drawn mark lines up with the
+     toast's text edge. */
+  margin-inline-end: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.toast-close:hover,
+.toast-close:focus-visible {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.toast-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}

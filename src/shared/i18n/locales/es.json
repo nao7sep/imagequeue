@@ -184,24 +184,9 @@
   "about.closeGithubResult": "Cerrar el resultado del enlace de GitHub",
   "about.closeIssuesResult": "Cerrar el resultado del enlace para informar de problemas",
   "about.copyright": "© {year} {author} — {license} o posterior",
-  "statusNotices.failed": {
-    "one": "{count} tarea falló",
-    "many": "{count} de tareas fallaron",
-    "other": "{count} tareas fallaron"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} tarea se detuvo antes de terminar",
-    "many": "{count} de tareas se detuvieron antes de terminar",
-    "other": "{count} tareas se detuvieron antes de terminar"
-  },
-  "statusNotices.and": "{first} y {rest}",
-  "statusNotices.queueTitle": "La cola necesita atención",
-  "statusNotices.queueBody": "{summary}. Sus filas en la cola muestran los detalles y las opciones para reintentar.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. Sus filas en la cola muestran los detalles y las opciones para reintentar. No se pudieron reintentar las tareas detenidas.",
-  "statusNotices.retrying": "Reintentando…",
-  "statusNotices.retryStopped": "Reintentar las detenidas",
   "statusNotices.closeDraftResult": "Cerrar el resultado del borrador de la sesión",
   "statusNotices.closeOperationResult": "Cerrar el resultado de la operación",
+  "toasts.region": "Notificaciones",
   "operation.outputFolderFailed": "No se pudo abrir la carpeta de salida. Comprueba que siga disponible.",
   "operation.queueControlsLoadFailed": "No se pudieron cargar los controles de la cola. Vuelve a abrir el menú para reintentarlo.",
   "operation.queueControlsRefreshFailed": "No se pudieron actualizar los controles de la cola. Vuelve a abrir el menú para reintentarlo.",

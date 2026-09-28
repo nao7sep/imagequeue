@@ -184,24 +184,9 @@
   "about.closeGithubResult": "Chiudi il risultato del link GitHub",
   "about.closeIssuesResult": "Chiudi il risultato del link delle segnalazioni",
   "about.copyright": "© {year} {author} — {license} o successiva",
-  "statusNotices.failed": {
-    "one": "{count} attività non è riuscita",
-    "many": "{count} di attività non sono riuscite",
-    "other": "{count} attività non sono riuscite"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} attività si è fermata prima del termine",
-    "many": "{count} di attività si sono fermate prima del termine",
-    "other": "{count} attività si sono fermate prima del termine"
-  },
-  "statusNotices.and": "{first} e {rest}",
-  "statusNotices.queueTitle": "La coda richiede attenzione",
-  "statusNotices.queueBody": "{summary}. Le relative righe nella coda mostrano i dettagli e le opzioni per riprovare.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. Le relative righe nella coda mostrano i dettagli e le opzioni per riprovare. Il nuovo tentativo delle attività fermate non è riuscito.",
-  "statusNotices.retrying": "Nuovo tentativo…",
-  "statusNotices.retryStopped": "Riprova le fermate",
   "statusNotices.closeDraftResult": "Chiudi il risultato della bozza di sessione",
   "statusNotices.closeOperationResult": "Chiudi il risultato dell’operazione",
+  "toasts.region": "Notifiche",
   "operation.outputFolderFailed": "Impossibile aprire la cartella di output. Controlla che sia ancora disponibile.",
   "operation.queueControlsLoadFailed": "Impossibile caricare i controlli della coda. Riapri il menu per riprovare.",
   "operation.queueControlsRefreshFailed": "Impossibile aggiornare i controlli della coda. Riapri il menu per riprovare.",

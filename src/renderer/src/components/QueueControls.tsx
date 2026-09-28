@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { MenuItem, Submenu } from './Menu'
 import { useConfirm } from '../context/ConfirmContext'
 import type { QueueControlState } from '../../../shared/types'
-import { reportOperationalFailure } from '../utils/operationalFailure'
+import { clearOperationalFailure, reportOperationalFailure } from '../utils/operationalFailure'
 import { useI18n } from '../i18n/I18nContext'
 
 const QUEUE_CONTROL_FAILURE = 'operation.queueCommandFailed'
@@ -25,7 +25,7 @@ function useQueueControlState(): { state: QueueControlState | null; refresh: () 
 
   useEffect(() => {
     void window.electronAPI.getQueueControlState().then(setState).catch((error) => {
-      reportOperationalFailure('queue-controls', 'operation.queueControlsLoadFailed', 'Failed to load queue control state', error)
+      reportOperationalFailure('queue-controls-load', 'operation.queueControlsLoadFailed', 'Failed to load queue control state', error)
     })
     return window.electronAPI.onQueueControlState(setState)
   }, [])
@@ -33,8 +33,11 @@ function useQueueControlState(): { state: QueueControlState | null; refresh: () 
   // Every action refreshes the state it just changed, so counts in the menu
   // never lag the queue.
   const refresh = useCallback(async (): Promise<void> => {
-    try { setState(await window.electronAPI.getQueueControlState()) } catch (error) {
-      reportOperationalFailure('queue-controls', 'operation.queueControlsRefreshFailed', 'Failed to refresh queue control state', error)
+    try {
+      setState(await window.electronAPI.getQueueControlState())
+      clearOperationalFailure('queue-controls-refresh')
+    } catch (error) {
+      reportOperationalFailure('queue-controls-refresh', 'operation.queueControlsRefreshFailed', 'Failed to refresh queue control state', error)
     }
   }, [])
 
@@ -70,8 +73,8 @@ export function QueueControlSubmenu(): React.JSX.Element {
   const pending = queued + interrupted
 
   const handlePause = useCallback(async (): Promise<void> => {
-    try { await window.electronAPI.setQueuePaused(!paused); await refresh() } catch (error) {
-      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to change queue pause state', error)
+    try { await window.electronAPI.setQueuePaused(!paused); clearOperationalFailure('queue-command'); await refresh() } catch (error) {
+      reportOperationalFailure('queue-command', QUEUE_CONTROL_FAILURE, 'Failed to change queue pause state', error)
     }
   }, [paused, refresh])
 
@@ -96,8 +99,8 @@ export function QueueControlSubmenu(): React.JSX.Element {
       danger: true,
     })
     if (!ok) return
-    try { await window.electronAPI.stopAllQueueWork(); await refresh() } catch (error) {
-      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to stop queue work', error)
+    try { await window.electronAPI.stopAllQueueWork(); clearOperationalFailure('queue-command'); await refresh() } catch (error) {
+      reportOperationalFailure('queue-command', QUEUE_CONTROL_FAILURE, 'Failed to stop queue work', error)
     }
   }, [confirm, generating, queued, refresh, t])
 
@@ -106,8 +109,8 @@ export function QueueControlSubmenu(): React.JSX.Element {
   // own standing choice, and retrying must not silently revoke it — the retried
   // tasks simply wait, exactly as the Paused badge says they will.
   const handleRetryAll = useCallback(async (): Promise<void> => {
-    try { await window.electronAPI.resumeInterruptedTasks(); await refresh() } catch (error) {
-      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to retry stopped queue work', error)
+    try { await window.electronAPI.resumeInterruptedTasks(); clearOperationalFailure('queue-command'); await refresh() } catch (error) {
+      reportOperationalFailure('queue-command', QUEUE_CONTROL_FAILURE, 'Failed to retry stopped queue work', error)
     }
   }, [refresh])
 
@@ -124,8 +127,8 @@ export function QueueControlSubmenu(): React.JSX.Element {
       danger: true,
     })
     if (!ok) return
-    try { await window.electronAPI.clearPendingTasks(); await refresh() } catch (error) {
-      reportOperationalFailure('queue-controls', QUEUE_CONTROL_FAILURE, 'Failed to clear pending queue work', error)
+    try { await window.electronAPI.clearPendingTasks(); clearOperationalFailure('queue-command'); await refresh() } catch (error) {
+      reportOperationalFailure('queue-command', QUEUE_CONTROL_FAILURE, 'Failed to clear pending queue work', error)
     }
   }, [confirm, queued, interrupted, refresh, t])
 

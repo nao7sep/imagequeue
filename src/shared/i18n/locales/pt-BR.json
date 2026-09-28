@@ -184,24 +184,9 @@
   "about.closeGithubResult": "Fechar o resultado do link do GitHub",
   "about.closeIssuesResult": "Fechar o resultado do link de problemas",
   "about.copyright": "© {year} {author} — {license} ou posterior",
-  "statusNotices.failed": {
-    "one": "{count} tarefa falhou",
-    "many": "{count} de tarefas falharam",
-    "other": "{count} tarefas falharam"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} tarefa parou antes de terminar",
-    "many": "{count} de tarefas pararam antes de terminar",
-    "other": "{count} tarefas pararam antes de terminar"
-  },
-  "statusNotices.and": "{first} e {rest}",
-  "statusNotices.queueTitle": "A fila precisa de atenção",
-  "statusNotices.queueBody": "{summary}. As linhas delas na fila mostram detalhes e opções para tentar novamente.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. As linhas delas na fila mostram detalhes e opções para tentar novamente. Não foi possível tentar novamente as tarefas paradas.",
-  "statusNotices.retrying": "Tentando novamente…",
-  "statusNotices.retryStopped": "Tentar as paradas novamente",
   "statusNotices.closeDraftResult": "Fechar o resultado do rascunho da sessão",
   "statusNotices.closeOperationResult": "Fechar o resultado da operação",
+  "toasts.region": "Notificações",
   "operation.outputFolderFailed": "Não foi possível abrir a pasta de saída. Verifique se ela ainda está disponível.",
   "operation.queueControlsLoadFailed": "Não foi possível carregar os controles da fila. Abra o menu novamente para tentar de novo.",
   "operation.queueControlsRefreshFailed": "Não foi possível atualizar os controles da fila. Abra o menu novamente para tentar de novo.",

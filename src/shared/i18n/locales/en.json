@@ -180,22 +180,9 @@
   "about.closeGithubResult": "Close GitHub link result",
   "about.closeIssuesResult": "Close issue link result",
   "about.copyright": "© {year} {author} — {license} or later",
-  "statusNotices.failed": {
-    "one": "{count} task failed",
-    "other": "{count} tasks failed"
-  },
-  "statusNotices.stopped": {
-    "one": "{count} task stopped before completion",
-    "other": "{count} tasks stopped before completion"
-  },
-  "statusNotices.and": "{first} and {rest}",
-  "statusNotices.queueTitle": "Queue needs attention",
-  "statusNotices.queueBody": "{summary}. Their rows in the queue show details and retry options.",
-  "statusNotices.queueBodyRetryFailed": "{summary}. Their rows in the queue show details and retry options. Retrying the stopped tasks failed.",
-  "statusNotices.retrying": "Retrying…",
-  "statusNotices.retryStopped": "Retry stopped",
   "statusNotices.closeDraftResult": "Close session draft result",
   "statusNotices.closeOperationResult": "Close operation result",
+  "toasts.region": "Notifications",
   "operation.outputFolderFailed": "The output folder could not be opened. Check that it is still available.",
   "operation.queueControlsLoadFailed": "Queue controls could not be loaded. Reopen the menu to try again.",
   "operation.queueControlsRefreshFailed": "Queue controls could not be refreshed. Reopen the menu to try again.",

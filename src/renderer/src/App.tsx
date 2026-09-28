@@ -1,5 +1,5 @@
 import { Layout } from './components/Layout'
-import { CliJobsPanel } from './components/CliJobsPanel'
+import { ToastStack } from './components/ToastStack'
 import { ResumeInterruptedPrompt } from './components/ResumeInterruptedPrompt'
 import { ConfirmProvider } from './context/ConfirmContext'
 import { CliJobsProvider } from './context/CliJobsContext'
@@ -24,7 +24,7 @@ export function App(): React.JSX.Element {
                   <EnqueueConfigProvider>
                     <SessionDraftProvider>
                       <Layout />
-                      <CliJobsPanel />
+                      <ToastStack />
                       <ResumeInterruptedPrompt />
                     </SessionDraftProvider>
                   </EnqueueConfigProvider>

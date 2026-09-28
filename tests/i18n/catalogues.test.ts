@@ -38,7 +38,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
     "nativeMenu.services", "nativeMenu.zoom", "about.version", "settings.tab.notifications", "settings.tab.prompts",
     "settings.volume", "settings.audioFilter", "option.opaque", "option.transparent", "menu.sessions",
     "menu.elaborationPrompts", "shortcuts.app", "details.prompt", "elaborator.kind.composition", "elaborator.kind.style",
-    "promptLength.long", "advanced.prompt", "conceptLibrary.conceptCount", "option.auto", "backend.format",
+    "promptLength.long", "advanced.prompt", "conceptLibrary.conceptCount", "option.auto", "backend.format", "toasts.region",
     "task.param.outputFormat",
   ],
   it: [
