@@ -452,22 +452,31 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   // line and cap the carried text at a generous grapheme budget. CSS still does
   // the visual ellipsis; the full prompt stays in the title tooltip.
   const promptPreview = truncate(task.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text
+  const promptId = `task-prompt-${task.id}`
+  const statusId = `task-status-${task.id}`
 
   return (
-    // The selectable button and its pointer strip share one positioned owner.
-    // Retained results are siblings below it, so their focusable close controls
-    // stay outside the one-tab-stop option and never become an overlay anchor.
+    // The selectable button is an invisible full-cover overlay: real
+    // interactive controls (the hover actions) can't nest inside a <button>,
+    // so the visible card — thumbnail, prompt, status — renders as a sibling
+    // "task-visual" instead of as the button's own content. task-visual takes
+    // no pointer events, so the absolutely positioned button (inset: 0)
+    // receives every click and hover on the row, while .task-actions
+    // (pointer-events restored, position: relative and later in the tree)
+    // sits above the button wherever it overlaps — its buttons stay
+    // clickable. The button's accessible name comes from aria-labelledby since
+    // it no longer contains the prompt/status text itself.
     <div className={`task-entry${task.status === 'kept' ? ' task-entry-kept' : ''}`} role="listitem">
       <div className="task-row-owner">
       <button
         type="button"
         className={[
           'task-item',
-          task.status === 'kept' ? 'task-item-kept' : '',
           isSelected ? 'task-item-selected' : '',
         ].filter(Boolean).join(' ')}
         ref={itemRef}
         aria-pressed={isSelected}
+        aria-labelledby={`${promptId} ${statusId}`}
         tabIndex={isTabbable ? 0 : -1}
         onClick={onSelect}
         // Activation follows focus: Tab-ing into the column (or focusing a row any
@@ -476,7 +485,8 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
         // never moves focus — so this can't recurse with the nav focus-follow.
         onFocus={onSelect}
         data-task-id={task.id}
-      >
+      />
+      <div className="task-visual">
         {thumbUrl && (
           <div className="task-thumbnail-frame">
             <img
@@ -498,10 +508,49 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
           </div>
         )}
         <div className="task-info">
-          <div className="task-prompt" title={task.prompt}>
-            {promptPreview}
+          {/* Per-item close/dismiss/remove convention (xalign): the hover
+              action group — including the plain "close" X on task-btn-warn,
+              when this row has one — sits on the PROMPT line, the card's
+              first text line, in every state. Sharing this flex row with
+              .task-prompt (flex: 1, min-width: 0, ellipsis) is what keeps it
+              there with no layout measurement: the prompt's own available
+              width simply shrinks by the action group's real rendered width,
+              below a thumbnail or not. */}
+          <div className="task-prompt-row">
+            <div className="task-prompt" id={promptId} title={task.prompt}>
+              {promptPreview}
+            </div>
+            {/* Pointer-only affordances (tabIndex -1); keyboard commands
+                operate on the selected row via the cover button above. */}
+            <div className={`task-actions${thumbUrl ? ' task-actions-overlay' : ''}`}>
+              {(task.status === 'failed' || task.status === 'interrupted') && (
+                <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title={t('task.retry')} aria-label={t('task.retry')}>
+                  <Icon name="retry" />
+                </button>
+              )}
+              {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
+                <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title={t('task.exportHint')} aria-label={t('task.export')}>
+                  <Icon name="export" />
+                </button>
+              )}
+              {task.status === 'kept' && (
+                <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title={t('task.restoreHint')} aria-label={t('task.restore')}>
+                  <Icon name="restore" />
+                </button>
+              )}
+              {task.status !== 'generating' && task.status !== 'kept' && (
+                <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={t(keeping ? 'task.keep' : 'task.remove')}>
+                  <Icon name={removeIcon} />
+                </button>
+              )}
+              {(task.status === 'completed' || task.status === 'kept') && (
+                <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title={t('task.deleteHint')} aria-label={t('task.delete')}>
+                  <Icon name="trash" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="task-status" style={{ color: STATUS_COLORS[task.status] }}>
+          <div className="task-status" id={statusId} style={{ color: STATUS_COLORS[task.status] }}>
             <span
               className={task.status === 'failed' ? 'task-error' : undefined}
               title={failureMessage ?? undefined}
@@ -510,36 +559,6 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             </span>
           </div>
         </div>
-      </button>
-      {/* Per-row actions are pointer-only affordances (tabIndex -1). Keyboard
-          commands operate on the selected row, while these stay outside the
-          selectable button so the DOM never nests interactive controls. */}
-      <div className="task-actions">
-        {(task.status === 'failed' || task.status === 'interrupted') && (
-          <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title={t('task.retry')} aria-label={t('task.retry')}>
-            <Icon name="retry" />
-          </button>
-        )}
-        {(task.status === 'completed' || task.status === 'kept') && task.baseName && (
-          <button tabIndex={-1} className="task-btn task-btn-exp" onClick={handleExport} title={t('task.exportHint')} aria-label={t('task.export')}>
-            <Icon name="export" />
-          </button>
-        )}
-        {task.status === 'kept' && (
-          <button tabIndex={-1} className="task-btn task-btn-restore" onClick={handleRestore} title={t('task.restoreHint')} aria-label={t('task.restore')}>
-            <Icon name="restore" />
-          </button>
-        )}
-        {task.status !== 'generating' && task.status !== 'kept' && (
-          <button tabIndex={-1} className="task-btn task-btn-warn" onClick={handleRemove} title={removeTitle} aria-label={t(keeping ? 'task.keep' : 'task.remove')}>
-            <Icon name={removeIcon} />
-          </button>
-        )}
-        {(task.status === 'completed' || task.status === 'kept') && (
-          <button tabIndex={-1} className="task-btn task-btn-danger" onClick={handleDelete} title={t('task.deleteHint')} aria-label={t('task.delete')}>
-            <Icon name="trash" />
-          </button>
-        )}
       </div>
       </div>
       {visibleActionResults.length > 0 && (

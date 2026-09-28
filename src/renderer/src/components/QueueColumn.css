@@ -158,21 +158,44 @@
   --task-bg: var(--task-kept-bg);
 }
 
+/* The selectable row is an invisible full-cover overlay: a close/dismiss/
+   remove control (or any hover action) can't nest inside a <button>, so the
+   visible card renders as the sibling .task-visual below, and this button
+   only catches clicks/focus for the row. Its own box never paints (no
+   border, no background) — the visible border/background/hover/selected
+   treatment that used to live here is now painted on .task-visual, driven by
+   this element's state through the sibling combinators below. Its accessible
+   name comes from aria-labelledby (the prompt + status text) since it no
+   longer contains that text itself. */
 .task-item {
   appearance: none;
-  display: block;
-  width: 100%;
-  padding: var(--space-3) var(--space-3) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--task-bg);
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  outline: none;
 }
 
-.task-item:hover {
+.task-visual {
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--task-bg);
+  /* The card's content is never a pointer target of its own: every point of
+     the card but its action buttons reaches the cover button, so a click
+     anywhere selects and hover never depends on what sits under the pointer.
+     Paint order alone can't promise that — anything that forms a stacking
+     context (the error text's opacity, for one) paints above the cover. */
+  pointer-events: none;
+}
+
+.task-row-owner:hover > .task-visual {
   border-color: var(--col-accent, var(--accent));
 }
 
@@ -180,36 +203,54 @@
    container, so a focus ring/outline at the row edge would be clipped into stray
    fragments — use a clip-safe background fill inside the box instead, and drop
    the default outline. Kept distinct from the persistent `.task-item-selected`
-   border mark below, which must stay visible even when focus leaves the row. */
-.task-item:focus-visible {
-  outline: none;
-  background:
-    linear-gradient(color-mix(in srgb, var(--col-accent, var(--accent)) 14%, transparent),
-                    color-mix(in srgb, var(--col-accent, var(--accent)) 14%, transparent)),
-    var(--task-bg);
+   border mark below, which must stay visible even when focus leaves the row.
+   `:focus`, not `:focus-visible`: a click focuses and selects the row exactly
+   as the arrow keys do, so it shows the same cursor — `:focus-visible` would
+   leave a clicked row with only the selection frame. */
+.task-item:focus ~ .task-visual {
+  --task-focus-tint: color-mix(in srgb, var(--col-accent, var(--accent)) 14%, transparent);
+  background: linear-gradient(var(--task-focus-tint), var(--task-focus-tint)), var(--task-bg);
+}
+/* The action group's backing takes the same tint, so it doesn't punch an
+   untinted box into the focused card. */
+.task-item:focus ~ .task-visual .task-actions {
+  background: linear-gradient(var(--task-focus-tint), var(--task-focus-tint)), var(--task-actions-bg);
 }
 
-.task-item-selected {
+.task-item-selected ~ .task-visual {
   border-color: var(--col-accent, var(--accent));
   box-shadow: 0 0 0 1px var(--col-accent, var(--accent)) inset;
 }
 
-.task-item-kept {
-  background: var(--task-bg);
-}
-
-.task-item-kept .task-status {
+.task-entry-kept .task-status {
   color: var(--warning) !important;
 }
 
+/* The prompt shares this row with the hover action group (flex: 1 vs. flex:
+   none), rather than the group overlaying it, so the group's real rendered
+   width is what the prompt's ellipsis yields to — correct with or without a
+   thumbnail above, with no layout measurement. Kept as one group (not just
+   the close/dismiss/remove X within it) rather than splitting the toolbar
+   across two anchor points; see .task-actions. */
+.task-prompt-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  /* .task-prompt's own line box (font-size * line-height), shared with
+     .task-actions below so the row's cross-size stays exactly this tall —
+     see .task-actions for why. */
+  --first-line: calc(var(--text-sm) * 1.45);
+}
+
 .task-prompt {
+  flex: 1;
+  min-width: 0;
   font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 4px;
 }
 
 .task-status {
@@ -410,11 +451,35 @@
   opacity: 0.5;
 }
 
+/* A real flex item in .task-prompt-row, not an overlay: opacity (not
+   display/visibility) hides it until hover, so it keeps reserving its layout
+   width the whole time and the prompt's ellipsis never jumps on hover.
+   position: relative carries no visual effect here — it only makes this
+   element (and so its buttons) paint after, and therefore above, the
+   invisible full-cover .task-item sitting earlier in the tree, so the
+   buttons stay clickable through it.
+   This group's own box (padding + control-sm buttons) is taller than the
+   prompt's text line; align-items: center on the row would otherwise stretch
+   the row to fit it, pushing .task-status down. margin-block shrinks this
+   item's MARGIN box back down to exactly --first-line (a negative margin
+   pulls the box in without touching the button's own size/hit area), so the
+   buttons overflow the line box symmetrically instead of growing the row.
+   Sitting inside the flow also puts it behind .task-visual's own right
+   padding (--space-3), which HEAD's absolutely positioned overlay never paid
+   (it was inset from the card edge by only --space-1, ignoring the button's
+   padding entirely) — margin-right cancels that difference out so the group
+   lands at HEAD's exact right inset instead of drifting in by --space-3.
+   The extra -1px is .task-visual's own border, which HEAD's overlay (inset
+   from the same edge, but outside any border) never crossed either; matched
+   empirically against the HEAD markup rather than re-derived by eye. */
 .task-actions {
-  position: absolute;
-  bottom: var(--space-1);
-  right: var(--space-1);
+  position: relative;
+  flex: none;
+  pointer-events: auto;
   display: flex;
+  align-items: center;
+  margin-block: calc((var(--first-line) - var(--control-sm) - 4px) / 2);
+  margin-right: calc(var(--space-1) - var(--space-3) - 1px);
   /* Separate controls keep the 8px minimum between them. */
   gap: var(--space-2);
   padding: 2px;
@@ -423,8 +488,25 @@
   opacity: 0;
   transition: opacity 0.15s;
 }
-.task-row-owner > .task-item:hover + .task-actions,
-.task-actions:hover {
+/* A row with a thumbnail (completed/kept) never has the close/dismiss/remove
+   X — keeping only shows archive/export/restore/delete — so the xalign rule
+   doesn't apply to it: put the group back exactly as at HEAD, an absolutely
+   positioned overlay at the card's bottom-right (over the status line), out
+   of the prompt-row's flex flow entirely. That leaves .task-prompt (the row's
+   only remaining flex item) at its full width again, and frees the row from
+   needing to make room above the thumbnail — the in-line, margin-block
+   mechanism above is for the no-thumbnail rows that actually carry the X. */
+.task-actions-overlay {
+  position: absolute;
+  top: auto;
+  bottom: var(--space-1);
+  right: var(--space-1);
+  margin: 0;
+}
+/* Shown while the pointer is anywhere over the card, and while focus is in it
+   (the row itself, or one of these buttons after a click). */
+.task-row-owner:hover .task-actions,
+.task-row-owner:focus-within .task-actions {
   opacity: 1;
 }
 .task-btn {
@@ -496,7 +578,7 @@
   border-color: var(--error);
   background: var(--bg-surface);
 }
-.task-item-kept .task-btn:hover {
+.task-entry-kept .task-btn:hover {
   background: var(--task-actions-bg);
 }
 .task-btn-danger:active {
