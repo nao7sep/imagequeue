@@ -282,6 +282,7 @@ export function toInterruptedTask(task: Task): Task {
     imagePath: null,
     baseName: null,
     error: null,
+    providerMessage: null,
   }
 }
 

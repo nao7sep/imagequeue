@@ -62,7 +62,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
     if (!response.ok) {
       const text = await response.text()
       log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
-      throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status)
+      throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, text)
     }
 
     logApiResponse('grok', 'ok', Date.now() - startTime)

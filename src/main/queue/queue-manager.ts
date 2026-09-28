@@ -44,7 +44,8 @@ export class QueueManager {
       durationMs: null,
       imagePath: null,
       baseName: null,
-      error: null
+      error: null,
+      providerMessage: null
     }
   }
 
@@ -128,6 +129,7 @@ export class QueueManager {
   private requeueTask(task: Task): void {
     task.status = 'queued'
     task.error = null
+    task.providerMessage = null
     task.startedAt = null
     task.completedAt = null
     task.durationMs = null
@@ -188,6 +190,7 @@ export class QueueManager {
           task.imagePath = null
           task.baseName = null
           task.error = null
+          task.providerMessage = null
           count++
         }
       }
@@ -206,6 +209,7 @@ export class QueueManager {
         if (task.status === 'queued') {
           task.status = 'interrupted'
           task.error = null
+          task.providerMessage = null
           count++
         }
       }

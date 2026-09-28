@@ -83,6 +83,32 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('PromptPane presentation', () => {
+  it('shows a failed task\'s whole reason in the preview: the authored lead-in, then the provider\'s words', () => {
+    const said = 'Your request was rejected by the safety system. '.repeat(8).trim()
+    const failedTask: Task = {
+      ...selectedTask,
+      status: 'failed',
+      error: { key: 'taskFailure.refusedWithReason', values: { name: 'OpenAI', reason: 'moderation_blocked' } },
+      providerMessage: said,
+    }
+    const { container } = render(
+      <PromptPane selectedTask={failedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
+    )
+    const failure = container.querySelector('.preview-area .preview-failure') as HTMLElement
+    expect(failure.textContent).toContain('OpenAI refused this prompt (“moderation_blocked”)')
+    expect(failure.querySelector('.preview-failure-provider')?.textContent).toBe(said)
+    expect(container.querySelector('.preview-placeholder')).toBeNull()
+  })
+
+  it('shows the lead-in alone when the provider said nothing', () => {
+    const failedTask: Task = { ...selectedTask, status: 'failed', error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } } }
+    const { container } = render(
+      <PromptPane selectedTask={failedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
+    )
+    expect(container.querySelector('.preview-failure')?.textContent).toContain('OpenAI could not generate this image')
+    expect(container.querySelector('.preview-failure-provider')).toBeNull()
+  })
+
   it('renders metadata, parameter, and task-state labels in sentence case', () => {
     const { container } = render(
       <PromptPane

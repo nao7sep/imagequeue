@@ -28,6 +28,7 @@ const { generateFlux } = await import('../../../src/main/backends/flux')
 const { generateOpenAI } = await import('../../../src/main/backends/openai')
 const { assertUsableGeminiResponse } = await import('../../../src/main/provider-response')
 const failurePresentation = await import('../../../src/main/failure-presentation')
+const { providerMessage } = await import('../../../src/main/provider-errors')
 const { createTranslator } = await import('../../../src/shared/i18n/translate')
 // The task keeps a message; these read it as English shows it.
 const english = createTranslator('en')
@@ -119,6 +120,25 @@ describe('backend failures reach the task row by kind', () => {
     const shownGemini = generationFailurePresentation('nanobanana', gemini, false)
     expect(shownGemini).toContain('refused this prompt')
     expect(shownGemini).toContain('PROHIBITED_CONTENT')
+  })
+
+  it('keeps the provider\'s own words, whole, on the classified error', async () => {
+    const said = 'Your request was rejected by the safety system. Your request may contain content that is not allowed.'
+    stubStatus(400, { error: { message: said, code: 'moderation_blocked', type: 'image_generation_user_error' } })
+    const refused = await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(refused)).toBe(said)
+
+    stubStatus(400, { error: { message: 'Invalid size.', code: 'invalid_value', type: 'invalid_request_error' } })
+    const rejected = await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(rejected)).toBe('Invalid size.')
+    expect(generationFailurePresentation('openai', rejected, false)).toContain('could not generate')
+
+    const longBody = { error: 'x'.repeat(600) }
+    stubStatus(400, longBody)
+    const grok = await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)
+    expect(providerMessage(grok)).toBe(JSON.stringify(longBody))
+
+    expect(providerMessage(new Error('socket hang up'))).toBeNull()
   })
 
   it('names a Gemini finish reason as the provider status', () => {

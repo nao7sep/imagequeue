@@ -204,6 +204,30 @@
   font-size: 11px;
 }
 
+/* A failed task's reason, in the app's error style. It fills the preview's
+   width and scrolls within it when long; the text is selectable and wraps,
+   keeping any line breaks the provider sent. */
+.preview-failure {
+  align-self: stretch;
+  max-height: 100%;
+  overflow-y: auto;
+  margin: var(--space-3);
+  padding: var(--space-2) 10px;
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.preview-failure-provider {
+  margin-top: var(--space-2);
+}
+
 .preview-image {
   width: 100%;
   height: 100%;

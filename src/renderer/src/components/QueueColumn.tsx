@@ -17,11 +17,10 @@ import {
 } from '../utils/imageBackendDefaults'
 import { hasApiKeyFor, isBackendReadyToEnqueue } from '../utils/enqueue'
 import { isFreshCompletion } from '../utils/taskScroll'
-import { taskStatusLabel } from '../utils/taskPresentation'
+import { taskFailureText, taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
 import { useI18n } from '../i18n/I18nContext'
-import { isMessage } from '../../../shared/i18n/translate'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import './QueueColumn.css'
 
@@ -438,11 +437,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   const removeIcon = keeping ? 'archive' : 'close'
   const removeTitle = t(keeping ? 'task.keepHint' : 'task.removeHint')
   const statusLabel = taskStatusLabel(t, task.status)
-  // A failure recorded as a message reads in the current language; older copy a
-  // session stored as words shows as it was written.
-  const failureMessage = task.status === 'failed'
-    ? isMessage(task.error) ? text(task.error) : task.error || t('taskFailure.unknown')
-    : null
+  const failureMessage = taskFailureText({ t, text }, task)
   const visibleActionResults = TASK_RESULT_ACTIONS.flatMap((action) => {
     const message = taskActionResults[task.id]?.[action]
     return message ? [{ action, message: t(message) }] : []

@@ -16,6 +16,7 @@ import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
 import { generationFailurePresentation, queueStorageFailurePresentation } from '../failure-presentation'
+import { providerMessage } from '../provider-errors'
 
 // Every generator takes the queue's cancellation signal. It is a parameter
 // rather than something each backend registers for itself: registration lived
@@ -235,6 +236,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       task.completedAt = null
       task.durationMs = null
       task.error = null
+      task.providerMessage = null
       drainTracker.recordFailed()
       log('info', 'Generation stopped by request', { taskId: task.id, backend })
     } else {
@@ -242,6 +244,9 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       // The task and manifest keep deliberately authored presentation copy. The
       // complete diagnostic (type, message, stack, cause) remains in the log.
       task.error = generationFailurePresentation(backend, err, generated)
+      // The provider's own words, kept beside the authored copy rather than in
+      // it. A save failure after a successful generation is not its answer.
+      task.providerMessage = generated ? null : providerMessage(err)
       drainTracker.recordFailed()
       logGenerationFailed(task.id, err, {
         backend,

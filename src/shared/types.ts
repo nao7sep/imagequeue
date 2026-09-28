@@ -174,6 +174,11 @@ export interface Task {
   // string is copy a session recorded before failures were kept as messages,
   // shown as it was written.
   error: Message | string | null
+  // What the provider itself answered when this attempt failed, verbatim and
+  // whole (OpenAI's moderation explanation, a fetch backend's error body); null
+  // when the failure was not a provider answer. Absent on tasks a session
+  // recorded before this was kept — unknown, not inferred.
+  providerMessage?: string | null
 }
 
 export interface EnqueueRequest {

@@ -1,11 +1,11 @@
-import OpenAI, { APIConnectionTimeoutError } from 'openai'
+import OpenAI, { APIConnectionTimeoutError, APIError } from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { buildOpenAIImageParams } from './openai-request'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, ProviderHttpError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
 
 // Calls OpenAI image generation API and returns the image bytes plus a
 // MIME-type hint derived from the user-selected output_format.
@@ -53,10 +53,19 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
       errorBody: (err as Record<string, unknown>).error,
       error: serializeError(err)
     })
+    // The API's own explanation is the `message` of the error body the SDK
+    // keeps on `error` — the provider's words, without the SDK's status prefix.
+    const body = err instanceof APIError ? err.error as Record<string, unknown> | undefined : undefined
+    const said = typeof body?.message === 'string' ? body.message : null
     // A moderation block is a 400 like any bad parameter, told apart only by its
     // code; it is the provider refusing this prompt, so retrying it cannot help.
     if ((err as Record<string, unknown>).code === 'moderation_blocked') {
-      throw new ProviderRefusalError('OpenAI blocked this prompt (moderation_blocked).', 'moderation_blocked')
+      throw new ProviderRefusalError('OpenAI blocked this prompt (moderation_blocked).', 'moderation_blocked', said)
+    }
+    // Any other answer with a status keeps that status (presentation and retry
+    // policy read it) and carries the provider's explanation with it.
+    if (err instanceof APIError && typeof err.status === 'number') {
+      throw new ProviderHttpError(err.message, err.status, said)
     }
     throw err
   })

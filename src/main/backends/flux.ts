@@ -74,7 +74,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     if (!submitResponse.ok) {
       const text = await submitResponse.text()
       log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
-      throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status)
+      throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, text)
     }
 
     const submitData = await submitResponse.json() as { id: string; polling_url?: string }

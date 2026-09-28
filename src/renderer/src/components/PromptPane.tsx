@@ -9,7 +9,7 @@ import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
-import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
+import { taskFailureText, taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
 import { serializeError } from '../../../shared/serialize-error'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
@@ -160,6 +160,8 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
       return next
     })
   }, [])
+
+  const failureText = selectedTask ? taskFailureText(i18n, selectedTask) : null
 
   const getExt = useCallback(
     () => selectedTask?.imagePath?.split('.').pop() ?? 'png',
@@ -378,6 +380,15 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
         <div className="preview-area">
           {previewDataUrl ? (
             <img className="preview-image" src={previewDataUrl} alt={t('prompt.previewAlt')} />
+          ) : failureText !== null ? (
+            // A failed task has no image; why it failed is the one thing worth
+            // showing, whole — the authored lead-in, then the provider's own words.
+            <div className="preview-failure">
+              <p>{failureText}</p>
+              {selectedTask?.providerMessage && (
+                <p className="preview-failure-provider">{selectedTask.providerMessage}</p>
+              )}
+            </div>
           ) : (
             <div className="preview-placeholder">
               <p>{t('prompt.noImage')}</p>

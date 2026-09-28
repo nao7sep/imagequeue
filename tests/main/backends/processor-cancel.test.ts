@@ -238,5 +238,27 @@ describe('the registry is released however the run ended', () => {
     await settle()
     expect(statusOf('openai')).toBe('failed')
     expect(inFlightCount()).toBe(0)
+  })})
+
+describe('a failed task keeps what the provider said', () => {
+  it('records the provider message whole beside the authored copy', async () => {
+    const { ProviderRefusalError } = await import('../../../src/main/provider-errors')
+    const said = 'Your request was rejected by the safety system. '.repeat(10).trim()
+    queueOne('openai')
+    processQueues()
+    captured!.reject(new ProviderRefusalError('OpenAI blocked this prompt (moderation_blocked).', 'moderation_blocked', said))
+    await settle()
+    const task = queueManager.getAllStoredTasks().openai[0]
+    expect(task.status).toBe('failed')
+    expect(task.error).toMatchObject({ key: 'taskFailure.refusedWithReason' })
+    expect(task.providerMessage).toBe(said)
+  })
+
+  it('records none for a failure that is not a provider answer', async () => {
+    queueOne('openai')
+    processQueues()
+    captured!.reject(new Error('socket hang up'))
+    await settle()
+    expect(queueManager.getAllStoredTasks().openai[0].providerMessage).toBeNull()
   })
 })
