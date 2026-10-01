@@ -1,10 +1,7 @@
 // Single source of truth for the main window's content-based minimum size.
 //
-// Per the window-chrome-conventions, the window minimum is DERIVED from the
-// panes' own minimums plus fixed chrome — never a hand-typed constant that
-// drifts the moment a pane changes. The values below are the pane/region
-// minimums; computeWindowMinWidth/Height fold them into the window minimum the
-// main process feeds to BrowserWindow.
+// Pane sizing follows window-conventions. The values below feed both the
+// renderer layout and the computed BrowserWindow minimum.
 //
 // The horizontal layout is a flex left pane (prompt + preview) followed by a
 // splitter and fixed-width backend panes. Each backend pane is clamped between

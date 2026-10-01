@@ -80,8 +80,6 @@
   overflow-wrap: anywhere;
 }
 
-/* A result's close affordance is quiet at rest and reveals its hit target only
-   on hover or keyboard focus (app-chrome-conventions). */
 .toast-close {
   box-sizing: border-box;
   display: inline-flex;
