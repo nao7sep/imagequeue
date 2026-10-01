@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
-import type { BrainstormPhase, ElaboratedPromptRecord } from '../../../shared/types'
+import type { BrainstormPhase } from '../../../shared/types'
 import type { PromptFormat, PromptLength } from '../../../shared/session-draft'
-import { TextProviderFailure } from '../../../shared/text-provider-failure'
+import type { BrainstormOutcome } from '../../../shared/text-provider-failure'
 
 interface BrainstormOperationInput {
   compositionElaboratorId: string | null
@@ -14,7 +14,7 @@ interface BrainstormOperationInput {
 
 export interface BrainstormOperation {
   progress: { done: number; total: number; phase: BrainstormPhase } | null
-  run: (count: number) => Promise<ElaboratedPromptRecord[]>
+  run: (count: number) => Promise<BrainstormOutcome>
   cancel: () => void
 }
 
@@ -31,7 +31,7 @@ export function useBrainstormOperation(input: BrainstormOperationInput): Brainst
     return () => { mounted.current = false }
   }, [])
 
-  const run = useCallback(async (count: number): Promise<ElaboratedPromptRecord[]> => {
+  const run = useCallback(async (count: number): Promise<BrainstormOutcome> => {
     if (!input.compositionElaboratorId || !input.styleElaboratorId) {
       throw new Error('Pick composition and style elaborators first.')
     }
@@ -45,7 +45,7 @@ export function useBrainstormOperation(input: BrainstormOperationInput): Brainst
     if (mounted.current) setProgress({ done: 0, total: count, phase: 'facets' })
 
     try {
-      const result = await window.electronAPI.brainstormPrompts({
+      return await window.electronAPI.brainstormPrompts({
         requestId,
         compositionElaboratorId: input.compositionElaboratorId,
         styleElaboratorId: input.styleElaboratorId,
@@ -54,8 +54,6 @@ export function useBrainstormOperation(input: BrainstormOperationInput): Brainst
         format: input.format,
         length: input.length,
       })
-      if (result.providerFailure) throw new TextProviderFailure(result.providerFailure)
-      return result.prompts
     } finally {
       unsubscribe()
       if (mounted.current) setProgress(null)

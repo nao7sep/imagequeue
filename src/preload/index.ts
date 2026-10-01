@@ -30,6 +30,7 @@ import type {
 } from '../shared/electron-api'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from '../shared/session-draft'
 import type { UiState } from '../shared/ui-state'
+import type { BrainstormOutcome } from '../shared/text-provider-failure'
 import type {
   CliJobSnapshot,
   CliChunkEvent,
@@ -173,7 +174,7 @@ const api = {
     count: number
     format: PromptFormat
     length: PromptLength
-  }): Promise<{ prompts: ElaboratedPromptRecord[] }> =>
+  }): Promise<BrainstormOutcome> =>
     ipcRenderer.invoke('elaborators:brainstorm', req),
 
   cancelBrainstorm: (requestId: string): Promise<void> =>

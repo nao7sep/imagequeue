@@ -1,8 +1,9 @@
 import type { WebContents } from 'electron'
 import { handle } from './ipc-boundary'
 import { brainstormPrompts, cancelBrainstorm } from './brainstorm'
-import { providerMessage } from './provider-errors'
+import { providerMessage, ProviderRefusalError } from './provider-errors'
 import { log, serializeError } from './logger'
+import type { BrainstormOutcome } from '../shared/text-provider-failure'
 import { createDefaultConfig } from './config/defaults'
 import {
   createElaborator,
@@ -85,14 +86,17 @@ export function registerElaboratorsIpc(): void {
         format: PromptFormat
         length: PromptLength
       }
-    ) => {
+    ): Promise<BrainstormOutcome> => {
       try {
-        return await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+        const { prompts } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+        return { ok: true, prompts }
       } catch (error) {
+        // Electron passes only an error's message across a rejected invoke, so a provider failure resolves as a typed result.
+        const refused = error instanceof ProviderRefusalError
         const said = providerMessage(error)
-        if (!said) throw error
+        if (!refused && !said) throw error
         log('warn', 'Brainstorm provider request failed', { error: serializeError(error) })
-        return { prompts: [], providerFailure: said }
+        return { ok: false, failure: { refused, providerMessage: said } }
       }
     }
   )

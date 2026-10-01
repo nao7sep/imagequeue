@@ -25,6 +25,7 @@ import {
 } from './types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
 import type { UiState } from './ui-state'
+import type { BrainstormOutcome } from './text-provider-failure'
 import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
 import type { AppNotice } from './app-notice'
 import type { StartupFailureMeasurement } from './startup-failure'
@@ -115,7 +116,7 @@ export interface ElectronAPI {
     count: number
     format: PromptFormat
     length: PromptLength
-  }) => Promise<{ prompts: ElaboratedPromptRecord[]; providerFailure?: string }>
+  }) => Promise<BrainstormOutcome>
   cancelBrainstorm: (requestId: string) => Promise<void>
   brainstormGetDefaults: () => Promise<{
     batch_size: number

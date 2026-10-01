@@ -1,4 +1,3 @@
-import { TextProviderFailure } from '../../../shared/text-provider-failure'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
@@ -47,6 +46,7 @@ import { useBrainstormOperation } from '../hooks/useBrainstormOperation'
 import './AdvancedPromptingModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
+import type { TextProviderFailure } from '../../../shared/text-provider-failure'
 
 // How long the "Queued N tasks." receipt stays on screen before the modal
 // closes. Long enough to register, short enough not to feel like a stall.
@@ -130,6 +130,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // append prompts or enqueue tasks.
   const cancelledRef = useRef(false)
   const elaboratorsByKind = useMemo(() => groupElaborators(elaborators), [elaborators])
+  // A refusal cannot change on a retry, so it offers none; every other failure does.
+  const showFailure = useCallback((operation: 'elaborate' | 'queue', error: unknown, failure: TextProviderFailure | null): void => {
+    setProviderError(failure?.providerMessage ?? null)
+    setRetryOperation(failure?.refused ? null : operation)
+    setError(presentFailure(operation === 'elaborate' ? 'advanced-elaborate' : 'advanced-queue', error))
+  }, [])
 
   const refreshElaborators = useCallback(async (): Promise<void> => {
     setElaboratorsLoading(true)
@@ -189,9 +195,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     return result
   }, [apiKeyPresence])
 
-  // Draw Things fallback params read straight from config: config-store's
-  // The effective config supplies these whole sets, so the defaults live in one
-  // place (config/defaults.ts) rather than being re-hardcoded here. Null only in
+  // Draw Things fallback params read straight from the effective config, which
+  // supplies the whole set, so the defaults live in one place
+  // (config/defaults.ts) rather than being re-hardcoded here. Null only in
   // the brief window before settings load — buildDtParams halts in that case
   // instead of inventing values.
   const drawThingsFallbacks = useMemo(() => {
@@ -278,9 +284,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       sessionPromptCount: elaboratedPrompts.length,
     })
     try {
-      const newPrompts = await brainstorm.run(1)
+      const outcome = await brainstorm.run(1)
       if (cancelledRef.current) return
-      const first = newPrompts[0]
+      if (!outcome.ok) {
+        showFailure('elaborate', outcome.failure, outcome.failure)
+        return
+      }
+      const first = outcome.prompts[0]
       if (!first) {
         setError('advanced.noPromptReturned')
         return
@@ -294,14 +304,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       update({ elaborated: firstText })
       appendElaboratedPrompts([first])
     } catch (err) {
-      setProviderError(err instanceof TextProviderFailure ? err.providerMessage : null)
-      setRetryOperation('elaborate')
-      setError(presentFailure('advanced-elaborate', err))
+      showFailure('elaborate', err, null)
     } finally {
       setActiveOperation(null)
     }
   }, [
-    gates.elaborate.disabled, brainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts,
+    gates.elaborate.disabled, brainstorm, elaboratedPrompts.length, update, appendElaboratedPrompts, showFailure,
     elaboratorsByKind, selectedCompositionElaboratorId, selectedStyleElaboratorId, seed,
   ])
 
@@ -360,7 +368,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       } else if (promptMode === 'elaborated') {
         prompts = [multiline(elaborated)]
       } else {
-        records = await brainstorm.run(promptsNeeded(promptMode, copies, allTargetCount))
+        const outcome = await brainstorm.run(promptsNeeded(promptMode, copies, allTargetCount))
+        if (cancelledRef.current) return
+        if (!outcome.ok) {
+          showFailure('queue', outcome.failure, outcome.failure)
+          return
+        }
+        records = outcome.prompts
         prompts = records.map((record) => record.text)
       }
       if (cancelledRef.current) return
@@ -411,9 +425,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // carries the user's intent, so no separate dispatch log is needed here.
     } catch (err) {
       // Stay open so the user can read the error and retry.
-      setProviderError(err instanceof TextProviderFailure ? err.providerMessage : null)
-      setRetryOperation('queue')
-      setError(presentFailure('advanced-queue', err))
+      showFailure('queue', err, null)
     } finally {
       setActiveOperation(null)
     }
@@ -421,7 +433,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [
     gates.queue.disabled, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, brainstorm, buildDtParams, elaboratedPrompts.length,
-    snapshots, appendElaboratedPrompts, onClose, t,
+    snapshots, appendElaboratedPrompts, onClose, t, showFailure,
   ])
 
   // Esc / outside-click / X all route through here. The only time we ask the

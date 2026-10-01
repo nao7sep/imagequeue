@@ -13,8 +13,8 @@ afterEach(() => {
 describe('useBrainstormOperation', () => {
   it('reports progress after the Strict Mode setup-cleanup-setup probe', async () => {
     let progressListener: ((event: { done: number; total: number; phase: 'prompts' }) => void) | null = null
-    let resolveRun!: (value: { prompts: [] }) => void
-    const brainstormPrompts = vi.fn(() => new Promise<{ prompts: [] }>((resolve) => { resolveRun = resolve }))
+    let resolveRun!: (value: { ok: true; prompts: [] }) => void
+    const brainstormPrompts = vi.fn(() => new Promise<{ ok: true; prompts: [] }>((resolve) => { resolveRun = resolve }))
     Object.defineProperty(window, 'electronAPI', {
       configurable: true,
       value: {
@@ -46,7 +46,7 @@ describe('useBrainstormOperation', () => {
     expect(result.current.progress).toEqual({ done: 1, total: 1, phase: 'prompts' })
 
     await act(async () => {
-      resolveRun({ prompts: [] })
+      resolveRun({ ok: true, prompts: [] })
       await running
     })
     expect(result.current.progress).toBeNull()
@@ -54,17 +54,18 @@ describe('useBrainstormOperation', () => {
 })
 
 
-it('preserves a structured provider failure for the caller without parsing arbitrary IPC messages', async () => {
+it('hands a provider failure to the caller as a typed outcome', async () => {
   const unsubscribe = vi.fn()
+  const outcome = { ok: false, failure: { refused: false, providerMessage: 'Unknown model custom-id' } }
   ;(window as unknown as { electronAPI: unknown }).electronAPI = {
     onBrainstormProgress: () => unsubscribe,
-    brainstormPrompts: vi.fn().mockResolvedValue({ prompts: [], providerFailure: 'Unknown model custom-id' }),
+    brainstormPrompts: vi.fn().mockResolvedValue(outcome),
   }
   const { result } = renderHook(() => useBrainstormOperation({
     compositionElaboratorId: 'composition', styleElaboratorId: 'style', seed: 'seed', format: 'sentences', length: 'medium',
   }))
   await act(async () => {
-    await expect(result.current.run(1)).rejects.toMatchObject({ name: 'TextProviderFailure', providerMessage: 'Unknown model custom-id' })
+    await expect(result.current.run(1)).resolves.toEqual(outcome)
   })
   expect(unsubscribe).toHaveBeenCalledOnce()
   expect(result.current.progress).toBeNull()
