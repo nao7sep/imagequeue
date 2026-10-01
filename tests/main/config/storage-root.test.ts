@@ -1,7 +1,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveStorageRoot } from '../../../src/main/config/storage-root'
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
@@ -12,12 +12,14 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
 
   beforeEach(() => {
     tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-root-'))
+    vi.spyOn(os, 'homedir').mockReturnValue(tmpBase)
     delete process.env[ENV_VAR]
   })
 
   afterEach(() => {
     if (original === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = original
+    vi.restoreAllMocks()
     fs.rmSync(tmpBase, { recursive: true, force: true })
   })
 

@@ -266,17 +266,16 @@ describe('concept store', () => {
     expect(listFacetsWithStats()).toHaveLength(0)
     expect(listProbeDisplays(f.id, 50)).toHaveLength(0)
   })
-})
-
-describe('listProbeDisplays bound', () => {
-  // The list is every generation ask's avoid-list, and the ledger accumulates
-  // for life: unbounded, a months-old facet ships thousands of domains per
-  // call and eventually overflows the model's context. Recency is the sample
-  // that matters — the model's repeat candidates are its recent favourites.
-  it('returns only the most recent `limit` domains, oldest-first', () => {
-    const f = ensureFacet('bounded')
-    addProbes(f.id, ['one', 'two', 'three', 'four', 'five'])
-    expect(listProbeDisplays(f.id, 3)).toEqual(['three', 'four', 'five'])
-    expect(listProbeDisplays(f.id, 10)).toEqual(['one', 'two', 'three', 'four', 'five'])
+  describe('listProbeDisplays bound', () => {
+    // The list is every generation ask's avoid-list, and the ledger accumulates
+    // for life: unbounded, a months-old facet ships thousands of domains per
+    // call and eventually overflows the model's context. Recency is the sample
+    // that matters — the model's repeat candidates are its recent favourites.
+    it('returns only the most recent `limit` domains, oldest-first', () => {
+      const f = ensureFacet('bounded')
+      addProbes(f.id, ['one', 'two', 'three', 'four', 'five'])
+      expect(listProbeDisplays(f.id, 3)).toEqual(['three', 'four', 'five'])
+      expect(listProbeDisplays(f.id, 10)).toEqual(['one', 'two', 'three', 'four', 'five'])
+    })
   })
 })
