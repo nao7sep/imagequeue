@@ -25,7 +25,7 @@ const translations = LANGUAGES.filter((language) => language !== "en");
 const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
   de: [
     "dependencies.updatesTitle", "dependencies.optional", "about.version", "settings.tab.prompts",
-    "settings.languageSystem", "settings.themeSystem", "settings.audioFilter", "settings.textAiBackend",
+    "settings.languageSystem", "settings.themeSystem", "settings.audioFilter",
     "option.transparent", "backend.moderation", "backend.format", "backend.guidance", "backend.seed",
     "task.param.outputFormat", "menu.elaborationPrompts", "shortcuts.app", "elabSettings.formatPart", "elaborators.name",
     "option.auto",

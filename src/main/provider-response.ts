@@ -18,19 +18,23 @@
  * policy can tell a refusal from a truncation without reading the message.
  */
 
+import { cleanReason } from './provider-reason'
 import { ProviderRefusalError, ProviderStatusError, ProviderTruncationError } from './provider-errors'
 
 interface GeminiLike {
-  promptFeedback?: { blockReason?: string }
+  promptFeedback?: { blockReason?: string; blockReasonMessage?: string }
   candidates?: { finishReason?: string }[]
 }
 
 export function assertUsableGeminiResponse(response: GeminiLike, what: string): void {
   const blockReason = response.promptFeedback?.blockReason
   if (blockReason) {
-    throw new ProviderRefusalError(`Gemini refused this ${what} (${blockReason}). The input was rejected, not lost.`, blockReason)
+    throw new ProviderRefusalError(`Gemini refused this ${what} (${blockReason}). The input was rejected, not lost.`, blockReason, cleanReason(response.promptFeedback?.blockReasonMessage ?? blockReason))
   }
   const finishReason = response.candidates?.[0]?.finishReason
+  if (finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT') {
+    throw new ProviderRefusalError(`Gemini refused this ${what} (${finishReason}).`, finishReason, cleanReason(finishReason))
+  }
   if (finishReason === 'MAX_TOKENS') {
     throw new ProviderTruncationError(`Gemini stopped at its output limit, so this ${what} is truncated rather than complete.`)
   }
@@ -49,7 +53,7 @@ export function assertUsableOpenAIResponse(response: OpenAILike, what: string): 
   // A refusal arrives as a `refusal` string with null content — reading only `content` reports
   // our own emptiness instead of the model's stated reason.
   if (choice?.message?.refusal) {
-    throw new ProviderRefusalError(`The model declined this ${what}: ${choice.message.refusal}`, choice.message.refusal)
+    throw new ProviderRefusalError(`The model declined this ${what}: ${choice.message.refusal}`, choice.message.refusal, cleanReason(choice.message.refusal))
   }
   if (choice?.finish_reason === 'content_filter') {
     throw new ProviderRefusalError(`The provider's content filter rejected this ${what}. The input was rejected, not lost.`, 'content_filter')

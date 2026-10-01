@@ -102,7 +102,7 @@ export async function startApp(home: string) {
     useTextBackend: async (backend: TextAIBackendId): Promise<void> => {
       const base = await invoke<AppConfig>('settings:get')
       const next = structuredClone(base)
-      next.text_ai.backend = backend
+      next.provider = backend
       await invoke('settings:saveChangedFields', base, next)
     },
 

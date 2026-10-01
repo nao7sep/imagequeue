@@ -22,9 +22,12 @@ beforeEach(() => {
 describe('generateSlug', () => {
   it('names from the text AI and passes the signal through', async () => {
     ask.mockResolvedValue({ text: 'Red Fox At Dawn' })
-    const signal = new AbortController().signal
-    await expect(generateSlug('a fox', signal)).resolves.toBe('red-fox-at-dawn')
-    expect(ask.mock.calls[0][0].signal).toBe(signal)
+    const controller = new AbortController()
+    await expect(generateSlug('a fox', controller.signal)).resolves.toBe('red-fox-at-dawn')
+    const received = ask.mock.calls[0][0].signal as AbortSignal
+    expect(received.aborted).toBe(false)
+    controller.abort()
+    expect(received.aborted).toBe(true)
   })
 
   it('skips the call once shutdown has begun', async () => {

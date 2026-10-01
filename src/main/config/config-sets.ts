@@ -14,7 +14,11 @@ export function configSetDefaults(): Record<string, unknown> {
   for (const section of ['general', 'notifications'] as const) {
     for (const [key, value] of Object.entries(config[section])) sets[`${section}.${key}`] = value
   }
-  sets['text_ai.backend'] = config.text_ai.backend
+  sets.provider = config.provider
+  sets.extraModelIds = config.extraModelIds
+  for (const provider of ['gemini', 'openai'] as const) {
+    for (const [key, value] of Object.entries(config[provider])) sets[`${provider}.${key}`] = value
+  }
   for (const provider of ['gemini', 'openai'] as const) {
     for (const [key, value] of Object.entries(config.text_ai[provider])) sets[`text_ai.${provider}.${key}`] = value
   }
@@ -70,7 +74,9 @@ export function applyConfigSet(config: AppConfig, key: string, value: unknown): 
 export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean {
   if (key === 'general.theme') return ['system', 'light', 'dark'].includes(String(value))
   if (key === 'general.language') return value === 'system' || isLanguage(value)
-  if (key === 'text_ai.backend') return value === 'gemini' || value === 'openai'
+  if (key === 'provider') return value === 'gemini' || value === 'openai'
+  if (key === 'extraModelIds') return isObject(value) && Object.entries(value).every(([provider, ids]) =>
+    ['gemini', 'openai'].includes(provider) && Array.isArray(ids) && ids.every((id) => typeof id === 'string'))
   if (key.endsWith('.defaults')) {
     if (!isObject(value) || typeof value.model !== 'string' || !isObject(value.default_params)) return false
     const expected = (builtIn as { default_params: Record<string, unknown> }).default_params

@@ -22,11 +22,11 @@ const { SettingsModal } = await import('../../../../src/renderer/src/components/
 function baseConfig(theme: unknown): Record<string, unknown> {
   const backend = (): Record<string, unknown> => ({ model: 'm', default_params: {}, concurrency: 3, timeout_ms: 180000 })
   return {
-    text_ai: {
-      backend: 'gemini',
-      gemini: { timeout_ms: 30000, main_model: 'gemini-3.7-flash', light_model: 'gemini-3.5-flash-lite' },
-      openai: { endpoint: '', timeout_ms: 60000, main_model: 'm', light_model: 'l' },
-    },
+    provider: 'gemini',
+    gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite' },
+    openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'gpt-5.6-terra', slug: 'gpt-6-luna' },
+    extraModelIds: {},
+    text_ai: { gemini: { timeout_ms: 30000 }, openai: { timeout_ms: 60000 } },
     general: {
       theme, ui_font_family: '', auto_preview_idle_seconds: 30, export_dir: '',
       confirm_remove: false, confirm_delete: false, delete_to_trash: true,
@@ -61,7 +61,7 @@ function themeRadios(): HTMLInputElement[] {
 }
 
 beforeEach(() => {
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', getTextModelLists: vi.fn().mockResolvedValue({}) }
 })
 afterEach(cleanup)
 

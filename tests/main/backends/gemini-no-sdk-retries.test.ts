@@ -1,14 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
 
-// The Google GenAI SDK resends a timed-out or 429/503 request by default. An
-// image generation is paid and not idempotent, so every resend can bill
-// another image while only one (or no) result comes back; the text path
-// already has its own retry policy (askJsonWithRetry) on top. Each client
-// passes `retryOptions: { attempts: 1 }` in `httpOptions` so it makes exactly
-// one request per call, whatever the response, leaving the app's own retry
-// policy (the queue's failed-then-Retry path, and askJsonWithRetry) as the
-// only retry authority.
+// Generation uses the wire adapter to retain failed-response headers; app
+// retries are bounded and the text JSON/slug caller owns text retries.
+vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { nanobanana: { timeout_ms: 180000 } } }),
@@ -42,11 +37,11 @@ const task: Task = {
   completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
 }
 
-describe('Gemini clients send each paid request once', () => {
-  it('Nano Banana image generation is not resent after a 503', async () => {
+describe('Gemini request attempt ownership', () => {
+  it('Nano Banana caps safe 503 retries at three requests', async () => {
     const fetchMock = stubServerError()
     await expect(generateNanoBanana(task, new AbortController().signal)).rejects.toThrow()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('a text request is not resent after a 503', async () => {

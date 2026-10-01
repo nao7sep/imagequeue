@@ -232,6 +232,8 @@ const api = {
     ipcRenderer.invoke('preview:getImage', baseName),
 
   // Settings operations
+  getTextModelLists: () => ipcRenderer.invoke('settings:textModelLists'),
+  refreshTextModelList: (provider) => ipcRenderer.invoke('settings:refreshTextModelList', provider),
   getSettings: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('settings:get'),
 

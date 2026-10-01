@@ -4,6 +4,7 @@ import { GeminiProvider } from './gemini'
 import { OpenAIProvider } from './openai'
 import type { TextAIProvider } from './types'
 import type { TextAIBackendId } from '../../shared/types'
+import type { TextRole } from '../../shared/ai-models'
 
 export type { TextAIProvider, ConversationMessage, AskOptions, AskResult } from './types'
 export { GeminiProvider } from './gemini'
@@ -16,47 +17,21 @@ interface ProviderHandle {
   modelId: string
 }
 
-type Tier = 'light' | 'main'
+export function getLightProvider(): ProviderHandle | null { return buildProviderHandle('slug') }
+export function getMainProvider(): ProviderHandle | null { return buildProviderHandle('elaboration') }
 
-// Light tier — short throwaway tasks (slug generation).
-export function getLightProvider(): ProviderHandle | null {
-  return buildProviderHandle('light')
-}
-
-// Main tier — general text work (prompt elaboration).
-export function getMainProvider(): ProviderHandle | null {
-  return buildProviderHandle('main')
-}
-
-function buildProviderHandle(tier: Tier): ProviderHandle | null {
-  const { text_ai } = loadConfig()
-  const backend = text_ai.backend
-
-  if (backend === 'gemini') {
-    const { timeout_ms, light_model, main_model } = text_ai.gemini
-    const apiKey = resolveApiKey('gemini.text')
-    if (!apiKey) return null
-    const modelId = tier === 'light' ? light_model : main_model
-    return {
-      provider: new GeminiProvider(modelId, apiKey),
-      timeoutMs: timeout_ms,
-      backend,
-      modelId,
-    }
+export function buildProviderHandle(role: TextRole): ProviderHandle | null {
+  const config = loadConfig()
+  const backend = config.provider
+  const apiKey = resolveApiKey(`${backend}.text`)
+  if (!apiKey) return null
+  const { endpoint, [role]: modelId } = config[backend]
+  return {
+    provider: backend === 'gemini'
+      ? new GeminiProvider(modelId, apiKey, endpoint, role)
+      : new OpenAIProvider(modelId, apiKey, endpoint, role),
+    timeoutMs: config.text_ai[backend].timeout_ms,
+    backend,
+    modelId,
   }
-
-  if (backend === 'openai') {
-    const { endpoint, timeout_ms, light_model, main_model } = text_ai.openai
-    const apiKey = resolveApiKey('openai.text')
-    if (!apiKey) return null
-    const modelId = tier === 'light' ? light_model : main_model
-    return {
-      provider: new OpenAIProvider(modelId, apiKey, endpoint),
-      timeoutMs: timeout_ms,
-      backend,
-      modelId,
-    }
-  }
-
-  throw new Error(`Unsupported text AI backend: ${backend}`)
 }

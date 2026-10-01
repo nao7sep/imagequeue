@@ -9,34 +9,15 @@
 import { TextAIBackendId } from '../../shared/types'
 import type { FormatDirectives } from '../../shared/session-draft'
 
-export interface GeminiTextAIConfig {
-  timeout_ms: number
-  // The two tier selections into the app-owned closed list (GEMINI_TEXT_MODELS in
-  // shared/models). The list itself is not stored — it has one home — so the config
-  // carries only the picks. main_model is the general/elaboration tier, light_model
-  // the throwaway/slug tier; main leads because it is the more consequential choice.
-  //
-  // Both are `string`, not GeminiTextModel: a config from an older build (when the list
-  // was editable) or a hand-edited file can name anything, and the store never judges a
-  // selection (the validity boundary). A retired or unsupported id fails fast at the API
-  // call, never snapped to a valid one here.
-  main_model: string
-  light_model: string
-}
-
-export interface OpenAITextAIConfig {
-  // Empty string means the official OpenAI endpoint (https://api.openai.com/v1).
+export interface TextProviderConfig {
   endpoint: string
-  timeout_ms: number
-  // main leads light, matching the Gemini config and the UI order.
-  main_model: string
-  light_model: string
+  elaboration: string
+  slug: string
 }
 
 export interface TextAIConfig {
-  backend: TextAIBackendId
-  gemini: GeminiTextAIConfig
-  openai: OpenAITextAIConfig
+  gemini: { timeout_ms: number }
+  openai: { timeout_ms: number }
 }
 
 export interface OpenAIBackendConfig {
@@ -183,6 +164,10 @@ export interface NotificationsConfig {
 }
 
 export interface AppConfig {
+  provider: TextAIBackendId
+  gemini: TextProviderConfig
+  openai: TextProviderConfig
+  extraModelIds: Partial<Record<TextAIBackendId, string[]>>
   text_ai: TextAIConfig
   general: GeneralConfig
   notifications: NotificationsConfig

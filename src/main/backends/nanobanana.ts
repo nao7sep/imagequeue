@@ -1,4 +1,5 @@
-import { GoogleGenAI } from '@google/genai'
+import { generateGeminiContent } from '../gemini-request'
+import { withProviderRetry } from '../provider-retry'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
@@ -21,8 +22,6 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     throw new MissingApiKeyError('Nano Banana')
   }
 
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 } } })
-
   const modelDef = findModel('nanobanana', task.model)
   const supportsImageConfig = modelDef?.supportsImageConfig ?? false
 
@@ -35,20 +34,15 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   logApiRequest('nanobanana', task.model, requestParams)
   const startTime = Date.now()
 
-  const response = await ai.models.generateContent({
-    model: task.model,
-    contents: task.prompt,
-    // No cast: GenerateContentConfig declares every field here, and the cast
-    // this replaced was silently erasing the only compile-time proof that the
-    // abort signal reaches this backend.
-    config: {
+  const response = await withProviderRetry((attemptSignal) => generateGeminiContent({
+    apiKey, model: task.model,
+    contents: [{ role: 'user', parts: [{ text: task.prompt }] }],
+    generationConfig: {
       responseModalities: ['TEXT', 'IMAGE'],
-      // Client-side only, per the SDK: aborting stops us waiting, it does not
-      // stop the service, and the call is still billed.
-      abortSignal: signal,
-      ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {})
-    }
-  }).catch((err: unknown) => {
+      ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {}),
+    },
+    signal: attemptSignal, timeoutMs: config.image_backends.nanobanana.timeout_ms,
+  }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms }).catch((err: unknown) => {
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })

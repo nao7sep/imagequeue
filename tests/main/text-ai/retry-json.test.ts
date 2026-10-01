@@ -54,7 +54,7 @@ describe('askJsonWithRetry', () => {
   ])('resends %s, which proves nothing was processed', async (_label, error) => {
     const { provider, ask } = failingProvider(error)
     await expect(run(provider)).rejects.toBe(error)
-    expect(ask).toHaveBeenCalledTimes(4)
+    expect(ask).toHaveBeenCalledTimes(3)
   })
 
   it.each([

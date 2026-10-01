@@ -295,10 +295,10 @@
   "settings.failureSound": "Failure sound",
   "settings.failureSoundPlaceholder": "Leave empty to use built-in tone",
   "settings.audioFilter": "Audio",
-  "settings.textAiBackend": "Backend",
+  "settings.textAiBackend": "Provider",
   "settings.apiKey": "API Key",
-  "settings.mainModel": "Main model",
-  "settings.lightModel": "Light model",
+  "settings.mainModel": "Elaboration model",
+  "settings.lightModel": "Slug model",
   "settings.timeout": "Timeout (s)",
   "settings.modelNoLongerOffered": "{model} — no longer offered",
   "settings.endpoint": "Endpoint",
@@ -770,5 +770,13 @@
   "cliJob.noOutput": "No output yet…",
   "cliJob.noNewOutput": "No new output yet…",
   "cliJob.converting": "Conversion in progress…",
-  "cliJob.starting": "Starting…"
+  "cliJob.starting": "Starting…",
+  "settings.chooseModel": "Choose {role}",
+  "settings.outOfList": "Out of list",
+  "settings.bundledModels": "App suggestions",
+  "settings.providerModels": "Provider models",
+  "settings.extraModelIds": "Extra model IDs",
+  "settings.extraModelIdsHint": "One model ID per line. You can also type any ID directly in a model field.",
+  "settings.refreshModels": "Refresh models",
+  "settings.frontierModel": "{model} (should work, not guaranteed)"
 }

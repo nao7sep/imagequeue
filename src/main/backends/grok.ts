@@ -1,5 +1,6 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
+import { withProviderRetry } from '../provider-retry'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
@@ -50,21 +51,25 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
   const startTime = Date.now()
 
   try {
-    const response = await fetch(`${BASE_URL}/images/generations`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    })
+    const response = await withProviderRetry(async (attemptSignal) => {
+      const response = await fetch(`${BASE_URL}/images/generations`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: attemptSignal
+      })
 
-    if (!response.ok) {
-      const text = await response.text()
-      log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
-      throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, reasonFromBody(text, grokReasonField))
-    }
+      if (!response.ok) {
+        const text = await response.text()
+        log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
+        throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, reasonFromBody(text, grokReasonField), response.headers.get('retry-after'))
+      }
+
+      return response
+    }, { signal: controller.signal })
 
     logApiResponse('grok', 'ok', Date.now() - startTime)
 

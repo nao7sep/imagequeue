@@ -1,4 +1,5 @@
 import { AppConfig } from './types'
+import { PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER, IMAGE_BACKEND_SECRET } from '../../shared/types'
 import { hasApiKey } from './api-keys-store'
 
@@ -28,16 +29,15 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
   }
 
   const drawthings = config.image_backends?.drawthings
-  const textAi = config.text_ai
 
   return {
     textAi: {
-      backend: textAi?.backend,
+      backend: config.provider,
       geminiApiKeyPresent: hasApiKey('gemini.text'),
-      geminiMainModel: textAi?.gemini?.main_model,
+      geminiMainModel: config.gemini?.elaboration,
       openaiApiKeyPresent: hasApiKey('openai.text'),
-      openaiMainModel: textAi?.openai?.main_model,
-      openaiEndpointOverride: Boolean(textAi?.openai?.endpoint),
+      openaiMainModel: config.openai?.elaboration,
+      openaiEndpointOverride: Boolean(config.openai?.endpoint && config.openai.endpoint !== PROVIDER_ENDPOINTS.openai),
     },
     imageBackends: {
       ...cloudBackends,

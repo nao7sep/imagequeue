@@ -1,6 +1,7 @@
 import { Task } from '../../shared/types'
 import { FLUX_MAX_PIXELS, FLUX_SIZE_STEP } from '../../shared/models'
 import { loadConfig } from '../config'
+import { withProviderRetry } from '../provider-retry'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, logApiRequest, logApiResponse } from '../logger'
 import { CANCELLED_MESSAGE } from './cancellation'
@@ -62,21 +63,25 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
   signal.addEventListener('abort', onAbort, { once: true })
 
   try {
-    const submitResponse = await fetch(`${BASE_URL}/${task.model}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-key': apiKey
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    })
+    const submitResponse = await withProviderRetry(async (attemptSignal) => {
+      const submitResponse = await fetch(`${BASE_URL}/${task.model}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-key': apiKey
+        },
+        body: JSON.stringify(body),
+        signal: attemptSignal
+      })
 
-    if (!submitResponse.ok) {
-      const text = await submitResponse.text()
-      log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
-      throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, reasonFromBody(text, fluxReasonField))
-    }
+      if (!submitResponse.ok) {
+        const text = await submitResponse.text()
+        log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
+        throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, reasonFromBody(text, fluxReasonField), submitResponse.headers.get('retry-after'))
+      }
+
+      return submitResponse
+    }, { signal: controller.signal })
 
     const submitData = await submitResponse.json() as { id: string; polling_url?: string }
     const pollingUrl = submitData.polling_url || `${BASE_URL}/get_result?id=${submitData.id}`
@@ -85,15 +90,20 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     while (true) {
       await abortableDelay(POLL_INTERVAL_MS, controller.signal)
 
-      const pollResponse = await fetch(pollingUrl, {
-        headers: { 'x-key': apiKey },
-        signal: controller.signal
-      })
+      const pollResponse = await withProviderRetry(async (attemptSignal) => {
+        const pollResponse = await fetch(pollingUrl, {
+          headers: { 'x-key': apiKey },
+          signal: attemptSignal
+        })
 
-      if (!pollResponse.ok) {
-        log('error', 'FLUX poll request failed', { model: task.model, status: pollResponse.status, jobId: submitData.id })
-        throw new ProviderHttpError(`FLUX poll failed (${pollResponse.status})`, pollResponse.status)
-      }
+        if (!pollResponse.ok) {
+          log('error', 'FLUX poll request failed', { model: task.model, status: pollResponse.status, jobId: submitData.id })
+          const body = await pollResponse.text()
+          throw new ProviderHttpError(`FLUX poll failed (${pollResponse.status})`, pollResponse.status, reasonFromBody(body, fluxReasonField), pollResponse.headers.get('retry-after'))
+        }
+
+        return pollResponse
+      }, { signal: controller.signal })
 
       const pollData = await pollResponse.json() as {
         status: string

@@ -60,6 +60,13 @@ describe('summarizeConfig', () => {
     expect(JSON.stringify(summary)).not.toContain('sk-super-secret')
   })
 
+  it('reports an endpoint override only when it differs from the official endpoint', () => {
+    const config = createDefaultConfig()
+    expect(summarizeConfig(config).textAi).toMatchObject({ openaiEndpointOverride: false })
+    config.openai.endpoint = 'https://proxy.example/v1'
+    expect(summarizeConfig(config).textAi).toMatchObject({ openaiEndpointOverride: true })
+  })
+
   it('reports no key present when none is stored or in the environment', () => {
     const summary = summarizeConfig(createDefaultConfig()) as {
       imageBackends: Record<string, { apiKeyPresent: boolean }>

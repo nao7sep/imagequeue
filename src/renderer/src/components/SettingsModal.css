@@ -236,3 +236,10 @@
   width: 100%;
   color: var(--text-muted);
 }
+
+.settings-model-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.settings-model-picker > * { min-width: 0; }

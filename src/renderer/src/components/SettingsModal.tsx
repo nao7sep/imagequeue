@@ -4,7 +4,7 @@ import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
 import { useTablist } from '../hooks/useTablist'
 import { multiline } from '../../../shared/textCleanup'
-import { GEMINI_TEXT_MODELS, TEXT_AI_BACKEND_OPTIONS } from '../../../shared/models'
+import { TextProviderSettings } from './TextProviderSettings'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
@@ -15,12 +15,6 @@ import { LANGUAGES, normalizeLanguagePreference } from '../../../shared/i18n/lan
 import { CATALOGUES, type MessageKey } from '../../../shared/i18n/catalogues'
 import { useI18n } from '../i18n/I18nContext'
 import './SettingsModal.css'
-
-// The Model selects offer this closed list; the fallback <option> for an
-// off-list selection asks whether the current value is one of them.
-function isGeminiTextModel(id: string): boolean {
-  return (GEMINI_TEXT_MODELS as readonly string[]).includes(id)
-}
 
 interface Props {
   onClose: () => void
@@ -127,7 +121,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         typeof prompts?.slug === 'string'
           ? { ...config, prompts: { ...prompts, slug: multiline(prompts.slug) } }
           : config
-      await saveChangedSettings(baseConfig, cleaned, resetSlug ? ['prompts.slug'] : [])
+      const extraModelIds = JSON.stringify(cleaned.extraModelIds) === JSON.stringify(baseConfig.extraModelIds)
+        ? cleaned.extraModelIds : Object.fromEntries(Object.entries((cleaned.extraModelIds ?? {}) as Record<string, string[]>).map(
+        ([provider, ids]) => [provider, [...new Set(ids.map((id) => id.trim()).filter(Boolean))]],
+      ))
+      await saveChangedSettings(baseConfig, { ...cleaned, extraModelIds }, resetSlug ? ['prompts.slug'] : [])
       // Keys second, and only when changed: this write can add or remove a
       // column, so it is the one that resizes the window.
       if (Object.keys(changedKeys).length > 0) {
@@ -169,9 +167,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     </Modal>
   )
 
-  const textAi = config.text_ai as Record<string, unknown>
-  const gemini = (textAi.gemini ?? {}) as Record<string, unknown>
-  const openai = (textAi.openai ?? {}) as Record<string, unknown>
   const backends = config.image_backends as Record<string, Record<string, unknown>>
   const prompts = config.prompts as Record<string, string>
   const general = (config.general ?? {}) as Record<string, unknown>
@@ -180,19 +175,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     ? t('settings.statusIconMenuBar')
     : t('settings.statusIconNotificationArea')
   const notificationCfg = (config.notifications ?? {}) as Record<string, unknown>
-  // The two tier selections into the closed GEMINI_TEXT_MODELS list. Reads the untyped
-  // draft config, so it defends against a missing key. There is no stored list and no
-  // editor: the list is app-owned (shared/models), the picks are all the user chooses.
-  const geminiMainModel = (gemini.main_model as string | undefined) ?? ''
-  const geminiLightModel = (gemini.light_model as string | undefined) ?? ''
-  const updateTextAi = (key: string, value: unknown): void => {
-    setConfig({ ...config, text_ai: { ...textAi, [key]: value } })
-  }
-
-  const updateGemini = (key: string, value: unknown): void => {
-    setConfig({ ...config, text_ai: { ...textAi, gemini: { ...gemini, [key]: value } } })
-  }
-
   // One editor for every API key, addressed by key id. Blank means "no stored
   // key" — saving it clears the stored value; it never writes an empty string.
   const updateKey = (id: SecretId, value: string): void => {
@@ -206,10 +188,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       onChange={(e) => updateKey(id, e.target.value)}
     />
   )
-
-  const updateOpenai = (key: string, value: unknown): void => {
-    setConfig({ ...config, text_ai: { ...textAi, openai: { ...openai, [key]: value } } })
-  }
 
   const updateGeneral = (key: string, value: unknown): void => {
     setConfig({ ...config, general: { ...general, [key]: value } })
@@ -535,79 +513,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       </div>
 
       <div className="app-tabpanel" {...tablist.getPanelProps('textai')} hidden={activeTab !== 'textai'}>
-        <div className="settings-section">
-          <div className="settings-field">
-            <label>{t('settings.textAiBackend')}</label>
-            <select value={textAi.backend as string} onChange={(e) => updateTextAi('backend', e.target.value)}>
-              {TEXT_AI_BACKEND_OPTIONS.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="settings-subsection">
-            <h4>Gemini</h4>
-            <div className="settings-field">
-              <label>{t('settings.apiKey')}</label>
-              {keyField('gemini.text')}
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.mainModel')}</label>
-              <select value={geminiMainModel} onChange={(e) => updateGemini('main_model', e.target.value)}>
-                {GEMINI_TEXT_MODELS.map((id) => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
-                {/* Only reachable from an older config (when the list was editable) or a
-                    hand-edited file — never from anything the user can do here now. Rendered
-                    so a <select> whose value matches no <option> doesn't go blank; the id is
-                    kept, and the API refuses it at call time if Google has retired it. */}
-                {geminiMainModel && !isGeminiTextModel(geminiMainModel) ? (
-                  <option value={geminiMainModel}>{t('settings.modelNoLongerOffered', { model: geminiMainModel })}</option>
-                ) : null}
-              </select>
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.lightModel')}</label>
-              <select value={geminiLightModel} onChange={(e) => updateGemini('light_model', e.target.value)}>
-                {GEMINI_TEXT_MODELS.map((id) => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
-                {geminiLightModel && !isGeminiTextModel(geminiLightModel) ? (
-                  <option value={geminiLightModel}>{t('settings.modelNoLongerOffered', { model: geminiLightModel })}</option>
-                ) : null}
-              </select>
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.timeout')}</label>
-              <input type="number" min={1} step={1} value={(gemini.timeout_ms as number) / 1000} onChange={(e) => updateGemini('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
-            </div>
-          </div>
-
-          <div className="settings-subsection">
-            <h4>OpenAI</h4>
-            <div className="settings-field">
-              <label>{t('settings.endpoint')}</label>
-              <input type="text" placeholder="https://api.openai.com/v1" value={openai.endpoint as string} onChange={(e) => updateOpenai('endpoint', e.target.value)} />
-              <p className="settings-hint">{t('settings.endpointHint')}</p>
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.apiKey')}</label>
-              {keyField('openai.text')}
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.mainModel')}</label>
-              <input type="text" value={openai.main_model as string} onChange={(e) => updateOpenai('main_model', e.target.value)} />
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.lightModel')}</label>
-              <input type="text" value={openai.light_model as string} onChange={(e) => updateOpenai('light_model', e.target.value)} />
-            </div>
-            <div className="settings-field">
-              <label>{t('settings.timeout')}</label>
-              <input type="number" min={1} step={1} value={(openai.timeout_ms as number) / 1000} onChange={(e) => updateOpenai('timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
-            </div>
-          </div>
-        </div>
+        <TextProviderSettings config={config} onChange={setConfig} keyField={keyField} />
       </div>
 
       <div className="app-tabpanel" {...tablist.getPanelProps('backends')} hidden={activeTab !== 'backends'}>

@@ -286,10 +286,10 @@
   "settings.failureSound": "失败提示音",
   "settings.failureSoundPlaceholder": "留空则使用内置提示音",
   "settings.audioFilter": "音频",
-  "settings.textAiBackend": "后端",
+  "settings.textAiBackend": "提供商",
   "settings.apiKey": "API 密钥",
-  "settings.mainModel": "主模型",
-  "settings.lightModel": "轻量模型",
+  "settings.mainModel": "扩展模型",
+  "settings.lightModel": "文件名模型",
   "settings.timeout": "超时（秒）",
   "settings.modelNoLongerOffered": "{model} — 已不再提供",
   "settings.endpoint": "端点",
@@ -748,5 +748,13 @@
   "cliJob.noOutput": "尚无输出…",
   "cliJob.noNewOutput": "尚无新输出…",
   "cliJob.converting": "正在转换…",
-  "cliJob.starting": "正在启动…"
+  "cliJob.starting": "正在启动…",
+  "settings.chooseModel": "选择{role}",
+  "settings.outOfList": "列表外模型",
+  "settings.bundledModels": "应用推荐",
+  "settings.providerModels": "提供商模型",
+  "settings.extraModelIds": "额外模型ID",
+  "settings.extraModelIdsHint": "每行输入一个模型ID。你也可以在模型字段中直接输入任意ID。",
+  "settings.refreshModels": "刷新模型",
+  "settings.frontierModel": "{model}（预计可用，但不保证）"
 }

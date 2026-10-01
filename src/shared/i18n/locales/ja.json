@@ -286,10 +286,10 @@
   "settings.failureSound": "失敗時のサウンド",
   "settings.failureSoundPlaceholder": "空欄にすると内蔵の警告音を使います",
   "settings.audioFilter": "オーディオ",
-  "settings.textAiBackend": "バックエンド",
+  "settings.textAiBackend": "プロバイダー",
   "settings.apiKey": "API キー",
-  "settings.mainModel": "メインモデル",
-  "settings.lightModel": "軽量モデル",
+  "settings.mainModel": "詳細化モデル",
+  "settings.lightModel": "ファイル名モデル",
   "settings.timeout": "タイムアウト（秒）",
   "settings.modelNoLongerOffered": "{model} — 提供終了",
   "settings.endpoint": "エンドポイント",
@@ -748,5 +748,13 @@
   "cliJob.noOutput": "まだ出力はありません…",
   "cliJob.noNewOutput": "まだ新しい出力はありません…",
   "cliJob.converting": "変換中…",
-  "cliJob.starting": "開始中…"
+  "cliJob.starting": "開始中…",
+  "settings.chooseModel": "{role}を選択",
+  "settings.outOfList": "リストにないモデル",
+  "settings.bundledModels": "アプリの候補",
+  "settings.providerModels": "プロバイダーのモデル",
+  "settings.extraModelIds": "追加のモデルID",
+  "settings.extraModelIdsHint": "1行に1つのモデルIDを入力します。モデル欄に任意のIDを直接入力することもできます。",
+  "settings.refreshModels": "モデルを更新",
+  "settings.frontierModel": "{model}（動作する見込みですが、保証はありません）"
 }

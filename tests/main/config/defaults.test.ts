@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
-import { GEMINI_TEXT_MODELS } from '../../../src/shared/models'
+import { modelsFor, PROVIDER_ENDPOINTS } from '../../../src/shared/ai-models'
 import { PROMPT_FORMATS, PROMPT_LENGTHS } from '../../../src/shared/session-draft'
 
 describe('createDefaultConfig', () => {
@@ -30,47 +30,18 @@ describe('createDefaultConfig', () => {
   })
 })
 
-// The Gemini text list is app-owned and closed (GEMINI_TEXT_MODELS): the config seeds only
-// the two tier selections, not the list. The seed must be coherent — both picks members of
-// the shipped list — or a fresh install would open Settings with its own default already
-// labelled "no longer offered".
-describe('default Gemini text selections', () => {
-  it('does not seed a stored models list', () => {
-    expect(createDefaultConfig().text_ai.gemini).not.toHaveProperty('models')
-  })
-
-  it('seeds both selections as members of the closed list', () => {
-    const { light_model, main_model } = createDefaultConfig().text_ai.gemini
-    expect(GEMINI_TEXT_MODELS).toContain(light_model)
-    expect(GEMINI_TEXT_MODELS).toContain(main_model)
-  })
-
-  // The two tier defaults are pinned so a silent flip is caught: main is the fleet's Gemini
-  // default (elaboration, whose output is generated from); light is the cheapest (throwaway
-  // slug). They must differ, and main must be the more capable of the two.
-  it('keeps the light and main selections distinct and pinned', () => {
-    const { light_model, main_model } = createDefaultConfig().text_ai.gemini
-    expect(main_model).toBe('gemini-3.7-flash')
-    expect(light_model).toBe('gemini-3.5-flash-lite')
-    expect(light_model).not.toBe(main_model)
-  })
-})
-
-// The OpenAI-compatible backend is OPEN (any endpoint), so these are starter defaults for
-// the common case, not a closed contract. The endpoint stays a blank sentinel — resolved to
-// the official URL in code — and the two model seeds are pinned so a flip is caught. Both were
-// verified live through the real provider before shipping.
-describe('default OpenAI text config', () => {
-  it('leaves the endpoint blank so it resolves to the official URL in code, not a stale literal', () => {
-    expect(createDefaultConfig().text_ai.openai.endpoint).toBe('')
-  })
-
-  it('seeds working starter models rather than blank (a blank model breaks the backend on first use)', () => {
-    const { main_model, light_model } = createDefaultConfig().text_ai.openai
-    expect(main_model).toBe('gpt-5.6-terra')
-    expect(light_model).toBe('gpt-5.6-luna')
-    expect(main_model.length).toBeGreaterThan(0)
-    expect(light_model.length).toBeGreaterThan(0)
+describe('text defaults', () => {
+  it('derives each role from the supported rows', () => {
+    const config = createDefaultConfig()
+    expect(config.provider).toBe('gemini')
+    expect(config.gemini.elaboration).toBe('gemini-3.8-flash')
+    expect(config.gemini.slug).toBe('gemini-3.5-flash-lite')
+    expect(config.openai.elaboration).toBe('gpt-5.6-terra')
+    expect(config.openai.slug).toBe('gpt-6-luna')
+    expect(modelsFor('gemini', 'text-balanced').map((row) => row.id)).toContain(config.gemini.elaboration)
+    expect(config.gemini.endpoint).toBe(PROVIDER_ENDPOINTS.gemini)
+    expect(config.openai.endpoint).toBe(PROVIDER_ENDPOINTS.openai)
+    expect(config.extraModelIds).toEqual({})
   })
 })
 

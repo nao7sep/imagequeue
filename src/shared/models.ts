@@ -1,6 +1,6 @@
 // Centralized model registry — single source of truth for models, sizes, parameters, and rough cost estimates.
 
-import { BackendId, TextAIBackendId } from './types'
+import { BackendId } from './types'
 
 // --- Size presets ---
 
@@ -414,41 +414,6 @@ export const GROK_MODELS: GrokModelDef[] = [
     aspectRatios: GROK_ASPECT_RATIOS,
     resolutions: GROK_RESOLUTIONS,
   }
-]
-
-// --- Text AI backends and models ---
-
-// The Gemini text models imagequeue offers. A CLOSED list (ai-model-routing-conventions):
-// the app ships it, the user picks the light and main tiers from it, nothing adds to it at
-// runtime — so there is no list editor and no "Reset Gemini models". The two selections are
-// stored; the list is not (it lives here, one home).
-//
-// Ordered by category (pro -> flash -> flash-lite), ONE PER CATEGORY, which also runs most- to
-// least-expensive. Verified live 2026-07-16 for the text path, and re-verified 2026-08-20 against
-// the models endpoint after the flash pair was rotated forward. Same ids fotoready ships for
-// vision — re-proven for text rather than assumed to carry across modality. Verification is a
-// design-time act; the app never queries the model-list endpoint. A wrong or retired selection
-// surfaces at call time (the validity boundary), never from a stored list.
-//
-// The ids this replaced (gemini-3.5-flash, gemini-3-flash-preview, gemini-3.1-flash-lite) all
-// still resolve — superseded, not retired. Worth stating because a published Google page listed
-// gemini-3-flash-preview as shut down while the live API served it: the endpoint is the authority.
-export const GEMINI_TEXT_MODELS = [
-  'gemini-3.1-pro-preview',
-  'gemini-3.7-flash',
-  'gemini-3.5-flash-lite'
-] as const
-
-export type GeminiTextModel = (typeof GEMINI_TEXT_MODELS)[number]
-
-export interface TextAIBackendOption {
-  id: TextAIBackendId
-  label: string
-}
-
-export const TEXT_AI_BACKEND_OPTIONS: TextAIBackendOption[] = [
-  { id: 'gemini', label: 'Gemini' },
-  { id: 'openai', label: 'OpenAI' }
 ]
 
 // --- Lookup helpers ---

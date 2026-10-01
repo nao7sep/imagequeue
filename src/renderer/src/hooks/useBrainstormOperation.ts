@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
 import type { BrainstormPhase, ElaboratedPromptRecord } from '../../../shared/types'
 import type { PromptFormat, PromptLength } from '../../../shared/session-draft'
+import { TextProviderFailure } from '../../../shared/text-provider-failure'
 
 interface BrainstormOperationInput {
   compositionElaboratorId: string | null
@@ -53,6 +54,7 @@ export function useBrainstormOperation(input: BrainstormOperationInput): Brainst
         format: input.format,
         length: input.length,
       })
+      if (result.providerFailure) throw new TextProviderFailure(result.providerFailure)
       return result.prompts
     } finally {
       unsubscribe()

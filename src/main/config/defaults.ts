@@ -1,33 +1,24 @@
 import { AppConfig } from './types'
 import { getDefaultModelForBackend } from '../../shared/models'
+import { defaultModelFor, PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 
 export function createDefaultConfig(): AppConfig {
   return {
+    provider: 'gemini',
+    gemini: {
+      endpoint: PROVIDER_ENDPOINTS.gemini,
+      elaboration: defaultModelFor('gemini', 'text-balanced'),
+      slug: defaultModelFor('gemini', 'text-fast'),
+    },
+    openai: {
+      endpoint: PROVIDER_ENDPOINTS.openai,
+      elaboration: defaultModelFor('openai', 'text-balanced'),
+      slug: defaultModelFor('openai', 'text-fast'),
+    },
+    extraModelIds: {},
     text_ai: {
-      backend: 'gemini',
-      gemini: {
-        timeout_ms: 30000,
-        // Picks into the closed GEMINI_TEXT_MODELS list. main = the fleet's Gemini
-        // default (matches mumbler/fotoready) for the elaboration tier whose output
-        // is generated from; light = the cheapest model for throwaway slug work.
-        main_model: 'gemini-3.7-flash',
-        light_model: 'gemini-3.5-flash-lite'
-      },
-      openai: {
-        // Empty endpoint is a sentinel, not a gap: it resolves to the official
-        // https://api.openai.com/v1 in code (openai.ts), so the field tracks the
-        // constant and never goes stale. The UI shows the URL as a placeholder + hint.
-        // Left blank deliberately rather than seeding the literal.
-        endpoint: '',
-        timeout_ms: 60000,
-        // Starter defaults for the common case (the endpoint IS OpenAI). Verified live
-        // through the real provider: both run elaboration + slug. This is an OPEN backend
-        // — any OpenAI-compatible endpoint — so these are only a working starting point a
-        // user pointing elsewhere (OpenRouter, Ollama, …) overrides. No reset exists (model
-        // and endpoint are coupled — see tapebox), so this reaches fresh installs only.
-        main_model: 'gpt-5.6-terra',
-        light_model: 'gpt-5.6-luna'
-      }
+      gemini: { timeout_ms: 30000 },
+      openai: { timeout_ms: 60000 },
     },
     general: {
       theme: 'system',
@@ -122,7 +113,7 @@ export function createDefaultConfig(): AppConfig {
     brainstorm: {
       batch_size: 10,
       concurrency: 12,
-      max_retries_per_turn: 3,
+      max_retries_per_turn: 2,
       retry_backoff_ms: [1000, 2000, 4000],
       prefer_new_concepts: false,
       // The expansion call's job is CONVERSION, not invention: variety is the

@@ -1,3 +1,4 @@
+import { TextProviderFailure } from '../../../shared/text-provider-failure'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
@@ -120,6 +121,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // Only errors surface in the modal: a successful queue closes it (the now-
   // populated queue columns are the confirmation), so there is no info state.
   const [error, setError] = useState<MessageKey | null>(null)
+  const [retryOperation, setRetryOperation] = useState<'elaborate' | 'queue' | null>(null)
+  const [providerError, setProviderError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const elaboratorRowRefs = useRef(new Map<string, HTMLLabelElement>())
   // Set to true when the user confirms closing mid-operation, so that any still-
@@ -266,6 +269,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     if (gates.elaborate.disabled) return
     setActiveOperation('elaborate')
     setError(null)
+    setProviderError(null)
+    setRetryOperation(null)
     void window.electronAPI.appLog('info', 'Advanced: Elaborate clicked', {
       compositionElaborator: elaboratorsByKind.composition.find((e) => e.id === selectedCompositionElaboratorId)?.name ?? null,
       styleElaborator: elaboratorsByKind.style.find((e) => e.id === selectedStyleElaboratorId)?.name ?? null,
@@ -289,6 +294,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       update({ elaborated: firstText })
       appendElaboratedPrompts([first])
     } catch (err) {
+      setProviderError(err instanceof TextProviderFailure ? err.providerMessage : null)
+      setRetryOperation('elaborate')
       setError(presentFailure('advanced-elaborate', err))
     } finally {
       setActiveOperation(null)
@@ -316,6 +323,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     if (gates.queue.disabled) return
     setActiveOperation('queue')
     setError(null)
+    setProviderError(null)
+    setRetryOperation(null)
     setCompletionNote(null)
     const targets = effectiveTargets
     const copies = Math.max(1, count)
@@ -402,6 +411,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // carries the user's intent, so no separate dispatch log is needed here.
     } catch (err) {
       // Stay open so the user can read the error and retry.
+      setProviderError(err instanceof TextProviderFailure ? err.providerMessage : null)
+      setRetryOperation('queue')
       setError(presentFailure('advanced-queue', err))
     } finally {
       setActiveOperation(null)
@@ -743,7 +754,15 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               {t('advanced.totalTasks', { count: totalTasks })}
             </div>
 
-            {error && <div className="advanced-message advanced-message-error" role="alert">{t(error)}</div>}
+            {error && <div className="advanced-message advanced-message-error" role="alert">
+              {t(error)}
+              {providerError && <p>{providerError}</p>}
+              {retryOperation && <button type="button" className="modal-btn"
+                disabled={retryOperation === 'elaborate' ? gates.elaborate.disabled : gates.queue.disabled}
+                onClick={() => void (retryOperation === 'elaborate' ? handleElaborate() : handleQueue())}>
+                {t('common.retry')}
+              </button>}
+            </div>}
 
             <button
               className="modal-btn modal-btn-primary advanced-queue-btn"

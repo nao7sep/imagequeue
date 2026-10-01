@@ -304,10 +304,10 @@
   "settings.failureSound": "Suono di errore",
   "settings.failureSoundPlaceholder": "Lascia vuoto per usare il tono incluso",
   "settings.audioFilter": "Audio",
-  "settings.textAiBackend": "Motore",
+  "settings.textAiBackend": "Fornitore",
   "settings.apiKey": "Chiave API",
-  "settings.mainModel": "Modello principale",
-  "settings.lightModel": "Modello leggero",
+  "settings.mainModel": "Modello per elaborazione",
+  "settings.lightModel": "Modello per nomi di file",
   "settings.timeout": "Timeout (s)",
   "settings.modelNoLongerOffered": "{model} — non più offerto",
   "settings.endpoint": "Endpoint",
@@ -792,5 +792,13 @@
   "cliJob.noOutput": "Ancora nessun output…",
   "cliJob.noNewOutput": "Ancora nessun nuovo output…",
   "cliJob.converting": "Conversione in corso…",
-  "cliJob.starting": "Avvio…"
+  "cliJob.starting": "Avvio…",
+  "settings.chooseModel": "Scegli {role}",
+  "settings.outOfList": "Fuori elenco",
+  "settings.bundledModels": "Suggerimenti dell’app",
+  "settings.providerModels": "Modelli del fornitore",
+  "settings.extraModelIds": "ID di modelli aggiuntivi",
+  "settings.extraModelIdsHint": "Un ID di modello per riga. Puoi anche digitare qualsiasi ID direttamente in un campo del modello.",
+  "settings.refreshModels": "Aggiorna modelli",
+  "settings.frontierModel": "{model} (dovrebbe funzionare, senza garanzia)"
 }

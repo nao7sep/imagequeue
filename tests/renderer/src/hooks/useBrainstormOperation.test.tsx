@@ -52,3 +52,20 @@ describe('useBrainstormOperation', () => {
     expect(result.current.progress).toBeNull()
   })
 })
+
+
+it('preserves a structured provider failure for the caller without parsing arbitrary IPC messages', async () => {
+  const unsubscribe = vi.fn()
+  ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+    onBrainstormProgress: () => unsubscribe,
+    brainstormPrompts: vi.fn().mockResolvedValue({ prompts: [], providerFailure: 'Unknown model custom-id' }),
+  }
+  const { result } = renderHook(() => useBrainstormOperation({
+    compositionElaboratorId: 'composition', styleElaboratorId: 'style', seed: 'seed', format: 'sentences', length: 'medium',
+  }))
+  await act(async () => {
+    await expect(result.current.run(1)).rejects.toMatchObject({ name: 'TextProviderFailure', providerMessage: 'Unknown model custom-id' })
+  })
+  expect(unsubscribe).toHaveBeenCalledOnce()
+  expect(result.current.progress).toBeNull()
+})

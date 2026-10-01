@@ -20,7 +20,7 @@ export class MissingApiKeyError extends Error {
  *  own errors carry, so SDK and fetch failures are classified alike. `providerMessage` is
  *  the provider's human-readable reason (see providerMessage below). */
 export class ProviderHttpError extends Error {
-  constructor(message: string, readonly status: number, readonly providerMessage: string | null = null) {
+  constructor(message: string, readonly status: number, readonly providerMessage: string | null = null, readonly retryAfter: string | null = null) {
     super(message)
     this.name = 'ProviderHttpError'
   }

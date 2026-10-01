@@ -57,3 +57,25 @@ describe('FLUX polling', () => {
     },
   )
 })
+
+
+describe('FLUX safe poll retry', () => {
+  it('retries a 503 poll on the same submitted job', async () => {
+    let polls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/flux-2-pro')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://poll.example/job' }))
+      if (url === 'https://poll.example/job') {
+        polls++
+        return polls === 1
+          ? new Response('{"detail":"busy"}', { status: 503, headers: { 'retry-after': '0' } })
+          : new Response(JSON.stringify({ status: 'Ready', result: { sample: 'https://image.example/result' } }))
+      }
+      return new Response(new Uint8Array([1, 2, 3]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await generateFlux(task, new AbortController().signal)
+    expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/flux-2-pro'))).toHaveLength(1)
+    expect(fetchMock.mock.calls.filter(([url]) => url === 'https://poll.example/job')).toHaveLength(2)
+  })
+})

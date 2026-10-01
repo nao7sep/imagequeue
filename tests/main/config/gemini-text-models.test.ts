@@ -1,83 +1,51 @@
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppConfig } from '../../../src/main/config/types'
-import { GEMINI_TEXT_MODELS } from '../../../src/shared/models'
 
-const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
+let root: string
+beforeEach(() => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-text-models-'))
+  vi.stubEnv('IMAGEQUEUE_DATA_DIR', root)
+  vi.resetModules()
+})
+afterEach(async () => {
+  const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
+  closeBackupStore()
+  vi.unstubAllEnvs()
+  fs.rmSync(root, { recursive: true, force: true })
+})
 
-// The Gemini text model list is now app-owned and CLOSED (GEMINI_TEXT_MODELS): it has one
-// home, in code, and is not stored in config.json. The config carries only the two tier
-// selections. These tests drive the real load path (parse → merge defaults → drop legacy
-// list) against a hand-edited / older config.json, and pin the two things that matter:
-// a stored `models` array is dropped, and the selections pointing into the list are never
-// judged — an off-list pick survives verbatim, its fate decided at the API call.
-//
-// loadConfig memoizes in a module-level cache, so each test resets the module registry and
-// re-imports the store. None load an absent file, so none triggers the first-run write-back.
-describe('Gemini text models through loadConfig (closed list)', () => {
-  let tmpRoot: string
-  const originalHome = process.env[ENV_VAR]
-
-  beforeEach(() => {
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-gemini-models-'))
-    process.env[ENV_VAR] = tmpRoot
+describe('open text model sets', () => {
+  it('preserves arbitrary role ids and writes only the changed role', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    const config = updateConfig((draft) => { draft.gemini.elaboration = 'unknown-future-id' })
+    expect(config.gemini.elaboration).toBe('unknown-future-id')
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ gemini: { elaboration: 'unknown-future-id' } })
   })
-
-  afterEach(() => {
-    if (originalHome === undefined) delete process.env[ENV_VAR]
-    else process.env[ENV_VAR] = originalHome
-    fs.rmSync(tmpRoot, { recursive: true, force: true })
-  })
-
-  async function loadFrom(config: unknown): Promise<AppConfig> {
-    fs.writeFileSync(path.join(tmpRoot, 'config.json'), JSON.stringify(config))
-    vi.resetModules()
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    return loadConfig()
-  }
-
-  // A config written before the list was closed still carries a user-owned `models` array.
-  // It has no home now, so it is dropped rather than persisted as dead data — while both
-  // selections, including one the shipped list no longer offers, survive untouched.
-  it('drops a legacy stored list and preserves both selections verbatim', async () => {
-    const loaded = await loadFrom({
-      text_ai: {
-        gemini: {
-          models: ['gemini-3.5-flash', 'gemini-2.5-pro', 'my-fine-tune'],
-          main_model: 'gemini-2.5-pro',
-          light_model: 'gemini-1.0-retired',
-        },
-      },
+  it('drops renamed keys at the next write without migrating them', async () => {
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
+      text_ai: { backend: 'openai', gemini: { main_model: 'old', light_model: 'old', timeout_ms: 40000 },
+        openai: { endpoint: 'https://old.example' } },
+      gemini: { slug: 'my-slug' },
+    }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().provider).toBe('gemini')
+    expect(loadConfig().gemini.elaboration).toBe('gemini-3.8-flash')
+    expect(loadConfig().gemini.slug).toBe('my-slug')
+    updateConfig((draft) => { draft.provider = 'openai' })
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({
+      provider: 'openai', gemini: { slug: 'my-slug' }, text_ai: { gemini: { timeout_ms: 40000 } },
     })
-
-    expect(loaded.text_ai.gemini).not.toHaveProperty('models')
-    expect(loaded.text_ai.gemini.main_model).toBe('gemini-2.5-pro')
-    expect(loaded.text_ai.gemini.light_model).toBe('gemini-1.0-retired')
   })
-
-  // A fresh-ish config with no `models` key loads without one too — the merge does not
-  // reintroduce it (createDefaultConfig no longer seeds a list), and the selections stand.
-  it('never introduces a models key, and leaves the selections alone', async () => {
-    const loaded = await loadFrom({
-      text_ai: {
-        gemini: { timeout_ms: 30000, main_model: 'gemini-3.5-flash', light_model: 'gemini-3.1-flash-lite' },
-      },
-    })
-
-    expect(loaded.text_ai.gemini).not.toHaveProperty('models')
-    expect(loaded.text_ai.gemini.main_model).toBe('gemini-3.5-flash')
-    expect(loaded.text_ai.gemini.light_model).toBe('gemini-3.1-flash-lite')
-  })
-
-  // The default selections a fresh install seeds are both members of the closed list —
-  // the picker can show them, and nothing lands on an off-list value out of the box.
-  it('seeds default selections that are members of the shipped list', async () => {
+  it('stores extras as one whole set and rejects a malformed set as absent', async () => {
+    const { updateConfig, loadConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.extraModelIds = { gemini: ['custom'], openai: ['local-id'] } })
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ extraModelIds: { gemini: ['custom'], openai: ['local-id'] } })
+    fs.writeFileSync(path.join(root, 'config.json'), '{"extraModelIds":{"gemini":[7]}}')
     vi.resetModules()
-    const { createDefaultConfig } = await import('../../../src/main/config/defaults')
-    const { gemini } = createDefaultConfig().text_ai
-    expect(GEMINI_TEXT_MODELS).toContain(gemini.main_model)
-    expect(GEMINI_TEXT_MODELS).toContain(gemini.light_model)
+    const store = await import('../../../src/main/config/config-store')
+    expect(store.loadConfig().extraModelIds).toEqual({})
+    expect(loadConfig().extraModelIds).toEqual({ gemini: ['custom'], openai: ['local-id'] })
   })
 })

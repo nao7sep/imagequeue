@@ -313,10 +313,10 @@
   "settings.failureSound": "Звук ошибки",
   "settings.failureSoundPlaceholder": "Оставьте пустым для встроенного тона",
   "settings.audioFilter": "Аудио",
-  "settings.textAiBackend": "Движок",
+  "settings.textAiBackend": "Провайдер",
   "settings.apiKey": "Ключ API",
-  "settings.mainModel": "Основная модель",
-  "settings.lightModel": "Облегчённая модель",
+  "settings.mainModel": "Модель для проработки",
+  "settings.lightModel": "Модель для имён файлов",
   "settings.timeout": "Тайм-аут (с)",
   "settings.modelNoLongerOffered": "{model} — больше не предлагается",
   "settings.endpoint": "Конечная точка",
@@ -814,5 +814,13 @@
   "cliJob.noOutput": "Вывода пока нет…",
   "cliJob.noNewOutput": "Нового вывода пока нет…",
   "cliJob.converting": "Идёт преобразование…",
-  "cliJob.starting": "Запуск…"
+  "cliJob.starting": "Запуск…",
+  "settings.chooseModel": "Выбрать {role}",
+  "settings.outOfList": "Вне списка",
+  "settings.bundledModels": "Рекомендации приложения",
+  "settings.providerModels": "Модели провайдера",
+  "settings.extraModelIds": "Дополнительные ID моделей",
+  "settings.extraModelIdsHint": "Один ID модели на строку. Вы также можете ввести любой ID прямо в поле модели.",
+  "settings.refreshModels": "Обновить модели",
+  "settings.frontierModel": "{model} (должна работать, без гарантии)"
 }

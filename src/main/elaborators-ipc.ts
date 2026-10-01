@@ -1,6 +1,8 @@
 import type { WebContents } from 'electron'
 import { handle } from './ipc-boundary'
 import { brainstormPrompts, cancelBrainstorm } from './brainstorm'
+import { providerMessage } from './provider-errors'
+import { log, serializeError } from './logger'
 import { createDefaultConfig } from './config/defaults'
 import {
   createElaborator,
@@ -10,7 +12,6 @@ import {
   resetElaborators,
   updateElaborator,
 } from './elaborators'
-import { log } from './logger'
 import type { ElaboratorKind } from '../shared/types'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
 import { elaboratorRecoveryPresentation } from './failure-presentation'
@@ -85,7 +86,14 @@ export function registerElaboratorsIpc(): void {
         length: PromptLength
       }
     ) => {
-      return withRecoveryReport(event.sender, () => brainstormPrompts(req))
+      try {
+        return await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+      } catch (error) {
+        const said = providerMessage(error)
+        if (!said) throw error
+        log('warn', 'Brainstorm provider request failed', { error: serializeError(error) })
+        return { prompts: [], providerFailure: said }
+      }
     }
   )
 

@@ -7,6 +7,7 @@ import { buildOpenAIImageParams } from './openai-request'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { MissingApiKeyError, ProviderHttpError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
 import { openaiReasonField, reasonFromParsed } from '../provider-reason'
+import { withProviderRetry } from '../provider-retry'
 
 // Calls OpenAI image generation API and returns the image bytes plus a
 // MIME-type hint derived from the user-selected output_format.
@@ -18,9 +19,7 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
     throw new MissingApiKeyError('OpenAI')
   }
 
-  // maxRetries: 0 — a generation is paid and not idempotent, so the SDK must
-  // never resend one on a timeout or 5xx. The queue's failed → Retry path is the
-  // only retry authority.
+  // The app owns retries; the SDK performs exactly one attempt.
   const client = new OpenAI({ apiKey, timeout: config.image_backends.openai.timeout_ms, maxRetries: 0 })
 
   const params = buildOpenAIImageParams(task)
@@ -28,12 +27,12 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
   logApiRequest('openai', 'images.generate', params)
   const startTime = Date.now()
 
-  const response = await client.images.generate({
+  const response = await withProviderRetry((attemptSignal) => client.images.generate({
     ...params,
     prompt: task.prompt,
     n: 1,
     stream: false,
-  }, { signal }).catch((err: unknown) => {
+  }, { signal: attemptSignal }).catch((err: unknown) => {
     // A stop the user asked for is not a timeout and not a failure; checked
     // first so the log does not claim otherwise.
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
@@ -65,10 +64,10 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
     // Any other answer with a status keeps that status (presentation and retry
     // policy read it) and carries the provider's explanation with it.
     if (err instanceof APIError && typeof err.status === 'number') {
-      throw new ProviderHttpError(err.message, err.status, said)
+      throw new ProviderHttpError(err.message, err.status, said, err.headers?.get('retry-after') ?? null)
     }
     throw err
-  })
+  }), { signal, timeoutMs: config.image_backends.openai.timeout_ms })
 
   logApiResponse('openai', 'ok', Date.now() - startTime)
 

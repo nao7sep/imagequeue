@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { loadConfig } from '../config'
 import { getLightProvider } from '../text-ai'
 import { log, serializeError } from '../logger'
+import { withProviderRetry } from '../provider-retry'
 
 // Generates a filename slug from a prompt using the configured Text AI's
 // light tier. Falls back to nanoid on any failure, if the AI is not
@@ -16,11 +17,11 @@ export async function generateSlug(prompt: string, signal: AbortSignal): Promise
 
   try {
     const systemPrompt = config.prompts.slug.replace(/\{\{PROMPT\}\}/i, prompt)
-    const result = await handle.provider.ask({
+    const result = await withProviderRetry((attemptSignal) => handle.provider.ask({
       messages: [{ role: 'user', text: systemPrompt }],
       timeoutMs: handle.timeoutMs,
-      signal,
-    })
+      signal: attemptSignal,
+    }), { signal, timeoutMs: handle.timeoutMs })
 
     const slug = result.text.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 
