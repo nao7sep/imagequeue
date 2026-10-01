@@ -4,6 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElaborator, updateElaborator, deleteElaborator, resetElaborators, drainElaboratorRecoveryNotices, listElaborators } from '../../src/main/elaborators'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
+import { multiline, singleLine } from '../../src/shared/textCleanup'
 
 describe('elaborator sets', () => {
   let root: string
@@ -50,6 +51,34 @@ describe('elaborator sets', () => {
     expect(stored()).toEqual({ composition })
     expect(listElaborators().filter((item) => item.kind === 'style')).toEqual(initial.filter((item) => item.kind === 'style'))
   })
+  it('removes a kind edited back to its shipped templates, and the file with its last key', () => {
+    const item = listElaborators().find((row) => row.kind === 'composition')!
+    updateElaborator(item.id, { template: 'changed' })
+    expect(Object.keys(stored())).toEqual(['composition'])
+    updateElaborator(item.id, { template: `${item.template}  \r\n` })
+    expect(fs.existsSync(file())).toBe(false)
+  })
+  it('never rewrites the file on a reset that would not change it', () => {
+    resetElaborators()
+    expect(fs.existsSync(file())).toBe(false)
+    createElaborator({ kind: 'style', name: 'My style', template: 'My template' })
+    fs.utimesSync(file(), new Date(2000, 0, 1), new Date(2000, 0, 1))
+    resetElaborators('composition')
+    expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
+  })
+  it('drops an untouched kind equal to its shipped templates at the next save of the other kind', () => {
+    const shipped = listElaborators()
+    fs.writeFileSync(file(), JSON.stringify({ composition: shipped.filter((item) => item.kind === 'composition') }))
+    createElaborator({ kind: 'style', name: 'My style', template: 'My template' })
+    expect(Object.keys(stored())).toEqual(['style'])
+  })
+  it('keeps every shipped template in its cleaned form', () => {
+    for (const item of listElaborators()) {
+      expect(item.name).toBe(singleLine(item.name))
+      expect(item.description).toBe(singleLine(item.description ?? ''))
+      expect(item.template).toBe(multiline(item.template))
+    }
+  })
   it('accepts an empty kind as an authored empty list', () => {
     fs.writeFileSync(file(), JSON.stringify({ style: [] }))
     expect(listElaborators().some((item) => item.kind === 'style')).toBe(false)
@@ -59,6 +88,9 @@ describe('elaborator sets', () => {
     fs.writeFileSync(file(), JSON.stringify({ style: [{ kind: 'wrong' }] }))
     expect(listElaborators()).toEqual(initial)
     expect(stored()).toEqual({ style: [{ kind: 'wrong' }] })
+    const created = createElaborator({ kind: 'composition', name: 'Mine', template: 'Mine' })
+    expect(stored().style).toEqual([{ kind: 'wrong' }])
+    expect(stored().composition).toContainEqual(created)
   })
   it('quarantines bad JSON and leaves the live file absent', () => {
     fs.writeFileSync(file(), '{ invalid')

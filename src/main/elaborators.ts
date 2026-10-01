@@ -7,6 +7,7 @@ import { log, serializeError } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
 import { utcStampForFilename } from '../shared/utc-stamp'
+import { multiline, singleLine } from '../shared/textCleanup'
 
 function getElaboratorsFilePath(): string {
   ensureDataDir()
@@ -295,7 +296,25 @@ type ElaboratorSets = Partial<Record<ElaboratorKind, unknown>>
 const kinds: ElaboratorKind[] = ['composition', 'style']
 const warnedSets = new Set<ElaboratorKind>()
 
-function readFile(): ElaboratorSets {
+function isElaboratorSet(items: unknown, kind: ElaboratorKind): items is Elaborator[] {
+  return Array.isArray(items) && items.every((item) => isElaborator(item) && item.kind === kind)
+}
+
+// An elaborator as it is compared and stored (text-cleanup-conventions): name
+// and description single-line, template multiline, an empty description absent.
+function cleanElaborator(item: Elaborator): Elaborator {
+  const description = item.description === undefined ? '' : singleLine(item.description)
+  return {
+    id: item.id,
+    kind: item.kind,
+    name: singleLine(item.name),
+    ...(description ? { description } : {}),
+    template: multiline(item.template),
+  }
+}
+
+// The file as it is now: every key it holds, or nothing when it is absent.
+function readFile(): Record<string, unknown> {
   const file = getElaboratorsFilePath()
   if (!fs.existsSync(file)) return {}
   let parsed: unknown
@@ -311,17 +330,34 @@ function readFile(): ElaboratorSets {
     recoveryNotices.push({ kind: 'recovered', path: movedTo })
     return {}
   }
-  const stored: ElaboratorSets = {}
-  for (const kind of kinds) {
-    const items = (parsed as Record<string, unknown>)[kind]
-    if (items === undefined) continue
-    stored[kind] = items
-  }
-  return stored
+  return parsed as Record<string, unknown>
 }
 
-function writeFile(stored: ElaboratorSets): void {
-  writeJsonAtomic(getElaboratorsFilePath(), stored, true)
+/**
+ * The one owner of what elaborators.json holds. Each kind is one set, stored,
+ * cleaned, only while it differs from the shipped templates; a set equal to them
+ * has its key removed, whether or not this save changed it. A kind this save
+ * leaves out is taken from the file as it is now; a copy there the reader
+ * rejected stays as the user left it. A result equal to the file writes nothing,
+ * and a result with no keys removes the file.
+ */
+function saveSets(changed: Partial<Record<ElaboratorKind, Elaborator[]>>): void {
+  const current = readFile()
+  const next: ElaboratorSets = {}
+  for (const kind of kinds) {
+    const items = changed[kind] ?? current[kind]
+    if (items === undefined) continue
+    if (!isElaboratorSet(items, kind)) {
+      next[kind] = items
+      continue
+    }
+    const cleaned = items.map(cleanElaborator)
+    if (!valuesEqual(cleaned, defaultElaborators(kind))) next[kind] = cleaned
+  }
+  if (valuesEqual(next, current)) return
+  const file = getElaboratorsFilePath()
+  if (Object.keys(next).length > 0) writeJsonAtomic(file, next, true)
+  else fs.rmSync(file, { force: true })
 }
 
 export function listElaborators(): Elaborator[] {
@@ -329,7 +365,7 @@ export function listElaborators(): Elaborator[] {
   return kinds.flatMap((kind) => {
     const items = stored[kind]
     if (items === undefined) return defaultElaborators(kind)
-    if (Array.isArray(items) && items.every((item) => isElaborator(item) && item.kind === kind)) return items as Elaborator[]
+    if (isElaboratorSet(items, kind)) return items
     if (!warnedSets.has(kind)) {
       warnedSets.add(kind)
       log('warn', 'Invalid elaborator set; using shipped templates', { key: kind })
@@ -339,9 +375,7 @@ export function listElaborators(): Elaborator[] {
 }
 
 function writeKind(kind: ElaboratorKind, items: Elaborator[]): void {
-  const stored = readFile()
-  stored[kind] = items.filter((item) => item.kind === kind)
-  writeFile(stored)
+  saveSets({ [kind]: items.filter((item) => item.kind === kind) })
 }
 
 export function createElaborator(input: {
@@ -401,10 +435,7 @@ export function deleteElaborator(id: string): boolean {
 }
 
 export function resetElaborators(kind?: ElaboratorKind): Elaborator[] {
-  const stored = readFile()
-  if (kind) delete stored[kind]
-  else for (const key of kinds) delete stored[key]
-  if (fs.existsSync(getElaboratorsFilePath())) writeFile(stored)
+  saveSets(Object.fromEntries((kind ? [kind] : kinds).map((each) => [each, defaultElaborators(each)])))
   return listElaborators()
 }
 

@@ -5,7 +5,7 @@ import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { resolveStorageRoot } from './storage-root'
-import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject } from './config-sets'
+import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
 
 let cachedConfig: AppConfig | null = null
@@ -80,30 +80,46 @@ export function loadConfig(): AppConfig {
  * becomes the cached config only once the write succeeded — a failed save
  * leaves the running app on the settings that are on disk.
  */
-export function updateConfig(apply: (draft: AppConfig) => void, resetSets: string[] = []): AppConfig {
+export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
   const draft = structuredClone(loadConfig())
   apply(draft)
-  saveConfig(draft, resetSets)
+  saveConfig(draft)
   return loadConfig()
 }
 
-export function saveConfig(config: AppConfig, resetSets: string[] = []): void {
+/**
+ * The one owner of what config.json holds. Every known set is stored, cleaned,
+ * only while it differs from its built-in; a set equal to its built-in has its
+ * key removed, whether or not this save changed it. A set this save leaves
+ * unchanged is taken from the file as it is now; a copy there the reader
+ * rejected stays as the user left it. A changed set of the wrong shape rejects
+ * the save. A result equal to the file writes nothing, and a result with no
+ * keys removes the file.
+ */
+export function saveConfig(config: AppConfig): void {
   const before = loadConfig()
-  const known = configSetDefaults()
-  for (const key of resetSets) {
-    if (key !== 'prompts.slug' && key !== 'brainstorm') throw new Error(`Cannot reset unsupported config set: ${key}`)
-  }
-  const changed = Object.keys(known).filter((key) => !valuesEqual(readConfigSet(before, key), readConfigSet(config, key)))
-  if (changed.length === 0 && resetSets.length === 0) return
   const current = readStoredMap()
-  if (changed.every((key) => resetSets.includes(key)) && resetSets.every((key) => readPath(current, key) === undefined)) return
-  const stored: Record<string, unknown> = {}
-  for (const key of Object.keys(known)) {
-    if (resetSets.includes(key)) continue
-    const value = changed.includes(key) ? readConfigSet(config, key) : readPath(current, key)
-    if (value !== undefined) writePath(stored, key, value)
+  const next: Record<string, unknown> = {}
+  for (const [key, builtIn] of Object.entries(configSetDefaults())) {
+    let value = readConfigSet(config, key)
+    if (valuesEqual(value, readConfigSet(before, key))) {
+      value = readPath(current, key)
+      if (value === undefined) continue
+      if (!hasSetShape(value, builtIn, key)) {
+        writePath(next, key, value)
+        continue
+      }
+    } else if (!hasSetShape(value, builtIn, key)) {
+      throw new Error(`Cannot save invalid config set: ${key}`)
+    }
+    const cleaned = cleanConfigSet(key, value)
+    if (!equalsBuiltIn(key, cleaned, builtIn)) writePath(next, key, cleaned)
   }
-  writeJsonAtomic(getConfigPath(), stored, true)
-  cachedConfig = effectiveConfig(stored)
-  log('info', 'Config saved', { path: getConfigPath() })
+  if (!valuesEqual(next, current)) {
+    const file = getConfigPath()
+    if (Object.keys(next).length > 0) writeJsonAtomic(file, next, true)
+    else fs.rmSync(file, { force: true })
+    log('info', 'Config saved', { path: file })
+  }
+  cachedConfig = effectiveConfig(next)
 }

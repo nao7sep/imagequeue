@@ -62,7 +62,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [errorMessage, setErrorMessage] = useState<MessageKey | null>(null)
-  const [resetSlug, setResetSlug] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const handleBrowseFailure = useCallback((error: unknown): void => {
     setErrorMessage('settings.browseFailed')
@@ -105,9 +104,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
 
   const dirty = useMemo(
     () =>
-      resetSlug || Object.keys(changedKeys).length > 0 ||
+      Object.keys(changedKeys).length > 0 ||
       (config && baseConfig ? JSON.stringify(config) !== JSON.stringify(baseConfig) : false),
-    [config, baseConfig, changedKeys, resetSlug]
+    [config, baseConfig, changedKeys]
   )
 
   const handleSave = async (): Promise<void> => {
@@ -125,7 +124,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         ? cleaned.extraModelIds : Object.fromEntries(Object.entries((cleaned.extraModelIds ?? {}) as Record<string, string[]>).map(
         ([provider, ids]) => [provider, [...new Set(ids.map((id) => id.trim()).filter(Boolean))]],
       ))
-      await saveChangedSettings(baseConfig, { ...cleaned, extraModelIds }, resetSlug ? ['prompts.slug'] : [])
+      await saveChangedSettings(baseConfig, { ...cleaned, extraModelIds })
       // Keys second, and only when changed: this write can add or remove a
       // column, so it is the one that resizes the window.
       if (Object.keys(changedKeys).length > 0) {
@@ -623,7 +622,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <div className="settings-field">
             <label>{t('settings.slugTemplate')}</label>
-            <textarea rows={5} value={prompts.slug} onChange={(e) => { setResetSlug(false); setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } }) }} />
+            <textarea rows={5} value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
           </div>
           <div className="settings-field-reset">
             <button
@@ -639,7 +638,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 if (!ok) return
                 const def = await window.electronAPI.promptsGetDefaultSlug()
                 setConfig({ ...config, prompts: { ...prompts, slug: def } })
-                setResetSlug(true)
               }}
             >
               {t('settings.resetSlug')}

@@ -1,6 +1,9 @@
-import type { AppConfig } from './types'
+import type { AppConfig, BrainstormConfig } from './types'
 import { createDefaultConfig } from './defaults'
 import { isLanguage } from '../../shared/i18n/languages'
+import { AI_ROLES, TEXT_PROVIDERS } from '../../shared/ai-models'
+import { multiline, singleLine } from '../../shared/textCleanup'
+import { valuesEqual } from '../settings-changes'
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -91,4 +94,42 @@ export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean
     return isObject(value) && Object.entries(builtIn).every(([member, expected]) => hasSetShape(value[member], expected))
   }
   return typeof value === typeof builtIn && (typeof value !== 'number' || Number.isFinite(value))
+}
+
+const MODEL_ID_SETS = new Set<string>(TEXT_PROVIDERS.flatMap((provider) => AI_ROLES.map((role) => `${provider}.${role.id}`)))
+// Filesystem paths are identity values, stored and compared exactly as given.
+const PATH_SETS = new Set<string>([
+  'general.export_dir', 'notifications.success_file', 'notifications.failure_file', 'image_backends.drawthings.models_dir',
+])
+
+function cleanEach(record: Record<string, string>, clean: (text: string) => string): Record<string, string> {
+  return Object.fromEntries(Object.entries(record).map(([key, text]) => [key, clean(text)]))
+}
+
+// A set's text as it is compared and stored (text-cleanup-conventions): bodies
+// multiline, scalars single-line. Paths and image backend clusters are stored
+// as given.
+// Expects a value of the set's shape.
+export function cleanConfigSet(key: string, value: unknown): unknown {
+  if (key === 'prompts.slug') return multiline(value as string)
+  if (key === 'brainstorm') {
+    const brainstorm = value as BrainstormConfig
+    return {
+      ...brainstorm,
+      templates: cleanEach(brainstorm.templates as unknown as Record<string, string>, (text) => multiline(text)),
+      format_directives: {
+        formats: cleanEach(brainstorm.format_directives.formats, (text) => singleLine(text)),
+        lengths: cleanEach(brainstorm.format_directives.lengths, (text) => singleLine(text)),
+      },
+    }
+  }
+  if (key.endsWith('.defaults') || PATH_SETS.has(key)) return value
+  return typeof value === 'string' ? singleLine(value) : value
+}
+
+// Whether a cleaned set equals its built-in; a model id is compared trimmed and
+// case-insensitive.
+export function equalsBuiltIn(key: string, cleaned: unknown, builtIn: unknown): boolean {
+  if (MODEL_ID_SETS.has(key)) return (cleaned as string).toLowerCase() === (builtIn as string).toLowerCase()
+  return valuesEqual(cleaned, builtIn)
 }
