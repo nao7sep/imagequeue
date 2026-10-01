@@ -6,8 +6,7 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { isObject } from '../config/config-sets'
-import { isTextModel } from '../../shared/model-registry'
-import { PROVIDER_ENDPOINTS, TEXT_PROVIDERS } from '../../shared/ai-models'
+import { PROVIDER_ENDPOINTS, SUPPORTED_MODELS, TEXT_PROVIDERS } from '../../shared/ai-models'
 import type { TextAIBackendId } from '../../shared/types'
 import type { ModelLists } from '../../shared/model-lists'
 import { shutdownSignal } from '../backends/cancellation'
@@ -59,7 +58,7 @@ export async function fetchTextModelIds(provider: TextAIBackendId, endpoint: str
     if (!isObject(body) || !Array.isArray(body.data)) throw new Error('Invalid OpenAI model list')
     for (const row of body.data) if (isObject(row) && typeof row.id === 'string') ids.push(row.id)
   }
-  return [...new Set(ids)].filter((id) => isTextModel(id, provider))
+  return [...new Set(ids)].filter((id) => SUPPORTED_MODELS.some((row) => row.provider === provider && row.id === id.trim().toLowerCase()))
 }
 
 export function refreshModelList(provider: TextAIBackendId, force = false): Promise<ModelLists> {

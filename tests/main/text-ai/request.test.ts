@@ -8,25 +8,24 @@ function reply(body: unknown): Response { return new Response(JSON.stringify(bod
 const opts = { messages: [{ role: 'user' as const, text: 'prompt' }], timeoutMs: 1000, signal: new AbortController().signal }
 
 describe('text adapter outbound contracts', () => {
-  it('routes known OpenAI ids by id at a custom endpoint and generic ids with model/messages only', async () => {
+  it('routes known OpenAI ids by id at a custom endpoint and other ids with only the feature\'s JSON format', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply({ choices: [{ message: { content: '{}' }, finish_reason: 'stop' }] }))
     vi.stubGlobal('fetch', fetchMock)
-    await new OpenAIProvider('gpt-6-luna', 'test-key', 'https://proxy.example/v1', 'slug').ask({ ...opts, schema: {} })
+    await new OpenAIProvider('gpt-6-luna', 'test-key', 'https://proxy.example/v1').ask({ ...opts, schema: {} })
     const known = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
-    expect(known).toMatchObject({ model: 'gpt-6-luna', max_completion_tokens: 2048, reasoning_effort: 'medium', response_format: { type: 'json_object' } })
-    expect(known).not.toHaveProperty('temperature')
-    await new OpenAIProvider('local-id', 'test-key', 'https://proxy.example/v1', 'elaboration').ask({ ...opts, schema: {} })
-    expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string)).toEqual({ model: 'local-id', messages: [{ role: 'user', content: 'prompt' }] })
+    expect(known).toEqual({ model: 'gpt-6-luna', messages: [{ role: 'user', content: 'prompt' }], reasoning_effort: 'medium', response_format: { type: 'json_object' } })
+    await new OpenAIProvider('local-id', 'test-key', 'https://proxy.example/v1').ask({ ...opts, schema: {} })
+    expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string)).toEqual({ model: 'local-id', messages: [{ role: 'user', content: 'prompt' }], response_format: { type: 'json_object' } })
   })
-  it('uses the Gemini endpoint with 3.x thinking levels, 2.5 budget, and the role ceiling', async () => {
+  it('uses the Gemini endpoint with the 3.x thinking level and sends an id with no row nothing model-specific', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply({ candidates: [{ content: { parts: [{ text: '{}' }] }, finishReason: 'STOP' }] }))
     vi.stubGlobal('fetch', fetchMock)
-    await new GeminiProvider('gemini-3.8-flash', 'test-key', 'https://proxy.example', 'elaboration').ask({ ...opts, schema: { type: 'object' } })
+    await new GeminiProvider('gemini-3.8-flash', 'test-key', 'https://proxy.example').ask({ ...opts, schema: { type: 'object' } })
     expect(fetchMock.mock.calls[0][0]).toBe('https://proxy.example/v1beta/models/gemini-3.8-flash:generateContent')
     const known = JSON.parse(fetchMock.mock.calls[0][1]?.body as string)
-    expect(known.generationConfig).toEqual({ maxOutputTokens: 16384, thinkingConfig: { thinkingLevel: 'MEDIUM' }, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } })
-    await new GeminiProvider('gemini-2.5-pro', 'test-key', '', 'slug').ask(opts)
-    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string).generationConfig).toEqual({ maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: -1 } })
+    expect(known.generationConfig).toEqual({ thinkingConfig: { thinkingLevel: 'MEDIUM' }, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } })
+    await new GeminiProvider('gemini-2.5-pro', 'test-key', '').ask(opts)
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string).generationConfig).toEqual({})
   })
   it('lets a typed unknown Gemini id reach the provider and keeps its cleaned message', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: { code: 404, message: 'No model my-custom-id', status: 'NOT_FOUND' } }),

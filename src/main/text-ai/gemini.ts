@@ -1,6 +1,5 @@
 import { ApiError, GoogleGenAI } from '@google/genai'
 import type { AskOptions, AskResult, TextAIProvider } from './types'
-import type { TextRole } from '../../shared/ai-models'
 import { PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 import { extractJson } from './json'
 import { geminiTextParams } from './request'
@@ -10,7 +9,7 @@ import { geminiReasonField, reasonFromBody } from '../provider-reason'
 
 export class GeminiProvider implements TextAIProvider {
   constructor(private model: string, private apiKey: string,
-    private endpoint = PROVIDER_ENDPOINTS.gemini, private role: TextRole = 'elaboration') {}
+    private endpoint = PROVIDER_ENDPOINTS.gemini) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
     // The app owns retries; the SDK performs exactly one attempt.
@@ -22,7 +21,7 @@ export class GeminiProvider implements TextAIProvider {
       model: this.model,
       contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
       config: {
-        ...geminiTextParams(this.model, this.role, opts.schema),
+        ...geminiTextParams(this.model, opts.schema),
         ...(opts.signal ? { abortSignal: opts.signal } : {}),
       },
     }).catch((error: unknown) => {

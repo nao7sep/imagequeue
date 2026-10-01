@@ -28,8 +28,8 @@ export function buildProviderHandle(role: TextRole): ProviderHandle | null {
   const { endpoint, [role]: modelId } = config[backend]
   return {
     provider: backend === 'gemini'
-      ? new GeminiProvider(modelId, apiKey, endpoint, role)
-      : new OpenAIProvider(modelId, apiKey, endpoint, role),
+      ? new GeminiProvider(modelId, apiKey, endpoint)
+      : new OpenAIProvider(modelId, apiKey, endpoint),
     timeoutMs: config.text_ai[backend].timeout_ms,
     backend,
     modelId,

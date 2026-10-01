@@ -1,6 +1,5 @@
 import OpenAI, { APIError } from 'openai'
 import type { AskOptions, AskResult, TextAIProvider } from './types'
-import type { TextRole } from '../../shared/ai-models'
 import { PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 import { extractJson } from './json'
 import { openaiTextParams } from './request'
@@ -10,7 +9,7 @@ import { openaiReasonField, reasonFromParsed } from '../provider-reason'
 
 export class OpenAIProvider implements TextAIProvider {
   constructor(private model: string, private apiKey: string,
-    private endpoint = PROVIDER_ENDPOINTS.openai, private role: TextRole = 'elaboration') {}
+    private endpoint = PROVIDER_ENDPOINTS.openai) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
     const client = new OpenAI({
@@ -20,7 +19,7 @@ export class OpenAIProvider implements TextAIProvider {
     const response = await client.chat.completions.create({
       model: this.model,
       messages: opts.messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
-      ...openaiTextParams(this.model, this.role, opts.schema),
+      ...openaiTextParams(this.model, opts.schema),
     }, { signal: opts.signal }).catch((error: unknown) => {
       if (error instanceof APIError && typeof error.status === 'number') {
         throw new ProviderHttpError(error.message, error.status,
