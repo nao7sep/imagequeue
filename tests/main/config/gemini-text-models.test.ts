@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../../src/main/config/types'
 import { GEMINI_TEXT_MODELS } from '../../../src/shared/models'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 // The Gemini text model list is now app-owned and CLOSED (GEMINI_TEXT_MODELS): it has one
 // home, in code, and is not stored in config.json. The config carries only the two tier

@@ -9,7 +9,7 @@ import {
   setStoredApiKey
 } from '../../../src/main/config/api-keys-store'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 const isPosix = process.platform !== 'win32'
 
 // Every env var the store may consult, cleared per test so a host that happens

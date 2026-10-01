@@ -27,9 +27,9 @@ let home: string
 let prevHome: string | undefined
 
 beforeEach(() => {
-  prevHome = process.env.IMAGEQUEUE_HOME
+  prevHome = process.env.IMAGEQUEUE_DATA_DIR
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-svc-'))
-  process.env.IMAGEQUEUE_HOME = home
+  process.env.IMAGEQUEUE_DATA_DIR = home
   // Seed the canonical config directly so loadConfig does not perform a managed-
   // text first-run write and open the process-wide backup database during this
   // isolated dependency-service test.
@@ -40,8 +40,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  if (prevHome === undefined) delete process.env.IMAGEQUEUE_HOME
-  else process.env.IMAGEQUEUE_HOME = prevHome
+  if (prevHome === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
+  else process.env.IMAGEQUEUE_DATA_DIR = prevHome
   fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 })
 

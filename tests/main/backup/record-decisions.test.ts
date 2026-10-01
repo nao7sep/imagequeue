@@ -22,7 +22,7 @@ import { closeBackupStore } from '../../../src/main/backup/backup-store'
 // the bin/ CLI sidecar are the other no-record sites; they are exercised by their own stores' tests
 // and, for the secret/binary paths, never route through this choke point at all.)
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 /** Distinct recorded paths in the store, or [] when the store file was never created. */
 function recordedPaths(root: string): string[] {

@@ -12,14 +12,14 @@ let home: string
 let prevHome: string | undefined
 
 beforeEach(() => {
-  prevHome = process.env.IMAGEQUEUE_HOME
+  prevHome = process.env.IMAGEQUEUE_DATA_DIR
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-store-'))
-  process.env.IMAGEQUEUE_HOME = home
+  process.env.IMAGEQUEUE_DATA_DIR = home
 })
 
 afterEach(() => {
-  if (prevHome === undefined) delete process.env.IMAGEQUEUE_HOME
-  else process.env.IMAGEQUEUE_HOME = prevHome
+  if (prevHome === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
+  else process.env.IMAGEQUEUE_DATA_DIR = prevHome
   fs.rmSync(home, { recursive: true, force: true })
 })
 

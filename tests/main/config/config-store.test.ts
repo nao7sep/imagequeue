@@ -68,7 +68,7 @@ describe('deepMergeDefaults', () => {
 // (the test above pins that), so a removed schema key would otherwise live in the
 // user's config forever. These prove the removals are actually swept.
 describe('legacy config keys', () => {
-  const ENV_VAR = 'IMAGEQUEUE_HOME'
+  const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
   let tmpRoot: string
   const originalHome = process.env[ENV_VAR]
 

@@ -7,10 +7,10 @@ import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
 import { writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 // config-store persists config.json under the storage root via writeJsonAtomic
-// (temp file + rename). These tests isolate the data dir with IMAGEQUEUE_HOME
+// (temp file + rename). These tests isolate the data dir with IMAGEQUEUE_DATA_DIR
 // and assert the write is atomic: valid JSON lands on disk and no orphaned
 // *.tmp artifact is left behind, mirroring the elaborators atomicity test.
 describe('config store (atomic write of config.json)', () => {
@@ -24,7 +24,7 @@ describe('config store (atomic write of config.json)', () => {
 
   afterEach(() => {
     // config.json is a recorded managed-text write; close the store singleton so the next test re-opens
-    // it against its own fresh IMAGEQUEUE_HOME rather than the previous, now-deleted throwaway root.
+    // it against its own fresh IMAGEQUEUE_DATA_DIR rather than the previous, now-deleted throwaway root.
     closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome

@@ -8,7 +8,7 @@ import { resolveStorageRoot } from './storage-root'
 
 let cachedConfig: AppConfig | null = null
 
-// The storage root is resolved lazily (honoring IMAGEQUEUE_HOME) rather than
+// The storage root is resolved lazily (honoring IMAGEQUEUE_DATA_DIR) rather than
 // frozen into a module-level constant at import time, so the override is read
 // once the environment is fully known. resolveStorageRoot mkdir -p's the root.
 export function getDataDir(): string {
@@ -28,7 +28,7 @@ export function getLogsDir(): string {
 export function ensureDataDir(): void {
   // resolveStorageRoot already creates the root (and throws on an unusable
   // override); calling it here keeps ensureDataDir an idempotent startup
-  // checkpoint that fails loudly on an unusable IMAGEQUEUE_HOME.
+  // checkpoint that fails loudly on an unusable IMAGEQUEUE_DATA_DIR.
   resolveStorageRoot()
 }
 

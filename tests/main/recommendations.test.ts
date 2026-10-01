@@ -31,16 +31,16 @@ function writeConfigs(file: string, specs: unknown[]): void {
 }
 
 beforeEach(() => {
-  prevHome = process.env.IMAGEQUEUE_HOME
+  prevHome = process.env.IMAGEQUEUE_DATA_DIR
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-rec-'))
-  process.env.IMAGEQUEUE_HOME = home
+  process.env.IMAGEQUEUE_DATA_DIR = home
   modelsDir = path.join(home, 'models')
 })
 
 afterEach(() => {
   closeBackupStore()
-  if (prevHome === undefined) delete process.env.IMAGEQUEUE_HOME
-  else process.env.IMAGEQUEUE_HOME = prevHome
+  if (prevHome === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
+  else process.env.IMAGEQUEUE_DATA_DIR = prevHome
   fs.rmSync(home, { recursive: true, force: true })
 })
 

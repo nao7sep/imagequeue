@@ -44,7 +44,7 @@ export class RendererContents extends EventEmitter {
 export type App = Awaited<ReturnType<typeof startApp>>
 
 export async function startApp(home: string) {
-  process.env.IMAGEQUEUE_HOME = home
+  process.env.IMAGEQUEUE_DATA_DIR = home
   handlers.clear()
   const config = await import('../../../src/main/config')
   const { initLogger } = await import('../../../src/main/logger')

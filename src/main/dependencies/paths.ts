@@ -1,5 +1,5 @@
 // Storage layout for the app-owned managed dependencies, all under the storage
-// root (so they honor IMAGEQUEUE_HOME):
+// root (so they honor IMAGEQUEUE_DATA_DIR):
 //
 //   bin/draw-things-cli        the persisted CLI binary
 //   bin/draw-things-cli.json   sidecar: the release tag + hash recorded at install

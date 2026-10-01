@@ -8,7 +8,7 @@ import { setStoredApiKey } from '../../../src/main/config/api-keys-store'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../src/shared/types'
 import type { AppConfig } from '../../../src/main/config/types'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 describe('summarizeConfig', () => {
   let tmpRoot: string

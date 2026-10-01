@@ -64,7 +64,7 @@ vi.mock('../../../src/main/local-cli', async (importOriginal) => ({
   resolveModelsDir: () => '/fake/models',
 }))
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 describe('Draw Things output staging', () => {
   let tmpRoot: string

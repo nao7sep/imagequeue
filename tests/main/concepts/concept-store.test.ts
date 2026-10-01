@@ -22,12 +22,12 @@ import {
 } from '../../../src/main/concepts/concept-store'
 
 // The concept ledger, tested against a real SQLite file under a throwaway
-// IMAGEQUEUE_HOME. The draw rules ARE the dedup mechanism — no similarity
+// IMAGEQUEUE_DATA_DIR. The draw rules ARE the dedup mechanism — no similarity
 // scoring exists anywhere — so what these tests pin is the entire guarantee:
 // never-used first, nothing twice within the window or session, and one draw
 // per probe cluster while the window covers it.
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 // A window wide enough that every use in a test stays inside it.
 const WIDE = 1_000_000

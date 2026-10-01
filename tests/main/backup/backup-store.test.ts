@@ -7,14 +7,14 @@ import { record, closeBackupStore } from '../../../src/main/backup/backup-store'
 import * as logger from '../../../src/main/logger'
 
 // The write-through data-backup store (data-backup conventions). These tests pin the store directly
-// through its public record()/closeBackupStore() API, isolating the storage root with IMAGEQUEUE_HOME
+// through its public record()/closeBackupStore() API, isolating the storage root with IMAGEQUEUE_DATA_DIR
 // and reading ~/.imagequeue/backups.sqlite3 back with a second node:sqlite handle. They assert:
 //   - content is a byte-identical BLOB (a CR/LF pair AND a non-UTF-8 byte prove raw-bytes fidelity),
 //   - written_at_utc is the serialized ISO-8601-ms form, NOT the yyyymmdd-hhmmss filename stamp,
 //   - dedup skips an unchanged re-save, while a changed save and a revert each insert a row,
 //   - best-effort: an injected store failure never throws, logs one warn, and never touches the caller.
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 /** Open a fresh read-only handle on the store file and return every row, oldest first. */
 function readAllRows(storeFile: string): Array<{
@@ -53,7 +53,7 @@ describe('write-through backup store', () => {
     vi.restoreAllMocks()
   })
 
-  it('creates backups.sqlite3 under the resolved root (honoring IMAGEQUEUE_HOME)', () => {
+  it('creates backups.sqlite3 under the resolved root (honoring IMAGEQUEUE_DATA_DIR)', () => {
     record(path.join(tmpRoot, 'config.json'), Buffer.from('{}'))
     closeBackupStore()
     expect(fs.existsSync(storeFile)).toBe(true)

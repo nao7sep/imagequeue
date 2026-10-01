@@ -11,7 +11,7 @@ import { SECRET_IDS } from '../../../src/shared/types'
 // different questions. settings:getApiKeyPresence answers the second; these
 // tests hold the two apart so a future refactor cannot quietly merge them.
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 const KEY_ENV = 'OPENAI_IMAGE_API_KEY'
 // Every variable resolution consults. The full gate exports the real ones, so
 // these cases clear them all and restore them afterwards: what a machine

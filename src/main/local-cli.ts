@@ -174,7 +174,7 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
 
 /**
  * ImageQueue's private models directory, under the storage root and so honoring
- * IMAGEQUEUE_HOME. Used when no `drawthings.models_dir` is configured, and shown
+ * IMAGEQUEUE_DATA_DIR. Used when no `drawthings.models_dir` is configured, and shown
  * in the settings UI as the default.
  */
 export function getDefaultModelsDir(): string {

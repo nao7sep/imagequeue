@@ -11,11 +11,11 @@ import {
 import type { Elaborator } from '../../src/shared/types'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 // elaborators.ts persists elaborators.json under the storage root via
 // writeJsonAtomic (temp file + rename). These tests isolate the data dir with
-// IMAGEQUEUE_HOME and assert three things: the store is materialized at startup
+// IMAGEQUEUE_DATA_DIR and assert three things: the store is materialized at startup
 // (write-if-absent, mirroring config.json), the store is written atomically
 // (valid JSON, no orphaned *.tmp), and a corrupt file is quarantined then
 // reseeded rather than silently discarded.
@@ -31,7 +31,7 @@ describe('elaborators store', () => {
 
   afterEach(() => {
     // Close the write-through backup store's singleton so the next test re-opens it against its own
-    // fresh IMAGEQUEUE_HOME (elaborators.json is a recorded managed-text write; without this the store
+    // fresh IMAGEQUEUE_DATA_DIR (elaborators.json is a recorded managed-text write; without this the store
     // would stay open on the previous, now-deleted throwaway root). See backup/backup-store.ts.
     closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
@@ -47,7 +47,7 @@ describe('elaborators store', () => {
   // editable elaborators.json (present in the first-run backup) rather than a
   // phantom held only in memory.
   describe('materializeElaborators (first-run write-if-absent)', () => {
-    it('writes elaborators.json on a clean IMAGEQUEUE_HOME (the launch-then-quit case)', () => {
+    it('writes elaborators.json on a clean IMAGEQUEUE_DATA_DIR (the launch-then-quit case)', () => {
       const filePath = path.join(tmpRoot, 'elaborators.json')
 
       // Fresh root: nothing on disk yet — the launch-then-quit failure this fix

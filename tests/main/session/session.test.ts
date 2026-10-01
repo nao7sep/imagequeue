@@ -32,7 +32,7 @@ describe('formatTimestampMs', () => {
 })
 
 describe('createSessionDir (session directory naming)', () => {
-  const ENV_VAR = 'IMAGEQUEUE_HOME'
+  const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
   const originalHome = process.env[ENV_VAR]
   let tmpRoot: string
 

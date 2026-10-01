@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { expandUserPath, getDefaultModelsDir, resolveModelsDir } from '../../src/main/local-cli'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 // The models directory is no longer pinned to ~/.imagequeue/models at import
 // time (Phase-2 fix). getDefaultModelsDir() now derives it lazily from
-// getDataDir(), so it follows IMAGEQUEUE_HOME, and resolveModelsDir() falls back
+// getDataDir(), so it follows IMAGEQUEUE_DATA_DIR, and resolveModelsDir() falls back
 // to it whenever drawthings.models_dir is blank (the default config state).
-describe('models directory follows IMAGEQUEUE_HOME', () => {
+describe('models directory follows IMAGEQUEUE_DATA_DIR', () => {
   let tmpRoot: string
   const originalHome = process.env[ENV_VAR]
 
@@ -30,7 +30,7 @@ describe('models directory follows IMAGEQUEUE_HOME', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('getDefaultModelsDir() resolves under the IMAGEQUEUE_HOME override, not ~/.imagequeue', () => {
+  it('getDefaultModelsDir() resolves under the IMAGEQUEUE_DATA_DIR override, not ~/.imagequeue', () => {
     const expected = path.join(tmpRoot, 'models')
     expect(getDefaultModelsDir()).toBe(expected)
     // Guard against a regression to the old hardcoded private dir.

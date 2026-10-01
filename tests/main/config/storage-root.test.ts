@@ -4,9 +4,9 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveStorageRoot } from '../../../src/main/config/storage-root'
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
-describe('resolveStorageRoot (IMAGEQUEUE_HOME)', () => {
+describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
   let tmpBase: string
   const original = process.env[ENV_VAR]
 
@@ -57,7 +57,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_HOME)', () => {
     const filePath = path.join(tmpBase, 'not-a-dir')
     fs.writeFileSync(filePath, 'x')
     process.env[ENV_VAR] = filePath
-    expect(() => resolveStorageRoot()).toThrow(/IMAGEQUEUE_HOME/)
+    expect(() => resolveStorageRoot()).toThrow(/IMAGEQUEUE_DATA_DIR/)
   })
 
   // The override value is run through env-reference expansion before it is made
@@ -110,7 +110,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_HOME)', () => {
       delete process.env[REF_VAR]
       process.env[ENV_VAR] = '$' + REF_VAR
 
-      expect(() => resolveStorageRoot()).toThrow(/IMAGEQUEUE_HOME/)
+      expect(() => resolveStorageRoot()).toThrow(/IMAGEQUEUE_DATA_DIR/)
       expect(() => resolveStorageRoot()).toThrow(/expands to an empty path/)
     })
 

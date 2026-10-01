@@ -10,7 +10,7 @@ import type { AskOptions, AskResult, TextAIProvider } from '../../src/main/text-
 import type { Elaborator, ElaboratorKind } from '../../src/shared/types'
 
 // Integration tests: the real orchestrator against the REAL concept store (a
-// throwaway IMAGEQUEUE_HOME) and a scripted provider that answers each planning
+// throwaway IMAGEQUEUE_DATA_DIR) and a scripted provider that answers each planning
 // ask by its message markers. What is pinned here is the mechanism itself:
 // every prose call runs in a FRESH context (the attractor kill), no concept
 // value is assigned twice within a session, and a use is recorded only for
@@ -56,7 +56,7 @@ vi.mock('../../src/main/text-ai/templates', () => ({
   }),
 }))
 
-const ENV_VAR = 'IMAGEQUEUE_HOME'
+const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
 const elaboratorFor = (kind: ElaboratorKind): Elaborator => ({
   id: kind, kind, name: kind, template: kind,

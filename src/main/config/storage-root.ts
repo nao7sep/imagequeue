@@ -3,7 +3,7 @@ import os from 'os'
 import path from 'path'
 
 // Resolves the single storage root per the storage-path conventions. The root
-// is the IMAGEQUEUE_HOME override when it is set and non-empty (its value is
+// is the IMAGEQUEUE_DATA_DIR override when it is set and non-empty (its value is
 // expanded for `~` and environment references, then made absolute against the
 // HOME directory — never the working directory), otherwise the default
 // `~/.imagequeue`. An override that cannot be created/used is a reported startup
@@ -12,7 +12,7 @@ import path from 'path'
 // Resolved lazily (called on demand, not frozen into a module constant at import
 // time) so the environment is fully known by the time the root is computed.
 
-const HOME_ENV_VAR = 'IMAGEQUEUE_HOME'
+const HOME_ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 const DEFAULT_DIR_NAME = '.imagequeue'
 
 // Expand `$VAR` / `${VAR}` (POSIX) and `%VAR%` (Windows) references against the
@@ -29,7 +29,7 @@ function expandEnvReferences(value: string): string {
   })
 }
 
-// Resolve the storage root, honoring IMAGEQUEUE_HOME. A relative override is
+// Resolve the storage root, honoring IMAGEQUEUE_DATA_DIR. A relative override is
 // made absolute against the HOME directory (never process.cwd()); the default
 // root is `<homeDir>/.imagequeue`. The chosen root is created (mkdir -p); if it
 // cannot be created or is not a usable directory, this throws a clear startup
