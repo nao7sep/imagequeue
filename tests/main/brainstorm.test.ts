@@ -365,6 +365,22 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(hasActiveBrainstorms()).toBe(false)
   })
 
+  it('makes max_retries_per_turn + 1 attempts on a repeated 503', async () => {
+    mockKnobs.maxRetries = 5
+    mockKnobs.backoffMs = [0]
+    let proseAttempts = 0
+    const error = Object.assign(new Error('unavailable'), { status: 503 })
+    installScriptedProvider({
+      onProseCall: () => {
+        proseAttempts++
+        throw error
+      },
+    })
+
+    await expect(brainstormPrompts(request({ requestId: 'retry-cap', count: 1 }))).rejects.toBe(error)
+    expect(proseAttempts).toBe(6)
+  })
+
   // The user waits on elaboration, so a timeout or a 5xx may have been billed:
   // it is reported for the user to retry, never resent by the app.
   it.each([

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TextAIProvider } from '../../../src/main/text-ai/types'
+import type { AskOptions, TextAIProvider } from '../../../src/main/text-ai/types'
 
 // Every elaboration attempt is paid, and the user waits on it. Only a failure that
 // proves the provider did no work is sent again; a timeout, a 5xx or an unusable
@@ -17,12 +17,12 @@ function failingProvider(error: unknown): { provider: TextAIProvider; ask: Retur
   return { provider: { ask } as unknown as TextAIProvider, ask }
 }
 
-function run(provider: TextAIProvider): Promise<unknown> {
+function run(provider: TextAIProvider, timeoutMs = 1000): Promise<unknown> {
   return askJsonWithRetry({
     provider,
     messages: [{ role: 'user', text: 'seed' }],
     schema: {},
-    timeoutMs: 1000,
+    timeoutMs,
     validate: (parsed) => parsed ?? null,
     maxRetries: 3,
     backoffSchedule: [0],
@@ -54,7 +54,7 @@ describe('askJsonWithRetry', () => {
   ])('resends %s, which proves nothing was processed', async (_label, error) => {
     const { provider, ask } = failingProvider(error)
     await expect(run(provider)).rejects.toBe(error)
-    expect(ask).toHaveBeenCalledTimes(3)
+    expect(ask).toHaveBeenCalledTimes(4)
   })
 
   it.each([
@@ -68,6 +68,20 @@ describe('askJsonWithRetry', () => {
     const { provider, ask } = failingProvider(error)
     await expect(run(provider)).rejects.toBe(error)
     expect(ask).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives each attempt its own full provider timeout', async () => {
+    const error = new ProviderHttpError('busy', 503)
+    const ask = vi.fn(async (opts: AskOptions) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, 300)
+        opts.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(opts.signal?.reason) })
+      })
+      if (ask.mock.calls.length === 1) throw error
+      return { text: '{}', parsed: {} }
+    })
+    await expect(run({ ask } as unknown as TextAIProvider, 500)).resolves.toEqual({})
+    expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
   })
 
   it('reports a reply with no usable payload at once', async () => {

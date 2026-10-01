@@ -47,7 +47,7 @@ export async function askJsonWithRetry<T>(options: {
     }
     return value
   }, {
-    signal, timeoutMs, maxAttempts: maxRetries + 1, backoff: backoffSchedule,
+    signal, maxAttempts: maxRetries + 1, backoff: backoffSchedule,
     onRetry: (error, attempt, backoff) => log('warn', 'Brainstorm call failed, retrying', {
       requestId, call: label, attempt, backoff, error: serializeError(error),
     }),

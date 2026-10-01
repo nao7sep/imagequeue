@@ -7,12 +7,18 @@ vi.mock('../../src/main/utils/abortable-delay', () => ({ abortableDelay: delay }
 const signal = () => new AbortController().signal
 
 describe('provider retry boundary', () => {
-  it('caps safe retries at three, including caller-provided larger caps', async () => {
+  it('makes three attempts for a caller with no cap of its own', async () => {
     const error = new ProviderHttpError('busy', 503, 'busy', '60')
     const call = vi.fn(async () => { throw error })
-    await expect(withProviderRetry(call, { signal: signal(), maxAttempts: 30 })).rejects.toBe(error)
+    await expect(withProviderRetry(call, { signal: signal() })).rejects.toBe(error)
     expect(call).toHaveBeenCalledTimes(3)
     expect(delay.mock.calls.slice(-2).map((args) => args[0])).toEqual([30000, 30000])
+  })
+  it('honours the caller\'s own cap above three', async () => {
+    const error = new ProviderHttpError('busy', 503)
+    const call = vi.fn(async () => { throw error })
+    await expect(withProviderRetry(call, { signal: signal(), maxAttempts: 6 })).rejects.toBe(error)
+    expect(call).toHaveBeenCalledTimes(6)
   })
   it('honors seconds and HTTP-date Retry-After, capped at 30 seconds', () => {
     expect(retryDelayMs(new ProviderHttpError('busy', 429, null, '2'), 1000)).toBe(2000)

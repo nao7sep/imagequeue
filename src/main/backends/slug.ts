@@ -21,7 +21,7 @@ export async function generateSlug(prompt: string, signal: AbortSignal): Promise
       messages: [{ role: 'user', text: systemPrompt }],
       timeoutMs: handle.timeoutMs,
       signal: attemptSignal,
-    }), { signal, timeoutMs: handle.timeoutMs })
+    }), { signal, maxAttempts: config.brainstorm.max_retries_per_turn + 1 })
 
     const slug = result.text.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 

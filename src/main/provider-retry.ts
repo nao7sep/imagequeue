@@ -22,8 +22,10 @@ export function retryDelayMs(error: unknown, backoff: number, now = Date.now()):
   return Math.max(0, backoff)
 }
 
-// Only answers proving no processing are resent. Callers retain their total
-// timeout and cancellation; SDKs perform exactly one attempt.
+// Only answers proving no processing are resent; SDKs perform exactly one
+// attempt. `maxAttempts` is the caller's own cap; a caller with none gets three
+// attempts. `timeoutMs`, when given, bounds all attempts together; a caller
+// without it leaves each attempt to the call's own timeout.
 export async function withProviderRetry<T>(call: (signal: AbortSignal) => Promise<T>, options: {
   signal: AbortSignal
   maxAttempts?: number
@@ -34,7 +36,7 @@ export async function withProviderRetry<T>(call: (signal: AbortSignal) => Promis
   const { backoff = [1000, 2000] } = options
   const timeout = options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs)
   const signal = timeout ? AbortSignal.any([options.signal, timeout]) : options.signal
-  const attempts = Math.min(3, Math.max(1, options.maxAttempts ?? 3))
+  const attempts = Math.max(1, options.maxAttempts ?? 3)
   try {
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted()

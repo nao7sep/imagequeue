@@ -5,11 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // named with the random fallback.
 
 const ask = vi.hoisted(() => vi.fn())
+const handle = vi.hoisted(() => ({ timeoutMs: 30000 }))
 vi.mock('../../../src/main/config', () => ({
-  loadConfig: () => ({ prompts: { slug: 'Name this: {{PROMPT}}' } }),
+  loadConfig: () => ({ prompts: { slug: 'Name this: {{PROMPT}}' }, brainstorm: { max_retries_per_turn: 5 } }),
 }))
+vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 vi.mock('../../../src/main/text-ai', () => ({
-  getLightProvider: () => ({ provider: { ask }, timeoutMs: 30000 }),
+  getLightProvider: () => ({ provider: { ask }, timeoutMs: handle.timeoutMs }),
 }))
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (e: unknown) => e }))
 
@@ -17,6 +19,7 @@ const { generateSlug } = await import('../../../src/main/backends/slug')
 
 beforeEach(() => {
   ask.mockReset()
+  handle.timeoutMs = 30000
 })
 
 describe('generateSlug', () => {
@@ -28,6 +31,26 @@ describe('generateSlug', () => {
     expect(received.aborted).toBe(false)
     controller.abort()
     expect(received.aborted).toBe(true)
+  })
+
+  it('makes max_retries_per_turn + 1 attempts on a repeated 503, then falls back', async () => {
+    ask.mockRejectedValue(Object.assign(new Error('unavailable'), { status: 503 }))
+    await expect(generateSlug('a fox', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
+    expect(ask).toHaveBeenCalledTimes(6)
+  })
+
+  it('gives each attempt its own full provider timeout', async () => {
+    handle.timeoutMs = 500
+    ask.mockImplementation(async (opts: { signal: AbortSignal }) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, 300)
+        opts.signal.addEventListener('abort', () => { clearTimeout(timer); reject(opts.signal.reason) })
+      })
+      if (ask.mock.calls.length === 1) throw Object.assign(new Error('unavailable'), { status: 503 })
+      return { text: 'Red Fox' }
+    })
+    await expect(generateSlug('a fox', new AbortController().signal)).resolves.toBe('red-fox')
+    expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
   })
 
   it('skips the call once shutdown has begun', async () => {
