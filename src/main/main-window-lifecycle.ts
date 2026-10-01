@@ -63,6 +63,10 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     this.startupComplete = true
   }
 
+  isShuttingDown(): boolean {
+    return this.shutdownStarted
+  }
+
   beginShutdown(): boolean {
     if (this.shutdownStarted) return false
     this.shutdownStarted = true

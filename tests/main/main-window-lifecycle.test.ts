@@ -144,7 +144,9 @@ describe('MainWindowController', () => {
   it('never converts explicit quit into backgrounding', () => {
     const { controller, win } = makeController()
     controller.createInitialWindow()
+    expect(controller.isShuttingDown()).toBe(false)
     expect(controller.beginShutdown()).toBe(true)
+    expect(controller.isShuttingDown()).toBe(true)
     expect(controller.beginShutdown()).toBe(false)
 
     const event = win.emitClose()

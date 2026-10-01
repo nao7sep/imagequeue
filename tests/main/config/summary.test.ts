@@ -85,7 +85,8 @@ describe('summarizeConfig', () => {
     // The summary boundary tolerates malformed input with null sections.
     // summarizeConfig runs at startup and must never crash window creation.
     const malformed = {
-      text_ai: null,
+      gemini: null,
+      openai: null,
       image_backends: null,
       general: null,
       notifications: null,

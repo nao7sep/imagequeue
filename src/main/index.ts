@@ -201,8 +201,21 @@ async function startUp(): Promise<void> {
   // any other startup step, so a failure in one of them is logged rather than
   // lost to the console. Everything below this line has a log to write to.
   initLogger(getLogsDir())
+  // Created before the launch archive, so a quit during it is claimed by the
+  // controller and the rest of startup does not run.
+  mainWindowController = new MainWindowController({
+    platform: process.platform,
+    createWindow,
+    isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
+    closeViewerWindow,
+    onPrimaryWindowClosed: () => {
+      if (startupFailureWindow) return
+      if (process.platform !== 'darwin') app.quit()
+    },
+    dock: app.dock,
+  })
   await archiveSession('begin')
-  if (shutdownStarted) return
+  if (mainWindowController.isShuttingDown()) return
   clearTempDir()
   // The saved theme reaches the title bar and the renderer's
   // prefers-color-scheme before any window exists, so launch never shows the OS
@@ -224,17 +237,6 @@ async function startUp(): Promise<void> {
   log('info', 'Session started', { sessionDir: getSessionDir() })
 
   persistActiveSession()
-  mainWindowController = new MainWindowController({
-    platform: process.platform,
-    createWindow,
-    isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
-    closeViewerWindow,
-    onPrimaryWindowClosed: () => {
-      if (startupFailureWindow) return
-      if (process.platform !== 'darwin') app.quit()
-    },
-    dock: app.dock,
-  })
   statusIconController = new StatusIconController({
     restoreMainWindow: () => mainWindowController?.restoreOrCreate(),
     requestQuit: () => app.quit(),
@@ -355,10 +357,7 @@ async function gracefulShutdown(reason: string): Promise<void> {
 // A cloud call already issued may still be billed. The shutdownStarted
 // guard still lets a second quit during cleanup fall through without
 // preventDefault, as a force-quit escape hatch in case cleanup ever hangs.
-let shutdownStarted = false
 app.on('before-quit', (event) => {
-  if (shutdownStarted) return
-  shutdownStarted = true
   if (mainWindowController && !mainWindowController.beginShutdown()) return
   event.preventDefault()
   statusIconController?.dispose()

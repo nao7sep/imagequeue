@@ -11,7 +11,7 @@ import { hasApiKey } from './api-keys-store'
 //
 // Every field is read defensively (optional chaining). config.json is
 // user-editable and callers may supply a malformed nested section
-// (e.g. `"text_ai": null`) verbatim, so a deep, unguarded dereference here would
+// (e.g. `"gemini": null`) verbatim, so a deep, unguarded dereference here would
 // throw inside app startup and leave the app running with no window. Cloud
 // backends are derived from the shared id list rather than hand-listed, so a new
 // backend appears here automatically.
