@@ -4,8 +4,8 @@
 // persisted-store-separation conventions.
 //
 // The file is:
-//   - recorded in the data-backup store (see writeUiState) — small, frequently
-//     rewritten JSON is exactly what a dedupe-by-content history absorbs;
+//   - not recorded in the data-backup store (see writeUiState) — it is volatile
+//     state and nothing else (column width, volume), so no history is kept;
 //   - materialized lazily — a missing file reads as defaults and is not written
 //     until the user actually changes something (a splitter drag, a volume drag);
 //   - self-healing — a malformed file falls back to defaults rather than failing.
@@ -51,11 +51,9 @@ export function readUiState(): UiState {
 
 export function writeUiState(state: UiState): void {
   fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-  // Recorded: the data-backup conventions name state.json explicitly among the
-  // recorded stores — small frequently-rewritten JSON is exactly what the
-  // dedupe-by-content history absorbs for free, and state files are where
-  // durable registries tend to accumulate later.
-  writeJsonAtomic(getUiStatePath(), state, true)
+  // Not recorded: state.json is volatile state and nothing else (column width,
+  // notification volume), which the data-backup conventions exclude from history.
+  writeJsonAtomic(getUiStatePath(), state, false)
 }
 
 /** Read, apply the patch, and persist in one step. Returns the new full state. */

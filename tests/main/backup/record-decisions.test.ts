@@ -15,10 +15,10 @@ import { closeBackupStore } from '../../../src/main/backup/backup-store'
 // backed up and what is not" pin: it proves the per-write-site `records` boolean actually reaches the
 // store, rather than only unit-testing record() in isolation.
 //
-//   RECORDED   config.json, elaborators.json, params.json — durable, user-authored managed text.
+//   RECORDED   config.json, elaborators.json, params.json, session.json — durable user data and authored text.
 //   NO-RECORD  dependencies.json — a re-derivable dependency-check cache.
 //
-// (output/ session manifests, the api-keys.json secret, the models-dir configs.json dependency, and
+// (state.json, the api-keys.json secret, the models-dir configs.json dependency, and
 // the bin/ CLI sidecar are the other no-record sites; they are exercised by their own stores' tests
 // and, for the secret/binary paths, never route through this choke point at all.)
 

@@ -371,13 +371,9 @@ export function persistActiveSession(): SessionManifest {
   fs.mkdirSync(sessionDir, { recursive: true })
   // buildManifest loads the active-session state if it isn't loaded yet.
   const manifest = buildManifest(getSessionId(), queueManager.getAllStoredTasks())
-  // not recorded: session.json is a generator-session manifest under output/<session>/ — imagequeue
-  // is an image GENERATOR, and its output/ sessions are transient, harvest-then-discard drops the user
-  // picks over and exports keepers from, not the app's reloaded durable state. The whole output/ tree
-  // (session dirs, their session.json manifests, the generated images) is app output,
-  // excluded wholesale as a binary-bearing directory (data-backup conventions: "Harvest-then-discard
-  // output"; "Anything colocated in a binary-bearing directory").
-  writeJsonAtomic(getManifestPath(sessionDir), manifest, false)
+  // recorded: session.json holds the draft prompt, seed and elaborated prompts — reloaded user
+  // work, so it keeps a history even though it sits under output/<session>/.
+  writeJsonAtomic(getManifestPath(sessionDir), manifest, true)
   return manifest
 }
 
