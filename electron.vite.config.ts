@@ -11,7 +11,13 @@ export default defineConfig({
     define: {
       __APP_VERSION__: JSON.stringify(version)
     },
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      // Loaded from disk, not over a network: the default 500 kB warning measures
+      // transfer cost. 2000 keeps a runaway bundle loud without flagging the
+      // ten-language catalogues on every build.
+      chunkSizeWarningLimit: 2000
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()]
@@ -19,7 +25,8 @@ export default defineConfig({
   renderer: {
     plugins: [react()],
     build: {
-      minify: true
+      minify: true,
+      chunkSizeWarningLimit: 2000 // see the main build block
     },
     server: {
       host: '127.0.0.1',
