@@ -12,7 +12,7 @@ import path from 'path'
 // Resolved lazily (called on demand, not frozen into a module constant at import
 // time) so the environment is fully known by the time the root is computed.
 
-const HOME_ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
+const DATA_DIR_ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 const DEFAULT_DIR_NAME = '.imagequeue'
 
 // Expand `$VAR` / `${VAR}` (POSIX) and `%VAR%` (Windows) references against the
@@ -36,7 +36,7 @@ function expandEnvReferences(value: string): string {
 // error and does not fall back.
 export function resolveStorageRoot(): string {
   const homeDir = os.homedir()
-  const override = process.env[HOME_ENV_VAR]
+  const override = process.env[DATA_DIR_ENV_VAR]
   const trimmed = typeof override === 'string' ? override.trim() : ''
 
   let root: string
@@ -53,7 +53,7 @@ export function resolveStorageRoot(): string {
     // back to that (or to the default root) silently.
     if (expanded.length === 0) {
       throw new Error(
-        `${HOME_ENV_VAR} is set to "${override}" but expands to an empty path ` +
+        `${DATA_DIR_ENV_VAR} is set to "${override}" but expands to an empty path ` +
           `(an unset $VAR/%VAR%?). Set it to a usable directory, or unset it to use ~/${DEFAULT_DIR_NAME}.`
       )
     }
@@ -77,7 +77,7 @@ export function resolveStorageRoot(): string {
     }
     tightenRootPermissions(root)
   } catch (error) {
-    const source = fromOverride ? `${HOME_ENV_VAR} (${override})` : 'default storage root'
+    const source = fromOverride ? `${DATA_DIR_ENV_VAR} (${override})` : 'default storage root'
     throw new Error(
       `Failed to create or use the ImageQueue storage root from ${source} at "${root}": ${(error as Error).message}`,
       { cause: error }
