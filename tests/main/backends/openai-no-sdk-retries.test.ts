@@ -48,7 +48,7 @@ describe('OpenAI clients send each paid request once', () => {
 
   it('a text request is not resent after a 5xx', async () => {
     const fetchMock = stubServerError()
-    const provider = new OpenAIProvider('gpt-test', 'sk-test', '')
+    const provider = new OpenAIProvider('gpt-test', 'sk-test', 'https://api.openai.com/v1')
     await expect(provider.ask({
       messages: [{ role: 'user', text: 'hi' }],
       timeoutMs: 30000,

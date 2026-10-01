@@ -48,7 +48,7 @@ describe('Gemini request attempt ownership', () => {
 
   it('a text request is not resent after a 503', async () => {
     const fetchMock = stubServerError()
-    const provider = new GeminiProvider('gemini-test', 'test-key')
+    const provider = new GeminiProvider('gemini-test', 'test-key', 'https://generativelanguage.googleapis.com')
     await expect(provider.ask({
       messages: [{ role: 'user', text: 'hi' }],
       timeoutMs: 30000,

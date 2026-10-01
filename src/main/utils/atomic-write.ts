@@ -110,8 +110,7 @@ export async function writeFileAtomicAsync(
   filePath: string,
   data: string | NodeJS.ArrayBufferView,
   records: boolean,
-  signal?: AbortSignal,
-  shouldPublish?: () => boolean,
+  signal?: AbortSignal
 ): Promise<void> {
   const dir = path.dirname(filePath)
   const stem = path.basename(filePath, path.extname(filePath))
@@ -136,7 +135,6 @@ export async function writeFileAtomicAsync(
     await handle.close()
     handle = null
     signal?.throwIfAborted()
-    if (shouldPublish && !shouldPublish()) return
     await fs.promises.rename(tempPath, filePath)
     await syncDirectoryAsync(dir)
     if (records) record(filePath, bytes)

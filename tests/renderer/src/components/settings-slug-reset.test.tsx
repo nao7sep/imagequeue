@@ -26,7 +26,6 @@ function baseConfig(theme: unknown): Record<string, unknown> {
     provider: 'gemini',
     gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', timeout_ms: 30000 },
     openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'gpt-5.6-terra', slug: 'gpt-6-luna', timeout_ms: 60000 },
-    extraModelIds: {},
     general: {
       theme, ui_font_family: '', auto_preview_idle_seconds: 30, export_dir: '',
       confirm_remove: false, confirm_delete: false, delete_to_trash: true,
@@ -58,7 +57,7 @@ function renderWith(theme: unknown, onClose = vi.fn()): void {
 
 beforeEach(() => {
   ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
-    platform: 'darwin', getTextModelLists: vi.fn().mockResolvedValue({}), promptsGetDefaultSlug: vi.fn().mockResolvedValue('shipped slug'),
+    platform: 'darwin', promptsGetDefaultSlug: vi.fn().mockResolvedValue('shipped slug'),
   }
 })
 afterEach(cleanup)

@@ -1,6 +1,5 @@
 import OpenAI, { APIError } from 'openai'
 import type { AskOptions, AskResult, TextAIProvider } from './types'
-import { PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 import { extractJson } from './json'
 import { openaiTextParams } from './request'
 import { assertUsableOpenAIResponse } from '../provider-response'
@@ -8,12 +7,11 @@ import { ProviderHttpError } from '../provider-errors'
 import { openaiReasonField, reasonFromParsed } from '../provider-reason'
 
 export class OpenAIProvider implements TextAIProvider {
-  constructor(private model: string, private apiKey: string,
-    private endpoint = PROVIDER_ENDPOINTS.openai) {}
+  constructor(private model: string, private apiKey: string, private endpoint: string) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
     const client = new OpenAI({
-      apiKey: this.apiKey, baseURL: this.endpoint || PROVIDER_ENDPOINTS.openai,
+      apiKey: this.apiKey, baseURL: this.endpoint,
       timeout: opts.timeoutMs, maxRetries: 0,
     })
     const response = await client.chat.completions.create({

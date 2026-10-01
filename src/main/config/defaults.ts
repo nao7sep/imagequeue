@@ -17,7 +17,6 @@ export function createDefaultConfig(): AppConfig {
       slug: defaultModelFor('openai', 'text-fast'),
       timeout_ms: 60000,
     },
-    extraModelIds: {},
     general: {
       theme: 'system',
       language: 'system',

@@ -51,7 +51,6 @@ function baseConfig(): Record<string, unknown> {
     provider: 'gemini',
     gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', timeout_ms: 30000 },
     openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'gpt-5.6-terra', slug: 'gpt-6-luna', timeout_ms: 60000 },
-    extraModelIds: {},
     general: {
       ui_font_family: '', auto_preview_idle_seconds: 30, export_dir: '',
       confirm_remove: false, confirm_delete: false, delete_to_trash: true,
@@ -73,7 +72,7 @@ function baseConfig(): Record<string, unknown> {
 beforeEach(() => {
   // The form reads the platform to decide whether to draw the Draw Things
   // section; nothing else here touches the bridge.
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', getTextModelLists: vi.fn().mockResolvedValue({}) }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
   settingsValue = {
     settings: baseConfig(),
     apiKeys: storedKeys(),
@@ -179,7 +178,7 @@ describe('Settings status icon preference', () => {
   })
 
   it('uses the Windows notification-area label', () => {
-    ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'win32', getTextModelLists: vi.fn().mockResolvedValue({}) }
+    ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'win32' }
     render(<SettingsModal onClose={() => {}} />)
     expect(screen.getByText('Show in notification area')).toBeTruthy()
   })

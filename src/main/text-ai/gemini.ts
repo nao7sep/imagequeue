@@ -1,6 +1,5 @@
 import { ApiError, GoogleGenAI } from '@google/genai'
 import type { AskOptions, AskResult, TextAIProvider } from './types'
-import { PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 import { extractJson } from './json'
 import { geminiTextParams } from './request'
 import { assertUsableGeminiResponse } from '../provider-response'
@@ -8,14 +7,13 @@ import { ProviderHttpError } from '../provider-errors'
 import { geminiReasonField, reasonFromBody } from '../provider-reason'
 
 export class GeminiProvider implements TextAIProvider {
-  constructor(private model: string, private apiKey: string,
-    private endpoint = PROVIDER_ENDPOINTS.gemini) {}
+  constructor(private model: string, private apiKey: string, private endpoint: string) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
     // The app owns retries; the SDK performs exactly one attempt.
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      httpOptions: { baseUrl: this.endpoint || PROVIDER_ENDPOINTS.gemini, timeout: opts.timeoutMs, retryOptions: { attempts: 1 } },
+      httpOptions: { baseUrl: this.endpoint, timeout: opts.timeoutMs, retryOptions: { attempts: 1 } },
     })
     const response = await ai.models.generateContent({
       model: this.model,

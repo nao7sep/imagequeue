@@ -308,8 +308,13 @@
   "settings.apiKey": "Chiave API",
   "settings.elaborationModel": "Modello per elaborazione",
   "settings.slugModel": "Modello per nome breve",
+  "settings.elaborationModelHelp": "Sviluppa un’idea in prompt di immagine diversi.",
+  "settings.slugModelHelp": "Dà a ogni file di immagine generato un nome tratto dal suo prompt.",
+  "settings.unsupportedModel": "Modello non supportato. Potrebbe non funzionare come previsto.",
   "settings.timeout": "Timeout (s)",
   "settings.endpoint": "Endpoint",
+  "settings.endpointHelp": "L’indirizzo a cui ImageQueue invia le richieste a {provider}.",
+  "settings.endpointRequired": "Ogni fornitore di testo richiede un endpoint.",
   "settings.concurrency": "Concorrenza",
   "settings.geminiApiKey": "Chiave API di Gemini",
   "settings.modelsDirectory": "Cartella dei modelli",
@@ -790,13 +795,5 @@
   "cliJob.noOutput": "Ancora nessun output…",
   "cliJob.noNewOutput": "Ancora nessun nuovo output…",
   "cliJob.converting": "Conversione in corso…",
-  "cliJob.starting": "Avvio…",
-  "settings.chooseModel": "Scegli {role}",
-  "settings.outOfList": "Fuori elenco",
-  "settings.bundledModels": "Suggerimenti dell’app",
-  "settings.providerModels": "Modelli del fornitore",
-  "settings.extraModelIds": "ID di modelli aggiuntivi",
-  "settings.extraModelIdsHint": "Un ID di modello per riga. Puoi anche digitare qualsiasi ID direttamente in un campo del modello.",
-  "settings.refreshModels": "Aggiorna modelli",
-  "settings.frontierModel": "{model} (dovrebbe funzionare, senza garanzia)"
+  "cliJob.starting": "Avvio…"
 }

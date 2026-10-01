@@ -163,7 +163,6 @@ export interface AppConfig {
   provider: TextAIBackendId
   gemini: TextProviderConfig
   openai: TextProviderConfig
-  extraModelIds: Partial<Record<TextAIBackendId, string[]>>
   general: GeneralConfig
   notifications: NotificationsConfig
   image_backends: ImageBackendsConfig

@@ -5,7 +5,6 @@ import { handle } from './ipc-boundary'
 import { loadConfig, updateConfig } from './config'
 import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
-import { openTextModelLists, refreshModelList } from './text-ai/model-lists'
 import { refreshMainWindowMinimumSize } from './main-window-layout'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter } from './utils/file-output'
@@ -56,11 +55,6 @@ const notificationFields = new Set<string>([
 export function registerSettingsIpc(
   onConfigSaved?: (config: AppConfig) => Promise<void> | void,
 ): void {
-  handle('settings:textModelLists', () => openTextModelLists())
-  handle('settings:refreshTextModelList', (_event, provider: string) => {
-    if (provider !== 'gemini' && provider !== 'openai') throw new Error(`Unsupported text provider: ${provider}`)
-    return refreshModelList(provider, true)
-  })
   handle('settings:get', () => {
     // The config carries no keys — they are neither in the type nor in this
     // payload — so the cached object is returned as-is (IPC serializes it).

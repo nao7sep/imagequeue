@@ -41,7 +41,6 @@ describe('text defaults', () => {
     expect(modelsFor('gemini', 'text-balanced').map((row) => row.id)).toContain(config.gemini.elaboration)
     expect(config.gemini.endpoint).toBe(PROVIDER_ENDPOINTS.gemini)
     expect(config.openai.endpoint).toBe(PROVIDER_ENDPOINTS.openai)
-    expect(config.extraModelIds).toEqual({})
   })
 })
 

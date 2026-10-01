@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 
-// The theme is one Settings › General choice of System, Light, or Dark, staged
-// with the rest of the form and applied only by Save (app-chrome conventions).
+// An endpoint is the provider's address and has no empty default: Save refuses
+// an empty one and stores nothing.
 
 let settingsValue: Record<string, unknown>
 
@@ -35,12 +35,12 @@ function baseConfig(theme: unknown): Record<string, unknown> {
       openai: backend(), nanobanana: backend(), grok: backend(), flux: backend(),
       drawthings: { timeout_ms: 1800000, default_params: {}, models_dir: '', check_updates_at_launch: true },
     },
-    prompts: { slug: 'slug' },
+    prompts: { slug: 'my slug' },
     brainstorm: {},
   }
 }
 
-function renderWith(theme: unknown): void {
+function renderWith(theme: unknown, onClose = vi.fn()): void {
   settingsValue = {
     settings: baseConfig(theme),
     apiKeys: {},
@@ -51,11 +51,7 @@ function renderWith(theme: unknown): void {
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
   }
-  render(<SettingsModal onClose={() => {}} />)
-}
-
-function themeRadios(): HTMLInputElement[] {
-  return within(screen.getByRole('radiogroup', { name: 'Theme' })).getAllByRole('radio') as HTMLInputElement[]
+  render(<SettingsModal onClose={onClose} />)
 }
 
 beforeEach(() => {
@@ -63,28 +59,13 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Settings theme choice', () => {
-  it('offers System, Light, and Dark as one radio group', () => {
-    renderWith('dark')
-    const radios = themeRadios()
-    expect(radios.map((radio) => radio.closest('label')?.textContent)).toEqual(['System', 'Light', 'Dark'])
-    expect(new Set(radios.map((radio) => radio.name)).size).toBe(1)
-    expect(radios.find((radio) => radio.checked)?.value).toBe('dark')
-  })
-
-  it('shows System for a missing or unknown stored value', () => {
-    renderWith('sepia')
-    expect(themeRadios().find((radio) => radio.checked)?.value).toBe('system')
-  })
-
-  it('stages the choice and saves it only on Save', async () => {
+describe('Endpoint at Save', () => {
+  it('refuses an empty endpoint and saves nothing', async () => {
     renderWith('system')
-    fireEvent.click(themeRadios()[1]!)
-    expect(settingsValue.saveChangedSettings).not.toHaveBeenCalled()
-
+    const endpoint = screen.getAllByLabelText('Endpoint', { selector: 'input' })[1] as HTMLInputElement
+    fireEvent.change(endpoint, { target: { value: '  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
-    expect((save.mock.calls[0]![1] as { general: { theme: string } }).general.theme).toBe('light')
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Every text provider needs an endpoint.'))
+    expect(settingsValue.saveChangedSettings).not.toHaveBeenCalled()
   })
 })

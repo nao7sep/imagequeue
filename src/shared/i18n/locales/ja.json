@@ -290,8 +290,13 @@
   "settings.apiKey": "API キー",
   "settings.elaborationModel": "詳細化モデル",
   "settings.slugModel": "スラッグモデル",
+  "settings.elaborationModelHelp": "アイデアを多様な画像プロンプトに展開します。",
+  "settings.slugModelHelp": "生成した画像ファイルにプロンプトから名前を付けます。",
+  "settings.unsupportedModel": "サポート対象外のモデルです。期待どおりに動作しない可能性があります。",
   "settings.timeout": "タイムアウト（秒）",
   "settings.endpoint": "エンドポイント",
+  "settings.endpointHelp": "ImageQueue が {provider} へのリクエストを送るアドレスです。",
+  "settings.endpointRequired": "各テキストプロバイダーにエンドポイントが必要です。",
   "settings.concurrency": "同時実行数",
   "settings.geminiApiKey": "Gemini API キー",
   "settings.modelsDirectory": "モデルのフォルダ",
@@ -746,13 +751,5 @@
   "cliJob.noOutput": "まだ出力はありません…",
   "cliJob.noNewOutput": "まだ新しい出力はありません…",
   "cliJob.converting": "変換中…",
-  "cliJob.starting": "開始中…",
-  "settings.chooseModel": "{role}を選択",
-  "settings.outOfList": "リストにないモデル",
-  "settings.bundledModels": "アプリの候補",
-  "settings.providerModels": "プロバイダーのモデル",
-  "settings.extraModelIds": "追加のモデルID",
-  "settings.extraModelIdsHint": "1行に1つのモデルIDを入力します。モデル欄に任意のIDを直接入力することもできます。",
-  "settings.refreshModels": "モデルを更新",
-  "settings.frontierModel": "{model}（動作する見込みですが、保証はありません）"
+  "cliJob.starting": "開始中…"
 }

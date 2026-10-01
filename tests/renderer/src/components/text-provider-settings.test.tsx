@@ -1,62 +1,52 @@
 // @vitest-environment jsdom
 import { useState } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TextProviderSettings } from '../../../../src/renderer/src/components/TextProviderSettings'
 
 function Harness(): React.JSX.Element {
   const [config, setConfig] = useState<Record<string, unknown>>({
     provider: 'gemini',
-    gemini: { endpoint: '', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', timeout_ms: 30000 },
-    openai: { endpoint: '', elaboration: 'local-unlisted', slug: 'gpt-6-luna', timeout_ms: 60000 },
-    extraModelIds: { gemini: ['custom'] },
+    gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', timeout_ms: 30000 },
+    openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'local-unlisted', slug: 'gpt-6-luna', timeout_ms: 60000 },
   })
   return <TextProviderSettings config={config} onChange={setConfig} keyField={() => <input type="password" />} />
 }
 afterEach(cleanup)
-function bridge() {
-  const api = { getTextModelLists: vi.fn().mockResolvedValue({ gemini: { fetchedAtUtc: '', ids: ['gemini-future'] } }),
-    refreshTextModelList: vi.fn().mockResolvedValue({}), appLog: vi.fn().mockResolvedValue(undefined) }
-  ;(window as unknown as { electronAPI: unknown }).electronAPI = api
-  return api
-}
 
-describe('open text provider settings', () => {
-  it('shows both provider sections, grouped sources, out-of-list values and free typing', async () => {
-    const api = bridge()
-    render(<Harness />)
-    await waitFor(() => expect(screen.getAllByRole('option', { name: 'gemini-future' })).toHaveLength(2))
-    expect(api.getTextModelLists).toHaveBeenCalledOnce()
-    const inputs = screen.getAllByLabelText('Elaboration model') as HTMLInputElement[]
-    expect(inputs.map((input) => input.value)).toEqual(['gemini-3.8-flash', 'local-unlisted'])
-    expect(screen.getByRole('group', { name: 'Out of list' })).toBeTruthy()
-    fireEvent.change(inputs[0], { target: { value: 'typed-arbitrary-id' } })
-    expect(inputs[0].value).toBe('typed-arbitrary-id')
-    expect(screen.getByRole('option', { name: 'typed-arbitrary-id' })).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'openai' } })
-    expect(inputs[0].value).toBe('typed-arbitrary-id')
-    expect(inputs[1].value).toBe('local-unlisted')
-    expect(api.refreshTextModelList).not.toHaveBeenCalled()
+const WARNING = 'Not a supported model. It may not work as expected.'
+
+describe('text provider settings', () => {
+  it('lays out each provider as endpoint, key, elaboration model, slug model, timeout', () => {
+    const { container } = render(<Harness />)
+    const sections = container.querySelectorAll('.settings-subsection')
+    expect(sections).toHaveLength(2)
+    const labels = [...sections[0]!.querySelectorAll('label')].map((label) => label.textContent)
+    expect(labels).toEqual(['Endpoint', 'API Key', 'Elaboration model', 'Slug model', 'Timeout (s)'])
+    expect(screen.getByText('The address ImageQueue sends Gemini requests to.')).toBeTruthy()
+    expect(screen.getAllByText('Expands an idea into varied image prompts.')).toHaveLength(2)
+    expect(screen.getAllByText('Names each generated image file from its prompt.')).toHaveLength(2)
+    expect(container.querySelector('select:not(#text-provider)')).toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
   })
-  it('labels each role by its id and reads each provider\'s timeout from its own set', async () => {
-    bridge()
+  it('warns under a model field only when the id is not a text row for that provider', () => {
     render(<Harness />)
-    expect((screen.getAllByLabelText('Slug model') as HTMLInputElement[]).map((input) => input.value)).toEqual(['gemini-3.5-flash-lite', 'gpt-6-luna'])
+    expect(screen.getAllByText(WARNING)).toHaveLength(1)
+    const elaboration = screen.getAllByLabelText('Elaboration model') as HTMLInputElement[]
+    fireEvent.change(elaboration[1]!, { target: { value: ' GPT-5.6-TERRA ' } })
+    expect(screen.queryAllByText(WARNING)).toHaveLength(0)
+    fireEvent.change(elaboration[0]!, { target: { value: 'gpt-5.6-terra' } })
+    expect(screen.getAllByText(WARNING)).toHaveLength(1)
+    expect(elaboration[0]!.value).toBe('gpt-5.6-terra')
+  })
+  it('keeps each provider\'s fields when the provider changes, and reads each timeout from its own set', () => {
+    render(<Harness />)
     const timeouts = screen.getAllByLabelText('Timeout (s)') as HTMLInputElement[]
     expect(timeouts.map((input) => input.value)).toEqual(['30', '60'])
-    fireEvent.change(timeouts[1], { target: { value: '90' } })
+    fireEvent.change(timeouts[1]!, { target: { value: '90' } })
+    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'openai' } })
     expect(timeouts.map((input) => input.value)).toEqual(['30', '90'])
-    await waitFor(() => expect(screen.getAllByRole('option', { name: 'gemini-future' })).toHaveLength(2))
-  })
-  it('preserves newlines while editing extra ids and calls only manual refresh on the button', async () => {
-    const api = bridge()
-    render(<Harness />)
-    const extras = screen.getAllByLabelText('Extra model IDs')[0] as HTMLTextAreaElement
-    fireEvent.change(extras, { target: { value: 'custom\n' } })
-    expect(extras.value).toBe('custom\n')
-    fireEvent.change(extras, { target: { value: 'custom\nsecond' } })
-    expect(extras.value).toBe('custom\nsecond')
-    fireEvent.click(screen.getAllByRole('button', { name: 'Refresh models' })[0])
-    await waitFor(() => expect(api.refreshTextModelList).toHaveBeenCalledWith('gemini'))
+    expect((screen.getAllByLabelText('Slug model') as HTMLInputElement[]).map((input) => input.value)).toEqual(['gemini-3.5-flash-lite', 'gpt-6-luna'])
   })
 })

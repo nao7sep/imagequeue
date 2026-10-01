@@ -290,8 +290,13 @@
   "settings.apiKey": "API 密钥",
   "settings.elaborationModel": "扩写模型",
   "settings.slugModel": "短名称模型",
+  "settings.elaborationModelHelp": "将一个想法扩写为多样的图像提示词。",
+  "settings.slugModelHelp": "根据提示词为每个生成的图像文件命名。",
+  "settings.unsupportedModel": "不是受支持的模型。可能无法按预期工作。",
   "settings.timeout": "超时（秒）",
   "settings.endpoint": "端点",
+  "settings.endpointHelp": "ImageQueue 向 {provider} 发送请求的地址。",
+  "settings.endpointRequired": "每个文本提供商都需要端点。",
   "settings.concurrency": "并发数",
   "settings.geminiApiKey": "Gemini API 密钥",
   "settings.modelsDirectory": "模型文件夹",
@@ -746,13 +751,5 @@
   "cliJob.noOutput": "尚无输出…",
   "cliJob.noNewOutput": "尚无新输出…",
   "cliJob.converting": "正在转换…",
-  "cliJob.starting": "正在启动…",
-  "settings.chooseModel": "选择{role}",
-  "settings.outOfList": "列表外模型",
-  "settings.bundledModels": "应用推荐",
-  "settings.providerModels": "提供商模型",
-  "settings.extraModelIds": "额外模型ID",
-  "settings.extraModelIdsHint": "每行输入一个模型ID。你也可以在模型字段中直接输入任意ID。",
-  "settings.refreshModels": "刷新模型",
-  "settings.frontierModel": "{model}（预计可用，但不保证）"
+  "cliJob.starting": "正在启动…"
 }

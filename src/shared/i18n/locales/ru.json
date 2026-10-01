@@ -317,8 +317,13 @@
   "settings.apiKey": "Ключ API",
   "settings.elaborationModel": "Модель для детализации",
   "settings.slugModel": "Модель для краткого имени",
+  "settings.elaborationModelHelp": "Превращает идею в разнообразные промпты для изображений.",
+  "settings.slugModelHelp": "Даёт каждому созданному файлу изображения имя по его промпту.",
+  "settings.unsupportedModel": "Модель не поддерживается. Она может работать не так, как ожидается.",
   "settings.timeout": "Тайм-аут (с)",
   "settings.endpoint": "Конечная точка",
+  "settings.endpointHelp": "Адрес, на который ImageQueue отправляет запросы к {provider}.",
+  "settings.endpointRequired": "Для каждого провайдера текста нужна конечная точка.",
   "settings.concurrency": "Параллельность",
   "settings.geminiApiKey": "Ключ API Gemini",
   "settings.modelsDirectory": "Папка моделей",
@@ -812,13 +817,5 @@
   "cliJob.noOutput": "Вывода пока нет…",
   "cliJob.noNewOutput": "Нового вывода пока нет…",
   "cliJob.converting": "Идёт преобразование…",
-  "cliJob.starting": "Запуск…",
-  "settings.chooseModel": "Выбрать {role}",
-  "settings.outOfList": "Вне списка",
-  "settings.bundledModels": "Рекомендации приложения",
-  "settings.providerModels": "Модели провайдера",
-  "settings.extraModelIds": "Дополнительные ID моделей",
-  "settings.extraModelIdsHint": "Один ID модели на строку. Вы также можете ввести любой ID прямо в поле модели.",
-  "settings.refreshModels": "Обновить модели",
-  "settings.frontierModel": "{model} (должна работать, без гарантии)"
+  "cliJob.starting": "Запуск…"
 }

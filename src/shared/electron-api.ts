@@ -25,8 +25,6 @@ import {
 } from './types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
 import type { UiState } from './ui-state'
-import type { ModelLists } from './model-lists'
-import type { TextAIBackendId } from './types'
 import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
 import type { AppNotice } from './app-notice'
 import type { StartupFailureMeasurement } from './startup-failure'
@@ -148,8 +146,6 @@ export interface ElectronAPI {
   getImage: (baseName: string) => Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null>
 
   // Settings operations
-  getTextModelLists: () => Promise<ModelLists>
-  refreshTextModelList: (provider: TextAIBackendId) => Promise<ModelLists>
   getSettings: () => Promise<Record<string, unknown>>
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<{ success: boolean }>

@@ -3,7 +3,6 @@ import { AI_ROLES, SUPPORTED_MODELS, TEXT_PROVIDERS, defaultModelFor, modelsFor 
 import { ThinkingLevel } from '@google/genai'
 import { configSetDefaults } from '../../src/main/config/config-sets'
 import { geminiTextParams, openaiTextParams } from '../../src/main/text-ai/request'
-import { modelPickerGroups } from '../../src/shared/model-lists'
 
 describe('text routing guard', () => {
   it('gives every text row its own branch', () => {
@@ -46,10 +45,5 @@ describe('text routing guard', () => {
         expect(sets[`${provider}.${role.id}`]).toBe(defaultModelFor(provider, role.kind))
       }
     }
-  })
-  it('keeps distinct groups in preference order without validating typed ids', () => {
-    expect(modelPickerGroups('gemini', 'text-balanced', ['gemini-3.8-flash', 'gemini-future'], ['gemini-future', 'custom'])).toEqual({
-      bundled: ['gemini-3.8-flash'], fetched: ['gemini-future'], extras: ['custom'],
-    })
   })
 })

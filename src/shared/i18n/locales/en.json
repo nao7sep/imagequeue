@@ -299,8 +299,13 @@
   "settings.apiKey": "API Key",
   "settings.elaborationModel": "Elaboration model",
   "settings.slugModel": "Slug model",
+  "settings.elaborationModelHelp": "Expands an idea into varied image prompts.",
+  "settings.slugModelHelp": "Names each generated image file from its prompt.",
+  "settings.unsupportedModel": "Not a supported model. It may not work as expected.",
   "settings.timeout": "Timeout (s)",
   "settings.endpoint": "Endpoint",
+  "settings.endpointHelp": "The address ImageQueue sends {provider} requests to.",
+  "settings.endpointRequired": "Every text provider needs an endpoint.",
   "settings.concurrency": "Concurrency",
   "settings.geminiApiKey": "Gemini API Key",
   "settings.modelsDirectory": "Models Directory",
@@ -768,13 +773,5 @@
   "cliJob.noOutput": "No output yet…",
   "cliJob.noNewOutput": "No new output yet…",
   "cliJob.converting": "Conversion in progress…",
-  "cliJob.starting": "Starting…",
-  "settings.chooseModel": "Choose {role}",
-  "settings.outOfList": "Out of list",
-  "settings.bundledModels": "App suggestions",
-  "settings.providerModels": "Provider models",
-  "settings.extraModelIds": "Extra model IDs",
-  "settings.extraModelIdsHint": "One model ID per line. You can also type any ID directly in a model field.",
-  "settings.refreshModels": "Refresh models",
-  "settings.frontierModel": "{model} (should work, not guaranteed)"
+  "cliJob.starting": "Starting…"
 }

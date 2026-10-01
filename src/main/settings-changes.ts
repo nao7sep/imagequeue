@@ -8,7 +8,6 @@ const settingsRootFields = new Set<string>([
   'provider',
   'gemini',
   'openai',
-  'extraModelIds',
   'general',
   'image_backends',
   'notifications',
@@ -75,7 +74,7 @@ function walkChangedFields(
   }
 
   const setKey = pathParts.join('.')
-  if (setKey === 'image_backends.drawthings.default_params' || setKey === 'extraModelIds') {
+  if (setKey === 'image_backends.drawthings.default_params') {
     setConfigPath(target, pathParts, structuredClone(next))
     return
   }

@@ -5,6 +5,7 @@ import { Modal } from './Modal'
 import { useTablist } from '../hooks/useTablist'
 import { multiline } from '../../../shared/textCleanup'
 import { TextProviderSettings } from './TextProviderSettings'
+import { TEXT_PROVIDERS } from '../../../shared/ai-models'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
@@ -112,6 +113,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const handleSave = async (): Promise<void> => {
     if (!config || !baseConfig) return
     setErrorMessage(null)
+    if (TEXT_PROVIDERS.some((provider) => !((config[provider] as Record<string, unknown>).endpoint as string).trim())) {
+      setErrorMessage('settings.endpointRequired')
+      return
+    }
     try {
       // Clean the slug template (a multiline body) at this commit point before
       // diffing against base, so the stored and compared value is the tidy one.
@@ -120,11 +125,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         typeof prompts?.slug === 'string'
           ? { ...config, prompts: { ...prompts, slug: multiline(prompts.slug) } }
           : config
-      const extraModelIds = JSON.stringify(cleaned.extraModelIds) === JSON.stringify(baseConfig.extraModelIds)
-        ? cleaned.extraModelIds : Object.fromEntries(Object.entries((cleaned.extraModelIds ?? {}) as Record<string, string[]>).map(
-        ([provider, ids]) => [provider, [...new Set(ids.map((id) => id.trim()).filter(Boolean))]],
-      ))
-      await saveChangedSettings(baseConfig, { ...cleaned, extraModelIds })
+      await saveChangedSettings(baseConfig, cleaned)
       // Keys second, and only when changed: this write can add or remove a
       // column, so it is the one that resizes the window.
       if (Object.keys(changedKeys).length > 0) {
