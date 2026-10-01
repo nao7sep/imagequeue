@@ -12,6 +12,9 @@ import { registerDependenciesIpc } from './dependencies-ipc'
 import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
+import { closeConceptStore } from './concepts/concept-store'
+import { closeBackupStore } from './backup/backup-store'
+import { archiveSession } from './backup/archive'
 import { registerConceptsIpc } from './concepts-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
@@ -160,7 +163,7 @@ function createWindow(): BrowserWindow {
 // Scheme privileges can only be granted before the app is ready.
 registerImageSchemeAsPrivileged()
 
-if (ownsSingleInstance) app.whenReady().then(() => {
+if (ownsSingleInstance) app.whenReady().then(async () => {
   // The language is settled before any window or native menu exists, so the
   // first words on every surface, a startup failure included, are already in it.
   settleLanguage()
@@ -172,7 +175,7 @@ if (ownsSingleInstance) app.whenReady().then(() => {
   // exit — a running process with no window and no dialog is not a halt
   // (storage-path conventions: a halt names the store and reaches the user).
   try {
-    startUp()
+    await startUp()
   } catch (err) {
     enterStartupFailure(err)
   }
@@ -186,7 +189,7 @@ function installAppMenu(): void {
   onLanguageChanged(apply)
 }
 
-function startUp(): void {
+async function startUp(): Promise<void> {
   // Set the renderer CSP before any window loads its content. Gate the strict
   // policy on the production-renderer signal (no dev-server URL), not
   // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
@@ -198,6 +201,8 @@ function startUp(): void {
   // any other startup step, so a failure in one of them is logged rather than
   // lost to the console. Everything below this line has a log to write to.
   initLogger(getLogsDir())
+  await archiveSession('begin')
+  if (shutdownStarted) return
   clearTempDir()
   // The saved theme reaches the title bar and the renderer's
   // prefers-color-scheme before any window exists, so launch never shows the OS
@@ -331,6 +336,9 @@ async function gracefulShutdown(reason: string): Promise<void> {
   await guarded('releaseWakeLock', () => releaseWakeLock())
   log('info', 'Session ended', { reason })
   await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
+  await guarded('closeConceptStore', () => closeConceptStore())
+  await guarded('closeBackupStore', () => closeBackupStore())
+  await guarded('archiveBinaryStores', () => archiveSession('finish'))
 }
 
 // before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
@@ -347,7 +355,10 @@ async function gracefulShutdown(reason: string): Promise<void> {
 // A cloud call already issued may still be billed. The shutdownStarted
 // guard still lets a second quit during cleanup fall through without
 // preventDefault, as a force-quit escape hatch in case cleanup ever hangs.
+let shutdownStarted = false
 app.on('before-quit', (event) => {
+  if (shutdownStarted) return
+  shutdownStarted = true
   if (mainWindowController && !mainWindowController.beginShutdown()) return
   event.preventDefault()
   statusIconController?.dispose()

@@ -15,5 +15,5 @@
     "types": ["node", "vite/client"]
   },
   "include": [
-    "src/main/app-version.d.ts", "tests/**/*", "src/renderer/src/env.d.ts"]
+    "src/main/app-version.d.ts", "src/main/env.d.ts", "tests/**/*", "src/renderer/src/env.d.ts"]
 }

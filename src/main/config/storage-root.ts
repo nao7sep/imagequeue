@@ -105,3 +105,12 @@ function tightenRootPermissions(root: string): void {
     console.error(`Failed to tighten permissions on the ImageQueue storage root "${root}":`, error)
   }
 }
+
+export interface ArchivedStore {
+  path: string
+  entryName: string
+}
+
+export function getArchivedStores(root: string = resolveStorageRoot()): ArchivedStore[] {
+  return [{ path: path.join(root, 'concepts.sqlite3'), entryName: 'concepts.sqlite3' }]
+}
