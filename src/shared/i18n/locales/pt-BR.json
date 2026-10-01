@@ -311,6 +311,8 @@
   "settings.slugModel": "Modelo para nome curto",
   "settings.slugModelHelp": "Dá nome a cada arquivo de imagem gerado a partir do prompt.",
   "settings.unsupportedModel": "Modelo não compatível. Pode não funcionar como esperado.",
+  "settings.thinking": "Raciocínio",
+  "settings.thinkingHelp": "Quanto o modelo raciocina antes de responder, nos termos do provedor.",
   "settings.timeout": "Tempo limite (s)",
   "settings.endpoint": "Endpoint",
   "settings.endpointHelp": "O endereço para o qual o ImageQueue envia as solicitações ao {provider}.",

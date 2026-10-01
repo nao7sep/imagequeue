@@ -7,8 +7,8 @@ import { TextProviderSettings } from '../../../../src/renderer/src/components/Te
 function Harness(): React.JSX.Element {
   const [config, setConfig] = useState<Record<string, unknown>>({
     provider: 'gemini',
-    gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', timeout_ms: 30000 },
-    openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'local-unlisted', slug: 'gpt-6-luna', timeout_ms: 60000 },
+    gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', thinking: { elaboration: '', slug: '' }, timeout_ms: 30000 },
+    openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'local-unlisted', slug: 'gpt-6-luna', thinking: { elaboration: '', slug: 'high' }, timeout_ms: 60000 },
   })
   return <TextProviderSettings config={config} onChange={setConfig} keyField={() => <input type="password" />} />
 }
@@ -22,11 +22,10 @@ describe('text provider settings', () => {
     const sections = container.querySelectorAll('.settings-subsection')
     expect(sections).toHaveLength(2)
     const labels = [...sections[0]!.querySelectorAll('label')].map((label) => label.textContent)
-    expect(labels).toEqual(['Endpoint', 'API Key', 'Elaboration model', 'Slug model', 'Timeout (s)'])
+    expect(labels).toEqual(['Endpoint', 'API Key', 'Elaboration model', 'Thinking', 'Slug model', 'Thinking', 'Timeout (s)'])
     expect(screen.getByText('The address ImageQueue sends Gemini requests to.')).toBeTruthy()
     expect(screen.getAllByText('Expands an idea into varied image prompts.')).toHaveLength(2)
     expect(screen.getAllByText('Names each generated image file from its prompt.')).toHaveLength(2)
-    expect(container.querySelector('select:not(#text-provider)')).toBeNull()
     expect(container.querySelector('textarea')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
   })
@@ -48,5 +47,29 @@ describe('text provider settings', () => {
     fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'openai' } })
     expect(timeouts.map((input) => input.value)).toEqual(['30', '90'])
     expect((screen.getAllByLabelText('Slug model') as HTMLInputElement[]).map((input) => input.value)).toEqual(['gemini-3.5-flash-lite', 'gpt-6-luna'])
+  })
+  it('lists the selected model\'s thinking values in its own words, showing the chosen or default value', () => {
+    const { container } = render(<Harness />)
+    const select = (id: string) => container.querySelector<HTMLSelectElement>(`#${id}-thinking`)
+    expect([...select('gemini-slug')!.options].map((option) => option.value)).toEqual(['minimal', 'low', 'medium', 'high'])
+    expect(select('gemini-slug')!.value).toBe('minimal')
+    expect(select('gemini-elaboration')!.value).toBe('medium')
+    expect([...select('openai-slug')!.options].map((option) => option.value)).toEqual(['none', 'low', 'medium', 'high', 'xhigh', 'max'])
+    expect(select('openai-slug')!.value).toBe('high')
+    expect(select('openai-elaboration')).toBeNull()
+  })
+  it('resets a role\'s thinking to the new model\'s default when its model changes', () => {
+    const { container } = render(<Harness />)
+    const slug = (screen.getAllByLabelText('Slug model') as HTMLInputElement[])[1]!
+    fireEvent.change(slug, { target: { value: 'gpt-6.1-sol' } })
+    const select = container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!
+    expect([...select.options].map((option) => option.value)).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(select.value).toBe('low')
+    fireEvent.change(select, { target: { value: 'max' } })
+    expect(select.value).toBe('max')
+    fireEvent.change(slug, { target: { value: 'gpt-6-luna' } })
+    expect(container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!.value).toBe('none')
+    fireEvent.change(slug, { target: { value: 'local-model' } })
+    expect(container.querySelector('#openai-slug-thinking')).toBeNull()
   })
 })

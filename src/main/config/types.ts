@@ -8,11 +8,15 @@
 
 import { TextAIBackendId } from '../../shared/types'
 import type { FormatDirectives } from '../../shared/session-draft'
+import type { TextRole } from '../../shared/ai-models'
 
 export interface TextProviderConfig {
   endpoint: string
   elaboration: string
   slug: string
+  // Each role's chosen thinking value; empty means the default for the role's
+  // selected model.
+  thinking: Record<TextRole, string>
   timeout_ms: number
 }
 

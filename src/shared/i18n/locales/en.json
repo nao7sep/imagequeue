@@ -302,6 +302,8 @@
   "settings.slugModel": "Slug model",
   "settings.slugModelHelp": "Names each generated image file from its prompt.",
   "settings.unsupportedModel": "Not a supported model. It may not work as expected.",
+  "settings.thinking": "Thinking",
+  "settings.thinkingHelp": "How much the model reasons before it answers, in the provider's own terms.",
   "settings.timeout": "Timeout (s)",
   "settings.endpoint": "Endpoint",
   "settings.endpointHelp": "The address ImageQueue sends {provider} requests to.",

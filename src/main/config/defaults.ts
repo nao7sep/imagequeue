@@ -9,12 +9,14 @@ export function createDefaultConfig(): AppConfig {
       endpoint: PROVIDER_ENDPOINTS.gemini,
       elaboration: defaultModelFor('gemini', 'text-balanced'),
       slug: defaultModelFor('gemini', 'text-fast'),
+      thinking: { elaboration: '', slug: '' },
       timeout_ms: 30000,
     },
     openai: {
       endpoint: PROVIDER_ENDPOINTS.openai,
       elaboration: defaultModelFor('openai', 'text-balanced'),
       slug: defaultModelFor('openai', 'text-fast'),
+      thinking: { elaboration: '', slug: '' },
       timeout_ms: 60000,
     },
     general: {

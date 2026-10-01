@@ -1,13 +1,9 @@
-import { AI_ROLES, TEXT_PROVIDERS, SUPPORTED_MODELS } from '../../../shared/ai-models'
+import { Fragment } from 'react'
+import { AI_ROLES, TEXT_PROVIDERS, defaultThinkingFor, hasThinkingChoice, textRowFor, thinkingFor } from '../../../shared/ai-models'
 import type { SecretId, TextAIBackendId } from '../../../shared/types'
 import { useI18n } from '../i18n/I18nContext'
 
 const PROVIDER_NAMES: Record<TextAIBackendId, string> = { gemini: 'Gemini', openai: 'OpenAI' }
-
-function isSupportedTextModel(provider: TextAIBackendId, id: string): boolean {
-  const key = id.trim().toLowerCase()
-  return SUPPORTED_MODELS.some((row) => row.provider === provider && row.id === key)
-}
 
 export function TextProviderSettings({ config, onChange, keyField }: {
   config: Record<string, unknown>
@@ -38,13 +34,30 @@ export function TextProviderSettings({ config, onChange, keyField }: {
         <div className="settings-field"><label>{t('settings.apiKey')}</label>{keyField(`${provider}.text`)}</div>
         {AI_ROLES.map((role) => {
           const value = section[role.id] as string
-          return <div className="settings-field" key={role.id}>
-            <label htmlFor={`${provider}-${role.id}`}>{t(`settings.${role.id}Model`)}</label>
-            <input id={`${provider}-${role.id}`} type="text" value={value}
-              onChange={(event) => updateProvider(provider, role.id, event.target.value)} />
-            <p className="settings-hint">{t(`settings.${role.id}ModelHelp`)}</p>
-            {!isSupportedTextModel(provider, value) && <p className="settings-hint settings-hint-warning">{t('settings.unsupportedModel')}</p>}
-          </div>
+          const thinking = section.thinking as Record<string, string>
+          const row = textRowFor(provider, value)
+          // A model change resets the role's thinking to the new model's default.
+          const changeModel = (id: string): void => {
+            const next = textRowFor(provider, id)
+            onChange({ ...config, [provider]: { ...section, [role.id]: id,
+              thinking: { ...thinking, [role.id]: next ? defaultThinkingFor(next, role.kind) : '' } } })
+          }
+          return <Fragment key={role.id}>
+            <div className="settings-field">
+              <label htmlFor={`${provider}-${role.id}`}>{t(`settings.${role.id}Model`)}</label>
+              <input id={`${provider}-${role.id}`} type="text" value={value} onChange={(event) => changeModel(event.target.value)} />
+              <p className="settings-hint">{t(`settings.${role.id}ModelHelp`)}</p>
+              {!row && <p className="settings-hint settings-hint-warning">{t('settings.unsupportedModel')}</p>}
+            </div>
+            {hasThinkingChoice(row) && <div className="settings-field">
+              <label htmlFor={`${provider}-${role.id}-thinking`}>{t('settings.thinking')}</label>
+              <select id={`${provider}-${role.id}-thinking`} value={thinkingFor(row, role.kind, thinking[role.id])}
+                onChange={(event) => updateProvider(provider, 'thinking', { ...thinking, [role.id]: event.target.value })}>
+                {row.thinking.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+              <p className="settings-hint">{t('settings.thinkingHelp')}</p>
+            </div>}
+          </Fragment>
         })}
         <div className="settings-field">
           <label htmlFor={`${provider}-timeout`}>{t('settings.timeout')}</label>

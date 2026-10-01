@@ -293,6 +293,8 @@
   "settings.slugModel": "スラッグモデル",
   "settings.slugModelHelp": "生成した画像ファイルにプロンプトから名前を付けます。",
   "settings.unsupportedModel": "サポート対象外のモデルです。期待どおりに動作しない可能性があります。",
+  "settings.thinking": "思考",
+  "settings.thinkingHelp": "回答する前にモデルがどれだけ考えるかを、プロバイダーの用語で指定します。",
   "settings.timeout": "タイムアウト（秒）",
   "settings.endpoint": "エンドポイント",
   "settings.endpointHelp": "ImageQueue が {provider} へのリクエストを送るアドレスです。",

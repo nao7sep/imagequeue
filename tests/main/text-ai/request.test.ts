@@ -12,7 +12,7 @@ describe('text adapter outbound contracts', () => {
   it('routes known OpenAI ids by id at a custom endpoint and other ids with only the feature\'s JSON format', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply({ choices: [{ message: { content: '{}' }, finish_reason: 'stop' }] }))
     vi.stubGlobal('fetch', fetchMock)
-    await new OpenAIProvider('gpt-6-luna', 'test-key', 'https://proxy.example/v1').ask({ ...opts, schema: {} })
+    await new OpenAIProvider('gpt-6-luna', 'test-key', 'https://proxy.example/v1', 'medium').ask({ ...opts, schema: {} })
     const known = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
     expect(known).toEqual({ model: 'gpt-6-luna', messages: [{ role: 'user', content: 'prompt' }], reasoning_effort: 'medium', response_format: { type: 'json_object' } })
     await new OpenAIProvider('local-id', 'test-key', 'https://proxy.example/v1').ask({ ...opts, schema: {} })
@@ -21,7 +21,7 @@ describe('text adapter outbound contracts', () => {
   it('uses the Gemini endpoint with the 3.x thinking level and sends an id with no row nothing model-specific', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply({ candidates: [{ content: { parts: [{ text: '{}' }] }, finishReason: 'STOP' }] }))
     vi.stubGlobal('fetch', fetchMock)
-    await new GeminiProvider('gemini-3.8-flash', 'test-key', 'https://proxy.example').ask({ ...opts, schema: { type: 'object' } })
+    await new GeminiProvider('gemini-3.8-flash', 'test-key', 'https://proxy.example', 'medium').ask({ ...opts, schema: { type: 'object' } })
     expect(fetchMock.mock.calls[0][0]).toBe('https://proxy.example/v1beta/models/gemini-3.8-flash:generateContent')
     const known = JSON.parse(fetchMock.mock.calls[0][1]?.body as string)
     expect(known.generationConfig).toEqual({ thinkingConfig: { thinkingLevel: 'MEDIUM' }, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } })

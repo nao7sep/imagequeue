@@ -7,7 +7,7 @@ import { ProviderHttpError } from '../provider-errors'
 import { openaiReasonField, reasonFromParsed } from '../provider-reason'
 
 export class OpenAIProvider implements TextAIProvider {
-  constructor(private model: string, private apiKey: string, private endpoint: string) {}
+  constructor(private model: string, private apiKey: string, private endpoint: string, private thinking?: string) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
     const client = new OpenAI({
@@ -17,7 +17,7 @@ export class OpenAIProvider implements TextAIProvider {
     const response = await client.chat.completions.create({
       model: this.model,
       messages: opts.messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
-      ...openaiTextParams(this.model, opts.schema),
+      ...openaiTextParams(this.model, this.thinking, opts.schema),
     }, { signal: opts.signal }).catch((error: unknown) => {
       if (error instanceof APIError && typeof error.status === 'number') {
         throw new ProviderHttpError(error.message, error.status,

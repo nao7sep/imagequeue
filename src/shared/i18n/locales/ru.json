@@ -320,6 +320,8 @@
   "settings.slugModel": "Модель для краткого имени",
   "settings.slugModelHelp": "Даёт каждому созданному файлу изображения имя по его промпту.",
   "settings.unsupportedModel": "Модель не поддерживается. Она может работать не так, как ожидается.",
+  "settings.thinking": "Рассуждение",
+  "settings.thinkingHelp": "Сколько модель рассуждает перед ответом, в терминах провайдера.",
   "settings.timeout": "Тайм-аут (с)",
   "settings.endpoint": "Конечная точка",
   "settings.endpointHelp": "Адрес, на который ImageQueue отправляет запросы к {provider}.",

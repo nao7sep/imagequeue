@@ -1,7 +1,8 @@
 import type { AppConfig, BrainstormConfig } from './types'
+import type { TextAIBackendId } from '../../shared/types'
 import { createDefaultConfig } from './defaults'
 import { isLanguage } from '../../shared/i18n/languages'
-import { AI_ROLES, TEXT_PROVIDERS } from '../../shared/ai-models'
+import { AI_ROLES, TEXT_PROVIDERS, defaultThinkingFor, textRowFor } from '../../shared/ai-models'
 import { multiline, singleLine } from '../../shared/textCleanup'
 import { valuesEqual } from '../settings-changes'
 
@@ -19,7 +20,10 @@ export function configSetDefaults(): Record<string, unknown> {
   }
   sets.provider = config.provider
   for (const provider of ['gemini', 'openai'] as const) {
-    for (const [key, value] of Object.entries(config[provider])) sets[`${provider}.${key}`] = value
+    for (const [key, value] of Object.entries(config[provider])) {
+      if (key !== 'thinking') sets[`${provider}.${key}`] = value
+    }
+    for (const role of AI_ROLES) sets[`${provider}.thinking.${role.id}`] = config[provider].thinking[role.id]
   }
   for (const [id, backend] of Object.entries(config.image_backends)) {
     for (const [key, value] of Object.entries(backend)) {
@@ -94,6 +98,8 @@ export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean
 }
 
 const MODEL_ID_SETS = new Set<string>(TEXT_PROVIDERS.flatMap((provider) => AI_ROLES.map((role) => `${provider}.${role.id}`)))
+const THINKING_SETS = new Map<string, { provider: TextAIBackendId; role: (typeof AI_ROLES)[number] }>(
+  TEXT_PROVIDERS.flatMap((provider) => AI_ROLES.map((role) => [`${provider}.thinking.${role.id}`, { provider, role }] as const)))
 // Filesystem paths are identity values, stored and compared exactly as given.
 const PATH_SETS = new Set<string>([
   'general.export_dir', 'notifications.success_file', 'notifications.failure_file', 'image_backends.drawthings.models_dir',
@@ -124,9 +130,16 @@ export function cleanConfigSet(key: string, value: unknown): unknown {
   return typeof value === 'string' ? singleLine(value) : value
 }
 
-// Whether a cleaned set equals its built-in; a model id is compared trimmed and
-// case-insensitive.
-export function equalsBuiltIn(key: string, cleaned: unknown, builtIn: unknown): boolean {
+// Whether a cleaned set equals its built-in in the config being saved; a model
+// id is compared trimmed and case-insensitive. A role's thinking equals its
+// built-in when it is empty or the default for the model the role selects, and
+// always for a model with no row, which has no thinking to store.
+export function equalsBuiltIn(key: string, cleaned: unknown, builtIn: unknown, config: AppConfig): boolean {
   if (MODEL_ID_SETS.has(key)) return (cleaned as string).toLowerCase() === (builtIn as string).toLowerCase()
+  const thinking = THINKING_SETS.get(key)
+  if (thinking) {
+    const row = textRowFor(thinking.provider, config[thinking.provider][thinking.role.id])
+    return !row || cleaned === builtIn || cleaned === defaultThinkingFor(row, thinking.role.kind)
+  }
   return valuesEqual(cleaned, builtIn)
 }

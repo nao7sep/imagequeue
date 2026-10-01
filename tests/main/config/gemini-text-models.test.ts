@@ -44,4 +44,33 @@ describe('open text model sets', () => {
     updateConfig((draft) => { draft.openai.timeout_ms = 90000 })
     expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ openai: { timeout_ms: 90000 } })
   })
+  it('stores a role\'s thinking only while it differs from the selected model\'s default', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    const file = (): unknown => JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))
+    updateConfig((draft) => { draft.openai.thinking.slug = 'none' })
+    expect(fs.existsSync(path.join(root, 'config.json'))).toBe(false)
+    updateConfig((draft) => { draft.openai.thinking.slug = 'high' })
+    expect(file()).toEqual({ openai: { thinking: { slug: 'high' } } })
+    updateConfig((draft) => { draft.openai.slug = 'gpt-6.1-sol'; draft.openai.thinking.slug = 'low' })
+    expect(file()).toEqual({ openai: { slug: 'gpt-6.1-sol' } })
+    updateConfig((draft) => { draft.openai.thinking.slug = 'max' })
+    updateConfig((draft) => { draft.openai.slug = 'local-model' })
+    expect(file()).toEqual({ openai: { slug: 'local-model' } })
+  })
+  it('sends the role\'s default when the stored thinking is one the selected row does not list', async () => {
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ provider: 'openai', openai: { thinking: { slug: 'minimal', elaboration: 'xhigh' } } }))
+    vi.doMock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] }), { headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const { getLightProvider, getMainProvider } = await import('../../../src/main/text-ai')
+      const ask = { messages: [{ role: 'user' as const, text: 'p' }], timeoutMs: 1000 }
+      await getLightProvider()!.provider.ask(ask)
+      await getMainProvider()!.provider.ask(ask)
+      expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(init!.body as string).reasoning_effort)).toEqual(['none', 'xhigh'])
+    } finally {
+      vi.unstubAllGlobals()
+      vi.doUnmock('../../../src/main/config/api-keys-store')
+    }
+  })
 })

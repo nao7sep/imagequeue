@@ -7,7 +7,7 @@ import { ProviderHttpError } from '../provider-errors'
 import { geminiReasonField, reasonFromBody } from '../provider-reason'
 
 export class GeminiProvider implements TextAIProvider {
-  constructor(private model: string, private apiKey: string, private endpoint: string) {}
+  constructor(private model: string, private apiKey: string, private endpoint: string, private thinking?: string) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
     // The app owns retries; the SDK performs exactly one attempt.
@@ -19,7 +19,7 @@ export class GeminiProvider implements TextAIProvider {
       model: this.model,
       contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
       config: {
-        ...geminiTextParams(this.model, opts.schema),
+        ...geminiTextParams(this.model, this.thinking, opts.schema),
         ...(opts.signal ? { abortSignal: opts.signal } : {}),
       },
     }).catch((error: unknown) => {

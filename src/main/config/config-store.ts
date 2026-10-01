@@ -113,7 +113,7 @@ export function saveConfig(config: AppConfig): void {
       throw new Error(`Cannot save invalid config set: ${key}`)
     }
     const cleaned = cleanConfigSet(key, value)
-    if (!equalsBuiltIn(key, cleaned, builtIn)) writePath(next, key, cleaned)
+    if (!equalsBuiltIn(key, cleaned, builtIn, config)) writePath(next, key, cleaned)
   }
   if (!valuesEqual(next, current)) {
     const file = getConfigPath()
