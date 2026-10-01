@@ -71,6 +71,12 @@ function walkChangedFields(
     return
   }
 
+  const setKey = pathParts.join('.')
+  if (setKey === 'image_backends.drawthings.default_params') {
+    setConfigPath(target, pathParts, structuredClone(next))
+    return
+  }
+
   if (isPlainObject(next)) {
     for (const key of Object.keys(next)) {
       // Trust boundary: keys come from the renderer's payload. A __proto__ /

@@ -5,6 +5,7 @@ import type { Elaborator, ElaboratorKind } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
+import { valuesEqual } from './settings-changes'
 import { utcStampForFilename } from '../shared/utc-stamp'
 
 function getElaboratorsFilePath(): string {
@@ -256,7 +257,6 @@ function isElaborator(value: unknown): value is Elaborator {
 export type ElaboratorRecoveryNotice =
   | { kind: 'recovered'; path: string }
   | { kind: 'quarantine-failed'; path: string; error: string }
-  | { kind: 'reseed-failed'; path: string; error: string }
 
 const recoveryNotices: ElaboratorRecoveryNotice[] = []
 
@@ -264,14 +264,14 @@ export function drainElaboratorRecoveryNotices(): ElaboratorRecoveryNotice[] {
   return recoveryNotices.splice(0)
 }
 
-// Preserve user-authored templates before reseeding. A failed rename propagates.
+// Preserve user-authored templates before recovery. A failed rename propagates.
 function quarantineCorruptFile(file: string, reason: string, err?: unknown): string {
   const dir = path.dirname(file)
   const stem = path.basename(file, path.extname(file))
   const movedTo = path.join(dir, `${stem}-${utcStampForFilename()}.invalid`)
   try {
     fs.renameSync(file, movedTo)
-    log('warn', `Quarantined ${reason} elaborators file; reseeding defaults`, {
+    log('warn', `Quarantined ${reason} elaborators file; using shipped templates`, {
       from: file,
       to: movedTo,
       ...(err ? { error: serializeError(err) } : {}),
@@ -291,93 +291,57 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): str
   }
 }
 
-// Recreate a valid live file after the corrupt one has moved aside.
-function reseedAfterQuarantine(quarantinedPath: string): Elaborator[] {
-  const seeded = defaultElaborators()
-  try {
-    writeFile(seeded)
-    recoveryNotices.push({ kind: 'recovered', path: quarantinedPath })
-    return seeded
-  } catch (err) {
-    const error = String(serializeError(err).message ?? err)
-    log('error', 'Failed to reseed elaborators after quarantine', {
-      quarantinedPath,
-      error: serializeError(err),
-    })
-    recoveryNotices.push({ kind: 'reseed-failed', path: quarantinedPath, error })
-    throw err
-  }
-}
+type ElaboratorSets = Partial<Record<ElaboratorKind, unknown>>
+const kinds: ElaboratorKind[] = ['composition', 'style']
+const warnedSets = new Set<ElaboratorKind>()
 
-// Reads the persisted elaborators, or null when the file is genuinely absent
-// (the first-run case, before materializeElaborators has run, or after a user
-// deletes the file). A present-but-corrupt file is not "absent": it is
-// quarantined aside and defaults are recreated on disk in place — this function
-// resolves that recovery itself and returns the reseeded items, so a null return
-// means only "no file", never "unreadable file".
-function readFile(): Elaborator[] | null {
+function readFile(): ElaboratorSets {
   const file = getElaboratorsFilePath()
-  // A missing file is the expected pre-materialization / deleted-file case — probe
-  // silently and let the caller fall back to in-memory defaults without writing.
-  // A file that EXISTS but is unparseable or malformed is unexpected (corrupt or
-  // hand-edited); quarantine the bad bytes aside and recreate valid defaults.
-  if (!fs.existsSync(file)) return null
+  if (!fs.existsSync(file)) return {}
   let parsed: unknown
   try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
   } catch (err) {
-    const quarantinedPath = quarantineCorruptFile(file, 'unreadable', err)
-    return reseedAfterQuarantine(quarantinedPath)
+    const movedTo = quarantineCorruptFile(file, 'unreadable', err)
+    recoveryNotices.push({ kind: 'recovered', path: movedTo })
+    return {}
   }
-  if (!Array.isArray(parsed) || !parsed.every(isElaborator)) {
-    const quarantinedPath = quarantineCorruptFile(file, 'malformed')
-    return reseedAfterQuarantine(quarantinedPath)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const movedTo = quarantineCorruptFile(file, 'malformed')
+    recoveryNotices.push({ kind: 'recovered', path: movedTo })
+    return {}
   }
-  return parsed
+  const stored: ElaboratorSets = {}
+  for (const kind of kinds) {
+    const items = (parsed as Record<string, unknown>)[kind]
+    if (items === undefined) continue
+    stored[kind] = items
+  }
+  return stored
 }
 
-function writeFile(items: Elaborator[]): void {
-  // elaborators.json is a persisted store under the storage root; write it
-  // atomically (temp + rename) so a crash mid-write can't leave a truncated
-  // file that the next load would reject as malformed. Mirrors config.json.
-  // recorded: elaborators.json is durable, user-authored managed text — the
-  // prompt-elaboration registry the user builds up (data-backup conventions).
-  writeJsonAtomic(getElaboratorsFilePath(), items, true)
-}
-
-// Write elaborators.json from the shipped defaults on first run, only when the
-// file is absent — the storage-path conventions' "materialize built-in
-// defaultable files on first run" rule, the same shape config-store.loadConfig
-// uses for config.json. Absence is the single trigger: a present file (even a
-// corrupt one) is left exactly as the user left it and never inspected here, so
-// the create-if-absent path can only ever fill a gap, never overwrite. A
-// corrupt file is resolved on the load path instead (readFile quarantines it
-// aside then reseeds), which is the convention's other allowed branch.
-//
-// Called from app.whenReady at the populated-but-not-yet-used startup point,
-// alongside the config seed, so a launch-then-quit leaves a real, editable
-// elaborators.json on disk — inspectable and captured by the first-run backup —
-// rather than a phantom the app carried in memory until the renderer first
-// asked for the list. The defaults come from one in-code source of truth
-// (shippedElaborators, via defaultElaborators) serialized through the app's own
-// save path (writeFile → writeJsonAtomic), never a hand-built JSON literal.
-export function materializeElaborators(): void {
-  const file = getElaboratorsFilePath()
-  if (fs.existsSync(file)) return
-  writeFile(defaultElaborators())
+function writeFile(stored: ElaboratorSets): void {
+  writeJsonAtomic(getElaboratorsFilePath(), stored, true)
 }
 
 export function listElaborators(): Elaborator[] {
-  // A pure read of the now-present file. elaborators.json is materialized at
-  // startup (materializeElaborators, called from app.whenReady before any
-  // consumer reads the store), so on every production path the file already
-  // exists and readFile returns its contents. If the file is genuinely absent —
-  // a test or tool driving the store without the startup seed, or a user
-  // deleting it at runtime — we return the in-memory defaults but do NOT write
-  // here: materialization is the single first-run writer, and every mutating
-  // caller (create/update/delete/reset) persists through its own writeFile, so
-  // this read stays free of a side-effecting first-write.
-  return readFile() ?? defaultElaborators()
+  const stored = readFile()
+  return kinds.flatMap((kind) => {
+    const items = stored[kind]
+    if (items === undefined) return defaultElaborators(kind)
+    if (Array.isArray(items) && items.every((item) => isElaborator(item) && item.kind === kind)) return items as Elaborator[]
+    if (!warnedSets.has(kind)) {
+      warnedSets.add(kind)
+      log('warn', 'Invalid elaborator set; using shipped templates', { key: kind })
+    }
+    return defaultElaborators(kind)
+  })
+}
+
+function writeKind(kind: ElaboratorKind, items: Elaborator[]): void {
+  const stored = readFile()
+  stored[kind] = items.filter((item) => item.kind === kind)
+  writeFile(stored)
 }
 
 export function createElaborator(input: {
@@ -402,7 +366,7 @@ export function createElaborator(input: {
   } else {
     items.splice(firstIndexOfKind, 0, created)
   }
-  writeFile(items)
+  writeKind(input.kind, items)
   return created
 }
 
@@ -422,8 +386,9 @@ export function updateElaborator(
     description: patch.description !== undefined ? (patch.description || undefined) : current.description,
     template: patch.template !== undefined ? patch.template : current.template,
   }
+  if (valuesEqual(current, next)) return current
   items[index] = next
-  writeFile(items)
+  writeKind(current.kind, items)
   return next
 }
 
@@ -431,19 +396,16 @@ export function deleteElaborator(id: string): boolean {
   const items = listElaborators()
   const next = items.filter((item) => item.id !== id)
   if (next.length === items.length) return false
-  writeFile(next)
+  writeKind(items.find((item) => item.id === id)!.kind, next)
   return true
 }
 
 export function resetElaborators(kind?: ElaboratorKind): Elaborator[] {
-  const items = kind
-    ? [
-        ...listElaborators().filter((item) => item.kind !== kind),
-        ...defaultElaborators(kind),
-      ]
-    : defaultElaborators()
-  writeFile(items)
-  return items
+  const stored = readFile()
+  if (kind) delete stored[kind]
+  else for (const key of kinds) delete stored[key]
+  if (fs.existsSync(getElaboratorsFilePath())) writeFile(stored)
+  return listElaborators()
 }
 
 export function getElaborator(id: string): Elaborator | null {

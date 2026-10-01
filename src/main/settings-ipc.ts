@@ -61,10 +61,10 @@ export function registerSettingsIpc(
     return loadConfig()
   })
 
-  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig) => {
+  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig, resetSets: string[] = []) => {
     const config = updateConfig((draft) => {
       applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
-    })
+    }, resetSets)
     if (onConfigSaved) {
       try {
         await onConfigSaved(config)
@@ -117,10 +117,10 @@ export function registerSettingsIpc(
     return { image, geminiText: hasApiKey('gemini.text'), openaiText: hasApiKey('openai.text') }
   })
 
-  handle('settings:saveBrainstorm', (_event, brainstorm: AppConfig['brainstorm']) => {
+  handle('settings:saveBrainstorm', (_event, brainstorm: AppConfig['brainstorm'], reset = false) => {
     updateConfig((draft) => {
       draft.brainstorm = brainstorm
-    })
+    }, reset ? ['brainstorm'] : [])
     return { success: true }
   })
 
@@ -140,10 +140,7 @@ export function registerSettingsIpc(
         backends[backend] = {
           ...current,
           model,
-          default_params: {
-            ...current.default_params,
-            ...params,
-          },
+          default_params: params,
         }
       })
       return { success: true }

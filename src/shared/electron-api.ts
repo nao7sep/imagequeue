@@ -147,8 +147,8 @@ export interface ElectronAPI {
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<{ success: boolean }>
-  saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<{ success: boolean }>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, resetSets?: string[]) => Promise<{ success: boolean }>
+  saveBrainstormSettings: (brainstorm: Record<string, unknown>, reset?: boolean) => Promise<{ success: boolean }>
   getApiKeyPresence: () => Promise<ApiKeyPresence>
   // Stored key values, by key id — their own channels, never part of the config
   // payload. saveApiKeys takes only the ids the user actually changed.

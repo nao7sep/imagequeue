@@ -237,12 +237,13 @@ const api = {
 
   saveChangedSettings: (
     base: Record<string, unknown>,
-    next: Record<string, unknown>
+    next: Record<string, unknown>,
+    resetSets: string[] = []
   ): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveChangedFields', base, next),
+    ipcRenderer.invoke('settings:saveChangedFields', base, next, resetSets),
 
-  saveBrainstormSettings: (brainstorm: Record<string, unknown>): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
+  saveBrainstormSettings: (brainstorm: Record<string, unknown>, reset = false): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('settings:saveBrainstorm', brainstorm, reset),
   getApiKeyPresence: (): Promise<ApiKeyPresence> =>
     ipcRenderer.invoke('settings:getApiKeyPresence'),
 

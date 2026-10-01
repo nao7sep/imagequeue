@@ -3,9 +3,9 @@ import os from 'os'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { saveConfig } from '../../../src/main/config'
+import { saveConfig, loadConfig } from '../../../src/main/config'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
-import { materializeElaborators, createElaborator } from '../../../src/main/elaborators'
+import { createElaborator } from '../../../src/main/elaborators'
 import { setModelParams } from '../../../src/main/model-params'
 import { updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
@@ -54,13 +54,12 @@ describe('record/no-record decisions at real write sites', () => {
   })
 
   it('records config.json on save', () => {
-    saveConfig(createDefaultConfig())
+    saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } })
     closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'config.json'))
   })
 
-  it('records elaborators.json on materialize and on a mutating write', () => {
-    materializeElaborators() // first-run write-if-absent
+  it('records elaborators.json on a mutating write', () => {
     createElaborator({ kind: 'style', name: 'X', template: 'a template' })
     closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'elaborators.json'))
@@ -102,7 +101,7 @@ describe('record/no-record decisions at real write sites', () => {
   })
 
   it('store-file filter: backups.sqlite3 and its -wal/-shm sidecars are excludable when asserting root contents', () => {
-    saveConfig(createDefaultConfig()) // triggers a recorded write → store file (+ WAL sidecars) appear
+    saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } }) // triggers a recorded write → store file (+ WAL sidecars) appear
     closeBackupStore()
 
     const isStoreArtifact = (name: string) =>

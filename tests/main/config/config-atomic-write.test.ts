@@ -31,27 +31,6 @@ describe('config store (atomic write of config.json)', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('seeds config.json with valid JSON and no leftover temp file on first load', () => {
-    const configPath = getConfigPath()
-    expect(configPath).toBe(path.join(tmpRoot, 'config.json'))
-
-    // First load on an empty root seeds defaults and writes them out.
-    const seeded = loadConfig()
-
-    expect(fs.existsSync(configPath)).toBe(true)
-
-    // The persisted file round-trips back as valid JSON equal to the defaults
-    // (api-key fields are scrubbed but the default config has none populated).
-    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-    expect(parsed).toEqual(seeded)
-    expect(parsed).toEqual(createDefaultConfig())
-
-    // writeJsonAtomic writes "<stem>-<nanoid>.tmp" (never a dot-appended "<file>.tmp") then renames;
-    // after a clean write the temp artifact must be gone so no truncated/partial file is left behind.
-    expect(fs.existsSync(`${configPath}.tmp`)).toBe(false)
-    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
-  })
-
   it('leaves no orphaned temp file after an explicit saveConfig', () => {
     const configPath = getConfigPath()
 
@@ -69,6 +48,7 @@ describe('config store (atomic write of config.json)', () => {
   it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as config.json', () => {
     const spy = vi.spyOn(fs, 'openSync')
     const config = createDefaultConfig()
+    config.general.language = 'ja'
     saveConfig(config)
 
     const tempCall = spy.mock.calls.find((call) =>
@@ -83,7 +63,7 @@ describe('config store (atomic write of config.json)', () => {
 
   it('syncs staged bytes before publication', () => {
     const sync = vi.spyOn(fs, 'fsyncSync')
-    saveConfig(createDefaultConfig())
+    updateConfig((draft) => { draft.general.language = loadConfig().general.language === 'ja' ? 'en' : 'ja' })
     expect(sync).toHaveBeenCalled()
     sync.mockRestore()
   })
@@ -92,7 +72,7 @@ describe('config store (atomic write of config.json)', () => {
     const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
       throw new Error('simulated rename failure')
     })
-    expect(() => saveConfig(createDefaultConfig())).toThrow('simulated rename failure')
+    expect(() => updateConfig((draft) => { draft.general.language = loadConfig().general.language === 'ja' ? 'en' : 'ja' })).toThrow('simulated rename failure')
     rename.mockRestore()
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
@@ -102,7 +82,7 @@ describe('config store (atomic write of config.json)', () => {
   // unrelated save would also write them to disk unnoticed.
   it('keeps the running settings when an update cannot be written', () => {
     // The cache outlives each test's data root; write it into this one first.
-    const before = updateConfig(() => undefined)
+    const before = updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 180001 })
     const timeout = before.image_backends.openai.timeout_ms
     const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
       throw new Error('simulated disk full')

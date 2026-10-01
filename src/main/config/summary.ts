@@ -9,7 +9,7 @@ import { hasApiKey } from './api-keys-store'
 // the primary "summarize, don't dump" defense for config.
 //
 // Every field is read defensively (optional chaining). config.json is
-// user-editable and deepMergeDefaults preserves a malformed nested section
+// user-editable and callers may supply a malformed nested section
 // (e.g. `"text_ai": null`) verbatim, so a deep, unguarded dereference here would
 // throw inside app startup and leave the app running with no window. Cloud
 // backends are derived from the shared id list rather than hand-listed, so a new

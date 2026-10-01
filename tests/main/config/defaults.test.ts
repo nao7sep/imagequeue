@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
-import { deepMergeDefaults } from '../../../src/main/config/config-store'
 import { GEMINI_TEXT_MODELS } from '../../../src/shared/models'
 import { PROMPT_FORMATS, PROMPT_LENGTHS } from '../../../src/shared/session-draft'
 
@@ -13,32 +12,21 @@ describe('createDefaultConfig', () => {
     expect(a.general).not.toBe(b.general)
   })
 
-  it('is a fixed point of deepMergeDefaults (merging defaults over defaults is a no-op)', () => {
-    const defaults = createDefaultConfig()
-    expect(deepMergeDefaults(createDefaultConfig(), defaults)).toEqual(defaults)
-  })
-
   // The wake lock ships opt-out, not opt-in: keeping the machine awake during
   // work is the default, and a pre-existing config without the key inherits it
-  // (deepMergeDefaults fills absent keys). Pin the default so it can't silently flip.
+  // (absent sets resolve to built-ins). Pin the default so it can't silently flip.
   it('keeps the system awake during work by default', () => {
     expect(createDefaultConfig().general.keep_awake_during_work).toBe(true)
-    const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
-    expect(legacy.general.keep_awake_during_work).toBe(true)
   })
 
   it('shows the native status icon by default and backfills the preference', () => {
     expect(createDefaultConfig().general.show_status_icon).toBe(true)
-    const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
-    expect(legacy.general.show_status_icon).toBe(true)
   })
 
   // The UI font defaults to blank (meaning the built-in --font-ui stack), and a pre-existing config
-  // without the key inherits that blank via deepMergeDefaults rather than breaking the load.
+  // without the key uses the built-in blank.
   it('defaults the UI font to blank and backfills it for an older config', () => {
     expect(createDefaultConfig().general.ui_font_family).toBe('')
-    const legacy = deepMergeDefaults({ general: { export_dir: '' } }, createDefaultConfig())
-    expect(legacy.general.ui_font_family).toBe('')
   })
 })
 

@@ -13,7 +13,6 @@ import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
 import { registerConceptsIpc } from './concepts-ipc'
-import { materializeElaborators } from './elaborators'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
@@ -206,14 +205,6 @@ function startUp(): void {
   // the startup failure window follows the OS.
   applyThemePreference(loadConfig().general.theme)
   followOsThemeChanges()
-  // Materialize the shipped elaborators the same way loadConfig materializes
-  // config.json: write elaborators.json from the in-code defaults on first run,
-  // only when absent, at this populated-but-not-yet-used point before any
-  // consumer (the renderer's elaborators:list, the backup pass) reads it. A
-  // launch-then-quit then leaves a real, editable elaborators.json on disk and
-  // in the first-run backup, instead of a phantom that materialized only when
-  // the renderer first asked for the list. (storage-path conventions)
-  materializeElaborators()
   initSession()
   resetOutputTimestampAllocators()
   log('info', 'App started', {

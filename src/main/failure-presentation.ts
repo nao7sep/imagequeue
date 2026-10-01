@@ -76,7 +76,7 @@ export function queueStorageFailurePresentation(): AppNotice {
 }
 
 type ElaboratorRecovery = {
-  kind: 'recovered' | 'quarantine-failed' | 'reseed-failed'
+  kind: 'recovered' | 'quarantine-failed'
   path?: string
   error?: string
 }

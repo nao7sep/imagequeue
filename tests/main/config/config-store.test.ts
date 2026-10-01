@@ -2,7 +2,6 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { deepMergeDefaults } from '../../../src/main/config/config-store'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 
 // The security property behind keys living outside the config type: the shipped
@@ -29,110 +28,80 @@ describe('the config shape cannot carry an api key', () => {
   })
 })
 
-describe('deepMergeDefaults', () => {
-  it('fills structurally absent keys from defaults', () => {
-    expect(deepMergeDefaults({ a: 1 }, { a: 0, b: 2 })).toEqual({ a: 1, b: 2 })
-  })
-
-  it('preserves explicit falsy values rather than overwriting with defaults', () => {
-    const loaded = { enabled: false, count: 0, name: '', nothing: null }
-    const defaults = { enabled: true, count: 5, name: 'def', nothing: 'def' }
-    expect(deepMergeDefaults(loaded, defaults)).toEqual(loaded)
-  })
-
-  it('merges nested objects recursively', () => {
-    const loaded = { general: { a: 1 } }
-    const defaults = { general: { a: 0, b: 2 }, extra: { c: 3 } }
-    expect(deepMergeDefaults(loaded, defaults)).toEqual({ general: { a: 1, b: 2 }, extra: { c: 3 } })
-  })
-
-  it('keeps loaded arrays verbatim instead of merging element-wise', () => {
-    const loaded = { items: [1] }
-    const defaults = { items: [9, 9, 9] }
-    expect(deepMergeDefaults(loaded, defaults)).toEqual({ items: [1] })
-  })
-
-  it('preserves user keys that are absent from defaults', () => {
-    expect(deepMergeDefaults({ extra: 'keep' }, { known: 1 }))
-      .toEqual({ extra: 'keep', known: 1 })
-  })
-
-  it('returns defaults when the loaded value is not a plain object', () => {
-    const defaults = { a: 1 }
-    expect(deepMergeDefaults(undefined, defaults)).toBe(defaults)
-    expect(deepMergeDefaults('not an object', defaults)).toBe('not an object')
-  })
-})
-
-// deepMergeDefaults deliberately keeps loaded keys that defaults no longer has
-// (the test above pins that), so a removed schema key would otherwise live in the
-// user's config forever. These prove the removals are actually swept.
-describe('legacy config keys', () => {
-  const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
-  let tmpRoot: string
-  const originalHome = process.env[ENV_VAR]
-
+describe('settings by set', () => {
+  let root: string
   beforeEach(() => {
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-config-'))
-    process.env[ENV_VAR] = tmpRoot
-    // loadConfig memoizes into a module-level cache, so each case needs a fresh
-    // module instance rather than a test-only reset export on the store.
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-config-'))
+    vi.stubEnv('IMAGEQUEUE_DATA_DIR', root)
     vi.resetModules()
   })
-
-  afterEach(() => {
-    if (originalHome === undefined) delete process.env[ENV_VAR]
-    else process.env[ENV_VAR] = originalHome
-    fs.rmSync(tmpRoot, { recursive: true, force: true })
+  afterEach(async () => {
+    const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
+    closeBackupStore()
+    vi.unstubAllEnvs()
+    fs.rmSync(root, { recursive: true, force: true })
   })
+  const file = () => path.join(root, 'config.json')
+  const stored = () => JSON.parse(fs.readFileSync(file(), 'utf8'))
 
-  async function loadWritten(config: unknown): Promise<Record<string, never>> {
-    fs.writeFileSync(path.join(tmpRoot, 'config.json'), JSON.stringify(config), 'utf-8')
+  it('loads built-ins without writing on first run', async () => {
     const { loadConfig } = await import('../../../src/main/config/config-store')
-    return loadConfig() as unknown as Record<string, never>
-  }
-
-  it('drops the Imagen backend block a pre-removal config still carries', async () => {
-    const loaded = await loadWritten({
-      image_backends: {
-        imagen: { api_key: '', model: 'imagen-4.0-generate-001', concurrency: 3, timeout_ms: 180000 },
-      },
-    })
-    const backends = loaded.image_backends as unknown as Record<string, unknown>
-    expect(backends).not.toHaveProperty('imagen')
-    // The surviving backends are untouched by the sweep.
-    expect(Object.keys(backends).sort()).toEqual(
-      ['drawthings', 'flux', 'grok', 'nanobanana', 'openai']
-    )
+    expect(loadConfig()).toEqual(createDefaultConfig())
+    expect(fs.existsSync(file())).toBe(false)
   })
-
-  it('drops the pre-closed-list Gemini text models array', async () => {
-    const loaded = await loadWritten({ text_ai: { gemini: { models: ['gemini-1.0'], main_model: 'kept' } } })
-    const gemini = (loaded.text_ai as unknown as Record<string, Record<string, unknown>>).gemini
-    expect(gemini).not.toHaveProperty('models')
-    // A legacy tier selection survives — the store never judges a selection.
-    expect(gemini.main_model).toBe('kept')
+  it('writes exactly one changed scalar set', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.general.language = 'ja' })
+    expect(stored()).toEqual({ general: { language: 'ja' } })
   })
-
-  it('drops the notification volume, which moved to state.json', async () => {
-    const loaded = await loadWritten({
-      notifications: { volume: 0.9, sounds_enabled: false },
-    })
-    const notifications = loaded.notifications as unknown as Record<string, unknown>
-    expect(notifications).not.toHaveProperty('volume')
-    // The neighbouring toggle is a real setting and stays.
-    expect(notifications.sounds_enabled).toBe(false)
+  it('reads every other set from the built-in without materializing it', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ general: { language: 'de' } }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    const defaults = createDefaultConfig()
+    defaults.general.language = 'de'
+    expect(loadConfig()).toEqual(defaults)
+    expect(stored()).toEqual({ general: { language: 'de' } })
   })
-
-  it('strips a stale api_key an older build left on disk, value and all', async () => {
-    const loaded = await loadWritten({
-      text_ai: { gemini: { api_key: 'sk-stale-secret' } },
-      image_backends: { grok: { api_key: 'xai-stale-secret', model: 'kept' } },
-    })
-    const gemini = (loaded.text_ai as unknown as Record<string, Record<string, unknown>>).gemini
-    const grok = (loaded.image_backends as unknown as Record<string, Record<string, unknown>>).grok
-    expect(gemini).not.toHaveProperty('api_key')
-    expect(grok).not.toHaveProperty('api_key')
-    expect(grok.model).toBe('kept')
+  it('drops version and unknown keys on the next actual save', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ version: 4, arbitrary: 'unknown', general: { language: 'ja' } }))
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.notifications.sounds_enabled = false })
+    expect(stored()).toEqual({ general: { language: 'ja' }, notifications: { sounds_enabled: false } })
+  })
+  it('does not write on an unchanged save', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig(() => undefined)
+    expect(fs.existsSync(file())).toBe(false)
+  })
+  it('keeps a whole cluster, and resets by deleting its copy', async () => {
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.brainstorm.concurrency = 2 })
+    expect(stored()).toEqual({ brainstorm: { ...createDefaultConfig().brainstorm, concurrency: 2 } })
+    updateConfig(() => undefined, ['brainstorm'])
+    expect(stored()).toEqual({})
+    expect(loadConfig().brainstorm).toEqual(createDefaultConfig().brainstorm)
+  })
+  it('rejects an incomplete cluster as absent without repairing or quarantining the file', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ brainstorm: { concurrency: 2 }, general: { theme: 'bogus' } }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig()).toEqual(createDefaultConfig())
+    expect(stored()).toEqual({ brainstorm: { concurrency: 2 }, general: { theme: 'bogus' } })
+  })
+  it('re-reads the map and keeps a different set changed since load', async () => {
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    loadConfig()
+    fs.writeFileSync(file(), JSON.stringify({ general: { language: 'ja' } }))
+    updateConfig((draft) => { draft.notifications.sounds_enabled = false })
+    expect(stored()).toEqual({ general: { language: 'ja' }, notifications: { sounds_enabled: false } })
+  })
+  it('stores model and parameters in one renamed set without migrating old sibling keys', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ image_backends: { openai: { model: 'old', default_params: {}, concurrency: 1 } } }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().image_backends.openai.model).toBe(createDefaultConfig().image_backends.openai.model)
+    updateConfig((draft) => { draft.image_backends.openai.model = 'chosen' })
+    expect(stored()).toEqual({ image_backends: { openai: {
+      concurrency: 1,
+      defaults: { model: 'chosen', default_params: createDefaultConfig().image_backends.openai.default_params },
+    } } })
   })
 })

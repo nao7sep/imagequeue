@@ -50,7 +50,6 @@ describe('generationFailurePresentation', () => {
     expect(notice && text(notice.title)).toContain('settings were reset')
     expect(notice && text(notice.message)).not.toContain(hostile)
     expect(elaboratorRecoveryPresentation({ kind: 'quarantine-failed', error: hostile })).toBeNull()
-    expect(elaboratorRecoveryPresentation({ kind: 'reseed-failed', error: hostile })).toBeNull()
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

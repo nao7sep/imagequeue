@@ -133,6 +133,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   const { t, text, rich } = useI18n()
   const [form, setForm] = useState<BrainstormForm | null>(null)
   const [baseForm, setBaseForm] = useState<BrainstormForm | null>(null)
+  const [resetForm, setResetForm] = useState<BrainstormForm | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
 
@@ -149,8 +150,8 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
   const dirty = useMemo(() => {
     if (!form || !baseForm) return false
-    return JSON.stringify(form) !== JSON.stringify(baseForm)
-  }, [form, baseForm])
+    return resetForm !== null || JSON.stringify(form) !== JSON.stringify(baseForm)
+  }, [form, baseForm, resetForm])
 
   const handleReset = useCallback(async (): Promise<void> => {
     const ok = await confirm({
@@ -165,6 +166,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     try {
       const defaults = await window.electronAPI.brainstormGetDefaults()
       setForm(fromConfig(defaults))
+      setResetForm(fromConfig(defaults))
     } catch (error) {
       setMessage(msg(presentFailure('elaboration-defaults-load', error)))
     } finally {
@@ -221,14 +223,14 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       }
       // Main logs `Config saved` whenever the config file is rewritten, so
       // there's nothing extra to record from the renderer side here.
-      await saveBrainstormSettings(next)
+      await saveBrainstormSettings(next, resetForm !== null && JSON.stringify(form) === JSON.stringify(resetForm))
       onClose()
     } catch (error) {
       setMessage(msg(presentFailure('elaboration-save', error)))
     } finally {
       setBusy(false)
     }
-  }, [form, saveBrainstormSettings, onClose, confirm, t])
+  }, [form, resetForm, saveBrainstormSettings, onClose, confirm, t])
 
   const handleCancel = useCallback(async (): Promise<void> => {
     if (dirty) {

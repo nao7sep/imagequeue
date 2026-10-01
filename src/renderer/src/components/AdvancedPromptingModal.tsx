@@ -187,7 +187,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [apiKeyPresence])
 
   // Draw Things fallback params read straight from config: config-store's
-  // deepMergeDefaults guarantees these keys exist, so the defaults live in one
+  // The effective config supplies these whole sets, so the defaults live in one
   // place (config/defaults.ts) rather than being re-hardcoded here. Null only in
   // the brief window before settings load — buildDtParams halts in that case
   // instead of inventing values.

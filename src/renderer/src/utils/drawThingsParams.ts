@@ -30,7 +30,7 @@ export interface DtRecommendationParams {
 /**
  * The configured fallbacks, with the pre-load placeholder values in ONE place.
  * The literals apply only while settings have not arrived; every populated
- * config carries all four numbers (config seeding materializes defaults).
+ * effective config carries all four numbers from its whole fallback set.
  */
 export function dtFallbacksFromSettings(settings: Record<string, unknown> | null): DtFallbackParams {
   const defaults = (

@@ -17,9 +17,9 @@ interface SettingsContextValue {
   // Stored key values by id, for the Settings form alone. Keys are not part of
   // `settings`: config.json cannot hold one, so they travel their own channel.
   apiKeys: Record<SecretId, string> | null
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<Record<string, unknown>>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, resetSets?: string[]) => Promise<Record<string, unknown>>
   saveApiKeys: (changes: Partial<Record<SecretId, string>>) => Promise<Record<string, unknown>>
-  saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<Record<string, unknown>>
+  saveBrainstormSettings: (brainstorm: Record<string, unknown>, reset?: boolean) => Promise<Record<string, unknown>>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveNotificationField: (field: string, value: unknown) => Promise<Record<string, unknown>>
 }
@@ -91,16 +91,16 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   )
 
   const saveChangedSettings = useCallback(
-    async (base: Record<string, unknown>, next: Record<string, unknown>): Promise<Record<string, unknown>> => {
-      await window.electronAPI.saveChangedSettings(base, next)
+    async (base: Record<string, unknown>, next: Record<string, unknown>, resetSets?: string[]): Promise<Record<string, unknown>> => {
+      await window.electronAPI.saveChangedSettings(base, next, resetSets)
       return refreshSettings()
     },
     [refreshSettings]
   )
 
   const saveBrainstormSettings = useCallback(
-    async (brainstorm: Record<string, unknown>): Promise<Record<string, unknown>> => {
-      await window.electronAPI.saveBrainstormSettings(brainstorm)
+    async (brainstorm: Record<string, unknown>, reset?: boolean): Promise<Record<string, unknown>> => {
+      await window.electronAPI.saveBrainstormSettings(brainstorm, reset)
       return refreshSettings()
     },
     [refreshSettings]

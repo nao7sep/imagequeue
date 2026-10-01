@@ -148,14 +148,14 @@ describe('API keys', () => {
 })
 
 describe('image backend defaults', () => {
-  it('replaces the model and merges the parameters onto what was there', () => {
+  it('replaces the model and parameters as one set', () => {
     expect(invoke('settings:saveImageBackendDefaults', 'openai', 'gpt-image-3', { quality: 'low' })).toEqual({
       success: true,
     })
 
     expect((mocks.config as unknown as Record<string, Record<string, unknown>>).image_backends.openai).toEqual({
       model: 'gpt-image-3',
-      default_params: { size: '1024x1024', quality: 'low' },
+      default_params: { quality: 'low' },
     })
     expect(mocks.saveConfig).toHaveBeenCalledExactlyOnceWith(mocks.config)
   })
