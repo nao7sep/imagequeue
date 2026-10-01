@@ -67,6 +67,13 @@ describe('summarizeConfig', () => {
     expect(summarizeConfig(config).textAi).toMatchObject({ openaiEndpointOverride: true })
   })
 
+  it('names each text model by its role', () => {
+    expect(summarizeConfig(createDefaultConfig()).textAi).toMatchObject({
+      geminiElaborationModel: 'gemini-3.8-flash', geminiSlugModel: 'gemini-3.5-flash-lite',
+      openaiElaborationModel: 'gpt-5.6-terra', openaiSlugModel: 'gpt-6-luna',
+    })
+  })
+
   it('reports no key present when none is stored or in the environment', () => {
     const summary = summarizeConfig(createDefaultConfig()) as {
       imageBackends: Record<string, { apiKeyPresent: boolean }>

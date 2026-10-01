@@ -7,10 +7,9 @@ import { TextProviderSettings } from '../../../../src/renderer/src/components/Te
 function Harness(): React.JSX.Element {
   const [config, setConfig] = useState<Record<string, unknown>>({
     provider: 'gemini',
-    gemini: { endpoint: '', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite' },
-    openai: { endpoint: '', elaboration: 'local-unlisted', slug: 'gpt-6-luna' },
+    gemini: { endpoint: '', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', timeout_ms: 30000 },
+    openai: { endpoint: '', elaboration: 'local-unlisted', slug: 'gpt-6-luna', timeout_ms: 60000 },
     extraModelIds: { gemini: ['custom'] },
-    text_ai: { gemini: { timeout_ms: 30000 }, openai: { timeout_ms: 60000 } },
   })
   return <TextProviderSettings config={config} onChange={setConfig} keyField={() => <input type="password" />} />
 }
@@ -38,6 +37,16 @@ describe('open text provider settings', () => {
     expect(inputs[0].value).toBe('typed-arbitrary-id')
     expect(inputs[1].value).toBe('local-unlisted')
     expect(api.refreshTextModelList).not.toHaveBeenCalled()
+  })
+  it('labels each role by its id and reads each provider\'s timeout from its own set', async () => {
+    bridge()
+    render(<Harness />)
+    expect((screen.getAllByLabelText('Slug model') as HTMLInputElement[]).map((input) => input.value)).toEqual(['gemini-3.5-flash-lite', 'gpt-6-luna'])
+    const timeouts = screen.getAllByLabelText('Timeout (s)') as HTMLInputElement[]
+    expect(timeouts.map((input) => input.value)).toEqual(['30', '60'])
+    fireEvent.change(timeouts[1], { target: { value: '90' } })
+    expect(timeouts.map((input) => input.value)).toEqual(['30', '90'])
+    await waitFor(() => expect(screen.getAllByRole('option', { name: 'gemini-future' })).toHaveLength(2))
   })
   it('preserves newlines while editing extra ids and calls only manual refresh on the button', async () => {
     const api = bridge()

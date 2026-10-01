@@ -9,17 +9,15 @@ export function createDefaultConfig(): AppConfig {
       endpoint: PROVIDER_ENDPOINTS.gemini,
       elaboration: defaultModelFor('gemini', 'text-balanced'),
       slug: defaultModelFor('gemini', 'text-fast'),
+      timeout_ms: 30000,
     },
     openai: {
       endpoint: PROVIDER_ENDPOINTS.openai,
       elaboration: defaultModelFor('openai', 'text-balanced'),
       slug: defaultModelFor('openai', 'text-fast'),
+      timeout_ms: 60000,
     },
     extraModelIds: {},
-    text_ai: {
-      gemini: { timeout_ms: 30000 },
-      openai: { timeout_ms: 60000 },
-    },
     general: {
       theme: 'system',
       language: 'system',

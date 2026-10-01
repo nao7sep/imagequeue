@@ -25,12 +25,12 @@ export function buildProviderHandle(role: TextRole): ProviderHandle | null {
   const backend = config.provider
   const apiKey = resolveApiKey(`${backend}.text`)
   if (!apiKey) return null
-  const { endpoint, [role]: modelId } = config[backend]
+  const { endpoint, timeout_ms, [role]: modelId } = config[backend]
   return {
     provider: backend === 'gemini'
       ? new GeminiProvider(modelId, apiKey, endpoint)
       : new OpenAIProvider(modelId, apiKey, endpoint),
-    timeoutMs: config.text_ai[backend].timeout_ms,
+    timeoutMs: timeout_ms,
     backend,
     modelId,
   }

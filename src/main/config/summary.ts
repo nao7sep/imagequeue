@@ -34,9 +34,11 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
     textAi: {
       backend: config.provider,
       geminiApiKeyPresent: hasApiKey('gemini.text'),
-      geminiMainModel: config.gemini?.elaboration,
+      geminiElaborationModel: config.gemini?.elaboration,
+      geminiSlugModel: config.gemini?.slug,
       openaiApiKeyPresent: hasApiKey('openai.text'),
-      openaiMainModel: config.openai?.elaboration,
+      openaiElaborationModel: config.openai?.elaboration,
+      openaiSlugModel: config.openai?.slug,
       openaiEndpointOverride: Boolean(config.openai?.endpoint && config.openai.endpoint !== PROVIDER_ENDPOINTS.openai),
     },
     imageBackends: {

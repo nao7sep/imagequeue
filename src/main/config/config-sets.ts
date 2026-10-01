@@ -19,9 +19,6 @@ export function configSetDefaults(): Record<string, unknown> {
   for (const provider of ['gemini', 'openai'] as const) {
     for (const [key, value] of Object.entries(config[provider])) sets[`${provider}.${key}`] = value
   }
-  for (const provider of ['gemini', 'openai'] as const) {
-    for (const [key, value] of Object.entries(config.text_ai[provider])) sets[`text_ai.${provider}.${key}`] = value
-  }
   for (const [id, backend] of Object.entries(config.image_backends)) {
     for (const [key, value] of Object.entries(backend)) {
       if (id !== 'drawthings' && (key === 'model' || key === 'default_params')) continue

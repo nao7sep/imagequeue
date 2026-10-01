@@ -33,10 +33,16 @@ describe('open text model sets', () => {
     expect(loadConfig().provider).toBe('gemini')
     expect(loadConfig().gemini.elaboration).toBe('gemini-3.8-flash')
     expect(loadConfig().gemini.slug).toBe('my-slug')
+    expect(loadConfig().gemini.timeout_ms).toBe(30000)
     updateConfig((draft) => { draft.provider = 'openai' })
     expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({
-      provider: 'openai', gemini: { slug: 'my-slug' }, text_ai: { gemini: { timeout_ms: 40000 } },
+      provider: 'openai', gemini: { slug: 'my-slug' },
     })
+  })
+  it('stores a provider timeout as its own set beside the provider\'s other sets', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.openai.timeout_ms = 90000 })
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ openai: { timeout_ms: 90000 } })
   })
   it('stores extras as one whole set and rejects a malformed set as absent', async () => {
     const { updateConfig, loadConfig } = await import('../../../src/main/config/config-store')

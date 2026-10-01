@@ -5,7 +5,6 @@
 // form saves them by key id over settings:saveApiKeys.
 
 const settingsRootFields = new Set<string>([
-  'text_ai',
   'provider',
   'gemini',
   'openai',

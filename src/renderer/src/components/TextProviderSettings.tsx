@@ -15,7 +15,6 @@ export function TextProviderSettings({ config, onChange, keyField }: {
   const [busy, setBusy] = useState<Partial<Record<TextAIBackendId, boolean>>>({})
   const refreshing = useRef(new Set<TextAIBackendId>())
   const mounted = useRef(false)
-  const textAi = (config.text_ai ?? {}) as Record<string, Record<string, unknown>>
   const extras = (config.extraModelIds ?? {}) as Partial<Record<TextAIBackendId, string[]>>
 
   const logFailure = (error: unknown): void => {
@@ -70,7 +69,7 @@ export function TextProviderSettings({ config, onChange, keyField }: {
           const inList = Object.values(groups).some((ids) => ids.includes(value))
           const modelLabel = (id: string): string => SUPPORTED_MODELS.some((row) => row.provider === provider && row.id === id && row.kinds.includes('text-frontier'))
             ? t('settings.frontierModel', { model: id }) : id
-          const label = t(role.id === 'elaboration' ? 'settings.mainModel' : 'settings.lightModel')
+          const label = t(`settings.${role.id}Model`)
           return <div className="settings-field" key={role.id}>
             <label htmlFor={`${provider}-${role.id}`}>{label}</label>
             <div className="settings-model-picker">
@@ -100,10 +99,8 @@ export function TextProviderSettings({ config, onChange, keyField }: {
         <div className="settings-field">
           <label htmlFor={`${provider}-timeout`}>{t('settings.timeout')}</label>
           <input id={`${provider}-timeout`} type="number" min={1} step={1}
-            value={(textAi[provider]?.timeout_ms as number ?? (provider === 'gemini' ? 30000 : 60000)) / 1000}
-            onChange={(event) => onChange({ ...config, text_ai: { ...textAi, [provider]: {
-              ...textAi[provider], timeout_ms: (parseInt(event.target.value) || 1) * 1000,
-            } } })} />
+            value={(section.timeout_ms as number) / 1000}
+            onChange={(event) => onChange({ ...config, [provider]: { ...section, timeout_ms: (parseInt(event.target.value) || 1) * 1000 } })} />
         </div>
       </div>
     })}

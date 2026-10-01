@@ -13,11 +13,7 @@ export interface TextProviderConfig {
   endpoint: string
   elaboration: string
   slug: string
-}
-
-export interface TextAIConfig {
-  gemini: { timeout_ms: number }
-  openai: { timeout_ms: number }
+  timeout_ms: number
 }
 
 export interface OpenAIBackendConfig {
@@ -168,7 +164,6 @@ export interface AppConfig {
   gemini: TextProviderConfig
   openai: TextProviderConfig
   extraModelIds: Partial<Record<TextAIBackendId, string[]>>
-  text_ai: TextAIConfig
   general: GeneralConfig
   notifications: NotificationsConfig
   image_backends: ImageBackendsConfig
