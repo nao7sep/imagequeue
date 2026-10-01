@@ -11,7 +11,7 @@ import { createDefaultConfig } from '../../../src/main/config/defaults'
 // history, which has no prune path to retract it.
 //
 // This asserts against the default config object rather than the written file on
-// purpose: the written file is also swept by dropLegacyConfigKeys, so a test
+// purpose: the written file holds only declared sets, so a test
 // reading it would still pass with this property broken.
 describe('the config shape cannot carry an api key', () => {
   function apiKeyPaths(value: unknown, trail: string[] = []): string[] {

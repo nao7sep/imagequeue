@@ -66,6 +66,7 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
         }
       }
     }
+    if (Object.keys(contents).length === 0) return result
     const existing = archiveNames(directory)
     if (existing[0]) {
       try {

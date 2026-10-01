@@ -95,7 +95,7 @@ export function registerElaboratorsIpc(): void {
 
   // Returns the shipped default brainstorm config — used by the Elaboration
   // Settings modal's "Reset to Defaults" button. Reads from the same
-  // createDefaultConfig() that seeds new installs, so it stays in sync.
+  // createDefaultConfig() used for absent sets, so it stays in sync.
   handle('brainstorm:getDefaults', () => {
     return createDefaultConfig().brainstorm
   })

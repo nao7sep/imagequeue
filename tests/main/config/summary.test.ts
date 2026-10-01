@@ -68,8 +68,7 @@ describe('summarizeConfig', () => {
   })
 
   it('does not throw on a malformed config with null nested sections', () => {
-    // deepMergeDefaults preserves a malformed nested section verbatim, so a
-    // hand-edited config.json can present null where an object is expected.
+    // The summary boundary tolerates malformed input with null sections.
     // summarizeConfig runs at startup and must never crash window creation.
     const malformed = {
       text_ai: null,

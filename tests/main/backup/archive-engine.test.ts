@@ -63,6 +63,21 @@ describe('binary-store archive', () => {
     expect(files['concepts.sqlite3']).toBeDefined()
     expect(files['missing.sqlite3']).toBeUndefined()
   })
+  it.each(['missing', 'unreadable'])('writes no archive when every declared store is %s', async (state) => {
+    database.close()
+    const store = getArchivedStores(root)[0]
+    fs.rmSync(store.path)
+    if (state === 'unreadable') fs.writeFileSync(store.path, 'not a database')
+
+    await runArchiveSession('begin', root, getArchivedStores(root))
+    const result = await runArchiveSession('finish', root, getArchivedStores(root))
+
+    expect(result.archivePath).toBeUndefined()
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings[0].path).toBe(store.path)
+    expect(fs.readdirSync(directory())).toEqual([])
+    if (state === 'missing') expect(fs.existsSync(store.path)).toBe(false)
+  })
   it('skips a held exclusive lock and leaves the owner intact', async () => {
     fs.mkdirSync(directory(), { recursive: true })
     fs.writeFileSync(path.join(directory(), '.lock'), String(process.pid))
