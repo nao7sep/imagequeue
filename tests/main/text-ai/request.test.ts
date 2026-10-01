@@ -24,16 +24,21 @@ describe('text adapter outbound contracts', () => {
     await new GeminiProvider('gemini-3.8-flash', 'test-key', 'https://proxy.example', 'elaboration').ask({ ...opts, schema: { type: 'object' } })
     expect(fetchMock.mock.calls[0][0]).toBe('https://proxy.example/v1beta/models/gemini-3.8-flash:generateContent')
     const known = JSON.parse(fetchMock.mock.calls[0][1]?.body as string)
-    expect(known.generationConfig).toEqual({ maxOutputTokens: 16384, thinkingConfig: { thinkingLevel: 'medium' }, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } })
+    expect(known.generationConfig).toEqual({ maxOutputTokens: 16384, thinkingConfig: { thinkingLevel: 'MEDIUM' }, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT' } })
     await new GeminiProvider('gemini-2.5-pro', 'test-key', '', 'slug').ask(opts)
     expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string).generationConfig).toEqual({ maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: -1 } })
   })
-  it('lets a typed unknown Gemini id reach the provider and retains its cleaned message and Retry-After', async () => {
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: { message: 'No model my-custom-id' } }), { status: 404, headers: { 'retry-after': '2' } }))
+  it('lets a typed unknown Gemini id reach the provider and keeps its cleaned message', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: { code: 404, message: 'No model my-custom-id', status: 'NOT_FOUND' } }),
+      { status: 404, headers: { 'content-type': 'application/json', 'retry-after': '2' } }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(new GeminiProvider('my-custom-id', 'test-key').ask(opts)).rejects.toMatchObject({ status: 404, providerMessage: 'No model my-custom-id', retryAfter: '2' })
+    await expect(new GeminiProvider('my-custom-id', 'test-key').ask(opts)).rejects.toMatchObject({ status: 404, providerMessage: 'No model my-custom-id', retryAfter: null })
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).generationConfig).not.toHaveProperty('thinkingConfig')
+  })
+  it('never takes a Gemini answer that is not JSON for the provider message', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>Bad gateway</html>', { status: 502, statusText: 'Bad Gateway', headers: { 'content-type': 'text/html' } })))
+    await expect(new GeminiProvider('gemini-3.8-flash', 'test-key').ask(opts)).rejects.toMatchObject({ status: 502, providerMessage: null })
   })
   it.each(['SAFETY', 'PROHIBITED_CONTENT'])('classifies Gemini %s as a refusal', async (finishReason) => {
     vi.stubGlobal('fetch', vi.fn(async () => reply({ candidates: [{ finishReason }] })))

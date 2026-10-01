@@ -55,7 +55,7 @@ describe('text routing guard', () => {
         }
       }
     }
-    expect(geminiTextParams('gemini-3.8-flash', 'elaboration')).toEqual({ maxOutputTokens: 16384, thinkingConfig: { thinkingLevel: 'medium' } })
+    expect(geminiTextParams('gemini-3.8-flash', 'elaboration')).toEqual({ maxOutputTokens: 16384, thinkingConfig: { thinkingLevel: 'MEDIUM' } })
     expect(geminiTextParams('gemini-2.5-pro', 'slug')).toEqual({ maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: -1 } })
     expect(openaiTextParams('gpt-6-luna', 'slug')).toEqual({ max_completion_tokens: 2048, reasoning_effort: 'medium' })
     expect(openaiTextParams('local-id', 'slug', {})).toEqual({})

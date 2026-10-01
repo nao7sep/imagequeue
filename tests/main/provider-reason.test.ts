@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanReason, fluxReasonField, grokReasonField, openaiReasonField, reasonFromBody } from '../../src/main/provider-reason'
+import { cleanReason, fluxReasonField, geminiReasonField, grokReasonField, openaiReasonField, reasonFromBody } from '../../src/main/provider-reason'
 
 describe('provider reason fields', () => {
   it('reads each provider\'s documented message field', () => {
@@ -8,12 +8,14 @@ describe('provider reason fields', () => {
     expect(reasonFromBody('{"detail":"Flux said."}', fluxReasonField)).toBe('Flux said.')
     expect(reasonFromBody('{"detail":[{"msg":"One"},{"msg":"Two"}]}', fluxReasonField)).toBe('One\nTwo')
     expect(reasonFromBody('{"error":{"message":"OpenAI said.","code":"x"}}', openaiReasonField)).toBe('OpenAI said.')
+    expect(reasonFromBody('{"error":{"code":400,"message":"Gemini said.","status":"INVALID_ARGUMENT"}}', geminiReasonField)).toBe('Gemini said.')
   })
 
   it('never falls back to the raw JSON', () => {
     expect(reasonFromBody('{"code":"c","usage":{"cost_in_usd_ticks":1}}', grokReasonField)).toBeNull()
     expect(reasonFromBody('[1,2]', fluxReasonField)).toBeNull()
     expect(reasonFromBody('{"error":"   "}', grokReasonField)).toBeNull()
+    expect(reasonFromBody('{"error":{"code":502,"message":"<html>Bad gateway</html>","status":"Bad Gateway"}}', geminiReasonField)).toBeNull()
   })
 })
 

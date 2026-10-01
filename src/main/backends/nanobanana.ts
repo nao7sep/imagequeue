@@ -1,4 +1,4 @@
-import { generateGeminiContent } from '../gemini-request'
+import { ApiError, GoogleGenAI } from '@google/genai'
 import { withProviderRetry } from '../provider-retry'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
@@ -7,7 +7,8 @@ import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
 import { findModel } from '../../shared/models'
 import { assertUsableGeminiResponse } from '../provider-response'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
+import { geminiReasonField, reasonFromBody } from '../provider-reason'
 
 // Calls the Gemini native image generation API (generateContent) and returns
 // the first image part as a Buffer along with its MIME-type hint. The Gemini
@@ -22,6 +23,9 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     throw new MissingApiKeyError('Nano Banana')
   }
 
+  // The app owns retries; the SDK performs exactly one attempt.
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 } } })
+
   const modelDef = findModel('nanobanana', task.model)
   const supportsImageConfig = modelDef?.supportsImageConfig ?? false
 
@@ -34,14 +38,24 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   logApiRequest('nanobanana', task.model, requestParams)
   const startTime = Date.now()
 
-  const response = await withProviderRetry((attemptSignal) => generateGeminiContent({
-    apiKey, model: task.model,
-    contents: [{ role: 'user', parts: [{ text: task.prompt }] }],
-    generationConfig: {
+  const response = await withProviderRetry((attemptSignal) => ai.models.generateContent({
+    model: task.model,
+    contents: task.prompt,
+    // No cast: GenerateContentConfig declares every field here, so the
+    // compiler proves the abort signal reaches this backend.
+    config: {
       responseModalities: ['TEXT', 'IMAGE'],
-      ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {}),
-    },
-    signal: attemptSignal, timeoutMs: config.image_backends.nanobanana.timeout_ms,
+      // Client-side only, per the SDK: aborting stops us waiting, it does not
+      // stop the service, and the call is still billed.
+      abortSignal: attemptSignal,
+      ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {})
+    }
+  }).catch((err: unknown) => {
+    if (err instanceof ApiError) {
+      const said = reasonFromBody(err.message, geminiReasonField)
+      throw new ProviderHttpError(said ?? `Gemini API error ${err.status}`, err.status, said)
+    }
+    throw err
   }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms }).catch((err: unknown) => {
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {

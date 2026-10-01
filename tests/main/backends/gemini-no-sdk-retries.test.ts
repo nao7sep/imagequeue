@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
 
-// Generation uses the wire adapter to retain failed-response headers; app
-// retries are bounded and the text JSON/slug caller owns text retries.
+// Each Gemini client passes `retryOptions: { attempts: 1 }`, so the SDK sends
+// one request per call and the app's own retry policy decides every resend:
+// Nano Banana resends only an answer proving no processing, and the text
+// JSON/slug caller owns text retries.
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 
 vi.mock('../../../src/main/config', () => ({

@@ -1,3 +1,4 @@
+import { ThinkingLevel, type ThinkingConfig } from '@google/genai'
 import { resolveModel } from '../../shared/model-registry'
 import type { TextRole } from '../../shared/ai-models'
 
@@ -7,14 +8,15 @@ export function outputCeiling(role: TextRole): number {
 
 export function geminiTextParams(model: string, role: TextRole, schema?: object): {
   maxOutputTokens?: number
-  thinkingConfig?: { thinkingLevel: 'medium' } | { thinkingBudget: -1 }
+  thinkingConfig?: ThinkingConfig
   responseMimeType?: string
   responseSchema?: object
 } {
   const { policy } = resolveModel(model, 'gemini')
+  const thinking = policy.thinkingConfig
   return {
     ...(policy.maxOutputTokens ? { maxOutputTokens: outputCeiling(role) } : {}),
-    ...(policy.thinkingConfig ? { thinkingConfig: policy.thinkingConfig } : {}),
+    ...(thinking ? { thinkingConfig: 'thinkingLevel' in thinking ? { thinkingLevel: ThinkingLevel.MEDIUM } : thinking } : {}),
     ...(schema && policy.structuredOutput ? { responseMimeType: 'application/json', responseSchema: schema } : {}),
   }
 }

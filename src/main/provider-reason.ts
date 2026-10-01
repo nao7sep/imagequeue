@@ -40,6 +40,16 @@ export const fluxReasonField: ReasonField = (body) => {
 export const openaiReasonField: ReasonField = (body) =>
   text(body.message) ?? text(record(body.error)?.message)
 
+/** Google answers `{"error": {"code": ..., "message": ..., "status": ...}}`, its `status` a
+ *  canonical code name such as `NOT_FOUND`. The SDK's `ApiError` carries that body,
+ *  serialized, as its message, and wraps a body that is not JSON in the same shape with the
+ *  HTTP status text as `status`, so only a canonical code name marks the provider's own
+ *  message and raw response text is never taken for one. */
+export const geminiReasonField: ReasonField = (body) => {
+  const error = record(body.error)
+  return typeof error?.status === 'string' && /^[A-Z_]+$/.test(error.status) ? text(error.message) : null
+}
+
 /** The reason in a provider's raw error response body. */
 export function reasonFromBody(body: string, field: ReasonField): string | null {
   let parsed: unknown
