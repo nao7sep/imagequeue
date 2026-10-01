@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { unzipSync, strFromU8 } from 'fflate'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { archiveStores, runArchiveSession, type ArchiveManifest } from '../../../src/main/backup/archive-engine'
+import { archiveStores, clearAbandonedRun, runArchiveSession, type ArchiveManifest } from '../../../src/main/backup/archive-engine'
 import { getArchivedStores } from '../../../src/main/config/storage-root'
 
 describe('binary-store archive', () => {
@@ -78,13 +78,33 @@ describe('binary-store archive', () => {
     expect(fs.readdirSync(directory())).toEqual([])
     if (state === 'missing') expect(fs.existsSync(store.path)).toBe(false)
   })
-  it('skips a held exclusive lock and leaves the owner intact', async () => {
+  it('skips a held exclusive lock with one warning and leaves the owner intact', async () => {
     fs.mkdirSync(directory(), { recursive: true })
     fs.writeFileSync(path.join(directory(), '.lock'), String(process.pid))
     const result = await archiveStores(root, getArchivedStores(root), time)
     expect(result.archivePath).toBeUndefined()
+    expect(result.warnings).toEqual([{ path: path.join(directory(), '.lock'), error: expect.objectContaining({ message: 'Archive skipped: the lock is held by another run' }) }])
     expect(archives()).toEqual([])
     expect(fs.readFileSync(path.join(directory(), '.lock'), 'utf8')).toBe(String(process.pid))
+  })
+  it('clears the lock and temporary files a run of this process left at its deadline', async () => {
+    fs.mkdirSync(directory(), { recursive: true })
+    fs.writeFileSync(path.join(directory(), '.lock'), String(process.pid))
+    fs.writeFileSync(path.join(directory(), 'snapshot-abc.tmp'), 'partial')
+    fs.writeFileSync(path.join(directory(), 'archive-def.tmp'), 'partial')
+    fs.writeFileSync(path.join(directory(), '20260101-000000-000-utc.zip'), 'kept')
+    await clearAbandonedRun(root)
+    expect(fs.readdirSync(directory())).toEqual(['20260101-000000-000-utc.zip'])
+    expect((await archiveStores(root, getArchivedStores(root), time)).archivePath).toBeDefined()
+  })
+  it('leaves a lock another process holds, and its temporary files, alone', async () => {
+    fs.mkdirSync(directory(), { recursive: true })
+    fs.writeFileSync(path.join(directory(), '.lock'), String(process.pid + 1))
+    fs.writeFileSync(path.join(directory(), 'snapshot-abc.tmp'), 'partial')
+    await clearAbandonedRun(root)
+    expect(fs.readdirSync(directory()).sort()).toEqual(['.lock', 'snapshot-abc.tmp'])
+    fs.rmSync(directory(), { recursive: true })
+    await expect(clearAbandonedRun(root)).resolves.toBeUndefined()
   })
   it('marks first launch without archiving, and archives clean exit after stores are closed', async () => {
     await runArchiveSession('begin', root, getArchivedStores(root))

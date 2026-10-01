@@ -29,6 +29,9 @@ function claimLock(file: string): number | null {
   return null
 }
 
+// The temporary files a run writes beside its lock; only the lock holder writes them.
+const TEMPORARY_NAME = /^(snapshot|archive)-.+\.tmp$/
+
 function archiveNames(directory: string): string[] {
   return fs.readdirSync(directory).filter((name) => /^\d{8}-\d{6}-\d{3}-utc\.zip$/.test(name)).sort().reverse()
 }
@@ -42,7 +45,10 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
   try {
     fs.mkdirSync(directory, { recursive: true })
     descriptor = claimLock(lock)
-    if (descriptor === null) return result
+    if (descriptor === null) {
+      result.warnings.push({ path: lock, error: serializeError(new Error('Archive skipped: the lock is held by another run')) })
+      return result
+    }
     fs.writeFileSync(descriptor, String(process.pid))
     const entries: ManifestEntry[] = []
     const contents: Record<string, Uint8Array> = {}
@@ -106,6 +112,26 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
     }
   }
   return result
+}
+
+/** Clears what a run of this process left when its deadline ended it: its lock,
+ *  and the temporary files that only the lock holder writes. A lock this
+ *  process does not hold, or none, is left alone. */
+export async function clearAbandonedRun(root: string): Promise<void> {
+  const directory = path.join(root, 'backups', 'archives')
+  const lock = path.join(directory, '.lock')
+  let owner: string
+  try {
+    owner = await fs.promises.readFile(lock, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  if (owner !== String(process.pid)) return
+  for (const name of await fs.promises.readdir(directory)) {
+    if (TEMPORARY_NAME.test(name)) await fs.promises.rm(path.join(directory, name), { force: true })
+  }
+  await fs.promises.rm(lock, { force: true })
 }
 
 export async function runArchiveSession(action: 'begin' | 'finish', root: string, stores: ArchivedStore[]): Promise<ArchiveResult> {
