@@ -8,12 +8,8 @@ import { hasApiKey } from './api-keys-store'
 // values are stored obfuscated but still reversible, so even the stored form
 // must not reach the log.
 //
-// Every field is read defensively (optional chaining). config.json is
-// user-editable and callers may supply a malformed nested section
-// (e.g. `"gemini": null`) verbatim, so a deep, unguarded dereference here would
-// throw inside app startup and leave the app running with no window. Cloud
-// backends are derived from the shared id list rather than hand-listed, so a new
-// backend appears here automatically.
+// Cloud backends are derived from the shared id list rather than hand-listed,
+// so a new backend appears here automatically.
 export function summarizeConfig(config: AppConfig): Record<string, unknown> {
   const cloudBackends: Record<string, unknown> = {}
   for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {

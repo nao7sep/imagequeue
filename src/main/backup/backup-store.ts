@@ -5,9 +5,6 @@
  * records the exact bytes it just wrote here, strictly AFTER its atomic rename lands, so the history
  * is always as current as the last save. There is no startup scan, no periodic pass, no restore path.
  *
- * This replaces the old startup-scan ZIP engine (`~/.imagequeue/backups/` archives + `index.json`, the
- * size+mtime incremental check, the no-clobber archive naming) entirely.
- *
  * SQLite binding: Node's built-in `node:sqlite` (`DatabaseSync`), not better-sqlite3. In an Electron
  * main process better-sqlite3 is a native addon that must be rebuilt against Electron's Node ABI on
  * every Electron bump — real, recurring packaging drag. `node:sqlite` is built into the Node that
