@@ -164,7 +164,7 @@ describe('backend failures reach the task row by kind', () => {
   it('takes a body that is not JSON as the provider\'s plain answer', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('  Service temporarily unavailable\n', { status: 503 })))
     const grok = await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)
-    expect(providerMessage(grok)).toBe('Service temporarily unavailable')
+    expect(providerMessage(grok)).toBe('  Service temporarily unavailable')
   })
 
   it('shows no reason for a JSON body without its message field', async () => {
@@ -173,37 +173,30 @@ describe('backend failures reach the task row by kind', () => {
     expect(providerMessage(grok)).toBeNull()
   })
 
-  describe('a hostile error body leaks no secret, path or raw field', () => {
-    const SENTINEL = 'SENTINEL_7f3a'
+  describe('an error body keeps its reason as written and no other field', () => {
     const KEY = 'xai-AbCdEf0123456789GhIjKlMn'
-    const PATH = '/Users/someone/.imagequeue/api-keys.json'
-    const reason = `Request rejected. key=${KEY} Bearer ${KEY} at ${PATH} see https://api.example.com/v1/x?token=${SENTINEL}`
+    const reason = `Request rejected. key=${KEY} at /Users/someone/.imagequeue/api-keys.json see https://api.example.com/v1/x?token=abc`
+    const extra = { code: 'internal_code', type: 'TypeError', usage: { cost_in_usd_ticks: 1 } }
 
-    function expectSafe(said: string | null): void {
-      expect(said).toContain('Request rejected.')
-      expect(said).toContain('https://api.example.com/v1/x?[redacted]')
-      for (const leak of [SENTINEL, KEY, PATH, 'TypeError', 'cost_in_usd_ticks', 'internal_code']) {
-        expect(said).not.toContain(leak)
-      }
+    function expectAsWritten(said: string | null, written: string): void {
+      expect(said).toBe(written)
+      for (const field of ['TypeError', 'cost_in_usd_ticks', 'internal_code']) expect(said).not.toContain(field)
     }
-    const extra = { code: `internal_code ${SENTINEL}`, type: 'TypeError', usage: { cost_in_usd_ticks: SENTINEL } }
 
     it('from Grok', async () => {
       stubStatus(400, { ...extra, error: reason })
-      expectSafe(providerMessage(await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)))
+      expectAsWritten(providerMessage(await generateGrok(task('grok', 'grok-imagine'), signal()).catch((e: unknown) => e)), reason)
     })
 
     it('from FLUX', async () => {
       stubStatus(400, { ...extra, detail: reason })
-      expectSafe(providerMessage(await generateFlux(task('flux', 'flux-2-pro'), signal()).catch((e: unknown) => e)))
+      expectAsWritten(providerMessage(await generateFlux(task('flux', 'flux-2-pro'), signal()).catch((e: unknown) => e)), reason)
     })
 
-    it('from OpenAI, refused or rejected', async () => {
-      stubStatus(400, { error: { ...extra, code: 'moderation_blocked', message: `${reason} sk-proj-${SENTINEL}abcd` } })
-      expectSafe(providerMessage(await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)))
-
-      stubStatus(400, { error: { ...extra, message: `${reason} C:\\Users\\someone\\${SENTINEL}.txt` } })
-      expectSafe(providerMessage(await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)))
+    it('from OpenAI', async () => {
+      const message = `${reason} C:\\Users\\someone\\notes.txt`
+      stubStatus(400, { error: { ...extra, code: 'moderation_blocked', message } })
+      expectAsWritten(providerMessage(await generateOpenAI(task('openai', 'gpt-image-2'), signal()).catch((e: unknown) => e)), message)
     })
   })
 

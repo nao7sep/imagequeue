@@ -20,12 +20,13 @@ describe('provider reason fields', () => {
 })
 
 describe('cleanReason', () => {
-  it('redacts a UUID-shaped key but keeps a URL\'s path and plain prose', () => {
-    const said = cleanReason('Key 6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b is invalid. See https://docs.example.com/errors/auth for help.')
-    expect(said).toBe('Key [redacted] is invalid. See https://docs.example.com/errors/auth for help.')
+  it('keeps the reason as written, cleaned as multiline text', () => {
+    const said = cleanReason('\n  Key 6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b is invalid.   \n  See ~/secret/file.txt or https://docs.example.com/x?token=abc\n\n')
+    expect(said).toBe('  Key 6f1c2a9e-3b4d-4e5f-8a7b-0c1d2e3f4a5b is invalid.\n  See ~/secret/file.txt or https://docs.example.com/x?token=abc')
   })
 
-  it('redacts home-relative and absolute paths', () => {
-    expect(cleanReason('Could not read ~/secret/file.txt or /var/lib/app/data')).toBe('Could not read [redacted] or [redacted]')
+  it('is null when nothing is left', () => {
+    expect(cleanReason(' \n\t ')).toBeNull()
+    expect(cleanReason(null)).toBeNull()
   })
 })

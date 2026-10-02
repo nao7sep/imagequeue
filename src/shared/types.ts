@@ -175,7 +175,7 @@ export interface Task {
   // shown as it was written.
   error: Message | string | null
   // The provider's human-readable reason when this attempt failed — the message
-  // field of its error body, cleaned and redacted, never the raw body; null when
+  // field of its error body as the provider wrote it, never the raw body; null when
   // the failure was not a provider answer or it gave no reason. Absent on tasks a session
   // recorded before this was kept — unknown, not inferred.
   providerMessage?: string | null

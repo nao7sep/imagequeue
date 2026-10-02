@@ -81,7 +81,7 @@ export function provedNotProcessed(error: unknown): boolean {
 }
 
 /** The provider's human-readable reason for a failure — the message field of its error
- *  body, cleaned and redacted (see provider-reason) — or null when the failure is not a
+ *  body, as the provider wrote it (see provider-reason) — or null when the failure is not a
  *  provider answer or the provider gave no reason. The backend that received the answer
  *  records it on the classified error; this never parses an SDK or transport message. */
 export function providerMessage(error: unknown): string | null {

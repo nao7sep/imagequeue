@@ -4,8 +4,9 @@ import { multiline } from '../shared/textCleanup'
  * A provider's human-readable reason for a failed request, as the task keeps it in
  * `providerMessage`. The reason comes from the documented message field of the provider's
  * error body — never the raw body, so codes, usage and billing fields stay out — and is
- * cleaned and redacted before it is stored. Each backend picks its own field; a body that
- * is not JSON is taken as the provider's plain-text answer.
+ * kept as the provider wrote it, cleaned as multiline text per the text-cleanup-conventions.
+ * Each backend picks its own field; a body that is not JSON is taken as the provider's
+ * plain-text answer.
  */
 
 /** Reads the reason out of one provider's parsed error body, or null when it has none. */
@@ -71,27 +72,8 @@ export function reasonFromParsed(body: unknown, field: ReasonField): string | nu
   return object ? cleanReason(field(object)) : null
 }
 
-const REDACTED = '[redacted]'
-
-// Applied in order. A URL keeps its origin and path but loses its query and fragment;
-// a credential or a long opaque token is replaced whole; a filesystem path is replaced
-// whole. The path rule does not start after ':' or '/', so a URL's '//' is not a path.
-const REDACTIONS: ReadonlyArray<[RegExp, string]> = [
-  [/(\bhttps?:\/\/[^\s?#"'<>]+)[?#][^\s"'<>]*/gi, `$1?${REDACTED}`],
-  [/\bBearer\s+[^\s"',;]+/gi, `Bearer ${REDACTED}`],
-  [/\b((?:api[_-]?key|x-key|key|token|secret|password|authorization)["']?\s*[:=]\s*)["']?[^\s"',;]+/gi, `$1${REDACTED}`],
-  [/\b(?:sk|xai|pk|rk)-[A-Za-z0-9_*.-]{4,}/g, REDACTED],
-  [/(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/g, REDACTED],
-  [/\b[A-Za-z]:\\[^\s"'<>]*/g, REDACTED],
-  [/(^|[\s"'(=[])(?:~\/|\/(?!\/))[^\s"'()<>]*\/[^\s"'()<>]*/gm, `$1${REDACTED}`],
-]
-
-/** Trimmed, with credentials, tokens, paths and URL queries redacted; null when nothing
- *  is left. */
+/** Cleaned as multiline text; null when nothing is left. */
 export function cleanReason(reason: string | null): string | null {
   if (reason === null) return null
-  // A reason is prose, not an indented body, so its first line's indentation goes too.
-  let cleaned = multiline(reason).trim()
-  for (const [pattern, replacement] of REDACTIONS) cleaned = cleaned.replace(pattern, replacement)
-  return cleaned || null
+  return multiline(reason) || null
 }
