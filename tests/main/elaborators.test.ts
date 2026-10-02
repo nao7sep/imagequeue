@@ -2,20 +2,30 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createElaborator, updateElaborator, deleteElaborator, resetElaborators, drainElaboratorRecoveryNotices, listElaborators } from '../../src/main/elaborators'
-import { closeBackupStore } from '../../src/main/backup/backup-store'
 import { multiline, singleLine } from '../../src/shared/textCleanup'
+
+// The store reads its file once per process, so each test starts a fresh module.
+let elaborators: typeof import('../../src/main/elaborators')
+let createElaborator: typeof elaborators.createElaborator
+let updateElaborator: typeof elaborators.updateElaborator
+let deleteElaborator: typeof elaborators.deleteElaborator
+let resetElaborators: typeof elaborators.resetElaborators
+let drainElaboratorRecoveryNotices: typeof elaborators.drainElaboratorRecoveryNotices
+let listElaborators: typeof elaborators.listElaborators
 
 describe('elaborator sets', () => {
   let root: string
   const file = () => path.join(root, 'elaborators.json')
   const stored = () => JSON.parse(fs.readFileSync(file(), 'utf8'))
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-elaborators-'))
     vi.stubEnv('IMAGEQUEUE_DATA_DIR', root)
-    drainElaboratorRecoveryNotices()
+    vi.resetModules()
+    elaborators = await import('../../src/main/elaborators')
+    ;({ createElaborator, updateElaborator, deleteElaborator, resetElaborators, drainElaboratorRecoveryNotices, listElaborators } = elaborators)
   })
-  afterEach(() => {
+  afterEach(async () => {
+    const { closeBackupStore } = await import('../../src/main/backup/backup-store')
     closeBackupStore()
     vi.restoreAllMocks()
     vi.unstubAllEnvs()
@@ -66,9 +76,11 @@ describe('elaborator sets', () => {
     resetElaborators('composition')
     expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
   })
-  it('drops an untouched kind equal to its shipped templates at the next save of the other kind', () => {
+  it('drops an untouched kind equal to its shipped templates at the next save of the other kind', async () => {
     const shipped = listElaborators()
     fs.writeFileSync(file(), JSON.stringify({ composition: shipped.filter((item) => item.kind === 'composition') }))
+    vi.resetModules()
+    ;({ createElaborator } = await import('../../src/main/elaborators'))
     createElaborator({ kind: 'style', name: 'My style', template: 'My template' })
     expect(Object.keys(stored())).toEqual(['style'])
   })
@@ -83,14 +95,23 @@ describe('elaborator sets', () => {
     fs.writeFileSync(file(), JSON.stringify({ style: [] }))
     expect(listElaborators().some((item) => item.kind === 'style')).toBe(false)
   })
-  it('uses shipped templates for a malformed kind without quarantining the whole map', () => {
+  it('reads a malformed kind as its shipped templates, warning once, and drops it at the next save', async () => {
     const initial = listElaborators()
     fs.writeFileSync(file(), JSON.stringify({ style: [{ kind: 'wrong' }] }))
+    vi.resetModules()
+    const warn = vi.spyOn(await import('../../src/main/logger'), 'log')
+    ;({ createElaborator, listElaborators } = await import('../../src/main/elaborators'))
     expect(listElaborators()).toEqual(initial)
+    expect(listElaborators()).toEqual(initial)
+    expect(warn.mock.calls.filter(([, message]) => message === 'Invalid elaborator set; using shipped templates')).toHaveLength(1)
     expect(stored()).toEqual({ style: [{ kind: 'wrong' }] })
     const created = createElaborator({ kind: 'composition', name: 'Mine', template: 'Mine' })
-    expect(stored().style).toEqual([{ kind: 'wrong' }])
-    expect(stored().composition).toContainEqual(created)
+    expect(stored()).toEqual({ composition: expect.arrayContaining([created]) })
+  })
+  it('reads its file once, where it is loaded', () => {
+    const initial = listElaborators()
+    fs.writeFileSync(file(), JSON.stringify({ style: [] }))
+    expect(listElaborators()).toEqual(initial)
   })
   it('quarantines bad JSON and leaves the live file absent', () => {
     fs.writeFileSync(file(), '{ invalid')

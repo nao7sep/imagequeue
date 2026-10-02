@@ -292,9 +292,8 @@ function quarantineCorruptFile(file: string, reason: string, err?: unknown): str
   }
 }
 
-type ElaboratorSets = Partial<Record<ElaboratorKind, unknown>>
+type ElaboratorSets = Record<ElaboratorKind, Elaborator[]>
 const kinds: ElaboratorKind[] = ['composition', 'style']
-const warnedSets = new Set<ElaboratorKind>()
 
 function isElaboratorSet(items: unknown, kind: ElaboratorKind): items is Elaborator[] {
   return Array.isArray(items) && items.every((item) => isElaborator(item) && item.kind === kind)
@@ -313,7 +312,7 @@ function cleanElaborator(item: Elaborator): Elaborator {
   }
 }
 
-// The file as it is now: every key it holds, or nothing when it is absent.
+// The file as it is: every key it holds, or nothing when it is absent.
 function readFile(): Record<string, unknown> {
   const file = getElaboratorsFilePath()
   if (!fs.existsSync(file)) return {}
@@ -333,43 +332,49 @@ function readFile(): Record<string, unknown> {
   return parsed as Record<string, unknown>
 }
 
-/**
- * The one owner of what elaborators.json holds. Each kind is one set, stored,
- * cleaned, only while it differs from the shipped templates; a set equal to them
- * has its key removed, whether or not this save changed it. A kind this save
- * leaves out is taken from the file as it is now; a copy there the reader
- * rejected stays as the user left it. A result equal to the file writes nothing.
- */
-function saveSets(changed: Partial<Record<ElaboratorKind, Elaborator[]>>): void {
-  const current = readFile()
-  const next: ElaboratorSets = {}
+// The file is read once, where it is loaded, and each set is checked as it is
+// read (config-sets conventions, Reading and healing). `file` is what the file
+// holds, `sets` what the app uses.
+let loaded: { file: Record<string, unknown>; sets: ElaboratorSets } | null = null
+
+function load(): { file: Record<string, unknown>; sets: ElaboratorSets } {
+  if (loaded) return loaded
+  const file = readFile()
+  const sets = {} as ElaboratorSets
   for (const kind of kinds) {
-    const items = changed[kind] ?? current[kind]
-    if (items === undefined) continue
-    if (!isElaboratorSet(items, kind)) {
-      next[kind] = items
-      continue
+    const items = file[kind]
+    if (items === undefined || isElaboratorSet(items, kind)) {
+      sets[kind] = items ?? defaultElaborators(kind)
+    } else {
+      log('warn', 'Invalid elaborator set; using shipped templates', { key: kind })
+      sets[kind] = defaultElaborators(kind)
     }
-    const cleaned = items.map(cleanElaborator)
+  }
+  loaded = { file, sets }
+  return loaded
+}
+
+/**
+ * The one owner of what elaborators.json holds. The file is written from the
+ * sets in memory: each kind is stored, cleaned, only while it differs from the
+ * shipped templates. A result equal to the file writes nothing.
+ */
+function saveSets(changed: Partial<ElaboratorSets>): void {
+  const current = load()
+  const next: Partial<ElaboratorSets> = {}
+  for (const kind of kinds) {
+    const cleaned = (changed[kind] ?? current.sets[kind]).map(cleanElaborator)
     if (!valuesEqual(cleaned, defaultElaborators(kind))) next[kind] = cleaned
   }
-  if (valuesEqual(next, current)) return
-  const file = getElaboratorsFilePath()
-  writeJsonAtomic(file, next, true)
+  if (!valuesEqual(next, current.file)) writeJsonAtomic(getElaboratorsFilePath(), next, true)
+  const sets = {} as ElaboratorSets
+  for (const kind of kinds) sets[kind] = next[kind] ?? defaultElaborators(kind)
+  loaded = { file: next, sets }
 }
 
 export function listElaborators(): Elaborator[] {
-  const stored = readFile()
-  return kinds.flatMap((kind) => {
-    const items = stored[kind]
-    if (items === undefined) return defaultElaborators(kind)
-    if (isElaboratorSet(items, kind)) return items
-    if (!warnedSets.has(kind)) {
-      warnedSets.add(kind)
-      log('warn', 'Invalid elaborator set; using shipped templates', { key: kind })
-    }
-    return defaultElaborators(kind)
-  })
+  const { sets } = load()
+  return kinds.flatMap((kind) => sets[kind])
 }
 
 function writeKind(kind: ElaboratorKind, items: Elaborator[]): void {
