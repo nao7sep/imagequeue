@@ -1,36 +1,15 @@
-import fs from 'fs'
-import path from 'path'
 import { serializeError } from '../shared/serialize-error'
-import { utcStampForFilename } from '../shared/utc-stamp'
+import { writeLogRecord } from './records'
 
 // Re-exported so main-process modules can keep importing serializeError from the
 // logger alongside log(); the single implementation lives in shared/ so the
 // renderer produces identical structured errors when forwarding over IPC.
 export { serializeError }
 
-// A small, hand-rolled, dependency-free logger that writes one JSON object per
-// line (JSON Lines) to this launch's log file. It is deliberately free of any
-// electron import so it stays unit-testable under plain Node (see
-// vitest.config.ts) and so the file-IO edge here carries no app logic.
-//
-// ONE FILE PER LAUNCH, in `<storage root>/logs/`, opened before anything else
-// runs. The app used to write into the active session directory's session.log
-// and repoint on every session switch, reading the logging-convention's
-// "per-session directory" allowance — but that allowance says *session* meaning
-// one process launch, and imagequeue's sessions are a different thing wearing
-// the same word: they are resumable across launches and one launch can touch
-// several. So the file was neither one launch nor one session, three ways:
-// startup lines landed in whichever session opened first, a resumed session's
-// log interleaved several launches, and dropping an empty session at quit
-// DELETED that launch's only log — including the startup failure a user would
-// be reporting. A launch-scoped file at a fixed location has none of those
-// problems and needs no carve-out from the convention.
-//
-// The caller describes *what happened* as a stable message plus structured
-// fields; this module builds the envelope, serializes, and appends. Writes are
-// synchronous, so every line is durable the moment it is logged — there is no
-// buffer to lose on a crash, which satisfies the "flush warn/error/debug
-// immediately and on crash" requirement for free.
+// The app's logging, per the logging-conventions: the caller describes what
+// happened as a stable message plus structured fields, and each line becomes a
+// record (records.ts). Free of any electron import so it stays unit-testable
+// under plain Node.
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -49,8 +28,6 @@ export function shouldEnableDebugLogging({
   return !isPackaged || imagequeueDebug === '1'
 }
 
-let logFilePath: string | null = null
-
 // Debug is off by default; the process startup policy flips it on for a
 // development build or an explicit packaged-build diagnostic run.
 let debugEnabled = false
@@ -61,91 +38,19 @@ export function setLoggerDebug(enabled: boolean): void {
   debugEnabled = enabled
 }
 
-// Opens this launch's log file inside `logsDir` and returns its path. Called
-// once, as early in startup as the storage root allows: every line logged
-// before this point has nowhere to go but the console. The directory is passed
-// in rather than derived here so the logger keeps no dependency on the config
-// store — and so a test can point it at a temp dir.
-export function initLogger(logsDir: string): string {
-  const filePath = path.join(logsDir, `${utcStampForFilename()}.log`)
-  logFilePath = filePath
-  // Create the file up front so `logs/` is a record of every launch, including
-  // one that died before it could log anything. Best-effort like every other
-  // write here: an unwritable logs directory degrades to the console rather
-  // than taking the app down with it.
-  try {
-    fs.mkdirSync(logsDir, { recursive: true })
-    fs.closeSync(fs.openSync(filePath, 'a'))
-  } catch (err) {
-    console.error('[logger] could not open the launch log; echoing to console instead', err)
-  }
-  return filePath
-}
-
 // The envelope keys the logger owns; a caller field may not overwrite them.
 const RESERVED_KEYS: ReadonlySet<string> = new Set(['time', 'level', 'message'])
 
-// Best-effort console fallback shared by both "no session target yet" and
-// "write to the session file failed" below. Mirrors the fotoready/bigmouth
-// loggers' fallback split: warn/error go to stderr, info/debug to stdout. The
-// argument is the already-rendered JSON line, never a re-derived summary, so
-// the event's actual content — not just a generic notice that something was
-// dropped — reaches the console.
-function consoleFallback(level: LogLevel, line: string): void {
-  const sink = level === 'error' || level === 'warn' ? console.error : console.log
-  sink(line.trimEnd())
-}
-
-// Appends one JSON Lines event to the active session log. Takes a structured
-// event — a short, stable message plus arbitrary fields — and builds the
-// envelope { time, level, message, ...fields }. debug lines are written
-// only when debug is enabled. Logging never throws and never crashes the app: a
-// field that cannot be serialized falls back to a minimal envelope, and both a
-// missing session target and a failed write degrade to the console
-// (best-effort, no new dependencies) rather than dropping the event.
+// Writes one log record. debug lines are written only when debug is enabled.
+// Logging never throws: records.ts keeps a line it cannot store in the
+// launch's plain text file or on the console.
 export function log(level: LogLevel, message: string, fields?: LogFields): void {
   if (level === 'debug' && !debugEnabled) return
-
-  const time = new Date().toISOString()
-  const entry: Record<string, unknown> = { time, level, message }
-  if (fields) {
-    for (const key of Object.keys(fields)) {
-      // Envelope keys are reserved: a caller field named time/level/message
-      // cannot overwrite them and corrupt the line's schema.
-      if (RESERVED_KEYS.has(key)) continue
-      entry[key] = fields[key]
-    }
+  const kept: LogFields = {}
+  for (const [key, value] of Object.entries(fields ?? {})) {
+    if (!RESERVED_KEYS.has(key)) kept[key] = value
   }
-
-  let line: string
-  try {
-    line = JSON.stringify(entry) + '\n'
-  } catch {
-    // A field was not serializable (e.g. a BigInt, or a getter that throws).
-    // Never lose the event: fall back to the bare envelope. message/level/time
-    // are all strings, so this stringify cannot itself throw.
-    line = JSON.stringify({ time, level, message, logSerializeError: 'fields not serializable' }) + '\n'
-  }
-
-  if (!logFilePath) {
-    // Logged before initLogger runs — the narrow window while the storage root
-    // itself is still being resolved, since the log lives under it. There is no
-    // buffer to append this into and no file to flush it to later, so — same as
-    // a write failure below — echo the real rendered line to the console rather
-    // than silently dropping the event.
-    consoleFallback(level, line)
-    return
-  }
-
-  try {
-    fs.appendFileSync(logFilePath, line, 'utf-8')
-  } catch (err) {
-    // The log file may be unwritable (disk full, permissions). Degrade to the
-    // console and keep running — never crash because logging failed, and never
-    // let the event's actual content be lost behind a generic failure notice.
-    console.error('[logger] failed to write log line; echoing to console instead', err)
-    consoleFallback(level, line)
-  }
+  writeLogRecord(new Date().toISOString(), level, message, kept)
 }
 
 export function logEnqueue(
@@ -179,12 +84,4 @@ export function logGenerationComplete(
 
 export function logGenerationFailed(taskId: string, err: unknown, context?: Record<string, unknown>): void {
   log('error', 'Generation failed', { taskId, error: serializeError(err), ...context })
-}
-
-export function logApiRequest(backend: string, endpoint: string, params: Record<string, unknown>): void {
-  log('debug', 'API request', { backend, endpoint, params })
-}
-
-export function logApiResponse(backend: string, status: number | string, durationMs?: number): void {
-  log('debug', 'API response', { backend, status, durationMs })
 }

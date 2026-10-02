@@ -2,7 +2,8 @@ import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { withProviderRetry } from '../provider-retry'
 import { resolveApiKey } from '../config/api-keys-store'
-import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
+import { log, serializeError } from '../logger'
+import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
 import { grokReasonField, reasonFromBody } from '../provider-reason'
@@ -47,33 +48,33 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
   if (params.resolution) body.resolution = params.resolution
   if (params.quality) body.quality = params.quality
 
-  logApiRequest('grok', task.model, { model: task.model, aspectRatio: params.aspectRatio, resolution: params.resolution, quality: params.quality })
-  const startTime = Date.now()
+  const url = `${BASE_URL}/images/generations`
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  }
 
   try {
-    const response = await withProviderRetry(async (attemptSignal) => {
-      const response = await fetch(`${BASE_URL}/images/generations`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+    const json = await withProviderRetry(async (attemptSignal) => {
+      const { response, text } = await fetchRecorded(
+        { backend: 'grok', model: task.model, purpose: 'image', taskId: task.id, request: { url, headers, body } },
+        url,
+        { method: 'POST', headers, body: JSON.stringify(body), signal: attemptSignal },
+        // The image bytes are the saved file's.
+        (parsed) => {
+          const answer = parsed as { data?: { b64_json?: string }[] }
+          return { ...answer, data: answer.data?.map(({ b64_json: _bytes, ...rest }) => rest) }
         },
-        body: JSON.stringify(body),
-        signal: attemptSignal
-      })
+      )
 
       if (!response.ok) {
-        const text = await response.text()
         log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
         throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, reasonFromBody(text, grokReasonField), response.headers.get('retry-after'))
       }
 
-      return response
+      return JSON.parse(text) as { data: { b64_json?: string }[] }
     }, { signal: controller.signal })
 
-    logApiResponse('grok', 'ok', Date.now() - startTime)
-
-    const json = await response.json() as { data: { b64_json?: string }[] }
     const b64 = json.data?.[0]?.b64_json
 
     if (!b64) {

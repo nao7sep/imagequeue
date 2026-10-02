@@ -5,6 +5,7 @@ import { geminiTextParams } from './request'
 import { assertUsableGeminiResponse } from '../provider-response'
 import { ProviderHttpError } from '../provider-errors'
 import { geminiReasonField, reasonFromBody } from '../provider-reason'
+import { recordAiCall } from '../records'
 
 export class GeminiProvider implements TextAIProvider {
   constructor(private model: string, private apiKey: string, private endpoint: string, private thinking?: string) {}
@@ -15,14 +16,18 @@ export class GeminiProvider implements TextAIProvider {
       apiKey: this.apiKey,
       httpOptions: { baseUrl: this.endpoint, timeout: opts.timeoutMs, retryOptions: { attempts: 1 } },
     })
-    const response = await ai.models.generateContent({
+    const request = {
       model: this.model,
       contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
-      config: {
-        ...geminiTextParams(this.model, this.thinking, opts.schema),
-        ...(opts.signal ? { abortSignal: opts.signal } : {}),
-      },
-    }).catch((error: unknown) => {
+      config: geminiTextParams(this.model, this.thinking, opts.schema),
+    }
+    const response = await recordAiCall(
+      { backend: 'gemini', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request } },
+      () => ai.models.generateContent({
+        ...request,
+        config: { ...request.config, ...(opts.signal ? { abortSignal: opts.signal } : {}) },
+      }),
+    ).catch((error: unknown) => {
       if (error instanceof ApiError) {
         const said = reasonFromBody(error.message, geminiReasonField)
         throw new ProviderHttpError(said ?? `Gemini API error ${error.status}`, error.status, said)

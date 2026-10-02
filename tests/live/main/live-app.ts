@@ -47,7 +47,7 @@ export async function startApp(home: string) {
   process.env.IMAGEQUEUE_DATA_DIR = home
   handlers.clear()
   const config = await import('../../../src/main/config')
-  const { initLogger } = await import('../../../src/main/logger')
+  const { closeRecords, openRecords } = await import('../../../src/main/records')
   const { clearTempDir } = await import('../../../src/main/dependencies/paths')
   const session = await import('../../../src/main/session')
   const { registerQueueIpc } = await import('../../../src/main/queue')
@@ -65,7 +65,7 @@ export async function startApp(home: string) {
   const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
 
   config.ensureDataDir()
-  initLogger(config.getLogsDir())
+  openRecords(config.getDataDir())
   clearTempDir()
   session.initSession()
   session.resetOutputTimestampAllocators()
@@ -135,6 +135,7 @@ export async function startApp(home: string) {
       await session.dropCurrentSessionIfEmpty('quit')
       contents.destroy()
       closeBackupStore()
+      closeRecords()
     },
   }
 }

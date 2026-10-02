@@ -1,30 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { initLogger, log, serializeError, setLoggerDebug, shouldEnableDebugLogging } from '../../src/main/logger'
-
-const createdDirs: string[] = []
-
-// initLogger creates the logs dir and returns the launch log's full path, which
-// is what these tests read — the filename carries a timestamp, so nothing here
-// reconstructs it by hand.
-let logFile = ''
-
-function freshLogsDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-log-'))
-  createdDirs.push(dir)
-  logFile = initLogger(dir)
-  return dir
-}
-
-function readEntries(_dir: string): Record<string, unknown>[] {
-  const content = fs.readFileSync(logFile, 'utf-8')
-  return content
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as Record<string, unknown>)
-}
+import { log, serializeError, setLoggerDebug, shouldEnableDebugLogging } from '../../src/main/logger'
+import { freshRecordsRoot, readLog, removeRecordsRoots } from './records-fixture'
 
 const ISO_MS_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
@@ -35,9 +11,7 @@ beforeEach(() => {
 })
 
 afterAll(() => {
-  for (const dir of createdDirs) {
-    fs.rmSync(dir, { recursive: true, force: true })
-  }
+  removeRecordsRoots()
 })
 
 describe('serializeError', () => {
@@ -131,22 +105,20 @@ describe('shouldEnableDebugLogging', () => {
 })
 
 describe('log', () => {
-  it('does not throw before a session directory is set', async () => {
-    // Use a freshly-evaluated module so logFilePath is guaranteed null
-    // regardless of test order (the static import may have been pointed at a
-    // file by another test).
+  it('does not throw before the records are open', async () => {
     vi.resetModules()
     const fresh = await import('../../src/main/logger')
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
     expect(() => fresh.log('info', 'no target yet')).not.toThrow()
+    expect(consoleLog.mock.calls.flat().map(String).join('\n')).toContain('no target yet')
+    consoleLog.mockRestore()
   })
 
-  it('writes one JSON object per line carrying the envelope', () => {
-    const dir = freshLogsDir()
+  it('writes one record per line carrying the envelope', () => {
+    const dir = freshRecordsRoot()
     log('info', 'hello', { a: 1, nested: { b: 2 } })
 
-    const entries = readEntries(dir)
-    // initLogger opens the file and writes nothing of its own, so the first
-    // line belongs to the first caller.
+    const entries = readLog(dir)
     expect(entries).toHaveLength(1)
     const entry = entries[0]
     expect(entry.level).toBe('info')
@@ -154,23 +126,24 @@ describe('log', () => {
     expect(entry.a).toBe(1)
     expect(entry.nested).toEqual({ b: 2 })
     expect(entry.time).toMatch(ISO_MS_Z)
+    expect(entry.launch).toMatch(ISO_MS_Z)
   })
 
   it('writes every field as given, with no redaction (logging conventions)', () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
     log('info', 'config', { api_key: 'sk-secret', model: 'gpt-image-1', nested: { token: 'abc' } })
 
-    const entry = readEntries(dir).at(-1)!
+    const entry = readLog(dir).at(-1)!
     expect(entry.api_key).toBe('sk-secret')
     expect(entry.model).toBe('gpt-image-1')
     expect(entry.nested).toEqual({ token: 'abc' })
   })
 
   it('does not let caller fields overwrite the reserved envelope keys', () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
     log('error', 'real message', { level: 'info', message: 'spoofed', time: 'whenever', extra: 1 })
 
-    const entry = readEntries(dir).at(-1)!
+    const entry = readLog(dir).at(-1)!
     expect(entry.level).toBe('error')
     expect(entry.message).toBe('real message')
     expect(entry.time).toMatch(ISO_MS_Z)
@@ -178,115 +151,34 @@ describe('log', () => {
   })
 
   it('suppresses debug when disabled and emits it when enabled', () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
 
     setLoggerDebug(false)
     log('debug', 'debug-off')
-    expect(readEntries(dir).some((e) => e.message === 'debug-off')).toBe(false)
+    expect(readLog(dir).some((e) => e.message === 'debug-off')).toBe(false)
 
     setLoggerDebug(true)
     log('debug', 'debug-on')
-    expect(readEntries(dir).some((e) => e.message === 'debug-on')).toBe(true)
+    expect(readLog(dir).some((e) => e.message === 'debug-on')).toBe(true)
   })
 
   it('always writes info, warn and error regardless of the debug gate', () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
     setLoggerDebug(false)
     log('info', 'i')
     log('warn', 'w')
     log('error', 'e')
-    const messages = readEntries(dir).map((entry) => entry.message)
-    expect(messages).toEqual(expect.arrayContaining(['i', 'w', 'e']))
+    expect(readLog(dir).map((entry) => entry.message)).toEqual(['i', 'w', 'e'])
   })
 
-  it('falls back to a bare envelope when a field cannot be serialized', () => {
-    const dir = freshLogsDir()
-    // A BigInt cannot be JSON-serialized; the event must survive as a valid line.
+  it('keeps the event when a field cannot be serialized', () => {
+    const dir = freshRecordsRoot()
     log('warn', 'bigint field', { n: BigInt(10) })
 
-    const entry = readEntries(dir).at(-1)!
+    const entry = readLog(dir).at(-1)!
     expect(entry.message).toBe('bigint field')
     expect(entry.level).toBe('warn')
-    expect(entry.time).toMatch(ISO_MS_Z)
-    expect(entry.logSerializeError).toBe('fields not serializable')
+    expect(typeof entry.recordSerializeError).toBe('string')
     expect('n' in entry).toBe(false)
-  })
-
-  // An append can fail at any time — the disk fills, permissions change, the
-  // directory is removed out from under the process. Whatever the cause, the app
-  // must not crash and the event must not be lost.
-  //
-  // This once carried a second job: the log lived inside the active session's
-  // directory, so dropping an empty session at quit deleted it and every
-  // shutdown line spilled to stderr. The log is launch-scoped now and sits
-  // outside any session, so that hazard is gone along with the ordering
-  // workaround it forced — only the general degradation contract remains.
-  it('degrades to the console (never crashes) when the log file cannot be written', () => {
-    const dir = freshLogsDir()
-    fs.rmSync(dir, { recursive: true, force: true })
-
-    // The write failure spills a notice to console.error and echoes the rendered
-    // line via consoleFallback (info -> console.log). Spy on both so the test
-    // captures the full degraded output.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
-    // Logging must not throw even though appendFileSync will ENOENT...
-    expect(() => log('info', 'Session ended', { reason: 'quit' })).not.toThrow()
-    // ...and the failed append degrades to the console (the notice on stderr)
-    // rather than crashing.
-    expect(consoleError).toHaveBeenCalled()
-    // The event's actual content — not just a generic "write failed" notice —
-    // still reaches the console via consoleFallback's echoed JSON line, so the
-    // "Session ended" line is degraded, never lost.
-    const printed = [...consoleError.mock.calls, ...consoleLog.mock.calls]
-      .flat()
-      .map(String)
-      .join('\n')
-    expect(printed).toContain('Session ended')
-    consoleError.mockRestore()
-    consoleLog.mockRestore()
-  })
-})
-
-// The launch log replaced a per-session log that was neither one launch nor one
-// session: it was opened inside the active session directory and repointed on
-// every session switch. These pin the three properties that cost the app a log.
-describe('one log file per launch', () => {
-  it('names the file for the launch instant and puts it in the given directory', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-launch-'))
-    createdDirs.push(dir)
-    const file = initLogger(dir)
-    expect(path.dirname(file)).toBe(dir)
-    expect(path.basename(file)).toMatch(/^\d{8}-\d{6}-\d{3}-utc\.log$/)
-  })
-
-  it('creates the file at init, so a launch that logs nothing still leaves a record', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-launch-'))
-    createdDirs.push(dir)
-    const file = initLogger(dir)
-    expect(fs.existsSync(file)).toBe(true)
-    expect(fs.readFileSync(file, 'utf-8')).toBe('')
-  })
-
-  // The property that matters most: the log lives outside every session
-  // directory, so dropping an empty session at quit — which trashes that whole
-  // directory — can no longer take the launch's only log with it.
-  it('keeps writing after a session directory is removed', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-launch-'))
-    createdDirs.push(root)
-    const file = initLogger(path.join(root, 'logs'))
-
-    const sessionDir = path.join(root, 'output', '20260101-000000-000-utc')
-    fs.mkdirSync(sessionDir, { recursive: true })
-    log('info', 'App started')
-    fs.rmSync(sessionDir, { recursive: true, force: true })
-    log('info', 'Session ended', { reason: 'quit' })
-
-    const messages = fs
-      .readFileSync(file, 'utf-8')
-      .split('\n')
-      .filter((line) => line.length > 0)
-      .map((line) => (JSON.parse(line) as { message: string }).message)
-    expect(messages).toEqual(['App started', 'Session ended'])
   })
 })

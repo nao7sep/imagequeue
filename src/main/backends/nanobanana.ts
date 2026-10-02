@@ -1,9 +1,10 @@
-import { ApiError, GoogleGenAI } from '@google/genai'
+import { ApiError, GoogleGenAI, type GenerateContentResponse } from '@google/genai'
 import { withProviderRetry } from '../provider-retry'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
-import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
+import { log, serializeError } from '../logger'
+import { recordAiCall } from '../records'
 import { findModel } from '../../shared/models'
 import { assertUsableGeminiResponse } from '../provider-response'
 import { CANCELLED_MESSAGE } from './cancellation'
@@ -35,22 +36,24 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   const requestParams = supportsImageConfig
     ? { aspectRatio, imageSize }
     : {}
-  logApiRequest('nanobanana', task.model, requestParams)
-  const startTime = Date.now()
-
-  const response = await withProviderRetry((attemptSignal) => ai.models.generateContent({
+  const request = {
     model: task.model,
     contents: task.prompt,
-    // No cast: GenerateContentConfig declares every field here, so the
-    // compiler proves the abort signal reaches this backend.
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
-      // Client-side only, per the SDK: aborting stops us waiting, it does not
-      // stop the service, and the call is still billed.
-      abortSignal: attemptSignal,
       ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {})
     }
-  }).catch((err: unknown) => {
+  }
+
+  const response = await withProviderRetry((attemptSignal) => recordAiCall(
+    { backend: 'nanobanana', model: task.model, purpose: 'image', taskId: task.id, request },
+    // No cast: GenerateContentConfig declares every field here, so the
+    // compiler proves the abort signal reaches this backend. Aborting is
+    // client-side only, per the SDK: it stops us waiting, it does not stop the
+    // service, and the call is still billed.
+    () => ai.models.generateContent({ ...request, config: { ...request.config, abortSignal: attemptSignal } }),
+    withoutImageBytes,
+  ).catch((err: unknown) => {
     if (err instanceof ApiError) {
       const said = reasonFromBody(err.message, geminiReasonField)
       throw new ProviderHttpError(said ?? `Gemini API error ${err.status}`, err.status, said)
@@ -71,8 +74,6 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     throw err
   })
 
-  logApiResponse('nanobanana', 'ok', Date.now() - startTime)
-
   assertUsableGeminiResponse(response, 'image')
 
   const parts = response.candidates?.[0]?.content?.parts ?? []
@@ -91,4 +92,15 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     buffer: Buffer.from(imagePart.inlineData.data, 'base64'),
     mimeType: imagePart.inlineData.mimeType
   }
+}
+
+// The response as recorded: the image bytes are the saved file's.
+function withoutImageBytes(response: GenerateContentResponse): unknown {
+  const copy = JSON.parse(JSON.stringify(response)) as GenerateContentResponse
+  for (const candidate of copy.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      if (part.inlineData) delete part.inlineData.data
+    }
+  }
+  return copy
 }

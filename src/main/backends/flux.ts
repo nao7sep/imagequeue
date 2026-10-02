@@ -3,7 +3,8 @@ import { FLUX_MAX_PIXELS, FLUX_SIZE_STEP } from '../../shared/models'
 import { loadConfig } from '../config'
 import { withProviderRetry } from '../provider-retry'
 import { resolveApiKey } from '../config/api-keys-store'
-import { log, logApiRequest, logApiResponse } from '../logger'
+import { log } from '../logger'
+import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { abortableDelay } from '../utils/abortable-delay'
 import { MissingApiKeyError, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
@@ -44,8 +45,6 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
   if (task.params.guidance) body.guidance = task.params.guidance
   if (task.params.seed != null) body.seed = task.params.seed
 
-  // Submit request
-  logApiRequest('flux', task.model, { width, height, steps: body.steps, guidance: body.guidance, seed: body.seed })
   const startTime = Date.now()
 
   // A signal that is ALREADY aborted never fires its listener — today no await
@@ -63,52 +62,47 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
   signal.addEventListener('abort', onAbort, { once: true })
 
   try {
-    const submitResponse = await withProviderRetry(async (attemptSignal) => {
-      const submitResponse = await fetch(`${BASE_URL}/${task.model}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-key': apiKey
-        },
-        body: JSON.stringify(body),
-        signal: attemptSignal
-      })
+    const call = { backend: 'flux', model: task.model, purpose: 'image', taskId: task.id }
+    const submitUrl = `${BASE_URL}/${task.model}`
+    const submitHeaders = { 'Content-Type': 'application/json', 'x-key': apiKey }
+    const submitData = await withProviderRetry(async (attemptSignal) => {
+      const { response: submitResponse, text } = await fetchRecorded(
+        { ...call, request: { url: submitUrl, headers: submitHeaders, body } },
+        submitUrl,
+        { method: 'POST', headers: submitHeaders, body: JSON.stringify(body), signal: attemptSignal },
+      )
 
       if (!submitResponse.ok) {
-        const text = await submitResponse.text()
         log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
         throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, reasonFromBody(text, fluxReasonField), submitResponse.headers.get('retry-after'))
       }
 
-      return submitResponse
+      return JSON.parse(text) as { id: string; polling_url?: string }
     }, { signal: controller.signal })
-
-    const submitData = await submitResponse.json() as { id: string; polling_url?: string }
     const pollingUrl = submitData.polling_url || `${BASE_URL}/get_result?id=${submitData.id}`
 
     // Poll for result
     while (true) {
       await abortableDelay(POLL_INTERVAL_MS, controller.signal)
 
-      const pollResponse = await withProviderRetry(async (attemptSignal) => {
-        const pollResponse = await fetch(pollingUrl, {
-          headers: { 'x-key': apiKey },
-          signal: attemptSignal
-        })
+      const pollHeaders = { 'x-key': apiKey }
+      const pollData = await withProviderRetry(async (attemptSignal) => {
+        const { response: pollResponse, text } = await fetchRecorded(
+          { ...call, request: { url: pollingUrl, headers: pollHeaders } },
+          pollingUrl,
+          { headers: pollHeaders, signal: attemptSignal },
+        )
 
         if (!pollResponse.ok) {
           log('error', 'FLUX poll request failed', { model: task.model, status: pollResponse.status, jobId: submitData.id })
-          const body = await pollResponse.text()
-          throw new ProviderHttpError(`FLUX poll failed (${pollResponse.status})`, pollResponse.status, reasonFromBody(body, fluxReasonField), pollResponse.headers.get('retry-after'))
+          throw new ProviderHttpError(`FLUX poll failed (${pollResponse.status})`, pollResponse.status, reasonFromBody(text, fluxReasonField), pollResponse.headers.get('retry-after'))
         }
 
-        return pollResponse
+        return JSON.parse(text) as {
+          status: string
+          result?: { sample?: string }
+        }
       }, { signal: controller.signal })
-
-      const pollData = await pollResponse.json() as {
-        status: string
-        result?: { sample?: string }
-      }
 
       if (pollData.status === 'Ready') {
         const imageUrl = pollData.result?.sample
@@ -116,8 +110,6 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
           log('error', 'FLUX completed but response missing image URL', { model: task.model, result: pollData.result })
           throw new Error('FLUX completed but no image URL in response')
         }
-
-        logApiResponse('flux', 'Ready', Date.now() - startTime)
 
         // Download image from signed URL
         const imageResponse = await fetch(imageUrl, { signal: controller.signal })

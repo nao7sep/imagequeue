@@ -7,7 +7,8 @@ import { loadConfig } from '../config'
 import { getTempDir } from '../dependencies/paths'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { ProviderTimeoutError } from '../provider-errors'
-import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
+import { log, serializeError } from '../logger'
+import { startAiCall } from '../records'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
 export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
@@ -63,18 +64,8 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     args.push('--negative-prompt', negativePrompt ?? '')
   }
 
-  logApiRequest('drawthings', 'draw-things-cli generate', {
-    model: task.model,
-    width,
-    height,
-    steps,
-    guidance,
-    seed,
-    negativePrompt
-  })
-  const startTime = Date.now()
-
   const { timeout_ms } = loadConfig().image_backends.drawthings
+  const record = startAiCall({ backend: 'drawthings', model: task.model, purpose: 'image', taskId: task.id, request: { command: cliPath, args } })
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(cliPath, args, { stdio: 'pipe' })
@@ -111,23 +102,31 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     proc.on('close', (code) => {
       clearTimeout(timer)
+      const answer = { exitCode: code, stderr }
+      const fail = (err: Error): void => {
+        record.fail(err, answer)
+        reject(err)
+      }
       if (cancelled) {
-        reject(new Error(CANCELLED_MESSAGE))
+        fail(new Error(CANCELLED_MESSAGE))
         return
       }
       if (timedOut) {
         log('error', 'draw-things-cli timed out', { model: task.model, timeoutMs: timeout_ms })
-        reject(new ProviderTimeoutError('Draw Things generation', timeout_ms))
+        fail(new ProviderTimeoutError('Draw Things generation', timeout_ms))
         return
       }
-      if (code === 0) resolve()
-      else {
+      if (code === 0) {
+        record.finish(answer)
+        resolve()
+      } else {
         log('error', 'draw-things-cli exited with error', { code, model: task.model, stderr: stderr.slice(-2000), stderrChars: stderr.length })
-        reject(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
+        fail(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
       }
     })
     proc.on('error', (err) => {
       log('error', 'draw-things-cli spawn failed', { cliPath, error: serializeError(err) })
+      record.fail(err)
       reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
     })
   })
@@ -136,8 +135,6 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     log('error', 'draw-things-cli produced no output file', { model: task.model, outputPath })
     throw new Error('draw-things-cli did not produce output file')
   }
-
-  logApiResponse('drawthings', 'ok', Date.now() - startTime)
 
   try {
     const buffer = fs.readFileSync(outputPath)

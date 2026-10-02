@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
-import { loadConfig, ensureDataDir, getLogsDir, summarizeConfig } from './config'
+import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
@@ -19,7 +19,8 @@ import { registerConceptsIpc } from './concepts-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
-import { initLogger, log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
+import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
+import { openRecords } from './records'
 import { killAllCliJobsAndWait } from './cli-jobs'
 import { cancelAllInFlightAndWait } from './backends/cancellation'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
@@ -85,7 +86,7 @@ app.on('window-all-closed', () => {})
 // Debug is diagnostic-only: enabled automatically for an unpackaged development
 // build, and available in packaged builds only through an explicit
 // IMAGEQUEUE_DEBUG=1 launch. Set once at process start so every debug line —
-// including any logged before the launch log is opened — honors the gate.
+// including any logged before the records are opened — honors the gate.
 const DEBUG_ENABLED = shouldEnableDebugLogging({
   isPackaged: app.isPackaged,
   imagequeueDebug: process.env['IMAGEQUEUE_DEBUG'],
@@ -94,7 +95,7 @@ setLoggerDebug(DEBUG_ENABLED)
 
 // Global last-resort hooks: log with full error fidelity before the process
 // dies, and also surface to the console as a backstop for the brief window
-// before the launch log is open. An uncaught exception leaves the process
+// before the records are open. An uncaught exception leaves the process
 // in an undefined state, so we exit after logging; an unhandled rejection is
 // logged but allowed to continue.
 process.on('uncaughtException', (err) => {
@@ -197,10 +198,10 @@ async function startUp(): Promise<void> {
   installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
   registerImageProtocol()
   ensureDataDir()
-  // Open this launch's log immediately after the storage root exists and before
-  // any other startup step, so a failure in one of them is logged rather than
-  // lost to the console. Everything below this line has a log to write to.
-  initLogger(getLogsDir())
+  // Records open immediately after the storage root exists and before any other
+  // startup step, so a failure in one of them is logged rather than lost to the
+  // console.
+  openRecords(getDataDir())
   // Created before the launch archive, so a quit during it is claimed by the
   // controller and the rest of startup does not run.
   mainWindowController = new MainWindowController({
@@ -231,8 +232,7 @@ async function startUp(): Promise<void> {
     debug: DEBUG_ENABLED,
     config: summarizeConfig(loadConfig()),
   })
-  // Every launch opens a fresh session, and the log has to say which one: it is
-  // where this launch's images land, and the log no longer lives inside it.
+  // Every launch opens a fresh session, where this launch's images land.
   // Switching or resuming a session logs its own line from session/state.
   log('info', 'Session started', { sessionDir: getSessionDir() })
 

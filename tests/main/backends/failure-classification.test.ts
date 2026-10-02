@@ -19,7 +19,7 @@ vi.mock('../../../src/main/config', () => ({
 }))
 vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => apiKey }))
 vi.mock('../../../src/main/logger', () => ({
-  log: vi.fn(), logApiRequest: vi.fn(), logApiResponse: vi.fn(), serializeError: (e: unknown) => e,
+  log: vi.fn(), serializeError: (e: unknown) => e,
 }))
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 

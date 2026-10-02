@@ -6,7 +6,7 @@ import { PROVIDER_ENDPOINTS } from '../../../src/shared/ai-models'
 
 afterEach(() => { vi.unstubAllGlobals() })
 function reply(body: unknown): Response { return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } }) }
-const opts = { messages: [{ role: 'user' as const, text: 'prompt' }], timeoutMs: 1000, signal: new AbortController().signal }
+const opts = { messages: [{ role: 'user' as const, text: 'prompt' }], timeoutMs: 1000, signal: new AbortController().signal, record: { purpose: 'test' } }
 
 describe('text adapter outbound contracts', () => {
   it('routes known OpenAI ids by id at a custom endpoint and other ids with only the feature\'s JSON format', async () => {

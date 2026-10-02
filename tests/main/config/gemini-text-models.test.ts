@@ -64,7 +64,7 @@ describe('open text model sets', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       const { getLightProvider, getMainProvider } = await import('../../../src/main/text-ai')
-      const ask = { messages: [{ role: 'user' as const, text: 'p' }], timeoutMs: 1000 }
+      const ask = { messages: [{ role: 'user' as const, text: 'p' }], timeoutMs: 1000, record: { purpose: 'test' } }
       await getLightProvider()!.provider.ask(ask)
       await getMainProvider()!.provider.ask(ask)
       expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(init!.body as string).reasoning_effort)).toEqual(['none', 'xhigh'])

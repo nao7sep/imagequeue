@@ -10,7 +10,7 @@ vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { flux: { timeout_ms: 180000 } } }),
 }))
 vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'bfl-test' }))
-vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), logApiRequest: vi.fn(), logApiResponse: vi.fn() }))
+vi.mock('../../../src/main/logger', () => ({ log: vi.fn() }))
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 
 const { generateFlux } = await import('../../../src/main/backends/flux')

@@ -5,6 +5,7 @@ import { openaiTextParams } from './request'
 import { assertUsableOpenAIResponse } from '../provider-response'
 import { ProviderHttpError } from '../provider-errors'
 import { openaiReasonField, reasonFromParsed } from '../provider-reason'
+import { recordAiCall } from '../records'
 
 export class OpenAIProvider implements TextAIProvider {
   constructor(private model: string, private apiKey: string, private endpoint: string, private thinking?: string) {}
@@ -14,11 +15,15 @@ export class OpenAIProvider implements TextAIProvider {
       apiKey: this.apiKey, baseURL: this.endpoint,
       timeout: opts.timeoutMs, maxRetries: 0,
     })
-    const response = await client.chat.completions.create({
+    const request = {
       model: this.model,
-      messages: opts.messages.map((m) => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text })),
+      messages: opts.messages.map((m) => ({ role: m.role === 'model' ? 'assistant' as const : 'user' as const, content: m.text })),
       ...openaiTextParams(this.model, this.thinking, opts.schema),
-    }, { signal: opts.signal }).catch((error: unknown) => {
+    }
+    const response = await recordAiCall(
+      { backend: 'openai', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request } },
+      () => client.chat.completions.create(request, { signal: opts.signal }),
+    ).catch((error: unknown) => {
       if (error instanceof APIError && typeof error.status === 'number') {
         throw new ProviderHttpError(error.message, error.status,
           reasonFromParsed(error.error, openaiReasonField), error.headers?.get('retry-after') ?? null)

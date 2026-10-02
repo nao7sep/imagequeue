@@ -12,7 +12,7 @@ vi.mock('../../../src/main/config', () => ({
 }))
 vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'sk-test' }))
 vi.mock('../../../src/main/logger', () => ({
-  log: vi.fn(), logApiRequest: vi.fn(), logApiResponse: vi.fn(), serializeError: (e: unknown) => e,
+  log: vi.fn(), serializeError: (e: unknown) => e,
 }))
 
 const { generateOpenAI } = await import('../../../src/main/backends/openai')

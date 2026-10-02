@@ -32,7 +32,7 @@ export async function askJsonWithRetry<T>(options: {
     backoffSchedule, signal, label, requestId,
   } = options
   return withProviderRetry(async (attemptSignal) => {
-    const result = await provider.ask({ messages, schema, timeoutMs, signal: attemptSignal })
+    const result = await provider.ask({ messages, schema, timeoutMs, signal: attemptSignal, record: { purpose: label, requestId } })
     const value = validate(result.parsed, result.text)
     if (value === null) {
       const preview = truncate(result.text ?? '', REJECTED_PAYLOAD_PREVIEW_GRAPHEMES)

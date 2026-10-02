@@ -177,7 +177,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     task.durationMs = completedAt.getTime() - new Date(task.startedAt!).getTime()
 
     // Generate slug and allocate timestamp
-    const slug = await generateSlug(task.prompt, shutdownSignal())
+    const slug = await generateSlug(task.prompt, task.id, shutdownSignal())
     const { timestamp, ordinal } = allocateOutputTimestamp(backend)
 
     const metadata: ImageMetadata = {

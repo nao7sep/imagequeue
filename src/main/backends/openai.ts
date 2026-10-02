@@ -2,7 +2,8 @@ import OpenAI, { APIConnectionTimeoutError, APIError } from 'openai'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
-import { log, logApiRequest, logApiResponse, serializeError } from '../logger'
+import { log, serializeError } from '../logger'
+import { recordAiCall } from '../records'
 import { buildOpenAIImageParams } from './openai-request'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { MissingApiKeyError, ProviderHttpError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
@@ -23,16 +24,14 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
   const client = new OpenAI({ apiKey, timeout: config.image_backends.openai.timeout_ms, maxRetries: 0 })
 
   const params = buildOpenAIImageParams(task)
+  const request = { ...params, prompt: task.prompt, n: 1, stream: false as const }
 
-  logApiRequest('openai', 'images.generate', params)
-  const startTime = Date.now()
-
-  const response = await withProviderRetry((attemptSignal) => client.images.generate({
-    ...params,
-    prompt: task.prompt,
-    n: 1,
-    stream: false,
-  }, { signal: attemptSignal }).catch((err: unknown) => {
+  const response = await withProviderRetry((attemptSignal) => recordAiCall(
+    { backend: 'openai', model: task.model, purpose: 'image', taskId: task.id, request },
+    () => client.images.generate(request, { signal: attemptSignal }),
+    // The image bytes are the saved file's.
+    (answer) => ({ ...answer, data: answer.data?.map(({ b64_json: _bytes, ...rest }) => rest) }),
+  ).catch((err: unknown) => {
     // A stop the user asked for is not a timeout and not a failure; checked
     // first so the log does not claim otherwise.
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
@@ -68,8 +67,6 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
     }
     throw err
   }), { signal, timeoutMs: config.image_backends.openai.timeout_ms })
-
-  logApiResponse('openai', 'ok', Date.now() - startTime)
 
   const b64 = response.data?.[0]?.b64_json
   if (!b64) {

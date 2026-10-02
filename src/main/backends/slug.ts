@@ -8,7 +8,7 @@ import { withProviderRetry } from '../provider-retry'
 // light tier. Falls back to nanoid on any failure, if the AI is not
 // configured, or once `signal` aborts (shutdown): the image is already made,
 // so it is saved under the random name rather than waiting on the network.
-export async function generateSlug(prompt: string, signal: AbortSignal): Promise<string> {
+export async function generateSlug(prompt: string, taskId: string, signal: AbortSignal): Promise<string> {
   const config = loadConfig()
   const handle = getLightProvider()
   if (!handle || signal.aborted) {
@@ -21,6 +21,7 @@ export async function generateSlug(prompt: string, signal: AbortSignal): Promise
       messages: [{ role: 'user', text: systemPrompt }],
       timeoutMs: handle.timeoutMs,
       signal: attemptSignal,
+      record: { purpose: 'slug', taskId },
     }), { signal, maxAttempts: config.brainstorm.max_retries_per_turn + 1 })
 
     const slug = result.text.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')

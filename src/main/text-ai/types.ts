@@ -1,6 +1,8 @@
 // Provider-agnostic text-AI interface. Implementers slot in via
 // getMainProvider / getLightProvider.
 
+import type { AiCall } from '../records'
+
 export interface ConversationMessage {
   role: 'user' | 'model'
   text: string
@@ -17,6 +19,8 @@ export interface AskOptions {
   // pass it through to the underlying SDK call so a cancelled brainstorm stops
   // spending tokens immediately rather than only between turns.
   signal?: AbortSignal
+  // What the call is for and what it belongs to, for its record.
+  record: Pick<AiCall, 'purpose' | 'taskId' | 'requestId'>
 }
 
 export interface AskResult {

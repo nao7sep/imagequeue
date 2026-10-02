@@ -38,7 +38,7 @@ vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
 const slugState = vi.hoisted(() => ({ failNext: false, hangUntilAborted: false, sawAbort: false }))
 vi.mock('../../../src/main/backends/slug', () => ({
-  generateSlug: async (_prompt: string, signal: AbortSignal) => {
+  generateSlug: async (_prompt: string, _taskId: string, signal: AbortSignal) => {
     if (slugState.failNext) {
       slugState.failNext = false
       throw new Error('slug service hiccup')

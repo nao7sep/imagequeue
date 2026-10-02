@@ -3,9 +3,9 @@ import { log, type LogLevel } from './logger'
 
 const ALLOWED_LEVELS: ReadonlySet<LogLevel> = new Set<LogLevel>(['info', 'warn', 'error', 'debug'])
 
-// Lets the renderer write entries to this launch's log. The renderer (a
-// sandboxed process) never opens the log file itself; it forwards structured log
-// objects here and the main process owns the file and runs redaction. Used for
+// Lets the renderer write log records. The renderer (a sandboxed process) never
+// opens the records itself; it forwards structured log objects here and the
+// main process writes them (logging-conventions). Used for
 // things the renderer knows but the main process doesn't (e.g. user clicked
 // Queue with mode=fresh-task and 4 targets). Diagnostic-only — not a generic
 // data channel: keep payloads small and structured.

@@ -1,7 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
 
 // The wrapper registers each handler with ipcMain.handle; capture the listener
 // it passes so the test can invoke it the way Electron would and observe what
@@ -21,28 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 import { handle } from '../../src/main/ipc-boundary'
-import { initLogger } from '../../src/main/logger'
-
-const createdDirs: string[] = []
-
-// Points the real logger (no electron dependency) at a fresh session dir so the
-// test can read back exactly what the wrapper wrote, rather than mocking log().
-let logFile = ''
-
-function freshLogsDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-ipc-'))
-  createdDirs.push(dir)
-  logFile = initLogger(dir)
-  return dir
-}
-
-function readEntries(_dir: string): Record<string, unknown>[] {
-  const content = fs.readFileSync(logFile, 'utf-8')
-  return content
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as Record<string, unknown>)
-}
+import { freshRecordsRoot, readLog, removeRecordsRoots } from './records-fixture'
 
 // Invokes the listener registered for a channel as Electron's invoke path would:
 // an opaque event followed by the renderer's args, result flattened to a promise.
@@ -57,30 +33,30 @@ beforeEach(() => {
 })
 
 afterAll(() => {
-  for (const dir of createdDirs) fs.rmSync(dir, { recursive: true, force: true })
+  removeRecordsRoots()
 })
 
 describe('handle (IPC boundary wrapper)', () => {
   it('returns the handler result and logs nothing for sync and async successes', async () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
     handle('ok:sync', (_event, a: number, b: number) => a + b)
     handle('ok:async', async (_event, name: string) => `hi ${name}`)
 
     await expect(invoke('ok:sync', 2, 3)).resolves.toBe(5)
     await expect(invoke('ok:async', 'cat')).resolves.toBe('hi cat')
 
-    expect(readEntries(dir).some((entry) => entry.message === 'IPC handler failed')).toBe(false)
+    expect(readLog(dir).some((entry) => entry.message === 'IPC handler failed')).toBe(false)
   })
 
   it('logs the channel + full error and still rejects when a sync handler throws', async () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
     handle('boom:sync', () => {
       throw new Error('kaboom')
     })
 
     await expect(invoke('boom:sync')).rejects.toThrow('kaboom')
 
-    const entry = readEntries(dir).at(-1) as {
+    const entry = readLog(dir).at(-1) as {
       level: string
       message: string
       channel: string
@@ -96,20 +72,20 @@ describe('handle (IPC boundary wrapper)', () => {
   })
 
   it('logs the channel and rejects when an async handler rejects', async () => {
-    const dir = freshLogsDir()
+    const dir = freshRecordsRoot()
     handle('boom:async', async () => {
       throw new Error('later')
     })
 
     await expect(invoke('boom:async')).rejects.toThrow('later')
 
-    const entry = readEntries(dir).at(-1) as { channel: string; error: { message: string } }
+    const entry = readLog(dir).at(-1) as { channel: string; error: { message: string } }
     expect(entry.channel).toBe('boom:async')
     expect(entry.error.message).toBe('later')
   })
 
   it('rethrows the original error instance unchanged', async () => {
-    freshLogsDir()
+    freshRecordsRoot()
     const original = new Error('identity')
     handle('boom:identity', () => {
       throw original

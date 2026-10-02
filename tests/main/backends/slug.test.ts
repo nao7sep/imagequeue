@@ -26,7 +26,7 @@ describe('generateSlug', () => {
   it('names from the text AI and passes the signal through', async () => {
     ask.mockResolvedValue({ text: 'Red Fox At Dawn' })
     const controller = new AbortController()
-    await expect(generateSlug('a fox', controller.signal)).resolves.toBe('red-fox-at-dawn')
+    await expect(generateSlug('a fox', 'task-1', controller.signal)).resolves.toBe('red-fox-at-dawn')
     const received = ask.mock.calls[0][0].signal as AbortSignal
     expect(received.aborted).toBe(false)
     controller.abort()
@@ -35,7 +35,7 @@ describe('generateSlug', () => {
 
   it('makes max_retries_per_turn + 1 attempts on a repeated 503, then falls back', async () => {
     ask.mockRejectedValue(Object.assign(new Error('unavailable'), { status: 503 }))
-    await expect(generateSlug('a fox', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
+    await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
     expect(ask).toHaveBeenCalledTimes(6)
   })
 
@@ -49,14 +49,14 @@ describe('generateSlug', () => {
       if (ask.mock.calls.length === 1) throw Object.assign(new Error('unavailable'), { status: 503 })
       return { text: 'Red Fox' }
     })
-    await expect(generateSlug('a fox', new AbortController().signal)).resolves.toBe('red-fox')
+    await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toBe('red-fox')
     expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
   })
 
   it('skips the call once shutdown has begun', async () => {
     const controller = new AbortController()
     controller.abort()
-    const slug = await generateSlug('a fox', controller.signal)
+    const slug = await generateSlug('a fox', 'task-1', controller.signal)
     expect(ask).not.toHaveBeenCalled()
     expect(slug).toMatch(/^[\w-]{10}$/)
   })
@@ -66,7 +66,7 @@ describe('generateSlug', () => {
     ask.mockImplementation((opts: { signal: AbortSignal }) => new Promise((_, reject) => {
       opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
     }))
-    const naming = generateSlug('a fox', controller.signal)
+    const naming = generateSlug('a fox', 'task-1', controller.signal)
     controller.abort()
     await expect(naming).resolves.toMatch(/^[\w-]{10}$/)
   })

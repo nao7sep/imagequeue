@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { getDataDir } from '../config'
 import { utcStampForFilename } from '../../shared/utc-stamp'
+import { setRecordsSession } from '../records'
 
 
 let sessionDir: string | null = null
@@ -33,6 +34,7 @@ export function createSessionDir(baseDate = new Date()): string {
 // Creates the session output directory on app launch. Called once.
 export function initSession(): string {
   sessionDir = createSessionDir()
+  setRecordsSession(path.basename(sessionDir))
   return sessionDir
 }
 
@@ -46,6 +48,7 @@ export function getSessionDir(): string {
 export function setSessionDir(nextSessionDir: string): string {
   fs.mkdirSync(nextSessionDir, { recursive: true })
   sessionDir = nextSessionDir
+  setRecordsSession(path.basename(sessionDir))
   return sessionDir
 }
 

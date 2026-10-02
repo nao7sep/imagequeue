@@ -12,7 +12,7 @@ vi.mock('../../../src/main/config', () => ({
 }))
 vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
 vi.mock('../../../src/main/logger', () => ({
-  log: vi.fn(), logApiRequest: vi.fn(), logApiResponse: vi.fn(), serializeError: (e: unknown) => e,
+  log: vi.fn(), serializeError: (e: unknown) => e,
 }))
 
 const { generateNanoBanana } = await import('../../../src/main/backends/nanobanana')
