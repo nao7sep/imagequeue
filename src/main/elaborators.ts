@@ -338,8 +338,7 @@ function readFile(): Record<string, unknown> {
  * cleaned, only while it differs from the shipped templates; a set equal to them
  * has its key removed, whether or not this save changed it. A kind this save
  * leaves out is taken from the file as it is now; a copy there the reader
- * rejected stays as the user left it. A result equal to the file writes nothing,
- * and a result with no keys removes the file.
+ * rejected stays as the user left it. A result equal to the file writes nothing.
  */
 function saveSets(changed: Partial<Record<ElaboratorKind, Elaborator[]>>): void {
   const current = readFile()
@@ -356,8 +355,7 @@ function saveSets(changed: Partial<Record<ElaboratorKind, Elaborator[]>>): void 
   }
   if (valuesEqual(next, current)) return
   const file = getElaboratorsFilePath()
-  if (Object.keys(next).length > 0) writeJsonAtomic(file, next, true)
-  else fs.rmSync(file, { force: true })
+  writeJsonAtomic(file, next, true)
 }
 
 export function listElaborators(): Elaborator[] {

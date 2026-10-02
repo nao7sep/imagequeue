@@ -93,8 +93,7 @@ export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
  * key removed, whether or not this save changed it. A set this save leaves
  * unchanged is taken from the file as it is now; a copy there the reader
  * rejected stays as the user left it. A changed set of the wrong shape rejects
- * the save. A result equal to the file writes nothing, and a result with no
- * keys removes the file.
+ * the save. A result equal to the file writes nothing.
  */
 export function saveConfig(config: AppConfig): void {
   const before = loadConfig()
@@ -117,8 +116,7 @@ export function saveConfig(config: AppConfig): void {
   }
   if (!valuesEqual(next, current)) {
     const file = getConfigPath()
-    if (Object.keys(next).length > 0) writeJsonAtomic(file, next, true)
-    else fs.rmSync(file, { force: true })
+    writeJsonAtomic(file, next, true)
     log('info', 'Config saved', { path: file })
   }
   cachedConfig = effectiveConfig(next)

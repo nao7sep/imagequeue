@@ -73,12 +73,12 @@ describe('settings by set', () => {
     updateConfig(() => undefined)
     expect(fs.existsSync(file())).toBe(false)
   })
-  it('keeps a whole cluster, and a save back to the built-in removes its key', async () => {
+  it('keeps a whole cluster, and a save back to the built-in leaves an empty file', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     updateConfig((draft) => { draft.brainstorm.concurrency = 2 })
     expect(stored()).toEqual({ brainstorm: { ...createDefaultConfig().brainstorm, concurrency: 2 } })
     updateConfig((draft) => { draft.brainstorm = createDefaultConfig().brainstorm })
-    expect(fs.existsSync(file())).toBe(false)
+    expect(stored()).toEqual({})
     expect(loadConfig().brainstorm).toEqual(createDefaultConfig().brainstorm)
   })
   it('removes a key saved back to its built-in and keeps the others', async () => {

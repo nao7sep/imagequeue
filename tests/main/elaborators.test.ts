@@ -51,12 +51,12 @@ describe('elaborator sets', () => {
     expect(stored()).toEqual({ composition })
     expect(listElaborators().filter((item) => item.kind === 'style')).toEqual(initial.filter((item) => item.kind === 'style'))
   })
-  it('removes a kind edited back to its shipped templates, and the file with its last key', () => {
+  it('removes a kind edited back to its shipped templates, leaving an empty file with its last key', () => {
     const item = listElaborators().find((row) => row.kind === 'composition')!
     updateElaborator(item.id, { template: 'changed' })
     expect(Object.keys(stored())).toEqual(['composition'])
     updateElaborator(item.id, { template: `${item.template}  \r\n` })
-    expect(fs.existsSync(file())).toBe(false)
+    expect(stored()).toEqual({})
   })
   it('never rewrites the file on a reset that would not change it', () => {
     resetElaborators()
