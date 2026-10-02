@@ -7,7 +7,7 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 import type { ArchivedStore } from '../config/storage-root'
 import { utcStampForFilename } from '../../shared/utc-stamp'
 import { serializeError } from '../../shared/serialize-error'
-import { syncDirectory, syncFile } from '../utils/atomic-write'
+import { syncDirectory, syncFile } from '../utils/fsync'
 import { archivesToThin } from './archive-thinning'
 
 interface ManifestEntry extends ArchivedStore {

@@ -2,38 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 import { record } from '../backup/backup-store'
-
-/** Sync directory metadata after an atomic rename where the platform exposes
- * directory handles. Windows does not, so the rename itself is its durability
- * boundary there. */
-export function syncDirectory(directory: string): void {
-  if (process.platform === 'win32') return
-  const fd = fs.openSync(directory, 'r')
-  try {
-    fs.fsyncSync(fd)
-  } finally {
-    fs.closeSync(fd)
-  }
-}
-
-export async function syncDirectoryAsync(directory: string): Promise<void> {
-  if (process.platform === 'win32') return
-  const handle = await fs.promises.open(directory, 'r')
-  try {
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-}
-
-export function syncFile(filePath: string): void {
-  const fd = fs.openSync(filePath, 'r')
-  try {
-    fs.fsyncSync(fd)
-  } finally {
-    fs.closeSync(fd)
-  }
-}
+import { syncDirectory, syncDirectoryAsync } from './fsync'
 
 // Writes data to filePath atomically via temp file + rename. On POSIX the
 // rename is atomic; on Windows it is atomic as long as the target file
