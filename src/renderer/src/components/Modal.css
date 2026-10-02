@@ -56,12 +56,13 @@
   max-width: 92vw;
 }
 
+/* Band lines take the control-edge colour (modal-dialog conventions). */
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--field-border);
   color: var(--text-primary);
 }
 
@@ -80,7 +81,7 @@
    band, with space on either side of its controls. */
 .modal-strip {
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--field-border);
 }
 
 .modal-header span {
@@ -182,7 +183,7 @@
   justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--field-border);
   font-size: var(--text-sm);
 }
 

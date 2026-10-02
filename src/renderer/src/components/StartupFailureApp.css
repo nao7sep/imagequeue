@@ -18,7 +18,7 @@
 .startup-failure-app h1 {
   margin: 0;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--field-border);
   font-size: var(--text-lg);
 }
 
@@ -36,7 +36,7 @@
   display: flex;
   justify-content: flex-end;
   padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--field-border);
 }
 
 .startup-failure-app button {
