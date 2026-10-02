@@ -1,4 +1,4 @@
-import { loadCatalogue, type Catalogue, type MessageKey } from './catalogues'
+import { ENGLISH, loadCatalogue, type Catalogue, type MessageKey } from './catalogues'
 import type { Language } from './languages'
 
 // A value filled into a placeholder: a number is formatted for the locale, and
@@ -24,6 +24,7 @@ export function isMessage(value: unknown): value is Message {
 }
 
 const PLACEHOLDER = /\{(\w+)\}/g
+const englishPluralRules = new Intl.PluralRules('en')
 
 export type Translator = {
   language: Language
@@ -44,21 +45,23 @@ export function createTranslator(language: Language, catalogue: Catalogue, local
   const pluralRules = new Intl.PluralRules(language)
 
   function template(key: MessageKey, values: MessageValues | undefined): string {
-    const entry = catalogue[key]
+    // A key the catalogue lacks reads in English, its fallback (localization
+    // conventions, Catalogues); one English lacks too shows as itself rather
+    // than taking the window down.
+    const own = catalogue[key]
+    const entry = own ?? ENGLISH[key]
     if (typeof entry === 'string') {
       return entry
     }
-    // A key the catalogue does not carry shows as itself rather than taking the
-    // window down; the catalogue gate and the on-screen-key check both fail on
-    // it, so it cannot reach a release unnoticed.
     if (entry === undefined || entry === null) {
       return key
     }
-    // A plural entry holds one form per CLDR category the language uses; the
+    // A plural entry holds one form per CLDR category its language uses; the
     // catalogue gate guarantees the category the rules select is present.
     const count = typeof values?.count === 'number' ? values.count : 0
     const forms = entry as Record<string, string>
-    return forms[pluralRules.select(count)] ?? forms.other
+    const rules = own == null ? englishPluralRules : pluralRules
+    return forms[rules.select(count)] ?? forms.other
   }
 
   function format(value: MessageValue): string {

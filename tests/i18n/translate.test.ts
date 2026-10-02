@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { MessageKey } from "../../src/shared/i18n/catalogues";
-import { loadTranslator, message } from "../../src/shared/i18n/translate";
+import { loadCatalogue, type Catalogue, type MessageKey } from "../../src/shared/i18n/catalogues";
+import { createTranslator, loadTranslator, message } from "../../src/shared/i18n/translate";
 
 describe("createTranslator", () => {
   it("fills placeholders and formats numbers for the locale", async () => {
@@ -35,7 +35,16 @@ describe("createTranslator", () => {
     expect((await loadTranslator("ja")).dateTime("not a date")).toBe("not a date");
   });
 
-  it("shows a key the catalogue lacks instead of failing the render", async () => {
+  it("reads a key the catalogue lacks in English, by English plural rules", async () => {
+    const partial: Record<string, unknown> = { ...(await loadCatalogue("ru")) };
+    delete partial["about.version"];
+    delete partial["dependencies.entries"];
+    const ru = createTranslator("ru", partial as Catalogue);
+    expect(ru.t("about.version", { version: "1.2.0" })).toBe("Version 1.2.0");
+    expect(ru.t("dependencies.entries", { count: 21 })).toBe("21 entries");
+  });
+
+  it("shows a key English lacks too instead of failing the render", async () => {
     // Types keep this out of the app; a stale build or a half-merged catalogue
     // could still reach it, and a window must not go down over one string.
     const missing = "gone.missing" as unknown as MessageKey;
