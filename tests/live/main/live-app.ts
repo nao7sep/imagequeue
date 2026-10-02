@@ -59,11 +59,15 @@ export async function startApp(home: string) {
   const { registerElaboratorsIpc } = await import('../../../src/main/elaborators-ipc')
   const { registerConceptsIpc } = await import('../../../src/main/concepts-ipc')
   const { startProcessor, stopProcessor } = await import('../../../src/main/backends')
-  const { cancelAllInFlightAndWait } = await import('../../../src/main/backends/cancellation')
+  const { cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
   const { killAllCliJobsAndWait } = await import('../../../src/main/cli-jobs')
   const { drainPendingWrites } = await import('../../../src/main/model-params')
   const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
 
+  // The app starts once per process; this harness starts it again in the same
+  // process, so the shutdown signal the last stop aborted is replaced first, or
+  // every slug would take the shutdown path and fall back to a random name.
+  resetCancellationState()
   config.ensureDataDir()
   openRecords(config.getDataDir())
   clearTempDir()
