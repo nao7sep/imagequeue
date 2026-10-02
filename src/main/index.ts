@@ -265,7 +265,7 @@ async function startUp(): Promise<void> {
   startWakeLockMonitor()
 
   // Re-check the managed dependencies if the launch toggle is on and the last
-  // check is past the staleness cap. Fire-and-forget: never blocks startup, and
+  // check attempt is a day old. Fire-and-forget: never blocks startup, and
   // its result is surfaced passively (pane pointer / modal), never as a prompt.
   void checkDependenciesAtLaunch()
 
