@@ -5,11 +5,11 @@ import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { resolveStorageRoot } from './storage-root'
+import { utcStampForFilename } from '../../shared/utc-stamp'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
 
 let cachedConfig: AppConfig | null = null
-const warnedSets = new Set<string>()
 
 // The storage root is resolved lazily (honoring IMAGEQUEUE_DATA_DIR) rather than
 // frozen into a module-level constant at import time, so the override is read
@@ -35,29 +35,40 @@ export function ensureDataDir(): void {
   resolveStorageRoot()
 }
 
+// An unreadable file is set aside (store-recovery conventions); a failed rename
+// propagates.
+function setAsideUnreadableFile(file: string, error: unknown): void {
+  const movedTo = path.join(path.dirname(file), `${path.basename(file, '.json')}-${utcStampForFilename()}.invalid`)
+  fs.renameSync(file, movedTo)
+  log('warn', 'Set aside an unreadable config file; using built-in settings', {
+    from: file,
+    to: movedTo,
+    error: serializeError(error),
+  })
+}
+
 function readStoredMap(): Record<string, unknown> {
   const file = getConfigPath()
   if (!fs.existsSync(file)) return {}
+  let parsed: unknown
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!isObject(parsed)) throw new Error('Config file must be a JSON object')
-    return parsed
   } catch (err) {
-    log('error', 'Failed to read config file', { path: file, error: serializeError(err) })
-    throw new Error(`Config file is not a valid JSON object: ${file}`, { cause: err })
+    setAsideUnreadableFile(file, err)
+    return {}
   }
+  return parsed
 }
 
+// Each set is checked as it is read (config-sets conventions, Reading and healing).
 function effectiveConfig(stored: Record<string, unknown>): AppConfig {
   const config = createDefaultConfig()
   for (const [key, builtIn] of Object.entries(configSetDefaults())) {
     const value = readPath(stored, key)
     if (value === undefined) continue
     if (!hasSetShape(value, builtIn, key)) {
-      if (!warnedSets.has(key)) {
-        warnedSets.add(key)
-        log('warn', 'Invalid config set; using built-in', { key })
-      }
+      log('warn', 'Invalid config set; using built-in', { key })
       continue
     }
     applyConfigSet(config, key, value)
@@ -88,33 +99,20 @@ export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
 }
 
 /**
- * The one owner of what config.json holds. Every known set is stored, cleaned,
- * only while it differs from its built-in; a set equal to its built-in has its
- * key removed, whether or not this save changed it. A set this save leaves
- * unchanged is taken from the file as it is now; a copy there the reader
- * rejected stays as the user left it. A changed set of the wrong shape rejects
- * the save. A result equal to the file writes nothing.
+ * The one owner of what config.json holds. The file is written from the config
+ * in memory: every known set is stored, cleaned, only while it differs from its
+ * built-in. A set of the wrong shape rejects the save. A result equal to the
+ * file writes nothing.
  */
 export function saveConfig(config: AppConfig): void {
-  const before = loadConfig()
-  const current = readStoredMap()
   const next: Record<string, unknown> = {}
   for (const [key, builtIn] of Object.entries(configSetDefaults())) {
-    let value = readConfigSet(config, key)
-    if (valuesEqual(value, readConfigSet(before, key))) {
-      value = readPath(current, key)
-      if (value === undefined) continue
-      if (!hasSetShape(value, builtIn, key)) {
-        writePath(next, key, value)
-        continue
-      }
-    } else if (!hasSetShape(value, builtIn, key)) {
-      throw new Error(`Cannot save invalid config set: ${key}`)
-    }
+    const value = readConfigSet(config, key)
+    if (!hasSetShape(value, builtIn, key)) throw new Error(`Cannot save invalid config set: ${key}`)
     const cleaned = cleanConfigSet(key, value)
     if (!equalsBuiltIn(key, cleaned, builtIn, config)) writePath(next, key, cleaned)
   }
-  if (!valuesEqual(next, current)) {
+  if (!valuesEqual(next, readStoredMap())) {
     const file = getConfigPath()
     writeJsonAtomic(file, next, true)
     log('info', 'Config saved', { path: file })

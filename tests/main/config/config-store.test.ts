@@ -38,6 +38,7 @@ describe('settings by set', () => {
   afterEach(async () => {
     const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
     closeBackupStore()
+    vi.restoreAllMocks()
     vi.unstubAllEnvs()
     fs.rmSync(root, { recursive: true, force: true })
   })
@@ -122,14 +123,42 @@ describe('settings by set', () => {
     expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
     expect(fs.readdirSync(root).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
-  it('keeps an unchanged rejected copy and rejects a changed set of the wrong shape', async () => {
+  it('drops a rejected copy at the next save and rejects a changed set of the wrong shape', async () => {
     fs.writeFileSync(file(), JSON.stringify({ general: { theme: 'bogus' } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     updateConfig((draft) => { draft.general.language = 'ja' })
-    expect(stored()).toEqual({ general: { theme: 'bogus', language: 'ja' } })
+    expect(stored()).toEqual({ general: { language: 'ja' } })
     expect(() => updateConfig((draft) => { (draft.general as unknown as Record<string, unknown>).auto_preview_idle_seconds = 'soon' })).toThrow('general.auto_preview_idle_seconds')
-    expect(stored()).toEqual({ general: { theme: 'bogus', language: 'ja' } })
+    expect(stored()).toEqual({ general: { language: 'ja' } })
     expect(loadConfig().general.language).toBe('ja')
+  })
+  it('reads a concurrency below one or a timeout not above zero as its built-in, and will not save one', async () => {
+    const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 0 }
+    fs.writeFileSync(file(), JSON.stringify({ brainstorm, gemini: { timeout_ms: 0 }, image_backends: { flux: { concurrency: 0, timeout_ms: -1 } } }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    const defaults = createDefaultConfig()
+    expect(loadConfig().brainstorm).toEqual(defaults.brainstorm)
+    expect(loadConfig().gemini.timeout_ms).toBe(defaults.gemini.timeout_ms)
+    expect(loadConfig().image_backends.flux).toEqual(defaults.image_backends.flux)
+    expect(() => updateConfig((draft) => { draft.openai.timeout_ms = 0 })).toThrow('openai.timeout_ms')
+    updateConfig((draft) => { draft.general.language = 'ja' })
+    expect(stored()).toEqual({ general: { language: 'ja' } })
+  })
+  it.each([['unreadable', '{ invalid'], ['not a map of sets', '[]']])('sets aside a file that is %s and starts from built-ins', async (_state, bytes) => {
+    fs.writeFileSync(file(), bytes)
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig()).toEqual(createDefaultConfig())
+    expect(fs.existsSync(file())).toBe(false)
+    const invalid = fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))
+    expect(invalid).toHaveLength(1)
+    expect(fs.readFileSync(path.join(root, invalid[0]), 'utf8')).toBe(bytes)
+  })
+  it('leaves an unreadable file in place when it cannot be set aside', async () => {
+    fs.writeFileSync(file(), '{ invalid')
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw new Error('locked') })
+    expect(() => loadConfig()).toThrow('locked')
+    expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
   })
   it('keeps every built-in text in its cleaned form', async () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')
@@ -141,12 +170,12 @@ describe('settings by set', () => {
     expect(loadConfig()).toEqual(createDefaultConfig())
     expect(stored()).toEqual({ brainstorm: { concurrency: 2 }, general: { theme: 'bogus' } })
   })
-  it('re-reads the map and keeps a different set changed since load', async () => {
+  it('writes the file from the config in memory, not from a set changed on disk since load', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     loadConfig()
     fs.writeFileSync(file(), JSON.stringify({ general: { language: 'ja' } }))
     updateConfig((draft) => { draft.notifications.sounds_enabled = false })
-    expect(stored()).toEqual({ general: { language: 'ja' }, notifications: { sounds_enabled: false } })
+    expect(stored()).toEqual({ notifications: { sounds_enabled: false } })
   })
   it('stores model and parameters in one renamed set without migrating old sibling keys', async () => {
     fs.writeFileSync(file(), JSON.stringify({ image_backends: { openai: { model: 'old', default_params: {}, concurrency: 1 } } }))

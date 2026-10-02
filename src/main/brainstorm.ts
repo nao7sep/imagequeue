@@ -169,7 +169,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   const { formats, lengths } = brainstormConfig.format_directives
   const formatDirective = `${formats[req.format]} ${lengths[req.length]}`
   const batchSize = Math.max(1, brainstormConfig.batch_size)
-  const concurrency = Math.max(1, brainstormConfig.concurrency)
+  const concurrency = brainstormConfig.concurrency
   const maxRetries = Math.max(0, brainstormConfig.max_retries_per_turn)
   const preferNew = brainstormConfig.prefer_new_concepts === true
 

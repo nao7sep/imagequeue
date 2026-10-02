@@ -169,8 +169,8 @@ if (ownsSingleInstance) app.whenReady().then(async () => {
   settleLanguage()
   registerLanguageIpc()
   installAppMenu()
-  // The startup body throws on a corrupt config.json (loadConfig deliberately
-  // does not fall back to defaults — see config-store.ts). Without this catch
+  // The startup body throws when a store cannot be recovered, such as a
+  // config.json that cannot be set aside (config-store.ts). Without this catch
   // the rejection lands in the unhandledRejection hook, which logs and does NOT
   // exit — a running process with no window and no dialog is not a halt
   // (storage-path conventions: a halt names the store and reaches the user).

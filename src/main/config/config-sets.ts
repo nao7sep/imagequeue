@@ -73,7 +73,15 @@ export function applyConfigSet(config: AppConfig, key: string, value: unknown): 
   } else writePath(config as unknown as Record<string, unknown>, key, value)
 }
 
-// Shape only: provider limits and current model support belong to the feature.
+// The ranges the app's own code requires.
+function meetsAppMinimum(key: string, value: number): boolean {
+  if (key.endsWith('.concurrency')) return value >= 1
+  if (key.endsWith('.timeout_ms')) return value > 0
+  return true
+}
+
+// Shape and the app's own minimums: provider limits and current model support
+// belong to the feature.
 export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean {
   if (key === 'general.theme') return ['system', 'light', 'dark'].includes(String(value))
   if (key === 'general.language') return value === 'system' || isLanguage(value)
@@ -92,9 +100,9 @@ export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean
   if (builtIn === null) return value === null || (typeof value === 'number' && Number.isFinite(value))
   if (Array.isArray(builtIn)) return Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
   if (isObject(builtIn)) {
-    return isObject(value) && Object.entries(builtIn).every(([member, expected]) => hasSetShape(value[member], expected))
+    return isObject(value) && Object.entries(builtIn).every(([member, expected]) => hasSetShape(value[member], expected, `${key}.${member}`))
   }
-  return typeof value === typeof builtIn && (typeof value !== 'number' || Number.isFinite(value))
+  return typeof value === typeof builtIn && (typeof value !== 'number' || (Number.isFinite(value) && meetsAppMinimum(key, value)))
 }
 
 const MODEL_ID_SETS = new Set<string>(TEXT_PROVIDERS.flatMap((provider) => AI_ROLES.map((role) => `${provider}.${role.id}`)))
