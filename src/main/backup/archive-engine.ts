@@ -8,6 +8,7 @@ import type { ArchivedStore } from '../config/storage-root'
 import { utcStampForFilename } from '../../shared/utc-stamp'
 import { serializeError } from '../../shared/serialize-error'
 import { syncDirectory, syncFile } from '../utils/atomic-write'
+import { archivesToThin } from './archive-thinning'
 
 interface ManifestEntry extends ArchivedStore {
   sha256?: string
@@ -100,7 +101,7 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
     }
     syncDirectory(directory)
     result.archivePath = destination
-    for (const name of archiveNames(directory).slice(10)) fs.unlinkSync(path.join(directory, name))
+    for (const name of archivesToThin(archiveNames(directory), now)) fs.unlinkSync(path.join(directory, name))
   } catch (error) {
     result.warnings.push({ path: directory, error: serializeError(error) })
   } finally {

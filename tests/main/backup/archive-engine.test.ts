@@ -40,18 +40,20 @@ describe('binary-store archive', () => {
     expect(fs.existsSync(path.join(directory(), '.lock'))).toBe(false)
     expect(fs.readdirSync(directory()).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
-  it('deduplicates unchanged snapshots and keeps the newest ten changed archives', async () => {
+  it('deduplicates unchanged snapshots and thins older archives by age when it writes one', async () => {
     await archiveStores(root, getArchivedStores(root), time)
     await archiveStores(root, getArchivedStores(root), new Date(time.getTime() + 1000))
     expect(archives()).toHaveLength(1)
     const first = fs.readFileSync(path.join(directory(), archives()[0]))
-    for (let i = 1; i <= 11; i++) {
-      fs.writeFileSync(path.join(directory(), `20261001-0900${String(i).padStart(2, '0')}-000-utc.zip`), first)
+    for (const name of ['20260801-090000-000-utc.zip', '20260801-180000-000-utc.zip', '20260925-090000-000-utc.zip', '20260925-180000-000-utc.zip']) {
+      fs.writeFileSync(path.join(directory(), name), first)
     }
     database.exec("INSERT INTO concepts VALUES ('changed')")
     await archiveStores(root, getArchivedStores(root), new Date(time.getTime() + 2000))
-    expect(archives()).toHaveLength(10)
-    expect(archives()[0]).toBe('20261001-090004-000-utc.zip')
+    expect(archives()).toEqual([
+      '20260801-180000-000-utc.zip', '20260925-090000-000-utc.zip', '20260925-180000-000-utc.zip',
+      '20261001-100000-000-utc.zip', '20261001-100002-000-utc.zip',
+    ])
   })
   it('skips an unreadable store while keeping readable stores and the reason in the manifest', async () => {
     const stores = [...getArchivedStores(root), { path: path.join(root, 'missing.sqlite3'), entryName: 'missing.sqlite3' }]
