@@ -28,3 +28,9 @@ describe('dialog band lines', () => {
     expect(declarations(sheets[sheet], selector)).toMatch(new RegExp(`${side}:\\s*1px solid var\\(--field-border\\)`))
   })
 })
+
+describe('modal button edges', () => {
+  it('draw in the control-edge colour (interface-styling conventions)', () => {
+    expect(declarations(sheets.modal, '.modal-btn')).toMatch(/border:\s*1px solid var\(--field-border\)/)
+  })
+})
