@@ -73,7 +73,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
       )
 
       if (!submitResponse.ok) {
-        log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text.slice(0, 500), bodyChars: text.length })
+        log('error', 'FLUX submit request failed', { model: task.model, status: submitResponse.status, body: text })
         throw new ProviderHttpError(`FLUX submit failed (${submitResponse.status}): ${text}`, submitResponse.status, reasonFromBody(text, fluxReasonField), submitResponse.headers.get('retry-after'))
       }
 

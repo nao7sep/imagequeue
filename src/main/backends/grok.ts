@@ -68,7 +68,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
       )
 
       if (!response.ok) {
-        log('error', 'Grok Imagine API error response', { status: response.status, body: text.slice(0, 500) })
+        log('error', 'Grok Imagine API error response', { status: response.status, body: text })
         throw new ProviderHttpError(`Grok API error ${response.status}: ${text.slice(0, 200)}`, response.status, reasonFromBody(text, grokReasonField), response.headers.get('retry-after'))
       }
 
