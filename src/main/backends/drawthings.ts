@@ -68,7 +68,8 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   const record = startAiCall({ backend: 'drawthings', model: task.model, purpose: 'image', taskId: task.id, request: { command: cliPath, args } })
 
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn(cliPath, args, { stdio: 'pipe' })
+    const proc = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
     let stderr = ''
     let cancelled = false
     let timedOut = false
@@ -99,10 +100,13 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     signal.addEventListener('abort', onAbort, { once: true })
     proc.on('close', () => signal.removeEventListener('abort', onAbort))
 
+    // Both pipes are drained as the CLI writes: an unread pipe fills and the
+    // CLI blocks on its next write until the timeout kills it.
+    proc.stdout.on('data', (chunk) => { stdout += chunk.toString() })
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     proc.on('close', (code) => {
       clearTimeout(timer)
-      const answer = { exitCode: code, stderr }
+      const answer = { exitCode: code, stdout, stderr }
       const fail = (err: Error): void => {
         record.fail(err, answer)
         reject(err)

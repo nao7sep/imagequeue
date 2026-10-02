@@ -37,9 +37,10 @@ vi.mock('../../../src/main/config', async (importOriginal) => ({
   }),
 }))
 
-function makeProc(args: string[]): EventEmitter & { stderr: EventEmitter; kill: (sig?: string) => void } {
+function makeProc(args: string[]): EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: (sig?: string) => void } {
   spawnCalls.push({ args })
   const proc = Object.assign(new EventEmitter(), {
+    stdout: new EventEmitter(),
     stderr: new EventEmitter(),
     kill: (sig?: string) => {
       killSignals.push(sig ?? 'SIGTERM')
@@ -53,7 +54,13 @@ function makeProc(args: string[]): EventEmitter & { stderr: EventEmitter; kill: 
     const outPath = args[outIndex + 1]
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
     fs.writeFileSync(outPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
-    setTimeout(() => proc.emit('close', 0), 0)
+    // A real CLI that prints more than a pipe holds blocks until the pipe is
+    // read, so the fake exits only once someone reads its stdout.
+    setTimeout(() => {
+      if (proc.stdout.listenerCount('data') === 0) return
+      proc.stdout.emit('data', Buffer.from('step 1/4\n'.repeat(20_000)))
+      proc.emit('close', 0)
+    }, 0)
   }
   return proc
 }
@@ -112,6 +119,18 @@ describe('Draw Things output staging', () => {
       durationMs: null, imagePath: null, baseName: null, error: null,
     } as never, new AbortController().signal)).rejects.toThrow(/timed out after/)
     expect(killSignals).toContain('SIGTERM')
+  })
+
+  it('reads the CLI output while it runs, so a chatty CLI still finishes', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    configKnobs.timeoutMs = 500
+    const result = await generateDrawThings({
+      id: 'tc', prompt: 'a cat', backend: 'drawthings', model: 'm.ckpt',
+      params: {}, status: 'generating', enqueuedAt: '', startedAt: '', completedAt: null,
+      durationMs: null, imagePath: null, baseName: null, error: null,
+    } as never, new AbortController().signal)
+    expect(result.buffer.length).toBeGreaterThan(0)
+    expect(killSignals).toEqual([])
   })
 
   it('stages the CLI output under temp/, never the session directory', async () => {
