@@ -313,7 +313,7 @@
   "settings.slugModelHelp": "Nomme chaque fichier image généré d’après son prompt.",
   "settings.unsupportedModel": "Modèle non pris en charge. Il risque de ne pas fonctionner comme prévu.",
   "settings.thinking": "Réflexion",
-  "settings.thinkingHelp": "Combien le modèle réfléchit avant de répondre, dans les termes du fournisseur.",
+  "settings.thinkingHelp": "Dans quelle mesure le modèle réfléchit avant de répondre, selon les termes du fournisseur.",
   "settings.timeout": "Délai d’expiration (s)",
   "settings.endpoint": "Point de terminaison",
   "settings.endpointHelp": "L’adresse à laquelle ImageQueue envoie les requêtes {provider}.",
