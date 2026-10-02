@@ -30,7 +30,7 @@ export async function generateSlug(prompt: string, taskId: string, signal: Abort
       return slug
     }
     log('warn', 'Slug AI returned unusable output, falling back to nanoid', {
-      responsePreview: (result.text ?? '').slice(0, 300), responseChars: (result.text ?? '').length,
+      response: result.text,
       derivedSlug: slug ?? null,
     })
     return nanoid(10)
