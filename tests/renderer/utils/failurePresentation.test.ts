@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { presentFailure, type FailureOperation } from '../../../src/renderer/src/utils/failurePresentation'
-import { createTranslator } from '../../../src/shared/i18n/translate'
+import { loadTranslator } from '../../../src/shared/i18n/translate'
 
-const { t } = createTranslator('en')
+const { t } = await loadTranslator('en')
 
 const hostile = 'EACCES Error invoking remote method IPC /private/tmp/hostile-sentinel'
 

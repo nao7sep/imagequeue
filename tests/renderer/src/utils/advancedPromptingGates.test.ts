@@ -9,11 +9,11 @@ import {
   type ElaboratorPicks,
   describeBrainstormProgress,
 } from '../../../../src/renderer/src/utils/advancedPromptingGates'
-import { createTranslator } from '../../../../src/shared/i18n/translate'
+import { loadTranslator } from '../../../../src/shared/i18n/translate'
 import type { MessageKey } from '../../../../src/shared/i18n/catalogues'
 
 // Reasons and progress are catalogue text; these read them as English shows them.
-const en = createTranslator('en')
+const en = await loadTranslator('en')
 const said = (key: MessageKey | null): string | null => (key === null ? null : en.t(key))
 const progressText = (...args: Parameters<typeof describeBrainstormProgress>): string => {
   const note = describeBrainstormProgress(...args)

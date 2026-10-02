@@ -5,10 +5,10 @@ import {
   generationFailurePresentation,
 } from '../../src/main/failure-presentation'
 import { ProviderHttpError, ProviderStatusError } from '../../src/main/provider-errors'
-import { createTranslator } from '../../src/shared/i18n/translate'
+import { loadTranslator } from '../../src/shared/i18n/translate'
 
 // Presentations are messages; these read them as English would show them.
-const { text } = createTranslator('en')
+const { text } = await loadTranslator('en')
 const presented = (...args: Parameters<typeof generationFailurePresentation>): string =>
   text(generationFailurePresentation(...args))
 

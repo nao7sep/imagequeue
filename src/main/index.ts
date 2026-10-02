@@ -167,7 +167,7 @@ registerImageSchemeAsPrivileged()
 if (ownsSingleInstance) app.whenReady().then(async () => {
   // The language is settled before any window or native menu exists, so the
   // first words on every surface, a startup failure included, are already in it.
-  settleLanguage()
+  await settleLanguage()
   registerLanguageIpc()
   installAppMenu()
   // The startup body throws when a store cannot be recovered, such as a
@@ -250,7 +250,7 @@ async function startUp(): Promise<void> {
     // Settings apply on Save, the theme and language included (app-chrome
     // conventions, Theme; localization conventions).
     applyThemePreference(config.general.theme)
-    applyLanguagePreference(config.general.language)
+    await applyLanguagePreference(config.general.language)
     await statusIconController?.reconcile(config.general.show_status_icon)
   })
   registerStateIpc()

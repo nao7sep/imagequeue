@@ -85,7 +85,7 @@ const {
   buildStatusIconTooltip,
   statusIconAssetName,
 } = await import('../../src/main/status-icon')
-const { createTranslator } = await import('../../src/shared/i18n/translate')
+const { loadTranslator } = await import('../../src/shared/i18n/translate')
 
 beforeEach(() => {
   mocks.FakeTray.instances.length = 0
@@ -108,13 +108,13 @@ describe('status icon presentation', () => {
     expect(statusIconAssetName('linux', 'dark')).toBeNull()
   })
 
-  it('builds a compact tooltip from authoritative queue state', () => {
-    const en = createTranslator('en')
+  it('builds a compact tooltip from authoritative queue state', async () => {
+    const en = await loadTranslator('en')
     expect(buildStatusIconTooltip({ paused: false, generating: 0, queued: 0, interrupted: 0 }, en))
       .toBe('ImageQueue — idle')
     expect(buildStatusIconTooltip({ paused: true, generating: 1, queued: 2, interrupted: 3 }, en))
       .toBe('ImageQueue — paused · 1 generating · 2 queued · 3 interrupted')
-    expect(buildStatusIconTooltip({ paused: false, generating: 2, queued: 5, interrupted: 0 }, createTranslator('ru')))
+    expect(buildStatusIconTooltip({ paused: false, generating: 2, queued: 5, interrupted: 0 }, await loadTranslator('ru')))
       .toMatch(/^ImageQueue/)
   })
 })

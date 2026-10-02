@@ -75,8 +75,8 @@ describe('AppKit language alignment', () => {
 
   it('clears its own entry before reading the computer, then writes the saved choice', async () => {
     const i18n = await load()
-    i18n.settleLanguage()
-    i18n.applyLanguagePreference('fr')
+    await i18n.settleLanguage()
+    await i18n.applyLanguagePreference('fr')
     expect(electron.calls).toContain('remove')
     expect(electron.calls.indexOf('remove')).toBeLessThan(electron.calls.indexOf('read'))
     expect(electron.defaults.get('AppleLanguages')).toEqual(['fr'])
@@ -85,25 +85,49 @@ describe('AppKit language alignment', () => {
   it('removes the entry when System is chosen', async () => {
     electron.defaults.set('AppleLanguages', ['fr'])
     const i18n = await load()
-    i18n.settleLanguage()
-    i18n.applyLanguagePreference('fr')
-    i18n.applyLanguagePreference('system')
+    await i18n.settleLanguage()
+    await i18n.applyLanguagePreference('fr')
+    await i18n.applyLanguagePreference('system')
     expect(electron.defaults.has('AppleLanguages')).toBe(false)
   })
 
   it('touches no defaults off macOS', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
     const i18n = await load()
-    i18n.settleLanguage()
-    i18n.applyLanguagePreference('fr')
+    await i18n.settleLanguage()
+    await i18n.applyLanguagePreference('fr')
     expect(electron.calls.filter((call) => call !== 'read')).toEqual([])
   })
 
   it('touches no defaults on an unpackaged macOS run', async () => {
     electron.isPackaged = false
     const i18n = await load()
-    i18n.settleLanguage()
-    i18n.applyLanguagePreference('fr')
+    await i18n.settleLanguage()
+    await i18n.applyLanguagePreference('fr')
     expect(electron.calls.filter((call) => call !== 'read')).toEqual([])
+  })
+})
+
+describe('the interface language\'s catalogue', () => {
+  beforeEach(() => {
+    electron.defaults.clear()
+    electron.preferred = ['ja-JP', 'en-US']
+  })
+
+  it('is loaded before main draws anything', async () => {
+    vi.resetModules()
+    const i18n = await import('../../src/main/i18n')
+    expect(i18n.mainTranslator().language).toBe('en')
+    await i18n.settleLanguage()
+    expect(i18n.mainTranslator().language).toBe('ja')
+    expect(i18n.mainTranslator().t('nativeMenu.edit')).not.toBe('Edit')
+  })
+
+  it('follows the latest saved choice when an earlier one loads later', async () => {
+    vi.resetModules()
+    const i18n = await import('../../src/main/i18n')
+    await i18n.settleLanguage()
+    await Promise.all([i18n.applyLanguagePreference('fr'), i18n.applyLanguagePreference('ja')])
+    expect(i18n.mainTranslator().language).toBe('ja')
   })
 })

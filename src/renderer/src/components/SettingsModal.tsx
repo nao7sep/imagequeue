@@ -12,8 +12,8 @@ import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import { presentFailure } from '../utils/failurePresentation'
 import { serializeError } from '../../../shared/serialize-error'
 import { normalizeThemePreference, type ThemePreference } from '../../../shared/theme'
-import { LANGUAGES, normalizeLanguagePreference } from '../../../shared/i18n/languages'
-import { CATALOGUES, type MessageKey } from '../../../shared/i18n/catalogues'
+import { LANGUAGE_NAMES, LANGUAGES, normalizeLanguagePreference } from '../../../shared/i18n/languages'
+import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { useI18n } from '../i18n/I18nContext'
 import './SettingsModal.css'
 
@@ -276,7 +276,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               <option value="system">{t('settings.languageSystem')}</option>
               {LANGUAGES.map((language) => (
                 <option key={language} value={language} lang={language}>
-                  {CATALOGUES[language]['language.name'] as string}
+                  {LANGUAGE_NAMES[language]}
                 </option>
               ))}
             </select>

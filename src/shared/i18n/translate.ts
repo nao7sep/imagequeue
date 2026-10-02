@@ -1,4 +1,4 @@
-import { CATALOGUES, type Catalogue, type MessageKey } from './catalogues'
+import { loadCatalogue, type Catalogue, type MessageKey } from './catalogues'
 import type { Language } from './languages'
 
 // A value filled into a placeholder: a number is formatted for the locale, and
@@ -38,8 +38,7 @@ export type Translator = {
   dateTime: (value: Date | string) => string
 }
 
-export function createTranslator(language: Language, locale: string = language): Translator {
-  const catalogue: Catalogue = CATALOGUES[language]
+export function createTranslator(language: Language, catalogue: Catalogue, locale: string = language): Translator {
   const numberFormat = new Intl.NumberFormat(locale)
   const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
   const pluralRules = new Intl.PluralRules(language)
@@ -86,4 +85,8 @@ export function createTranslator(language: Language, locale: string = language):
       return Number.isNaN(date.getTime()) ? String(value) : dateTimeFormat.format(date)
     },
   }
+}
+
+export async function loadTranslator(language: Language, locale: string = language): Promise<Translator> {
+  return createTranslator(language, await loadCatalogue(language), locale)
 }

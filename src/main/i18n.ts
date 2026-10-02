@@ -18,7 +18,8 @@ import {
   type LanguageEnvironment,
   type LanguagePreference,
 } from '../shared/i18n/languages'
-import { createTranslator, type Translator } from '../shared/i18n/translate'
+import { createTranslator, loadTranslator, type Translator } from '../shared/i18n/translate'
+import { ENGLISH } from '../shared/i18n/catalogues'
 import { getConfigPath } from './config'
 import { handle } from './ipc-boundary'
 import { log, serializeError } from './logger'
@@ -33,6 +34,8 @@ interface LanguageState {
 }
 
 let state: LanguageState | null = null
+// The latest preference applied; a load for an older one is dropped.
+let latestApply = 0
 const listeners = new Set<(translator: Translator) => void>()
 
 /**
@@ -95,27 +98,27 @@ function alignAppKit(preference: LanguagePreference): void {
   }
 }
 
-function build(systemLanguage: Language, systemLocale: string | null, preference: LanguagePreference): LanguageState {
+async function build(systemLanguage: Language, systemLocale: string | null, preference: LanguagePreference): Promise<LanguageState> {
   const language = effectiveLanguage(preference, systemLanguage)
   return {
     systemLanguage,
     systemLocale,
     preference,
-    translator: createTranslator(language, formattingLocale(language, systemLocale)),
+    translator: await loadTranslator(language, formattingLocale(language, systemLocale)),
   }
 }
 
 /** Settles the language once the app is ready, before any window or native menu exists. */
-export function settleLanguage(): void {
+export async function settleLanguage(): Promise<void> {
   const systemLanguage = resolveSystemLanguage(computerLanguages())
   const preference = readSavedPreference(readConfigText())
-  state = build(systemLanguage, app.getSystemLocale() || null, preference)
+  state = await build(systemLanguage, app.getSystemLocale() || null, preference)
   alignAppKit(preference)
 }
 
 /** The translator main draws its own surfaces with. English before settling. */
 export function mainTranslator(): Translator {
-  return state?.translator ?? createTranslator('en')
+  return state?.translator ?? createTranslator('en', ENGLISH)
 }
 
 export function languageEnvironment(): LanguageEnvironment {
@@ -130,12 +133,15 @@ export function onLanguageChanged(listener: (translator: Translator) => void): (
 }
 
 /** Applies a saved choice: every window and native surface follows at once. */
-export function applyLanguagePreference(value: unknown): void {
+export async function applyLanguagePreference(value: unknown): Promise<void> {
+  const applying = ++latestApply
   if (!state) return
   const preference = normalizeLanguagePreference(value)
   if (preference === state.preference) return
+  const next = await build(state.systemLanguage, state.systemLocale, preference)
+  if (applying !== latestApply) return
   const previous = state.translator.language
-  state = build(state.systemLanguage, state.systemLocale, preference)
+  state = next
   alignAppKit(preference)
   if (state.translator.language === previous) return
   const translator = state.translator

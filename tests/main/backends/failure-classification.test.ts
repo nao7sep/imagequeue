@@ -29,9 +29,9 @@ const { generateOpenAI } = await import('../../../src/main/backends/openai')
 const { assertUsableGeminiResponse } = await import('../../../src/main/provider-response')
 const failurePresentation = await import('../../../src/main/failure-presentation')
 const { providerMessage } = await import('../../../src/main/provider-errors')
-const { createTranslator } = await import('../../../src/shared/i18n/translate')
+const { loadTranslator } = await import('../../../src/shared/i18n/translate')
 // The task keeps a message; these read it as English shows it.
-const english = createTranslator('en')
+const english = await loadTranslator('en')
 const generationFailurePresentation = (...args: Parameters<typeof failurePresentation.generationFailurePresentation>): string =>
   english.text(failurePresentation.generationFailurePresentation(...args))
 

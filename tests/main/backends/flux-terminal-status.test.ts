@@ -15,9 +15,9 @@ vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: asyn
 
 const { generateFlux } = await import('../../../src/main/backends/flux')
 const failurePresentation = await import('../../../src/main/failure-presentation')
-const { createTranslator } = await import('../../../src/shared/i18n/translate')
+const { loadTranslator } = await import('../../../src/shared/i18n/translate')
 // The task keeps a message; these read it as English shows it.
-const english = createTranslator('en')
+const english = await loadTranslator('en')
 const generationFailurePresentation = (...args: Parameters<typeof failurePresentation.generationFailurePresentation>): string =>
   english.text(failurePresentation.generationFailurePresentation(...args))
 

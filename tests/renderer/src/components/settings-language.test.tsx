@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { I18nProvider } from '../../../../src/renderer/src/i18n/I18nContext'
 import type { Language } from '../../../../src/shared/i18n/languages'
+import { loadTranslator, type Translator } from '../../../../src/shared/i18n/translate'
 
 // The interface language is one Settings › General choice: System first, then
 // each language by its own name, staged with the rest of the form and applied
@@ -43,6 +44,9 @@ function baseConfig(language: unknown): Record<string, unknown> {
   }
 }
 
+const translators = new Map<Language, Translator>()
+for (const language of ['en', 'ja'] as const) translators.set(language, await loadTranslator(language))
+
 function renderWith(language: unknown, interfaceLanguage: Language = 'en'): void {
   settingsValue = {
     settings: baseConfig(language),
@@ -55,7 +59,7 @@ function renderWith(language: unknown, interfaceLanguage: Language = 'en'): void
     saveNotificationField: vi.fn().mockResolvedValue({}),
   }
   render(
-    <I18nProvider language={interfaceLanguage} locale={interfaceLanguage}>
+    <I18nProvider translator={translators.get(interfaceLanguage)!}>
       <SettingsModal onClose={() => {}} />
     </I18nProvider>,
   )

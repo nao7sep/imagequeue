@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 import { buildAppMenuTemplate, buildTextContextMenuTemplate } from '../../src/main/app-menu'
-import { createTranslator } from '../../src/shared/i18n/translate'
+import { loadTranslator } from '../../src/shared/i18n/translate'
 
 // The application menu is Electron's default menu with every label in the
 // interface language. Items keep their roles, so the system's standard actions
@@ -16,8 +16,8 @@ function titles(template: MenuItemConstructorOptions[]): Array<string | undefine
 }
 
 describe('application menu', () => {
-  it('titles every menu in the interface language, the Edit menu included', () => {
-    const ja = createTranslator('ja')
+  it('titles every menu in the interface language, the Edit menu included', async () => {
+    const ja = await loadTranslator('ja')
     const template = buildAppMenuTemplate(ja, 'darwin')
     expect(titles(template)).toEqual([
       'ImageQueue',
@@ -30,8 +30,8 @@ describe('application menu', () => {
     expect(ja.t('nativeMenu.edit')).not.toBe('Edit')
   })
 
-  it('keeps each item on its role, with a label in the language', () => {
-    const de = createTranslator('de')
+  it('keeps each item on its role, with a label in the language', async () => {
+    const de = await loadTranslator('de')
     const template = buildAppMenuTemplate(de, 'darwin')
     const edit = submenu(template[2]!)
     expect(edit.filter((item) => item.role).map((item) => item.role)).toEqual([
@@ -45,8 +45,8 @@ describe('application menu', () => {
     expect(submenu(template[0]!).find((item) => item.role === 'about')?.label).toBe(de.t('nativeMenu.about', { app: 'ImageQueue' }))
   })
 
-  it('carries Exit in File and no app menu on Windows', () => {
-    const en = createTranslator('en')
+  it('carries Exit in File and no app menu on Windows', async () => {
+    const en = await loadTranslator('en')
     const template = buildAppMenuTemplate(en, 'win32')
     expect(titles(template)).toEqual(['File', 'Edit', 'View', 'Window', 'Help'])
     expect(submenu(template[0]!)).toEqual([{ role: 'quit', label: 'Exit' }])
@@ -56,14 +56,14 @@ describe('application menu', () => {
 describe('text context menu', () => {
   const flags = { canUndo: true, canRedo: false, canCut: true, canCopy: true, canPaste: true, canSelectAll: true }
 
-  it('offers nothing outside editable text and selections', () => {
-    expect(buildTextContextMenuTemplate(createTranslator('en'), {
+  it('offers nothing outside editable text and selections', async () => {
+    expect(buildTextContextMenuTemplate(await loadTranslator('en'), {
       isEditable: false, selectionText: '', misspelledWord: '', dictionarySuggestions: [], editFlags: flags,
     }, () => {})).toBeNull()
   })
 
-  it('words the edit actions in the interface language and says when no spelling suggestion exists', () => {
-    const fr = createTranslator('fr')
+  it('words the edit actions in the interface language and says when no spelling suggestion exists', async () => {
+    const fr = await loadTranslator('fr')
     const template = buildTextContextMenuTemplate(fr, {
       isEditable: true, selectionText: 'x', misspelledWord: 'teh', dictionarySuggestions: [], editFlags: flags,
     }, () => {})!

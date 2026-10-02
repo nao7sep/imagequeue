@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskStatus } from '../../../../src/shared/types'
 import { taskParameterLabel, taskStatusLabel } from '../../../../src/renderer/src/utils/taskPresentation'
-import { createTranslator } from '../../../../src/shared/i18n/translate'
+import { loadTranslator } from '../../../../src/shared/i18n/translate'
 
-const { t } = createTranslator('en')
+const { t } = await loadTranslator('en')
 
 describe('taskStatusLabel', () => {
   it('projects every stored task state to a capitalized display label', () => {
