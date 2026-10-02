@@ -11,7 +11,7 @@ import { getArchivedStores } from '../../../src/main/config/storage-root'
 describe('binary-store archive', () => {
   let root: string
   let database: DatabaseSync
-  const directory = () => path.join(root, 'backups', 'archives')
+  const directory = () => path.join(root, 'backups')
   const archives = () => fs.readdirSync(directory()).filter((name) => name.endsWith('.zip')).sort()
   const time = new Date('2026-10-01T10:00:00.000Z')
   beforeEach(() => {

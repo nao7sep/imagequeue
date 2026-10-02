@@ -32,13 +32,17 @@ function claimLock(file: string): number | null {
 // The temporary files a run writes beside its lock; only the lock holder writes them.
 const TEMPORARY_NAME = /^(snapshot|archive)-.+\.tmp$/
 
+function archiveDirectory(root: string): string {
+  return path.join(root, 'backups')
+}
+
 function archiveNames(directory: string): string[] {
   return fs.readdirSync(directory).filter((name) => /^\d{8}-\d{6}-\d{3}-utc\.zip$/.test(name)).sort().reverse()
 }
 
 export async function archiveStores(root: string, stores: ArchivedStore[], now: Date = new Date()): Promise<ArchiveResult> {
   const result: ArchiveResult = { warnings: [] }
-  const directory = path.join(root, 'backups', 'archives')
+  const directory = archiveDirectory(root)
   const lock = path.join(directory, '.lock')
   let descriptor: number | null = null
   let staging: string | undefined
@@ -118,7 +122,7 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
  *  and the temporary files that only the lock holder writes. A lock this
  *  process does not hold, or none, is left alone. */
 export async function clearAbandonedRun(root: string): Promise<void> {
-  const directory = path.join(root, 'backups', 'archives')
+  const directory = archiveDirectory(root)
   const lock = path.join(directory, '.lock')
   let owner: string
   try {
@@ -135,7 +139,7 @@ export async function clearAbandonedRun(root: string): Promise<void> {
 }
 
 export async function runArchiveSession(action: 'begin' | 'finish', root: string, stores: ArchivedStore[]): Promise<ArchiveResult> {
-  const directory = path.join(root, 'backups', 'archives')
+  const directory = archiveDirectory(root)
   const running = path.join(directory, '.running')
   try {
     fs.mkdirSync(directory, { recursive: true })
