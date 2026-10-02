@@ -318,7 +318,9 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 
 // Drops a session directory, honoring delete_to_trash. Used by the three
 // auto-drop paths (new session, resume session, quit) when the setting is on
-// and the session is empty.
+// and the session is empty. The directory goes with its session.json, draft
+// included, on purpose: an empty session is an abandoned start, and a user
+// never returns to one for its draft.
 //
 // The log call states the intent before the destructive operation, so the line
 // records what was attempted even if the op then throws.
