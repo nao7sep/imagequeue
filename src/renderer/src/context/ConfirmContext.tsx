@@ -33,14 +33,23 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
   noticeRef.current = notice
 
   useEffect(() => {
-    return window.electronAPI.onAppNotice((next) => {
+    const show = (next: AppNotice): void => {
       if (noticeRef.current) {
         noticeQueueRef.current.push(next)
       } else {
         noticeRef.current = next
         setNotice(next)
       }
+    }
+    let subscribed = true
+    const unsubscribe = window.electronAPI.onAppNotice(show)
+    void window.electronAPI.takePendingNotices().then((pending) => {
+      if (subscribed) pending.forEach(show)
     })
+    return () => {
+      subscribed = false
+      unsubscribe()
+    }
   }, [])
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {

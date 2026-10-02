@@ -1,5 +1,6 @@
 import type { BackendId } from '../shared/types'
 import type { AppNotice } from '../shared/app-notice'
+import type { ElaboratorRecoveryNotice } from './elaborators'
 import { message, type Message } from '../shared/i18n/translate'
 import { mainTranslator } from './i18n'
 import { httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
@@ -75,18 +76,20 @@ export function queueStorageFailurePresentation(): AppNotice {
   }
 }
 
-type ElaboratorRecovery = {
-  kind: 'recovered' | 'quarantine-failed'
-  path?: string
-  error?: string
-}
-
 /** Only successful recovery is app-wide. Failed recovery rejects to the active modal, its sole owner. */
-export function elaboratorRecoveryPresentation(recovery: ElaboratorRecovery): AppNotice | null {
+export function elaboratorRecoveryPresentation(recovery: ElaboratorRecoveryNotice): AppNotice | null {
   if (recovery.kind !== 'recovered') return null
   return {
     title: message('notice.elaboratorsResetTitle'),
-    message: message('notice.elaboratorsResetMessage'),
+    message: message('notice.elaboratorsResetMessage', { path: recovery.path }),
+  }
+}
+
+/** config.json was unreadable and set aside at `path`; the app started from built-in settings. */
+export function configResetPresentation(path: string): AppNotice {
+  return {
+    title: message('notice.settingsResetTitle'),
+    message: message('notice.settingsResetMessage', { path }),
   }
 }
 

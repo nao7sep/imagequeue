@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cliJobStartFailurePresentation,
+  configResetPresentation,
   elaboratorRecoveryPresentation,
   generationFailurePresentation,
 } from '../../src/main/failure-presentation'
@@ -45,11 +46,19 @@ describe('generationFailurePresentation', () => {
     expect(message).not.toContain(hostile)
   })
 
-  it('uses an app-wide notice only for successful elaborator recovery', () => {
-    const notice = elaboratorRecoveryPresentation({ kind: 'recovered', path: hostile })
+  it('uses an app-wide notice only for successful elaborator recovery, naming the preserved file', () => {
+    const preserved = '/data/elaborators-20261002T000000Z.invalid'
+    const notice = elaboratorRecoveryPresentation({ kind: 'recovered', path: preserved })
     expect(notice && text(notice.title)).toContain('settings were reset')
-    expect(notice && text(notice.message)).not.toContain(hostile)
-    expect(elaboratorRecoveryPresentation({ kind: 'quarantine-failed', error: hostile })).toBeNull()
+    expect(notice && text(notice.message)).toContain(preserved)
+    expect(elaboratorRecoveryPresentation({ kind: 'quarantine-failed', path: preserved, error: hostile })).toBeNull()
+  })
+
+  it('names the set-aside settings file when settings are reset', () => {
+    const preserved = '/data/config-20261002T000000Z.invalid'
+    const notice = configResetPresentation(preserved)
+    expect(text(notice.title)).toBe('Settings were reset')
+    expect(text(notice.message)).toContain(preserved)
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

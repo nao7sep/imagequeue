@@ -17,6 +17,7 @@ import { closeBackupStore } from './backup/backup-store'
 import { archiveSession } from './backup/archive'
 import { registerConceptsIpc } from './concepts-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
+import { registerAppNoticeIpc } from './app-notice-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
@@ -258,6 +259,7 @@ async function startUp(): Promise<void> {
   registerElaboratorsIpc()
   registerConceptsIpc()
   registerAppLogIpc()
+  registerAppNoticeIpc()
   registerViewerIpc(() => mainWindowController?.getWindow() ?? null)
   registerNotificationIpc()
   initNotificationWindow()

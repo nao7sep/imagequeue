@@ -153,6 +153,14 @@ describe('settings by set', () => {
     expect(invalid).toHaveLength(1)
     expect(fs.readFileSync(path.join(root, invalid[0]), 'utf8')).toBe(bytes)
   })
+  it('hands out where a set-aside file went once, for the window to tell the user', async () => {
+    fs.writeFileSync(file(), '{ invalid')
+    const { loadConfig, drainSetAsideConfigPaths } = await import('../../../src/main/config/config-store')
+    loadConfig()
+    const invalid = fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))
+    expect(drainSetAsideConfigPaths()).toEqual([path.join(root, invalid[0])])
+    expect(drainSetAsideConfigPaths()).toEqual([])
+  })
   it('leaves an unreadable file in place when it cannot be set aside', async () => {
     fs.writeFileSync(file(), '{ invalid')
     const { loadConfig } = await import('../../../src/main/config/config-store')

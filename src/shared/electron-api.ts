@@ -68,6 +68,8 @@ export interface ElectronAPI {
   getLanguageEnvironment: () => Promise<LanguageEnvironment>
   onLanguageChanged: (callback: (environment: LanguageEnvironment) => void) => (() => void)
   onAppNotice: (callback: (notice: AppNotice) => void) => (() => void)
+  // Notices main raised before this window subscribed; each is handed out once.
+  takePendingNotices: () => Promise<AppNotice[]>
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement) => void
 
   // Queue operations

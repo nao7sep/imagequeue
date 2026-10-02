@@ -29,11 +29,19 @@ export function ensureDataDir(): void {
   resolveStorageRoot()
 }
 
+// Where each set-aside file went, until the window takes them to tell the user.
+const setAsidePaths: string[] = []
+
+export function drainSetAsideConfigPaths(): string[] {
+  return setAsidePaths.splice(0)
+}
+
 // An unreadable file is set aside (store-recovery conventions); a failed rename
 // propagates.
 function setAsideUnreadableFile(file: string, error: unknown): void {
   const movedTo = path.join(path.dirname(file), `${path.basename(file, '.json')}-${utcStampForFilename()}.invalid`)
   fs.renameSync(file, movedTo)
+  setAsidePaths.push(movedTo)
   log('warn', 'Set aside an unreadable config file; using built-in settings', {
     from: file,
     to: movedTo,

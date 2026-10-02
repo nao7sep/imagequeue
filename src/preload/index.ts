@@ -65,6 +65,8 @@ const api = {
     ipcRenderer.on('app:notice', handler)
     return () => { ipcRenderer.removeListener('app:notice', handler) }
   },
+  takePendingNotices: (): Promise<AppNotice[]> =>
+    ipcRenderer.invoke('app:takePendingNotices'),
 
   // Queue operations
   enqueue: (request: EnqueueRequest): Promise<Task[]> =>
