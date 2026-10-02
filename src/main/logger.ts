@@ -27,10 +27,10 @@ export { serializeError }
 // problems and needs no carve-out from the convention.
 //
 // The caller describes *what happened* as a stable message plus structured
-// fields; this module builds the envelope, redacts denied keys, serializes, and
-// appends. Writes are synchronous, so every line is durable the moment it is
-// logged — there is no buffer to lose on a crash, which satisfies the
-// "flush warn/error/debug immediately and on crash" requirement for free.
+// fields; this module builds the envelope, serializes, and appends. Writes are
+// synchronous, so every line is durable the moment it is logged — there is no
+// buffer to lose on a crash, which satisfies the "flush warn/error/debug
+// immediately and on crash" requirement for free.
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -54,19 +54,6 @@ let logFilePath: string | null = null
 // Debug is off by default; the process startup policy flips it on for a
 // development build or an explicit packaged-build diagnostic run.
 let debugEnabled = false
-
-const REDACTED = '[redacted]'
-
-// Field names whose VALUES are replaced before serialization. Matched by exact,
-// case-insensitive name — never by substring, so `token` never matches
-// `tokenCount`. Both camelCase and snake_case spellings are listed because the
-// match is exact: this app stores keys as `api_key`. Seeded with the obvious
-// secrets and extended as needed (no cross-app taxonomy).
-const DENIED_KEYS: ReadonlySet<string> = new Set(
-  ['apiKey', 'api_key', 'authorization', 'token', 'password', 'secret', 'x-key', 'x-api-key'].map(
-    (key) => key.toLowerCase()
-  )
-)
 
 // Enables or disables debug output for the whole process. Called once at
 // startup using shouldEnableDebugLogging().
@@ -95,47 +82,6 @@ export function initLogger(logsDir: string): string {
   return filePath
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== 'object') return false
-  const proto = Object.getPrototypeOf(value)
-  return proto === Object.prototype || proto === null
-}
-
-// Non-destructive, type-preserving redactor. Rebuilds only plain objects and
-// arrays, replacing the value of a denied key with a fixed marker and leaving
-// every other value byte-identical. It never inspects string contents and never
-// edits the message. Non-plain objects (Date, Buffer, Map, Set, class
-// instances) pass through untouched — JSON.stringify renders them correctly
-// (e.g. a Date to an ISO string), whereas iterating them via Object.entries
-// would flatten them to `{}` and destroy data. It is total: a true reference
-// cycle (unrepresentable in JSON) is collapsed to a marker rather than
-// overflowing the stack, while a value merely shared between sibling fields is
-// still fully processed in each place — so legitimate fields are never dropped.
-function redactInner(value: unknown, ancestors: Set<object>): unknown {
-  if (Array.isArray(value)) {
-    if (ancestors.has(value)) return '[circular]'
-    ancestors.add(value)
-    const result = value.map((item) => redactInner(item, ancestors))
-    ancestors.delete(value)
-    return result
-  }
-  if (isPlainObject(value)) {
-    if (ancestors.has(value)) return '[circular]'
-    ancestors.add(value)
-    const out: Record<string, unknown> = {}
-    for (const [key, fieldValue] of Object.entries(value)) {
-      out[key] = DENIED_KEYS.has(key.toLowerCase()) ? REDACTED : redactInner(fieldValue, ancestors)
-    }
-    ancestors.delete(value)
-    return out
-  }
-  return value
-}
-
-export function redact(value: unknown): unknown {
-  return redactInner(value, new Set<object>())
-}
-
 // The envelope keys the logger owns; a caller field may not overwrite them.
 const RESERVED_KEYS: ReadonlySet<string> = new Set(['time', 'level', 'message'])
 
@@ -152,7 +98,7 @@ function consoleFallback(level: LogLevel, line: string): void {
 
 // Appends one JSON Lines event to the active session log. Takes a structured
 // event — a short, stable message plus arbitrary fields — and builds the
-// envelope { time, level, message, ...redactedFields }. debug lines are written
+// envelope { time, level, message, ...fields }. debug lines are written
 // only when debug is enabled. Logging never throws and never crashes the app: a
 // field that cannot be serialized falls back to a minimal envelope, and both a
 // missing session target and a failed write degrade to the console
@@ -163,12 +109,11 @@ export function log(level: LogLevel, message: string, fields?: LogFields): void 
   const time = new Date().toISOString()
   const entry: Record<string, unknown> = { time, level, message }
   if (fields) {
-    const redacted = redact(fields) as Record<string, unknown>
-    for (const key of Object.keys(redacted)) {
+    for (const key of Object.keys(fields)) {
       // Envelope keys are reserved: a caller field named time/level/message
       // cannot overwrite them and corrupt the line's schema.
       if (RESERVED_KEYS.has(key)) continue
-      entry[key] = redacted[key]
+      entry[key] = fields[key]
     }
   }
 

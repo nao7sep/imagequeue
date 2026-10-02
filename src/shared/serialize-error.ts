@@ -7,9 +7,8 @@
 // Total by construction: the cause chain is walked with a `seen` set so a
 // circular chain (`err.cause === err`, or mutual A↔B) is collapsed to a marker
 // instead of overflowing the stack. A non-Error value that is an object is
-// embedded under `value` rather than stringified to "[object Object]"; the
-// logger's redactor scrubs any secrets and breaks any cycles when it serializes
-// that value.
+// embedded under `value` rather than stringified to "[object Object]"; a cycle
+// inside that value leaves the logger writing its bare envelope.
 function serializeErrorInner(err: unknown, seen: Set<unknown>): Record<string, unknown> {
   if (err instanceof Error) {
     if (seen.has(err)) {
@@ -33,8 +32,7 @@ function serializeErrorInner(err: unknown, seen: Set<unknown>): Record<string, u
   }
   if (err !== null && typeof err === 'object') {
     // A non-Error object was thrown/rejected (some SDKs reject with plain
-    // objects carrying status/body). Keep its fields; redaction and cycle
-    // handling happen downstream in the logger's redactor.
+    // objects carrying status/body). Keep its fields.
     const name = (err as { constructor?: { name?: string } }).constructor?.name ?? 'Object'
     return { name, value: err }
   }

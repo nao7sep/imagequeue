@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { initLogger, log, redact, serializeError, setLoggerDebug, shouldEnableDebugLogging } from '../../src/main/logger'
+import { initLogger, log, serializeError, setLoggerDebug, shouldEnableDebugLogging } from '../../src/main/logger'
 
 const createdDirs: string[] = []
 
@@ -38,67 +38,6 @@ afterAll(() => {
   for (const dir of createdDirs) {
     fs.rmSync(dir, { recursive: true, force: true })
   }
-})
-
-describe('redact', () => {
-  it('replaces denied keys by exact, case-insensitive name', () => {
-    expect(
-      redact({ apiKey: 's', API_KEY: 's', api_key: 's', token: 't', Authorization: 'a', password: 'p', secret: 'x', keep: 1 })
-    ).toEqual({
-      apiKey: '[redacted]',
-      API_KEY: '[redacted]',
-      api_key: '[redacted]',
-      token: '[redacted]',
-      Authorization: '[redacted]',
-      password: '[redacted]',
-      secret: '[redacted]',
-      keep: 1,
-    })
-  })
-
-  it('never matches by substring', () => {
-    const input = { tokenCount: 5, broken: 'x', myToken: 'y', apiKeyId: 'z' }
-    expect(redact(input)).toEqual(input)
-  })
-
-  it('recurses through nested objects and arrays', () => {
-    expect(
-      redact({ outer: { password: 'p', ok: 1 }, list: [{ secret: 's' }, { ok: 2 }] })
-    ).toEqual({ outer: { password: '[redacted]', ok: 1 }, list: [{ secret: '[redacted]' }, { ok: 2 }] })
-  })
-
-  it('is type-preserving and leaves non-matching values byte-identical', () => {
-    const input = { n: 0, b: false, z: null, s: 'hi', arr: [1, 'two', true] }
-    expect(redact(input)).toEqual(input)
-  })
-
-  it('passes non-plain objects through untouched instead of flattening them to {}', () => {
-    const date = new Date('2026-06-10T03:15:42.123Z')
-    const out = redact({ when: date, count: 3 }) as { when: Date; count: number }
-    // The Date survives as a Date (so JSON.stringify renders its ISO string),
-    // rather than being rebuilt into {} by Object.entries.
-    expect(out.when).toBe(date)
-    expect(out.count).toBe(3)
-  })
-
-  it('does not treat a field literally named message specially', () => {
-    expect(redact({ message: 'hello' })).toEqual({ message: 'hello' })
-  })
-
-  it('collapses a true cycle to a marker instead of overflowing', () => {
-    const a: Record<string, unknown> = { name: 'a' }
-    a.self = a
-    expect(() => redact(a)).not.toThrow()
-    expect(redact(a)).toEqual({ name: 'a', self: '[circular]' })
-  })
-
-  it('processes a shared (diamond) reference fully in each position', () => {
-    const shared = { secret: 's', ok: 1 }
-    expect(redact({ a: shared, b: shared })).toEqual({
-      a: { secret: '[redacted]', ok: 1 },
-      b: { secret: '[redacted]', ok: 1 },
-    })
-  })
 })
 
 describe('serializeError', () => {
@@ -217,14 +156,14 @@ describe('log', () => {
     expect(entry.time).toMatch(ISO_MS_Z)
   })
 
-  it('redacts denied keys in the written line', () => {
+  it('writes every field as given, with no redaction (logging conventions)', () => {
     const dir = freshLogsDir()
     log('info', 'config', { api_key: 'sk-secret', model: 'gpt-image-1', nested: { token: 'abc' } })
 
     const entry = readEntries(dir).at(-1)!
-    expect(entry.api_key).toBe('[redacted]')
+    expect(entry.api_key).toBe('sk-secret')
     expect(entry.model).toBe('gpt-image-1')
-    expect(entry.nested).toEqual({ token: '[redacted]' })
+    expect(entry.nested).toEqual({ token: 'abc' })
   })
 
   it('does not let caller fields overwrite the reserved envelope keys', () => {

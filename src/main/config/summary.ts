@@ -6,8 +6,7 @@ import { hasApiKey } from './api-keys-store'
 // A secret-free summary of the effective configuration for the startup log
 // line. API keys are reduced to presence booleans and never logged — the raw
 // values are stored obfuscated but still reversible, so even the stored form
-// must not reach the log. The logger's redactor is a backstop; this summary is
-// the primary "summarize, don't dump" defense for config.
+// must not reach the log.
 //
 // Every field is read defensively (optional chaining). config.json is
 // user-editable and callers may supply a malformed nested section
