@@ -6,9 +6,9 @@
 
 import type { DependencyState } from '../../shared/types'
 
-// How long a successful check is trusted before the launch path re-runs it. An
-// app constant, not a setting — see the managed-runtime-dependencies convention.
-export const STALENESS_CAP_MS = 24 * 60 * 60 * 1000
+// How long the launch check waits after the last attempt. An app constant, not
+// a setting — see the managed-runtime-dependencies convention.
+export const LAUNCH_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export type DependencyComparison = 'current' | 'outdated' | 'unknown'
 
@@ -27,14 +27,13 @@ export function deriveDependencyState(
   return 'installed-unchecked'
 }
 
-/** Whether a check recorded at `lastCheckedAtUtc` is still within the staleness
- * cap relative to `nowMs`. A null/unparseable timestamp is always stale, so the
- * launch path re-checks. */
-export function isCheckFresh(lastCheckedAtUtc: string | null, nowMs: number): boolean {
-  if (!lastCheckedAtUtc) return false
-  const checkedMs = Date.parse(lastCheckedAtUtc)
-  if (Number.isNaN(checkedMs)) return false
-  return nowMs - checkedMs < STALENESS_CAP_MS
+/** Whether the launch check is due, given the last check attempt: when that
+ * time is missing, unparseable, in the future, or at least the interval old. */
+export function isLaunchCheckDue(lastAttemptAtUtc: string | null, nowMs: number): boolean {
+  if (!lastAttemptAtUtc) return true
+  const attemptMs = Date.parse(lastAttemptAtUtc)
+  if (Number.isNaN(attemptMs) || attemptMs > nowMs) return true
+  return nowMs - attemptMs >= LAUNCH_CHECK_INTERVAL_MS
 }
 
 /**

@@ -26,6 +26,7 @@ afterEach(() => {
 describe('dependencies cache', () => {
   it('returns empty defaults when no file exists', () => {
     expect(readDependenciesCache()).toEqual({
+      lastAttemptAtUtc: null,
       cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
       recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })
@@ -45,7 +46,7 @@ describe('dependencies cache', () => {
   // sidecar, and configs.json's installed identity is its own modification time.
   it('records nothing about the artifacts themselves', () => {
     const cache = readDependenciesCache()
-    expect(Object.keys(cache)).toEqual(['cli', 'recommendations'])
+    expect(Object.keys(cache)).toEqual(['lastAttemptAtUtc', 'cli', 'recommendations'])
     expect(Object.keys(cache.cli).sort()).toEqual(['lastCheckedAtUtc', 'lastKnownLatest'])
     expect(Object.keys(cache.recommendations).sort()).toEqual(['lastCheckedAtUtc', 'lastKnownModifiedUtc'])
   })
@@ -65,6 +66,7 @@ describe('dependencies cache', () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
     fs.writeFileSync(getDependenciesStatePath(), '{ not valid json')
     expect(readDependenciesCache()).toEqual({
+      lastAttemptAtUtc: null,
       cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
       recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })
@@ -78,6 +80,15 @@ describe('dependencies cache', () => {
     expect(cache.cli.lastCheckedAtUtc).toBeNull()
   })
 
+  it('persists the last check attempt and reads a non-string one as missing', () => {
+    updateDependenciesCache((cache) => {
+      cache.lastAttemptAtUtc = '2026-10-02T00:00:00.000Z'
+    })
+    expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-10-02T00:00:00.000Z')
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: 42 }))
+    expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
+  })
+
   it('ignores obsolete recommendation-check facts from a pre-release store', () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
     fs.writeFileSync(
@@ -88,6 +99,7 @@ describe('dependencies cache', () => {
       })
     )
     expect(readDependenciesCache()).toEqual({
+      lastAttemptAtUtc: null,
       cli: { lastKnownLatest: 'v1.0.0', lastCheckedAtUtc: null },
       recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })

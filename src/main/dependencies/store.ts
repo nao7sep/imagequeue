@@ -16,9 +16,12 @@ import { getDependenciesStatePath } from './paths'
 import path from 'path'
 
 export interface DependenciesCache {
+  // When any check, automatic or manual, last started; it throttles the launch
+  // check whether or not that check succeeded. ISO-8601 UTC.
+  lastAttemptAtUtc: string | null
   cli: {
     // The newest release tag seen by a successful check, so "update available"
-    // survives a relaunch within the staleness cap without re-fetching.
+    // survives a relaunch between launch checks without re-fetching.
     lastKnownLatest: string | null
     lastCheckedAtUtc: string | null
   }
@@ -32,6 +35,7 @@ export interface DependenciesCache {
 
 function emptyCache(): DependenciesCache {
   return {
+    lastAttemptAtUtc: null,
     cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
     recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
   }
@@ -43,6 +47,7 @@ export function readDependenciesCache(): DependenciesCache {
     const parsed = JSON.parse(raw) as Partial<DependenciesCache>
     const base = emptyCache()
     return {
+      lastAttemptAtUtc: typeof parsed.lastAttemptAtUtc === 'string' ? parsed.lastAttemptAtUtc : null,
       cli: { ...base.cli, ...parsed.cli },
       // A pre-release store kept a bare check time here with no server time;
       // that fact is obsolete, and trusting it would skip a due check.
@@ -64,7 +69,7 @@ export function readDependenciesCache(): DependenciesCache {
 export function writeDependenciesCache(cache: DependenciesCache): void {
   fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
   // not recorded: dependencies.json is a re-derivable network-facts cache (the last-known-latest
-  // CLI release tag, configs.json's last-known server time, and last-successful-check times), not
+  // CLI release tag, configs.json's last-known server time, the last check attempt, and last-successful-check times), not
   // durable user-authored data — deleting it just
   // makes the next launch re-check (data-backup conventions: re-fetchable caches are not recorded).
   writeJsonAtomic(getDependenciesStatePath(), cache, false)

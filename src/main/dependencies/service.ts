@@ -1,5 +1,5 @@
 // The dependency orchestrator: assembles the surface state both the modal and the
-// pane pointer read, runs checks (honoring the staleness cap at launch), and
+// pane pointer read, runs checks (throttling the launch check by the last attempt), and
 // drives the CLI install/update. It composes the lower modules — release lookup,
 // binary install, version compare, the configs.json module, the check cache — and
 // is the only main-side entry point the IPC layer needs.
@@ -20,7 +20,7 @@ import {
 import {
   compareRecommendations,
   deriveDependencyState,
-  isCheckFresh,
+  isLaunchCheckDue,
   type DependencyComparison,
 } from './state'
 import { readDependenciesCache, updateDependenciesCache } from './store'
@@ -84,7 +84,7 @@ async function checkCliForUpdate(force: boolean, signal?: AbortSignal): Promise<
   const release = await resolveLatestCliRelease(force, signal)
   // A failed lookup (offline, rate-limited, non-200) resolves null and must write
   // NO persisted fact (invariant I3): advancing the timestamp here would read as
-  // "checked just now" having learned nothing, and suppress re-checks for 24h.
+  // "checked just now" having learned nothing.
   if (!release) throw new Error('Could not reach the Draw Things release server')
   updateDependenciesCache((cache) => {
     cache.cli.lastCheckedAtUtc = new Date().toISOString()
@@ -102,9 +102,16 @@ async function checkRecommendationsForUpdate(signal?: AbortSignal): Promise<void
   })
 }
 
+function recordCheckAttempt(): void {
+  updateDependenciesCache((cache) => {
+    cache.lastAttemptAtUtc = new Date().toISOString()
+  })
+}
+
 /** Check every managed tool now, without installing anything. Each success is
  * recorded even when the other check fails; any failure is then reported. */
 export async function checkAllDependencies(signal?: AbortSignal): Promise<DependenciesState> {
+  recordCheckAttempt()
   const results = await Promise.allSettled([
     checkCliForUpdate(true, signal),
     checkRecommendationsForUpdate(signal),
@@ -135,23 +142,28 @@ async function checkAtLaunch(
   }
 }
 
-/** The launch path: when the toggle is on, re-check whatever is stale — the
- * CLI's release metadata, and configs.json's server time when the file is
- * present. Never fetches recommendation bytes and never throws. */
+/** The launch path: when the toggle is on and the last attempt is a day old,
+ * check the CLI's release metadata, and configs.json's server time when the
+ * file is present. Never fetches recommendation bytes and never throws. */
 export async function checkDependenciesAtLaunch(): Promise<void> {
   // The CLI is macOS-only; on any other platform this would fetch GitHub
   // releases for a binary the machine cannot run and cache an "update
   // available" nobody can act on.
   if (process.platform !== 'darwin') return
   if (!checkUpdatesAtLaunch()) return
-  const cache = readDependenciesCache()
-  const now = Date.now()
-  const checks: Promise<void>[] = []
-  if (!isCheckFresh(cache.cli.lastCheckedAtUtc, now)) {
-    checks.push(checkAtLaunch('cli', 'Draw Things CLI', (signal) => checkCliForUpdate(false, signal)))
+  if (!isLaunchCheckDue(readDependenciesCache().lastAttemptAtUtc, Date.now())) return
+  try {
+    recordCheckAttempt()
+  } catch (error) {
+    // A check whose attempt cannot be recorded could not record its result either.
+    log('warn', 'Launch dependency check skipped; the check attempt could not be recorded', {
+      error: serializeError(error),
+    })
+    return
   }
+  const checks = [checkAtLaunch('cli', 'Draw Things CLI', (signal) => checkCliForUpdate(false, signal))]
   // An absent optional file reads "Not installed" whatever the server holds.
-  if (getRecommendationsStatus().exists && !isCheckFresh(cache.recommendations.lastCheckedAtUtc, now)) {
+  if (getRecommendationsStatus().exists) {
     checks.push(checkAtLaunch('recommendations', 'Recommended parameters', checkRecommendationsForUpdate))
   }
   await Promise.all(checks)

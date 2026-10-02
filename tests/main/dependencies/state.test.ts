@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   compareRecommendations,
   deriveDependencyState,
-  isCheckFresh,
-  STALENESS_CAP_MS,
+  isLaunchCheckDue,
+  LAUNCH_CHECK_INTERVAL_MS,
 } from '../../../src/main/dependencies/state'
 
 describe('deriveDependencyState', () => {
@@ -20,25 +20,27 @@ describe('deriveDependencyState', () => {
   })
 })
 
-describe('isCheckFresh', () => {
+describe('isLaunchCheckDue', () => {
   const now = Date.parse('2026-06-30T12:00:00.000Z')
 
-  it('is false for a null or unparseable timestamp', () => {
-    expect(isCheckFresh(null, now)).toBe(false)
-    expect(isCheckFresh('not a date', now)).toBe(false)
+  it('is due for a missing, unparseable or future attempt', () => {
+    expect(isLaunchCheckDue(null, now)).toBe(true)
+    expect(isLaunchCheckDue('not a date', now)).toBe(true)
+    expect(isLaunchCheckDue(new Date(now + 60_000).toISOString(), now)).toBe(true)
   })
 
-  it('is true within the cap and false at or beyond it', () => {
-    const justUnder = new Date(now - (STALENESS_CAP_MS - 60_000)).toISOString()
-    const exactlyCap = new Date(now - STALENESS_CAP_MS).toISOString()
-    const wellPast = new Date(now - 2 * STALENESS_CAP_MS).toISOString()
-    expect(isCheckFresh(justUnder, now)).toBe(true)
-    expect(isCheckFresh(exactlyCap, now)).toBe(false)
-    expect(isCheckFresh(wellPast, now)).toBe(false)
+  it('waits within the interval and is due at or beyond it', () => {
+    const justUnder = new Date(now - (LAUNCH_CHECK_INTERVAL_MS - 60_000)).toISOString()
+    const exactly = new Date(now - LAUNCH_CHECK_INTERVAL_MS).toISOString()
+    const wellPast = new Date(now - 2 * LAUNCH_CHECK_INTERVAL_MS).toISOString()
+    expect(isLaunchCheckDue(new Date(now).toISOString(), now)).toBe(false)
+    expect(isLaunchCheckDue(justUnder, now)).toBe(false)
+    expect(isLaunchCheckDue(exactly, now)).toBe(true)
+    expect(isLaunchCheckDue(wellPast, now)).toBe(true)
   })
 
-  it('uses a 24-hour cap', () => {
-    expect(STALENESS_CAP_MS).toBe(24 * 60 * 60 * 1000)
+  it('uses a 24-hour interval', () => {
+    expect(LAUNCH_CHECK_INTERVAL_MS).toBe(24 * 60 * 60 * 1000)
   })
 })
 

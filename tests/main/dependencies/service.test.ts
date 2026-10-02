@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -16,8 +16,12 @@ vi.mock('../../../src/main/recommendations', async (importOriginal) => ({
 
 import { resolveLatestCliRelease } from '../../../src/main/dependencies/cli-release'
 import { fetchLatestRecommendationsModified } from '../../../src/main/recommendations'
-import { checkAllDependencies, getDependenciesState } from '../../../src/main/dependencies/service'
-import { readDependenciesCache } from '../../../src/main/dependencies/store'
+import {
+  checkAllDependencies,
+  checkDependenciesAtLaunch,
+  getDependenciesState,
+} from '../../../src/main/dependencies/service'
+import { readDependenciesCache, updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 
 const resolveMock = resolveLatestCliRelease as unknown as ReturnType<typeof vi.fn>
@@ -161,5 +165,56 @@ describe('recommendations lifecycle', () => {
     expect(cache.cli.lastKnownLatest).toBe('v26.0910.1')
     expect(cache.recommendations).toEqual({ lastKnownModifiedUtc: null, lastCheckedAtUtc: null })
     expect(getDependenciesState().recommendations.state).toBe('installed-unchecked')
+  })
+})
+
+describe('the launch check, throttled by the last attempt', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const day = 24 * 60 * 60 * 1000
+
+  beforeAll(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+  })
+
+  afterAll(() => {
+    if (originalPlatform) Object.defineProperty(process, 'platform', originalPlatform)
+  })
+
+  function setLastAttempt(value: string): void {
+    updateDependenciesCache((cache) => {
+      cache.lastAttemptAtUtc = value
+    })
+  }
+
+  it('records the attempt before a failed check and waits a day after it', async () => {
+    resolveMock.mockResolvedValue(null)
+    await checkDependenciesAtLaunch()
+    expect(resolveMock).toHaveBeenCalledTimes(1)
+    expect(readDependenciesCache().lastAttemptAtUtc).not.toBeNull()
+    expect(readDependenciesCache().cli.lastCheckedAtUtc).toBeNull()
+
+    await checkDependenciesAtLaunch()
+    expect(resolveMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits after a manual check attempt too, even a failed one', async () => {
+    resolveMock.mockResolvedValue(null)
+    await expect(checkAllDependencies()).rejects.toThrow('Could not reach')
+    expect(readDependenciesCache().lastAttemptAtUtc).not.toBeNull()
+
+    await checkDependenciesAtLaunch()
+    expect(resolveMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['a day old', () => new Date(Date.now() - day).toISOString()],
+    ['in the future', () => new Date(Date.now() + day).toISOString()],
+    ['invalid', () => 'not a date'],
+  ])('runs when the last attempt is %s', async (_label, lastAttempt) => {
+    setLastAttempt(lastAttempt())
+    resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
+    await checkDependenciesAtLaunch()
+    expect(resolveMock).toHaveBeenCalledTimes(1)
+    expect(Date.parse(readDependenciesCache().lastAttemptAtUtc!)).toBeLessThanOrEqual(Date.now())
   })
 })
