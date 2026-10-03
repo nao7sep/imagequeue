@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { readUiState, updateUiState, getUiStatePath } from '../../src/main/state-store'
 import { defaultUiState, NOTIFICATION_VOLUME_DEFAULT } from '../../src/shared/ui-state'
+import { RECORDS_LIST_WIDTH } from '../../src/shared/records-layout'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
 let home: string
@@ -70,5 +71,16 @@ describe('ui state store', () => {
     expect(readUiState().notificationVolume).toBe(0)
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ notificationVolume: 'loud' }))
     expect(readUiState().notificationVolume).toBe(NOTIFICATION_VOLUME_DEFAULT)
+  })
+
+  it('keeps the Records list width beside the other adjustments, healed to its bounds on read', () => {
+    expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.default)
+    updateUiState({ columnWidth: 240 })
+    expect(updateUiState({ recordsListWidth: 512 })).toMatchObject({ columnWidth: 240, recordsListWidth: 512 })
+    expect(readUiState()).toMatchObject({ columnWidth: 240, recordsListWidth: 512 })
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ recordsListWidth: 9999 }))
+    expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.max)
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ recordsListWidth: 'wide' }))
+    expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.default)
   })
 })

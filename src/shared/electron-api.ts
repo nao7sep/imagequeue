@@ -30,6 +30,7 @@ import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
 import type { AppNotice } from './app-notice'
 import type { StartupFailureMeasurement } from './startup-failure'
 import type { LanguageEnvironment } from './i18n/languages'
+import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery } from './records'
 
 // The Node platform string (member set of NodeJS.Platform), spelled out as a
 // portable union so this shared contract carries no @types/node dependency — it
@@ -224,4 +225,12 @@ export interface ElectronAPI {
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void) => (() => void)
   onSessionChanged: (callback: (event: { sessionId: string }) => void) => (() => void)
   onInterruptedTasksOnResume: (callback: (event: { count: number }) => void) => (() => void)
+
+  // The Records window: opened from the main menu, it reads records.sqlite3.
+  openRecordsWindow: () => Promise<void>
+  readRecordsPage: (query: RecordsQuery) => Promise<RecordsPage>
+  readRecordDetail: (kind: RecordKind, id: number) => Promise<RecordDetail | null>
+  readRecordSources: () => Promise<RecordSources>
+  // A record was stored in the records database.
+  onRecordsChanged: (callback: () => void) => (() => void)
 }

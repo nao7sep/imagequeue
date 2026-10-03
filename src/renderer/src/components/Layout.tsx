@@ -368,6 +368,11 @@ export function Layout(): React.JSX.Element {
               <MenuItem onSelect={() => setOverlay('elaborated-prompts')}>{t('menu.elaborationPrompts')}</MenuItem>
               <MenuItem onSelect={() => setOverlay('concept-library')}>{t('menu.conceptLibrary')}</MenuItem>
             </Submenu>
+            <MenuItem onSelect={() => {
+              void window.electronAPI.openRecordsWindow()
+                .then(() => clearOperationalFailure('records-open'))
+                .catch((error) => reportOperationalFailure('records-open', 'operation.recordsOpenFailed', 'Failed to open the Records window', error))
+            }}>{t('menu.records')}</MenuItem>
             <MenuItem onSelect={() => setOverlay('shortcuts')}>{t('menu.keyboardShortcuts')}</MenuItem>
             <MenuItem onSelect={() => setOverlay('about')}>{t('menu.about')}</MenuItem>
           </Menu>

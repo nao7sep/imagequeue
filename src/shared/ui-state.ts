@@ -12,6 +12,7 @@ import {
   LEFT_PANE_MIN_PX,
   PANE_BORDER_PX,
 } from './layout-metrics'
+import { RECORDS_LIST_WIDTH } from './records-layout'
 
 export interface UiState {
   /**
@@ -32,6 +33,12 @@ export interface UiState {
    * loud this machine plays them is an adjustment to the here and now.
    */
   notificationVolume: number
+  /**
+   * The Records window's list pane width the user dragged to, in CSS px (the
+   * INTENT), kept within the pane's bounds. The displayed width is derived from it
+   * and the live window (displayedRecordsListWidth), the same way as columnWidth.
+   */
+  recordsListWidth: number
 }
 
 export const NOTIFICATION_VOLUME_DEFAULT = 0.7
@@ -40,6 +47,7 @@ export function defaultUiState(): UiState {
   return {
     columnWidth: null,
     notificationVolume: NOTIFICATION_VOLUME_DEFAULT,
+    recordsListWidth: RECORDS_LIST_WIDTH.default,
   }
 }
 

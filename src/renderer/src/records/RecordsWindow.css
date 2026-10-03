@@ -1,0 +1,240 @@
+/* The Records window: the list pane (filters above the record list), the
+   pane splitter, and the detail pane, which takes the rest. The minimums mirror
+   shared/records-layout.ts by value; --records-list-width is set inline from
+   the displayed width. Only the panes scroll (window-conventions). */
+html:has(.records-shell),
+html:has(.records-shell) body {
+  overflow: clip;
+}
+
+.records-shell {
+  height: 100vh;
+  display: grid;
+  /* RECORDS_LIST_WIDTH, RECORDS_SPLITTER_PX, RECORDS_DETAIL_MIN_WIDTH */
+  grid-template-columns: var(--records-list-width) 1px minmax(420px, 1fr);
+  background: var(--pane-bg);
+}
+
+.records-list-pane,
+.records-detail-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* RECORDS_FILTERS_HEIGHT: 12px padding, three 32px controls 8px apart, a 1px line. */
+.records-filters {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.records-filters-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.records-filters input,
+.records-filters select {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-md);
+  padding: var(--control-pad-md);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+/* The chevron's room, which the padding above would otherwise take back. */
+.records-filters select {
+  padding-right: 28px;
+}
+
+/* RECORDS_LIST_MIN_HEIGHT is the least this keeps. */
+.records-list-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.records-list {
+  display: grid;
+  gap: 2px;
+}
+
+.records-row {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-2) 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--motion) ease,
+    border-color var(--motion) ease;
+}
+
+.records-row:not(.selected):hover {
+  background: var(--bg-hover);
+}
+
+.records-row.selected {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.records-row:focus-visible {
+  outline: 2px solid var(--accent);
+  /* Inside the row, so the next row's hover fill cannot cover it. */
+  outline-offset: -2px;
+}
+
+.records-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.records-row-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.records-row-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.records-code {
+  font-family: var(--font-mono);
+}
+
+.records-pill {
+  flex-shrink: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.records-pill--error {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.records-pill--warn {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.records-note {
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.records-note--error {
+  color: var(--error);
+}
+
+.records-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.records-detail-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.records-detail-pills {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.records-detail-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.records-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+
+.records-meta div {
+  min-width: 0;
+}
+
+.records-meta dt {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.records-meta dd {
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.records-block {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.records-block-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.records-block-text {
+  padding: 10px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

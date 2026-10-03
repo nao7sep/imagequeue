@@ -51,6 +51,8 @@ let activeSessionId: string | null = null
 let db: DatabaseSync | null = null
 let inserts: Record<Table, StatementSync> | null = null
 let fallbackFile: string | null = null
+let databaseFile: string | null = null
+let storedListener: (() => void) | null = null
 
 function insertStatement(store: DatabaseSync, table: Table, columns: string[]): StatementSync {
   return store.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((c) => `:${c}`).join(', ')})`)
@@ -71,6 +73,7 @@ export function openRecords(dataDir: string): string {
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),
     }
     db = opened
+    databaseFile = file
   } catch (error) {
     reportFailure('Records database could not be opened', error)
   }
@@ -87,6 +90,23 @@ export function closeRecords(): void {
   db = null
   inserts = null
   fallbackFile = null
+  databaseFile = null
+}
+
+/** The open database's path, for the Records window's reader; null while closed. */
+export function recordsDatabasePath(): string | null {
+  return databaseFile
+}
+
+/** This process launch and the imagequeue session open now, as later records carry them. */
+export function currentRecordsContext(): { launch: string; session: string | null } {
+  return { launch, session: activeSessionId }
+}
+
+/** Called after each record the database stored; a record kept in the fallback
+ *  file is not in the database, so it calls nothing. */
+export function onRecordStored(listener: (() => void) | null): void {
+  storedListener = listener
 }
 
 /** The imagequeue session whose id later records carry. */
@@ -135,10 +155,17 @@ function write(table: Table, row: Row): void {
   if (inserts) {
     try {
       inserts[table].run(row)
-      return
     } catch (error) {
       reportFailure('Records database write failed', error)
+      writeFallback(table, row)
+      return
     }
+    try {
+      storedListener?.()
+    } catch (error) {
+      console.error('[records] the stored-record listener failed', error)
+    }
+    return
   }
   writeFallback(table, row)
 }

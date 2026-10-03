@@ -4,14 +4,17 @@ import { App } from './App'
 import { StartupFailureApp } from './components/StartupFailureApp'
 import { RendererErrorBoundary } from './components/RendererErrorBoundary'
 import { MainProcessLanguage } from './i18n/I18nContext'
+import { RecordsApp } from './records/RecordsWindow'
 
 const query = new URLSearchParams(window.location.search)
-const startupFailure = query.get('surface') === 'startup-failure'
+const surface = query.get('surface')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {startupFailure ? (
+    {surface === 'startup-failure' ? (
       <MainProcessLanguage><StartupFailureApp /></MainProcessLanguage>
+    ) : surface === 'records' ? (
+      <RendererErrorBoundary><MainProcessLanguage><RecordsApp /></MainProcessLanguage></RendererErrorBoundary>
     ) : (
       <RendererErrorBoundary><MainProcessLanguage><App /></MainProcessLanguage></RendererErrorBoundary>
     )}

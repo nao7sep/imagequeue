@@ -17,6 +17,7 @@ import { writeJsonAtomic } from './utils/atomic-write'
 import { getDataDir } from './config'
 import type { UiState } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
+import { clampRecordsListWidth } from '../shared/records-layout'
 
 export function getUiStatePath(): string {
   return path.join(getDataDir(), 'state.json')
@@ -38,6 +39,7 @@ export function readUiState(): UiState {
         typeof parsed.notificationVolume === 'number' && Number.isFinite(parsed.notificationVolume)
           ? Math.min(1, Math.max(0, parsed.notificationVolume))
           : base.notificationVolume,
+      recordsListWidth: clampRecordsListWidth(parsed.recordsListWidth),
     }
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an
@@ -52,7 +54,8 @@ export function readUiState(): UiState {
 export function writeUiState(state: UiState): void {
   fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
   // Not recorded: state.json is volatile state and nothing else (column width,
-  // notification volume), which the data-backup conventions exclude from history.
+  // notification volume, the Records list width), which the data-backup conventions
+  // exclude from history.
   writeJsonAtomic(getUiStatePath(), state, false)
 }
 

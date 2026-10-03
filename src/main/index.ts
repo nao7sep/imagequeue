@@ -21,7 +21,10 @@ import { registerAppNoticeIpc } from './app-notice-ipc'
 import { closeViewerWindow, registerViewerIpc } from './viewer'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
-import { openRecords } from './records'
+import { onRecordStored, openRecords } from './records'
+import { registerRecordsIpc } from './records-ipc'
+import { closeRecordsReader } from './records-reader'
+import { closeRecordsWindow, notifyRecordsChanged } from './records-window'
 import { killAllCliJobsAndWait } from './cli-jobs'
 import { cancelAllInFlightAndWait } from './backends/cancellation'
 import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
@@ -203,6 +206,8 @@ async function startUp(): Promise<void> {
   // startup step, so a failure in one of them is logged rather than lost to the
   // console.
   openRecords(getDataDir())
+  // The Records window, when open, follows each record the database stores.
+  onRecordStored(notifyRecordsChanged)
   // Created before the launch archive, so a quit during it is claimed by the
   // controller and the rest of startup does not run.
   mainWindowController = new MainWindowController({
@@ -259,6 +264,7 @@ async function startUp(): Promise<void> {
   registerElaboratorsIpc()
   registerConceptsIpc()
   registerAppLogIpc()
+  registerRecordsIpc()
   registerAppNoticeIpc()
   registerViewerIpc(() => mainWindowController?.getWindow() ?? null)
   registerNotificationIpc()
@@ -336,6 +342,8 @@ async function gracefulShutdown(reason: string): Promise<void> {
     }
   })
   await guarded('closeViewerWindow', () => closeViewerWindow())
+  await guarded('closeRecordsWindow', () => closeRecordsWindow())
+  await guarded('closeRecordsReader', () => closeRecordsReader())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())
   await guarded('releaseWakeLock', () => releaseWakeLock())
   log('info', 'Session ended', { reason })

@@ -39,6 +39,7 @@ import type {
 import type { ElectronAPI } from '../shared/electron-api'
 import type { AppNotice } from '../shared/app-notice'
 import type { LanguageEnvironment } from '../shared/i18n/languages'
+import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery } from '../shared/records'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
   type StartupFailureMeasurement,
@@ -469,6 +470,20 @@ const api = {
     }
     ipcRenderer.on('session:interruptedTasks', handler)
     return () => { ipcRenderer.removeListener('session:interruptedTasks', handler) }
+  },
+
+  openRecordsWindow: (): Promise<void> =>
+    ipcRenderer.invoke('records:open'),
+  readRecordsPage: (query: RecordsQuery): Promise<RecordsPage> =>
+    ipcRenderer.invoke('records:page', query),
+  readRecordDetail: (kind: RecordKind, id: number): Promise<RecordDetail | null> =>
+    ipcRenderer.invoke('records:detail', kind, id),
+  readRecordSources: (): Promise<RecordSources> =>
+    ipcRenderer.invoke('records:sources'),
+  onRecordsChanged: (callback: () => void): (() => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('records:changed', handler)
+    return () => { ipcRenderer.removeListener('records:changed', handler) }
   }
 } satisfies ElectronAPI
 

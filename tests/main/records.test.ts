@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
-import { closeRecords, fetchRecorded, openRecords, recordAiCall, setRecordsSession, startAiCall, writeLogRecord } from '../../src/main/records'
+import { closeRecords, fetchRecorded, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, writeLogRecord } from '../../src/main/records'
 import { freshRecordsRoot, readLog, readRows, removeRecordsRoots } from './records-fixture'
 
 afterAll(() => {
@@ -98,5 +98,42 @@ describe('AI call records', () => {
     record.finish({ exitCode: 0 })
     expect(readRows(dir, 'ai_calls')).toHaveLength(1)
     expect(readLog(dir)).toHaveLength(0)
+  })
+})
+
+describe('the stored-record signal', () => {
+  it('follows each record the database stored, and no record kept in the fallback file', () => {
+    const dir = freshRecordsRoot()
+    const stored = vi.fn()
+    onRecordStored(stored)
+    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Stored', {})
+    startAiCall({ backend: 'openai', model: 'm', purpose: 'image', request: {} }).finish({})
+    expect(stored).toHaveBeenCalledTimes(2)
+
+    const other = new DatabaseSync(path.join(dir, 'records.sqlite3'))
+    other.exec('DROP TABLE log_records')
+    other.close()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    writeLogRecord('2026-01-01T00:00:01.000Z', 'info', 'Kept in the fallback file', {})
+    consoleError.mockRestore()
+    expect(stored).toHaveBeenCalledTimes(2)
+    onRecordStored(null)
+  })
+
+  it('never lets a failing listener lose the record or reach the caller', () => {
+    const dir = freshRecordsRoot()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    onRecordStored(() => { throw new Error('window gone') })
+    expect(() => writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Still stored', {})).not.toThrow()
+    onRecordStored(null)
+    consoleError.mockRestore()
+    expect(readLog(dir).map((row) => row.message)).toEqual(['Still stored'])
+  })
+
+  it('names the open database for the reader, and none once closed', () => {
+    const dir = freshRecordsRoot()
+    expect(recordsDatabasePath()).toBe(path.join(dir, 'records.sqlite3'))
+    closeRecords()
+    expect(recordsDatabasePath()).toBeNull()
   })
 })
