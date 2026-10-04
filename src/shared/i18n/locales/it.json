@@ -315,7 +315,7 @@
   "settings.slugModelHelp": "Dà a ogni file di immagine generato un nome tratto dal suo prompt.",
   "settings.unsupportedModel": "Modello non supportato. Potrebbe non funzionare come previsto.",
   "settings.thinking": "Ragionamento",
-  "settings.thinkingHelp": "Quanto ragiona il modello prima di rispondere, nei termini del provider.",
+  "settings.thinkingHelp": "Quanto ragiona il modello prima di rispondere, con la terminologia del provider.",
   "settings.timeout": "Timeout (s)",
   "settings.endpoint": "Endpoint",
   "settings.endpointHelp": "L’indirizzo a cui ImageQueue invia le richieste a {provider}.",
