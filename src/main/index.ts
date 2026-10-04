@@ -72,23 +72,6 @@ function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void
   })
 }
 
-// Every mutable app store is process-owned. Letting a second ImageQueue process
-// open the same root would turn otherwise-atomic file replacement into competing
-// read/modify/write snapshots (most dangerously for api-keys.json). Electron's
-// native instance authority closes that entire class of split-brain state; a
-// second launch raises the existing window instead of starting another writer.
-const ownsSingleInstance = app.requestSingleInstanceLock()
-if (!ownsSingleInstance) app.quit()
-
-app.on('second-instance', () => {
-  void mainWindowController?.restoreOrCreate()
-})
-
-// Electron's default is to quit after the last BrowserWindow closes when no
-// listener exists. Primary-window close policy belongs to MainWindowController;
-// explicit quit paths continue through the before-quit handler below.
-app.on('window-all-closed', () => {})
-
 // Debug is diagnostic-only: enabled automatically for an unpackaged development
 // build, and available in packaged builds only through an explicit
 // IMAGEQUEUE_DEBUG=1 launch. Set once at process start so every debug line —
@@ -97,29 +80,106 @@ const DEBUG_ENABLED = shouldEnableDebugLogging({
   isPackaged: app.isPackaged,
   imagequeueDebug: process.env['IMAGEQUEUE_DEBUG'],
 })
-setLoggerDebug(DEBUG_ENABLED)
 
-// Global last-resort hooks: log with full error fidelity before the process
-// dies, and also surface to the console as a backstop for the brief window
-// before the records are open. An uncaught exception leaves the process
-// in an undefined state, so we exit after logging; an unhandled rejection is
-// logged but allowed to continue.
-process.on('uncaughtException', (err) => {
-  log('error', 'Uncaught exception', { error: serializeError(err) })
-  console.error('Uncaught exception:', err)
-  // app.exit() skips the before-quit graceful shutdown that normally drains the
-  // debounced session-draft and model-param writes, so flush them here first —
-  // the writers are synchronous and route their own errors to onError, so this
-  // best-effort flush cannot itself throw. OS resources (CLI jobs, wake lock)
-  // are reclaimed by the OS on exit and need no cleanup on a crash.
-  drainPendingModelParamsWrites()
-  drainPendingDraftWrites()
-  app.exit(1)
-})
-process.on('unhandledRejection', (reason) => {
-  log('error', 'Unhandled rejection', { error: serializeError(reason) })
-  console.error('Unhandled rejection:', reason)
-})
+// before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
+// any programmatic app.quit(). Every quit is held; the first runs the async
+// cleanup and the process ends with app.exit(0) once it settles, so a second
+// quit during cleanup cannot end the process before cleanup finishes.
+//
+// app.exit(0), not a second app.quit(): on macOS, calling app.quit() after the
+// cleanup closes the windows but then stalls — once the last window closes the
+// app stays alive instead of proceeding to will-quit/quit, so the dock dot
+// lingers and the user has to quit a second time to actually terminate. (Note:
+// an in-flight image generation and CLI child is signalled and awaited through
+// a bounded barrier.) A cloud call already issued may still be billed. The
+// whole cleanup is bounded above its own steps' bounds, so a step that hangs
+// still ends in an exit.
+const QUIT_TIMEOUT_MS = 30_000
+
+// Every mutable app store is process-owned. Letting a second ImageQueue process
+// open the same root would turn otherwise-atomic file replacement into competing
+// read/modify/write snapshots (most dangerously for api-keys.json). Electron's
+// native instance authority closes that entire class of split-brain state; a
+// second launch raises the existing window instead of starting another writer.
+//
+// The lock is decided before this process registers or opens anything. One that
+// loses it has handed over to the running instance and ends by app.exit, not
+// app.quit: a quit would run the before-quit shutdown, whose steps write to the
+// stores, records, backups and state the running instance owns.
+if (app.requestSingleInstanceLock()) runPrimaryInstance()
+else app.exit(0)
+
+function runPrimaryInstance(): void {
+  app.on('second-instance', () => {
+    void mainWindowController?.restoreOrCreate()
+  })
+
+  // Electron's default is to quit after the last BrowserWindow closes when no
+  // listener exists. Primary-window close policy belongs to MainWindowController;
+  // explicit quit paths continue through the before-quit handler below.
+  app.on('window-all-closed', () => {})
+
+  setLoggerDebug(DEBUG_ENABLED)
+  installLastResortHooks()
+
+  // Scheme privileges can only be granted before the app is ready.
+  registerImageSchemeAsPrivileged()
+
+  app.whenReady().then(async () => {
+    // The language is settled before any window or native menu exists, so the
+    // first words on every surface, a startup failure included, are already in it.
+    await settleLanguage()
+    registerLanguageIpc()
+    installAppMenu()
+    // The startup body throws when a store cannot be recovered, such as a
+    // config.json that cannot be read or set aside (config-store.ts). Without this catch
+    // the rejection lands in the unhandledRejection hook, which logs and does NOT
+    // exit — a running process with no window and no dialog is not a halt
+    // (storage-path conventions: a halt names the store and reaches the user).
+    try {
+      await startUp()
+    } catch (err) {
+      enterStartupFailure(err)
+    }
+  })
+
+  app.on('before-quit', createBeforeQuitHandler({
+    shutdown: async () => {
+      mainWindowController?.beginShutdown()
+      statusIconController?.dispose()
+      mainWindowController?.dispose()
+      await gracefulShutdown('quit')
+    },
+    exit: (code) => app.exit(code),
+    timeoutMs: QUIT_TIMEOUT_MS,
+    onError: (err) => log('error', 'Graceful shutdown error', { error: serializeError(err) }),
+    onTimeout: () => log('warn', 'Graceful shutdown did not finish in time; exiting', { timeoutMs: QUIT_TIMEOUT_MS }),
+  }))
+}
+
+function installLastResortHooks(): void {
+  // Global last-resort hooks: log with full error fidelity before the process
+  // dies, and also surface to the console as a backstop for the brief window
+  // before the records are open. An uncaught exception leaves the process
+  // in an undefined state, so we exit after logging; an unhandled rejection is
+  // logged but allowed to continue.
+  process.on('uncaughtException', (err) => {
+    log('error', 'Uncaught exception', { error: serializeError(err) })
+    console.error('Uncaught exception:', err)
+    // app.exit() skips the before-quit graceful shutdown that normally drains the
+    // debounced session-draft and model-param writes, so flush them here first —
+    // the writers are synchronous and route their own errors to onError, so this
+    // best-effort flush cannot itself throw. OS resources (CLI jobs, wake lock)
+    // are reclaimed by the OS on exit and need no cleanup on a crash.
+    drainPendingModelParamsWrites()
+    drainPendingDraftWrites()
+    app.exit(1)
+  })
+  process.on('unhandledRejection', (reason) => {
+    log('error', 'Unhandled rejection', { error: serializeError(reason) })
+    console.error('Unhandled rejection:', reason)
+  })
+}
 
 function createWindow(): BrowserWindow {
   // Chrome + sizing come from the pure buildMainWindowOptions: the window
@@ -166,27 +226,6 @@ function createWindow(): BrowserWindow {
   )
   return win
 }
-
-// Scheme privileges can only be granted before the app is ready.
-registerImageSchemeAsPrivileged()
-
-if (ownsSingleInstance) app.whenReady().then(async () => {
-  // The language is settled before any window or native menu exists, so the
-  // first words on every surface, a startup failure included, are already in it.
-  await settleLanguage()
-  registerLanguageIpc()
-  installAppMenu()
-  // The startup body throws when a store cannot be recovered, such as a
-  // config.json that cannot be read or set aside (config-store.ts). Without this catch
-  // the rejection lands in the unhandledRejection hook, which logs and does NOT
-  // exit — a running process with no window and no dialog is not a halt
-  // (storage-path conventions: a halt names the store and reaches the user).
-  try {
-    await startUp()
-  } catch (err) {
-    enterStartupFailure(err)
-  }
-})
 
 function installAppMenu(): void {
   const apply = (): void => {
@@ -354,31 +393,3 @@ async function gracefulShutdown(reason: string): Promise<void> {
   await guarded('closeBackupStore', () => closeBackupStore())
   await guarded('archiveBinaryStores', () => archiveSession('finish'))
 }
-
-// before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
-// any programmatic app.quit(). Every quit is held; the first runs the async
-// cleanup and the process ends with app.exit(0) once it settles, so a second
-// quit during cleanup cannot end the process before cleanup finishes.
-//
-// app.exit(0), not a second app.quit(): on macOS, calling app.quit() after the
-// cleanup closes the windows but then stalls — once the last window closes the
-// app stays alive instead of proceeding to will-quit/quit, so the dock dot
-// lingers and the user has to quit a second time to actually terminate. (Note:
-// an in-flight image generation and CLI child is signalled and awaited through
-// a bounded barrier.) A cloud call already issued may still be billed. The
-// whole cleanup is bounded above its own steps' bounds, so a step that hangs
-// still ends in an exit.
-const QUIT_TIMEOUT_MS = 30_000
-
-app.on('before-quit', createBeforeQuitHandler({
-  shutdown: async () => {
-    mainWindowController?.beginShutdown()
-    statusIconController?.dispose()
-    mainWindowController?.dispose()
-    await gracefulShutdown('quit')
-  },
-  exit: (code) => app.exit(code),
-  timeoutMs: QUIT_TIMEOUT_MS,
-  onError: (err) => log('error', 'Graceful shutdown error', { error: serializeError(err) }),
-  onTimeout: () => log('warn', 'Graceful shutdown did not finish in time; exiting', { timeoutMs: QUIT_TIMEOUT_MS }),
-}))
