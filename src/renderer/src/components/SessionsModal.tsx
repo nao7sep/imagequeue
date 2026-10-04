@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -86,22 +86,29 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     [settings]
   )
 
+  // Only the latest read applies, so a slow earlier read never replaces a
+  // newer list.
+  const latestRead = useRef(0)
   const refreshSessions = useCallback(async (): Promise<void> => {
+    const read = ++latestRead.current
     setLoading(true)
     setLoadError(null)
     try {
       const next = await window.electronAPI.listSessions()
-      setSessions(next)
+      if (read === latestRead.current) setSessions(next)
     } catch (error) {
-      setLoadError(presentFailure('sessions-load', error))
+      if (read === latestRead.current) setLoadError(presentFailure('sessions-load', error))
     } finally {
-      setLoading(false)
+      if (read === latestRead.current) setLoading(false)
     }
   }, [])
 
+  // Read when the window opens and again whenever the queue changes while it
+  // is open: the app's own jobs move the current session's counts and updated
+  // date, and main writes the session before it publishes the queue.
   useEffect(() => {
     void refreshSessions()
-  }, [refreshSessions])
+  }, [refreshSessions, tasks])
 
   // Keep the active row pointing at a live session: default to the first, and
   // recover to the first when the selected session disappears (after a delete).
