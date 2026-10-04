@@ -55,8 +55,8 @@ describe('generationFailurePresentation', () => {
   it('uses an app-wide notice only for successful elaborator recovery, naming the preserved file', () => {
     const preserved = '/data/elaborators-20261002T000000Z.invalid'
     const notice = elaboratorRecoveryPresentation({ kind: 'recovered', path: preserved })
-    expect(notice && text(notice.title)).toContain('settings were reset')
-    expect(notice && text(notice.message)).toContain(preserved)
+    expect(notice && text(notice.title)).toBe('Elaborators were reset')
+    expect(notice && text(notice.message)).toContain(`elaborators file was unreadable, so ImageQueue set it aside at ${preserved}`)
     expect(elaboratorRecoveryPresentation({ kind: 'quarantine-failed', path: preserved, error: hostile })).toBeNull()
   })
 

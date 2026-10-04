@@ -83,7 +83,7 @@
   "notice.queuePausedTitle": "Coda in pausa",
   "notice.queuePausedMessage": "ImageQueue non è riuscito a salvare l’avanzamento di questa sessione, quindi ha messo in pausa la coda prima di avviare altro. Le immagini già in generazione verranno completate. Controlla che la posizione di output sia disponibile e abbia spazio libero sufficiente, poi scegli Riprendi.",
   "notice.elaboratorsResetTitle": "I template di elaborazione sono stati reimpostati",
-  "notice.elaboratorsResetMessage": "Il file dei template di elaborazione non era leggibile, quindi ImageQueue lo ha conservato in {path} e ha ripristinato i valori predefiniti inclusi. I template che avevi modificato restano nella copia conservata.",
+  "notice.elaboratorsResetMessage": "Il file dei template di elaborazione non era leggibile, quindi ImageQueue lo ha messo da parte in {path} e ha ripristinato i valori predefiniti inclusi. I template che avevi modificato restano nella copia messa da parte.",
   "notice.settingsResetMessage": "ImageQueue non è riuscito a leggere il file delle impostazioni, quindi lo ha messo da parte in {path} e si è avviato con le impostazioni predefinite. Le tue sessioni e le tue immagini non sono state toccate.",
   "notice.settingsResetTitle": "Le impostazioni sono state reimpostate",
   "taskFailure.notSaved": "L’immagine è stata generata, ma ImageQueue non è riuscito a salvarla. Controlla che la posizione di output sia disponibile e abbia spazio libero sufficiente, poi riprova.",

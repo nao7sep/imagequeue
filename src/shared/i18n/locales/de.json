@@ -83,7 +83,7 @@
   "notice.queuePausedTitle": "Warteschlange angehalten",
   "notice.queuePausedMessage": "ImageQueue konnte den Fortschritt dieser Sitzung nicht speichern und hat die Warteschlange deshalb angehalten, bevor etwas Neues beginnt. Bilder, die gerade erzeugt werden, werden fertiggestellt. Prüfen Sie, ob der Ausgabeort verfügbar ist und genügend freien Speicher hat, und wählen Sie dann „Fortsetzen“.",
   "notice.elaboratorsResetTitle": "Die Ausarbeitungsvorlagen wurden zurückgesetzt",
-  "notice.elaboratorsResetMessage": "Ihre Datei mit den Ausarbeitungsvorlagen war nicht lesbar. ImageQueue hat sie unter {path} aufbewahrt und die mitgelieferten Standardwerte wiederhergestellt. Ihre bearbeiteten Vorlagen sind in der aufbewahrten Kopie erhalten.",
+  "notice.elaboratorsResetMessage": "Ihre Datei mit den Ausarbeitungsvorlagen war nicht lesbar. ImageQueue hat sie daher unter {path} beiseitegelegt und die mitgelieferten Standardwerte wiederhergestellt. Ihre bearbeiteten Vorlagen sind in der beiseitegelegten Kopie erhalten.",
   "notice.settingsResetMessage": "ImageQueue konnte seine Einstellungsdatei nicht lesen, hat sie daher unter {path} beiseitegelegt und ist mit den Standardeinstellungen gestartet. Ihre Sitzungen und Bilder sind unverändert.",
   "notice.settingsResetTitle": "Die Einstellungen wurden zurückgesetzt",
   "taskFailure.notSaved": "Das Bild wurde erzeugt, aber ImageQueue konnte es nicht speichern. Prüfen Sie, ob der Ausgabeort verfügbar ist und genügend freien Speicher hat, und versuchen Sie es dann erneut.",

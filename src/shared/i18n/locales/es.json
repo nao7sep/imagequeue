@@ -83,7 +83,7 @@
   "notice.queuePausedTitle": "Cola en pausa",
   "notice.queuePausedMessage": "ImageQueue no pudo guardar el progreso de esta sesión, así que pausó la cola antes de iniciar nada más. Las imágenes que ya se están generando terminarán. Comprueba que la ubicación de salida esté disponible y tenga espacio libre suficiente y luego elige Reanudar.",
   "notice.elaboratorsResetTitle": "Se restablecieron las plantillas de elaboración",
-  "notice.elaboratorsResetMessage": "Tu archivo de plantillas de elaboración no se podía leer, así que ImageQueue lo conservó en {path} y restauró los valores predeterminados incluidos. Tus plantillas editadas siguen en la copia conservada.",
+  "notice.elaboratorsResetMessage": "Tu archivo de plantillas de elaboración no se podía leer, así que ImageQueue lo guardó aparte en {path} y restauró los valores predeterminados incluidos. Tus plantillas editadas siguen en la copia guardada aparte.",
   "notice.settingsResetMessage": "ImageQueue no pudo leer su archivo de configuración, así que lo guardó aparte en {path} y se inició con la configuración predeterminada. Tus sesiones e imágenes no se han modificado.",
   "notice.settingsResetTitle": "Se restableció la configuración",
   "taskFailure.notSaved": "La imagen se generó, pero ImageQueue no pudo guardarla. Comprueba que la ubicación de salida esté disponible y tenga espacio libre suficiente y luego vuelve a intentarlo.",
