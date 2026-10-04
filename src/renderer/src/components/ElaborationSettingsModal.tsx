@@ -277,7 +277,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       }
     >
       <div className="elaboration-settings-body">
-        <div className="elaboration-settings-section">
+        <div className="elaboration-settings-section elaboration-settings-fields">
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.batchSize')}</label>
             <input

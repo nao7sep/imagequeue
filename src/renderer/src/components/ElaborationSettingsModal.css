@@ -54,16 +54,26 @@
   font-family: var(--font-mono);
 }
 
+/* The rows share one grid: the label column fits the longest label up to a
+   cap, past which labels wrap, the input column fits its inputs, and the hint
+   takes the rest. Each row is a subgrid, so the columns align without fixed
+   widths (localization conventions). */
+.elaboration-settings-fields {
+  grid-template-columns: fit-content(35%) auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+
 .elaboration-settings-row {
   display: grid;
-  grid-template-columns: 180px 140px 1fr;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: var(--space-2);
 }
 
 .elaboration-settings-row label {
   font-size: var(--text-sm);
   color: var(--text-primary);
+  overflow-wrap: break-word;
 }
 
 .elaboration-settings-row input {
