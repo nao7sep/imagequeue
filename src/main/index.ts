@@ -41,6 +41,7 @@ import {
   unregisterMainWindowForLayout,
 } from './main-window-layout'
 import { createStartupFailureWindow } from './startup-failure-window'
+import { createBeforeQuitHandler } from './quit-handler'
 import { startupFailurePresentation } from './failure-presentation'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
@@ -355,27 +356,29 @@ async function gracefulShutdown(reason: string): Promise<void> {
 }
 
 // before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
-// any programmatic app.quit(). We preventDefault the first invocation, run
-// async cleanup, then terminate with app.exit(0).
+// any programmatic app.quit(). Every quit is held; the first runs the async
+// cleanup and the process ends with app.exit(0) once it settles, so a second
+// quit during cleanup cannot end the process before cleanup finishes.
 //
 // app.exit(0), not a second app.quit(): on macOS, calling app.quit() after the
 // cleanup closes the windows but then stalls — once the last window closes the
 // app stays alive instead of proceeding to will-quit/quit, so the dock dot
-// lingers and the user has to quit a second time to actually terminate. The
-// gracefulShutdown steps above have all run by the time the finally fires, so
-// app.exit(0) ends the process deterministically. (Note: an in-flight image
-// generation and CLI child is signalled and awaited through a bounded barrier.)
-// A cloud call already issued may still be billed. The shutdownStarted
-// guard still lets a second quit during cleanup fall through without
-// preventDefault, as a force-quit escape hatch in case cleanup ever hangs.
-app.on('before-quit', (event) => {
-  if (mainWindowController && !mainWindowController.beginShutdown()) return
-  event.preventDefault()
-  statusIconController?.dispose()
-  mainWindowController?.dispose()
-  gracefulShutdown('quit')
-    .catch((err) => log('error', 'Graceful shutdown error', {
-      error: serializeError(err),
-    }))
-    .finally(() => app.exit(0))
-})
+// lingers and the user has to quit a second time to actually terminate. (Note:
+// an in-flight image generation and CLI child is signalled and awaited through
+// a bounded barrier.) A cloud call already issued may still be billed. The
+// whole cleanup is bounded above its own steps' bounds, so a step that hangs
+// still ends in an exit.
+const QUIT_TIMEOUT_MS = 30_000
+
+app.on('before-quit', createBeforeQuitHandler({
+  shutdown: async () => {
+    mainWindowController?.beginShutdown()
+    statusIconController?.dispose()
+    mainWindowController?.dispose()
+    await gracefulShutdown('quit')
+  },
+  exit: (code) => app.exit(code),
+  timeoutMs: QUIT_TIMEOUT_MS,
+  onError: (err) => log('error', 'Graceful shutdown error', { error: serializeError(err) }),
+  onTimeout: () => log('warn', 'Graceful shutdown did not finish in time; exiting', { timeoutMs: QUIT_TIMEOUT_MS }),
+}))
