@@ -161,12 +161,53 @@ describe('settings by set', () => {
     expect(drainSetAsideConfigPaths()).toEqual([path.join(root, invalid[0])])
     expect(drainSetAsideConfigPaths()).toEqual([])
   })
-  it('leaves an unreadable file in place when it cannot be set aside', async () => {
+  it('halts naming the file and leaves it in place when it cannot be set aside', async () => {
     fs.writeFileSync(file(), '{ invalid')
-    const { loadConfig } = await import('../../../src/main/config/config-store')
+    const { loadConfig, ConfigFileHaltError } = await import('../../../src/main/config/config-store')
     vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw new Error('locked') })
-    expect(() => loadConfig()).toThrow('locked')
+    let thrown: unknown
+    try { loadConfig() } catch (err) { thrown = err }
+    expect(thrown).toBeInstanceOf(ConfigFileHaltError)
+    expect((thrown as InstanceType<typeof ConfigFileHaltError>).path).toBe(file())
+    expect(((thrown as Error).cause as Error).message).toBe('locked')
     expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
+  })
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('halts naming a file it cannot read, and leaves it unchanged in place', async () => {
+    const bytes = JSON.stringify({ general: { language: 'ja' } })
+    fs.writeFileSync(file(), bytes)
+    fs.chmodSync(file(), 0o000)
+    const { loadConfig, ConfigFileHaltError } = await import('../../../src/main/config/config-store')
+    let thrown: unknown
+    try { loadConfig() } catch (err) { thrown = err }
+    fs.chmodSync(file(), 0o644)
+    expect(thrown).toBeInstanceOf(ConfigFileHaltError)
+    expect((thrown as InstanceType<typeof ConfigFileHaltError>).path).toBe(file())
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
+  })
+  it('saves against the map it loaded, so a file unreadable since load is neither read, written nor set aside', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ general: { language: 'ja' } }))
+    fs.utimesSync(file(), new Date(2000, 0, 1), new Date(2000, 0, 1))
+    const { loadConfig, updateConfig, drainSetAsideConfigPaths } = await import('../../../src/main/config/config-store')
+    loadConfig()
+    const read = vi.spyOn(fs, 'readFileSync').mockImplementation(() => { throw Object.assign(new Error('unreadable'), { code: 'EACCES' }) })
+    updateConfig(() => undefined)
+    read.mockRestore()
+    expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
+    expect(stored()).toEqual({ general: { language: 'ja' } })
+    expect(drainSetAsideConfigPaths()).toEqual([])
+  })
+  it('warns once, naming the key, for a set that fails its check', async () => {
+    const log = vi.fn()
+    vi.doMock('../../../src/main/logger', async (importOriginal) => ({ ...await importOriginal<object>(), log }))
+    fs.writeFileSync(file(), JSON.stringify({ general: { theme: 'bogus' } }))
+    try {
+      const { loadConfig } = await import('../../../src/main/config/config-store')
+      loadConfig()
+    } finally {
+      vi.doUnmock('../../../src/main/logger')
+    }
+    expect(log.mock.calls.filter(([level]) => level === 'warn')).toEqual([['warn', 'Invalid config set; using built-in', { key: 'general.theme' }]])
   })
   it('keeps every built-in text in its cleaned form', async () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')

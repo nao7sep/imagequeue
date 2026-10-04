@@ -10,6 +10,10 @@ import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, 
 import { valuesEqual } from '../settings-changes'
 
 let cachedConfig: AppConfig | null = null
+// The map config.json holds as of the last load or write; null while there is
+// no file, including after a set-aside. Save compares against it and never
+// re-reads the file, so config.json is read only at load.
+let storedMap: Record<string, unknown> | null = null
 
 // The storage root is resolved lazily (honoring IMAGEQUEUE_DATA_DIR) rather than
 // frozen into a module-level constant at import time, so the override is read
@@ -36,29 +40,59 @@ export function drainSetAsideConfigPaths(): string[] {
   return setAsidePaths.splice(0)
 }
 
-// An unreadable file is set aside (store-recovery conventions); a failed rename
-// propagates.
-function setAsideUnreadableFile(file: string, error: unknown): void {
+/**
+ * config.json exists but can be neither read nor set aside. Startup halts and
+ * names the file, which is left exactly where it is (store-recovery conventions).
+ */
+export class ConfigFileHaltError extends Error {
+  constructor(readonly path: string, options: { cause: unknown }) {
+    super(`The settings file could not be used and was left in place: ${path}`, options)
+    this.name = 'ConfigFileHaltError'
+  }
+}
+
+function isMissingFile(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
+}
+
+// A file that does not parse or is not a map of sets is set aside
+// (store-recovery conventions); a failed rename halts.
+function setAsideUnusableFile(file: string, error: unknown): void {
   const movedTo = path.join(path.dirname(file), `${path.basename(file, '.json')}-${utcStampForFilename()}.invalid`)
-  fs.renameSync(file, movedTo)
+  try {
+    fs.renameSync(file, movedTo)
+  } catch (renameError) {
+    throw new ConfigFileHaltError(file, { cause: renameError })
+  }
   setAsidePaths.push(movedTo)
-  log('warn', 'Set aside an unreadable config file; using built-in settings', {
+  log('warn', 'Set aside an unusable config file; using built-in settings', {
     from: file,
     to: movedTo,
     error: serializeError(error),
   })
 }
 
-function readStoredMap(): Record<string, unknown> {
+// A file that exists but cannot be read halts: moving it would not fix a
+// permission problem, and a passing I/O error would move a good file.
+function readStoredMap(): Record<string, unknown> | null {
   const file = getConfigPath()
-  if (!fs.existsSync(file)) return {}
+  let text: string
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (err) {
+    if (isMissingFile(err)) return null
+    throw new ConfigFileHaltError(file, { cause: err })
+  }
   let parsed: unknown
   try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
-    if (!isObject(parsed)) throw new Error('Config file must be a JSON object')
+    parsed = JSON.parse(text)
   } catch (err) {
-    setAsideUnreadableFile(file, err)
-    return {}
+    setAsideUnusableFile(file, err)
+    return null
+  }
+  if (!isObject(parsed)) {
+    setAsideUnusableFile(file, new Error('Config file must be a JSON object'))
+    return null
   }
   return parsed
 }
@@ -83,7 +117,8 @@ export function loadConfig(): AppConfig {
 
   ensureDataDir()
 
-  cachedConfig = effectiveConfig(readStoredMap())
+  storedMap = readStoredMap()
+  cachedConfig = effectiveConfig(storedMap ?? {})
   return cachedConfig
 }
 
@@ -104,7 +139,8 @@ export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
  * The one owner of what config.json holds. The file is written from the config
  * in memory: every known set is stored, cleaned, only while it differs from its
  * built-in. A set of the wrong shape rejects the save. A result equal to the
- * file writes nothing.
+ * map last loaded or written writes nothing, and so does an empty result while
+ * there is no file.
  */
 export function saveConfig(config: AppConfig): void {
   const next: Record<string, unknown> = {}
@@ -114,9 +150,11 @@ export function saveConfig(config: AppConfig): void {
     const cleaned = cleanConfigSet(key, value)
     if (!equalsBuiltIn(key, cleaned, builtIn, config)) writePath(next, key, cleaned)
   }
-  if (!valuesEqual(next, readStoredMap())) {
+  const unchanged = storedMap === null ? Object.keys(next).length === 0 : valuesEqual(next, storedMap)
+  if (!unchanged) {
     const file = getConfigPath()
     writeJsonAtomic(file, next, true)
+    storedMap = next
     log('info', 'Config saved', { path: file })
   }
   cachedConfig = effectiveConfig(next)
