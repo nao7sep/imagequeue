@@ -205,6 +205,24 @@ describe('RecordsWindow', () => {
     expect(document.querySelector('.records-detail-body')!.textContent).toContain('task-7')
   })
 
+  it('leaves out a block with nothing in it, keeping the fields', async () => {
+    readRecordDetail.mockImplementation(async (kind) => (kind === 'log'
+      ? { ...lineDetail, fields: '{}' }
+      : { ...callDetail, request: '{}', response: '  ', error: 'null' }))
+    await mount()
+    const blockLabels = () => Array.from(document.querySelectorAll('.records-block h3')).map((label) => label.textContent)
+
+    await act(async () => options()[1]!.click())
+    expect(document.querySelector('.records-detail-title')?.textContent).toBe('Generation failed')
+    expect(blockLabels()).toEqual([])
+    expect(document.querySelector('.records-detail-body')!.textContent).toContain('task-7')
+
+    await act(async () => options()[0]!.click())
+    expect(document.querySelector('.records-detail-title')?.textContent).toBe('gemini brainstorm')
+    expect(blockLabels()).toEqual([])
+    expect(document.querySelector('.records-detail-body')!.textContent).toContain('gemini-x')
+  })
+
   it('moves the selection with the arrow keys', async () => {
     await mount()
     await act(async () => options()[0]!.focus())

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cursorAfter, mergeNewestPage, prettyJson, recordKey } from '../../../../src/renderer/src/records/record-format'
+import { cursorAfter, jsonBlockText, mergeNewestPage, recordKey } from '../../../../src/renderer/src/records/record-format'
 import type { RecordSummary } from '../../../../src/shared/records'
 
 const row = (id: number, time: string, title = `row ${id}`): RecordSummary => ({
@@ -42,8 +42,17 @@ describe('mergeNewestPage', () => {
 
 describe('record formatting', () => {
   it('indents stored JSON and shows other text as it is', () => {
-    expect(prettyJson('{"a":1}')).toBe('{\n  "a": 1\n}')
-    expect(prettyJson('not json')).toBe('not json')
+    expect(jsonBlockText('{"a":1}')).toBe('{\n  "a": 1\n}')
+    expect(jsonBlockText('[0]')).toBe('[\n  0\n]')
+    expect(jsonBlockText('false')).toBe('false')
+    expect(jsonBlockText('"text"')).toBe('"text"')
+    expect(jsonBlockText('not json')).toBe('not json')
+  })
+
+  it('leaves out a block with nothing in it', () => {
+    for (const empty of [null, '', '  \n', '{}', ' { } ', 'null', '[]', '""', '"  "']) {
+      expect(jsonBlockText(empty)).toBeNull()
+    }
   })
 
   it('continues after the last row shown', () => {

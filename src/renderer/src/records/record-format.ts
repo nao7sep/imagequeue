@@ -5,13 +5,27 @@ export function recordKey(record: { kind: RecordKind; id: number }): string {
   return `${record.kind}:${record.id}`
 }
 
-// Stored JSON, indented for reading; text that is not JSON is shown as it is.
-export function prettyJson(text: string): string {
+function isEmptyValue(value: unknown): boolean {
+  if (value === null) return true
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  if (typeof value === 'object') return Object.keys(value).length === 0
+  return false
+}
+
+// A JSON column as its detail block shows it, indented for reading, text that
+// is not JSON as it is; or null when there is nothing in it to show: no value,
+// `null`, an empty object, array or string, or only whitespace. Such a block is
+// left out rather than shown empty.
+export function jsonBlockText(text: string | null): string | null {
+  if (text === null || text.trim() === '') return null
+  let value: unknown
   try {
-    return JSON.stringify(JSON.parse(text), null, 2)
+    value = JSON.parse(text)
   } catch {
     return text
   }
+  return isEmptyValue(value) ? null : JSON.stringify(value, null, 2)
 }
 
 export const KIND_LABELS: Record<RecordKind, MessageKey> = {

@@ -30,8 +30,8 @@ import {
   LEVEL_FILTER_LABELS,
   LEVEL_LABELS,
   cursorAfter,
+  jsonBlockText,
   mergeNewestPage,
-  prettyJson,
   recordKey,
 } from './record-format'
 import './RecordsWindow.css'
@@ -562,13 +562,17 @@ function RecordDetailView({
   add(t('records.session'), record.sessionId === null ? null : sessionLabel(record.sessionId))
   add(t('records.launch'), launchLabel(record.launch))
 
+  // A block with nothing in it is left out.
   const blocks: { label: string; text: string }[] = []
+  const addBlock = (label: string, text: string | null): void => {
+    if (text !== null) blocks.push({ label, text })
+  }
   if (record.kind === 'log') {
-    blocks.push({ label: t('records.details'), text: prettyJson(record.fields) })
+    addBlock(t('records.details'), jsonBlockText(record.fields))
   } else {
-    blocks.push({ label: t('records.request'), text: prettyJson(record.request) })
-    if (record.response !== null) blocks.push({ label: t('records.response'), text: prettyJson(record.response) })
-    if (record.error !== null) blocks.push({ label: t('records.error'), text: prettyJson(record.error) })
+    addBlock(t('records.request'), jsonBlockText(record.request))
+    addBlock(t('records.response'), jsonBlockText(record.response))
+    addBlock(t('records.error'), jsonBlockText(record.error))
   }
 
   return (
