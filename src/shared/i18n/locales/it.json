@@ -5,6 +5,7 @@
   "common.retry": "Riprova",
   "startupFailure.title": "Impossibile avviare ImageQueue",
   "startupFailure.message": "ImageQueue si è fermato prima di aprire la finestra principale. I suoi dati non sono stati modificati. Controlla il registro della sessione, correggi il problema di avvio e poi riavvialo.",
+  "startupFailure.settingsFileMessage": "ImageQueue non è riuscito a usare il file delle impostazioni in {path} e lo ha lasciato invariato. Controllane i permessi o spostalo altrove, poi riavvia ImageQueue.",
   "startupFailure.detailsLabel": "Dettagli dell’errore di avvio",
   "rendererFailure.title": "ImageQueue non è riuscito a mantenere aperta questa finestra.",
   "rendererFailure.message": "Ricarica la finestra per ripristinarla. Le sessioni salvate e le immagini generate non sono cambiate.",

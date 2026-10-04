@@ -1,4 +1,7 @@
 export const STARTUP_FAILURE_MEASUREMENT_CHANNEL = 'startup-failure:measurement'
+// The window asks main what to say: the message for the failure that stopped
+// startup, which only main knows.
+export const STARTUP_FAILURE_MESSAGE_CHANNEL = 'startup-failure:message'
 
 export interface StartupFailureMeasurement {
   naturalHeight: number

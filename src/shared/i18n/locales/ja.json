@@ -5,6 +5,7 @@
   "common.retry": "再試行",
   "startupFailure.title": "ImageQueue を起動できませんでした",
   "startupFailure.message": "ImageQueue はメインウインドウを開く前に停止しました。データは変更されていません。セッションログを確認して起動の問題を解決してから、もう一度起動してください。",
+  "startupFailure.settingsFileMessage": "ImageQueue は {path} にある設定ファイルを使用できなかったため、変更せずにそのまま残しました。ファイルのアクセス権を確認するか別の場所へ移動してから、ImageQueue をもう一度起動してください。",
   "startupFailure.detailsLabel": "起動失敗の詳細",
   "rendererFailure.title": "ImageQueue はこのウインドウを開いたままにできませんでした。",
   "rendererFailure.message": "ウインドウを再読み込みすると回復します。保存済みのセッションと生成済みの画像は変更されていません。",

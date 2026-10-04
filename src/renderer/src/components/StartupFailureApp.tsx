@@ -1,13 +1,26 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../i18n/I18nContext'
+import { message, type Message } from '../../../shared/i18n/translate'
 import './StartupFailureApp.css'
 
 /** Plain fatal-startup surface used when the main application cannot be initialized. */
 export function StartupFailureApp(): React.JSX.Element {
-  const { t } = useI18n()
+  const { t, text } = useI18n()
   const rootRef = useRef<HTMLElement | null>(null)
+  // Main says what stopped startup; until it answers, the hidden window shows
+  // nothing to measure. A failed answer keeps the general copy.
+  const [failureMessage, setFailureMessage] = useState<Message | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    void window.electronAPI.getStartupFailureMessage()
+      .catch(() => message('startupFailure.message'))
+      .then((next) => { if (!cancelled) setFailureMessage(next) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!failureMessage) return
     const reportMeasurement = (): void => {
       const root = rootRef.current
       if (!root) return
@@ -54,7 +67,7 @@ export function StartupFailureApp(): React.JSX.Element {
     }
     window.addEventListener('load', reportMeasurement, { once: true })
     return () => window.removeEventListener('load', reportMeasurement)
-  }, [])
+  }, [failureMessage])
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
@@ -67,7 +80,7 @@ export function StartupFailureApp(): React.JSX.Element {
   return (
     <main ref={rootRef} className="startup-failure-app">
       <h1>{t('startupFailure.title')}</h1>
-      <p role="region" aria-label={t('startupFailure.detailsLabel')} tabIndex={0}>{t('startupFailure.message')}</p>
+      <p role="region" aria-label={t('startupFailure.detailsLabel')} tabIndex={0}>{failureMessage ? text(failureMessage) : null}</p>
       <footer>
         <button autoFocus onClick={() => window.close()}>{t('common.close')}</button>
       </footer>

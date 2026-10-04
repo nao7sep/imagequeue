@@ -5,6 +5,7 @@
   "common.retry": "Erneut versuchen",
   "startupFailure.title": "ImageQueue konnte nicht starten",
   "startupFailure.message": "ImageQueue wurde beendet, bevor das Hauptfenster geöffnet wurde. Die Daten wurden nicht verändert. Prüfen Sie das Sitzungsprotokoll, beheben Sie das Startproblem und starten Sie die App dann erneut.",
+  "startupFailure.settingsFileMessage": "ImageQueue konnte seine Einstellungsdatei unter {path} nicht verwenden und hat sie unverändert gelassen. Prüfen Sie ihre Zugriffsrechte oder verschieben Sie sie an einen anderen Ort und starten Sie ImageQueue dann erneut.",
   "startupFailure.detailsLabel": "Details zum Startfehler",
   "rendererFailure.title": "ImageQueue konnte dieses Fenster nicht geöffnet halten.",
   "rendererFailure.message": "Laden Sie das Fenster neu, um es wiederherzustellen. Ihre gespeicherten Sitzungen und erzeugten Bilder sind unverändert.",

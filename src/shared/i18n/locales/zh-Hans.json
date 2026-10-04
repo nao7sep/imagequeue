@@ -5,6 +5,7 @@
   "common.retry": "重试",
   "startupFailure.title": "ImageQueue 无法启动",
   "startupFailure.message": "ImageQueue 在打开主窗口前已停止。它的数据未被更改。请查看会话日志，解决启动问题后再次启动。",
+  "startupFailure.settingsFileMessage": "ImageQueue 无法使用位于 {path} 的设置文件，已保持其原样。请检查该文件的权限或将其移到别处，然后再次启动 ImageQueue。",
   "startupFailure.detailsLabel": "启动失败详情",
   "rendererFailure.title": "ImageQueue 无法保持此窗口打开。",
   "rendererFailure.message": "重新加载窗口即可恢复。你保存的会话和生成的图像均未改变。",

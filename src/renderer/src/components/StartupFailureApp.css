@@ -30,6 +30,7 @@
   padding: var(--space-5);
   font-size: var(--text-md);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .startup-failure-app footer {

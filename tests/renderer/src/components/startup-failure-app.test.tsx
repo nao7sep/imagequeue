@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StartupFailureApp } from '../../../../src/renderer/src/components/StartupFailureApp'
 
 const reportMeasurement = vi.fn()
+const getStartupFailureMessage = vi.fn()
 
 beforeEach(() => {
+  getStartupFailureMessage.mockResolvedValue({ key: 'startupFailure.message' })
   window.electronAPI = {
     reportStartupFailureMeasurement: reportMeasurement,
+    getStartupFailureMessage,
   } as unknown as typeof window.electronAPI
   vi.spyOn(window, 'getComputedStyle').mockReturnValue({
     lineHeight: '24px',
@@ -27,14 +30,17 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   reportMeasurement.mockReset()
+  getStartupFailureMessage.mockReset()
   vi.restoreAllMocks()
 })
 
 describe('StartupFailureApp measurement handshake', () => {
-  it('reports natural content geometry only after the authored surface is committed', () => {
+  it('reports natural content geometry only after the authored surface is committed', async () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
     render(<StartupFailureApp />)
+    expect(reportMeasurement).not.toHaveBeenCalled()
 
+    await screen.findByText(/stopped before opening its main window/)
     expect(reportMeasurement).toHaveBeenCalledOnce()
     expect(reportMeasurement).toHaveBeenCalledWith({
       naturalHeight: 200,
@@ -47,9 +53,10 @@ describe('StartupFailureApp measurement handshake', () => {
     expect(details?.getAttribute('tabindex')).toBe('0')
   })
 
-  it('waits for production stylesheets before reporting the committed geometry', () => {
+  it('waits for production stylesheets before reporting the committed geometry', async () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
     render(<StartupFailureApp />)
+    await screen.findByText(/stopped before opening its main window/)
     expect(reportMeasurement).not.toHaveBeenCalled()
 
     act(() => window.dispatchEvent(new Event('load')))
@@ -59,5 +66,24 @@ describe('StartupFailureApp measurement handshake', () => {
       naturalHeight: 200,
       minimumHeight: 174,
     })
+  })
+
+  it('names the settings file and its path when main says the settings stopped startup', async () => {
+    vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
+    getStartupFailureMessage.mockResolvedValue({ key: 'startupFailure.settingsFileMessage', values: { path: '/Users/me/.imagequeue/config.json' } })
+    render(<StartupFailureApp />)
+
+    const details = await screen.findByText(/settings file at/)
+    expect(details.textContent).toBe('ImageQueue couldn’t use its settings file at /Users/me/.imagequeue/config.json and left it unchanged. Check its permissions or move it aside, then start ImageQueue again.')
+    expect(reportMeasurement).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the general copy when main cannot say what stopped startup', async () => {
+    vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
+    getStartupFailureMessage.mockRejectedValue(new Error('Error invoking remote method'))
+    render(<StartupFailureApp />)
+
+    await screen.findByText(/stopped before opening its main window/)
+    expect(reportMeasurement).toHaveBeenCalledOnce()
   })
 })

@@ -5,6 +5,7 @@
   "common.retry": "다시 시도",
   "startupFailure.title": "ImageQueue를 시작할 수 없습니다",
   "startupFailure.message": "ImageQueue가 기본 윈도우를 열기 전에 중지되었습니다. 데이터는 변경되지 않았습니다. 세션 로그를 확인하고 시작 문제를 해결한 다음 다시 시작하십시오.",
+  "startupFailure.settingsFileMessage": "ImageQueue가 {path}에 있는 설정 파일을 사용할 수 없어 변경하지 않고 그대로 두었습니다. 파일 권한을 확인하거나 파일을 다른 위치로 옮긴 다음 ImageQueue를 다시 시작하십시오.",
   "startupFailure.detailsLabel": "시작 실패 세부 정보",
   "rendererFailure.title": "ImageQueue가 이 윈도우를 열어 둘 수 없습니다.",
   "rendererFailure.message": "윈도우를 새로고침하면 복구됩니다. 저장된 세션과 생성된 이미지는 변경되지 않았습니다.",

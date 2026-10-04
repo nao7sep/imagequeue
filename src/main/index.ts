@@ -41,6 +41,7 @@ import {
   unregisterMainWindowForLayout,
 } from './main-window-layout'
 import { createStartupFailureWindow } from './startup-failure-window'
+import { startupFailurePresentation } from './failure-presentation'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
 import { openOutputFolder } from './session/open-output-folder'
@@ -60,7 +61,7 @@ function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void
     return
   }
   // The window shows authored copy only; the diagnostic stays in the log.
-  startupFailureWindow = createStartupFailureWindow()
+  startupFailureWindow = createStartupFailureWindow(startupFailurePresentation(error))
   // Create the recovery owner before destroying the failed primary window so
   // its closed callback cannot turn this fatal path into an ordinary quit.
   if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy()
@@ -175,7 +176,7 @@ if (ownsSingleInstance) app.whenReady().then(async () => {
   registerLanguageIpc()
   installAppMenu()
   // The startup body throws when a store cannot be recovered, such as a
-  // config.json that cannot be set aside (config-store.ts). Without this catch
+  // config.json that cannot be read or set aside (config-store.ts). Without this catch
   // the rejection lands in the unhandledRejection hook, which logs and does NOT
   // exit — a running process with no window and no dialog is not a halt
   // (storage-path conventions: a halt names the store and reaches the user).

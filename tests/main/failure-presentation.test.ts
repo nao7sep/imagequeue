@@ -4,7 +4,9 @@ import {
   configResetPresentation,
   elaboratorRecoveryPresentation,
   generationFailurePresentation,
+  startupFailurePresentation,
 } from '../../src/main/failure-presentation'
+import { ConfigFileHaltError } from '../../src/main/config/config-store'
 import { ProviderHttpError, ProviderStatusError } from '../../src/main/provider-errors'
 import { loadTranslator } from '../../src/shared/i18n/translate'
 
@@ -59,6 +61,18 @@ describe('generationFailurePresentation', () => {
     const notice = configResetPresentation(preserved)
     expect(text(notice.title)).toBe('Settings were reset')
     expect(text(notice.message)).toContain(preserved)
+  })
+
+  it('names the settings file and its path when it stopped startup, and keeps other diagnostics out', () => {
+    const settings = '/Users/me/.imagequeue/config.json'
+    const halted = text(startupFailurePresentation(new ConfigFileHaltError(settings, { cause: new Error(hostile) })))
+    expect(halted).toContain(`settings file at ${settings}`)
+    expect(halted).toContain('left it unchanged')
+    expect(halted).not.toContain('hostile-sentinel')
+
+    const other = text(startupFailurePresentation(new Error(hostile)))
+    expect(other).toContain('stopped before opening its main window')
+    expect(other).not.toContain('hostile-sentinel')
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

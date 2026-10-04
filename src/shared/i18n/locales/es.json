@@ -5,6 +5,7 @@
   "common.retry": "Reintentar",
   "startupFailure.title": "ImageQueue no pudo iniciarse",
   "startupFailure.message": "ImageQueue se detuvo antes de abrir su ventana principal. Sus datos no se modificaron. Revisa el registro de la sesión, corrige el problema de inicio y vuelve a abrir la app.",
+  "startupFailure.settingsFileMessage": "ImageQueue no pudo usar su archivo de configuración en {path} y lo dejó sin cambios. Revisa sus permisos o muévelo a otra ubicación y vuelve a abrir ImageQueue.",
   "startupFailure.detailsLabel": "Detalles del error de inicio",
   "rendererFailure.title": "ImageQueue no pudo mantener abierta esta ventana.",
   "rendererFailure.message": "Vuelve a cargar la ventana para recuperarla. Tus sesiones guardadas y las imágenes generadas no han cambiado.",

@@ -29,6 +29,7 @@ import type { BrainstormOutcome } from './text-provider-failure'
 import type { CliJobSnapshot, CliChunkEvent, CliStatusEvent } from './cli-jobs'
 import type { AppNotice } from './app-notice'
 import type { StartupFailureMeasurement } from './startup-failure'
+import type { Message } from './i18n/translate'
 import type { LanguageEnvironment } from './i18n/languages'
 import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery } from './records'
 
@@ -72,6 +73,8 @@ export interface ElectronAPI {
   // Notices main raised before this window subscribed; each is handed out once.
   takePendingNotices: () => Promise<AppNotice[]>
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement) => void
+  // What the startup failure window says about the failure that stopped startup.
+  getStartupFailureMessage: () => Promise<Message>
 
   // Queue operations
   enqueue: (request: EnqueueRequest) => Promise<Task[]>

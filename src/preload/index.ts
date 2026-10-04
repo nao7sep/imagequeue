@@ -42,8 +42,10 @@ import type { LanguageEnvironment } from '../shared/i18n/languages'
 import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery } from '../shared/records'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
+  STARTUP_FAILURE_MESSAGE_CHANNEL,
   type StartupFailureMeasurement,
 } from '../shared/startup-failure'
+import type { Message } from '../shared/i18n/translate'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
@@ -54,6 +56,8 @@ const api = {
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement): void => {
     ipcRenderer.send(STARTUP_FAILURE_MEASUREMENT_CHANNEL, measurement)
   },
+  getStartupFailureMessage: (): Promise<Message> =>
+    ipcRenderer.invoke(STARTUP_FAILURE_MESSAGE_CHANNEL),
   getLanguageEnvironment: (): Promise<LanguageEnvironment> =>
     ipcRenderer.invoke('language:environment'),
   onLanguageChanged: (callback: (environment: LanguageEnvironment) => void): (() => void) => {

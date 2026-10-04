@@ -5,6 +5,7 @@
   "common.retry": "Retry",
   "startupFailure.title": "ImageQueue could not start",
   "startupFailure.message": "ImageQueue stopped before opening its main window. Its data was left unchanged. Check the session log, correct the startup problem, then start it again.",
+  "startupFailure.settingsFileMessage": "ImageQueue couldn’t use its settings file at {path} and left it unchanged. Check its permissions or move it aside, then start ImageQueue again.",
   "startupFailure.detailsLabel": "Startup failure details",
   "rendererFailure.title": "ImageQueue could not keep this window open.",
   "rendererFailure.message": "Reload the window to recover. Your saved sessions and generated images are unchanged.",

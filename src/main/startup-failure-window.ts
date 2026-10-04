@@ -2,20 +2,23 @@ import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
 import path from 'path'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
+  STARTUP_FAILURE_MESSAGE_CHANNEL,
   fitStartupFailureHeight,
   isStartupFailureMeasurement,
 } from '../shared/startup-failure'
 import { hardenWindow } from './utils/harden-window'
+import { handle } from './ipc-boundary'
 import { trackThemedWindow, windowBackground } from './theme'
 import { log, serializeError } from './logger'
 import { mainTranslator } from './i18n'
+import type { Message } from '../shared/i18n/translate'
 
 /**
  * Creates ImageQueue's app-authored fatal-startup surface without a native alert
- * icon. It shows only authored copy in the interface language; the diagnostic
- * stays in the log.
+ * icon. It shows only authored copy in the interface language, the message it
+ * is given; the diagnostic stays in the log.
  */
-export function createStartupFailureWindow(): BrowserWindow {
+export function createStartupFailureWindow(failureMessage: Message): BrowserWindow {
   const win = new BrowserWindow({
     title: mainTranslator().t('startupFailure.title'),
     width: 520,
@@ -65,6 +68,13 @@ export function createStartupFailureWindow(): BrowserWindow {
   }
   ipcMain.on(STARTUP_FAILURE_MEASUREMENT_CHANNEL, receiveMeasurement)
   win.once('closed', removeMeasurementOwner)
+
+  // Registered once: a process has one startup failure window, and closing it
+  // exits the app.
+  handle(STARTUP_FAILURE_MESSAGE_CHANNEL, (event) => {
+    if (event.sender !== win.webContents) throw new Error('Startup failure message requested by another window')
+    return failureMessage
+  })
 
   const handleLoadFailure = (error: unknown): void => {
     log('error', 'Failed to load the startup failure surface', { error: serializeError(error) })
