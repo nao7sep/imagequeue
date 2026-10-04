@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // download is replaced, by copying the fixture's bytes into the staging file
 // with a quarantine flag, as a browser download would carry.
 
-const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0) }))
+const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0) as Buffer }))
 
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../../src/main/dependencies/download', async (importOriginal) => ({
