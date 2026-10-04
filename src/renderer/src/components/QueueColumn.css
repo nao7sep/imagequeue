@@ -73,15 +73,20 @@
   gap: var(--space-2);
 }
 
+/* A long label wraps within at most half the row rather than squeezing the
+   control, which keeps a usable minimum (localization conventions). */
 .setting-row label {
   color: var(--text-secondary);
-  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow-wrap: anywhere;
 }
 
 .setting-row select,
 .setting-row input {
   flex: 1;
-  min-width: 0;
+  min-width: 88px;
   height: var(--control-sm);
   padding: 0 8px;
   border: 1px solid var(--field-border);
