@@ -47,7 +47,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
   it: [
     "nativeMenu.file", "nativeMenu.zoom", "settings.volume", "settings.audioFilter", "settings.timeout",
     "settings.endpoint", "volume.title", "shortcuts.app", "drawThings.negative", "conceptLibrary.facetCount", "option.auto",
-    "records.levelInfo", "records.levelDebug", "records.output",
+    "records.levelInfo", "records.levelDebug", "records.output", "settings.textAiBackend",
   ],
   "pt-BR": [
     "nativeMenu.zoom", "settings.tab.prompts", "settings.volume", "settings.endpoint", "menu.elaborationPrompts",
