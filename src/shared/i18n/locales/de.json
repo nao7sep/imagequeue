@@ -791,6 +791,7 @@
   "records.allKinds": "Alle Arten",
   "records.kindLog": "Protokollzeile",
   "records.kindAiCall": "KI-Aufruf",
+  "records.kindCliJob": "CLI-Auftrag",
   "records.level": "Stufe",
   "records.allLevels": "Alle Stufen",
   "records.levelAttention": "Benötigt Aufmerksamkeit",
@@ -815,5 +816,18 @@
   "records.details": "Details",
   "records.request": "Anfrage",
   "records.response": "Antwort",
-  "records.error": "Fehler"
+  "records.error": "Fehler",
+  "records.requested": "Angefordert",
+  "records.finished": "Ende",
+  "records.target": "Ziel",
+  "records.command": "Befehl",
+  "records.status": "Status",
+  "records.statusExited": "Beendet",
+  "records.statusKilled": "Gestoppt",
+  "records.exitCode": "Exit-Code",
+  "records.signal": "Signal",
+  "records.job": "Auftrag",
+  "records.arguments": "Argumente",
+  "records.output": "Ausgabe",
+  "records.errorOutput": "Fehlerausgabe"
 }

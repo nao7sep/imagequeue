@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
 import { spawn as spawnPty } from 'node-pty'
 import { log, serializeError } from './logger'
+import { startCliJobRecord, type CliJobRecord } from './records'
 import { cliJobStartFailurePresentation } from './failure-presentation'
 import { waitForAllSettledWithin } from './utils/bounded-wait'
 import {
@@ -52,6 +53,12 @@ interface JobState {
   cliPath: string
   args: string[]
   logContext: Record<string, unknown>
+  // The job's record in records.sqlite3: when its process started, and
+  // everything it wrote as received, kept whole until the record is written.
+  record: CliJobRecord
+  processStartedAt: string | null
+  stdoutReceived: string
+  stderrReceived: string
 }
 
 const jobs = new Map<string, JobState>()
@@ -89,6 +96,10 @@ export function startCliJob(opts: StartCliJobOpts): string {
     cliPath: opts.cliPath,
     args: opts.args,
     logContext: opts.logContext,
+    record: startCliJobRecord({ jobId, kind: opts.kind, target: opts.target, cliPath: opts.cliPath, args: opts.args }),
+    processStartedAt: null,
+    stdoutReceived: '',
+    stderrReceived: '',
   }
   jobs.set(jobId, state)
 
@@ -203,6 +214,7 @@ function launchNextImport(): void {
 //     into the log and fought with stdin; node-pty is the clean replacement.)
 // Do NOT "simplify" import onto the pipe path — it will break imports entirely.
 function launchJob(state: JobState): void {
+  state.processStartedAt = new Date().toISOString()
   if (state.kind === 'import') {
     launchImportJob(state)
     return
@@ -224,7 +236,7 @@ function launchPipeJob(state: JobState): void {
   if (!stdout || !stderr) {
     log('error', 'CLI job spawned without stdout/stderr pipes', { jobId: state.jobId, ...state.logContext })
     pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, null))
-    finalize(state, 'exited', null)
+    finalize(state, 'exited', null, null, new Error('CLI job spawned without stdout/stderr pipes'))
     return
   }
 
@@ -245,11 +257,11 @@ function launchPipeJob(state: JobState): void {
   child.on('error', (err) => {
     log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
     pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, err))
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
+    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null, null, err)
   })
 
-  child.on('close', (code) => {
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', code)
+  child.on('close', (code, signal) => {
+    finalize(state, state.status === 'killed' ? 'killed' : 'exited', code, signal)
   })
 
   if (state.kind === 'download') {
@@ -301,10 +313,10 @@ function launchImportJob(state: JobState): void {
     dataSubscription = ptyProcess.onData((chunk) => {
       onData(state, 'stdout', chunk)
     })
-    exitSubscription = ptyProcess.onExit(({ exitCode }) => {
+    exitSubscription = ptyProcess.onExit(({ exitCode, signal }) => {
       dataSubscription?.dispose()
       exitSubscription?.dispose()
-      finalize(state, state.status === 'killed' ? 'killed' : 'exited', exitCode)
+      finalize(state, state.status === 'killed' ? 'killed' : 'exited', exitCode, signal === undefined ? null : String(signal))
     })
 
     emitStatus(state)
@@ -318,18 +330,21 @@ function launchImportJob(state: JobState): void {
   } catch (err) {
     log('error', 'CLI PTY spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
     pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, err))
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null)
+    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null, null, err)
   }
 }
 
 function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string): void {
   if (kind === 'stdout') {
+    state.stdoutReceived += chunk
     state.lastStdoutMs = Date.now()
     if (state.status === 'stalled') {
       state.status = 'running'
       state.stalled = false
       emitStatus(state)
     }
+  } else {
+    state.stderrReceived += chunk
   }
 
   const fragmentField = kind === 'stdout' ? 'stdoutFragment' : 'stderrFragment'
@@ -428,7 +443,13 @@ function removeSubscriber(state: JobState, wc: WebContents): void {
   }
 }
 
-function finalize(state: JobState, status: 'exited' | 'killed', code: number | null): void {
+function finalize(
+  state: JobState,
+  status: 'exited' | 'killed',
+  code: number | null,
+  signal: string | null = null,
+  error?: unknown,
+): void {
   if (state.finalized) return
   state.finalized = true
 
@@ -457,6 +478,18 @@ function finalize(state: JobState, status: 'exited' | 'killed', code: number | n
 
   emitStatus(state)
   log('info', 'CLI job finished', { jobId: state.jobId, status, exitCode: code })
+  state.record.finish({
+    startedAt: state.processStartedAt,
+    status,
+    exitCode: code,
+    signal,
+    stdout: state.stdoutReceived,
+    stderr: state.stderrReceived,
+    error,
+  })
+  // The record holds the output now; the toast keeps its own lines.
+  state.stdoutReceived = ''
+  state.stderrReceived = ''
 
   if (state.subscribers.size === 0) {
     scheduleRetentionTimer(state, CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS)

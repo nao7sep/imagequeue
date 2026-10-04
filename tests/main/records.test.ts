@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
-import { closeRecords, fetchRecorded, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, writeLogRecord } from '../../src/main/records'
+import { closeRecords, fetchRecorded, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
 import { freshRecordsRoot, readLog, readRows, removeRecordsRoots } from './records-fixture'
 
 afterAll(() => {
@@ -98,6 +98,56 @@ describe('AI call records', () => {
     record.finish({ exitCode: 0 })
     expect(readRows(dir, 'ai_calls')).toHaveLength(1)
     expect(readLog(dir)).toHaveLength(0)
+  })
+})
+
+describe('CLI job records', () => {
+  const job = {
+    jobId: 'job-1', kind: 'download', target: 'model.ckpt', cliPath: '/bin/draw-things-cli',
+    args: ['models', 'ensure', '--model', 'model.ckpt'],
+  }
+
+  it('hold the command, the session when it was asked for, how it ended and its output as received', () => {
+    const dir = freshRecordsRoot()
+    setRecordsSession('s1')
+    const record = startCliJobRecord(job)
+    setRecordsSession('s2')
+    record.finish({
+      startedAt: '2026-01-01T00:00:01.000Z', status: 'exited', exitCode: 0, signal: null,
+      stdout: '10%\r100%\r\nDone\n', stderr: '',
+    })
+    record.finish({ startedAt: null, status: 'killed', exitCode: null, signal: 'SIGTERM', stdout: '', stderr: '' })
+
+    const rows = readRows(dir, 'cli_jobs')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      session_id: 's1', job_id: 'job-1', job_kind: 'download', target: 'model.ckpt', cli_path: '/bin/draw-things-cli',
+      started_at: '2026-01-01T00:00:01.000Z', status: 'exited', exit_code: 0, signal: null,
+      stdout: '10%\r100%\r\nDone\n', stderr: '', error: null,
+    })
+    expect(JSON.parse(rows[0]!.args as string)).toEqual(job.args)
+    expect(rows[0]!.ended_at).toEqual(expect.stringMatching(/Z$/))
+  })
+
+  it('keep the error the process runner reported', () => {
+    const dir = freshRecordsRoot()
+    startCliJobRecord(job).finish({
+      startedAt: '2026-01-01T00:00:01.000Z', status: 'exited', exitCode: null, signal: null, stdout: '', stderr: '',
+      error: Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }),
+    })
+    expect(JSON.parse(readRows(dir, 'cli_jobs')[0]!.error as string)).toMatchObject({ message: 'spawn ENOENT', code: 'ENOENT' })
+  })
+
+  it('fall back with their arguments inline when the write fails', () => {
+    const dir = freshRecordsRoot()
+    const other = new DatabaseSync(path.join(dir, 'records.sqlite3'))
+    other.exec('DROP TABLE cli_jobs')
+    other.close()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    startCliJobRecord(job).finish({ startedAt: null, status: 'killed', exitCode: null, signal: null, stdout: 'out', stderr: '' })
+    consoleError.mockRestore()
+
+    expect(fallbackLines(dir).at(-1)).toMatchObject({ table: 'cli_jobs', job_id: 'job-1', args: job.args, stdout: 'out' })
   })
 })
 

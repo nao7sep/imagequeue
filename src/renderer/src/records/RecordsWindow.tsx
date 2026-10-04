@@ -26,12 +26,14 @@ import { useI18n } from '../i18n/I18nContext'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 import { sessionDisplayName } from '../utils/sessionName'
 import {
+  CLI_JOB_STATUS_LABELS,
   KIND_LABELS,
   LEVEL_FILTER_LABELS,
   LEVEL_LABELS,
   cursorAfter,
   jsonBlockText,
   mergeNewestPage,
+  outputBlockText,
   recordKey,
 } from './record-format'
 import './RecordsWindow.css'
@@ -441,9 +443,9 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
                     <div className="records-row-meta">
                       <span>{timeFormat.format(new Date(record.time))}</span>
                       <LevelPill level={record.level} />
-                      {record.kind === 'ai-call' ? <span className="records-pill">{t(KIND_LABELS[record.kind])}</span> : null}
+                      {record.kind !== 'log' ? <span className="records-pill">{t(KIND_LABELS[record.kind])}</span> : null}
                     </div>
-                    <div className={`records-row-title${record.kind === 'ai-call' ? ' records-code' : ''}`}>{record.title}</div>
+                    <div className={`records-row-title${record.kind !== 'log' ? ' records-code' : ''}`}>{record.title}</div>
                     {record.text ? <div className="records-row-text">{record.text}</div> : null}
                   </div>
                 )
@@ -542,7 +544,8 @@ function RecordDetailView({
     [locale],
   )
   const time = (value: string): string => timeFormat.format(new Date(value))
-  const level: RecordLevel = record.kind === 'log' ? record.level : record.error === null ? 'info' : 'error'
+  const code = (value: string): ReactNode => <code className="records-code">{value}</code>
+  const level: RecordLevel = record.kind === 'ai-call' ? (record.error === null ? 'info' : 'error') : record.level
 
   const fields: { label: string; value: ReactNode }[] = []
   const add = (label: string, value: ReactNode | null): void => {
@@ -550,15 +553,32 @@ function RecordDetailView({
   }
   if (record.kind === 'log') {
     add(t('records.time'), time(record.time))
-  } else {
+  } else if (record.kind === 'ai-call') {
     add(t('records.started'), time(record.time))
     add(t('records.duration'), seconds.format(record.durationMs / 1000))
-    add(t('records.backend'), <code className="records-code">{record.backend}</code>)
-    add(t('records.model'), <code className="records-code">{record.model}</code>)
-    add(t('records.purpose'), <code className="records-code">{record.purpose}</code>)
+    add(t('records.backend'), code(record.backend))
+    add(t('records.model'), code(record.model))
+    add(t('records.purpose'), code(record.purpose))
+  } else {
+    const statusLabel = CLI_JOB_STATUS_LABELS[record.status]
+    add(t('records.requested'), time(record.time))
+    add(t('records.started'), record.startedAt === null ? null : time(record.startedAt))
+    add(t('records.finished'), time(record.endedAt))
+    add(
+      t('records.duration'),
+      record.startedAt === null ? null : seconds.format((Date.parse(record.endedAt) - Date.parse(record.startedAt)) / 1000),
+    )
+    add(t('records.target'), code(record.target))
+    add(t('records.command'), code(record.cliPath))
+    add(t('records.status'), statusLabel === undefined ? code(record.status) : t(statusLabel))
+    add(t('records.exitCode'), record.exitCode === null ? null : code(String(record.exitCode)))
+    add(t('records.signal'), record.signal === null ? null : code(record.signal))
+    add(t('records.job'), code(record.jobId))
   }
-  add(t('records.task'), record.taskId === null ? null : <code className="records-code">{record.taskId}</code>)
-  add(t('records.elaboration'), record.requestId === null ? null : <code className="records-code">{record.requestId}</code>)
+  if (record.kind !== 'cli-job') {
+    add(t('records.task'), record.taskId === null ? null : code(record.taskId))
+    add(t('records.elaboration'), record.requestId === null ? null : code(record.requestId))
+  }
   add(t('records.session'), record.sessionId === null ? null : sessionLabel(record.sessionId))
   add(t('records.launch'), launchLabel(record.launch))
 
@@ -569,9 +589,14 @@ function RecordDetailView({
   }
   if (record.kind === 'log') {
     addBlock(t('records.details'), jsonBlockText(record.fields))
-  } else {
+  } else if (record.kind === 'ai-call') {
     addBlock(t('records.request'), jsonBlockText(record.request))
     addBlock(t('records.response'), jsonBlockText(record.response))
+    addBlock(t('records.error'), jsonBlockText(record.error))
+  } else {
+    addBlock(t('records.arguments'), jsonBlockText(record.args))
+    addBlock(t('records.output'), outputBlockText(record.stdout))
+    addBlock(t('records.errorOutput'), outputBlockText(record.stderr))
     addBlock(t('records.error'), jsonBlockText(record.error))
   }
 
@@ -579,7 +604,7 @@ function RecordDetailView({
     <>
       <div className="records-detail-header">
         <h2 className="records-detail-title">
-          {record.kind === 'log' ? record.message : `${record.backend} ${record.purpose}`}
+          {record.kind === 'log' ? record.message : record.kind === 'ai-call' ? `${record.backend} ${record.purpose}` : record.title}
         </h2>
         <div className="records-detail-pills">
           <LevelPill level={level} />

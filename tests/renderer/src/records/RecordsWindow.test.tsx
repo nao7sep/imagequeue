@@ -36,6 +36,16 @@ const lineDetail: RecordDetail = {
   kind: 'log', id: 9, time: '2026-10-02T08:00:30.000Z', launch: LAUNCH, sessionId: SESSION, taskId: 'task-7',
   requestId: null, level: 'warn', message: 'Generation failed', fields: JSON.stringify({ backend: 'flux', status: 429 }),
 }
+const job: RecordSummary = {
+  kind: 'cli-job', id: 2, time: '2026-10-02T08:00:10.000Z', level: 'warn', title: 'draw-things-cli download', text: 'flux.ckpt',
+}
+const jobDetail: RecordDetail = {
+  kind: 'cli-job', id: 2, time: '2026-10-02T08:00:10.000Z', launch: LAUNCH, sessionId: SESSION, level: 'warn',
+  title: 'draw-things-cli download', jobId: 'job-abc', jobKind: 'download', target: 'flux.ckpt',
+  cliPath: '/Users/someone/.imagequeue/bin/draw-things-cli', args: JSON.stringify(['models', 'ensure', '--model', 'flux.ckpt']),
+  startedAt: '2026-10-02T08:00:10.000Z', endedAt: '2026-10-02T08:00:14.500Z', status: 'killed', exitCode: null,
+  signal: 'SIGTERM', stdout: 'Downloading 10%\rDownloading 40%\r', stderr: '\n', error: null,
+}
 const newer: RecordSummary = {
   kind: 'log', id: 12, time: '2026-10-02T08:02:00.000Z', level: 'info', title: 'Arrived while open', text: null,
 }
@@ -223,6 +233,40 @@ describe('RecordsWindow', () => {
     expect(document.querySelector('.records-detail-body')!.textContent).toContain('gemini-x')
   })
 
+  it('shows everything a selected CLI job holds, its output as the terminal left it', async () => {
+    readRecordsPage.mockResolvedValue({ records: [job], more: false })
+    readRecordDetail.mockResolvedValue(jobDetail)
+    await mount()
+    const row = options()[0]!
+    expect(row.querySelector('.records-pill:not(.records-pill--warn)')?.textContent).toBe('CLI job')
+    expect(row.querySelector('.records-row-title')?.textContent).toBe('draw-things-cli download')
+    expect(row.querySelector('.records-row-text')?.textContent).toBe('flux.ckpt')
+
+    await act(async () => row.click())
+
+    expect(readRecordDetail).toHaveBeenCalledWith('cli-job', 2)
+    expect(document.querySelector('.records-detail-title')?.textContent).toBe('draw-things-cli download')
+    const fields = Object.fromEntries(Array.from(document.querySelectorAll('.records-meta > div')).map((field) => [
+      field.querySelector('dt')?.textContent, field.querySelector('dd')?.textContent,
+    ]))
+    expect(fields).toMatchObject({
+      Target: 'flux.ckpt', Command: '/Users/someone/.imagequeue/bin/draw-things-cli', Status: 'Stopped', Signal: 'SIGTERM',
+      Job: 'job-abc', Session: '20261002-080000 (current session)',
+    })
+    expect(fields['Duration']).toContain('4.5')
+    expect(Object.keys(fields)).toEqual(expect.arrayContaining(['Requested', 'Started', 'Finished']))
+    expect(Object.keys(fields)).not.toContain('Exit code')
+    expect(Object.keys(fields)).not.toContain('Task')
+    const blocks = Array.from(document.querySelectorAll('.records-block')).map((block) => [
+      block.querySelector('h3')?.textContent,
+      block.querySelector('pre')?.textContent,
+    ])
+    expect(blocks).toEqual([
+      ['Arguments', JSON.stringify(['models', 'ensure', '--model', 'flux.ckpt'], null, 2)],
+      ['Output', 'Downloading 40%'],
+    ])
+  })
+
   it('moves the selection with the arrow keys', async () => {
     await mount()
     await act(async () => options()[0]!.focus())
@@ -244,7 +288,7 @@ describe('RecordsWindow', () => {
     expect(Array.from(selects[1]!.options).map((option) => option.textContent)).toEqual([
       'All sessions', '20261002-080000 (current session)', '20261001-080000',
     ])
-    expect(Array.from(selects[2]!.options).map((option) => option.textContent)).toEqual(['All kinds', 'Log line', 'AI call'])
+    expect(Array.from(selects[2]!.options).map((option) => option.textContent)).toEqual(['All kinds', 'Log line', 'AI call', 'CLI job'])
 
     const choose = async (select: HTMLSelectElement, value: string) => {
       await act(async () => {

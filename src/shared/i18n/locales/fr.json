@@ -813,6 +813,7 @@
   "records.allKinds": "Tous les types",
   "records.kindLog": "Ligne de journal",
   "records.kindAiCall": "Appel à l’IA",
+  "records.kindCliJob": "Opération de la CLI",
   "records.level": "Niveau",
   "records.allLevels": "Tous les niveaux",
   "records.levelAttention": "Attention requise",
@@ -837,5 +838,18 @@
   "records.details": "Détails",
   "records.request": "Requête",
   "records.response": "Réponse",
-  "records.error": "Erreur"
+  "records.error": "Erreur",
+  "records.requested": "Demandé",
+  "records.finished": "Fin",
+  "records.target": "Cible",
+  "records.command": "Commande",
+  "records.status": "Statut",
+  "records.statusExited": "Terminé",
+  "records.statusKilled": "Arrêté",
+  "records.exitCode": "Code de sortie",
+  "records.signal": "Signal",
+  "records.job": "Opération",
+  "records.arguments": "Arguments",
+  "records.output": "Sortie",
+  "records.errorOutput": "Sortie d’erreur"
 }

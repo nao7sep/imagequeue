@@ -2,11 +2,11 @@
 // summaries, newest first, and one record whole. JSON columns arrive as the
 // text the database holds; the window decides how to show them.
 
-export type RecordKind = 'log' | 'ai-call'
+export type RecordKind = 'log' | 'ai-call' | 'cli-job'
 
 export type RecordLevel = 'debug' | 'info' | 'warn' | 'error'
 
-export const RECORD_KINDS: readonly RecordKind[] = ['log', 'ai-call']
+export const RECORD_KINDS: readonly RecordKind[] = ['log', 'ai-call', 'cli-job']
 
 export const RECORD_LEVELS: readonly RecordLevel[] = ['error', 'warn', 'info', 'debug']
 
@@ -31,7 +31,9 @@ export interface RecordsQuery {
   // An imagequeue session, by its id.
   session: string | null
   kind: RecordKind | null
-  // An AI call reads as `error` when it failed and `info` otherwise.
+  // An AI call reads as `error` when it failed and `info` otherwise; a CLI job
+  // as `info` when it exited with 0, `warn` when it was stopped, and `error`
+  // otherwise.
   level: RecordLevelFilter | null
   search: string
   after: RecordCursor | null
@@ -42,9 +44,10 @@ export interface RecordSummary {
   id: number
   time: string
   level: RecordLevel
-  // A log line's message, or an AI call's backend and purpose.
+  // A log line's message, an AI call's backend and purpose, or the CLI and a
+  // CLI job's kind.
   title: string
-  // An AI call's model; a log line has none.
+  // An AI call's model or a CLI job's target; a log line has none.
   text: string | null
 }
 
@@ -83,7 +86,31 @@ export interface AiCallRecordDetail {
   error: string | null
 }
 
-export type RecordDetail = LogRecordDetail | AiCallRecordDetail
+export interface CliJobRecordDetail {
+  kind: 'cli-job'
+  id: number
+  time: string
+  launch: string
+  sessionId: string | null
+  // Read from the stored facts, as the summary reads them.
+  level: RecordLevel
+  title: string
+  jobId: string
+  jobKind: string
+  target: string
+  cliPath: string
+  args: string
+  startedAt: string | null
+  endedAt: string
+  status: string
+  exitCode: number | null
+  signal: string | null
+  stdout: string
+  stderr: string
+  error: string | null
+}
+
+export type RecordDetail = LogRecordDetail | AiCallRecordDetail | CliJobRecordDetail
 
 // What the Records window asks of the database.
 export type RecordsRead =

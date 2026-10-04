@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
-import { currentRecordsContext, setRecordsSession, startAiCall, writeLogRecord } from '../../src/main/records'
+import { currentRecordsContext, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
 import { readDetail, readPage, readSources, runRecordsRead } from '../../src/main/records-query'
 import { RECORDS_PAGE_SIZE, type RecordsQuery } from '../../src/shared/records'
 import { freshRecordsRoot, removeRecordsRoots } from './records-fixture'
@@ -37,6 +37,20 @@ function seed(): string {
   failed.fail(new Error('quota'))
   writeLogRecord('2026-01-02T00:00:03.000Z', 'error', 'Generation failed', { taskId: 't1' })
   writeEarlierLaunch(dir, '2026-01-01T00:00:05.000Z', 'Earlier launch')
+  return dir
+}
+
+// One CLI job of each ending: exited with 0, stopped, and exited with 1.
+function seedJobs(): string {
+  const dir = freshRecordsRoot()
+  setRecordsSession('20260103-000000-000-utc')
+  const job = (jobId: string, target: string) =>
+    startCliJobRecord({ jobId, kind: 'download', target, cliPath: '/bin/draw-things-cli', args: ['models', 'ensure', '--model', target] })
+  const end = { startedAt: '2026-01-03T00:00:00.000Z', signal: null, stderr: '' }
+  job('j-ok', 'ok.ckpt').finish({ ...end, status: 'exited', exitCode: 0, stdout: 'Downloaded 100%\n' })
+  job('j-stopped', 'stopped.ckpt').finish({ ...end, status: 'killed', exitCode: null, signal: 'SIGTERM', stdout: '' })
+  job('j-failed', 'failed.ckpt').finish({ ...end, status: 'exited', exitCode: 1, stdout: '', stderr: 'checksum mismatch\n' })
+  writeLogRecord('2026-01-03T00:00:01.000Z', 'info', 'CLI job finished', { jobId: 'j-ok' })
   return dir
 }
 
@@ -91,6 +105,48 @@ describe('records page', () => {
     expect(second.more).toBe(false)
     const ids = [...first.records, ...second.records].map((record) => record.id)
     expect(new Set(ids).size).toBe(RECORDS_PAGE_SIZE + 5)
+    db.close()
+  })
+})
+
+describe('CLI job records', () => {
+  it('list as the CLI and the job kind with the target, reading their level from how they ended', () => {
+    const db = open(seedJobs())
+    const jobs = readPage(db, query({ kind: 'cli-job' })).records
+    expect(jobs.map(({ kind, level, title, text }) => ({ kind, level, title, text })).sort((a, b) => a.text!.localeCompare(b.text!))).toEqual([
+      { kind: 'cli-job', level: 'error', title: 'draw-things-cli download', text: 'failed.ckpt' },
+      { kind: 'cli-job', level: 'info', title: 'draw-things-cli download', text: 'ok.ckpt' },
+      { kind: 'cli-job', level: 'warn', title: 'draw-things-cli download', text: 'stopped.ckpt' },
+    ])
+    db.close()
+  })
+
+  it('filter by kind, level and search, reaching their output and job id', () => {
+    const db = open(seedJobs())
+    const texts = (overrides: Partial<RecordsQuery>) => readPage(db, query(overrides)).records.map((record) => record.text ?? record.title).sort()
+    expect(texts({})).toEqual(['CLI job finished', 'failed.ckpt', 'ok.ckpt', 'stopped.ckpt'])
+    expect(texts({ kind: 'log' })).toEqual(['CLI job finished'])
+    expect(texts({ kind: 'ai-call' })).toEqual([])
+    expect(texts({ level: 'attention' })).toEqual(['failed.ckpt', 'stopped.ckpt'])
+    expect(texts({ search: 'checksum' })).toEqual(['failed.ckpt'])
+    expect(texts({ kind: 'cli-job', search: 'j-ok' })).toEqual(['ok.ckpt'])
+    expect(texts({ session: '20260103-000000-000-utc', kind: 'cli-job' })).toHaveLength(3)
+    db.close()
+  })
+
+  it('name their launch and session among the sources, and read whole', () => {
+    const db = open(seedJobs())
+    expect(readSources(db).sessions).toEqual(['20260103-000000-000-utc'])
+    const [failed] = readPage(db, query({ kind: 'cli-job', level: 'error' })).records
+    const detail = readDetail(db, 'cli-job', failed!.id)
+    expect(detail).toMatchObject({
+      kind: 'cli-job', level: 'error', title: 'draw-things-cli download', sessionId: '20260103-000000-000-utc',
+      launch: currentRecordsContext().launch, jobId: 'j-failed', jobKind: 'download', target: 'failed.ckpt',
+      cliPath: '/bin/draw-things-cli', startedAt: '2026-01-03T00:00:00.000Z', status: 'exited', exitCode: 1,
+      signal: null, stdout: '', stderr: 'checksum mismatch\n', error: null,
+    })
+    expect(JSON.parse((detail as { args: string }).args)).toEqual(['models', 'ensure', '--model', 'failed.ckpt'])
+    expect(readDetail(db, 'cli-job', 99_999)).toBeNull()
     db.close()
   })
 })

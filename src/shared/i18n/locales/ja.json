@@ -769,6 +769,7 @@
   "records.allKinds": "すべての種類",
   "records.kindLog": "ログ行",
   "records.kindAiCall": "AI呼び出し",
+  "records.kindCliJob": "CLIジョブ",
   "records.level": "レベル",
   "records.allLevels": "すべてのレベル",
   "records.levelAttention": "要対応",
@@ -793,5 +794,18 @@
   "records.details": "詳細",
   "records.request": "リクエスト",
   "records.response": "レスポンス",
-  "records.error": "エラー"
+  "records.error": "エラー",
+  "records.requested": "受付",
+  "records.finished": "終了",
+  "records.target": "対象",
+  "records.command": "コマンド",
+  "records.status": "状態",
+  "records.statusExited": "自然終了",
+  "records.statusKilled": "停止",
+  "records.exitCode": "終了コード",
+  "records.signal": "シグナル",
+  "records.job": "ジョブ",
+  "records.arguments": "引数",
+  "records.output": "出力",
+  "records.errorOutput": "エラー出力"
 }

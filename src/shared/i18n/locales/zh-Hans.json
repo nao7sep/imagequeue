@@ -769,6 +769,7 @@
   "records.allKinds": "所有类型",
   "records.kindLog": "日志行",
   "records.kindAiCall": "AI 调用",
+  "records.kindCliJob": "CLI 作业",
   "records.level": "级别",
   "records.allLevels": "所有级别",
   "records.levelAttention": "需要关注",
@@ -793,5 +794,18 @@
   "records.details": "详情",
   "records.request": "请求",
   "records.response": "响应",
-  "records.error": "错误"
+  "records.error": "错误",
+  "records.requested": "提交",
+  "records.finished": "结束",
+  "records.target": "目标",
+  "records.command": "命令",
+  "records.status": "状态",
+  "records.statusExited": "已退出",
+  "records.statusKilled": "已停止",
+  "records.exitCode": "退出码",
+  "records.signal": "信号",
+  "records.job": "作业",
+  "records.arguments": "参数",
+  "records.output": "输出",
+  "records.errorOutput": "错误输出"
 }

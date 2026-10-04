@@ -835,6 +835,7 @@
   "records.allKinds": "Все типы",
   "records.kindLog": "Строка журнала",
   "records.kindAiCall": "Вызов ИИ",
+  "records.kindCliJob": "Задание CLI",
   "records.level": "Уровень",
   "records.allLevels": "Все уровни",
   "records.levelAttention": "Требует внимания",
@@ -859,5 +860,18 @@
   "records.details": "Подробности",
   "records.request": "Запрос",
   "records.response": "Ответ",
-  "records.error": "Ошибка"
+  "records.error": "Ошибка",
+  "records.requested": "Запрошено",
+  "records.finished": "Окончание",
+  "records.target": "Цель",
+  "records.command": "Команда",
+  "records.status": "Статус",
+  "records.statusExited": "Завершено",
+  "records.statusKilled": "Остановлено",
+  "records.exitCode": "Код выхода",
+  "records.signal": "Сигнал",
+  "records.job": "Задание",
+  "records.arguments": "Аргументы",
+  "records.output": "Вывод",
+  "records.errorOutput": "Вывод ошибок"
 }

@@ -791,6 +791,7 @@
   "records.allKinds": "All kinds",
   "records.kindLog": "Log line",
   "records.kindAiCall": "AI call",
+  "records.kindCliJob": "CLI job",
   "records.level": "Level",
   "records.allLevels": "All levels",
   "records.levelAttention": "Needs attention",
@@ -815,5 +816,18 @@
   "records.details": "Details",
   "records.request": "Request",
   "records.response": "Response",
-  "records.error": "Error"
+  "records.error": "Error",
+  "records.requested": "Requested",
+  "records.finished": "Finished",
+  "records.target": "Target",
+  "records.command": "Command",
+  "records.status": "Status",
+  "records.statusExited": "Exited",
+  "records.statusKilled": "Stopped",
+  "records.exitCode": "Exit code",
+  "records.signal": "Signal",
+  "records.job": "Job",
+  "records.arguments": "Arguments",
+  "records.output": "Output",
+  "records.errorOutput": "Error output"
 }

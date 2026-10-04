@@ -9,7 +9,8 @@ import { utcStampForFilename } from '../shared/utc-stamp'
 // process. Every row carries `time`; `launch`, this process launch by its start time
 // (the conventions' session); `session_id`, the imagequeue session open at the time,
 // null before one opens; and the domain ids it belongs to, `task_id` (a queued image)
-// and `request_id` (an elaboration run). Nothing here deletes a row.
+// and `request_id` (an elaboration run), or a Draw Things CLI job's `job_id`.
+// Nothing here deletes a row.
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS log_records (
@@ -40,9 +41,29 @@ CREATE TABLE IF NOT EXISTS ai_calls (
   error       TEXT            -- JSON: the failure, null on success
 );
 CREATE INDEX IF NOT EXISTS ai_calls_session ON ai_calls (session_id);
+CREATE TABLE IF NOT EXISTS cli_jobs (
+  id         INTEGER PRIMARY KEY,
+  time       TEXT NOT NULL,  -- when the job was asked for
+  launch     TEXT NOT NULL,
+  session_id TEXT,
+  job_id     TEXT NOT NULL,  -- as the job's log lines carry it
+  job_kind   TEXT NOT NULL,  -- import or download
+  target     TEXT NOT NULL,
+  cli_path   TEXT NOT NULL,
+  args       TEXT NOT NULL,  -- JSON array: the arguments as passed
+  started_at TEXT,           -- when the process was started; null when it never was
+  ended_at   TEXT NOT NULL,
+  status     TEXT NOT NULL,  -- exited, or killed when stopped
+  exit_code  INTEGER,
+  signal     TEXT,           -- as the process runner reported it
+  stdout     TEXT NOT NULL,  -- as received, whole
+  stderr     TEXT NOT NULL,
+  error      TEXT            -- JSON: the error the process runner reported, null when none
+);
+CREATE INDEX IF NOT EXISTS cli_jobs_session ON cli_jobs (session_id);
 `
 
-type Table = 'log_records' | 'ai_calls'
+type Table = 'log_records' | 'ai_calls' | 'cli_jobs'
 type Row = Record<string, string | number | null>
 
 const launchStarted = new Date()
@@ -71,6 +92,7 @@ export function openRecords(dataDir: string): string {
     inserts = {
       log_records: insertStatement(opened, 'log_records', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'level', 'message', 'fields']),
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),
+      cli_jobs: insertStatement(opened, 'cli_jobs', ['time', 'launch', 'session_id', 'job_id', 'job_kind', 'target', 'cli_path', 'args', 'started_at', 'ended_at', 'status', 'exit_code', 'signal', 'stdout', 'stderr', 'error']),
     }
     db = opened
     databaseFile = file
@@ -122,7 +144,7 @@ function json(value: unknown): string {
   }
 }
 
-const JSON_COLUMNS: ReadonlySet<string> = new Set(['fields', 'request', 'response', 'error'])
+const JSON_COLUMNS: ReadonlySet<string> = new Set(['fields', 'request', 'response', 'error', 'args'])
 
 // A failed write keeps the entry in the launch's plain text file, then the console,
 // as one JSON line with its JSON columns inline.
@@ -257,4 +279,50 @@ export async function fetchRecorded(
     }
     return { status: response.status, headers: Object.fromEntries(response.headers), body }
   })
+}
+
+/** What a Draw Things CLI job was asked to run. */
+export interface CliJobStart {
+  jobId: string
+  kind: string
+  target: string
+  cliPath: string
+  args: readonly string[]
+}
+
+/** How a CLI job ended, and everything it wrote. */
+export interface CliJobEnd {
+  startedAt: string | null
+  status: string
+  exitCode: number | null
+  signal: string | null
+  stdout: string
+  stderr: string
+  // The error the process runner reported, such as a failed spawn; undefined when none.
+  error?: unknown
+}
+
+export interface CliJobRecord {
+  finish(end: CliJobEnd): void
+}
+
+/** Starts one CLI job's record when the job is asked for; the record is written
+ *  once, when the job first finishes. */
+export function startCliJobRecord(job: CliJobStart): CliJobRecord {
+  const base = {
+    time: new Date().toISOString(), launch, session_id: activeSessionId,
+    job_id: job.jobId, job_kind: job.kind, target: job.target, cli_path: job.cliPath, args: json(job.args),
+  }
+  let written = false
+  return {
+    finish: (end) => {
+      if (written) return
+      written = true
+      write('cli_jobs', {
+        ...base, started_at: end.startedAt, ended_at: new Date().toISOString(), status: end.status,
+        exit_code: end.exitCode, signal: end.signal, stdout: end.stdout, stderr: end.stderr,
+        error: end.error === undefined ? null : json(serializeError(end.error)),
+      })
+    },
+  }
 }

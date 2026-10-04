@@ -28,9 +28,31 @@ export function jsonBlockText(text: string | null): string | null {
   return isEmptyValue(value) ? null : JSON.stringify(value, null, 2)
 }
 
+// A CLI job's output, stored as received, as a terminal would have left it:
+// escape sequences dropped and each line as its last carriage return left it,
+// so a progress line shows its final state. Null when only whitespace remains.
+export function outputBlockText(received: string): string | null {
+  const text = received
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.split('\r').filter((part) => part !== '').at(-1) ?? '')
+    .join('\n')
+    .trimEnd()
+  return text.trim() === '' ? null : text
+}
+
 export const KIND_LABELS: Record<RecordKind, MessageKey> = {
   log: 'records.kindLog',
   'ai-call': 'records.kindAiCall',
+  'cli-job': 'records.kindCliJob',
+}
+
+// A CLI job's stored status, as the detail names it.
+export const CLI_JOB_STATUS_LABELS: Partial<Record<string, MessageKey>> = {
+  exited: 'records.statusExited',
+  killed: 'records.statusKilled',
 }
 
 export const LEVEL_LABELS: Record<RecordLevel, MessageKey> = {

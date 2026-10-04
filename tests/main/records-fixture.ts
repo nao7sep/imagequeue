@@ -19,7 +19,7 @@ export function removeRecordsRoots(): void {
   for (const dir of createdDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true })
 }
 
-export function readRows(dir: string, table: 'log_records' | 'ai_calls'): Record<string, unknown>[] {
+export function readRows(dir: string, table: 'log_records' | 'ai_calls' | 'cli_jobs'): Record<string, unknown>[] {
   const db = new DatabaseSync(path.join(dir, 'records.sqlite3'), { readOnly: true })
   try {
     return db.prepare(`SELECT * FROM ${table} ORDER BY id`).all() as Record<string, unknown>[]

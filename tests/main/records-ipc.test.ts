@@ -35,6 +35,7 @@ describe('records IPC validation', () => {
       expect(() => assertRecordsQuery(bad), JSON.stringify(bad)).toThrow(/Invalid IPC parameter/)
     }
     expect(() => assertRecordKind('log')).not.toThrow()
+    expect(() => assertRecordKind('cli-job')).not.toThrow()
     expect(() => assertRecordKind('card')).toThrow(/Invalid IPC parameter/)
   })
 })

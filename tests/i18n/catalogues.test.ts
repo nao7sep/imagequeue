@@ -30,7 +30,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
     "settings.languageSystem", "settings.themeSystem", "settings.audioFilter",
     "option.transparent", "backend.moderation", "backend.format", "backend.guidance", "backend.seed",
     "task.param.outputFormat", "menu.elaborationPrompts", "shortcuts.app", "elabSettings.formatPart", "elaborators.name",
-    "option.auto", "records.levelInfo", "records.levelDebug", "records.backend", "records.details",
+    "option.auto", "records.levelInfo", "records.levelDebug", "records.backend", "records.details", "records.status", "records.signal",
   ],
   es: [
     "nativeMenu.zoom", "settings.tab.general", "settings.tab.prompts", "settings.audioFilter", "settings.endpoint",
@@ -42,16 +42,16 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
     "settings.volume", "settings.audioFilter", "option.opaque", "option.transparent", "menu.sessions",
     "menu.elaborationPrompts", "shortcuts.app", "details.prompt", "elaborator.kind.composition", "elaborator.kind.style",
     "promptLength.long", "advanced.prompt", "conceptLibrary.conceptCount", "option.auto", "backend.format", "toasts.region",
-    "task.param.outputFormat", "records.session",
+    "task.param.outputFormat", "records.session", "records.signal", "records.arguments",
   ],
   it: [
     "nativeMenu.file", "nativeMenu.zoom", "settings.volume", "settings.audioFilter", "settings.timeout",
     "settings.endpoint", "volume.title", "shortcuts.app", "drawThings.negative", "conceptLibrary.facetCount", "option.auto",
-    "records.levelInfo", "records.levelDebug",
+    "records.levelInfo", "records.levelDebug", "records.output",
   ],
   "pt-BR": [
     "nativeMenu.zoom", "settings.tab.prompts", "settings.volume", "settings.endpoint", "menu.elaborationPrompts",
-    "volume.title", "shortcuts.app", "drawThings.negative", "option.auto", "elabSettings.templates",
+    "volume.title", "shortcuts.app", "drawThings.negative", "option.auto", "elabSettings.templates", "records.status",
   ],
   ja: ["dependencies.cliTitle"],
   ko: ["dependencies.cliTitle"],
