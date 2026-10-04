@@ -192,14 +192,18 @@ html:has(.records-shell) body {
   padding: var(--space-4);
 }
 
+/* Each field takes the width its value needs, at least 180px, and a value wraps only
+   when the pane cannot fit it on one line. */
 .records-meta {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3) var(--space-4);
 }
 
-.records-meta div {
-  min-width: 0;
+.records-meta > div {
+  flex: 0 1 auto;
+  min-width: 180px;
+  max-width: 100%;
 }
 
 .records-meta dt {
