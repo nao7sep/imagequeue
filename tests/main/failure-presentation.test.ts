@@ -27,6 +27,10 @@ describe('generationFailurePresentation', () => {
     expect(error.cause).toBeInstanceOf(Error)
   })
 
+  it('points an unclassified failure to the Records window', () => {
+    expect(presented('openai', new Error(hostile), false)).toContain('Records in the main menu')
+  })
+
   it('classifies known recovery from structured fields rather than message text', () => {
     expect(presented('grok', new ProviderHttpError('unrelated', 401), false)).toContain('API key')
     expect(presented('flux', new ProviderHttpError('unrelated', 429), false)).toContain('rate-limiting')
@@ -82,6 +86,8 @@ describe('generationFailurePresentation', () => {
 
     expect(download).toContain('download could not be started')
     expect(imported).toContain('import could not be started')
+    expect(download).toContain('Records in the main menu')
+    expect(imported).toContain('Records in the main menu')
     expect(download).not.toContain(hostile)
     expect(imported).not.toContain(hostile)
     expect(error.cause).toBeInstanceOf(Error)

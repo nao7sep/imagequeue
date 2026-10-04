@@ -267,7 +267,7 @@ describe('task status presentation', () => {
   })
 
   it('keeps the full generic failure available when its compact row text ellipsizes', () => {
-    const genericFailure = 'This image could not be generated. Retry it; if the problem continues, check the session log.'
+    const genericFailure = 'This image could not be generated. Retry it; if the problem continues, Records in the main menu shows why.'
     queueValue.tasks.openai = [task('failed')]
 
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
