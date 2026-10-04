@@ -220,6 +220,14 @@ export interface AiCallRecord {
   fail(error: unknown, response?: unknown): void
 }
 
+/** A request as it is kept: its headers are left out, since they carry the
+ *  credential (Authorization, x-key) and records never hold a key. */
+function withoutHeaders(request: unknown): unknown {
+  if (typeof request !== 'object' || request === null || Array.isArray(request) || !('headers' in request)) return request
+  const { headers: _headers, ...rest } = request as Record<string, unknown>
+  return rest
+}
+
 /** Starts one call's record at the moment its request is sent; the record is written
  *  once, when the call first finishes or fails. */
 export function startAiCall(call: AiCall): AiCallRecord {
@@ -227,7 +235,7 @@ export function startAiCall(call: AiCall): AiCallRecord {
   const base = {
     time: new Date(started).toISOString(), launch, session_id: activeSessionId,
     task_id: call.taskId ?? null, request_id: call.requestId ?? null,
-    backend: call.backend, model: call.model, purpose: call.purpose, request: json(call.request),
+    backend: call.backend, model: call.model, purpose: call.purpose, request: json(withoutHeaders(call.request)),
   }
   let written = false
   const end = (response: unknown, error: unknown): void => {

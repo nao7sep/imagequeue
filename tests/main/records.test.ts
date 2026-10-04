@@ -62,6 +62,16 @@ describe('log records', () => {
 })
 
 describe('AI call records', () => {
+  it('never keep a request\'s headers, so no key reaches the database', async () => {
+    const dir = freshRecordsRoot()
+    const call = { backend: 'flux', model: 'flux-pro', purpose: 'image', request: { url: 'https://api.example/flux', headers: { 'x-key': 'secret-key', Authorization: 'Bearer secret-token' }, body: { prompt: 'a fox' } } }
+    await recordAiCall(call, async () => ({ ok: true }))
+
+    const [row] = readRows(dir, 'ai_calls')
+    expect(JSON.parse(row!.request as string)).toEqual({ url: 'https://api.example/flux', body: { prompt: 'a fox' } })
+    expect(JSON.stringify(row)).not.toMatch(/secret/)
+  })
+
   it('hold the request, the kept response and the session, and an error when the call fails', async () => {
     const dir = freshRecordsRoot()
     setRecordsSession('s1')
