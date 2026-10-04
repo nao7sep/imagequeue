@@ -316,7 +316,8 @@ function launchImportJob(state: JobState): void {
     exitSubscription = ptyProcess.onExit(({ exitCode, signal }) => {
       dataSubscription?.dispose()
       exitSubscription?.dispose()
-      finalize(state, state.status === 'killed' ? 'killed' : 'exited', exitCode, signal === undefined ? null : String(signal))
+      // node-pty reports 0 when no signal ended the process.
+      finalize(state, state.status === 'killed' ? 'killed' : 'exited', exitCode, signal === undefined || signal === 0 ? null : String(signal))
     })
 
     emitStatus(state)
