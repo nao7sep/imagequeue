@@ -533,7 +533,7 @@
   "advanced.targets": "대상",
   "advanced.proprietary": "클라우드 서비스",
   "advanced.noApiKey": "API 키 없음",
-  "advanced.modelNotInList": "목록에 없는 모델",
+  "advanced.modelNotInList": "모델이 목록에 없음",
   "advanced.loadingModels": "모델을 불러오는 중…",
   "advanced.noModels": "다운로드한 모델이 없습니다.",
   "advanced.execution": "실행",

@@ -533,7 +533,7 @@
   "advanced.targets": "対象",
   "advanced.proprietary": "クラウドサービス",
   "advanced.noApiKey": "API キーなし",
-  "advanced.modelNotInList": "リストにないモデル",
+  "advanced.modelNotInList": "モデルがリストにありません",
   "advanced.loadingModels": "モデルを読み込み中…",
   "advanced.noModels": "ダウンロード済みのモデルはありません。",
   "advanced.execution": "実行",
