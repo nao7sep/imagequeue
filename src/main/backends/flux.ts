@@ -52,7 +52,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     const submitHeaders = { 'Content-Type': 'application/json', 'x-key': apiKey }
     const submitData = await withProviderRetry(async (attemptSignal) => {
       const { response: submitResponse, text } = await fetchRecorded(
-        { ...call, request: { url: submitUrl, body } },
+        { ...call, request: { url: submitUrl, headers: submitHeaders, body } },
         submitUrl,
         { method: 'POST', headers: submitHeaders, body: JSON.stringify(body), signal: attemptSignal },
       )
@@ -74,7 +74,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
       const pollHeaders = { 'x-key': apiKey }
       const pollData = await withProviderRetry(async (attemptSignal) => {
         const { response: pollResponse, text } = await fetchRecorded(
-          { ...call, request: { url: pollingUrl } },
+          { ...call, request: { url: pollingUrl, headers: pollHeaders } },
           pollingUrl,
           { headers: pollHeaders, signal: attemptSignal },
         )

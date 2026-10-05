@@ -47,7 +47,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
   try {
     const json = await withProviderRetry(async (attemptSignal) => {
       const { response, text } = await fetchRecorded(
-        { backend: 'grok', model: task.model, purpose: 'image', taskId: task.id, request: { url, body } },
+        { backend: 'grok', model: task.model, purpose: 'image', taskId: task.id, request: { url, headers, body } },
         url,
         { method: 'POST', headers, body: JSON.stringify(body), signal: attemptSignal },
         // The image bytes are the saved file's.
