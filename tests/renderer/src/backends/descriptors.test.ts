@@ -123,9 +123,9 @@ describe('grok quality — a parameter only one model declares', () => {
   const v2 = findModel('grok', 'grok-imagine-image-2.0')!
   const v1 = findModel('grok', 'grok-imagine-image')!
 
-  // 2.0 takes `quality` as a request field; the 1.x pair encode the choice in their
-  // model ids, so sending it there would be a second, contradictory control.
-  it('enqueues quality for 2.0 and omits it for both 1.x ids', () => {
+  // 2.0 takes `quality` as a request field; grok-imagine-image has no quality
+  // choice, so the field is not sent there.
+  it('enqueues quality for 2.0 and omits it for grok-imagine-image', () => {
     const params = grokBackend.defaults()
     expect(grokBackend.toEnqueueParams(params, v2)).toHaveProperty('quality', 'auto')
     expect(grokBackend.toEnqueueParams(params, v1)).not.toHaveProperty('quality')
@@ -138,16 +138,16 @@ describe('grok quality — a parameter only one model declares', () => {
     expect(v1.qualities).toBeUndefined()
   })
 
-  // The value is HELD while hidden rather than reset: a user who picks low, switches to a
-  // 1.x id and comes back should find low, not the default. This is the flux steps rule.
+  // The value is HELD while hidden rather than reset: a user who picks low, switches to
+  // grok-imagine-image and comes back should find low, not the default. This is the flux steps rule.
   // ('low' and not 'high' — 2.0 rejects high, so a test using it would assert a state the
   // app can never legitimately be in.)
   it('keeps a chosen quality across a switch to a model that does not declare it', () => {
     const chosen = { ...grokBackend.defaults(), quality: 'low' as const }
     expect(chosen.quality).not.toBe(grokBackend.defaults().quality)  // a real change, not the default
-    const on1x = grokBackend.clampToModel(chosen, v1)
-    expect(on1x.quality).toBe('low')
-    expect(grokBackend.clampToModel(on1x, v2).quality).toBe('low')
+    const onV1 = grokBackend.clampToModel(chosen, v1)
+    expect(onV1.quality).toBe('low')
+    expect(grokBackend.clampToModel(onV1, v2).quality).toBe('low')
   })
 
   // An unreadable saved value falls to `auto` (the API's own default), NOT to the list's

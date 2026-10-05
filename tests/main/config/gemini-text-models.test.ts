@@ -59,7 +59,7 @@ describe('open text model sets', () => {
     updateConfig((draft) => { draft.openai.slug = 'local-model' })
     expect(file()).toEqual({ openai: { slug: 'local-model', thinking: { slug: 'max' } } })
   })
-  it('sends the role\'s default when the stored thinking is one the selected row does not list', async () => {
+  it('sends the selected row\'s default when the stored thinking is one the row does not list', async () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ provider: 'openai', openai: { thinking: { slug: 'minimal', elaboration: 'xhigh' } } }))
     vi.doMock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] }), { headers: { 'content-type': 'application/json' } }))

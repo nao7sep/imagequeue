@@ -62,8 +62,8 @@ export function createDefaultConfig(): AppConfig {
         default_params: {
           aspectRatio: '1:1',
           resolution: '1k',
-          // `auto` is the API's own default. It currently selects low for generation
-          // and medium for editing; users can choose either tier explicitly instead.
+          // `auto` is the API's own default, sent as chosen; low and medium are
+          // xAI's two real levels, so medium is the higher one, not a middle.
           quality: 'auto'
         },
         concurrency: 3,
