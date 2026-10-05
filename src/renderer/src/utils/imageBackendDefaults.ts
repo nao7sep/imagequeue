@@ -11,6 +11,7 @@ import { grokBackend } from '../backends/grok'
 import { nanoBananaBackend } from '../backends/nanobanana'
 import { openaiBackend } from '../backends/openai'
 import type { BackendParamModel } from '../backends/types'
+import { CLOUD_BACKENDS } from '../backends'
 
 // The OpenAI size helpers live with their backend descriptor; re-exported here
 // for the existing import sites.
@@ -26,8 +27,10 @@ export function serializeImageBackendDefaults(model: string, params: Record<stri
   return JSON.stringify({ model, params })
 }
 
-function savedModelId(models: ModelDef[], defaultModel: ModelDef | undefined, backendSettings: Record<string, unknown>): string {
-  return typeof backendSettings.model === 'string' && models.some((m) => m.id === backendSettings.model)
+// The saved model is kept as it is, in the list or not: a column whose model
+// is not a row says so and queues nothing until another model is chosen.
+function savedModelId(defaultModel: ModelDef | undefined, backendSettings: Record<string, unknown>): string {
+  return typeof backendSettings.model === 'string' && backendSettings.model.trim() !== ''
     ? backendSettings.model
     : (defaultModel?.id ?? '')
 }
@@ -57,9 +60,11 @@ export function resolveSavedImageBackendDefaults(
   if (!backendSettings) return null
 
   const savedDefaultParams = (backendSettings.default_params as Record<string, unknown> | undefined) ?? {}
-  const model = savedModelId(models, defaultModel, backendSettings)
-  const modelDef = models.find((m) => m.id === model) ?? defaultModel
-  if (!modelDef) return null
+  const model = savedModelId(defaultModel, backendSettings)
+  const modelDef = models.find((m) => m.id === model)
+  // A model not in the list has no parameters to resolve; the column starts
+  // from the backend's own defaults once another model is chosen.
+  if (!modelDef) return model ? { model, params: {}, ui: CLOUD_BACKENDS[backend].defaults() } : null
 
   if (backend === 'openai') {
     return resolveWith(openaiBackend, modelDef as OpenAIModelDef, model, savedDefaultParams)

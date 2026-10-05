@@ -4,7 +4,7 @@ import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import type { BackendId, CloudBackendId, Task } from '../../../shared/types'
-import { getModelsForBackend, findModel } from '../../../shared/models'
+import { findModel, getDefaultModelForBackend, getModelsForBackend } from '../../../shared/ai-models'
 import { currentSessionImageUrl } from '../../../shared/image-url'
 import { CLOUD_BACKENDS } from '../backends'
 import { useDrawThingsColumn, DrawThingsControls } from './DrawThingsColumn'
@@ -57,7 +57,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   const { settings, apiKeyPresence, saveImageBackendDefaults } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId)
-  const defaultModel = models.find((m) => m.isDefault) ?? models[0]
+  const defaultModel = getDefaultModelForBackend(backendId)
   const [model, setModel] = useState(defaultModel?.id ?? '')
   const proprietaryBackend = backendId === 'drawthings' ? null : backendId as CloudBackendId
 
@@ -68,9 +68,12 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // keeps its own state below.
   const cloudBackend = proprietaryBackend ? CLOUD_BACKENDS[proprietaryBackend] : null
   const cloudModelDef = useMemo(
-    () => (proprietaryBackend ? findModel(proprietaryBackend, model) ?? models[0] : null),
-    [proprietaryBackend, model, models]
+    () => (proprietaryBackend ? findModel(proprietaryBackend, model) ?? null : null),
+    [proprietaryBackend, model]
   )
+  // A saved model that is not a row stays selected, shown as not in the list,
+  // and queues nothing until the user chooses another.
+  const modelNotInList = proprietaryBackend !== null && model !== '' && cloudModelDef === null
   const [cloudParams, setCloudParams] = useState<Record<string, unknown>>(
     () => cloudBackend?.defaults() ?? {}
   )
@@ -131,7 +134,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     backend: proprietaryBackend,
     settingsLoaded,
     saved: savedProprietaryDefaults,
-    currentModel: model,
+    // Nothing is saved while the model is not in the list, so its saved record stands.
+    currentModel: modelNotInList ? '' : model,
     currentParams: currentEnqueueParams,
     applySaved: applySavedProprietaryDefaults,
     saveDefaults: saveImageBackendDefaults,
@@ -142,6 +146,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // skip not-ready backends, and reused for the "+ Queue" button's disabled state.
   const readyToEnqueue = isBackendReadyToEnqueue({
     backendId,
+    modelNotInList,
     apiKeyMissing,
     cliInstalled: drawThings.cliInstalled,
     downloadedModelCount: drawThings.downloadedModelCount,
@@ -255,11 +260,18 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
           <div className="setting-row">
             <label>{t('column.model')}</label>
             <select value={model} onChange={(e) => setModel(e.target.value)}>
+              {modelNotInList && (
+                <option value={model}>{t('column.modelNotInListOption', { model })}</option>
+              )}
               {models.map((m) => (
                 <option key={m.id} value={m.id}>{m.label}</option>
               ))}
             </select>
           </div>
+        )}
+
+        {modelNotInList && (
+          <div className="setting-row model-warning">{t('column.modelNotInList')}</div>
         )}
 
         {/* The cloud backends' parameter rows come from this backend's

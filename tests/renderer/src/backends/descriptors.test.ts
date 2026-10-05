@@ -14,7 +14,7 @@ import {
   findModel,
   getDefaultModelForBackend,
   getModelsForBackend,
-} from '../../../../src/shared/models'
+} from '../../../../src/shared/ai-models'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 
 describe('defaults', () => {

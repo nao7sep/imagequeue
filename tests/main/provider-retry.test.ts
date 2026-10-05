@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { withProviderRetry, retryDelayMs } from '../../src/main/provider-retry'
-import { ProviderHttpError } from '../../src/main/provider-errors'
+import { ProviderHttpError, provedNotStarted } from '../../src/main/provider-errors'
 
 const delay = vi.hoisted(() => vi.fn(async (_ms: number, _signal: AbortSignal) => undefined))
 vi.mock('../../src/main/utils/abortable-delay', () => ({ abortableDelay: delay }))
@@ -31,5 +31,20 @@ describe('provider retry boundary', () => {
     const call = vi.fn(async () => { controller.abort(); throw error })
     await expect(withProviderRetry(call, { signal: controller.signal })).rejects.toBe(error)
     expect(call).toHaveBeenCalledOnce()
+  })
+  // A proxy can answer 408 or 503 after the provider made (and billed) the image,
+  // so an image request is resent only on a 429 or a connection that never opened.
+  it.each([408, 503])('does not resend an image request after a %i', async (status) => {
+    const error = new ProviderHttpError('busy', status)
+    const call = vi.fn(async () => { throw error })
+    await expect(withProviderRetry(call, { signal: signal(), resend: provedNotStarted })).rejects.toBe(error)
+    expect(call).toHaveBeenCalledOnce()
+  })
+  it('resends an image request after a 429 or a refused connection', async () => {
+    for (const error of [new ProviderHttpError('slow down', 429), Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })]) {
+      const call = vi.fn(async () => { throw error })
+      await expect(withProviderRetry(call, { signal: signal(), resend: provedNotStarted })).rejects.toBe(error)
+      expect(call).toHaveBeenCalledTimes(3)
+    }
   })
 })

@@ -383,6 +383,8 @@
   "task.deleteHint": "ファイルごと削除",
   "column.defaultsSaveFailed": "モデルとパラメータの変更を保存できませんでした。現在の選択はこのセッションの間は使われます。",
   "column.model": "モデル",
+  "column.modelNotInListOption": "{model}（リストにありません）",
+  "column.modelNotInList": "このモデルはリストにありません。画像をキューに追加するには、別のモデルを選んでください。",
   "column.closeSaveResult": "設定の保存結果を閉じる",
   "column.apiKeyNotSet": "API キーが未設定です",
   "column.queue": "キューに追加",

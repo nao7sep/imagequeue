@@ -410,6 +410,8 @@
   "task.deleteHint": "Удалить вместе с файлами",
   "column.defaultsSaveFailed": "Не удалось сохранить изменения модели и параметров. Текущий выбор используется до конца этого сеанса.",
   "column.model": "Модель",
+  "column.modelNotInListOption": "{model} (нет в списке)",
+  "column.modelNotInList": "Этой модели нет в списке. Чтобы поставить изображения в очередь, выберите другую модель.",
   "column.closeSaveResult": "Закрыть результат сохранения настроек",
   "column.apiKeyNotSet": "Ключ API не задан",
   "column.queue": "В очередь",

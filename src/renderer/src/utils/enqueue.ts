@@ -15,11 +15,13 @@ export interface EnqueueConfigSnapshot {
 // Things. (Draw Things has no API key, so apiKeyMissing is always false there.)
 export function isBackendReadyToEnqueue(input: {
   backendId: BackendId
+  // The column's model is not one of its rows.
+  modelNotInList: boolean
   apiKeyMissing: boolean
   cliInstalled: boolean
   downloadedModelCount: number
 }): boolean {
-  if (input.apiKeyMissing) return false
+  if (input.apiKeyMissing || input.modelNotInList) return false
   if (input.backendId === 'drawthings') {
     return input.cliInstalled && input.downloadedModelCount > 0
   }

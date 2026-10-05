@@ -6,13 +6,14 @@ import {
   serializeImageBackendDefaults
 } from '../../../../src/renderer/src/utils/imageBackendDefaults'
 import {
-  findModel,
   OPENAI_GPT2_MAX_EDGE,
   OPENAI_GPT2_MIN_EDGE,
   OPENAI_GPT2_SIZE_STEP,
-  OPENAI_MODELS,
-  FLUX_MODELS
 } from '../../../../src/shared/models'
+import { findModel, getModelsForBackend } from '../../../../src/shared/ai-models'
+
+const OPENAI_MODELS = getModelsForBackend('openai')
+const FLUX_MODELS = getModelsForBackend('flux')
 
 describe('normalizeOpenAiDimension', () => {
   it('snaps to the 16px step', () => {
@@ -119,5 +120,23 @@ describe('resolveSavedImageBackendDefaults', () => {
     )!
     expect(result.params).not.toHaveProperty('steps')
     expect(result.params).not.toHaveProperty('guidance')
+  })
+
+  // A saved model that is no longer a row is kept as it is, never swapped for
+  // the default, and carries no parameters while it is not in the list.
+  it('keeps a saved model that is not in the list', () => {
+    const result = resolveSavedImageBackendDefaults(
+      'openai',
+      { model: 'gpt-image-0', default_params: { quality: 'high' } },
+      OPENAI_MODELS,
+      findModel('openai', 'gpt-image-2')
+    )!
+    expect(result.model).toBe('gpt-image-0')
+    expect(result.params).toEqual({})
+  })
+
+  it('takes the default model when none is saved', () => {
+    const result = resolveSavedImageBackendDefaults('openai', { default_params: {} }, OPENAI_MODELS, findModel('openai', 'gpt-image-2'))!
+    expect(result.model).toBe('gpt-image-2')
   })
 })

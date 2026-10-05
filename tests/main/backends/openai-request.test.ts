@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildOpenAIImageParams, validateGptImage2Size } from '../../../src/main/backends/openai-request'
 import type { Task } from '../../../src/shared/types'
 
-function makeTask(params: Record<string, unknown>, model = 'gpt-image-1'): Task {
+function makeTask(params: Record<string, unknown>, model = 'gpt-image-1.5'): Task {
   return {
     id: 't1',
     prompt: 'a cat',
@@ -23,7 +23,7 @@ function makeTask(params: Record<string, unknown>, model = 'gpt-image-1'): Task 
 describe('buildOpenAIImageParams', () => {
   it('applies defaults when params are empty', () => {
     const p = buildOpenAIImageParams(makeTask({}))
-    expect(p.model).toBe('gpt-image-1')
+    expect(p.model).toBe('gpt-image-1.5')
     expect(p.size).toBe('1024x1024')
     expect(p.output_format).toBe('png')
     // Default-valued optional fields are omitted, not sent.
@@ -83,9 +83,13 @@ describe('buildOpenAIImageParams', () => {
   })
 
   it('does not validate size for non-gpt-image-2 models', () => {
-    // Same off-grid size that throws for gpt-image-2 is accepted for gpt-image-1.
-    const p = buildOpenAIImageParams(makeTask({ width: 1000, height: 1024 }, 'gpt-image-1'))
+    // Same off-grid size that throws for gpt-image-2 is accepted for gpt-image-1.5.
+    const p = buildOpenAIImageParams(makeTask({ width: 1000, height: 1024 }, 'gpt-image-1.5'))
     expect(p.size).toBe('1000x1024')
+  })
+
+  it('sends an unlisted id the plain request: the model alone', () => {
+    expect(buildOpenAIImageParams(makeTask({ width: 1000, height: 1024, quality: 'high' }, 'gpt-image-1'))).toEqual({ model: 'gpt-image-1' })
   })
 })
 

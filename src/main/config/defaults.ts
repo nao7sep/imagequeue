@@ -1,6 +1,5 @@
 import { AppConfig } from './types'
-import { getDefaultModelForBackend } from '../../shared/models'
-import { defaultModelFor, PROVIDER_ENDPOINTS } from '../../shared/ai-models'
+import { defaultModelFor, getDefaultModelForBackend, PROVIDER_ENDPOINTS } from '../../shared/ai-models'
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -34,8 +33,8 @@ export function createDefaultConfig(): AppConfig {
     },
     image_backends: {
       openai: {
-        // Seeded from the registry's isDefault entry rather than restated here, so a
-        // registry change reaches a fresh install without a second edit.
+        // Seeded from the table's default row rather than restated here, so a
+        // table change reaches a fresh install without a second edit.
         model: getDefaultModelForBackend('openai').id,
         default_params: {
           width: 1024,

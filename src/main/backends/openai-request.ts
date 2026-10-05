@@ -37,14 +37,28 @@ export function validateGptImage2Size(width: number, height: number): void {
   }
 }
 
-// Builds the images.generate parameters from a task's params. Fields that the
-// API treats as defaults (moderation=auto, quality=auto, background=opaque) are
-// omitted rather than sent, matching the API's own defaulting.
+// One branch per OpenAI image row of SUPPORTED_MODELS. An id with no row gets
+// the plain request: the model alone, beside the prompt openai.ts adds.
 export function buildOpenAIImageParams(task: Task): OpenAIImageParams {
+  switch (task.model) {
+    // GPT Image 2 takes any size within its custom-size rule.
+    case 'gpt-image-2':
+      validateGptImage2Size((task.params.width as number) || 1024, (task.params.height as number) || 1024)
+      return gptImageParams(task)
+    // The 1.x pair take the GPT Image fields as they are.
+    case 'gpt-image-1.5':
+    case 'gpt-image-1-mini':
+      return gptImageParams(task)
+    default:
+      return { model: task.model }
+  }
+}
+
+// Fields that the API treats as defaults (moderation=auto, quality=auto,
+// background=opaque) are omitted rather than sent, matching the API's own defaulting.
+function gptImageParams(task: Task): OpenAIImageParams {
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
-  if (task.model === 'gpt-image-2') validateGptImage2Size(width, height)
-
   const size = `${width}x${height}`
   const moderation = (task.params.moderation as 'auto' | 'low') || 'auto'
   const quality = (task.params.quality as 'low' | 'medium' | 'high' | 'auto') || 'auto'

@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { AI_ROLES, MODEL_LINEUP, SUPPORTED_MODELS, TEXT_PROVIDERS, defaultModelFor, hasThinkingChoice, modelsFor, textRowFor, thinkingFor } from '../../src/shared/ai-models'
+import { AI_ROLES, MODEL_LINEUP, SUPPORTED_MODELS, TEXT_PROVIDERS, defaultModelFor, hasThinkingChoice, isTextModel, modelsFor, textRowFor, thinkingFor } from '../../src/shared/ai-models'
 import { ThinkingLevel } from '@google/genai'
 import { configSetDefaults } from '../../src/main/config/config-sets'
 import { GEMINI_SAFETY_SETTINGS, geminiTextParams, openaiTextParams } from '../../src/main/text-ai/request'
 
 const safety = { safetySettings: GEMINI_SAFETY_SETTINGS }
+const TEXT_MODELS = SUPPORTED_MODELS.filter(isTextModel)
 
 describe('text routing guard', () => {
   it('rests on the 2026-10-04 lineup', () => {
     expect(MODEL_LINEUP).toBe('ai-model-lineup-20261004')
   })
   it('pins every text row, its order, its thinking list and its default', () => {
-    expect(SUPPORTED_MODELS.map(({ provider, id, kinds, defaultFor, thinking, defaultThinking }) =>
+    expect(TEXT_MODELS.map(({ provider, id, kinds, defaultFor, thinking, defaultThinking }) =>
       [provider, id, kinds, defaultFor, thinking, defaultThinking])).toEqual([
       ['gemini', 'gemini-3.1-pro-preview', ['text-smart'], ['text-smart'], ['low', 'medium', 'high'], 'medium'],
       ['gemini', 'gemini-3.8-flash', ['text-balanced'], ['text-balanced'], ['low', 'medium', 'high'], 'medium'],
@@ -21,14 +22,14 @@ describe('text routing guard', () => {
       ['openai', 'gpt-5.6-terra', ['text-balanced'], ['text-balanced'], ['none', 'low', 'medium', 'high', 'xhigh', 'max'], 'medium'],
       ['openai', 'gpt-6-luna', ['text-fast'], ['text-fast'], ['none', 'low', 'medium', 'high', 'xhigh', 'max'], 'none'],
     ])
-    for (const row of SUPPORTED_MODELS) expect(row.thinking, row.id).toContain(row.defaultThinking)
+    for (const row of TEXT_MODELS) expect(row.thinking, row.id).toContain(row.defaultThinking)
   })
   it('pins each role\'s default model', () => {
     expect([defaultModelFor('gemini', 'text-balanced'), defaultModelFor('gemini', 'text-fast')]).toEqual(['gemini-3.8-flash', 'gemini-3.5-flash-lite'])
     expect([defaultModelFor('openai', 'text-balanced'), defaultModelFor('openai', 'text-fast')]).toEqual(['gpt-5.6-terra', 'gpt-6-luna'])
   })
   it('translates every thinking value each text row lists through its own branch', () => {
-    for (const row of SUPPORTED_MODELS) {
+    for (const row of TEXT_MODELS) {
       expect(row.thinking.length, row.id).toBeGreaterThan(0)
       for (const value of row.thinking) {
         if (row.provider === 'gemini') {
@@ -69,22 +70,22 @@ describe('text routing guard', () => {
     ])
   })
   it('sends the row\'s default for a chosen value the row does not list', () => {
-    const luna = SUPPORTED_MODELS.find((each) => each.id === 'gpt-6-luna')!
+    const luna = TEXT_MODELS.find((each) => each.id === 'gpt-6-luna')!
     expect(thinkingFor(luna, 'high')).toBe('high')
     expect(thinkingFor(luna, 'minimal')).toBe('none')
     expect(thinkingFor(luna, '')).toBe('none')
     // The model's tier sets the default, whatever role it serves.
-    const flash = SUPPORTED_MODELS.find((each) => each.id === 'gemini-3.8-flash')!
+    const flash = TEXT_MODELS.find((each) => each.id === 'gemini-3.8-flash')!
     expect(thinkingFor(flash, '')).toBe('medium')
   })
   it('offers a Thinking choice only for a row with more than one value', () => {
-    const luna = SUPPORTED_MODELS.find((each) => each.id === 'gpt-6-luna')!
+    const luna = TEXT_MODELS.find((each) => each.id === 'gpt-6-luna')!
     expect(hasThinkingChoice(luna)).toBe(true)
     expect(hasThinkingChoice({ ...luna, thinking: ['none'] })).toBe(false)
     expect(hasThinkingChoice(undefined)).toBe(false)
   })
   it('sends no output ceiling and no temperature', () => {
-    for (const row of [...SUPPORTED_MODELS, { id: 'nonsense-id', thinking: ['medium'] }]) {
+    for (const row of [...TEXT_MODELS, { id: 'nonsense-id', thinking: ['medium'] }]) {
       for (const params of [geminiTextParams(row.id, row.thinking[0], {}), openaiTextParams(row.id, row.thinking[0], {})]) {
         for (const key of ['maxOutputTokens', 'max_completion_tokens', 'max_tokens', 'temperature']) expect(params, row.id).not.toHaveProperty(key)
       }
@@ -93,7 +94,7 @@ describe('text routing guard', () => {
   it('has one default per offered kind, a model for every role, and a setting per role', () => {
     const sets = configSetDefaults()
     for (const provider of TEXT_PROVIDERS) {
-      const kinds = new Set(SUPPORTED_MODELS.filter((row) => row.provider === provider).flatMap((row) => row.kinds))
+      const kinds = new Set(TEXT_MODELS.filter((row) => row.provider === provider).flatMap((row) => row.kinds))
       for (const kind of kinds) {
         const defaults = modelsFor(provider, kind).filter((row) => row.defaultFor.includes(kind))
         expect(defaults).toHaveLength(kind === 'text-frontier' ? 0 : 1)

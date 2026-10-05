@@ -1,7 +1,31 @@
-import type { TextAIBackendId } from './types'
+import type { CloudBackendId, TextAIBackendId } from './types'
+import {
+  FLUX_SIZES,
+  GROK_ASPECT_RATIOS,
+  GROK_QUALITY_VALUES,
+  GROK_RESOLUTIONS,
+  NANO_BANANA_ASPECT_RATIOS_BASE,
+  NANO_BANANA_ASPECT_RATIOS_FLASH2,
+  NANO_BANANA_SIZES,
+  NANO_BANANA_SIZES_FLASH2,
+  NANO_BANANA_SIZES_LITE,
+  NANO_BANANA_SIZES_PRO,
+  OPENAI_SIZES,
+  STANDARD_SIZE_PRESETS,
+  type FluxModelDef,
+  type GrokModelDef,
+  type ImageKind,
+  type ImageProviderId,
+  type ModelDef,
+  type NanoBananaModelDef,
+  type OpenAIModelDef,
+} from './models'
 
 export type TextKind = 'text-frontier' | 'text-smart' | 'text-balanced' | 'text-fast'
-export interface SupportedModel {
+export type ModelKind = TextKind | ImageKind
+export type ProviderId = TextAIBackendId | ImageProviderId
+
+export interface TextModel {
   provider: TextAIBackendId
   id: string
   kinds: readonly TextKind[]
@@ -14,10 +38,15 @@ export interface SupportedModel {
   defaultThinking: string
 }
 
+export type ImageModel = OpenAIModelDef | NanoBananaModelDef | GrokModelDef | FluxModelDef
+export type SupportedModel = TextModel | ImageModel
+
 // The lineup research document these rows and defaults rest on.
 export const MODEL_LINEUP = 'ai-model-lineup-20261004'
 
-// Image rows remain in models.ts until the imaging alignment is decided.
+// Every row has its branch in a request builder: text in main/text-ai/request.ts,
+// images in main/backends/*-request.ts. Within a provider and kind, rows run from
+// the highest tier to the lowest, newest first within a tier.
 export const SUPPORTED_MODELS: readonly SupportedModel[] = [
   { provider: 'gemini', id: 'gemini-3.1-pro-preview', kinds: ['text-smart'], defaultFor: ['text-smart'], thinking: ['low', 'medium', 'high'], defaultThinking: 'medium' },
   { provider: 'gemini', id: 'gemini-3.8-flash', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['low', 'medium', 'high'], defaultThinking: 'medium' },
@@ -26,6 +55,102 @@ export const SUPPORTED_MODELS: readonly SupportedModel[] = [
   { provider: 'openai', id: 'gpt-6.1-sol', kinds: ['text-smart'], defaultFor: ['text-smart'], thinking: ['low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'medium' },
   { provider: 'openai', id: 'gpt-5.6-terra', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'medium' },
   { provider: 'openai', id: 'gpt-6-luna', kinds: ['text-fast'], defaultFor: ['text-fast'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'none' },
+
+  // OpenAI images.
+  {
+    provider: 'openai', id: 'gpt-image-2', label: 'GPT Image 2', backend: 'openai',
+    kinds: ['image-generate'], defaultFor: ['image-generate'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
+    sizes: STANDARD_SIZE_PRESETS,
+    supportsCustomSizes: true,
+    outputFormats: ['png', 'jpeg', 'webp'],
+    backgrounds: ['opaque', 'auto'],
+  },
+  {
+    provider: 'openai', id: 'gpt-image-1.5', label: 'GPT Image 1.5', backend: 'openai',
+    kinds: ['image-generate'], defaultFor: [],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
+    sizes: OPENAI_SIZES,
+    outputFormats: ['png', 'jpeg', 'webp'],
+    backgrounds: ['opaque', 'transparent', 'auto'],
+  },
+  {
+    provider: 'openai', id: 'gpt-image-1-mini', label: 'GPT Image 1 Mini', backend: 'openai',
+    kinds: ['image-generate'], defaultFor: [],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    moderations: ['auto', 'low'],
+    sizes: OPENAI_SIZES,
+    outputFormats: ['png', 'jpeg', 'webp'],
+    backgrounds: ['opaque', 'transparent', 'auto'],
+  },
+
+  // Gemini images (Nano Banana).
+  {
+    provider: 'gemini', id: 'gemini-3-pro-image', label: 'Nano Banana Pro', backend: 'nanobanana',
+    kinds: ['image-generate'], defaultFor: [],
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
+    imageSizes: NANO_BANANA_SIZES_PRO,
+  },
+  {
+    provider: 'gemini', id: 'gemini-3.1-flash-image', label: 'Nano Banana 2', backend: 'nanobanana',
+    kinds: ['image-generate'], defaultFor: ['image-generate'],
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
+    imageSizes: NANO_BANANA_SIZES_FLASH2,
+  },
+  {
+    provider: 'gemini', id: 'gemini-2.5-flash-image', label: 'Nano Banana', backend: 'nanobanana',
+    kinds: ['image-generate'], defaultFor: [],
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
+    imageSizes: NANO_BANANA_SIZES,
+  },
+  {
+    provider: 'gemini', id: 'gemini-3.1-flash-lite-image', label: 'Nano Banana 2 Lite', backend: 'nanobanana',
+    kinds: ['image-generate'], defaultFor: [],
+    supportsImageConfig: true,
+    aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
+    imageSizes: NANO_BANANA_SIZES_LITE,
+  },
+
+  // xAI images (Grok Imagine). Only 2.0 declares qualities; the 1.x pair carry
+  // that choice in their ids.
+  {
+    provider: 'xai', id: 'grok-imagine-image-2.0', label: 'Grok Imagine 2.0', backend: 'grok',
+    kinds: ['image-generate'], defaultFor: ['image-generate'],
+    aspectRatios: GROK_ASPECT_RATIOS,
+    resolutions: GROK_RESOLUTIONS,
+    qualities: GROK_QUALITY_VALUES,
+  },
+  {
+    provider: 'xai', id: 'grok-imagine-image-quality', label: 'Grok Imagine Quality', backend: 'grok',
+    kinds: ['image-generate'], defaultFor: [],
+    aspectRatios: GROK_ASPECT_RATIOS,
+    resolutions: GROK_RESOLUTIONS,
+  },
+  {
+    provider: 'xai', id: 'grok-imagine-image', label: 'Grok Imagine', backend: 'grok',
+    kinds: ['image-generate'], defaultFor: [],
+    aspectRatios: GROK_ASPECT_RATIOS,
+    resolutions: GROK_RESOLUTIONS,
+  },
+
+  // Black Forest Labs images (FLUX).
+  { provider: 'bfl', id: 'flux-2-max', label: 'FLUX.2 Max', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES },
+  { provider: 'bfl', id: 'flux-2-pro', label: 'FLUX.2 Pro', backend: 'flux', kinds: ['image-generate'], defaultFor: ['image-generate'], sizes: FLUX_SIZES },
+  {
+    provider: 'bfl', id: 'flux-2-flex', label: 'FLUX.2 Flex', backend: 'flux',
+    kinds: ['image-generate'], defaultFor: [],
+    sizes: FLUX_SIZES,
+    // Source: https://api.bfl.ai/openapi.json — Flux2FlexInputs
+    stepsRange: { min: 1, max: 50, default: 50 },
+    guidanceRange: { min: 1.5, max: 10, default: 5 },
+  },
+  { provider: 'bfl', id: 'flux-2-klein-9b', label: 'FLUX.2 Klein 9B', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES },
+  { provider: 'bfl', id: 'flux-2-klein-4b', label: 'FLUX.2 Klein 4B', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES },
 ]
 
 export const AI_ROLES = [
@@ -41,29 +166,91 @@ export const PROVIDER_ENDPOINTS: Record<TextAIBackendId, string> = {
   openai: 'https://api.openai.com/v1',
 }
 
-export function modelsFor(provider: TextAIBackendId, kind: TextKind): SupportedModel[] {
-  return SUPPORTED_MODELS.filter((row) => row.provider === provider && row.kinds.includes(kind))
+// Each image column is one provider's image-generate role. The backend ids are
+// the released config, session and file-name keys, so they stay as they are.
+export const IMAGE_BACKEND_PROVIDERS: Record<CloudBackendId, ImageProviderId> = {
+  openai: 'openai',
+  nanobanana: 'gemini',
+  grok: 'xai',
+  flux: 'bfl',
 }
 
-export function defaultModelFor(provider: TextAIBackendId, kind: TextKind): string {
+export function modelsFor(provider: TextAIBackendId, kind: TextKind): TextModel[]
+export function modelsFor(provider: ProviderId, kind: ImageKind): ImageModel[]
+export function modelsFor(provider: ProviderId, kind: ModelKind): SupportedModel[]
+export function modelsFor(provider: ProviderId, kind: ModelKind): SupportedModel[] {
+  return SUPPORTED_MODELS.filter((row) => row.provider === provider && (row.kinds as readonly ModelKind[]).includes(kind))
+}
+
+export function defaultModelFor(provider: ProviderId, kind: ModelKind): string {
   const rows = modelsFor(provider, kind)
-  const row = rows.find((model) => model.defaultFor.includes(kind)) ?? rows[0]
+  const row = rows.find((model) => (model.defaultFor as readonly ModelKind[]).includes(kind)) ?? rows[0]
   if (!row) throw new Error(`No model for ${provider}/${kind}`)
   return row.id
 }
 
-export function textRowFor(provider: TextAIBackendId, id: string): SupportedModel | undefined {
+export function isTextModel(row: SupportedModel): row is TextModel {
+  return !('backend' in row)
+}
+
+export function isImageModel(row: SupportedModel): row is ImageModel {
+  return 'backend' in row
+}
+
+export function textRowFor(provider: TextAIBackendId, id: string): TextModel | undefined {
   const key = id.trim().toLowerCase()
-  return SUPPORTED_MODELS.find((row) => row.provider === provider && row.id === key)
+  return SUPPORTED_MODELS.filter(isTextModel).find((row) => row.provider === provider && row.id === key)
 }
 
 // The value a role sends: its chosen value when the row lists it, else the
 // row's default.
-export function thinkingFor(row: SupportedModel, chosen: string): string {
+export function thinkingFor(row: TextModel, chosen: string): string {
   return row.thinking.includes(chosen) ? chosen : row.defaultThinking
 }
 
 // A row with one thinking value offers no choice, so it shows no Thinking field.
-export function hasThinkingChoice(row: SupportedModel | undefined): row is SupportedModel {
+export function hasThinkingChoice(row: TextModel | undefined): row is TextModel {
   return row !== undefined && row.thinking.length > 1
+}
+
+// --- An image column's rows ---
+
+export function getModelsForBackend(backend: 'openai'): OpenAIModelDef[]
+export function getModelsForBackend(backend: 'nanobanana'): NanoBananaModelDef[]
+export function getModelsForBackend(backend: 'grok'): GrokModelDef[]
+export function getModelsForBackend(backend: 'flux'): FluxModelDef[]
+// Draw Things' models are the files installed on the machine, so it has no rows.
+export function getModelsForBackend(backend: CloudBackendId | 'drawthings'): ModelDef[]
+export function getModelsForBackend(backend: CloudBackendId | 'drawthings'): ModelDef[] {
+  return backend === 'drawthings' ? [] : IMAGE_ROWS_BY_BACKEND[backend]
+}
+
+// Computed once, so a column's list keeps its identity from render to render.
+const IMAGE_ROWS_BY_BACKEND: Record<CloudBackendId, ImageModel[]> = {
+  openai: modelsFor('openai', 'image-generate'),
+  nanobanana: modelsFor('gemini', 'image-generate'),
+  grok: modelsFor('xai', 'image-generate'),
+  flux: modelsFor('bfl', 'image-generate'),
+}
+
+// The model a column starts on: the provider's image-generate default.
+export function getDefaultModelForBackend(backend: 'openai'): OpenAIModelDef
+export function getDefaultModelForBackend(backend: 'nanobanana'): NanoBananaModelDef
+export function getDefaultModelForBackend(backend: 'grok'): GrokModelDef
+export function getDefaultModelForBackend(backend: 'flux'): FluxModelDef
+export function getDefaultModelForBackend(backend: CloudBackendId | 'drawthings'): ModelDef | undefined
+export function getDefaultModelForBackend(backend: CloudBackendId | 'drawthings'): ModelDef | undefined {
+  if (backend === 'drawthings') return undefined
+  const id = defaultModelFor(IMAGE_BACKEND_PROVIDERS[backend], 'image-generate')
+  return getModelsForBackend(backend).find((row) => row.id === id)
+}
+
+// The row for a column's model id, or undefined when the id is not in the list.
+export function findModel(backend: 'openai', modelId: string): OpenAIModelDef | undefined
+export function findModel(backend: 'nanobanana', modelId: string): NanoBananaModelDef | undefined
+export function findModel(backend: 'grok', modelId: string): GrokModelDef | undefined
+export function findModel(backend: 'flux', modelId: string): FluxModelDef | undefined
+export function findModel(backend: CloudBackendId | 'drawthings', modelId: string): ModelDef | undefined
+export function findModel(backend: CloudBackendId | 'drawthings', modelId: string): ModelDef | undefined {
+  return getModelsForBackend(backend).find((row) => row.id === modelId)
 }

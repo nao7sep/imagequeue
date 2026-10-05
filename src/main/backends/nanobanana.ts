@@ -5,10 +5,10 @@ import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { recordAiCall } from '../records'
-import { findModel } from '../../shared/models'
+import { buildGeminiImageRequest } from './nanobanana-request'
 import { assertUsableGeminiResponse } from '../provider-response'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
 import { geminiReasonField, reasonFromBody } from '../provider-reason'
 
 // Calls the Gemini native image generation API (generateContent) and returns
@@ -27,23 +27,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   // The app owns retries; the SDK performs exactly one attempt.
   const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 } } })
 
-  const modelDef = findModel('nanobanana', task.model)
-  const supportsImageConfig = modelDef?.supportsImageConfig ?? false
-
-  const aspectRatio = (task.params.aspectRatio as string) || '1:1'
-  const imageSize = (task.params.imageSize as string) || '1K'
-
-  const requestParams = supportsImageConfig
-    ? { aspectRatio, imageSize }
-    : {}
-  const request = {
-    model: task.model,
-    contents: task.prompt,
-    config: {
-      responseModalities: ['TEXT', 'IMAGE'],
-      ...(supportsImageConfig ? { imageConfig: { aspectRatio, imageSize } } : {})
-    }
-  }
+  const request = buildGeminiImageRequest(task)
 
   const response = await withProviderRetry((attemptSignal) => recordAiCall(
     { backend: 'nanobanana', model: task.model, purpose: 'image', taskId: task.id, request },
@@ -59,7 +43,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
       throw new ProviderHttpError(said ?? `Gemini API error ${err.status}`, err.status, said)
     }
     throw err
-  }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms }).catch((err: unknown) => {
+  }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms, resend: provedNotStarted }).catch((err: unknown) => {
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
@@ -67,7 +51,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     }
     log('error', 'Nano Banana API call failed', {
       model: task.model,
-      requestParams,
+      requestParams: request.config,
       status: (err as Record<string, unknown>).status ?? (err as Record<string, unknown>).httpStatus,
       error: serializeError(err)
     })

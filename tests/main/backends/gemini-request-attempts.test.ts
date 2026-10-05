@@ -3,8 +3,8 @@ import type { Task } from '../../../src/shared/types'
 
 // Each Gemini client passes `retryOptions: { attempts: 1 }`, so the SDK sends
 // one request per call and the app's own retry policy decides every resend:
-// Nano Banana resends only an answer proving no processing, and the text
-// JSON/slug caller owns text retries.
+// Nano Banana resends only an answer proving the work never started, and the
+// text JSON/slug caller owns text retries.
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 
 vi.mock('../../../src/main/config', () => ({
@@ -20,9 +20,9 @@ const { GeminiProvider } = await import('../../../src/main/text-ai/gemini')
 
 // retry-after-ms keeps a regressed client's resends immediate, so the count
 // fails the assertion instead of waiting out the SDK's backoff.
-function stubServerError(): ReturnType<typeof vi.fn> {
+function stubServerError(status = 503): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { message: 'overloaded' } }), {
-    status: 503,
+    status,
     headers: { 'content-type': 'application/json', 'retry-after-ms': '1' },
   }))
   vi.stubGlobal('fetch', fetchMock)
@@ -40,10 +40,17 @@ const task: Task = {
 }
 
 describe('Gemini request attempt ownership', () => {
-  it('Nano Banana caps safe 503 retries at three requests', async () => {
-    const fetchMock = stubServerError()
+  it('Nano Banana caps safe 429 retries at three requests', async () => {
+    const fetchMock = stubServerError(429)
     await expect(generateNanoBanana(task, new AbortController().signal)).rejects.toThrow()
     expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  // A proxy can answer 503 after the image was made and billed.
+  it('Nano Banana does not resend an image request after a 503', async () => {
+    const fetchMock = stubServerError()
+    await expect(generateNanoBanana(task, new AbortController().signal)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('a text request is not resent after a 503', async () => {

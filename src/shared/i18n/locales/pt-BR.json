@@ -401,6 +401,8 @@
   "task.deleteHint": "Apagar com os arquivos",
   "column.defaultsSaveFailed": "Não foi possível salvar as alterações de modelo e parâmetros. Suas escolhas atuais continuam em uso nesta sessão.",
   "column.model": "Modelo",
+  "column.modelNotInListOption": "{model} (não está na lista)",
+  "column.modelNotInList": "Este modelo não está na lista. Escolha outro modelo para pôr imagens na fila.",
   "column.closeSaveResult": "Fechar o resultado do salvamento dos ajustes",
   "column.apiKeyNotSet": "Chave de API não definida",
   "column.queue": "Pôr na fila",

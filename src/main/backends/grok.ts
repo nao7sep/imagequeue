@@ -5,8 +5,9 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
 import { grokReasonField, reasonFromBody } from '../provider-reason'
+import { buildXaiImageBody } from './grok-request'
 
 const BASE_URL = 'https://api.x.ai/v1'
 
@@ -35,18 +36,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
   const onAbort = (): void => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
 
-  const params = task.params as { aspectRatio?: string; resolution?: string; quality?: string }
-
-  const body: Record<string, unknown> = {
-    model: task.model,
-    prompt: task.prompt,
-    n: 1,
-    response_format: 'b64_json'
-  }
-
-  if (params.aspectRatio) body.aspect_ratio = params.aspectRatio
-  if (params.resolution) body.resolution = params.resolution
-  if (params.quality) body.quality = params.quality
+  const body = buildXaiImageBody(task)
 
   const url = `${BASE_URL}/images/generations`
   const headers = {
@@ -73,7 +63,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
       }
 
       return JSON.parse(text) as { data: { b64_json?: string }[] }
-    }, { signal: controller.signal })
+    }, { signal: controller.signal, resend: provedNotStarted })
 
     const b64 = json.data?.[0]?.b64_json
 

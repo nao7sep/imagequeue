@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest'
+import {
+  IMAGE_BACKEND_PROVIDERS,
+  SUPPORTED_MODELS,
+  findModel,
+  getDefaultModelForBackend,
+  getModelsForBackend,
+  isImageModel,
+} from '../../src/shared/ai-models'
+import type { CloudBackendId, Task } from '../../src/shared/types'
+import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../src/shared/types'
+import { buildOpenAIImageParams } from '../../src/main/backends/openai-request'
+import { buildGeminiImageRequest } from '../../src/main/backends/nanobanana-request'
+import { buildXaiImageBody } from '../../src/main/backends/grok-request'
+import { buildFluxBody } from '../../src/main/backends/flux-request'
+
+// The image half of the routing guard: the rows each column offers, in order,
+// with their defaults, and a request-builder branch for every row.
+
+const IMAGE_MODELS = SUPPORTED_MODELS.filter(isImageModel)
+
+const BUILDERS: Record<CloudBackendId, (task: Task) => unknown> = {
+  openai: buildOpenAIImageParams,
+  nanobanana: buildGeminiImageRequest,
+  grok: buildXaiImageBody,
+  flux: buildFluxBody,
+}
+
+// Params every row of the backend takes, so a branch has something to send.
+const SAMPLE_PARAMS: Record<CloudBackendId, Record<string, unknown>> = {
+  openai: { width: 1024, height: 1024 },
+  nanobanana: { aspectRatio: '1:1', imageSize: '1K' },
+  grok: { aspectRatio: '1:1', resolution: '1k' },
+  flux: { width: 1024, height: 1024 },
+}
+
+function imageTask(backend: CloudBackendId, model: string, params: Record<string, unknown>): Task {
+  return {
+    id: 't1', prompt: 'a cat', backend, model, params, status: 'queued',
+    enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null, completedAt: null, durationMs: null,
+    imagePath: null, baseName: null, error: null,
+  }
+}
+
+/** A request with the model id swapped out, so a row's request and an unlisted id's compare. */
+function withoutModel(request: unknown): unknown {
+  return JSON.parse(JSON.stringify(request, (key, value) => (key === 'model' ? undefined : value)))
+}
+
+describe('image routing guard', () => {
+  it('pins every column\'s rows, in order, and its default', () => {
+    expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getModelsForBackend(backend).map((row) => row.id)]))).toEqual({
+      openai: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1-mini'],
+      nanobanana: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-lite-image'],
+      grok: ['grok-imagine-image-2.0', 'grok-imagine-image-quality', 'grok-imagine-image'],
+      flux: ['flux-2-max', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b', 'flux-2-klein-4b'],
+    })
+    expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getDefaultModelForBackend(backend)?.id]))).toEqual({
+      openai: 'gpt-image-2',
+      nanobanana: 'gemini-3.1-flash-image',
+      grok: 'grok-imagine-image-2.0',
+      flux: 'flux-2-pro',
+    })
+  })
+
+  it('keys every image row by its api-key provider and the generate kind, with one default per provider', () => {
+    for (const row of IMAGE_MODELS) {
+      expect(row.provider, row.id).toBe(IMAGE_BACKEND_PROVIDERS[row.backend as CloudBackendId])
+      expect(row.kinds, row.id).toEqual(['image-generate'])
+    }
+    for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
+      expect(getModelsForBackend(backend).filter((row) => row.defaultFor.includes('image-generate')), backend).toHaveLength(1)
+    }
+  })
+
+  it('gives every image row its own branch, beyond the plain request an unlisted id gets', () => {
+    for (const row of IMAGE_MODELS) {
+      const backend = row.backend as CloudBackendId
+      const build = BUILDERS[backend]
+      const params = SAMPLE_PARAMS[backend]
+      expect(withoutModel(build(imageTask(backend, row.id, params))), row.id)
+        .not.toEqual(withoutModel(build(imageTask(backend, 'unlisted-model', params))))
+    }
+  })
+
+  it('finds a row only by its exact id', () => {
+    expect(findModel('openai', 'gpt-image-2')?.id).toBe('gpt-image-2')
+    expect(findModel('openai', 'unlisted-model')).toBeUndefined()
+    expect(getModelsForBackend('drawthings')).toEqual([])
+  })
+})

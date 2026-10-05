@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
-import { getDefaultModelForBackend } from '../../../../src/shared/models'
+import { getDefaultModelForBackend } from '../../../../src/shared/ai-models'
 import type { DrawThingsParamsPersistenceState } from '../../../../src/shared/electron-api'
 
 // The column under test drives everything through four contexts plus
@@ -223,6 +223,34 @@ describe('cloud columns: saved defaults at launch', () => {
     const labels = Array.from(container.querySelectorAll('.setting-row label')).map((label) => label.textContent ?? '')
     expect(labels.length).toBeGreaterThan(0)
     expect(labels.every((label) => /^[A-Z]/.test(label))).toBe(true)
+  })
+})
+
+describe('cloud columns: a saved model not in the list', () => {
+  it.each(CLOUD_BACKEND_IDS_IN_UI_ORDER)('%s shows it as not in the list and queues nothing until another is chosen', async (backend) => {
+    vi.useFakeTimers()
+    stageSettings(backend, 'retired-model', { quality: 'high' })
+    settingsValue.apiKeyPresence = { image: { openai: true, nanobanana: true, grok: true, flux: true }, geminiText: true, openaiText: true }
+    const { container } = render(<QueueColumn backendId={backend} label={backend} prompt="a cat" />)
+    await flush()
+    const select = rowControl(container, 'Model') as HTMLSelectElement
+    expect(select.value).toBe('retired-model')
+    expect(select.selectedOptions[0]!.textContent).toBe('retired-model (not in the list)')
+    expect(container.textContent).toContain('This model is not in the list. Choose another model to queue images.')
+    // No parameter rows belong to a model with no row.
+    expect(container.querySelectorAll('.setting-row label').length).toBe(1)
+    expect(container.querySelector<HTMLButtonElement>('.enqueue-btn')!.disabled).toBe(true)
+    expect(enqueueValue.setSnapshot).toHaveBeenLastCalledWith(backend, expect.objectContaining({ model: 'retired-model', ready: false }))
+    await advanceAutosave()
+    expect(settingsValue.saveImageBackendDefaults, 'its saved record stands').not.toHaveBeenCalled()
+
+    const model = getDefaultModelForBackend(backend)!.id
+    fireEvent.change(select, { target: { value: model } })
+    await flush()
+    expect([...select.options].map((option) => option.value)).not.toContain('retired-model')
+    expect(container.querySelector<HTMLButtonElement>('.enqueue-btn')!.disabled).toBe(false)
+    await advanceAutosave()
+    expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalledWith(backend, model, expect.any(Object))
   })
 })
 
@@ -462,10 +490,10 @@ describe('flux column', () => {
 
 describe('snapshot wiring', () => {
   it('publishes model, params, and readiness for Send-to-All', async () => {
-    stageSettings('grok', 'grok-2-image')
+    const model = getDefaultModelForBackend('grok')!.id
+    stageSettings('grok', model)
     render(<QueueColumn backendId="grok" label="Grok" prompt="a cat" />)
     await flush()
-    const model = getDefaultModelForBackend('grok')!.id
     const calls = enqueueValue.setSnapshot.mock.calls.filter(([, snap]) => snap !== null)
     const last = calls[calls.length - 1]
     expect(last[0]).toBe('grok')

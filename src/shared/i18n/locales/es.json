@@ -401,6 +401,8 @@
   "task.deleteHint": "Eliminar con sus archivos",
   "column.defaultsSaveFailed": "No se pudieron guardar los cambios de modelo y parámetros. Tus elecciones actuales siguen en uso durante esta sesión.",
   "column.model": "Modelo",
+  "column.modelNotInListOption": "{model} (no está en la lista)",
+  "column.modelNotInList": "Este modelo no está en la lista. Elige otro modelo para poner imágenes en cola.",
   "column.closeSaveResult": "Cerrar el resultado de guardar la configuración",
   "column.apiKeyNotSet": "Clave de API sin configurar",
   "column.queue": "Poner en cola",

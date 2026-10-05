@@ -80,6 +80,16 @@ export function provedNotProcessed(error: unknown): boolean {
   return false
 }
 
+/** Whether a failure proves the request never started paid work: the provider answered 429,
+ *  or the connection was refused or never resolved. A 408 or 503 is left out, since a proxy
+ *  can return either after the provider has made the image; an image request, billed per
+ *  image, is resent only on this stricter proof. */
+export function provedNotStarted(error: unknown): boolean {
+  const status = httpStatus(error)
+  if (status !== null) return status === 429
+  return provedNotProcessed(error)
+}
+
 /** The provider's human-readable reason for a failure — the message field of its error
  *  body, as the provider wrote it (see provider-reason) — or null when the failure is not a
  *  provider answer or the provider gave no reason. The backend that received the answer

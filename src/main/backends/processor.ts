@@ -22,7 +22,8 @@ import { providerMessage } from '../provider-errors'
 // rather than something each backend registers for itself: registration lived
 // in Draw Things alone, which made "stop generating" a Draw-Things-only command
 // and left the four cloud backends running with no way to reach them.
-type GenerateFn = (task: Task, signal: AbortSignal) => Promise<{ buffer: Buffer; mimeType?: string }>
+// A generator returns the seed it sent, when it sent one, for the sidecar.
+type GenerateFn = (task: Task, signal: AbortSignal) => Promise<{ buffer: Buffer; mimeType?: string; seed?: number }>
 
 const generators: Record<BackendId, GenerateFn> = {
   openai: generateOpenAI,
@@ -168,7 +169,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   let generated = false
 
   try {
-    const { buffer: imageBuffer, mimeType } = await generate(task, controller.signal)
+    const { buffer: imageBuffer, mimeType, seed } = await generate(task, controller.signal)
     generated = true
     clearInFlight(task.id)
     const completedAt = new Date()
@@ -192,7 +193,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       completed_at: task.completedAt,
       file_timestamp: new Date().toISOString(),
       duration_ms: task.durationMs,
-      seed: null,
+      seed: seed ?? null,
       error: null
     }
 

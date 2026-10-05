@@ -12,9 +12,8 @@ import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { getDefaultModelForBackend, getModelsForBackend } from '../../../../src/shared/ai-models'
 import {
-  getDefaultModelForBackend,
-  getModelsForBackend,
   type FluxModelDef,
   type GrokModelDef,
   type ModelDef,

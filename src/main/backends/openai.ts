@@ -6,7 +6,7 @@ import { log, serializeError } from '../logger'
 import { recordAiCall } from '../records'
 import { buildOpenAIImageParams } from './openai-request'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, ProviderHttpError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderRefusalError, ProviderTimeoutError } from '../provider-errors'
 import { openaiReasonField, reasonFromParsed } from '../provider-reason'
 import { withProviderRetry } from '../provider-retry'
 
@@ -66,7 +66,7 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
       throw new ProviderHttpError(err.message, err.status, said, err.headers?.get('retry-after') ?? null)
     }
     throw err
-  }), { signal, timeoutMs: config.image_backends.openai.timeout_ms })
+  }), { signal, timeoutMs: config.image_backends.openai.timeout_ms, resend: provedNotStarted })
 
   const b64 = response.data?.[0]?.b64_json
   if (!b64) {

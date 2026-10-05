@@ -1,5 +1,4 @@
 import { Task } from '../../shared/types'
-import { FLUX_MAX_PIXELS, FLUX_SIZE_STEP } from '../../shared/models'
 import { loadConfig } from '../config'
 import { withProviderRetry } from '../provider-retry'
 import { resolveApiKey } from '../config/api-keys-store'
@@ -7,15 +6,16 @@ import { log } from '../logger'
 import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { abortableDelay } from '../utils/abortable-delay'
-import { MissingApiKeyError, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
 import { fluxReasonField, reasonFromBody } from '../provider-reason'
+import { buildFluxBody } from './flux-request'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
 
-// Calls FLUX API (async submit/poll/download flow) and returns the image bytes
-// plus the Content-Type reported by the signed-URL download.
-export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
+// Calls FLUX API (async submit/poll/download flow) and returns the image bytes,
+// the Content-Type reported by the signed-URL download, and the seed it sent.
+export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string; seed?: number }> {
   const config = loadConfig()
   const apiKey = resolveApiKey('bfl')
 
@@ -23,27 +23,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     throw new MissingApiKeyError('FLUX')
   }
 
-  const width = (task.params.width as number) || 1024
-  const height = (task.params.height as number) || 1024
-
-  // The same limits the size ladder is built from, so a preset can never fail here.
-  if (width % FLUX_SIZE_STEP !== 0 || height % FLUX_SIZE_STEP !== 0) {
-    throw new Error(`FLUX dimensions must be multiples of ${FLUX_SIZE_STEP}`)
-  }
-  if (width * height > FLUX_MAX_PIXELS) {
-    throw new Error('FLUX dimensions exceed 4MP limit')
-  }
-
-  const body: Record<string, unknown> = {
-    prompt: task.prompt,
-    width,
-    height,
-    output_format: 'png'
-  }
-
-  if (task.params.steps) body.steps = task.params.steps
-  if (task.params.guidance) body.guidance = task.params.guidance
-  if (task.params.seed != null) body.seed = task.params.seed
+  const body = buildFluxBody(task)
 
   const startTime = Date.now()
 
@@ -78,7 +58,8 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
       }
 
       return JSON.parse(text) as { id: string; polling_url?: string }
-    }, { signal: controller.signal })
+    // The submit is the paid request; a poll below costs nothing and keeps the ordinary proof.
+    }, { signal: controller.signal, resend: provedNotStarted })
     const pollingUrl = submitData.polling_url || `${BASE_URL}/get_result?id=${submitData.id}`
 
     // Poll for result
@@ -122,7 +103,8 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
 
         return {
           buffer: Buffer.from(await imageResponse.arrayBuffer()),
-          mimeType: imageResponse.headers.get('content-type') ?? undefined
+          mimeType: imageResponse.headers.get('content-type') ?? undefined,
+          ...(typeof body.seed === 'number' ? { seed: body.seed } : {}),
         }
       }
 

@@ -11,14 +11,14 @@ import { log, serializeError } from '../logger'
 import { startAiCall } from '../records'
 import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
 
-export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
+export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string; seed?: number }> {
   // Same guard as the cloud backends with manual wiring: an already-aborted
   // signal never fires its listener, so it must be answered before spawn.
   if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
   return generateDrawThingsCli(task, signal)
 }
 
-async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
+async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string; seed?: number }> {
   const config = loadConfig()
   const defaults = config.image_backends.drawthings.default_params
   const cliPath = resolveCliPath()
@@ -142,7 +142,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
 
   try {
     const buffer = fs.readFileSync(outputPath)
-    return { buffer }
+    return { buffer, ...(seed != null && seed > 0 ? { seed } : {}) }
   } finally {
     try { fs.unlinkSync(outputPath) } catch { /* ignore */ }
   }

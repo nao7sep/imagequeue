@@ -392,6 +392,8 @@
   "task.deleteHint": "Samt Dateien löschen",
   "column.defaultsSaveFailed": "Änderungen an Modell und Parametern konnten nicht gespeichert werden. Ihre aktuelle Auswahl bleibt für diese Sitzung in Gebrauch.",
   "column.model": "Modell",
+  "column.modelNotInListOption": "{model} (nicht in der Liste)",
+  "column.modelNotInList": "Dieses Modell ist nicht in der Liste. Wählen Sie ein anderes Modell, um Bilder einzureihen.",
   "column.closeSaveResult": "Ergebnis des Speicherns der Einstellungen schließen",
   "column.apiKeyNotSet": "Kein API-Schlüssel festgelegt",
   "column.queue": "Einreihen",
