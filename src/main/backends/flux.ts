@@ -12,6 +12,11 @@ import { buildFluxBody } from './flux-request'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
+// BFL's final words for a job that made no image. Any other status is a job
+// still at work — FLUX 3 passes through Reasoning and Generating, words FLUX.2
+// never used — so an unknown one is polled on, within the request's timeout,
+// rather than abandoning a paid job.
+const ENDED_WITHOUT_IMAGE = new Set(['Request Moderated', 'Content Moderated', 'Task not found', 'Error', 'Failed'])
 
 // Calls FLUX API (async submit/poll/download flow) and returns the image bytes,
 // the Content-Type reported by the signed-URL download, and the seed it sent.
@@ -108,11 +113,10 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
         }
       }
 
-      if (pollData.status === 'Pending' || pollData.status === 'Processing') continue
+      if (!ENDED_WITHOUT_IMAGE.has(pollData.status)) continue
 
-      // Every other status is BFL's final word — "Request Moderated", "Content
-      // Moderated", "Task not found", "Error", "Failed" — and polling on would
-      // only turn it into a timeout the provider never had.
+      // Polling on after a final word would only turn it into a timeout the
+      // provider never had.
       log('error', 'FLUX generation ended without an image', { model: task.model, status: pollData.status, jobId: submitData.id })
       throw new ProviderStatusError('FLUX', String(pollData.status))
     }

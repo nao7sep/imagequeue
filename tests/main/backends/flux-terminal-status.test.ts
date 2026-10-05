@@ -43,7 +43,7 @@ afterEach(() => {
 })
 
 describe('FLUX polling', () => {
-  it.each(['Request Moderated', 'Content Moderated', 'Task not found'])(
+  it.each(['Request Moderated', 'Content Moderated', 'Task not found', 'Error', 'Failed'])(
     'ends at once on "%s" and reports that status, not a timeout',
     async (status) => {
       const fetchMock = stubPolls(['Pending', 'Processing', status])
@@ -56,8 +56,24 @@ describe('FLUX polling', () => {
       expect(shown).not.toMatch(/time/i)
     },
   )
-})
 
+  it('polls on through FLUX 3\'s Reasoning and Generating statuses to the image', async () => {
+    const statuses = ['Reasoning', 'Generating', 'Ready']
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/flux-3-image')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://poll.example/job' }))
+      if (url === 'https://poll.example/job') {
+        const status = statuses.shift()!
+        return new Response(JSON.stringify(status === 'Ready' ? { status, result: { sample: 'https://image.example/result' } } : { status }))
+      }
+      return new Response(new Uint8Array([1, 2, 3]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await generateFlux({ ...task, model: 'flux-3-image', params: { aspectRatio: '1:1', resolution: '1k' } }, new AbortController().signal)
+    expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
+    expect(result, 'FLUX 3 sends no seed').not.toHaveProperty('seed')
+    expect(fetchMock.mock.calls.filter(([url]) => url === 'https://poll.example/job')).toHaveLength(3)
+  })
+})
 
 describe('FLUX safe poll retry', () => {
   it('retries a 503 poll on the same submitted job', async () => {
