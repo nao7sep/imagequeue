@@ -5,6 +5,7 @@ import { DatabaseSync, StatementSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { record, closeBackupStore } from '../../../src/main/backup/backup-store'
 import * as logger from '../../../src/main/logger'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 // The write-through data-backup store (data-backup conventions). These tests pin the store directly
 // through its public record()/closeBackupStore() API, isolating the storage root with IMAGEQUEUE_DATA_DIR
@@ -231,5 +232,47 @@ describe('write-through backup store', () => {
     const warnCalls = warn.mock.calls.filter((c) => c[0] === 'warn')
     expect(warnCalls).toHaveLength(1)
     expect(warnCalls[0][1]).toContain('failed to record')
+  })
+  describe('format version', () => {
+    function userVersion(): number {
+      const db = new DatabaseSync(storeFile, { readOnly: true })
+      try {
+        return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+      } finally {
+        db.close()
+      }
+    }
+
+    it('reads a store with no version as version 1 and records it', () => {
+      const seeded = new DatabaseSync(storeFile)
+      seeded.exec('CREATE TABLE kept (value TEXT)')
+      seeded.close()
+      record(path.join(tmpRoot, 'config.json'), Buffer.from('{}'))
+      closeBackupStore()
+      expect(userVersion()).toBe(FORMAT_VERSIONS.backups)
+      expect(readAllRows(storeFile)).toHaveLength(1)
+    })
+
+    it('writes its version and keeps recording on the next open', () => {
+      record(path.join(tmpRoot, 'config.json'), Buffer.from('{}'))
+      closeBackupStore()
+      expect(userVersion()).toBe(FORMAT_VERSIONS.backups)
+      record(path.join(tmpRoot, 'config.json'), Buffer.from('{"a":1}'))
+      closeBackupStore()
+      expect(readAllRows(storeFile)).toHaveLength(2)
+    })
+
+    it('records nothing into a store from a newer version, warning once, and leaves its bytes as they were', () => {
+      const seeded = new DatabaseSync(storeFile)
+      seeded.exec(`CREATE TABLE kept (value TEXT); PRAGMA user_version = ${FORMAT_VERSIONS.backups + 1}`)
+      seeded.close()
+      const bytes = fs.readFileSync(storeFile)
+      const warn = vi.spyOn(logger, 'log')
+      expect(() => record(path.join(tmpRoot, 'config.json'), Buffer.from('{}'))).not.toThrow()
+      record(path.join(tmpRoot, 'config.json'), Buffer.from('{"a":1}'))
+      closeBackupStore()
+      expect(warn.mock.calls.filter((c) => c[0] === 'warn')).toHaveLength(1)
+      expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
+    })
   })
 })

@@ -9,6 +9,7 @@ import {
   markModelParamsPersistenceFailed,
   markModelParamsPersistenceSaved,
 } from './model-params-persistence'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from './store-format'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -20,7 +21,7 @@ type ParamsStore = Record<string, DrawThingsModelParams>
 const WRITE_DEBOUNCE_MS = 200
 
 let store: ParamsStore | null = null
-// When params.json exists but cannot be parsed, we refuse to write rather than
+// When params.json exists but cannot be parsed or has the wrong shape, we refuse to write rather than
 // overwrite the corrupted-but-possibly-recoverable file with an empty store.
 // Reads degrade to empty (UI shows missing values) and writes throw with an
 // actionable message naming the file. The bad file is left untouched so the
@@ -36,8 +37,13 @@ function ensureLoaded(): ParamsStore {
     return store
   }
   try {
-    store = JSON.parse(fs.readFileSync(file, 'utf-8')) as ParamsStore
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf-8'))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('params.json must be a JSON object')
+    store = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file) as ParamsStore
   } catch (err) {
+    // A newer file refuses every request, reads included, and stays exactly
+    // where it is; store stays null, so nothing is ever written over it.
+    if (err instanceof NewerFormatError) throw err
     const message = (err as Error).message
     loadFailed = true
     loadFailedMessage =
@@ -61,7 +67,7 @@ function writeNow(): void {
   // recorded: params.json is durable, user-authored managed text — the
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
-  writeJsonAtomic(getParamsFilePath(), store, true)
+  writeJsonAtomic(getParamsFilePath(), markFormat(store, FORMAT_VERSIONS.modelParams), true)
   markModelParamsPersistenceSaved()
 }
 

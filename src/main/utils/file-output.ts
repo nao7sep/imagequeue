@@ -6,6 +6,7 @@ import { getSessionDir } from '../session'
 import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log } from '../logger'
+import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
 
@@ -137,7 +138,8 @@ export function writeImageOutput(
   // colocated with a binary (data-backup conventions: "Harvest-then-discard output"; "Binaries";
   // "Anything colocated in a binary-bearing directory").
   fs.writeFileSync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
-  fs.writeFileSync(path.join(dir, `${baseName}.json`), JSON.stringify(metadata, null, 2), 'utf-8')
+  const sidecar = markFormat(metadata, FORMAT_VERSIONS.imageSidecar, SNAKE_FORMAT_VERSION_KEY)
+  fs.writeFileSync(path.join(dir, `${baseName}.json`), JSON.stringify(sidecar, null, 2), 'utf-8')
 
   return baseName
 }

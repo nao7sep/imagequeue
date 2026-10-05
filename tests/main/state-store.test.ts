@@ -6,6 +6,7 @@ import { readUiState, updateUiState, getUiStatePath } from '../../src/main/state
 import { defaultUiState, NOTIFICATION_VOLUME_DEFAULT } from '../../src/shared/ui-state'
 import { RECORDS_LIST_WIDTH } from '../../src/shared/records-layout'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
+import { FORMAT_VERSIONS } from '../../src/main/store-format'
 
 let home: string
 let prevHome: string | undefined
@@ -82,5 +83,26 @@ describe('ui state store', () => {
     expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.max)
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ recordsListWidth: 'wide' }))
     expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.default)
+  })
+})
+
+describe('ui state format version', () => {
+  it('reads a file with no format version as version 1', () => {
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 288 }))
+    expect(readUiState().columnWidth).toBe(288)
+  })
+
+  it('writes its format version first and reads it back', () => {
+    updateUiState({ columnWidth: 240 })
+    expect(Object.entries(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.uiState])
+    expect(readUiState().columnWidth).toBe(240)
+  })
+
+  it('reads a file from a newer version as defaults and never writes it', () => {
+    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.uiState + 1, columnWidth: 288 })
+    fs.writeFileSync(getUiStatePath(), bytes)
+    expect(readUiState()).toEqual(defaultUiState())
+    expect(updateUiState({ columnWidth: 240 }).columnWidth).toBe(240)
+    expect(fs.readFileSync(getUiStatePath(), 'utf8')).toBe(bytes)
   })
 })

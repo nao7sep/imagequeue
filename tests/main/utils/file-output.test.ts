@@ -10,6 +10,7 @@ import {
   writeImageOutput
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 // writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
 // test. The closure reads `sessionDir` only when getSessionDir() is called, by
@@ -73,6 +74,13 @@ describe('writeImageOutput', () => {
     expect(base).toBe('20260604-093015-utc-cat-openai')
     expect(fs.existsSync(path.join(sessionDir, `${base}.png`))).toBe(true)
     expect(fs.existsSync(path.join(sessionDir, `${base}.json`))).toBe(true)
+  })
+
+  // The app never reads a sidecar back; it is written for others to read.
+  it('writes the sidecar with its snake_case format version first', () => {
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, { prompt: 'a cat' } as ImageMetadata, 'png')
+    const sidecar = JSON.parse(fs.readFileSync(path.join(sessionDir, `${base}.json`), 'utf8'))
+    expect(Object.entries(sidecar)).toEqual([['format_version', FORMAT_VERSIONS.imageSidecar], ['prompt', 'a cat']])
   })
 
   it('never overwrites: a collision advances to the next free ordinal instead of discarding the image', () => {

@@ -5,6 +5,7 @@ import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { closeRecords, fetchRecorded, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
 import { freshRecordsRoot, readLog, readRows, removeRecordsRoots } from './records-fixture'
+import { FORMAT_VERSIONS } from '../../src/main/store-format'
 
 afterAll(() => {
   vi.unstubAllGlobals()
@@ -196,5 +197,58 @@ describe('the stored-record signal', () => {
     expect(recordsDatabasePath()).toBe(path.join(dir, 'records.sqlite3'))
     closeRecords()
     expect(recordsDatabasePath()).toBeNull()
+  })
+})
+
+describe('the records format version', () => {
+  function userVersion(file: string): number {
+    const db = new DatabaseSync(file, { readOnly: true })
+    try {
+      return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+    } finally {
+      db.close()
+    }
+  }
+
+  it('reads a database with no version as version 1 and records it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-unversioned-'))
+    const seeded = new DatabaseSync(path.join(dir, 'records.sqlite3'))
+    seeded.exec('CREATE TABLE kept (value TEXT)')
+    seeded.close()
+    openRecords(dir)
+    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Stored', {})
+    closeRecords()
+
+    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FORMAT_VERSIONS.records)
+    expect(readLog(dir).map((row) => row.message)).toEqual(['Stored'])
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes its version and reads it back on the next open', () => {
+    const dir = freshRecordsRoot()
+    closeRecords()
+    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FORMAT_VERSIONS.records)
+    openRecords(dir)
+    expect(recordsDatabasePath()).toBe(path.join(dir, 'records.sqlite3'))
+    closeRecords()
+  })
+
+  it('keeps records in the fallback file beside a database from a newer version, and leaves its bytes as they were', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-newer-'))
+    const file = path.join(dir, 'records.sqlite3')
+    const seeded = new DatabaseSync(file)
+    seeded.exec(`CREATE TABLE kept (value TEXT); PRAGMA user_version = ${FORMAT_VERSIONS.records + 1}`)
+    seeded.close()
+    const bytes = fs.readFileSync(file)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    openRecords(dir)
+    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Kept anyway', {})
+    consoleError.mockRestore()
+
+    expect(recordsDatabasePath()).toBeNull()
+    expect(fallbackLines(dir).map((line) => line.message)).toEqual(['Records database could not be opened', 'Kept anyway'])
+    expect(fs.readFileSync(file).equals(bytes)).toBe(true)
+    closeRecords()
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 })

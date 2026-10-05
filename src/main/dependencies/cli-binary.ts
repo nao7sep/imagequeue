@@ -19,6 +19,7 @@ import { downloadToFile, sha256File, type DownloadProgress } from './download'
 import type { CliRelease } from './cli-release'
 import { isCliReleaseTag } from './cli-version'
 import type { DependencyProgress } from '../../shared/types'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 
 const execFileAsync = promisify(execFile)
 
@@ -44,15 +45,26 @@ function isRecordedBinary(binaryId: string): boolean {
   return binaryId.slice(binaryId.lastIndexOf(':') + 1) === cliBinaryId()
 }
 
+let newerWarned = false
+
+// A sidecar a newer build wrote reads as unknown and is never rewritten in
+// place; installing a binary replaces it with the binary it describes.
 function readCliMeta(): CliMeta | null {
   try {
-    const meta = JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')) as Partial<CliMeta>
+    const file = getCliMetaPath()
+    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    const meta = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.cliSidecar, file) as Partial<CliMeta>
     if (typeof meta.tag !== 'string' || !isCliReleaseTag(meta.tag)) return null
     if (typeof meta.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(meta.sha256)) return null
     if (typeof meta.installedAt !== 'string') return null
     if (meta.binaryId !== undefined && typeof meta.binaryId !== 'string') return null
     return meta as CliMeta
-  } catch {
+  } catch (err) {
+    if (err instanceof NewerFormatError && !newerWarned) {
+      newerWarned = true
+      log('warn', 'The Draw Things CLI sidecar is from a newer version; its version reads as unknown', { error: serializeError(err) })
+    }
     return null
   }
 }
@@ -107,7 +119,7 @@ export function publishCliBinary(
     // publication fails, that pair remains valid; if it succeeds and the new
     // sidecar fails, the old identity cannot match the new binary.
     if (priorMeta && priorMeta.binaryId === undefined) {
-      writeJsonAtomic(getCliMetaPath(), { ...priorMeta, binaryId: cliBinaryId() }, false)
+      writeJsonAtomic(getCliMetaPath(), markFormat({ ...priorMeta, binaryId: cliBinaryId() }, FORMAT_VERSIONS.cliSidecar), false)
     }
   } else {
     // An orphan sidecar has no artifact to preserve and must not label the first
@@ -128,7 +140,7 @@ export function publishCliBinary(
   // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
   // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
   // colocated in a binary-bearing directory").
-  writeJsonAtomic(getCliMetaPath(), meta, false)
+  writeJsonAtomic(getCliMetaPath(), markFormat(meta, FORMAT_VERSIONS.cliSidecar), false)
 }
 
 /**

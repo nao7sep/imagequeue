@@ -4,9 +4,11 @@ import {
   configResetPresentation,
   elaboratorRecoveryPresentation,
   generationFailurePresentation,
+  newerFilePresentation,
   startupFailurePresentation,
 } from '../../src/main/failure-presentation'
 import { ConfigFileHaltError } from '../../src/main/config/config-store'
+import { NewerFormatError } from '../../src/main/store-format'
 import { ProviderHttpError, ProviderStatusError } from '../../src/main/provider-errors'
 import { loadTranslator } from '../../src/shared/i18n/translate'
 
@@ -77,6 +79,18 @@ describe('generationFailurePresentation', () => {
     const other = text(startupFailurePresentation(new Error(hostile)))
     expect(other).toContain('stopped before opening its main window')
     expect(other).not.toContain('hostile-sentinel')
+  })
+
+  it('names a file a newer version wrote, when it stopped startup and when a request needed it', () => {
+    const settings = '/Users/me/.imagequeue/config.json'
+    const halted = text(startupFailurePresentation(new NewerFormatError(settings, 2, 1)))
+    expect(halted).toContain(`newer version of ImageQueue wrote the file at ${settings}`)
+    expect(halted).toContain('left it unchanged')
+
+    const elaborators = '/Users/me/.imagequeue/elaborators.json'
+    const notice = newerFilePresentation(elaborators)
+    expect(text(notice.title)).toBe('File from a newer version')
+    expect(text(notice.message)).toContain(`newer version of ImageQueue wrote the file at ${elaborators}`)
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

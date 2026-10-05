@@ -7,6 +7,7 @@ import {
   updateDependenciesCache,
 } from '../../../src/main/dependencies/store'
 import { getDependenciesStatePath } from '../../../src/main/dependencies/paths'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 let home: string
 let prevHome: string | undefined
@@ -103,5 +104,27 @@ describe('dependencies cache', () => {
       cli: { lastKnownLatest: 'v1.0.0', lastCheckedAtUtc: null },
       recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
     })
+  })
+})
+
+describe('dependencies cache format version', () => {
+  it('reads a file with no format version as version 1', () => {
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
+    expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
+  })
+
+  it('writes its format version first and reads it back', () => {
+    updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-06-30T00:00:00.000Z' })
+    expect(Object.entries(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.dependencies])
+    expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
+  })
+
+  it('reads a file from a newer version as empty and never writes it', () => {
+    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.dependencies + 1, lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' })
+    fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
+    fs.writeFileSync(getDependenciesStatePath(), bytes)
+    expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
+    expect(updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-07-01T00:00:00.000Z' }).lastAttemptAtUtc).toBe('2026-07-01T00:00:00.000Z')
+    expect(fs.readFileSync(getDependenciesStatePath(), 'utf8')).toBe(bytes)
   })
 })

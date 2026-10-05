@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
 import { log, serializeError } from './logger'
+import { NewerFormatError } from './store-format'
+import { newerFilePresentation } from './failure-presentation'
 
 // The one place renderer→main invoke handlers are registered. Every registrar
 // goes through handle() instead of ipcMain.handle directly, so a throw is
@@ -27,12 +29,24 @@ import { log, serializeError } from './logger'
 // body. A stricter unknown[] would reject those concrete parameter types.
 type IpcInvokeHandler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
 
+// A store a newer build wrote refuses every request that needs it. The renderer
+// shows that request's own failure, and the first refusal of each file also
+// names it in a notice, once per launch.
+const reportedNewerFiles = new Set<string>()
+
+function reportNewerFile(event: Electron.IpcMainInvokeEvent, error: NewerFormatError): void {
+  if (reportedNewerFiles.has(error.path)) return
+  reportedNewerFiles.add(error.path)
+  event.sender.send('app:notice', newerFilePresentation(error.path))
+}
+
 export function handle(channel: string, fn: IpcInvokeHandler): void {
   ipcMain.handle(channel, async (event, ...args) => {
     try {
       return await fn(event, ...args)
     } catch (err) {
       log('error', 'IPC handler failed', { channel, error: serializeError(err) })
+      if (err instanceof NewerFormatError) reportNewerFile(event, err)
       throw err
     }
   })

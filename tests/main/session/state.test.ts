@@ -10,7 +10,7 @@ import {
   toResumedTask
 } from '../../../src/main/session/state'
 import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
-import { BackendId, SESSION_MANIFEST_VERSION, Task, TaskStatus } from '../../../src/shared/types'
+import { BackendId, Task, TaskStatus } from '../../../src/shared/types'
 import { createEmptySessionDraft } from '../../../src/shared/session-draft'
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
@@ -182,7 +182,6 @@ describe('collectSessionThumbnails', () => {
 
 describe('isSessionManifest', () => {
   const valid = {
-    version: SESSION_MANIFEST_VERSION,
     sessionId: 's',
     createdAt: 'now',
     updatedAt: 'now',
@@ -235,9 +234,8 @@ describe('isSessionManifest', () => {
     ])
   })
 
-  it('rejects wrong version, missing fields, and malformed task maps', () => {
+  it('rejects missing fields and malformed task maps', () => {
     expect(isSessionManifest(null)).toBe(false)
-    expect(isSessionManifest({ ...valid, version: 999 })).toBe(false)
     expect(isSessionManifest({ ...valid, sessionId: 123 })).toBe(false)
     expect(isSessionManifest({ ...valid, elaboratedPrompts: 'nope' })).toBe(false)
     // Junk ENTRIES no longer reject — they are repaired on read (see below);

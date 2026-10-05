@@ -6,6 +6,7 @@ import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import { utcStampForFilename } from '../../shared/utc-stamp'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 
 // The secret store, realized per the fleet api-key-storage-conventions. Secrets
 // live in their own file under the storage root (`~/.imagequeue/api-keys.json`),
@@ -101,9 +102,16 @@ function moveAsideInvalid(filePath: string): string | null {
 // only when strings. A wrong outer container is not the same thing as an empty
 // valid store: returning null lets the reader preserve those original bytes
 // before a later key edit writes a clean file.
-function normalize(raw: unknown): SecretsFile | null {
+function normalize(raw: unknown, filePath: string): SecretsFile | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const rawKeys = (raw as { keys?: unknown }).keys
+  let unmarked: Record<string, unknown>
+  try {
+    unmarked = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.apiKeys, filePath)
+  } catch (err) {
+    if (err instanceof NewerFormatError) throw err
+    return null
+  }
+  const rawKeys = unmarked.keys
   if (!rawKeys || typeof rawKeys !== 'object' || Array.isArray(rawKeys)) return null
   const keys: Record<string, string> = {}
   for (const [id, value] of Object.entries(rawKeys as Record<string, unknown>)) {
@@ -112,6 +120,8 @@ function normalize(raw: unknown): SecretsFile | null {
   }
   return { keys }
 }
+
+let newerWarned = false
 
 function readSecretsFile(forMutation = false): SecretsFile {
   const filePath = getSecretsPath()
@@ -132,18 +142,9 @@ function readSecretsFile(forMutation = false): SecretsFile {
     }
     return { keys: {} }
   }
+  let raw: unknown
   try {
-    const normalized = normalize(JSON.parse(text))
-    if (normalized) return normalized
-    const movedTo = moveAsideInvalid(filePath)
-    log('warn', 'API keys file had the wrong shape; set aside and treating as empty', {
-      path: filePath,
-      movedTo,
-    })
-    if (forMutation && !movedTo) {
-      throw new Error('API keys file had the wrong shape and could not be preserved; it was left unchanged')
-    }
-    return { keys: {} }
+    raw = JSON.parse(text)
   } catch (err) {
     const movedTo = moveAsideInvalid(filePath)
     log('warn', 'API keys file is not valid JSON; set aside and treating as empty', {
@@ -156,6 +157,32 @@ function readSecretsFile(forMutation = false): SecretsFile {
     }
     return { keys: {} }
   }
+  let normalized: SecretsFile | null
+  try {
+    normalized = normalize(raw, filePath)
+  } catch (err) {
+    // A newer file is intact: it is never moved aside or written. Reads treat
+    // it as absent, warned once, and a change to a key is refused.
+    if (forMutation) throw err
+    if (!newerWarned) {
+      newerWarned = true
+      log('warn', 'API keys file is from a newer version; treating it as empty and leaving it unchanged', {
+        path: filePath,
+        error: serializeError(err)
+      })
+    }
+    return { keys: {} }
+  }
+  if (normalized) return normalized
+  const movedTo = moveAsideInvalid(filePath)
+  log('warn', 'API keys file had the wrong shape; set aside and treating as empty', {
+    path: filePath,
+    movedTo,
+  })
+  if (forMutation && !movedTo) {
+    throw new Error('API keys file had the wrong shape and could not be preserved; it was left unchanged')
+  }
+  return { keys: {} }
 }
 
 function writeSecretsFile(file: SecretsFile): void {
@@ -170,7 +197,7 @@ function writeSecretsFile(file: SecretsFile): void {
   // through writeFileAtomic — the separate path is itself the exclusion, by construction.
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
-  fs.writeFileSync(tempPath, `${JSON.stringify(file, null, 2)}\n`, { mode: SECRETS_FILE_MODE })
+  fs.writeFileSync(tempPath, `${JSON.stringify(markFormat(file, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, { mode: SECRETS_FILE_MODE })
   if (ENFORCE_FILE_MODE) fs.chmodSync(tempPath, SECRETS_FILE_MODE)
   fs.renameSync(tempPath, filePath)
 }

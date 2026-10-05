@@ -211,8 +211,6 @@ export interface ElaboratedPromptRecord {
   concepts: ConceptCredit[]
 }
 
-export const SESSION_MANIFEST_VERSION = 1
-
 export interface SessionTaskCounts {
   total: number
   queued: number
@@ -224,7 +222,7 @@ export interface SessionTaskCounts {
 }
 
 export interface SessionManifest {
-  version: typeof SESSION_MANIFEST_VERSION
+  formatVersion: number
   sessionId: string
   createdAt: string
   updatedAt: string

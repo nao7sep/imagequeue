@@ -43,7 +43,11 @@ describe('settings by set', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
   const file = () => path.join(root, 'config.json')
-  const stored = () => JSON.parse(fs.readFileSync(file(), 'utf8'))
+  // The sets the file holds; its format version has tests of its own.
+  const stored = () => {
+    const { formatVersion: _formatVersion, ...sets } = JSON.parse(fs.readFileSync(file(), 'utf8'))
+    return sets
+  }
 
   it('loads built-ins without writing on first run', async () => {
     const { loadConfig } = await import('../../../src/main/config/config-store')
@@ -196,6 +200,39 @@ describe('settings by set', () => {
     expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
     expect(stored()).toEqual({ general: { language: 'ja' } })
     expect(drainSetAsideConfigPaths()).toEqual([])
+  })
+  it('reads a file with no format version as version 1', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ general: { language: 'de' } }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().general.language).toBe('de')
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
+  })
+  it('writes its format version first and reads it back', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    const { FORMAT_VERSIONS } = await import('../../../src/main/store-format')
+    updateConfig((draft) => { draft.general.language = 'ja' })
+    expect(Object.entries(JSON.parse(fs.readFileSync(file(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.config])
+    vi.resetModules()
+    const reloaded = await import('../../../src/main/config/config-store')
+    expect(reloaded.loadConfig().general.language).toBe('ja')
+  })
+  it('halts on a file from a newer version, naming it, and leaves its bytes as they were', async () => {
+    const { FORMAT_VERSIONS, NewerFormatError } = await import('../../../src/main/store-format')
+    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.config + 1, general: { language: 'ja' } })
+    fs.writeFileSync(file(), bytes)
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    let thrown: unknown
+    try { loadConfig() } catch (err) { thrown = err }
+    expect(thrown).toBeInstanceOf(NewerFormatError)
+    expect((thrown as InstanceType<typeof NewerFormatError>).path).toBe(file())
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
+  })
+  it('sets aside a file whose format version is not a positive integer', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 'one', general: { language: 'ja' } }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig()).toEqual(createDefaultConfig())
+    expect(fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))).toHaveLength(1)
   })
   it('warns once, naming the key, for a set that fails its check', async () => {
     const log = vi.fn()

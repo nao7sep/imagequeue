@@ -4,6 +4,11 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let root: string
+// The sets config.json holds; its format version is the config store's to test.
+function storedSets(): unknown {
+  const { formatVersion: _formatVersion, ...sets } = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))
+  return sets
+}
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-text-models-'))
   vi.stubEnv('IMAGEQUEUE_DATA_DIR', root)
@@ -21,7 +26,7 @@ describe('open text model sets', () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
     const config = updateConfig((draft) => { draft.gemini.elaboration = 'unknown-future-id' })
     expect(config.gemini.elaboration).toBe('unknown-future-id')
-    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ gemini: { elaboration: 'unknown-future-id' } })
+    expect(storedSets()).toEqual({ gemini: { elaboration: 'unknown-future-id' } })
   })
   it('drops renamed keys at the next write without migrating them', async () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
@@ -35,18 +40,18 @@ describe('open text model sets', () => {
     expect(loadConfig().gemini.slug).toBe('my-slug')
     expect(loadConfig().gemini.timeout_ms).toBe(30000)
     updateConfig((draft) => { draft.provider = 'openai' })
-    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({
+    expect(storedSets()).toEqual({
       provider: 'openai', gemini: { slug: 'my-slug' },
     })
   })
   it('stores a provider timeout as its own set beside the provider\'s other sets', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
     updateConfig((draft) => { draft.openai.timeout_ms = 90000 })
-    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ openai: { timeout_ms: 90000 } })
+    expect(storedSets()).toEqual({ openai: { timeout_ms: 90000 } })
   })
   it('stores a role\'s thinking only while it differs from the selected model\'s default', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
-    const file = (): unknown => JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))
+    const file = storedSets
     updateConfig((draft) => { draft.openai.thinking.slug = 'none' })
     expect(fs.existsSync(path.join(root, 'config.json'))).toBe(false)
     updateConfig((draft) => { draft.openai.thinking.slug = 'high' })
@@ -70,7 +75,7 @@ describe('open text model sets', () => {
       draft.gemini.slug = 'gemini-3.8-flash'
       draft.gemini.thinking.slug = 'medium'
     })
-    expect(JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))).toEqual({ gemini: { elaboration: 'gemini-3.5-flash-lite', slug: 'gemini-3.8-flash' } })
+    expect(storedSets()).toEqual({ gemini: { elaboration: 'gemini-3.5-flash-lite', slug: 'gemini-3.8-flash' } })
     const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
     closeBackupStore()
 

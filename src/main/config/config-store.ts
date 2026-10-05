@@ -8,10 +8,11 @@ import { resolveStorageRoot } from './storage-root'
 import { utcStampForFilename } from '../../shared/utc-stamp'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 
 let cachedConfig: AppConfig | null = null
-// The map config.json holds as of the last load or write; null while there is
-// no file, including after a set-aside. Save compares against it and never
+// The map of sets config.json holds as of the last load or write; null while
+// there is no file, including after a set-aside. Save compares against it and never
 // re-reads the file, so config.json is read only at load.
 let storedMap: Record<string, unknown> | null = null
 
@@ -94,7 +95,14 @@ function readStoredMap(): Record<string, unknown> | null {
     setAsideUnusableFile(file, new Error('Config file must be a JSON object'))
     return null
   }
-  return parsed
+  try {
+    return checkFormat(parsed, FORMAT_VERSIONS.config, file)
+  } catch (err) {
+    // A newer file halts startup and stays exactly where it is.
+    if (err instanceof NewerFormatError) throw err
+    setAsideUnusableFile(file, err)
+    return null
+  }
 }
 
 // Each set is checked as it is read (config-sets conventions, Reading and healing).
@@ -153,7 +161,7 @@ export function saveConfig(config: AppConfig): void {
   const unchanged = storedMap === null ? Object.keys(next).length === 0 : valuesEqual(next, storedMap)
   if (!unchanged) {
     const file = getConfigPath()
-    writeJsonAtomic(file, next, true)
+    writeJsonAtomic(file, markFormat(next, FORMAT_VERSIONS.config), true)
     storedMap = next
     log('info', 'Config saved', { path: file })
   }

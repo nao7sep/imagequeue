@@ -8,6 +8,7 @@ import {
   getStoredApiKey,
   setStoredApiKey
 } from '../../../src/main/config/api-keys-store'
+import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 const isPosix = process.platform !== 'win32'
@@ -254,5 +255,34 @@ describe('api-keys-store', () => {
     expect(path.dirname(tempPath)).toBe(tmpRoot)
     expect(path.basename(tempPath)).toMatch(/^api-keys-[A-Za-z0-9_-]+\.tmp$/)
     spy.mockRestore()
+  })
+  describe('format version', () => {
+    const secretsPath = () => path.join(tmpRoot, 'api-keys.json')
+
+    it('reads a file with no format version as version 1', () => {
+      setStoredApiKey('openai.image', 'sk-stored')
+      const { formatVersion: _formatVersion, ...unmarked } = JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))
+      fs.writeFileSync(secretsPath(), JSON.stringify(unmarked))
+      expect(getStoredApiKey('openai.image')).toBe('sk-stored')
+    })
+
+    it('writes its format version first and reads it back', () => {
+      setStoredApiKey('openai.image', 'sk-stored')
+      expect(Object.entries(JSON.parse(fs.readFileSync(secretsPath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.apiKeys])
+      expect(getStoredApiKey('openai.image')).toBe('sk-stored')
+    })
+
+    it('reads a file from a newer version as no keys, refuses a change, and leaves its bytes as they were', () => {
+      setStoredApiKey('openai.image', 'sk-stored')
+      const marked = JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))
+      const bytes = JSON.stringify({ ...marked, formatVersion: FORMAT_VERSIONS.apiKeys + 1 })
+      fs.writeFileSync(secretsPath(), bytes)
+
+      expect(resolveApiKey('openai.image')).toBe('')
+      expect(getStoredApiKey('openai.image')).toBe('')
+      expect(() => setStoredApiKey('openai.image', 'sk-other')).toThrow(NewerFormatError)
+      expect(fs.readFileSync(secretsPath(), 'utf8')).toBe(bytes)
+      expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.invalid'))).toEqual([])
+    })
   })
 })

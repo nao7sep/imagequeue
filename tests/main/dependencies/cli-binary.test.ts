@@ -11,6 +11,7 @@ import {
   getCliBinaryPath,
   getCliMetaPath,
 } from '../../../src/main/dependencies/paths'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 let home: string
 let previousHome: string | undefined
@@ -125,5 +126,40 @@ describe('readInstalledCliTag', () => {
   it('does not name a different file with the recorded tag', () => {
     installWithSidecar((ino, dev) => `${dev}:${ino + 1n}`)
     expect(readInstalledCliTag()).toBeNull()
+  })
+})
+
+describe('the sidecar format version', () => {
+  function installWithSidecar(marker: Record<string, unknown>): void {
+    fs.mkdirSync(getBinDir(), { recursive: true })
+    fs.writeFileSync(getCliBinaryPath(), 'binary')
+    fs.writeFileSync(getCliMetaPath(), JSON.stringify({
+      ...marker,
+      tag: 'v1.20260716.0',
+      sha256: 'c'.repeat(64),
+      installedAt: '2026-08-22T20:13:13.750Z',
+      binaryId: String(fs.statSync(getCliBinaryPath(), { bigint: true }).ino),
+    }))
+  }
+
+  it('reads a sidecar with no format version as version 1', () => {
+    installWithSidecar({})
+    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+  })
+
+  it('writes its format version first and reads it back', () => {
+    fs.mkdirSync(getBinDir(), { recursive: true })
+    const staged = path.join(home, 'new-cli')
+    fs.writeFileSync(staged, 'new binary')
+    publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64))
+    expect(Object.entries(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.cliSidecar])
+    expect(readInstalledCliTag()).toBe('v1.20260822.0')
+  })
+
+  it('reads a sidecar from a newer version as unknown and leaves its bytes as they were', () => {
+    installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
+    const bytes = fs.readFileSync(getCliMetaPath(), 'utf8')
+    expect(readInstalledCliTag()).toBeNull()
+    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(bytes)
   })
 })

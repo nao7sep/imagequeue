@@ -20,6 +20,7 @@ import {
   recordUse,
   unexpandedProbes,
 } from '../../../src/main/concepts/concept-store'
+import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
 
 // The concept ledger, tested against a real SQLite file under a throwaway
 // IMAGEQUEUE_DATA_DIR. The draw rules ARE the dedup mechanism — no similarity
@@ -277,5 +278,63 @@ describe('concept store', () => {
       expect(listProbeDisplays(f.id, 3)).toEqual(['three', 'four', 'five'])
       expect(listProbeDisplays(f.id, 10)).toEqual(['one', 'two', 'three', 'four', 'five'])
     })
+  })
+})
+
+describe('concept store format version', () => {
+  let tmpRoot: string
+  let storeFile: string
+  const originalHome = process.env[ENV_VAR]
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-concepts-format-'))
+    process.env[ENV_VAR] = tmpRoot
+    storeFile = path.join(tmpRoot, 'concepts.sqlite3')
+  })
+
+  afterEach(() => {
+    closeConceptStore()
+    if (originalHome === undefined) delete process.env[ENV_VAR]
+    else process.env[ENV_VAR] = originalHome
+    fs.rmSync(tmpRoot, { recursive: true, force: true })
+  })
+
+  function userVersion(): number {
+    const db = new DatabaseSync(storeFile, { readOnly: true })
+    try {
+      return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+    } finally {
+      db.close()
+    }
+  }
+
+  it('reads a ledger with no version as version 1 and records it', () => {
+    ensureFacet('place')
+    closeConceptStore()
+    const unversioned = new DatabaseSync(storeFile)
+    unversioned.exec('PRAGMA user_version = 0')
+    unversioned.close()
+
+    expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['place'])
+    closeConceptStore()
+    expect(userVersion()).toBe(FORMAT_VERSIONS.concepts)
+  })
+
+  it('writes its version and reads the ledger back on the next open', () => {
+    ensureFacet('place')
+    closeConceptStore()
+    expect(userVersion()).toBe(FORMAT_VERSIONS.concepts)
+    expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['place'])
+  })
+
+  it('refuses every request on a ledger from a newer version and leaves its bytes as they were', () => {
+    const seeded = new DatabaseSync(storeFile)
+    seeded.exec(`CREATE TABLE kept (value TEXT); PRAGMA user_version = ${FORMAT_VERSIONS.concepts + 1}`)
+    seeded.close()
+    const bytes = fs.readFileSync(storeFile)
+
+    expect(() => listFacetsWithStats()).toThrow(NewerFormatError)
+    expect(() => ensureFacet('place')).toThrow(NewerFormatError)
+    expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
   })
 })

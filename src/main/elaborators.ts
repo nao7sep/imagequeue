@@ -8,6 +8,7 @@ import { writeJsonAtomic } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
 import { utcStampForFilename } from '../shared/utc-stamp'
 import { multiline, singleLine } from '../shared/textCleanup'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from './store-format'
 
 function getElaboratorsFilePath(): string {
   ensureDataDir()
@@ -312,7 +313,8 @@ function cleanElaborator(item: Elaborator): Elaborator {
   }
 }
 
-// The file as it is: every key it holds, or nothing when it is absent.
+// The file as it is: every key it holds but its format version, or nothing
+// when it is absent.
 function readFile(): Record<string, unknown> {
   const file = getElaboratorsFilePath()
   if (!fs.existsSync(file)) return {}
@@ -329,7 +331,15 @@ function readFile(): Record<string, unknown> {
     recoveryNotices.push({ kind: 'recovered', path: movedTo })
     return {}
   }
-  return parsed as Record<string, unknown>
+  try {
+    return checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.elaborators, file)
+  } catch (err) {
+    // A newer file refuses every request and stays exactly where it is.
+    if (err instanceof NewerFormatError) throw err
+    const movedTo = quarantineCorruptFile(file, 'malformed', err)
+    recoveryNotices.push({ kind: 'recovered', path: movedTo })
+    return {}
+  }
 }
 
 // The file is read once, where it is loaded, and each set is checked as it is
@@ -366,7 +376,9 @@ function saveSets(changed: Partial<ElaboratorSets>): void {
     const cleaned = (changed[kind] ?? current.sets[kind]).map(cleanElaborator)
     if (!valuesEqual(cleaned, defaultElaborators(kind))) next[kind] = cleaned
   }
-  if (!valuesEqual(next, current.file)) writeJsonAtomic(getElaboratorsFilePath(), next, true)
+  if (!valuesEqual(next, current.file)) {
+    writeJsonAtomic(getElaboratorsFilePath(), markFormat(next, FORMAT_VERSIONS.elaborators), true)
+  }
   const sets = {} as ElaboratorSets
   for (const kind of kinds) sets[kind] = next[kind] ?? defaultElaborators(kind)
   loaded = { file: next, sets }

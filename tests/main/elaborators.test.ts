@@ -16,7 +16,11 @@ let listElaborators: typeof elaborators.listElaborators
 describe('elaborator sets', () => {
   let root: string
   const file = () => path.join(root, 'elaborators.json')
-  const stored = () => JSON.parse(fs.readFileSync(file(), 'utf8'))
+  // The kinds the file holds; its format version has tests of its own.
+  const stored = () => {
+    const { formatVersion: _formatVersion, ...kinds } = JSON.parse(fs.readFileSync(file(), 'utf8'))
+    return kinds
+  }
   beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-elaborators-'))
     vi.stubEnv('IMAGEQUEUE_DATA_DIR', root)
@@ -127,5 +131,35 @@ describe('elaborator sets', () => {
     expect(() => listElaborators()).toThrow('locked')
     expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
     expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'quarantine-failed', path: file(), error: 'locked' }])
+  })
+  it('reads a file with no format version as version 1', () => {
+    fs.writeFileSync(file(), JSON.stringify({ style: [] }))
+    expect(listElaborators().filter((item) => item.kind === 'style')).toEqual([])
+    expect(drainElaboratorRecoveryNotices()).toEqual([])
+  })
+  it('writes its format version first and reads it back', async () => {
+    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+    const created = createElaborator({ kind: 'style', name: 'My style', template: 'My template' })
+    expect(Object.entries(JSON.parse(fs.readFileSync(file(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.elaborators])
+    vi.resetModules()
+    const reloaded = await import('../../src/main/elaborators')
+    expect(reloaded.listElaborators()).toContainEqual(created)
+  })
+  it('refuses every request on a file from a newer version and leaves its bytes as they were', async () => {
+    const { FORMAT_VERSIONS, NewerFormatError } = await import('../../src/main/store-format')
+    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.elaborators + 1, style: [] })
+    fs.writeFileSync(file(), bytes)
+    expect(() => listElaborators()).toThrow(NewerFormatError)
+    expect(() => createElaborator({ kind: 'style', name: 'My style', template: 'My template' })).toThrow(NewerFormatError)
+    expect(() => resetElaborators()).toThrow(NewerFormatError)
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
+    expect(drainElaboratorRecoveryNotices()).toEqual([])
+  })
+  it('quarantines a file whose format version is not a positive integer', () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 0, style: [] }))
+    expect(listElaborators().some((item) => item.kind === 'style')).toBe(true)
+    expect(fs.existsSync(file())).toBe(false)
+    expect(drainElaboratorRecoveryNotices()).toHaveLength(1)
   })
 })

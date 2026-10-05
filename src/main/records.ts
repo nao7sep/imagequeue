@@ -3,6 +3,7 @@ import path from 'path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
+import { claimSqliteFormat, FORMAT_VERSIONS } from './store-format'
 
 // The app's records, per the logging-conventions and the data-lifecycle-conventions'
 // Records: one `records.sqlite3` under the storage root, written only by the main
@@ -85,8 +86,11 @@ export function openRecords(dataDir: string): string {
   closeRecords()
   const file = path.join(dataDir, 'records.sqlite3')
   fallbackFile = path.join(dataDir, 'logs', `${utcStampForFilename(launchStarted)}.log`)
+  let opened: DatabaseSync | undefined
   try {
-    const opened = new DatabaseSync(file)
+    opened = new DatabaseSync(file)
+    // A newer database stays as it is; records go to the fallback file.
+    claimSqliteFormat(opened, FORMAT_VERSIONS.records, file)
     opened.exec('PRAGMA journal_mode = WAL')
     opened.exec(SCHEMA)
     inserts = {
@@ -97,6 +101,11 @@ export function openRecords(dataDir: string): string {
     db = opened
     databaseFile = file
   } catch (error) {
+    try {
+      opened?.close()
+    } catch (closeError) {
+      console.error('[records] closing the records database failed', closeError)
+    }
     reportFailure('Records database could not be opened', error)
   }
   return file

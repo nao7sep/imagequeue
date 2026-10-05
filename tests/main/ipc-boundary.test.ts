@@ -18,6 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 import { handle } from '../../src/main/ipc-boundary'
+import { NewerFormatError } from '../../src/main/store-format'
 import { freshRecordsRoot, readLog, removeRecordsRoots } from './records-fixture'
 
 // Invokes the listener registered for a channel as Electron's invoke path would:
@@ -91,5 +92,28 @@ describe('handle (IPC boundary wrapper)', () => {
       throw original
     })
     await expect(invoke('boom:identity')).rejects.toBe(original)
+  })
+})
+
+describe('a refusal by a store a newer version wrote', () => {
+  it('names the file to the window in one notice per file, and still rejects every request', async () => {
+    freshRecordsRoot()
+    const send = vi.fn()
+    const event = { sender: { send } }
+    const listener = (channel: string, file: string) => {
+      handle(channel, () => { throw new NewerFormatError(file, 2, 1) })
+      return hoisted.registered.get(channel)!
+    }
+    const elaborators = listener('newer:elaborators', '/data/elaborators.json')
+    const params = listener('newer:params', '/data/params.json')
+
+    await expect(Promise.resolve(elaborators(event))).rejects.toThrow(NewerFormatError)
+    await expect(Promise.resolve(elaborators(event))).rejects.toThrow(NewerFormatError)
+    await expect(Promise.resolve(params(event))).rejects.toThrow(NewerFormatError)
+
+    expect(send.mock.calls.map(([channel, notice]) => [channel, notice.message.values.path])).toEqual([
+      ['app:notice', '/data/elaborators.json'],
+      ['app:notice', '/data/params.json'],
+    ])
   })
 })

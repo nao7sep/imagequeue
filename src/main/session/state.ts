@@ -7,7 +7,6 @@ import {
   ElaboratedPromptRecord,
   BACKEND_IDS_IN_UI_ORDER,
   BackendId,
-  SESSION_MANIFEST_VERSION,
   SessionManifest,
   SessionSummary,
   SessionTaskCounts,
@@ -27,6 +26,7 @@ import { writeJsonAtomic } from '../utils/atomic-write'
 import { createCoalescedWriter } from '../utils/coalesced-writer'
 import { publishQueueState } from '../queue/publisher'
 import { markDraftPersistenceFailed, markDraftPersistenceSaved } from './draft-persistence'
+import { checkFormat, FORMAT_VERSIONS, NewerFormatError } from '../store-format'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -173,10 +173,12 @@ export function normalizeElaboratedPrompts(entries: readonly unknown[]): Elabora
   return repaired
 }
 
-export function isSessionManifest(value: unknown): value is SessionManifest {
+// A manifest as read: its format version is checked and set aside before this.
+type StoredSessionManifest = Omit<SessionManifest, 'formatVersion'>
+
+export function isSessionManifest(value: unknown): value is StoredSessionManifest {
   if (!value || typeof value !== 'object') return false
-  const candidate = value as Partial<SessionManifest>
-  if (candidate.version !== SESSION_MANIFEST_VERSION) return false
+  const candidate = value as Partial<StoredSessionManifest>
   if (typeof candidate.sessionId !== 'string') return false
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
@@ -193,12 +195,14 @@ export function isSessionManifest(value: unknown): value is SessionManifest {
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
 }
 
-function readManifestFromDir(sessionDir: string): SessionManifest | null {
+function readManifestFromDir(sessionDir: string): StoredSessionManifest | null {
   const filePath = getManifestPath(sessionDir)
   if (!fs.existsSync(filePath)) return null
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid session manifest shape')
+    const parsed = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.session, filePath)
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
@@ -216,7 +220,11 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
       tasks: normalizedTasks,
     }
   } catch (error) {
-    log('warn', 'Ignoring unreadable session manifest', {
+    // A newer manifest is skipped like an unreadable one, and its session is
+    // never opened, so nothing writes over it.
+    log('warn', error instanceof NewerFormatError
+      ? 'Ignoring a session manifest from a newer version'
+      : 'Ignoring unreadable session manifest', {
       filePath,
       error: serializeError(error),
     })
@@ -311,7 +319,7 @@ function buildManifest(
   tasksByBackend: Record<BackendId, Task[]>,
 ): SessionManifest {
   return {
-    version: SESSION_MANIFEST_VERSION,
+    formatVersion: FORMAT_VERSIONS.session,
     sessionId,
     createdAt: session.createdAt,
     updatedAt,

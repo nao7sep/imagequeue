@@ -9,6 +9,7 @@ import { utcStampForFilename } from '../../shared/utc-stamp'
 import { serializeError } from '../../shared/serialize-error'
 import { syncDirectory, syncFile } from '../utils/fsync'
 import { archivesToThin } from './archive-thinning'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 
 interface ManifestEntry extends ArchivedStore {
   sha256?: string
@@ -80,16 +81,21 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
     if (Object.keys(contents).length === 0) return result
     const existing = archiveNames(directory)
     if (existing[0]) {
+      const latest = path.join(directory, existing[0])
       try {
-        const bytes = unzipSync(fs.readFileSync(path.join(directory, existing[0])), { filter: (file) => file.name === 'manifest.json' })
-        const previous = JSON.parse(strFromU8(bytes['manifest.json'])) as ArchiveManifest
+        const bytes = unzipSync(fs.readFileSync(latest), { filter: (file) => file.name === 'manifest.json' })
+        const raw: unknown = JSON.parse(strFromU8(bytes['manifest.json']))
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('manifest.json must be a JSON object')
+        const previous = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.backupManifest, latest) as Partial<ArchiveManifest>
         if (JSON.stringify(previous.entries) === JSON.stringify(entries)) return result
       } catch (error) {
-        result.warnings.push({ path: path.join(directory, existing[0]), error: serializeError(error) })
+        result.warnings.push({ path: latest, error: serializeError(error) })
+        // Archives a newer build wrote are its own: this run writes and thins nothing.
+        if (error instanceof NewerFormatError) return result
       }
     }
     const manifest: ArchiveManifest = { writtenAtUtc: now.toISOString(), entries }
-    contents['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
+    contents['manifest.json'] = strToU8(JSON.stringify(markFormat(manifest, FORMAT_VERSIONS.backupManifest), null, 2))
     const destination = path.join(directory, `${utcStampForFilename(now)}.zip`)
     staging = path.join(directory, `archive-${nanoid()}.tmp`)
     fs.writeFileSync(staging, zipSync(contents, { level: 6 }), { flag: 'wx' })

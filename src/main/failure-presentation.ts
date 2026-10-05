@@ -5,6 +5,7 @@ import { message, type Message } from '../shared/i18n/translate'
 import { mainTranslator } from './i18n'
 import { httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
 import { ConfigFileHaltError } from './config/config-store'
+import { NewerFormatError } from './store-format'
 
 const BACKEND_NAMES: Record<BackendId, string> = {
   openai: 'OpenAI',
@@ -88,13 +89,23 @@ export function elaboratorRecoveryPresentation(recovery: ElaboratorRecoveryNotic
 
 /** config.json was unreadable and set aside at `path`; the app started from built-in settings. */
 /**
- * What the startup failure window says. A settings file that could not be used
- * is named with its path, since the user repairs or moves it; every other
- * failure keeps the general copy, and its diagnostic stays in the log.
+ * What the startup failure window says. A settings file that could not be used,
+ * or a file a newer ImageQueue wrote, is named with its path, since the user
+ * repairs, moves or reopens it; every other failure keeps the general copy, and
+ * its diagnostic stays in the log.
  */
 export function startupFailurePresentation(error: unknown): Message {
   if (error instanceof ConfigFileHaltError) return message('startupFailure.settingsFileMessage', { path: error.path })
+  if (error instanceof NewerFormatError) return message('startupFailure.newerFileMessage', { path: error.path })
   return message('startupFailure.message')
+}
+
+/** A store a newer ImageQueue wrote was left as it is, and what it holds is unavailable here. */
+export function newerFilePresentation(path: string): AppNotice {
+  return {
+    title: message('notice.newerFileTitle'),
+    message: message('notice.newerFileMessage', { path }),
+  }
 }
 
 export function configResetPresentation(path: string): AppNotice {

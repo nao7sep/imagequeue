@@ -52,7 +52,7 @@ const {
 const { getOutputDir, getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
 const { createEmptyQueues, queueManager } = await import('../../../src/main/queue/queue-manager')
 const { createEmptySessionDraft } = await import('../../../src/shared/session-draft')
-const { SESSION_MANIFEST_VERSION } = await import('../../../src/shared/types')
+const { FORMAT_VERSIONS, NewerFormatError } = await import('../../../src/main/store-format')
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
   return {
@@ -90,7 +90,7 @@ function stageSession(sessionId: string, manifest: Partial<SessionManifest> = {}
   fs.writeFileSync(
     path.join(dir, 'session.json'),
     JSON.stringify({
-      version: SESSION_MANIFEST_VERSION,
+      formatVersion: FORMAT_VERSIONS.session,
       sessionId,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -140,7 +140,7 @@ describe('starting a new session', () => {
     expect(getSessionDir()).not.toBe(previous)
     const manifest = readManifest(getSessionDir())
     expect(manifest).toMatchObject({
-      version: SESSION_MANIFEST_VERSION,
+      formatVersion: FORMAT_VERSIONS.session,
       sessionId: getSessionId(),
       lastResumedAt: null,
       taskCounts: expect.objectContaining({ total: 0 }),
@@ -510,5 +510,37 @@ describe('the updated time', () => {
     drainPendingDraftWrites()
 
     expect(updatedAt()).toBe(before)
+  })
+})
+
+describe('the manifest format version', () => {
+  it('reads a manifest with no version as version 1, and writes the version when it is opened', async () => {
+    const dir = stageSession('20260110-000000-utc', { formatVersion: undefined })
+    expect(readManifest(dir)).not.toHaveProperty('formatVersion')
+
+    expect(listSessions().map((summary) => summary.sessionId)).toContain('20260110-000000-utc')
+    await resumeSession('20260110-000000-utc')
+
+    expect(readManifest(dir).formatVersion).toBe(FORMAT_VERSIONS.session)
+  })
+
+  it('reads back the version it writes', () => {
+    persistActiveSession()
+
+    expect(readManifest(getSessionDir()).formatVersion).toBe(FORMAT_VERSIONS.session)
+    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+  })
+
+  it('passes over a manifest from a newer version, refuses to open it, and leaves its bytes as they were', async () => {
+    const dir = stageSession('20260111-000000-utc', { formatVersion: FORMAT_VERSIONS.session + 1 })
+    const before = fs.readFileSync(path.join(dir, 'session.json'))
+
+    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+    expect(log).toHaveBeenCalledWith('warn', 'Ignoring a session manifest from a newer version', expect.objectContaining({
+      error: expect.stringContaining(NewerFormatError.name),
+    }))
+    await expect(resumeSession('20260111-000000-utc')).rejects.toThrow(/missing a readable session.json/)
+
+    expect(fs.readFileSync(path.join(dir, 'session.json')).equals(before)).toBe(true)
   })
 })

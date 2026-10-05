@@ -3,10 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { unzipSync, strFromU8 } from 'fflate'
+import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { archiveStores, clearAbandonedRun, runArchiveSession, type ArchiveManifest } from '../../../src/main/backup/archive-engine'
 import { getArchivedStores } from '../../../src/main/config/storage-root'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 describe('binary-store archive', () => {
   let root: string
@@ -148,6 +149,36 @@ describe('binary-store archive', () => {
     expect(second.warnings).toHaveLength(1)
     expect(fs.readFileSync(result.archivePath!)).toEqual(original)
     expect(fs.readdirSync(directory()).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+  // Rewrites an archive's manifest through `edit`, keeping its other entries.
+  function rewriteManifest(archive: string, edit: (manifest: Record<string, unknown>) => Record<string, unknown>): void {
+    const contents = unzipSync(fs.readFileSync(archive))
+    contents['manifest.json'] = strToU8(JSON.stringify(edit(JSON.parse(strFromU8(contents['manifest.json'])))))
+    fs.writeFileSync(archive, zipSync(contents))
+  }
+  it('writes the manifest format version first', async () => {
+    const result = await archiveStores(root, getArchivedStores(root), time)
+    const manifest = JSON.parse(strFromU8(unzipSync(fs.readFileSync(result.archivePath!))['manifest.json']))
+    expect(Object.entries(manifest)[0]).toEqual(['formatVersion', FORMAT_VERSIONS.backupManifest])
+  })
+  it('reads a previous manifest with no format version as version 1', async () => {
+    const first = await archiveStores(root, getArchivedStores(root), time)
+    rewriteManifest(first.archivePath!, ({ formatVersion: _formatVersion, ...rest }) => rest)
+    const next = await archiveStores(root, getArchivedStores(root), new Date(time.getTime() + 1000))
+    expect(next.warnings).toEqual([])
+    expect(archives()).toHaveLength(1)
+  })
+  it('writes and thins nothing beside an archive from a newer version, and leaves its bytes as they were', async () => {
+    const first = await archiveStores(root, getArchivedStores(root), time)
+    fs.copyFileSync(first.archivePath!, path.join(directory(), '20260801-090000-000-utc.zip'))
+    rewriteManifest(first.archivePath!, (manifest) => ({ ...manifest, formatVersion: FORMAT_VERSIONS.backupManifest + 1 }))
+    const bytes = fs.readFileSync(first.archivePath!)
+    database.exec("INSERT INTO concepts VALUES ('changed')")
+    const next = await archiveStores(root, getArchivedStores(root), new Date(time.getTime() + 1000))
+    expect(next.warnings).toHaveLength(1)
+    expect(next.archivePath).toBeUndefined()
+    expect(archives()).toEqual(['20260801-090000-000-utc.zip', path.basename(first.archivePath!)])
+    expect(fs.readFileSync(first.archivePath!).equals(bytes)).toBe(true)
   })
   it('reports archive failures without escaping into startup or quit', async () => {
     vi.spyOn(fs, 'mkdirSync').mockImplementationOnce(() => { throw new Error('full') })

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { getDataDir } from '../config'
 import { cleanDisplay, normalizeKey } from './normalize'
+import { claimSqliteFormat, FORMAT_VERSIONS } from '../store-format'
 
 // The concept ledger: every facet, probe (the narrow domain an ask mined), and
 // concept value the text AI has ever produced, plus one row per time a value
@@ -77,9 +78,16 @@ function open(): DatabaseSync {
   const file = storeFile()
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const opened = new DatabaseSync(file)
-  opened.exec('PRAGMA journal_mode = WAL')
-  opened.exec('PRAGMA busy_timeout = 5000')
-  opened.exec(SCHEMA)
+  try {
+    // A newer ledger refuses every request and stays as it is.
+    claimSqliteFormat(opened, FORMAT_VERSIONS.concepts, file)
+    opened.exec('PRAGMA journal_mode = WAL')
+    opened.exec('PRAGMA busy_timeout = 5000')
+    opened.exec(SCHEMA)
+  } catch (err) {
+    opened.close()
+    throw err
+  }
   db = opened
   return db
 }
