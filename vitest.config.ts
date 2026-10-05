@@ -35,6 +35,7 @@ export default defineConfig({
       // Excluded as framework wiring with no decision to cover:
       exclude: [
         'src/main/index.ts', // Electron main entry / bootstrap
+        'src/main/primary-instance.ts', // the bootstrap the entry loads once it holds the lock
         'src/preload/**', // contextBridge wiring
         'src/renderer/src/main.tsx', // React DOM mount
         // Hand-written re-export barrels: permanent zeros that would bury the

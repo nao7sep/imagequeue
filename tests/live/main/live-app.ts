@@ -1,4 +1,4 @@
-// Starts the main process for the live lane the way src/main/index.ts starts it,
+// Starts the main process for the live lane the way src/main/primary-instance.ts starts it,
 // minus the windows, status icon, and wake lock, and drives it through the IPC
 // handlers the renderer calls. Only the live test files import it, after they
 // install ./electron-glue as Electron.
@@ -130,7 +130,7 @@ export async function startApp(home: string) {
       }
     },
 
-    /** src/main/index.ts's graceful shutdown, in its order, then the renderer goes away. */
+    /** src/main/primary-instance.ts's graceful shutdown, in its order, then the renderer goes away. */
     shutdown: async (): Promise<void> => {
       stopProcessor()
       drainPendingWrites()

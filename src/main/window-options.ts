@@ -3,7 +3,7 @@
 // Kept free of any `electron` import so it can be unit-tested in the node test
 // env, and so the content-based window minimum is derived in one place from the
 // shared layout metrics rather than hand-typed in createWindow. The main process
-// (src/main/index.ts) spreads the result into `new BrowserWindow({ ... })`,
+// (src/main/primary-instance.ts) spreads the result into `new BrowserWindow({ ... })`,
 // adding only the environment-bound bits (the preload path and the background of
 // the resolved theme, see mainWindowBackground).
 //

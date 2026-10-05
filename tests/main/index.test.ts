@@ -1,117 +1,68 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The main entry is driven through a stand-in Electron whose single-instance
-// lock answer the test chooses; nothing else of Electron is reached at import.
+// lock answer the test chooses.
 const electron = vi.hoisted(() => ({
   app: {
-    isPackaged: false,
-    requestSingleInstanceLock: (): boolean => false,
-    exit: (_code: number): void => {},
-    quit: (): void => {},
-    on: (_event: string, _listener: unknown): void => {},
-    whenReady: (): Promise<void> => new Promise<void>(() => {}),
+    requestSingleInstanceLock: vi.fn((): boolean => false),
+    exit: vi.fn((_code: number): void => {}),
+    quit: vi.fn((): void => {}),
   },
-  protocol: { registerSchemesAsPrivileged: (_schemes: unknown): void => {} },
+  dialog: { showErrorBox: vi.fn((_title: string, _content: string): void => {}) },
 }))
+vi.mock('electron', () => electron)
 
-vi.mock('electron', () => ({
-  ...electron,
-  BrowserWindow: class {},
-  Menu: {},
-  ipcMain: {},
-  nativeTheme: {},
-  screen: {},
-  session: {},
-  shell: {},
-}))
-
-// The bundler's worker factories; a worker started here would be work begun.
-const workers = vi.hoisted(() => ({ archive: vi.fn(), recordsReader: vi.fn() }))
-vi.mock('../../src/main/backup/archive-worker?nodeWorker', () => ({ default: workers.archive }))
-vi.mock('../../src/main/records-reader-worker?nodeWorker', () => ({ default: workers.recordsReader }))
-
-const PROCESS_HOOKS = ['uncaughtException', 'unhandledRejection'] as const
-
-let dataDir: string
-let savedDataDir: string | undefined
-let hooksBefore: Map<string, Function[]>
+// The app body the entry loads once it holds the lock. Standing in for it keeps
+// these tests to the lock decision itself: loading the real body would compile
+// and evaluate the whole main process inside each test.
+const primary = vi.hoisted(() => ({ loaded: vi.fn(), runPrimaryInstance: vi.fn() }))
+vi.mock('../../src/main/primary-instance', () => {
+  primary.loaded()
+  return { runPrimaryInstance: primary.runPrimaryInstance }
+})
 
 beforeEach(() => {
   vi.resetModules()
-  dataDir = mkdtempSync(path.join(tmpdir(), 'imagequeue-index-'))
-  savedDataDir = process.env.IMAGEQUEUE_DATA_DIR
-  process.env.IMAGEQUEUE_DATA_DIR = dataDir
-  hooksBefore = new Map(PROCESS_HOOKS.map((event) => [event, process.listeners(event)]))
+  vi.clearAllMocks()
 })
-
-afterEach(() => {
-  vi.restoreAllMocks()
-  // Remove the last-resort hooks a primary-instance import installs on this worker.
-  for (const event of PROCESS_HOOKS) {
-    const before = hooksBefore.get(event) ?? []
-    for (const listener of process.listeners(event)) {
-      if (!before.includes(listener)) process.removeListener(event, listener as (...args: unknown[]) => void)
-    }
-  }
-  if (savedDataDir === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
-  else process.env.IMAGEQUEUE_DATA_DIR = savedDataDir
-  rmSync(dataDir, { recursive: true, force: true })
-})
-
-function spyOnElectron(ownsLock: boolean) {
-  return {
-    requestLock: vi.spyOn(electron.app, 'requestSingleInstanceLock').mockReturnValue(ownsLock),
-    exit: vi.spyOn(electron.app, 'exit'),
-    quit: vi.spyOn(electron.app, 'quit'),
-    on: vi.spyOn(electron.app, 'on'),
-    whenReady: vi.spyOn(electron.app, 'whenReady'),
-    registerSchemes: vi.spyOn(electron.protocol, 'registerSchemesAsPrivileged'),
-  }
-}
-
-async function settle(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 describe('main entry and the single-instance lock', () => {
-  it('exits a process that lost the lock without registering, opening or writing anything', async () => {
-    const spies = spyOnElectron(false)
+  it('exits a process that lost the lock without loading or starting anything of the app', async () => {
+    electron.app.requestSingleInstanceLock.mockReturnValue(false)
 
-    await import('../../src/main/index')
-    await settle()
+    const { startup } = await import('../../src/main/index')
+    await startup
 
-    expect(spies.requestLock).toHaveBeenCalledOnce()
-    expect(spies.exit).toHaveBeenCalledExactlyOnceWith(0)
+    expect(electron.app.requestSingleInstanceLock).toHaveBeenCalledOnce()
+    expect(electron.app.exit).toHaveBeenCalledExactlyOnceWith(0)
     // A quit would run the before-quit shutdown against the running instance's stores.
-    expect(spies.quit).not.toHaveBeenCalled()
-    expect(spies.on).not.toHaveBeenCalled()
-    expect(spies.whenReady).not.toHaveBeenCalled()
-    expect(spies.registerSchemes).not.toHaveBeenCalled()
-    for (const event of PROCESS_HOOKS) expect(process.listeners(event)).toEqual(hooksBefore.get(event))
-    expect(workers.archive).not.toHaveBeenCalled()
-    expect(workers.recordsReader).not.toHaveBeenCalled()
-    expect(readdirSync(dataDir)).toEqual([])
+    expect(electron.app.quit).not.toHaveBeenCalled()
+    expect(primary.loaded).not.toHaveBeenCalled()
+    expect(primary.runPrimaryInstance).not.toHaveBeenCalled()
   })
 
-  it('decides the lock before a process that owns it registers its quit handling and startup', async () => {
-    const spies = spyOnElectron(true)
+  it('loads and starts the app only after a process has the lock', async () => {
+    electron.app.requestSingleInstanceLock.mockReturnValue(true)
 
-    await import('../../src/main/index')
-    await settle()
+    const { startup } = await import('../../src/main/index')
+    await startup
 
-    const events = spies.on.mock.calls.map(([event]) => event)
-    expect(events).toEqual(expect.arrayContaining(['second-instance', 'window-all-closed', 'before-quit']))
-    expect(spies.requestLock.mock.invocationCallOrder[0]).toBeLessThan(Math.min(
-      ...spies.on.mock.invocationCallOrder,
-      ...spies.whenReady.mock.invocationCallOrder,
-      ...spies.registerSchemes.mock.invocationCallOrder,
-    ))
-    expect(spies.exit).not.toHaveBeenCalled()
-    expect(spies.quit).not.toHaveBeenCalled()
-    // Startup waits for ready, which this stand-in never reaches, so nothing is opened yet.
-    expect(readdirSync(dataDir)).toEqual([])
+    expect(primary.loaded).toHaveBeenCalledOnce()
+    expect(primary.runPrimaryInstance).toHaveBeenCalledOnce()
+    expect(electron.app.requestSingleInstanceLock.mock.invocationCallOrder[0])
+      .toBeLessThan(primary.runPrimaryInstance.mock.invocationCallOrder[0])
+    expect(electron.app.exit).not.toHaveBeenCalled()
+    expect(electron.app.quit).not.toHaveBeenCalled()
+  })
+
+  it('shows the load failure and exits when the app cannot be started', async () => {
+    electron.app.requestSingleInstanceLock.mockReturnValue(true)
+    primary.runPrimaryInstance.mockImplementationOnce(() => { throw new Error('broken build') })
+
+    const { startup } = await import('../../src/main/index')
+    await startup
+
+    expect(electron.dialog.showErrorBox).toHaveBeenCalledExactlyOnceWith('ImageQueue', expect.stringContaining('broken build'))
+    expect(electron.app.exit).toHaveBeenCalledExactlyOnceWith(1)
   })
 })

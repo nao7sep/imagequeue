@@ -104,7 +104,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
 
     // Windows can deliver session-end before Electron begins its ordinary quit
     // sequence. Never turn an OS logoff/restart close into close-to-background;
-    // releasing the primary window lets index.ts enter graceful shutdown.
+    // releasing the primary window lets primary-instance.ts enter graceful shutdown.
     win.on('session-end', () => {
       this.systemSessionEnding = true
     })
