@@ -396,7 +396,7 @@
   "column.defaultsSaveFailed": "Model and parameter changes could not be saved. Your current choices remain in use for this session.",
   "column.model": "Model",
   "column.modelNotInListOption": "{model} (not in the list)",
-  "column.modelNotInList": "This model is not in the list. Choose another model to queue images.",
+  "column.modelNotInList": "This model is not in the list, so its images are requested with no settings.",
   "column.closeSaveResult": "Close settings save result",
   "column.apiKeyNotSet": "API key not set",
   "column.queue": "Queue",

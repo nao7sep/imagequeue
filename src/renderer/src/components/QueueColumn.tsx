@@ -71,8 +71,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     () => (proprietaryBackend ? findModel(proprietaryBackend, model) ?? null : null),
     [proprietaryBackend, model]
   )
-  // A saved model that is not a row stays selected, shown as not in the list,
-  // and queues nothing until the user chooses another.
+  // A saved model that is not a row stays selected, shown as not in the list
+  // with a warning, and queues its tasks with the plain request.
   const modelNotInList = proprietaryBackend !== null && model !== '' && cloudModelDef === null
   const [cloudParams, setCloudParams] = useState<Record<string, unknown>>(
     () => cloudBackend?.defaults() ?? {}
@@ -148,7 +148,6 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // skip not-ready backends, and reused for the "+ Queue" button's disabled state.
   const readyToEnqueue = isBackendReadyToEnqueue({
     backendId,
-    modelNotInList,
     apiKeyMissing,
     cliInstalled: drawThings.cliInstalled,
     downloadedModelCount: drawThings.downloadedModelCount,

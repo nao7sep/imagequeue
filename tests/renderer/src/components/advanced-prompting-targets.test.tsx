@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createEmptySessionDraft } from '../../../../src/shared/session-draft'
 
-// A column whose saved model is not in the list queues nothing until another
-// model is chosen, and Advanced Prompting is no way around that: the column's
-// own readiness decides whether it is a target, as it does for Send to All.
+// A column whose saved model is not in the list still queues, with the plain
+// request, and is a target here as from the column itself; its row warns that
+// the model is not in the list.
 
 vi.mock('../../../../src/renderer/src/hooks/useBrainstormOperation', () => ({
   useBrainstormOperation: () => ({ progress: null, run: vi.fn(), cancel: vi.fn() }),
@@ -20,7 +20,7 @@ vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({ useConfi
 vi.mock('../../../../src/renderer/src/context/EnqueueConfigContext', () => ({
   useEnqueueConfigs: () => ({
     snapshots: {
-      openai: { model: 'gpt-image-1.5', params: {}, ready: false },
+      openai: { model: 'gpt-image-1.5', params: {}, ready: true },
       grok: { model: 'grok-imagine-image-2.0', params: { aspectRatio: '1:1', resolution: '1k', quality: 'auto' }, ready: true },
     },
   }),
@@ -57,17 +57,20 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Advanced Prompting targets', () => {
-  it('does not queue to a column whose model is not in the list', async () => {
+  it('queues to a column whose model is not in the list and warns on its row', async () => {
     render(<AdvancedPromptingModal onClose={() => {}} />)
     const openai = screen.getByRole('checkbox', { name: /GPT Image/ }) as HTMLInputElement
-    expect(openai.disabled).toBe(true)
-    expect(screen.getByText('Model not in the list')).toBeTruthy()
+    expect(openai.disabled).toBe(false)
+    expect(screen.getAllByText('Model not in the list')).toHaveLength(1)
 
     const queue = await screen.findByRole('button', { name: /Queue/ })
     await waitFor(() => expect((queue as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(queue)
     await waitFor(() => expect(enqueueBatch).toHaveBeenCalledOnce())
-    const units = enqueueBatch.mock.calls[0]![0] as { backend: string; model: string }[]
-    expect(units.map((unit) => unit.backend)).toEqual(['grok'])
+    const units = enqueueBatch.mock.calls[0]![0] as { backend: string; model: string; params: unknown }[]
+    expect(units.map(({ backend, model, params }) => ({ backend, model, params }))).toEqual([
+      { backend: 'openai', model: 'gpt-image-1.5', params: {} },
+      { backend: 'grok', model: 'grok-imagine-image-2.0', params: { aspectRatio: '1:1', resolution: '1k', quality: 'auto' } },
+    ])
   })
 })

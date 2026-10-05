@@ -46,10 +46,10 @@ describe('text routing guard', () => {
     expect(openaiTextParams(' GPT-6-LUNA ', 'none')).toEqual({ reasoning_effort: 'none' })
     expect(textRowFor('openai', ' GPT-6-LUNA ')?.id).toBe('gpt-6-luna')
   })
-  it('sends an id with no row nothing model-specific, no thinking, but keeps the feature\'s strict schema and the safety settings', () => {
+  it('sends an id with no row nothing model-specific, no thinking or safety, but keeps the feature\'s strict schema', () => {
     const schema = { type: 'object' }
-    expect(geminiTextParams('nonsense-id', 'high')).toEqual(safety)
-    expect(geminiTextParams('nonsense-id', 'high', schema)).toEqual({ ...safety, responseMimeType: 'application/json', responseJsonSchema: schema })
+    expect(geminiTextParams('nonsense-id', 'high')).toEqual({})
+    expect(geminiTextParams('nonsense-id', 'high', schema)).toEqual({ responseMimeType: 'application/json', responseJsonSchema: schema })
     expect(openaiTextParams('nonsense-id', 'high')).toEqual({})
     expect(openaiTextParams('nonsense-id', 'high', schema)).toEqual({ response_format: { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema } } })
   })
@@ -57,7 +57,7 @@ describe('text routing guard', () => {
     for (const id of ['gpt-6-sol', 'gemini-2.5-flash', 'gpt-5.6-sol', 'gpt-5.6-luna']) {
       expect(textRowFor('openai', id) ?? textRowFor('gemini', id), id).toBeUndefined()
       expect(openaiTextParams(id, 'high')).toEqual({})
-      expect(geminiTextParams(id, 'high')).toEqual(safety)
+      expect(geminiTextParams(id, 'high')).toEqual({})
     }
   })
   it('sends every current harm category off, and not civic integrity', () => {

@@ -18,24 +18,18 @@ const readySnapshot = (over: Partial<EnqueueConfigSnapshot> = {}): EnqueueConfig
 describe('isBackendReadyToEnqueue', () => {
   it('is false for a cloud backend with a missing API key', () => {
     expect(isBackendReadyToEnqueue({
-      backendId: 'openai', modelNotInList: false, apiKeyMissing: true, cliInstalled: false, downloadedModelCount: 0,
+      backendId: 'openai', apiKeyMissing: true, cliInstalled: false, downloadedModelCount: 0,
     })).toBe(false)
   })
 
   it('is true for a cloud backend with an API key', () => {
     expect(isBackendReadyToEnqueue({
-      backendId: 'nanobanana', modelNotInList: false, apiKeyMissing: false, cliInstalled: false, downloadedModelCount: 0,
+      backendId: 'nanobanana', apiKeyMissing: false, cliInstalled: false, downloadedModelCount: 0,
     })).toBe(true)
   })
 
-  it('is false for a cloud backend whose model is not in the list', () => {
-    expect(isBackendReadyToEnqueue({
-      backendId: 'nanobanana', modelNotInList: true, apiKeyMissing: false, cliInstalled: false, downloadedModelCount: 0,
-    })).toBe(false)
-  })
-
   it('requires the CLI and at least one model for Draw Things', () => {
-    const base = { backendId: 'drawthings' as const, modelNotInList: false, apiKeyMissing: false }
+    const base = { backendId: 'drawthings' as const, apiKeyMissing: false }
     expect(isBackendReadyToEnqueue({ ...base, cliInstalled: false, downloadedModelCount: 3 })).toBe(false)
     expect(isBackendReadyToEnqueue({ ...base, cliInstalled: true, downloadedModelCount: 0 })).toBe(false)
     expect(isBackendReadyToEnqueue({ ...base, cliInstalled: true, downloadedModelCount: 1 })).toBe(true)

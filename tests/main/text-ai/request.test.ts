@@ -17,10 +17,10 @@ describe('text adapter outbound contracts', () => {
     await new OpenAIProvider('gpt-6-luna', 'test-key', 'https://proxy.example/v1', 'medium').ask({ ...opts, schema: {} })
     const known = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
     expect(known).toEqual({ model: 'gpt-6-luna', messages: [{ role: 'user', content: 'prompt' }], reasoning_effort: 'medium', response_format: { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema: {} } } })
-    await new OpenAIProvider('local-id', 'test-key', 'https://proxy.example/v1').ask({ ...opts, schema: {} })
+    await new OpenAIProvider('local-id', 'test-key', 'https://proxy.example/v1', 'medium').ask({ ...opts, schema: {} })
     expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string)).toEqual({ model: 'local-id', messages: [{ role: 'user', content: 'prompt' }], response_format: { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema: {} } } })
   })
-  it('uses the Gemini endpoint with the 3.x thinking level and sends an id with no row nothing model-specific', async () => {
+  it('uses the Gemini endpoint with the 3.x thinking level and safety, and sends an id with no row only its schema', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply({ candidates: [{ content: { parts: [{ text: '{}' }] }, finishReason: 'STOP' }] }))
     vi.stubGlobal('fetch', fetchMock)
     await new GeminiProvider('gemini-3.8-flash', 'test-key', 'https://proxy.example', 'medium').ask({ ...opts, schema: { type: 'object' } })
@@ -28,10 +28,14 @@ describe('text adapter outbound contracts', () => {
     const known = JSON.parse(fetchMock.mock.calls[0][1]?.body as string)
     expect(known.generationConfig).toEqual({ thinkingConfig: { thinkingLevel: 'MEDIUM' }, responseMimeType: 'application/json', responseJsonSchema: { type: 'object' } })
     expect(known.safetySettings).toEqual(OFF_FOR_EVERY_CATEGORY)
-    await new GeminiProvider('gemini-2.5-pro', 'test-key', PROVIDER_ENDPOINTS.gemini).ask(opts)
+    await new GeminiProvider('gemini-2.5-pro', 'test-key', PROVIDER_ENDPOINTS.gemini, 'medium').ask({ ...opts, schema: { type: 'object' } })
     const unknown = JSON.parse(fetchMock.mock.calls[1][1]?.body as string)
-    expect(unknown.generationConfig).toEqual({})
-    expect(unknown.safetySettings, 'safety is the app\'s, sent for every id').toEqual(OFF_FOR_EVERY_CATEGORY)
+    expect(unknown).toEqual({
+      contents: [{ role: 'user', parts: [{ text: 'prompt' }] }],
+      generationConfig: { responseMimeType: 'application/json', responseJsonSchema: { type: 'object' } },
+    })
+    await new GeminiProvider('gemini-2.5-pro', 'test-key', PROVIDER_ENDPOINTS.gemini).ask(opts)
+    expect(JSON.parse(fetchMock.mock.calls[2][1]?.body as string)).toEqual({ contents: [{ role: 'user', parts: [{ text: 'prompt' }] }], generationConfig: {} })
   })
   it('lets a typed unknown Gemini id reach the provider and keeps its cleaned message', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: { code: 404, message: 'No model my-custom-id', status: 'NOT_FOUND' } }),

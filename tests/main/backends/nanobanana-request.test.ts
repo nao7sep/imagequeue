@@ -44,9 +44,15 @@ describe('buildGeminiImageRequest', () => {
     expect(buildGeminiImageRequest(makeTask('gemini-3.1-flash-lite-image', { thinking: '' })).config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' })
   })
 
-  it.each(['gemini-2.5-flash-image', 'unlisted-model'])('sends %s, an id with no row, the plain request with the safety settings', (model) => {
-    expect(buildGeminiImageRequest(makeTask(model, { aspectRatio: '16:9', imageSize: '2K', thinking: 'high' })).config).toEqual({
-      responseModalities: ['TEXT', 'IMAGE'], safetySettings: GEMINI_SAFETY_SETTINGS,
+  it('sends every listed row its safety settings', () => {
+    for (const row of getModelsForBackend('nanobanana')) {
+      expect(buildGeminiImageRequest(makeTask(row.id, {})).config.safetySettings, row.id).toEqual(GEMINI_SAFETY_SETTINGS)
+    }
+  })
+
+  it.each(['gemini-2.5-flash-image', 'unlisted-model'])('sends %s, an id with no row, exactly the plain request: no thinking, size or safety', (model) => {
+    expect(buildGeminiImageRequest(makeTask(model, { aspectRatio: '16:9', imageSize: '2K', thinking: 'high' }))).toEqual({
+      model, contents: 'a cat', config: { responseModalities: ['TEXT', 'IMAGE'] },
     })
   })
 })

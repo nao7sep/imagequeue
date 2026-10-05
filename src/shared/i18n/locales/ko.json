@@ -387,7 +387,7 @@
   "column.defaultsSaveFailed": "모델과 매개변수 변경 사항을 저장할 수 없습니다. 현재 선택은 이 세션 동안 계속 사용됩니다.",
   "column.model": "모델",
   "column.modelNotInListOption": "{model}(목록에 없음)",
-  "column.modelNotInList": "이 모델은 목록에 없습니다. 이미지를 대기열에 추가하려면 다른 모델을 선택하십시오.",
+  "column.modelNotInList": "이 모델은 목록에 없으므로 설정 없이 이미지를 요청합니다.",
   "column.closeSaveResult": "설정 저장 결과 닫기",
   "column.apiKeyNotSet": "API 키가 설정되지 않음",
   "column.queue": "대기열에 추가",

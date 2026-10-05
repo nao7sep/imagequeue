@@ -405,7 +405,7 @@
   "column.defaultsSaveFailed": "Impossibile salvare le modifiche a modello e parametri. Le scelte attuali restano in uso per questa sessione.",
   "column.model": "Modello",
   "column.modelNotInListOption": "{model} (non in elenco)",
-  "column.modelNotInList": "Questo modello non è in elenco. Scegli un altro modello per mettere immagini in coda.",
+  "column.modelNotInList": "Questo modello non è in elenco, quindi le sue immagini vengono richieste senza impostazioni.",
   "column.closeSaveResult": "Chiudi il risultato del salvataggio delle impostazioni",
   "column.apiKeyNotSet": "Chiave API non impostata",
   "column.queue": "Metti in coda",

@@ -227,7 +227,7 @@ describe('cloud columns: saved defaults at launch', () => {
 })
 
 describe('cloud columns: a saved model not in the list', () => {
-  it.each(CLOUD_BACKEND_IDS_IN_UI_ORDER)('%s shows it as not in the list and queues nothing until another is chosen', async (backend) => {
+  it.each(CLOUD_BACKEND_IDS_IN_UI_ORDER)('%s warns that it is not in the list and queues it with no parameters', async (backend) => {
     vi.useFakeTimers()
     stageSettings(backend, 'retired-model', { quality: 'high' })
     settingsValue.apiKeyPresence = { image: { openai: true, nanobanana: true, grok: true, flux: true }, geminiText: true, openaiText: true }
@@ -236,11 +236,11 @@ describe('cloud columns: a saved model not in the list', () => {
     const select = rowControl(container, 'Model') as HTMLSelectElement
     expect(select.value).toBe('retired-model')
     expect(select.selectedOptions[0]!.textContent).toBe('retired-model (not in the list)')
-    expect(container.textContent).toContain('This model is not in the list. Choose another model to queue images.')
+    expect(container.textContent).toContain('This model is not in the list, so its images are requested with no settings.')
     // No parameter rows belong to a model with no row.
     expect(container.querySelectorAll('.setting-row label').length).toBe(1)
-    expect(container.querySelector<HTMLButtonElement>('.enqueue-btn')!.disabled).toBe(true)
-    expect(enqueueValue.setSnapshot).toHaveBeenLastCalledWith(backend, expect.objectContaining({ model: 'retired-model', ready: false }))
+    expect(container.querySelector<HTMLButtonElement>('.enqueue-btn')!.disabled).toBe(false)
+    expect(enqueueValue.setSnapshot).toHaveBeenLastCalledWith(backend, { model: 'retired-model', params: {}, ready: true })
     await advanceAutosave()
     expect(settingsValue.saveImageBackendDefaults, 'its saved record stands').not.toHaveBeenCalled()
 
@@ -248,7 +248,7 @@ describe('cloud columns: a saved model not in the list', () => {
     fireEvent.change(select, { target: { value: model } })
     await flush()
     expect([...select.options].map((option) => option.value)).not.toContain('retired-model')
-    expect(container.querySelector<HTMLButtonElement>('.enqueue-btn')!.disabled).toBe(false)
+    expect(container.textContent).not.toContain('not in the list')
     await advanceAutosave()
     expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalledWith(backend, model, expect.any(Object))
   })

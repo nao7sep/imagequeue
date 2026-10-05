@@ -28,7 +28,7 @@ export function serializeImageBackendDefaults(model: string, params: Record<stri
 }
 
 // The saved model is kept as it is, in the list or not: a column whose model
-// is not a row says so and queues nothing until another model is chosen.
+// is not a row warns so and queues its tasks with the plain request.
 function savedModelId(defaultModel: ModelDef | undefined, backendSettings: Record<string, unknown>): string {
   return typeof backendSettings.model === 'string' && backendSettings.model.trim() !== ''
     ? backendSettings.model

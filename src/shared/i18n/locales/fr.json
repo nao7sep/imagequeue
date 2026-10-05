@@ -405,7 +405,7 @@
   "column.defaultsSaveFailed": "Les changements de modèle et de paramètres n’ont pas pu être enregistrés. Vos choix actuels restent utilisés pour cette session.",
   "column.model": "Modèle",
   "column.modelNotInListOption": "{model} (absent de la liste)",
-  "column.modelNotInList": "Ce modèle n’est pas dans la liste. Choisissez un autre modèle pour mettre des images en file.",
+  "column.modelNotInList": "Ce modèle n’est pas dans la liste, ses images sont donc demandées sans réglages.",
   "column.closeSaveResult": "Fermer le résultat de l’enregistrement des réglages",
   "column.apiKeyNotSet": "Clé API non définie",
   "column.queue": "Mettre en file",

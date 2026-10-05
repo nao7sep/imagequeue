@@ -387,7 +387,7 @@
   "column.defaultsSaveFailed": "无法保存模型和参数的更改。当前选择在本次会话中仍然有效。",
   "column.model": "模型",
   "column.modelNotInListOption": "{model}（不在列表中）",
-  "column.modelNotInList": "此模型不在列表中。请选择其他模型以将图像加入队列。",
+  "column.modelNotInList": "此模型不在列表中，因此将不带任何设置请求图像。",
   "column.closeSaveResult": "关闭设置保存结果",
   "column.apiKeyNotSet": "未设置 API 密钥",
   "column.queue": "加入队列",
