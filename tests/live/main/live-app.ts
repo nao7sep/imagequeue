@@ -8,6 +8,7 @@ import { link, mkdir, readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import { DatabaseSync } from 'node:sqlite'
 
 import { expect } from 'vitest'
 
@@ -118,7 +119,8 @@ export async function startApp(home: string) {
         const current = await task(request.backend, queued!.id)
         if (current.status === 'completed') return current
         if (current.status === 'failed' || current.status === 'interrupted') {
-          throw new Error(`The ${request.backend} task ended ${current.status}: ${current.error}`)
+          throw new Error(`The ${request.backend} task ended ${current.status}: ${JSON.stringify(current.error)}`
+            + `\nThe provider said: ${current.providerMessage ?? '(nothing)'}\nIts calls: ${recordedCalls(queued!.id)}`)
         }
         if (Date.now() > deadline) {
           await invoke('queue:stopAll')
@@ -176,6 +178,16 @@ async function openAfterClosing(): Promise<string[]> {
     const settled = !open.includes('ProcessWrap') && !open.includes('TCPServerWrap')
     if (settled || Date.now() > deadline) return open
     await delay(20)
+  }
+}
+
+/** A task's recorded provider calls, so a failed paid call can be read without sending it again. */
+function recordedCalls(taskId: string): string {
+  const db = new DatabaseSync(join(process.env.IMAGEQUEUE_DATA_DIR!, 'records.sqlite3'), { readOnly: true })
+  try {
+    return JSON.stringify(db.prepare('SELECT request, response, error FROM ai_calls WHERE task_id = ? ORDER BY time').all(taskId))
+  } finally {
+    db.close()
   }
 }
 
