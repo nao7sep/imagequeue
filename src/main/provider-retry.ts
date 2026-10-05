@@ -23,8 +23,7 @@ export function retryDelayMs(error: unknown, backoff: number, now = Date.now()):
 }
 
 // Only answers proving no processing are resent; SDKs perform exactly one
-// attempt. `resend` is that proof, provedNotProcessed unless the caller names a
-// stricter one. `maxAttempts` is the caller's own cap; a caller with none gets three
+// attempt. `maxAttempts` is the caller's own cap; a caller with none gets three
 // attempts. `timeoutMs`, when given, bounds all attempts together; a caller
 // without it leaves each attempt to the call's own timeout.
 export async function withProviderRetry<T>(call: (signal: AbortSignal) => Promise<T>, options: {
@@ -32,10 +31,9 @@ export async function withProviderRetry<T>(call: (signal: AbortSignal) => Promis
   maxAttempts?: number
   backoff?: readonly number[]
   timeoutMs?: number
-  resend?: (error: unknown) => boolean
   onRetry?: (error: unknown, attempt: number, backoffMs: number) => void
 }): Promise<T> {
-  const { backoff = [1000, 2000], resend = provedNotProcessed } = options
+  const { backoff = [1000, 2000] } = options
   const timeout = options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs)
   const signal = timeout ? AbortSignal.any([options.signal, timeout]) : options.signal
   const attempts = Math.max(1, options.maxAttempts ?? 3)
@@ -43,7 +41,7 @@ export async function withProviderRetry<T>(call: (signal: AbortSignal) => Promis
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted()
       try { return await call(signal) } catch (error) {
-        if (signal.aborted || attempt + 1 >= attempts || !resend(error)) throw error
+        if (signal.aborted || attempt + 1 >= attempts || !provedNotProcessed(error)) throw error
         const backoffMs = retryDelayMs(error, backoff[Math.min(attempt, backoff.length - 1)] ?? 1000)
         options.onRetry?.(error, attempt + 1, backoffMs)
         await abortableDelay(backoffMs, signal)

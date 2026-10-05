@@ -6,7 +6,7 @@ import { log } from '../logger'
 import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
 import { abortableDelay } from '../utils/abortable-delay'
-import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, ProviderHttpError, ProviderStatusError, ProviderTimeoutError } from '../provider-errors'
 import { fluxReasonField, reasonFromBody } from '../provider-reason'
 import { buildFluxBody } from './flux-request'
 
@@ -63,8 +63,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
       }
 
       return JSON.parse(text) as { id: string; polling_url?: string }
-    // The submit is the paid request; a poll below costs nothing and keeps the ordinary proof.
-    }, { signal: controller.signal, resend: provedNotStarted })
+    }, { signal: controller.signal })
     const pollingUrl = submitData.polling_url || `${BASE_URL}/get_result?id=${submitData.id}`
 
     // Poll for result

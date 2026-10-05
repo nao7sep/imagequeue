@@ -5,7 +5,7 @@ import { resolveApiKey } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
 import { grokReasonField, reasonFromBody } from '../provider-reason'
 import { buildXaiImageBody } from './grok-request'
 
@@ -63,7 +63,7 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
       }
 
       return JSON.parse(text) as { data: { b64_json?: string }[] }
-    }, { signal: controller.signal, resend: provedNotStarted })
+    }, { signal: controller.signal })
 
     const b64 = json.data?.[0]?.b64_json
 

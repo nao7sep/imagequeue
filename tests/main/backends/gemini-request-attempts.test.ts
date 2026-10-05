@@ -3,8 +3,8 @@ import type { Task } from '../../../src/shared/types'
 
 // Each Gemini client passes `retryOptions: { attempts: 1 }`, so the SDK sends
 // one request per call and the app's own retry policy decides every resend:
-// Nano Banana resends only an answer proving the work never started, and the
-// text JSON/slug caller owns text retries.
+// Nano Banana resends only an answer proving no processing, and the text
+// JSON/slug caller owns text retries.
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 
 vi.mock('../../../src/main/config', () => ({
@@ -40,15 +40,14 @@ const task: Task = {
 }
 
 describe('Gemini request attempt ownership', () => {
-  it('Nano Banana caps safe 429 retries at three requests', async () => {
-    const fetchMock = stubServerError(429)
+  it.each([408, 429, 503])('Nano Banana caps safe %i retries at three requests', async (status) => {
+    const fetchMock = stubServerError(status)
     await expect(generateNanoBanana(task, new AbortController().signal)).rejects.toThrow()
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
-  // A proxy can answer 503 after the image was made and billed.
-  it('Nano Banana does not resend an image request after a 503', async () => {
-    const fetchMock = stubServerError()
+  it('Nano Banana does not resend an image request after a 500', async () => {
+    const fetchMock = stubServerError(500)
     await expect(generateNanoBanana(task, new AbortController().signal)).rejects.toThrow()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })

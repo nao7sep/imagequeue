@@ -8,7 +8,7 @@ import { recordAiCall } from '../records'
 import { buildGeminiImageRequest } from './nanobanana-request'
 import { assertUsableGeminiResponse } from '../provider-response'
 import { CANCELLED_MESSAGE } from './cancellation'
-import { MissingApiKeyError, provedNotStarted, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
+import { MissingApiKeyError, ProviderHttpError, ProviderTimeoutError } from '../provider-errors'
 import { geminiReasonField, reasonFromBody } from '../provider-reason'
 
 // Calls the Gemini native image generation API (generateContent) and returns
@@ -43,7 +43,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
       throw new ProviderHttpError(said ?? `Gemini API error ${err.status}`, err.status, said)
     }
     throw err
-  }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms, resend: provedNotStarted }).catch((err: unknown) => {
+  }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms }).catch((err: unknown) => {
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
     if (err instanceof Error && err.name === 'AbortError') {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
