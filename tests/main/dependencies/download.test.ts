@@ -24,6 +24,7 @@ function writeTemp(bytes: Buffer): string {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   while (tempDirs.length) fs.rmSync(tempDirs.pop()!, { recursive: true, force: true })
 })
 
@@ -69,6 +70,9 @@ describe('bounded transfers', () => {
     })
     const progress: Array<{ downloadedBytes: number; totalBytes: number | null }> = []
     const limits = { maxBytes: bytes.length, idleTimeoutMs: 1000, wholeTimeoutMs: 5000 }
+    // Progress between the first and last chunk is paced by the clock; holding
+    // it still leaves exactly those two, however long the transfer takes here.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now())
 
     const writing = writeDownloadResponse(
       stream as unknown as IncomingMessage,
@@ -82,8 +86,10 @@ describe('bounded transfers', () => {
     await writing
 
     expect(fs.readFileSync(dest).equals(bytes)).toBe(true)
-    expect(progress.length).toBeLessThanOrEqual(3)
-    expect(progress.at(-1)).toEqual({ downloadedBytes: bytes.length, totalBytes: bytes.length })
+    expect(progress).toEqual([
+      { downloadedBytes: 1024, totalBytes: bytes.length },
+      { downloadedBytes: bytes.length, totalBytes: bytes.length },
+    ])
   })
 })
 

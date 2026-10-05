@@ -82,7 +82,7 @@ describe('open text model sets', () => {
 
     vi.resetModules()
     vi.doMock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ formatVersion: 1, candidates: [{ content: { parts: [{ text: 'x' }] }, finishReason: 'STOP' }] }), { headers: { 'content-type': 'application/json' } }))
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'x' }] }, finishReason: 'STOP' }] }), { headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
     try {
       const { loadConfig } = await import('../../../src/main/config/config-store')
@@ -103,7 +103,7 @@ describe('open text model sets', () => {
   it('sends the selected row\'s default when the stored thinking is one the row does not list', async () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ formatVersion: 1, provider: 'openai', openai: { thinking: { slug: 'minimal', elaboration: 'xhigh' } } }))
     vi.doMock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ formatVersion: 1, choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] }), { headers: { 'content-type': 'application/json' } }))
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] }), { headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
     try {
       const { getLightProvider, getMainProvider } = await import('../../../src/main/text-ai')
