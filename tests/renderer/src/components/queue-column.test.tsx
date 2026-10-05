@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup, within, waitFor } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend } from '../../../../src/shared/ai-models'
@@ -496,6 +496,45 @@ describe('openai column', () => {
       (r) => r.querySelector('label')?.textContent === 'Width'
     )
     expect(widthRow).toBeUndefined()
+  })
+})
+
+describe('cloud columns: a field the current model does not take', () => {
+  // The settings the app reads back after each autosave hold only the current
+  // model's fields; reading them back must not reset what the column holds for
+  // another model or format.
+  async function saveAndReadBack(rerender: (ui: React.ReactElement) => void, ui: () => React.ReactElement): Promise<void> {
+    await waitFor(() => expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalled(), { timeout: 3000 })
+    await flush()
+    const [backend, model, params] = settingsValue.saveImageBackendDefaults.mock.lastCall as [string, string, Record<string, unknown>]
+    settingsValue.settings = { image_backends: { [backend]: { model, default_params: params } } }
+    rerender(ui())
+    await flush()
+  }
+
+  it('keeps FLUX 3\'s ratio across a FLUX.2 autosave and the settings read back after it', async () => {
+    stageSettings('flux', 'flux-3-image', { aspectRatio: '1:1', resolution: '1k' })
+    const ui = (): React.ReactElement => <QueueColumn backendId="flux" label="FLUX" prompt="a cat" />
+    const { container, rerender } = render(ui())
+    await flush()
+    fireEvent.change(rowControl(container, 'Aspect'), { target: { value: '16:9' } })
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'flux-2-pro' } })
+    await saveAndReadBack(rerender, ui)
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'flux-3-image' } })
+    await flush()
+    expect(rowControl(container, 'Aspect').value).toBe('16:9')
+  })
+
+  it('keeps an OpenAI compression across a png autosave and the settings read back after it', async () => {
+    stageSettings('openai', 'gpt-image-2', { width: 1024, height: 1024, quality: 'auto', outputFormat: 'webp', outputCompression: 80, background: 'auto' })
+    const ui = (): React.ReactElement => <QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />
+    const { container, rerender } = render(ui())
+    await flush()
+    fireEvent.change(rowControl(container, 'Format'), { target: { value: 'png' } })
+    await saveAndReadBack(rerender, ui)
+    fireEvent.change(rowControl(container, 'Format'), { target: { value: 'webp' } })
+    await flush()
+    expect(rowControl(container, 'Compression').value).toBe('80')
   })
 })
 

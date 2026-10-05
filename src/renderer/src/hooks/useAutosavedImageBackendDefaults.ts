@@ -44,10 +44,15 @@ export function useAutosavedImageBackendDefaults({
 
   useEffect(() => {
     if (!backend || !saved) return
-    if (loadedRef.current && currentSnapshot !== persistedSnapshotRef.current) return
+    const savedSnapshot = serializeImageBackendDefaults(saved.model, saved.params)
+    // After the first load, a saved record is applied only over a column with
+    // nothing unsaved, and only when it says something new: one equal to the
+    // column's own snapshot, such as its last save read back, would only reset
+    // what the column holds beyond what is saved (another model's fields).
+    if (loadedRef.current && (currentSnapshot !== persistedSnapshotRef.current || savedSnapshot === currentSnapshot)) return
 
     applySaved(saved)
-    persistedSnapshotRef.current = serializeImageBackendDefaults(saved.model, saved.params)
+    persistedSnapshotRef.current = savedSnapshot
     loadedRef.current = true
   }, [backend, saved, currentSnapshot, applySaved])
 
