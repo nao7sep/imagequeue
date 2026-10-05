@@ -36,9 +36,15 @@ export function TextProviderSettings({ config, onChange, keyField }: {
           const value = section[role.id] as string
           const thinking = section.thinking as Record<string, string>
           const row = textRowFor(provider, value)
-          // A model change resets the role's thinking to the new model's default.
+          // Thinking resets to the new model's default only when the edit resolves
+          // to a different row, or moves between a row and no row; an edit that
+          // resolves to the same row keeps the chosen value.
           const changeModel = (id: string): void => {
             const next = textRowFor(provider, id)
+            if (next === row) {
+              updateProvider(provider, role.id, id)
+              return
+            }
             onChange({ ...config, [provider]: { ...section, [role.id]: id,
               thinking: { ...thinking, [role.id]: next ? next.defaultThinking : '' } } })
           }

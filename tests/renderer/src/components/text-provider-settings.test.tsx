@@ -73,4 +73,23 @@ describe('text provider settings', () => {
     fireEvent.change(slug, { target: { value: 'local-model' } })
     expect(container.querySelector('#openai-slug-thinking')).toBeNull()
   })
+  it('keeps a role\'s chosen thinking when the model edit resolves to the same row', () => {
+    const { container } = render(<Harness />)
+    const slug = (screen.getAllByLabelText('Slug model') as HTMLInputElement[])[1]!
+    const select = (): HTMLSelectElement => container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!
+    expect(select().value).toBe('high')
+    for (const value of ['gpt-6-luna ', ' GPT-6-Luna', 'gpt-6-luna']) {
+      fireEvent.change(slug, { target: { value } })
+      expect(slug.value).toBe(value)
+      expect(select().value).toBe('high')
+    }
+  })
+  it('resets thinking when the model moves from an unlisted id back to a listed one', () => {
+    const { container } = render(<Harness />)
+    const slug = (screen.getAllByLabelText('Slug model') as HTMLInputElement[])[1]!
+    fireEvent.change(slug, { target: { value: 'local-model' } })
+    expect(container.querySelector('#openai-slug-thinking')).toBeNull()
+    fireEvent.change(slug, { target: { value: 'gpt-6-luna' } })
+    expect(container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!.value).toBe('none')
+  })
 })
