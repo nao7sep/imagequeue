@@ -27,7 +27,7 @@ describe('defaults', () => {
       outputCompression: 100,
       background: 'auto',
     })
-    expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K' })
+    expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'minimal' })
     expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
     expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, steps: 50, guidance: 5, seed: '' })
   })
@@ -74,11 +74,21 @@ describe('clampToModel', () => {
     expect(clamped.sizeIdx).toBe(0)
   })
 
-  it('leaves nano banana params untouched for a model without image config', () => {
-    const unsupported = getModelsForBackend('nanobanana').find((m) => !m.supportsImageConfig)
-    if (!unsupported) return // every model supports image config today; guard stays for a future one
-    const params = { aspectRatio: '16:9', imageSize: '2K' }
-    expect(nanoBananaBackend.clampToModel(params, unsupported)).toBe(params)
+  it('resets Gemini thinking to the new model\'s default and keeps a ratio and size it takes', () => {
+    const pro = findModel('nanobanana', 'gemini-3-pro-image')!
+    const flash = findModel('nanobanana', 'gemini-3.1-flash-image')!
+    const lite = findModel('nanobanana', 'gemini-3.1-flash-lite-image')!
+    expect(nanoBananaBackend.clampToModel({ aspectRatio: '16:9', imageSize: '2K', thinking: 'high' }, pro)).toEqual({ aspectRatio: '16:9', imageSize: '2K', thinking: 'medium' })
+    expect(nanoBananaBackend.clampToModel({ aspectRatio: '8:1', imageSize: '512', thinking: 'medium' }, flash)).toEqual({ aspectRatio: '8:1', imageSize: '512', thinking: 'minimal' })
+    // Pro takes neither 8:1 nor 512, so they fall to 1:1 and 1K.
+    expect(nanoBananaBackend.clampToModel({ aspectRatio: '8:1', imageSize: '512', thinking: 'high' }, pro)).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'medium' })
+    expect(nanoBananaBackend.clampToModel({ aspectRatio: '1:1', imageSize: '4K', thinking: 'high' }, lite)).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'minimal' })
+  })
+
+  it('keeps a saved Gemini thinking the row takes, else the row\'s default, and sizes fall to 1K', () => {
+    const flash = findModel('nanobanana', 'gemini-3.1-flash-image')!
+    expect(nanoBananaBackend.fromSaved({ thinking: 'high' }, flash)).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'high' })
+    expect(nanoBananaBackend.fromSaved({ thinking: 'low', imageSize: 'bogus' }, flash)).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'minimal' })
   })
 })
 

@@ -516,6 +516,36 @@ describe('flux column', () => {
   })
 })
 
+describe('nano banana column', () => {
+  const options = (container: HTMLElement, label: string) => [...(rowControl(container, label) as HTMLSelectElement).options].map((option) => option.value)
+
+  it('shows aspect, size and thinking with their defaults, thinking from the chosen model', async () => {
+    stageSettings('nanobanana', 'gemini-3.1-flash-image', { aspectRatio: '1:1', imageSize: '1K', thinking: 'minimal' })
+    const { container } = render(<QueueColumn backendId="nanobanana" label="Nano Banana" prompt="a cat" />)
+    await flush()
+    const labels = Array.from(container.querySelectorAll('.setting-row label')).map((label) => label.textContent)
+    expect(labels).toEqual(['Model', 'Aspect', 'Size', 'Thinking'])
+    expect(options(container, 'Size')).toEqual(['512', '1K', '2K', '4K'])
+    expect(options(container, 'Thinking')).toEqual(['minimal', 'high'])
+    expect([rowControl(container, 'Aspect').value, rowControl(container, 'Size').value, rowControl(container, 'Thinking').value]).toEqual(['1:1', '1K', 'minimal'])
+  })
+
+  it('resets thinking to the new model\'s default when the model changes, and keeps a saved one at launch', async () => {
+    stageSettings('nanobanana', 'gemini-3.1-flash-image', { aspectRatio: '1:1', imageSize: '1K', thinking: 'high' })
+    const { container } = render(<QueueColumn backendId="nanobanana" label="Nano Banana" prompt="a cat" />)
+    await flush()
+    expect(rowControl(container, 'Thinking').value).toBe('high')
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'gemini-3-pro-image' } })
+    await flush()
+    expect(options(container, 'Thinking')).toEqual(['minimal', 'low', 'medium', 'high'])
+    expect(rowControl(container, 'Thinking').value).toBe('medium')
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'gemini-3.1-flash-lite-image' } })
+    await flush()
+    expect(rowControl(container, 'Thinking').value).toBe('minimal')
+    expect(options(container, 'Size')).toEqual(['1K'])
+  })
+})
+
 describe('snapshot wiring', () => {
   it('publishes model, params, and readiness for Send-to-All', async () => {
     const model = getDefaultModelForBackend('grok')!.id

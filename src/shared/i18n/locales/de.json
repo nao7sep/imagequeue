@@ -330,6 +330,7 @@
   "option.high": "Hoch",
   "option.xhigh": "Sehr hoch",
   "option.max": "Maximal",
+  "option.minimal": "Minimal",
   "option.auto": "Auto",
   "option.opaque": "Deckend",
   "option.transparent": "Transparent",

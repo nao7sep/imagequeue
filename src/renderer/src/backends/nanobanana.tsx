@@ -1,25 +1,33 @@
 import type { NanoBananaModelDef } from '../../../shared/models'
+import { getDefaultModelForBackend } from '../../../shared/ai-models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
+import { optionLabel } from '../i18n/optionLabels'
 
 export type NanoBananaParams = {
   aspectRatio: string
   imageSize: string
+  thinking: string
 }
 
+function listed(values: readonly string[], value: unknown, fallback: string): string {
+  return typeof value === 'string' && values.includes(value) ? value : fallback
+}
+
+// The ratio and size fall to 1:1 and 1K, the app's and Google's defaults, when
+// the row takes them, else to the row's first; thinking falls to the row's default.
 function resolveParams(saved: Record<string, unknown>, modelDef: NanoBananaModelDef): NanoBananaParams {
-  const aspectRatio = typeof saved.aspectRatio === 'string' && modelDef.aspectRatios.some((item) => item.value === saved.aspectRatio)
-    ? saved.aspectRatio
-    : (modelDef.aspectRatios[0]?.value ?? '1:1')
-  const imageSize = typeof saved.imageSize === 'string' && modelDef.imageSizes.some((item) => item.value === saved.imageSize)
-    ? saved.imageSize
-    : (modelDef.imageSizes[0]?.value ?? '1K')
-  return { aspectRatio, imageSize }
+  const ratios = modelDef.aspectRatios.map((item) => item.value)
+  const sizes = modelDef.imageSizes.map((item) => item.value)
+  return {
+    aspectRatio: listed(ratios, saved.aspectRatio, listed(ratios, '1:1', ratios[0]!)),
+    imageSize: listed(sizes, saved.imageSize, listed(sizes, '1K', sizes[0]!)),
+    thinking: listed(modelDef.thinking, saved.thinking, modelDef.defaultThinking),
+  }
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBananaParams, NanoBananaModelDef>): React.JSX.Element {
   const { t } = useI18n()
-  if (!modelDef.supportsImageConfig) return <></>
   return (
     <>
       <div className="setting-row">
@@ -38,6 +46,14 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
           ))}
         </select>
       </div>
+      <div className="setting-row">
+        <label>{t('settings.thinking')}</label>
+        <select value={params.thinking} onChange={(e) => onChange({ ...params, thinking: e.target.value })}>
+          {modelDef.thinking.map((level) => (
+            <option key={level} value={level}>{optionLabel(t, level)}</option>
+          ))}
+        </select>
+      </div>
     </>
   )
 }
@@ -46,19 +62,15 @@ export const nanoBananaBackend: BackendParamModel<NanoBananaParams, NanoBananaMo
   defaults: () => ({
     aspectRatio: '1:1',
     imageSize: '1K',
+    thinking: getDefaultModelForBackend('nanobanana').defaultThinking,
   }),
 
-  // A model without image-config support ignores these params entirely (they
-  // never reach the request — see toEnqueueParams), so a switch to one leaves
-  // the UI values untouched for the switch back.
-  clampToModel: (params, modelDef) =>
-    modelDef.supportsImageConfig ? resolveParams(params, modelDef) : params,
+  // Models take different thinking levels, so a model switch resets thinking to
+  // the new model's default; the ratio and size keep a value the new model takes.
+  clampToModel: (params, modelDef) => ({ ...resolveParams(params, modelDef), thinking: modelDef.defaultThinking }),
   fromSaved: (saved, modelDef) => resolveParams(saved, modelDef),
 
-  toEnqueueParams: (params, modelDef) =>
-    modelDef.supportsImageConfig
-      ? { aspectRatio: params.aspectRatio, imageSize: params.imageSize }
-      : {},
+  toEnqueueParams: (params) => ({ aspectRatio: params.aspectRatio, imageSize: params.imageSize, thinking: params.thinking }),
 
   Controls,
 }

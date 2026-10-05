@@ -145,25 +145,11 @@ export const NANO_BANANA_ASPECT_RATIOS_BASE: { label: string; value: string }[] 
   { label: '21:9', value: '21:9' }
 ]
 
-// The Gemini 3.1 image generation (both gemini-3.1-flash-image and its Lite
-// sibling) add the extra extreme ratios on top of the base set. Live-verified
-// 2026-07-16: both accept 4:1 (and reject on the 3-pro / 2.5 models).
+// The 3.1 Flash pair add the four extreme ratios, in Google's own order. Lite's
+// older model page lists 10, but Google's guide lists all 14 for it.
 export const NANO_BANANA_ASPECT_RATIOS_FLASH2: { label: string; value: string }[] = [
-  { label: '1:1',  value: '1:1' },
-  { label: '1:4',  value: '1:4' },
-  { label: '1:8',  value: '1:8' },
-  { label: '2:3',  value: '2:3' },
-  { label: '3:2',  value: '3:2' },
-  { label: '3:4',  value: '3:4' },
-  { label: '4:1',  value: '4:1' },
-  { label: '4:3',  value: '4:3' },
-  { label: '4:5',  value: '4:5' },
-  { label: '5:4',  value: '5:4' },
-  { label: '8:1',  value: '8:1' },
-  { label: '9:16', value: '9:16' },
-  { label: '16:9', value: '16:9' },
-  { label: '21:9', value: '21:9' }
-]
+  '1:1', '1:4', '4:1', '1:8', '8:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9',
+].map((ratio) => ({ label: ratio, value: ratio }))
 
 export const NANO_BANANA_SIZES_FLASH2: { label: string; value: string }[] = [
   { label: '0.5K', value: '512' },
@@ -178,12 +164,6 @@ export const NANO_BANANA_SIZES_PRO: { label: string; value: string }[] = [
   { label: '4K', value: '4K' }
 ]
 
-export const NANO_BANANA_SIZES: { label: string; value: string }[] = [
-  { label: '1K', value: '1K' },
-  { label: '2K', value: '2K' },
-  { label: '4K', value: '4K' }
-]
-
 // Nano Banana 2 Lite (Gemini 3.1 Flash-Lite Image) generates at 1K only.
 export const NANO_BANANA_SIZES_LITE: { label: string; value: string }[] = [
   { label: '1K', value: '1K' }
@@ -192,10 +172,11 @@ export const NANO_BANANA_SIZES_LITE: { label: string; value: string }[] = [
 export interface NanoBananaModelDef extends ModelDef {
   provider: 'gemini'
   backend: 'nanobanana'
-  // Image config support varies by model and is controlled per registry entry.
-  supportsImageConfig: boolean
   aspectRatios: { label: string; value: string }[]
   imageSizes: { label: string; value: string }[]
+  // The thinking levels the model takes, in Google's words, lowest first.
+  thinking: string[]
+  defaultThinking: string
 }
 
 export type GrokAspectRatio =

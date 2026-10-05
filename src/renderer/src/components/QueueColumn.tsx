@@ -78,12 +78,14 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     () => cloudBackend?.defaults() ?? {}
   )
 
-  // Re-validate the params whenever the model changes: a value the new model
-  // does not offer falls to that model's own default (descriptor semantics).
-  useEffect(() => {
-    if (!cloudBackend || !cloudModelDef) return
-    setCloudParams((prev) => cloudBackend.clampToModel(prev, cloudModelDef))
-  }, [cloudBackend, cloudModelDef])
+  // The user's model choice re-validates the params: a value the new model does
+  // not offer falls to that model's own default (descriptor semantics). Saved
+  // defaults arrive already resolved for their model, so only this choice clamps.
+  const chooseModel = (id: string): void => {
+    setModel(id)
+    const next = proprietaryBackend ? findModel(proprietaryBackend, id) : undefined
+    if (cloudBackend && next) setCloudParams((prev) => cloudBackend.clampToModel(prev, next))
+  }
 
   // Derived from context — updates automatically when settings change (no effect
   // needed). Read from the PRESENCE signal, never from settings' api_key string:
@@ -259,7 +261,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         {backendId !== 'drawthings' && (
           <div className="setting-row">
             <label>{t('column.model')}</label>
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
+            <select value={model} onChange={(e) => chooseModel(e.target.value)}>
               {modelNotInList && (
                 <option value={model}>{t('column.modelNotInListOption', { model })}</option>
               )}

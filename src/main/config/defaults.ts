@@ -51,7 +51,8 @@ export function createDefaultConfig(): AppConfig {
         model: getDefaultModelForBackend('nanobanana').id,
         default_params: {
           aspectRatio: '1:1',
-          imageSize: '1K'
+          imageSize: '1K',
+          thinking: getDefaultModelForBackend('nanobanana').defaultThinking
         },
         concurrency: 3,
         timeout_ms: 180000

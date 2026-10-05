@@ -52,7 +52,7 @@ describe('image routing guard', () => {
   it('pins every column\'s rows, in order, and its default', () => {
     expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getModelsForBackend(backend).map((row) => row.id)]))).toEqual({
       openai: ['gpt-image-2.5-flare', 'gpt-image-2'],
-      nanobanana: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-lite-image'],
+      nanobanana: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image'],
       grok: ['grok-imagine-image-2.0', 'grok-imagine-image-quality', 'grok-imagine-image'],
       flux: ['flux-2-max', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b', 'flux-2-klein-4b'],
     })
@@ -92,8 +92,20 @@ describe('image routing guard', () => {
     for (const row of getModelsForBackend('openai')) expect(row.sizes, row.id).toBe(STANDARD_SIZE_PRESETS)
   })
 
-  it('treats a removed OpenAI id as an id not in the list', () => {
+  it('pins each Gemini row\'s ratios, sizes and thinking in order, with its default', () => {
+    const base = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+    const all = ['1:1', '1:4', '4:1', '1:8', '8:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+    expect(getModelsForBackend('nanobanana').map(({ id, aspectRatios, imageSizes, thinking, defaultThinking }) =>
+      [id, aspectRatios.map((item) => item.value), imageSizes.map((item) => item.value), thinking, defaultThinking])).toEqual([
+      ['gemini-3-pro-image', base, ['1K', '2K', '4K'], ['minimal', 'low', 'medium', 'high'], 'medium'],
+      ['gemini-3.1-flash-image', all, ['512', '1K', '2K', '4K'], ['minimal', 'high'], 'minimal'],
+      ['gemini-3.1-flash-lite-image', all, ['1K'], ['minimal', 'high'], 'minimal'],
+    ])
+  })
+
+  it('treats a removed image id as an id not in the list', () => {
     for (const id of ['gpt-image-1.5', 'gpt-image-1-mini']) expect(findModel('openai', id), id).toBeUndefined()
+    expect(findModel('nanobanana', 'gemini-2.5-flash-image')).toBeUndefined()
   })
 
   it('finds a row only by its exact id', () => {

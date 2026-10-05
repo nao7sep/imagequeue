@@ -6,7 +6,6 @@ import {
   GROK_RESOLUTIONS,
   NANO_BANANA_ASPECT_RATIOS_BASE,
   NANO_BANANA_ASPECT_RATIOS_FLASH2,
-  NANO_BANANA_SIZES,
   NANO_BANANA_SIZES_FLASH2,
   NANO_BANANA_SIZES_LITE,
   NANO_BANANA_SIZES_PRO,
@@ -73,34 +72,29 @@ export const SUPPORTED_MODELS: readonly SupportedModel[] = [
     backgrounds: ['auto', 'transparent', 'opaque'],
   },
 
-  // Gemini images (Nano Banana).
+  // Gemini images (Nano Banana). Flash and Lite refuse low and medium thinking.
+  // Flash keeps Google's own minimal as its default: medium, the balanced
+  // baseline, is not offered, and high would break the balanced idea.
   {
     provider: 'gemini', id: 'gemini-3-pro-image', label: 'Nano Banana Pro', backend: 'nanobanana',
     kinds: ['image-generate'], defaultFor: [],
-    supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
     imageSizes: NANO_BANANA_SIZES_PRO,
+    thinking: ['minimal', 'low', 'medium', 'high'], defaultThinking: 'medium',
   },
   {
     provider: 'gemini', id: 'gemini-3.1-flash-image', label: 'Nano Banana 2', backend: 'nanobanana',
     kinds: ['image-generate'], defaultFor: ['image-generate'],
-    supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
     imageSizes: NANO_BANANA_SIZES_FLASH2,
-  },
-  {
-    provider: 'gemini', id: 'gemini-2.5-flash-image', label: 'Nano Banana', backend: 'nanobanana',
-    kinds: ['image-generate'], defaultFor: [],
-    supportsImageConfig: true,
-    aspectRatios: NANO_BANANA_ASPECT_RATIOS_BASE,
-    imageSizes: NANO_BANANA_SIZES,
+    thinking: ['minimal', 'high'], defaultThinking: 'minimal',
   },
   {
     provider: 'gemini', id: 'gemini-3.1-flash-lite-image', label: 'Nano Banana 2 Lite', backend: 'nanobanana',
     kinds: ['image-generate'], defaultFor: [],
-    supportsImageConfig: true,
     aspectRatios: NANO_BANANA_ASPECT_RATIOS_FLASH2,
     imageSizes: NANO_BANANA_SIZES_LITE,
+    thinking: ['minimal', 'high'], defaultThinking: 'minimal',
   },
 
   // xAI images (Grok Imagine). Only 2.0 declares qualities; the 1.x pair carry

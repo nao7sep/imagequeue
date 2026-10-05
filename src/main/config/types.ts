@@ -75,6 +75,7 @@ export interface NanoBananaBackendConfig {
   default_params: {
     aspectRatio: string
     imageSize: string
+    thinking: string
   }
   concurrency: number
   timeout_ms: number
