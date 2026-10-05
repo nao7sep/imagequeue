@@ -553,6 +553,7 @@
   "advanced.targets": "Destinazioni",
   "advanced.proprietary": "Servizi cloud",
   "advanced.noApiKey": "Nessuna chiave API",
+  "advanced.modelNotInList": "Modello non in elenco",
   "advanced.loadingModels": "Caricamento dei modelli…",
   "advanced.noModels": "Nessun modello scaricato.",
   "advanced.execution": "Esecuzione",

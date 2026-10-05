@@ -543,6 +543,7 @@
   "advanced.targets": "Ziele",
   "advanced.proprietary": "Cloud-Dienste",
   "advanced.noApiKey": "Kein API-Schlüssel",
+  "advanced.modelNotInList": "Modell nicht in der Liste",
   "advanced.loadingModels": "Modelle werden geladen …",
   "advanced.noModels": "Keine Modelle heruntergeladen.",
   "advanced.execution": "Ausführung",

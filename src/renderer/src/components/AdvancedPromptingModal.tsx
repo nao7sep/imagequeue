@@ -194,6 +194,15 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     }
     return result
   }, [apiKeyPresence])
+  // A column whose model is not in the list queues nothing, here as from the
+  // column itself; its snapshot's readiness is the column's own judgement.
+  const proprietaryEnabledByBackend = useMemo<Record<string, boolean>>(() => {
+    const result: Record<string, boolean> = {}
+    for (const id of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
+      result[id] = proprietaryApiKeyByBackend[id] === true && snapshots[id]?.ready !== false
+    }
+    return result
+  }, [proprietaryApiKeyByBackend, snapshots])
 
   // Draw Things fallback params read straight from the effective config, which
   // supplies the whole set, so the defaults live in one place
@@ -228,9 +237,9 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       selectedProprietary,
       selectedDtFiles,
       downloadedDtModels,
-      proprietaryEnabled: proprietaryApiKeyByBackend,
+      proprietaryEnabled: proprietaryEnabledByBackend,
     })
-  }, [targetScope, selectedProprietary, selectedDtFiles, downloadedDtModels, proprietaryApiKeyByBackend])
+  }, [targetScope, selectedProprietary, selectedDtFiles, downloadedDtModels, proprietaryEnabledByBackend])
 
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
   const totalTasks = Math.max(0, targetCount * Math.max(1, count))
@@ -608,17 +617,18 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                 <div className="advanced-targets-group-title">{t('advanced.proprietary')}</div>
               )}
               {CLOUD_BACKEND_IDS_IN_UI_ORDER.map((id) => {
-                const hasKey = proprietaryApiKeyByBackend[id]
+                const enabled = proprietaryEnabledByBackend[id]
+                const hint = !proprietaryApiKeyByBackend[id] ? 'advanced.noApiKey' : enabled ? null : 'advanced.modelNotInList'
                 return (
-                  <label key={id} className={`advanced-target-row${hasKey ? '' : ' disabled'}`}>
+                  <label key={id} className={`advanced-target-row${enabled ? '' : ' disabled'}`}>
                     <input
                       type="checkbox"
                       checked={!!selectedProprietary[id]}
-                      disabled={!hasKey}
+                      disabled={!enabled}
                       onChange={() => toggleProprietary(id)}
                     />
                     <span>{BACKEND_LABELS[id]}</span>
-                    {!hasKey && <span className="advanced-target-hint">{t('advanced.noApiKey')}</span>}
+                    {hint && <span className="advanced-target-hint">{t(hint)}</span>}
                   </label>
                 )
               })}

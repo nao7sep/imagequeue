@@ -543,6 +543,7 @@
   "advanced.targets": "Targets",
   "advanced.proprietary": "Proprietary",
   "advanced.noApiKey": "No API key",
+  "advanced.modelNotInList": "Model not in the list",
   "advanced.loadingModels": "Loading models…",
   "advanced.noModels": "No models downloaded.",
   "advanced.execution": "Execution",

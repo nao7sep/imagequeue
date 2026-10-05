@@ -563,6 +563,7 @@
   "advanced.targets": "Цели",
   "advanced.proprietary": "Облачные сервисы",
   "advanced.noApiKey": "Нет ключа API",
+  "advanced.modelNotInList": "Модели нет в списке",
   "advanced.loadingModels": "Загрузка моделей…",
   "advanced.noModels": "Нет скачанных моделей.",
   "advanced.execution": "Выполнение",

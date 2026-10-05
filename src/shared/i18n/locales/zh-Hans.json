@@ -533,6 +533,7 @@
   "advanced.targets": "目标",
   "advanced.proprietary": "云服务",
   "advanced.noApiKey": "无 API 密钥",
+  "advanced.modelNotInList": "模型不在列表中",
   "advanced.loadingModels": "正在载入模型…",
   "advanced.noModels": "没有已下载的模型。",
   "advanced.execution": "执行",
