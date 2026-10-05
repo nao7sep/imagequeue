@@ -5,7 +5,9 @@ import {
   createTaskCounts,
   isSessionManifest,
   normalizeResumedQueues,
-  toInterruptedTask
+  readStoredTask,
+  sessionContentKey,
+  toResumedTask
 } from '../../../src/main/session/state'
 import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
 import { BackendId, SESSION_MANIFEST_VERSION, Task, TaskStatus } from '../../../src/shared/types'
@@ -52,33 +54,45 @@ describe('createTaskCounts', () => {
   })
 })
 
-describe('toInterruptedTask', () => {
-  it('leaves completed and kept tasks untouched', () => {
-    expect(toInterruptedTask(makeTask('a', 'completed')).status).toBe('completed')
-    expect(toInterruptedTask(makeTask('b', 'kept')).status).toBe('kept')
+describe('toResumedTask', () => {
+  it('leaves finished, failed and already interrupted tasks as they were stored', () => {
+    const failed = makeTask('c', 'failed', {
+      completedAt: null,
+      imagePath: null,
+      baseName: null,
+      error: { key: 'taskFailure.refused', values: { name: 'OpenAI' } },
+      providerMessage: 'Your request was rejected by the safety system.',
+    })
+    expect(toResumedTask(makeTask('a', 'completed')).status).toBe('completed')
+    expect(toResumedTask(makeTask('b', 'kept')).status).toBe('kept')
+    expect(toResumedTask(failed)).toEqual(failed)
+    expect(toResumedTask(makeTask('d', 'interrupted')).status).toBe('interrupted')
   })
 
   it('marks in-flight tasks interrupted and clears per-attempt fields', () => {
-    const result = toInterruptedTask(makeTask('a', 'generating', { error: 'boom' }))
-    expect(result.status).toBe('interrupted')
-    expect(result.startedAt).toBeNull()
-    expect(result.completedAt).toBeNull()
-    expect(result.durationMs).toBeNull()
-    expect(result.imagePath).toBeNull()
-    expect(result.baseName).toBeNull()
-    expect(result.error).toBeNull()
+    for (const status of ['generating', 'queued'] as const) {
+      const result = toResumedTask(makeTask('a', status))
+      expect(result.status).toBe('interrupted')
+      expect(result.startedAt).toBeNull()
+      expect(result.completedAt).toBeNull()
+      expect(result.durationMs).toBeNull()
+      expect(result.imagePath).toBeNull()
+      expect(result.baseName).toBeNull()
+      expect(result.error).toBeNull()
+    }
   })
 })
 
 describe('normalizeResumedQueues', () => {
-  it('interrupts unfinished work while preserving finished outputs', () => {
+  it('interrupts only the work that was in flight', () => {
     const normalized = normalizeResumedQueues(queuesWith([
       makeTask('done', 'completed'),
+      makeTask('refused', 'failed'),
       makeTask('mid', 'generating'),
       makeTask('wait', 'queued')
     ]))
     const byId = Object.fromEntries(normalized.openai.map((t) => [t.id, t.status]))
-    expect(byId).toEqual({ done: 'completed', mid: 'interrupted', wait: 'interrupted' })
+    expect(byId).toEqual({ done: 'completed', refused: 'failed', mid: 'interrupted', wait: 'interrupted' })
   })
 
   it('repairs duplicate task ids across backend queues while preserving every task', () => {
@@ -91,6 +105,59 @@ describe('normalizeResumedQueues', () => {
     expect(tasks[0].id).toBe('same-id')
     expect(tasks[1].id).not.toBe('same-id')
     expect(new Set(tasks.map((task) => task.id)).size).toBe(2)
+  })
+})
+
+describe('readStoredTask', () => {
+  const failed = (extra: Partial<Task>): Task => makeTask('f', 'failed', { completedAt: null, imagePath: null, baseName: null, ...extra })
+
+  it('keeps a failure recorded as a message', () => {
+    const error = { key: 'taskFailure.refusedWithReason', values: { name: 'Grok', reason: 'content moderated' } } as const
+    expect(readStoredTask(failed({ error })).error).toEqual(error)
+  })
+
+  it('drops a failure an older build recorded as words, which may be the raw diagnostic', () => {
+    const legacy = failed({ error: 'Grok API error 400: {"code":"x","usage":{"cost_in_usd_ticks":1}}' as unknown as Task['error'] })
+    expect(readStoredTask(legacy).error).toBeNull()
+  })
+
+  it('reduces a provider message kept as the whole error body to the provider\'s reason', () => {
+    const raw = '{"code":"imagine:content-moderated","error":"Generated image rejected by content moderation.","usage":{"cost_in_usd_ticks":600000000}}'
+    expect(readStoredTask(failed({ backend: 'grok', providerMessage: raw })).providerMessage)
+      .toBe('Generated image rejected by content moderation.')
+    expect(readStoredTask(failed({ backend: 'flux', providerMessage: '{"detail":"Insufficient credits.","code":402}' })).providerMessage)
+      .toBe('Insufficient credits.')
+    expect(readStoredTask(failed({ backend: 'grok', providerMessage: '{"code":"internal","usage":{}}' })).providerMessage)
+      .toBeNull()
+  })
+
+  it('keeps a provider message that is already the reason, and leaves an absent one absent', () => {
+    expect(readStoredTask(failed({ providerMessage: 'Your request was rejected by the safety system.' })).providerMessage)
+      .toBe('Your request was rejected by the safety system.')
+    const { providerMessage: _absent, ...older } = failed({})
+    expect('providerMessage' in readStoredTask(older as Task)).toBe(false)
+  })
+})
+
+describe('sessionContentKey', () => {
+  const draft = createEmptySessionDraft()
+  const key = (tasks: Task[]): string => sessionContentKey(draft, [], queuesWith(tasks))
+
+  it('ignores what is lifecycle: status, timing and failure', () => {
+    const base = key([makeTask('a', 'completed')])
+    expect(key([makeTask('a', 'kept')])).toBe(base)
+    expect(key([makeTask('a', 'completed', { startedAt: null, completedAt: null, durationMs: null })])).toBe(base)
+    expect(key([makeTask('a', 'completed', { error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } }, providerMessage: 'x' })])).toBe(base)
+  })
+
+  it('changes with the request, the saved image, the task list, the draft and the prompts', () => {
+    const base = key([makeTask('a', 'completed')])
+    expect(key([makeTask('a', 'completed', { prompt: 'q' })])).not.toBe(base)
+    expect(key([makeTask('a', 'completed', { params: { quality: 'high' } })])).not.toBe(base)
+    expect(key([makeTask('a', 'completed', { baseName: 'other' })])).not.toBe(base)
+    expect(key([makeTask('a', 'completed'), makeTask('b', 'queued')])).not.toBe(base)
+    expect(sessionContentKey({ ...draft, prompt: 'a cat' }, [], queuesWith([makeTask('a', 'completed')]))).not.toBe(base)
+    expect(sessionContentKey(draft, [{ text: 't', concepts: [] }], queuesWith([makeTask('a', 'completed')]))).not.toBe(base)
   })
 })
 

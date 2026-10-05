@@ -5,6 +5,7 @@ import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task 
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend, getModelsForBackend } from '../../../../src/shared/ai-models'
 import type { DrawThingsParamsPersistenceState } from '../../../../src/shared/electron-api'
+import type { Message } from '../../../../src/shared/i18n/translate'
 
 // The column under test drives everything through four contexts plus
 // window.electronAPI. The contexts are mocked with mutable module-level values
@@ -159,7 +160,7 @@ function stageSettings(backend: string, model: string, defaultParams: Record<str
   }
 }
 
-function task(status: Task['status'], error: string | null = null): Task {
+function task(status: Task['status'], error: Message | null = null): Task {
   return {
     id: `task-${status}`,
     prompt: 'a cat',
@@ -297,12 +298,13 @@ describe('task status presentation', () => {
   })
 
   it('shows the authored failure without a redundant severity prefix', () => {
-    queueValue.tasks.openai = [task('failed', 'provider refused the image')]
+    queueValue.tasks.openai = [task('failed', { key: 'taskFailure.refused', values: { name: 'OpenAI' } })]
+    const refused = 'OpenAI refused this prompt. Change the prompt, then retry.'
 
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
 
-    expect(screen.getByText('provider refused the image').getAttribute('title')).toBe('provider refused the image')
-    expect(screen.queryByText('Failed: provider refused the image')).toBeNull()
+    expect(screen.getByText(refused).getAttribute('title')).toBe(refused)
+    expect(screen.queryByText(`Failed: ${refused}`)).toBeNull()
     expect(container.querySelector('.task-prompt')?.getAttribute('title')).toBe('a cat')
     expect(queueValue.tasks.openai[0].status).toBe('failed')
   })

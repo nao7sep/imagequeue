@@ -174,7 +174,7 @@ export class QueueManager {
   }
 
   // Flips any in-flight 'generating' tasks to 'interrupted', clearing the
-  // per-attempt fields the same way a resumed session does (toInterruptedTask).
+  // per-attempt fields the same way a resumed session does (toResumedTask).
   // Called at shutdown so the persisted manifest reflects that the process
   // stopped mid-generation instead of freezing a task as 'generating' forever.
   // Returns how many were affected.

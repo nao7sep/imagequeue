@@ -238,9 +238,14 @@ describe('listing sessions', () => {
 })
 
 describe('resuming a session', () => {
-  it('loads its work, marks what never finished, and says how much was interrupted', async () => {
+  it('loads its work, marks what was in flight, and says how much was interrupted', async () => {
     const staged = stageSession('20260105-000000-utc', {
-      tasks: withTasks([makeTask('done', 'completed'), makeTask('midway', 'generating'), makeTask('waiting', 'queued')]),
+      tasks: withTasks([
+        makeTask('done', 'completed'),
+        makeTask('refused', 'failed'),
+        makeTask('midway', 'generating'),
+        makeTask('waiting', 'queued'),
+      ]),
     })
 
     await resumeSession('20260105-000000-utc')
@@ -249,25 +254,36 @@ describe('resuming a session', () => {
     const resumed = queueManager.getAllStoredTasks().openai
     expect(resumed.map((task) => [task.id, task.status])).toEqual([
       ['done', 'completed'],
+      ['refused', 'failed'],
       ['midway', 'interrupted'],
       ['waiting', 'interrupted'],
     ])
     expect(sent('session:changed')).toEqual([{ sessionId: '20260105-000000-utc' }])
-    expect(sent('session:interruptedTasks')).toEqual([{ count: 2 }])
+    expect(sent('session:interruptedTasks'), 'a failure is not offered for another run').toEqual([{ count: 2 }])
     expect(readManifest(staged).lastResumedAt, 'the resume is stamped on disk').not.toBeNull()
   })
 
-  it('brings back no raw provider body from a failed task an older build saved', async () => {
+  it('keeps a failed task failed, with its reason and no raw provider body', async () => {
     const raw = '{"code":"imagine:content-moderated","error":"Generated image rejected by content moderation.","usage":{"cost_in_usd_ticks":600000000}}'
+    const refusal = { key: 'taskFailure.refused', values: { name: 'Grok' } } as const
     const staged = stageSession('20260111-000000-utc', {
-      tasks: withTasks([makeTask('old', 'failed', { backend: 'grok', error: 'Grok failed.', providerMessage: raw })]),
+      tasks: withTasks([
+        makeTask('refused', 'failed', { backend: 'grok', error: refusal, providerMessage: raw }),
+        makeTask('old', 'failed', { backend: 'grok', error: `Grok API error 400: ${raw}` as unknown as Task['error'] }),
+      ]),
     })
 
     await resumeSession('20260111-000000-utc')
 
-    const [resumed] = queueManager.getAllStoredTasks().grok
-    expect(resumed.status).toBe('interrupted')
-    expect(resumed.providerMessage).toBeNull()
+    const [refused, old] = queueManager.getAllStoredTasks().grok
+    expect(refused).toMatchObject({
+      status: 'failed',
+      error: refusal,
+      providerMessage: 'Generated image rejected by content moderation.',
+      startedAt: '2026-01-01T00:00:01.000Z',
+    })
+    expect(old).toMatchObject({ status: 'failed', error: null })
+    expect(sent('session:interruptedTasks')).toEqual([])
     expect(fs.readFileSync(path.join(staged, 'session.json'), 'utf-8')).not.toContain('cost_in_usd_ticks')
   })
 
@@ -408,12 +424,91 @@ describe('the working draft and its elaborated prompts', () => {
     expect(readManifest(getSessionDir()).elaboratedPrompts).toEqual([])
   })
 
-  it('stamps every manifest write with the moment it happened', () => {
-    const before = readManifest(getSessionDir()).updatedAt
+})
 
-    const manifest = persistActiveSession()
+describe('the updated time', () => {
+  // Only Date is faked: the coalesced draft writer keeps its real timer.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-02-01T00:00:00.000Z'))
+  })
+  afterEach(() => vi.useRealTimers())
 
-    expect(manifest.updatedAt >= before).toBe(true)
-    expect(readManifest(getSessionDir()).updatedAt).toBe(manifest.updatedAt)
+  const later = (): void => {
+    vi.setSystemTime(new Date('2026-03-01T00:00:00.000Z'))
+  }
+  const updatedAt = (): string => readManifest(getSessionDir()).updatedAt
+
+  it('stays when a past session is opened, so the list keeps its order', async () => {
+    stageSession('20260102-000000-utc', {
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      tasks: withTasks([makeTask('done', 'completed'), makeTask('midway', 'generating')]),
+    })
+    stageSession('20260103-000000-utc', { updatedAt: '2026-01-03T00:00:00.000Z' })
+    later()
+
+    await resumeSession('20260102-000000-utc')
+
+    const manifest = readManifest(getSessionDir())
+    expect(manifest.updatedAt).toBe('2026-01-02T00:00:00.000Z')
+    expect(manifest.lastResumedAt).toBe('2026-03-01T00:00:00.000Z')
+    const ids = listSessions().map((summary) => summary.sessionId)
+    expect(ids.indexOf('20260103-000000-utc')).toBeLessThan(ids.indexOf('20260102-000000-utc'))
+  })
+
+  it('stays on the session left behind when a new one starts', async () => {
+    const previous = getSessionDir()
+    queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed')]))
+    persistActiveSession()
+    later()
+
+    await createSession()
+
+    expect(readManifest(previous).updatedAt).toBe('2026-02-01T00:00:00.000Z')
+    expect(updatedAt(), 'a new session is updated when it is made').toBe('2026-03-01T00:00:00.000Z')
+  })
+
+  it('stays when a finished task is kept or restored, or when only statuses change', () => {
+    queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed'), makeTask('b', 'failed')]))
+    persistActiveSession()
+    const before = updatedAt()
+    later()
+
+    queueManager.keepTask('openai', 'a')
+    persistActiveSession()
+    expect(updatedAt()).toBe(before)
+
+    queueManager.restoreTask('openai', 'a')
+    queueManager.retryTask('openai', 'b')
+    persistActiveSession()
+    expect(updatedAt()).toBe(before)
+  })
+
+  it('moves on an edit to the tasks, the prompts or the draft', () => {
+    const before = updatedAt()
+    later()
+    queueManager.replaceAllTasks(withTasks([makeTask('a', 'queued')]))
+    expect(persistActiveSession().updatedAt).toBe('2026-03-01T00:00:00.000Z')
+    expect(updatedAt()).not.toBe(before)
+
+    vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
+    appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])
+    expect(updatedAt()).toBe('2026-04-01T00:00:00.000Z')
+
+    vi.setSystemTime(new Date('2026-05-01T00:00:00.000Z'))
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
+    drainPendingDraftWrites()
+    expect(updatedAt()).toBe('2026-05-01T00:00:00.000Z')
+  })
+
+  it('stays when the draft saved is the content already saved', () => {
+    const before = updatedAt()
+    later()
+
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
+    setActiveSessionDraft(createEmptySessionDraft())
+    drainPendingDraftWrites()
+
+    expect(updatedAt()).toBe(before)
   })
 })

@@ -261,7 +261,7 @@ describe('deleting a row together with its image', () => {
 
 describe('trying again', () => {
   it('re-queues one failed row', () => {
-    seed([makeTask('failed', 'failed', { error: 'rate limited' })])
+    seed([makeTask('failed', 'failed', { error: { key: 'taskFailure.rateLimited', values: { name: 'OpenAI' } } })])
 
     invoke('queue:retryTask', 'openai', 'failed')
 

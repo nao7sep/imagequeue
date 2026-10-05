@@ -170,10 +170,9 @@ export interface Task {
   durationMs: number | null
   imagePath: string | null
   baseName: string | null
-  // Why the task failed, as a message rendered in the current language. A plain
-  // string is copy a session recorded before failures were kept as messages,
-  // shown as it was written.
-  error: Message | string | null
+  // Why the task failed, as a message rendered in the current language. Words an
+  // older build stored here are dropped when the session is read.
+  error: Message | null
   // The provider's human-readable reason when this attempt failed — the message
   // field of its error body as the provider wrote it, never the raw body; null when
   // the failure was not a provider answer or it gave no reason. Absent on tasks a session

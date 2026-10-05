@@ -1,4 +1,5 @@
 import { multiline } from '../shared/textCleanup'
+import type { BackendId } from '../shared/types'
 
 /**
  * A provider's human-readable reason for a failed request, as the task keeps it in
@@ -49,6 +50,31 @@ export const openaiReasonField: ReasonField = (body) =>
 export const geminiReasonField: ReasonField = (body) => {
   const error = record(body.error)
   return typeof error?.status === 'string' && /^[A-Z_]+$/.test(error.status) ? text(error.message) : null
+}
+
+/** Each image backend's reason field; Draw Things runs locally and has no provider body. */
+const IMAGE_REASON_FIELDS: Record<BackendId, ReasonField | null> = {
+  openai: openaiReasonField,
+  nanobanana: geminiReasonField,
+  grok: grokReasonField,
+  flux: fluxReasonField,
+  drawthings: null,
+}
+
+/** A task's stored `providerMessage` as a session brings it back. An older build kept the
+ *  whole error body there; a body that is a JSON object is reduced to its reason, and any
+ *  other text is already the reason as the provider wrote it. */
+export function storedProviderReason(stored: string, backend: BackendId): string | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stored)
+  } catch {
+    return stored
+  }
+  const object = record(parsed)
+  if (!object) return stored
+  const field = IMAGE_REASON_FIELDS[backend]
+  return field ? cleanReason(field(object)) : null
 }
 
 /** The reason in a provider's raw error response body. */

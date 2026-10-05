@@ -17,6 +17,8 @@ import {
 import { createEmptySessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
+import { isMessage } from '../../shared/i18n/translate'
+import { storedProviderReason } from '../provider-reason'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
 import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
@@ -29,18 +31,23 @@ import { markDraftPersistenceFailed, markDraftPersistenceSaved } from './draft-p
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
 // Single source of truth for the active session's renderer-facing manifest
-// fields: the prompt/elaboration working state plus the timestamps we stamp on
-// each write. null until loaded; replaced as a whole unit on create/resume (via
-// adoptActiveSession) or filled lazily from disk (ensureActiveSessionLoaded), so
-// persistActiveSession never re-reads session.json just to preserve
-// createdAt/lastResumedAt. Grouping the fields means every session transition
-// sets them all together — a new field can't be wired into one transition and
-// silently forgotten in another.
+// fields: the prompt/elaboration working state plus its times. null until
+// loaded; replaced as a whole unit on create/resume (via adoptActiveSession) or
+// filled lazily from disk (ensureActiveSessionLoaded), so persistActiveSession
+// never re-reads session.json just to preserve them. Grouping the fields means
+// every session transition sets them all together — a new field can't be wired
+// into one transition and silently forgotten in another.
+//
+// updatedAt follows the content-lifecycle-conventions' Modified rule.
+// savedContent is the sessionContentKey of the content last saved, which
+// persistActiveSession judges each write against.
 interface ActiveSessionState {
   elaboratedPrompts: ElaboratedPromptRecord[]
   draft: SessionDraft
   createdAt: string
+  updatedAt: string
   lastResumedAt: string | null
+  savedContent: string
 }
 let activeSession: ActiveSessionState | null = null
 
@@ -197,7 +204,7 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
     }
     const normalizedTasks = createEmptyQueues()
     for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-      normalizedTasks[backend] = parsed.tasks[backend].map(normalizeTaskRecord)
+      normalizedTasks[backend] = parsed.tasks[backend].map(readStoredTask)
     }
     return {
       ...parsed,
@@ -217,10 +224,67 @@ function readManifestFromDir(sessionDir: string): SessionManifest | null {
   }
 }
 
+// A task as a stored session brings it back. A failure recorded as plain words
+// is dropped, since an older build stored the raw diagnostic there, and a
+// provider message an older build kept as the whole error body is reduced to
+// the provider's reason.
+export function readStoredTask(task: Task): Task {
+  const stored = normalizeTaskRecord(task)
+  return {
+    ...stored,
+    error: isMessage(stored.error) ? stored.error : null,
+    ...(typeof stored.providerMessage === 'string'
+      ? { providerMessage: storedProviderReason(stored.providerMessage, stored.backend) }
+      : {}),
+  }
+}
+
+// The part of a session the Modified rule counts as content: the draft, the
+// elaborated prompts, and each task's request and saved image. A task's status,
+// timing and failure are its lifecycle, not content.
+export function sessionContentKey(
+  draft: SessionDraft,
+  elaboratedPrompts: ElaboratedPromptRecord[],
+  tasksByBackend: Record<BackendId, Task[]>,
+): string {
+  return JSON.stringify({
+    draft,
+    elaboratedPrompts,
+    tasks: BACKEND_IDS_IN_UI_ORDER.map((backend) =>
+      (tasksByBackend[backend] ?? []).map((task) => [task.id, task.prompt, task.model, task.params, task.baseName])
+    ),
+  })
+}
+
+interface AdoptedSession {
+  elaboratedPrompts: ElaboratedPromptRecord[]
+  draft: SessionDraft
+  createdAt: string
+  updatedAt: string
+  lastResumedAt: string | null
+}
+
 // Replaces the active-session state as a unit. Used by create/resume so they
-// can't set some fields and forget others.
-function adoptActiveSession(state: ActiveSessionState): void {
-  activeSession = state
+// can't set some fields and forget others. `tasks` is what the session holds as
+// it is adopted: the content later writes are judged against.
+function adoptActiveSession(state: AdoptedSession, tasks: Record<BackendId, Task[]>): ActiveSessionState {
+  activeSession = {
+    ...state,
+    savedContent: sessionContentKey(state.draft, state.elaboratedPrompts, tasks),
+  }
+  return activeSession
+}
+
+// A session that has just been made: nothing in it, updated when it was created.
+function newSessionState(): AdoptedSession {
+  const createdAt = new Date().toISOString()
+  return {
+    elaboratedPrompts: [],
+    draft: createEmptySessionDraft(),
+    createdAt,
+    updatedAt: createdAt,
+    lastResumedAt: null,
+  }
 }
 
 // Returns the active-session state, loading it from disk on first use. read
@@ -229,29 +293,28 @@ function adoptActiveSession(state: ActiveSessionState): void {
 function ensureActiveSessionLoaded(): ActiveSessionState {
   if (activeSession) return activeSession
   const manifest = readManifestFromDir(getSessionDir())
-  activeSession = manifest
-    ? {
+  return manifest
+    ? adoptActiveSession({
         elaboratedPrompts: [...manifest.elaboratedPrompts],
         draft: manifest.draft,
         createdAt: manifest.createdAt,
+        updatedAt: manifest.updatedAt,
         lastResumedAt: manifest.lastResumedAt,
-      }
-    : {
-        elaboratedPrompts: [],
-        draft: createEmptySessionDraft(),
-        createdAt: new Date().toISOString(),
-        lastResumedAt: null,
-      }
-  return activeSession
+      }, manifest.tasks)
+    : adoptActiveSession(newSessionState(), createEmptyQueues())
 }
 
-function buildManifest(sessionId: string, tasksByBackend: Record<BackendId, Task[]>): SessionManifest {
-  const session = ensureActiveSessionLoaded()
+function buildManifest(
+  sessionId: string,
+  session: ActiveSessionState,
+  updatedAt: string,
+  tasksByBackend: Record<BackendId, Task[]>,
+): SessionManifest {
   return {
     version: SESSION_MANIFEST_VERSION,
     sessionId,
     createdAt: session.createdAt,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
     lastResumedAt: session.lastResumedAt,
     taskCounts: createTaskCounts(tasksByBackend),
     elaboratedPrompts: [...session.elaboratedPrompts],
@@ -271,8 +334,10 @@ function ensureSessionId(sessionId: string): string {
   return sessionId
 }
 
-export function toInterruptedTask(task: Task): Task {
-  if (task.status === 'completed' || task.status === 'kept') return cloneTask(task)
+// Opening a session interrupts only the work that was in flight when it was
+// last open; finished and failed tasks keep their outcome.
+export function toResumedTask(task: Task): Task {
+  if (task.status !== 'queued' && task.status !== 'generating') return cloneTask(task)
   return {
     ...cloneTask(task),
     status: 'interrupted',
@@ -292,7 +357,7 @@ export function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>
   let repairedIds = 0
   for (const backend of BACKEND_IDS_IN_UI_ORDER) {
     normalized[backend] = (tasksByBackend[backend] ?? []).map((task) => {
-      const resumed = toInterruptedTask(task)
+      const resumed = toResumedTask(task)
       if (typeof resumed.id !== 'string' || resumed.id.length === 0 || usedIds.has(resumed.id)) {
         do {
           resumed.id = nanoid()
@@ -371,11 +436,18 @@ export function resolveSessionDir(sessionId: string): string {
 export function persistActiveSession(): SessionManifest {
   const sessionDir = getSessionDir()
   fs.mkdirSync(sessionDir, { recursive: true })
-  // buildManifest loads the active-session state if it isn't loaded yet.
-  const manifest = buildManifest(getSessionId(), queueManager.getAllStoredTasks())
+  const session = ensureActiveSessionLoaded()
+  const tasks = queueManager.getAllStoredTasks()
+  const content = sessionContentKey(session.draft, session.elaboratedPrompts, tasks)
+  const updatedAt = content === session.savedContent ? session.updatedAt : new Date().toISOString()
+  const manifest = buildManifest(getSessionId(), session, updatedAt, tasks)
   // recorded: session.json holds the draft prompt, seed and elaborated prompts — reloaded user
   // work, so it keeps a history even though it sits under output/<session>/.
   writeJsonAtomic(getManifestPath(sessionDir), manifest, true)
+  // Only a write that landed moves the baseline, so content a failed write
+  // never saved still counts as an edit on the next one.
+  session.savedContent = content
+  session.updatedAt = updatedAt
   return manifest
 }
 
@@ -406,12 +478,7 @@ export async function createSession(): Promise<void> {
   log('info', 'Session started', { sessionDir })
   queueManager.replaceAllTasks(createEmptyQueues())
   resetOutputTimestampAllocators()
-  adoptActiveSession({
-    elaboratedPrompts: [],
-    draft: createEmptySessionDraft(),
-    createdAt: new Date().toISOString(),
-    lastResumedAt: null,
-  })
+  adoptActiveSession(newSessionState(), createEmptyQueues())
   persistActiveSession()
   markDraftPersistenceSaved()
   publishQueueState()
@@ -485,13 +552,16 @@ export async function resumeSession(sessionId: string): Promise<void> {
   queueManager.replaceAllTasks(resumedQueues)
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)
+  // Judged against the queues as resumed: interrupting in-flight work and
+  // repairing ids are the app's own rewrites, not edits.
   adoptActiveSession({
     elaboratedPrompts: [...manifest.elaboratedPrompts],
     // manifest.draft is already normalized by readManifestFromDir.
     draft: manifest.draft,
     createdAt: manifest.createdAt,
+    updatedAt: manifest.updatedAt,
     lastResumedAt: new Date().toISOString(),
-  })
+  }, resumedQueues)
   persistActiveSession()
   markDraftPersistenceSaved()
   publishQueueState()

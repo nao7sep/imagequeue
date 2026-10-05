@@ -1,6 +1,6 @@
 import type { Task, TaskStatus } from '../../../shared/types'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
-import { isMessage, type Translator } from '../../../shared/i18n/translate'
+import type { Translator } from '../../../shared/i18n/translate'
 
 // A status is stored as its English word and shown as catalogue text.
 const TASK_STATUS_LABELS: Record<TaskStatus, MessageKey> = {
@@ -31,10 +31,9 @@ export function taskParameterLabel(t: Translator['t'], key: string): string {
   return label ? t(label) : key
 }
 
-// A failure recorded as a message reads in the current language; older copy a
-// session stored as words shows as it was written. Null for a task that has not
-// failed.
+// A failure reads in the current language; one with no recorded reason reads as
+// the general failure. Null for a task that has not failed.
 export function taskFailureText(i18n: Pick<Translator, 't' | 'text'>, task: Task): string | null {
   if (task.status !== 'failed') return null
-  return isMessage(task.error) ? i18n.text(task.error) : task.error || i18n.t('taskFailure.unknown')
+  return task.error ? i18n.text(task.error) : i18n.t('taskFailure.unknown')
 }
