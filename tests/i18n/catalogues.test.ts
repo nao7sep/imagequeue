@@ -28,7 +28,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
   de: [
     "dependencies.updatesTitle", "dependencies.optional", "about.version", "settings.tab.prompts",
     "settings.languageSystem", "settings.themeSystem", "settings.audioFilter",
-    "option.transparent", "option.minimal", "backend.format", "backend.guidance", "backend.seed",
+    "option.transparent", "backend.format", "backend.guidance", "backend.seed",
     "task.param.outputFormat", "menu.elaborationPrompts", "shortcuts.app", "elabSettings.formatPart", "elaborators.name",
     "option.auto", "records.levelInfo", "records.levelDebug", "records.backend", "records.details", "records.status", "records.signal",
   ],

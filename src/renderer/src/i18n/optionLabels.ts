@@ -5,7 +5,6 @@ import type { Translator } from '../../../shared/i18n/translate'
 // Option values the providers define ('low', 'auto', 'opaque') are stored and
 // sent as they are; the interface shows each one in the reader's language.
 const OPTION_LABELS: Record<string, MessageKey> = {
-  minimal: 'option.minimal',
   low: 'option.low',
   medium: 'option.medium',
   high: 'option.high',

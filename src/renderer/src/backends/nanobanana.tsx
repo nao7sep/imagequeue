@@ -2,7 +2,6 @@ import type { NanoBananaModelDef } from '../../../shared/models'
 import { getDefaultModelForBackend } from '../../../shared/ai-models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
-import { optionLabel } from '../i18n/optionLabels'
 
 export type NanoBananaParams = {
   aspectRatio: string
@@ -46,11 +45,12 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
           ))}
         </select>
       </div>
+      {/* The provider's own words, as the text settings show them. */}
       <div className="setting-row">
         <label>{t('settings.thinking')}</label>
         <select value={params.thinking} onChange={(e) => onChange({ ...params, thinking: e.target.value })}>
           {modelDef.thinking.map((level) => (
-            <option key={level} value={level}>{optionLabel(t, level)}</option>
+            <option key={level} value={level}>{level}</option>
           ))}
         </select>
       </div>

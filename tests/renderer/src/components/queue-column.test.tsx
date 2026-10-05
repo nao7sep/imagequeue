@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, act, cleanup, within, waitFor } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
-import { getDefaultModelForBackend } from '../../../../src/shared/ai-models'
+import { getDefaultModelForBackend, getModelsForBackend } from '../../../../src/shared/ai-models'
 import type { DrawThingsParamsPersistenceState } from '../../../../src/shared/electron-api'
 
 // The column under test drives everything through four contexts plus
@@ -223,6 +223,19 @@ describe('cloud columns: saved defaults at launch', () => {
     const labels = Array.from(container.querySelectorAll('.setting-row label')).map((label) => label.textContent ?? '')
     expect(labels.length).toBeGreaterThan(0)
     expect(labels.every((label) => /^[A-Z]/.test(label))).toBe(true)
+  })
+})
+
+describe('Gemini image column: thinking', () => {
+  // The provider's own words, as the text settings show them.
+  it.each(['gemini-3.1-flash-image', 'gemini-3-pro-image'])('lists %s\'s thinking values in the provider\'s words', async (model) => {
+    stageSettings('nanobanana', model)
+    const { container } = render(<QueueColumn backendId="nanobanana" label="nanobanana" prompt="a cat" />)
+    await flush()
+    const select = rowControl(container, 'Thinking') as HTMLSelectElement
+    const row = getModelsForBackend('nanobanana').find((candidate) => candidate.id === model)!
+    expect([...select.options].map((option) => option.textContent)).toEqual(row.thinking)
+    expect([...select.options].map((option) => option.value)).toEqual(row.thinking)
   })
 })
 
