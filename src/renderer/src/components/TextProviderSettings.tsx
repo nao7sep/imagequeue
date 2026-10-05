@@ -1,5 +1,5 @@
-import { Fragment } from 'react'
-import { AI_ROLES, TEXT_PROVIDERS, hasThinkingChoice, textRowFor, thinkingFor } from '../../../shared/ai-models'
+import { Fragment, useRef } from 'react'
+import { AI_ROLES, TEXT_PROVIDERS, hasThinkingChoice, textRowFor, thinkingAfterModelEdit, thinkingFor, type TextModel } from '../../../shared/ai-models'
 import type { SecretId, TextAIBackendId } from '../../../shared/types'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -11,6 +11,9 @@ export function TextProviderSettings({ config, onChange, keyField }: {
   keyField: (id: SecretId) => React.JSX.Element
 }): React.JSX.Element {
   const { t } = useI18n()
+  // The last listed row each model field held, so typing through ids with no
+  // row does not lose the field's thinking.
+  const heldRows = useRef(new Map<string, TextModel>())
   const updateProvider = (provider: TextAIBackendId, field: string, value: unknown): void => {
     onChange({ ...config, [provider]: { ...config[provider] as Record<string, unknown>, [field]: value } })
   }
@@ -36,17 +39,14 @@ export function TextProviderSettings({ config, onChange, keyField }: {
           const value = section[role.id] as string
           const thinking = section.thinking as Record<string, string>
           const row = textRowFor(provider, value)
-          // Thinking resets to the new model's default only when the edit resolves
-          // to a different row, or moves between a row and no row; an edit that
-          // resolves to the same row keeps the chosen value.
+          const field = `${provider}.${role.id}`
           const changeModel = (id: string): void => {
+            const held = row ?? heldRows.current.get(field)
             const next = textRowFor(provider, id)
-            if (next === row) {
-              updateProvider(provider, role.id, id)
-              return
-            }
+            const nowHeld = next ?? held
+            if (nowHeld) heldRows.current.set(field, nowHeld)
             onChange({ ...config, [provider]: { ...section, [role.id]: id,
-              thinking: { ...thinking, [role.id]: next ? next.defaultThinking : '' } } })
+              thinking: { ...thinking, [role.id]: thinkingAfterModelEdit(held, next, thinking[role.id] ?? '') } } })
           }
           return <Fragment key={role.id}>
             <div className="settings-field">

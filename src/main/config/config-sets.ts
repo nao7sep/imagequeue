@@ -137,14 +137,14 @@ export function cleanConfigSet(key: string, value: unknown): unknown {
 
 // Whether a cleaned set equals its built-in in the config being saved; a model
 // id is compared trimmed and case-insensitive. A role's thinking equals its
-// built-in when it is empty or the default for the model the role selects, and
-// always for a model with no row, which has no thinking to store.
+// built-in when it is empty or the default for the model the role selects; under
+// a model with no row it is kept as chosen, for when a listed row returns.
 export function equalsBuiltIn(key: string, cleaned: unknown, builtIn: unknown, config: AppConfig): boolean {
   if (MODEL_ID_SETS.has(key)) return (cleaned as string).toLowerCase() === (builtIn as string).toLowerCase()
   const thinking = THINKING_SETS.get(key)
   if (thinking) {
     const row = textRowFor(thinking.provider, config[thinking.provider][thinking.role.id])
-    return !row || cleaned === builtIn || cleaned === row.defaultThinking
+    return cleaned === builtIn || (row !== undefined && cleaned === row.defaultThinking)
   }
   return valuesEqual(cleaned, builtIn)
 }

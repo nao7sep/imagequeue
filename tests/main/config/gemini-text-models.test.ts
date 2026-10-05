@@ -55,8 +55,9 @@ describe('open text model sets', () => {
     updateConfig((draft) => { draft.openai.slug = 'gpt-6.1-sol'; draft.openai.thinking.slug = 'medium' })
     expect(file()).toEqual({ openai: { slug: 'gpt-6.1-sol' } })
     updateConfig((draft) => { draft.openai.thinking.slug = 'max' })
+    // Under a model with no row the choice is kept, unsent, for when a listed row returns.
     updateConfig((draft) => { draft.openai.slug = 'local-model' })
-    expect(file()).toEqual({ openai: { slug: 'local-model' } })
+    expect(file()).toEqual({ openai: { slug: 'local-model', thinking: { slug: 'max' } } })
   })
   it('sends the role\'s default when the stored thinking is one the selected row does not list', async () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ provider: 'openai', openai: { thinking: { slug: 'minimal', elaboration: 'xhigh' } } }))

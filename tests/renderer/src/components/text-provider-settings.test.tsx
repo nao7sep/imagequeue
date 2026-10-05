@@ -8,7 +8,7 @@ function Harness(): React.JSX.Element {
   const [config, setConfig] = useState<Record<string, unknown>>({
     provider: 'gemini',
     gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', thinking: { elaboration: '', slug: '' }, timeout_ms: 30000 },
-    openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'local-unlisted', slug: 'gpt-6-luna', thinking: { elaboration: '', slug: 'high' }, timeout_ms: 60000 },
+    openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'local-unlisted', slug: 'gpt-6-luna', thinking: { elaboration: 'xhigh', slug: 'high' }, timeout_ms: 60000 },
   })
   return <TextProviderSettings config={config} onChange={setConfig} keyField={() => <input type="password" />} />
 }
@@ -58,7 +58,7 @@ describe('text provider settings', () => {
     expect(select('openai-slug')!.value).toBe('high')
     expect(select('openai-elaboration')).toBeNull()
   })
-  it('resets a role\'s thinking to the new model\'s default when its model changes', () => {
+  it('resets a role\'s thinking to the new model\'s default when its model reaches a different listed row', () => {
     const { container } = render(<Harness />)
     const slug = (screen.getAllByLabelText('Slug model') as HTMLInputElement[])[1]!
     fireEvent.change(slug, { target: { value: 'gpt-6.1-sol' } })
@@ -70,8 +70,6 @@ describe('text provider settings', () => {
     expect(select.value).toBe('max')
     fireEvent.change(slug, { target: { value: 'gpt-6-luna' } })
     expect(container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!.value).toBe('none')
-    fireEvent.change(slug, { target: { value: 'local-model' } })
-    expect(container.querySelector('#openai-slug-thinking')).toBeNull()
   })
   it('keeps a role\'s chosen thinking when the model edit resolves to the same row', () => {
     const { container } = render(<Harness />)
@@ -84,12 +82,28 @@ describe('text provider settings', () => {
       expect(select().value).toBe('high')
     }
   })
-  it('resets thinking when the model moves from an unlisted id back to a listed one', () => {
+  it('keeps the choice through ids with no row while one letter is deleted and retyped', () => {
     const { container } = render(<Harness />)
     const slug = (screen.getAllByLabelText('Slug model') as HTMLInputElement[])[1]!
-    fireEvent.change(slug, { target: { value: 'local-model' } })
-    expect(container.querySelector('#openai-slug-thinking')).toBeNull()
+    fireEvent.change(slug, { target: { value: 'gpt-6-lun' } })
+    expect(container.querySelector('#openai-slug-thinking'), 'hidden under an id with no row').toBeNull()
     fireEvent.change(slug, { target: { value: 'gpt-6-luna' } })
-    expect(container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!.value).toBe('none')
+    expect(container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!.value).toBe('high')
+  })
+  it('keeps the stored value under an id with no row, and resets only on reaching a different listed row', () => {
+    const { container } = render(<Harness />)
+    const slug = (screen.getAllByLabelText('Slug model') as HTMLInputElement[])[1]!
+    for (const value of ['local-model', 'gpt-6', 'gpt-6.1-so']) {
+      fireEvent.change(slug, { target: { value } })
+      expect(container.querySelector('#openai-slug-thinking')).toBeNull()
+    }
+    fireEvent.change(slug, { target: { value: 'gpt-6.1-sol' } })
+    expect(container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!.value).toBe('medium')
+  })
+  it('keeps the stored value when a field that opened on an id with no row reaches a listed one', () => {
+    const { container } = render(<Harness />)
+    const elaboration = (screen.getAllByLabelText('Elaboration model') as HTMLInputElement[])[1]!
+    fireEvent.change(elaboration, { target: { value: 'gpt-5.6-terra' } })
+    expect(container.querySelector<HTMLSelectElement>('#openai-elaboration-thinking')!.value).toBe('xhigh')
   })
 })

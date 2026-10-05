@@ -198,6 +198,15 @@ export function thinkingFor(row: TextModel, chosen: string): string {
   return row.thinking.includes(chosen) ? chosen : row.defaultThinking
 }
 
+// A role's thinking after an edit of its model field. `held` is the last listed
+// row the field held, `next` the row the edit reaches. Only reaching a listed row
+// other than the one held resets it, to that row's default; an id with no row
+// (typing passes through many) or the same row again keeps the stored value,
+// which an id with no row neither shows nor sends.
+export function thinkingAfterModelEdit(held: TextModel | undefined, next: TextModel | undefined, stored: string): string {
+  return next && held && next !== held ? next.defaultThinking : stored
+}
+
 // A row with one thinking value offers no choice, so it shows no Thinking field.
 export function hasThinkingChoice(row: TextModel | undefined): row is TextModel {
   return row !== undefined && row.thinking.length > 1
