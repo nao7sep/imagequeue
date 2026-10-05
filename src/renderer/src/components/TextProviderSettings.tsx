@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { AI_ROLES, TEXT_PROVIDERS, defaultThinkingFor, hasThinkingChoice, textRowFor, thinkingFor } from '../../../shared/ai-models'
+import { AI_ROLES, TEXT_PROVIDERS, hasThinkingChoice, textRowFor, thinkingFor } from '../../../shared/ai-models'
 import type { SecretId, TextAIBackendId } from '../../../shared/types'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -40,7 +40,7 @@ export function TextProviderSettings({ config, onChange, keyField }: {
           const changeModel = (id: string): void => {
             const next = textRowFor(provider, id)
             onChange({ ...config, [provider]: { ...section, [role.id]: id,
-              thinking: { ...thinking, [role.id]: next ? defaultThinkingFor(next, role.kind) : '' } } })
+              thinking: { ...thinking, [role.id]: next ? next.defaultThinking : '' } } })
           }
           return <Fragment key={role.id}>
             <div className="settings-field">
@@ -51,7 +51,7 @@ export function TextProviderSettings({ config, onChange, keyField }: {
             </div>
             {hasThinkingChoice(row) && <div className="settings-field">
               <label htmlFor={`${provider}-${role.id}-thinking`}>{t('settings.thinking')}</label>
-              <select id={`${provider}-${role.id}-thinking`} value={thinkingFor(row, role.kind, thinking[role.id])}
+              <select id={`${provider}-${role.id}-thinking`} value={thinkingFor(row, thinking[role.id])}
                 onChange={(event) => updateProvider(provider, 'thinking', { ...thinking, [role.id]: event.target.value })}>
                 {row.thinking.map((level) => <option key={level} value={level}>{level}</option>)}
               </select>

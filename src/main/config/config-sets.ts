@@ -2,7 +2,7 @@ import type { AppConfig, BrainstormConfig } from './types'
 import type { TextAIBackendId } from '../../shared/types'
 import { createDefaultConfig } from './defaults'
 import { isLanguage } from '../../shared/i18n/languages'
-import { AI_ROLES, TEXT_PROVIDERS, defaultThinkingFor, textRowFor } from '../../shared/ai-models'
+import { AI_ROLES, TEXT_PROVIDERS, textRowFor } from '../../shared/ai-models'
 import { multiline, singleLine } from '../../shared/textCleanup'
 import { valuesEqual } from '../settings-changes'
 
@@ -147,7 +147,7 @@ export function equalsBuiltIn(key: string, cleaned: unknown, builtIn: unknown, c
   const thinking = THINKING_SETS.get(key)
   if (thinking) {
     const row = textRowFor(thinking.provider, config[thinking.provider][thinking.role.id])
-    return !row || cleaned === builtIn || cleaned === defaultThinkingFor(row, thinking.role.kind)
+    return !row || cleaned === builtIn || cleaned === row.defaultThinking
   }
   return valuesEqual(cleaned, builtIn)
 }

@@ -51,7 +51,8 @@ describe('open text model sets', () => {
     expect(fs.existsSync(path.join(root, 'config.json'))).toBe(false)
     updateConfig((draft) => { draft.openai.thinking.slug = 'high' })
     expect(file()).toEqual({ openai: { thinking: { slug: 'high' } } })
-    updateConfig((draft) => { draft.openai.slug = 'gpt-6.1-sol'; draft.openai.thinking.slug = 'low' })
+    // The default is the model's tier's, medium on the smart Sol, not the fast role's.
+    updateConfig((draft) => { draft.openai.slug = 'gpt-6.1-sol'; draft.openai.thinking.slug = 'medium' })
     expect(file()).toEqual({ openai: { slug: 'gpt-6.1-sol' } })
     updateConfig((draft) => { draft.openai.thinking.slug = 'max' })
     updateConfig((draft) => { draft.openai.slug = 'local-model' })

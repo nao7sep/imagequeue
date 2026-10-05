@@ -4,6 +4,14 @@ import { getLightProvider } from '../text-ai'
 import { log, serializeError } from '../logger'
 import { withProviderRetry } from '../provider-retry'
 
+// The slug comes back in a strict schema, so it cannot arrive in another shape.
+export const SLUG_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: { slug: { type: 'string' } },
+  required: ['slug'],
+  additionalProperties: false,
+} as const
+
 // Generates a filename slug from a prompt using the configured Text AI's
 // light tier. Falls back to nanoid on any failure, if the AI is not
 // configured, or once `signal` aborts (shutdown): the image is already made,
@@ -19,12 +27,14 @@ export async function generateSlug(prompt: string, taskId: string, signal: Abort
     const systemPrompt = config.prompts.slug.replace(/\{\{PROMPT\}\}/i, prompt)
     const result = await withProviderRetry((attemptSignal) => handle.provider.ask({
       messages: [{ role: 'user', text: systemPrompt }],
+      schema: SLUG_RESPONSE_SCHEMA,
       timeoutMs: handle.timeoutMs,
       signal: attemptSignal,
       record: { purpose: 'slug', taskId },
     }), { signal, maxAttempts: config.brainstorm.max_retries_per_turn + 1 })
 
-    const slug = result.text.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const answer = (result.parsed as { slug?: unknown } | undefined)?.slug
+    const slug = (typeof answer === 'string' ? answer : '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 
     if (slug && slug.length >= 3 && slug.length <= 60) {
       return slug

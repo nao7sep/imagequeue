@@ -64,7 +64,8 @@ describe('text provider settings', () => {
     fireEvent.change(slug, { target: { value: 'gpt-6.1-sol' } })
     const select = container.querySelector<HTMLSelectElement>('#openai-slug-thinking')!
     expect([...select.options].map((option) => option.value)).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
-    expect(select.value).toBe('low')
+    // The smart model's own default, though the slug role is fast.
+    expect(select.value).toBe('medium')
     fireEvent.change(select, { target: { value: 'max' } })
     expect(select.value).toBe('max')
     fireEvent.change(slug, { target: { value: 'gpt-6-luna' } })

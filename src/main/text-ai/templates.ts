@@ -16,6 +16,7 @@ export const PROMPTS_RESPONSE_SCHEMA = {
     },
   },
   required: ['prompts'],
+  additionalProperties: false,
 } as const
 
 // Literal shown to the model in place of {{JSON}}. Kept as a constant so a

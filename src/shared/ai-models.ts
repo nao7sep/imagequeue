@@ -6,19 +6,26 @@ export interface SupportedModel {
   id: string
   kinds: readonly TextKind[]
   defaultFor: readonly TextKind[]
-  // The thinking values the model accepts, in the provider's own words, ascending.
+  // The thinking values the model accepts, in the provider's own words: a
+  // no-thinking value first, then lowest to highest.
   thinking: readonly string[]
+  // The value a role sends until the user picks another, set by the model's own
+  // tier, not by the role it serves.
+  defaultThinking: string
 }
+
+// The lineup research document these rows and defaults rest on.
+export const MODEL_LINEUP = 'ai-model-lineup-20261004'
 
 // Image rows remain in models.ts until the imaging alignment is decided.
 export const SUPPORTED_MODELS: readonly SupportedModel[] = [
-  { provider: 'gemini', id: 'gemini-3.1-pro-preview', kinds: ['text-smart'], defaultFor: ['text-smart'], thinking: ['low', 'medium', 'high'] },
-  { provider: 'gemini', id: 'gemini-3.8-flash', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['low', 'medium', 'high'] },
-  { provider: 'gemini', id: 'gemini-3.5-flash-lite', kinds: ['text-fast'], defaultFor: ['text-fast'], thinking: ['minimal', 'low', 'medium', 'high'] },
-  { provider: 'openai', id: 'gpt-6-astra', kinds: ['text-frontier'], defaultFor: [], thinking: ['low', 'medium', 'high', 'xhigh', 'max'] },
-  { provider: 'openai', id: 'gpt-6.1-sol', kinds: ['text-smart'], defaultFor: ['text-smart'], thinking: ['low', 'medium', 'high', 'xhigh', 'max'] },
-  { provider: 'openai', id: 'gpt-5.6-terra', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
-  { provider: 'openai', id: 'gpt-6-luna', kinds: ['text-fast'], defaultFor: ['text-fast'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { provider: 'gemini', id: 'gemini-3.1-pro-preview', kinds: ['text-smart'], defaultFor: ['text-smart'], thinking: ['low', 'medium', 'high'], defaultThinking: 'medium' },
+  { provider: 'gemini', id: 'gemini-3.8-flash', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['low', 'medium', 'high'], defaultThinking: 'medium' },
+  { provider: 'gemini', id: 'gemini-3.5-flash-lite', kinds: ['text-fast'], defaultFor: ['text-fast'], thinking: ['minimal', 'low', 'medium', 'high'], defaultThinking: 'minimal' },
+  { provider: 'openai', id: 'gpt-6-astra', kinds: ['text-frontier'], defaultFor: [], thinking: ['low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'medium' },
+  { provider: 'openai', id: 'gpt-6.1-sol', kinds: ['text-smart'], defaultFor: ['text-smart'], thinking: ['low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'medium' },
+  { provider: 'openai', id: 'gpt-5.6-terra', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'medium' },
+  { provider: 'openai', id: 'gpt-6-luna', kinds: ['text-fast'], defaultFor: ['text-fast'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'none' },
 ]
 
 export const AI_ROLES = [
@@ -50,17 +57,10 @@ export function textRowFor(provider: TextAIBackendId, id: string): SupportedMode
   return SUPPORTED_MODELS.find((row) => row.provider === provider && row.id === key)
 }
 
-// A fast role thinks as little as the row allows; every other role thinks
-// adaptively where the row offers it, else at medium, else at its first value.
-export function defaultThinkingFor(row: SupportedModel, kind: TextKind): string {
-  if (kind === 'text-fast') return row.thinking.find((value) => value === 'off' || value === 'none') ?? row.thinking[0]
-  return ['adaptive', 'medium'].find((value) => row.thinking.includes(value)) ?? row.thinking[0]
-}
-
 // The value a role sends: its chosen value when the row lists it, else the
-// role's default for the row.
-export function thinkingFor(row: SupportedModel, kind: TextKind, chosen: string): string {
-  return row.thinking.includes(chosen) ? chosen : defaultThinkingFor(row, kind)
+// row's default.
+export function thinkingFor(row: SupportedModel, chosen: string): string {
+  return row.thinking.includes(chosen) ? chosen : row.defaultThinking
 }
 
 // A row with one thinking value offers no choice, so it shows no Thinking field.

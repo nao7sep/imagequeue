@@ -24,9 +24,12 @@ beforeEach(() => {
 
 describe('generateSlug', () => {
   it('names from the text AI and passes the signal through', async () => {
-    ask.mockResolvedValue({ text: 'Red Fox At Dawn' })
+    ask.mockResolvedValue({ text: '{"slug":"Red Fox At Dawn"}', parsed: { slug: 'Red Fox At Dawn' } })
     const controller = new AbortController()
     await expect(generateSlug('a fox', 'task-1', controller.signal)).resolves.toBe('red-fox-at-dawn')
+    expect(ask.mock.calls[0][0].schema).toEqual({
+      type: 'object', properties: { slug: { type: 'string' } }, required: ['slug'], additionalProperties: false,
+    })
     const received = ask.mock.calls[0][0].signal as AbortSignal
     expect(received.aborted).toBe(false)
     controller.abort()
@@ -47,10 +50,15 @@ describe('generateSlug', () => {
         opts.signal.addEventListener('abort', () => { clearTimeout(timer); reject(opts.signal.reason) })
       })
       if (ask.mock.calls.length === 1) throw Object.assign(new Error('unavailable'), { status: 503 })
-      return { text: 'Red Fox' }
+      return { text: '{"slug":"Red Fox"}', parsed: { slug: 'Red Fox' } }
     })
     await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toBe('red-fox')
     expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
+  })
+
+  it('falls back to a random name when the answer carries no slug', async () => {
+    ask.mockResolvedValue({ text: 'red-fox', parsed: undefined })
+    await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
   })
 
   it('skips the call once shutdown has begun', async () => {

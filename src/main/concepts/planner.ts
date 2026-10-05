@@ -70,12 +70,14 @@ export const FACETS_SCHEMA = {
   type: 'object',
   properties: { facets: { type: 'array', items: { type: 'string' } } },
   required: ['facets'],
+  additionalProperties: false,
 } as const
 
 export const PROBES_SCHEMA = {
   type: 'object',
   properties: { probes: { type: 'array', items: { type: 'string' } } },
   required: ['probes'],
+  additionalProperties: false,
 } as const
 
 export const CLUSTERS_SCHEMA = {
@@ -90,10 +92,12 @@ export const CLUSTERS_SCHEMA = {
           concepts: { type: 'array', items: { type: 'string' } },
         },
         required: ['domain', 'concepts'],
+        additionalProperties: false,
       },
     },
   },
   required: ['clusters'],
+  additionalProperties: false,
 } as const
 
 export function buildResolveFacetsMessage(seed: string, existingFacets: readonly string[]): string {
