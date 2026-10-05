@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StartupFailureApp } from '../../../../src/renderer/src/components/StartupFailureApp'
 
@@ -41,7 +41,8 @@ describe('StartupFailureApp measurement handshake', () => {
     expect(reportMeasurement).not.toHaveBeenCalled()
 
     await screen.findByText(/stopped before opening its main window/)
-    expect(reportMeasurement).toHaveBeenCalledOnce()
+    // The measurement runs in an effect after the text commits.
+    await waitFor(() => expect(reportMeasurement).toHaveBeenCalledOnce())
     expect(reportMeasurement).toHaveBeenCalledWith({
       naturalHeight: 200,
       minimumHeight: 174,
@@ -75,7 +76,7 @@ describe('StartupFailureApp measurement handshake', () => {
 
     const details = await screen.findByText(/settings file at/)
     expect(details.textContent).toBe('ImageQueue couldn’t use its settings file at /Users/me/.imagequeue/config.json and left it unchanged. Check its permissions or move it aside, then start ImageQueue again.')
-    expect(reportMeasurement).toHaveBeenCalledOnce()
+    await waitFor(() => expect(reportMeasurement).toHaveBeenCalledOnce())
   })
 
   it('keeps the general copy when main cannot say what stopped startup', async () => {
@@ -84,6 +85,6 @@ describe('StartupFailureApp measurement handshake', () => {
     render(<StartupFailureApp />)
 
     await screen.findByText(/stopped before opening its main window/)
-    expect(reportMeasurement).toHaveBeenCalledOnce()
+    await waitFor(() => expect(reportMeasurement).toHaveBeenCalledOnce())
   })
 })
