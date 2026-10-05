@@ -546,6 +546,24 @@ describe('nano banana column', () => {
   })
 })
 
+describe('grok column', () => {
+  it('shows quality and 1.5k for 2.0 only, with 1:1, 1k and auto as defaults', async () => {
+    stageSettings('grok', 'grok-imagine-image-2.0', { aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
+    const { container } = render(<QueueColumn backendId="grok" label="Grok" prompt="a cat" />)
+    await flush()
+    const options = (label: string) => [...(rowControl(container, label) as HTMLSelectElement).options].map((option) => option.value)
+    expect(Array.from(container.querySelectorAll('.setting-row label')).map((label) => label.textContent)).toEqual(['Model', 'Aspect', 'Size', 'Quality'])
+    expect(options('Aspect')[0]).toBe('auto')
+    expect(options('Size')).toEqual(['1k', '1.5k', '2k'])
+    expect(options('Quality')).toEqual(['auto', 'low', 'medium'])
+    expect([rowControl(container, 'Aspect').value, rowControl(container, 'Size').value, rowControl(container, 'Quality').value]).toEqual(['1:1', '1k', 'auto'])
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'grok-imagine-image' } })
+    await flush()
+    expect(screen.queryByText('Quality')).toBeNull()
+    expect(options('Size')).toEqual(['1k', '2k'])
+  })
+})
+
 describe('snapshot wiring', () => {
   it('publishes model, params, and readiness for Send-to-All', async () => {
     const model = getDefaultModelForBackend('grok')!.id

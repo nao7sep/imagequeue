@@ -4,6 +4,7 @@ import {
   GROK_ASPECT_RATIOS,
   GROK_QUALITY_VALUES,
   GROK_RESOLUTIONS,
+  GROK_RESOLUTIONS_2,
   NANO_BANANA_ASPECT_RATIOS_BASE,
   NANO_BANANA_ASPECT_RATIOS_FLASH2,
   NANO_BANANA_SIZES_FLASH2,
@@ -97,20 +98,14 @@ export const SUPPORTED_MODELS: readonly SupportedModel[] = [
     thinking: ['minimal', 'high'], defaultThinking: 'minimal',
   },
 
-  // xAI images (Grok Imagine). Only 2.0 declares qualities; the 1.x pair carry
-  // that choice in their ids.
+  // xAI images (Grok Imagine). Only 2.0 declares qualities. grok-imagine-image
+  // stays: it is still served and much cheaper.
   {
     provider: 'xai', id: 'grok-imagine-image-2.0', label: 'Grok Imagine 2.0', backend: 'grok',
     kinds: ['image-generate'], defaultFor: ['image-generate'],
     aspectRatios: GROK_ASPECT_RATIOS,
-    resolutions: GROK_RESOLUTIONS,
+    resolutions: GROK_RESOLUTIONS_2,
     qualities: GROK_QUALITY_VALUES,
-  },
-  {
-    provider: 'xai', id: 'grok-imagine-image-quality', label: 'Grok Imagine Quality', backend: 'grok',
-    kinds: ['image-generate'], defaultFor: [],
-    aspectRatios: GROK_ASPECT_RATIOS,
-    resolutions: GROK_RESOLUTIONS,
   },
   {
     provider: 'xai', id: 'grok-imagine-image', label: 'Grok Imagine', backend: 'grok',

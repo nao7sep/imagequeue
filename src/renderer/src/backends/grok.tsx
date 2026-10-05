@@ -10,20 +10,19 @@ export type GrokParams = {
   quality: GrokQuality
 }
 
+// The ratio falls to 1:1, the app's default, and the resolution to 1k, xAI's,
+// not to a list's first entry: auto comes first in the ratio list.
 function resolveParams(saved: Record<string, unknown>, modelDef: GrokModelDef): GrokParams {
   const aspectRatio = typeof saved.aspectRatio === 'string' && modelDef.aspectRatios.some((item) => item.value === saved.aspectRatio)
     ? saved.aspectRatio as GrokAspectRatio
-    : (modelDef.aspectRatios[0]?.value ?? '1:1')
+    : '1:1'
   const resolution = typeof saved.resolution === 'string' && modelDef.resolutions.some((item) => item.value === saved.resolution)
     ? saved.resolution as GrokResolution
-    : (modelDef.resolutions[0]?.value ?? '1k')
+    : '1k'
   // Held even for a model that declares no qualities — the field is hidden and never
   // enqueued there, but switching back to 2.0 should restore the user's choice rather
-  // than reset it (the flux steps/guidance rule).
-  //
-  // The fallback is NOT the list's first entry, unlike the two above: `auto` is the API's
-  // own default and index 0 is `low`, so clamping an unreadable saved value positionally
-  // would silently pin a tier instead of restoring the provider-selected state.
+  // than reset it (the flux steps/guidance rule). The fallback is `auto`, the API's
+  // own default.
   const quality = typeof saved.quality === 'string' && (modelDef.qualities ?? GROK_QUALITY_VALUES).some((item) => item.value === saved.quality)
     ? saved.quality as GrokQuality
     : 'auto'
@@ -79,8 +78,8 @@ export const grokBackend: BackendParamModel<GrokParams, GrokModelDef> = {
       aspectRatio: params.aspectRatio,
       resolution: params.resolution,
     }
-    // 1.x carries its quality in the model id, so sending the field there would be a
-    // second, contradictory way to say the same thing.
+    // grok-imagine-image carries its quality in the model id, so sending the field
+    // there would be a second, contradictory way to say the same thing.
     if (modelDef.qualities) result.quality = params.quality
     return result
   },

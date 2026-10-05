@@ -53,7 +53,7 @@ describe('image routing guard', () => {
     expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getModelsForBackend(backend).map((row) => row.id)]))).toEqual({
       openai: ['gpt-image-2.5-flare', 'gpt-image-2'],
       nanobanana: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image'],
-      grok: ['grok-imagine-image-2.0', 'grok-imagine-image-quality', 'grok-imagine-image'],
+      grok: ['grok-imagine-image-2.0', 'grok-imagine-image'],
       flux: ['flux-2-max', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b', 'flux-2-klein-4b'],
     })
     expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getDefaultModelForBackend(backend)?.id]))).toEqual({
@@ -103,7 +103,17 @@ describe('image routing guard', () => {
     ])
   })
 
+  it('pins each xAI row\'s ratios, resolutions and qualities in order', () => {
+    const ratios = ['auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '2:1', '1:2', '19.5:9', '9:19.5', '20:9', '9:20', '21:9', '5:2']
+    expect(getModelsForBackend('grok').map(({ id, aspectRatios, resolutions, qualities }) =>
+      [id, aspectRatios.map((item) => item.value), resolutions.map((item) => item.value), qualities?.map((item) => item.value)])).toEqual([
+      ['grok-imagine-image-2.0', ratios, ['1k', '1.5k', '2k'], ['auto', 'low', 'medium']],
+      ['grok-imagine-image', ratios, ['1k', '2k'], undefined],
+    ])
+  })
+
   it('treats a removed image id as an id not in the list', () => {
+    expect(findModel('grok', 'grok-imagine-image-quality')).toBeUndefined()
     for (const id of ['gpt-image-1.5', 'gpt-image-1-mini']) expect(findModel('openai', id), id).toBeUndefined()
     expect(findModel('nanobanana', 'gemini-2.5-flash-image')).toBeUndefined()
   })

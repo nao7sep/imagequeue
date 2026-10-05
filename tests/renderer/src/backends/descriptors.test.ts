@@ -103,7 +103,6 @@ describe('fromSaved', () => {
 describe('grok quality — a parameter only one model declares', () => {
   const v2 = findModel('grok', 'grok-imagine-image-2.0')!
   const v1 = findModel('grok', 'grok-imagine-image')!
-  const v1q = findModel('grok', 'grok-imagine-image-quality')!
 
   // 2.0 takes `quality` as a request field; the 1.x pair encode the choice in their
   // model ids, so sending it there would be a second, contradictory control.
@@ -111,15 +110,13 @@ describe('grok quality — a parameter only one model declares', () => {
     const params = grokBackend.defaults()
     expect(grokBackend.toEnqueueParams(params, v2)).toHaveProperty('quality', 'auto')
     expect(grokBackend.toEnqueueParams(params, v1)).not.toHaveProperty('quality')
-    expect(grokBackend.toEnqueueParams(params, v1q)).not.toHaveProperty('quality')
   })
 
   // Only 2.0 declares the list, so only 2.0 renders the control.
   it('declares qualities on 2.0 alone', () => {
     // `auto` was live-verified with a successful generation; 2.0 still rejects `high`.
-    expect(v2.qualities?.map((q) => q.value)).toEqual(['low', 'medium', 'auto'])
+    expect(v2.qualities?.map((q) => q.value)).toEqual(['auto', 'low', 'medium'])
     expect(v1.qualities).toBeUndefined()
-    expect(v1q.qualities).toBeUndefined()
   })
 
   // The value is HELD while hidden rather than reset: a user who picks low, switches to a
@@ -138,7 +135,12 @@ describe('grok quality — a parameter only one model declares', () => {
   // first entry — positional clamping here would silently pin output to `low`.
   it('falls back to auto, not to the first list entry', () => {
     expect(grokBackend.fromSaved({ quality: 'ultra' }, v2).quality).toBe('auto')
-    expect(v2.qualities![0].value).toBe('low')
+  })
+
+  it('falls back to 1:1 and 1k, not to the lists\' first entries, and keeps 1.5k only where the row takes it', () => {
+    expect(grokBackend.fromSaved({}, v2)).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
+    expect(grokBackend.fromSaved({ aspectRatio: 'auto', resolution: '1.5k' }, v2)).toMatchObject({ aspectRatio: 'auto', resolution: '1.5k' })
+    expect(grokBackend.clampToModel({ aspectRatio: '21:9', resolution: '1.5k', quality: 'medium' }, v1)).toMatchObject({ aspectRatio: '21:9', resolution: '1k' })
   })
 })
 

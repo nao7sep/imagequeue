@@ -179,60 +179,39 @@ export interface NanoBananaModelDef extends ModelDef {
   defaultThinking: string
 }
 
-export type GrokAspectRatio =
-  'auto' | '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3' |
-  '2:1' | '1:2' | '19.5:9' | '9:19.5' | '20:9' | '9:20'
+// Both xAI rows take auto, then the 15 ratios in xAI's own order.
+export const GROK_ASPECT_RATIO_VALUES = [
+  'auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '2:1', '1:2',
+  '19.5:9', '9:19.5', '20:9', '9:20', '21:9', '5:2',
+] as const
+export type GrokAspectRatio = (typeof GROK_ASPECT_RATIO_VALUES)[number]
 
-export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] = [
-  // 'auto' lets Grok pick the ratio for the prompt (live-verified accepted).
-  { label: 'Auto',   value: 'auto' },
-  { label: '1:1',    value: '1:1' },
-  { label: '1:2',    value: '1:2' },
-  { label: '2:1',    value: '2:1' },
-  { label: '2:3',    value: '2:3' },
-  { label: '3:2',    value: '3:2' },
-  { label: '3:4',    value: '3:4' },
-  { label: '4:3',    value: '4:3' },
-  { label: '9:16',   value: '9:16' },
-  { label: '9:19.5', value: '9:19.5' },
-  { label: '9:20',   value: '9:20' },
-  { label: '16:9',   value: '16:9' },
-  { label: '19.5:9', value: '19.5:9' },
-  { label: '20:9',   value: '20:9' },
+export const GROK_ASPECT_RATIOS: { label: string; value: GrokAspectRatio }[] =
+  GROK_ASPECT_RATIO_VALUES.map((value) => ({ label: value === 'auto' ? 'Auto' : value, value }))
+
+export type GrokResolution = '1k' | '1.5k' | '2k'
+
+// 2.0 takes 1.5k; grok-imagine-image refuses it.
+export const GROK_RESOLUTIONS_2: { label: string; value: GrokResolution }[] = [
+  { label: '1K', value: '1k' },
+  { label: '1.5K', value: '1.5k' },
+  { label: '2K', value: '2k' }
 ]
-
-export type GrokResolution = '1k' | '2k'
 
 export const GROK_RESOLUTIONS: { label: string; value: GrokResolution }[] = [
   { label: '1K', value: '1k' },
   { label: '2K', value: '2k' }
 ]
 
-// Quality is a REQUEST PARAMETER on Grok Imagine 2.0, where 1.x expressed the same idea as
-// two separate model ids (grok-imagine-image / -quality). Only 2.0 declares this list, so
-// only 2.0 shows the control and sends the field — the FluxModelDef stepsRange/guidanceRange
-// idiom, for the same reason: a parameter belongs to the models that declare it.
-//
-// `auto` was live-verified on 2026-09-06 with a successful image generation. xAI says it
-// currently resolves to low for generation and medium for editing; explicit low/medium pin
-// the requested tier.
-//
-// Sending `quality: "ultra"` made the DESERIALIZER answer `unknown variant \`ultra\`,
-// expected one of \`low\`, \`medium\`, \`high\``, which read like the contract and was not:
-// that is a shared wire enum, while actually generating with `high` on 2.0 returns 400.
-// `auto` was added later and is accepted even though that older error did not name it.
-//
-// So a deserializer error names a parser TYPE, while a successful request proves the
-// per-model CONTRACT. An intermediate version of this list shipped `high` on the strength
-// of the parse error alone. Verify a value by using it, not by watching the parser refuse
-// a different one.
-export type GrokQuality = 'low' | 'medium' | 'high' | 'auto'
+// Quality is a request parameter on Grok Imagine 2.0 alone. xAI offers two real
+// levels, so medium is the higher of two; auto is the API's literal default,
+// which xAI resolves to low when generating.
+export type GrokQuality = 'auto' | 'low' | 'medium'
 
-// This list is what 2.0 offers, not every value Grok's shared parser can name.
 export const GROK_QUALITY_VALUES: { label: string; value: GrokQuality }[] = [
+  { label: 'Auto',   value: 'auto' },
   { label: 'Low',    value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'Auto',   value: 'auto' }
+  { label: 'Medium', value: 'medium' }
 ]
 
 export interface GrokModelDef extends ModelDef {
@@ -240,7 +219,7 @@ export interface GrokModelDef extends ModelDef {
   backend: 'grok'
   aspectRatios: { label: string; value: GrokAspectRatio }[]
   resolutions: { label: string; value: GrokResolution }[]
-  // Only Grok Imagine 2.0 takes a `quality` parameter; the 1.x pair encode the same
+  // Only Grok Imagine 2.0 takes a `quality` parameter; the 1.x id encodes the same
   // choice in their model ids. Absent means the field is neither shown nor sent.
   qualities?: { label: string; value: GrokQuality }[]
 }
