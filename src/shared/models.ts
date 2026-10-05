@@ -239,8 +239,8 @@ export interface GrokModelDef extends ModelDef {
   backend: 'grok'
   aspectRatios: { label: string; value: GrokAspectRatio }[]
   resolutions: { label: string; value: GrokResolution }[]
-  // Only Grok Imagine 2.0 takes a `quality` parameter; the 1.x id encodes the same
-  // choice in their model ids. Absent means the field is neither shown nor sent.
+  // Only Grok Imagine 2.0 takes a `quality` parameter; grok-imagine-image has no
+  // quality choice. Absent means the field is neither shown nor sent.
   qualities?: { label: string; value: GrokQuality }[]
 }
 

@@ -78,8 +78,8 @@ export const grokBackend: BackendParamModel<GrokParams, GrokModelDef> = {
       aspectRatio: params.aspectRatio,
       resolution: params.resolution,
     }
-    // grok-imagine-image carries its quality in the model id, so sending the field
-    // there would be a second, contradictory way to say the same thing.
+    // Only a model that declares qualities (Grok Imagine 2.0) takes the field;
+    // grok-imagine-image has no quality choice to send.
     if (modelDef.qualities) result.quality = params.quality
     return result
   },

@@ -10,7 +10,7 @@ export function buildXaiImageBody(task: Task): Record<string, unknown> {
     // 2.0 takes a quality beside its ratio and resolution.
     case 'grok-imagine-image-2.0':
       return { ...plain, ...ratioAndResolution(task), quality: chosen(task, 'quality', 'auto') }
-    // grok-imagine-image carries its quality in the id.
+    // grok-imagine-image takes no quality, only its ratio and resolution.
     case 'grok-imagine-image':
       return { ...plain, ...ratioAndResolution(task) }
     default:
