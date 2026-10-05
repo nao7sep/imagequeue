@@ -3,6 +3,8 @@ import { formatTimestamp } from '../../shared/utc-stamp'
 export interface OutputTimestamp {
   // Second-precision UTC timestamp string (yyyymmdd-hhmmss).
   timestamp: string
+  // The same second, serialized, for the sidecar to record the time in the name.
+  utc: string
   // 0 for the first output of a given second; increments for each subsequent
   // output in the same second. writeImageOutput appends it to the basename only
   // when > 0, so the common case keeps the plain `…-utc-slug-backend` name.
@@ -32,7 +34,8 @@ export class TimestampAllocator {
       this.lastOrdinal = 0
     }
     this.lastSecondMs = secondMs
-    return { timestamp: formatTimestamp(new Date(secondMs)), ordinal: this.lastOrdinal }
+    const second = new Date(secondMs)
+    return { timestamp: formatTimestamp(second), utc: second.toISOString(), ordinal: this.lastOrdinal }
   }
 
   // Seeds the allocator from a resumed session's existing output so new
