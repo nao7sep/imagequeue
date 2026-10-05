@@ -35,6 +35,7 @@ import {
 } from '../../../shared/types'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { isBrainstormMode } from '../utils/promptMode'
+import { shownElaboratorId, shownSeed } from '../utils/advancedPromptingDefaults'
 import { presentFailure } from '../utils/failurePresentation'
 import {
   computeAdvancedGates,
@@ -84,22 +85,19 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const { snapshots } = useEnqueueConfigs()
   const { state, update, appendElaboratedPrompts } = useSessionDraft()
   const {
-    prompt, seed, selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborated,
+    prompt, seed: savedSeed, selectedCompositionElaboratorId: savedCompositionElaboratorId,
+    selectedStyleElaboratorId: savedStyleElaboratorId, elaborated,
     selectedProprietary, selectedDtFiles, promptMode, targetScope, count, elaboratedPrompts,
     promptFormat, promptLength,
   } = state
 
-  // Pre-fill the seed from the main prompt on first open within a session,
-  // and only when the user has nothing typed yet. Once the user has anything
-  // in the seed, we leave it alone — including across modal open/close — so
-  // their work is preserved when reopening within the same session.
-  useEffect(() => {
-    if (!seed && prompt.trim()) {
-      update({ seed: prompt })
-    }
-    // Intentionally only on mount: later prompt edits shouldn't clobber the seed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Opening the modal fills its defaults on screen without saving them, so
+  // opening it never edits the session (content-lifecycle-conventions,
+  // Modified): an empty seed shows the main prompt as it was on opening until
+  // the user edits the seed, and a missing or vanished elaborator choice shows
+  // the first of its kind until the user picks one.
+  const [seedFill, setSeedFill] = useState<string | null>(() => (!savedSeed && prompt.trim() ? prompt : null))
+  const seed = shownSeed(savedSeed, seedFill)
 
   const [elaborators, setElaborators] = useState<Elaborator[]>([])
   const [elaboratorsLoading, setElaboratorsLoading] = useState(true)
@@ -131,6 +129,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // append prompts or enqueue tasks.
   const cancelledRef = useRef(false)
   const elaboratorsByKind = useMemo(() => groupElaborators(elaborators), [elaborators])
+  const selectedCompositionElaboratorId = shownElaboratorId(elaboratorsByKind.composition, savedCompositionElaboratorId)
+  const selectedStyleElaboratorId = shownElaboratorId(elaboratorsByKind.style, savedStyleElaboratorId)
   // A refusal cannot change on a retry, so it offers none; every other failure does.
   const showFailure = useCallback((operation: 'elaborate' | 'queue', error: unknown, failure: TextProviderFailure | null): void => {
     setProviderError(failure?.providerMessage ?? null)
@@ -142,23 +142,13 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     setElaboratorsLoading(true)
     setElaboratorsError(null)
     try {
-      const next = await window.electronAPI.listElaborators()
-      setElaborators(next)
-      const grouped = groupElaborators(next)
-      update({
-        selectedCompositionElaboratorId: grouped.composition.some((e) => e.id === selectedCompositionElaboratorId)
-          ? selectedCompositionElaboratorId
-          : grouped.composition[0]?.id ?? null,
-        selectedStyleElaboratorId: grouped.style.some((e) => e.id === selectedStyleElaboratorId)
-          ? selectedStyleElaboratorId
-          : grouped.style[0]?.id ?? null,
-      })
+      setElaborators(await window.electronAPI.listElaborators())
     } catch (loadError) {
       setElaboratorsError(presentFailure('advanced-elaborators-load', loadError))
     } finally {
       setElaboratorsLoading(false)
     }
-  }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, update])
+  }, [])
 
   useEffect(() => {
     void refreshElaborators()
@@ -560,7 +550,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               className="advanced-seed"
               placeholder={t('advanced.seedPlaceholder')}
               value={seed}
-              onChange={(e) => update({ seed: e.target.value })}
+              onChange={(e) => {
+                setSeedFill(null)
+                update({ seed: e.target.value })
+              }}
             />
             <div className="advanced-section-label">{t('advanced.elaborators')}</div>
             {elaboratorsError && (
