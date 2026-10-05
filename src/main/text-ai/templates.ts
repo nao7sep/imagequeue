@@ -19,8 +19,9 @@ export const PROMPTS_RESPONSE_SCHEMA = {
   additionalProperties: false,
 } as const
 
-// Literal shown to the model in place of {{JSON}}. Kept as a constant so a
-// user cannot accidentally break the parser by editing the template text.
+// Literal shown to the model in place of {{JSON}}, a placeholder the built-in
+// template leaves to the strict schema but an edited one may still hold. Kept
+// as a constant so a user cannot accidentally break the parser by editing it.
 export const JSON_FORMAT_LITERAL = '{ "prompts": [string, ...] }'
 
 // Returns the live brainstorm config (defaults filled in via config-store).
