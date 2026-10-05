@@ -3,6 +3,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Each test imports a fresh copy of the stores and providers. Loading them once
+// here first compiles that code and loads the provider SDKs, which a fresh copy
+// reuses, so no test pays that one-time cost.
+await import('../../../src/main/config/config-store')
+await import('../../../src/main/text-ai')
+
 let root: string
 // The sets config.json holds; its format version is the config store's to test.
 function storedSets(): unknown {
