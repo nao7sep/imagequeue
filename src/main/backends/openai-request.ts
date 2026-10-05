@@ -1,11 +1,15 @@
 import type { ImageGenerateParamsNonStreaming } from 'openai/resources/images'
 import type { Task } from '../../shared/types'
 import {
-  OPENAI_GPT2_MAX_ASPECT_RATIO,
-  OPENAI_GPT2_MAX_EDGE,
-  OPENAI_GPT2_MAX_PIXELS,
-  OPENAI_GPT2_MIN_PIXELS,
-  OPENAI_GPT2_SIZE_STEP,
+  OPENAI_COMPRESSION_RANGE,
+  OPENAI_IMAGE_MAX_ASPECT_RATIO,
+  OPENAI_IMAGE_MAX_EDGE,
+  OPENAI_IMAGE_MAX_PIXELS,
+  OPENAI_IMAGE_MIN_PIXELS,
+  OPENAI_IMAGE_SIZE_STEP,
+  type OpenAIBackground,
+  type OpenAIOutputFormat,
+  type OpenAIQuality,
 } from '../../shared/models'
 
 // Pure request-shaping for the OpenAI image backend. No I/O: this builds (and
@@ -13,27 +17,28 @@ import {
 // separate so the conditional-field logic is unit-testable without the SDK.
 
 // The per-request fields we send to images.generate, minus the envelope
-// (prompt/n/stream) that openai.ts adds at call time and never logs.
-export type OpenAIImageParams = Omit<ImageGenerateParamsNonStreaming, 'prompt' | 'n' | 'stream'>
+// (prompt/n/stream) that openai.ts adds at call time and never logs. The SDK's
+// quality type predates the 2.5 models' xhigh and max.
+export type OpenAIImageParams = Omit<ImageGenerateParamsNonStreaming, 'prompt' | 'n' | 'stream' | 'quality'> & { quality?: OpenAIQuality }
 
-export function validateGptImage2Size(width: number, height: number): void {
+export function validateGptImageSize(width: number, height: number): void {
   if (!Number.isInteger(width) || !Number.isInteger(height)) {
-    throw new Error('GPT Image 2 size must use whole-number width and height values')
+    throw new Error('GPT Image size must use whole-number width and height values')
   }
-  if (width > OPENAI_GPT2_MAX_EDGE || height > OPENAI_GPT2_MAX_EDGE) {
-    throw new Error(`GPT Image 2 width and height must not exceed ${OPENAI_GPT2_MAX_EDGE}px`)
+  if (width > OPENAI_IMAGE_MAX_EDGE || height > OPENAI_IMAGE_MAX_EDGE) {
+    throw new Error(`GPT Image width and height must not exceed ${OPENAI_IMAGE_MAX_EDGE}px`)
   }
-  if (width * height < OPENAI_GPT2_MIN_PIXELS) {
-    throw new Error(`GPT Image 2 size must be at least ${OPENAI_GPT2_MIN_PIXELS.toLocaleString()} pixels total`)
+  if (width * height < OPENAI_IMAGE_MIN_PIXELS) {
+    throw new Error(`GPT Image size must be at least ${OPENAI_IMAGE_MIN_PIXELS.toLocaleString()} pixels total`)
   }
-  if (width % OPENAI_GPT2_SIZE_STEP !== 0 || height % OPENAI_GPT2_SIZE_STEP !== 0) {
-    throw new Error(`GPT Image 2 width and height must be multiples of ${OPENAI_GPT2_SIZE_STEP}px`)
+  if (width % OPENAI_IMAGE_SIZE_STEP !== 0 || height % OPENAI_IMAGE_SIZE_STEP !== 0) {
+    throw new Error(`GPT Image width and height must be multiples of ${OPENAI_IMAGE_SIZE_STEP}px`)
   }
-  if (Math.max(width, height) / Math.min(width, height) > OPENAI_GPT2_MAX_ASPECT_RATIO) {
-    throw new Error(`GPT Image 2 aspect ratio must stay within ${OPENAI_GPT2_MAX_ASPECT_RATIO}:1`)
+  if (Math.max(width, height) / Math.min(width, height) > OPENAI_IMAGE_MAX_ASPECT_RATIO) {
+    throw new Error(`GPT Image aspect ratio must stay within ${OPENAI_IMAGE_MAX_ASPECT_RATIO}:1`)
   }
-  if (width * height > OPENAI_GPT2_MAX_PIXELS) {
-    throw new Error(`GPT Image 2 size must stay at or below ${OPENAI_GPT2_MAX_PIXELS.toLocaleString()} pixels`)
+  if (width * height > OPENAI_IMAGE_MAX_PIXELS) {
+    throw new Error(`GPT Image size must stay at or below ${OPENAI_IMAGE_MAX_PIXELS.toLocaleString()} pixels`)
   }
 }
 
@@ -41,41 +46,35 @@ export function validateGptImage2Size(width: number, height: number): void {
 // the plain request: the model alone, beside the prompt openai.ts adds.
 export function buildOpenAIImageParams(task: Task): OpenAIImageParams {
   switch (task.model) {
-    // GPT Image 2 takes any size within its custom-size rule.
+    // Both take any size within the GPT Image custom-size rule and the GPT Image
+    // fields; each row lists the qualities it takes.
+    case 'gpt-image-2.5-flare':
     case 'gpt-image-2':
-      validateGptImage2Size((task.params.width as number) || 1024, (task.params.height as number) || 1024)
-      return gptImageParams(task)
-    // The 1.x pair take the GPT Image fields as they are.
-    case 'gpt-image-1.5':
-    case 'gpt-image-1-mini':
       return gptImageParams(task)
     default:
       return { model: task.model }
   }
 }
 
-// Fields that the API treats as defaults (moderation=auto, quality=auto,
-// background=opaque) are omitted rather than sent, matching the API's own defaulting.
+// Every field is sent as chosen, `auto` included; a value a task does not carry
+// (one queued before the field existed) is sent as the field's default.
+// Moderation is not a choice: the most permissive value is always sent.
 function gptImageParams(task: Task): OpenAIImageParams {
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
-  const size = `${width}x${height}`
-  const moderation = (task.params.moderation as 'auto' | 'low') || 'auto'
-  const quality = (task.params.quality as 'low' | 'medium' | 'high' | 'auto') || 'auto'
-  const outputFormat = (task.params.outputFormat as 'png' | 'jpeg' | 'webp') || 'png'
-  const background = (task.params.background as 'opaque' | 'auto' | 'transparent') || 'opaque'
-  const outputCompression = task.params.outputCompression as number | undefined
-
+  validateGptImageSize(width, height)
+  const outputFormat = (task.params.outputFormat as OpenAIOutputFormat | undefined) ?? 'png'
+  const compression = task.params.outputCompression as number | undefined
   return {
     model: task.model,
     // The SDK's `size` type is `(string & {}) | 'auto' | '1024x1024' | … | null`,
-    // so an arbitrary WIDTHxHEIGHT string is accepted directly — gpt-image-2's
-    // custom sizes (validated above) need no special handling here.
-    size,
+    // so an arbitrary WIDTHxHEIGHT string is accepted directly.
+    size: `${width}x${height}`,
+    quality: (task.params.quality as OpenAIQuality | undefined) ?? 'auto',
+    background: (task.params.background as OpenAIBackground | undefined) ?? 'auto',
     output_format: outputFormat,
-    ...(moderation !== 'auto' && { moderation }),
-    ...(quality !== 'auto' && { quality }),
-    ...(background !== 'opaque' && { background }),
-    ...(outputCompression != null && { output_compression: outputCompression }),
+    // Compression applies to jpeg and webp only.
+    ...(outputFormat !== 'png' && { output_compression: compression ?? OPENAI_COMPRESSION_RANGE.default }),
+    moderation: 'low',
   }
 }

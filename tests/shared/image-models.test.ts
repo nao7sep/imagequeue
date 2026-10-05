@@ -8,6 +8,7 @@ import {
   isImageModel,
 } from '../../src/shared/ai-models'
 import type { CloudBackendId, Task } from '../../src/shared/types'
+import { STANDARD_SIZE_PRESETS } from '../../src/shared/models'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../src/shared/types'
 import { buildOpenAIImageParams } from '../../src/main/backends/openai-request'
 import { buildGeminiImageRequest } from '../../src/main/backends/nanobanana-request'
@@ -50,13 +51,13 @@ function withoutModel(request: unknown): unknown {
 describe('image routing guard', () => {
   it('pins every column\'s rows, in order, and its default', () => {
     expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getModelsForBackend(backend).map((row) => row.id)]))).toEqual({
-      openai: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1-mini'],
+      openai: ['gpt-image-2.5-flare', 'gpt-image-2'],
       nanobanana: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-lite-image'],
       grok: ['grok-imagine-image-2.0', 'grok-imagine-image-quality', 'grok-imagine-image'],
       flux: ['flux-2-max', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b', 'flux-2-klein-4b'],
     })
     expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getDefaultModelForBackend(backend)?.id]))).toEqual({
-      openai: 'gpt-image-2',
+      openai: 'gpt-image-2.5-flare',
       nanobanana: 'gemini-3.1-flash-image',
       grok: 'grok-imagine-image-2.0',
       flux: 'flux-2-pro',
@@ -83,8 +84,20 @@ describe('image routing guard', () => {
     }
   })
 
+  it('pins each OpenAI row\'s choice lists in order', () => {
+    expect(getModelsForBackend('openai').map(({ id, qualities, backgrounds, outputFormats }) => [id, qualities, backgrounds, outputFormats])).toEqual([
+      ['gpt-image-2.5-flare', ['auto', 'low', 'medium', 'high', 'xhigh', 'max'], ['auto', 'transparent', 'opaque'], ['png', 'jpeg', 'webp']],
+      ['gpt-image-2', ['auto', 'low', 'medium', 'high'], ['auto', 'transparent', 'opaque'], ['png', 'jpeg', 'webp']],
+    ])
+    for (const row of getModelsForBackend('openai')) expect(row.sizes, row.id).toBe(STANDARD_SIZE_PRESETS)
+  })
+
+  it('treats a removed OpenAI id as an id not in the list', () => {
+    for (const id of ['gpt-image-1.5', 'gpt-image-1-mini']) expect(findModel('openai', id), id).toBeUndefined()
+  })
+
   it('finds a row only by its exact id', () => {
-    expect(findModel('openai', 'gpt-image-2')?.id).toBe('gpt-image-2')
+    expect(findModel('openai', 'gpt-image-2.5-flare')?.id).toBe('gpt-image-2.5-flare')
     expect(findModel('openai', 'unlisted-model')).toBeUndefined()
     expect(getModelsForBackend('drawthings')).toEqual([])
   })

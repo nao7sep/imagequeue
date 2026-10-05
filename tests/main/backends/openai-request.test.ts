@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildOpenAIImageParams, validateGptImage2Size } from '../../../src/main/backends/openai-request'
+import { buildOpenAIImageParams, validateGptImageSize } from '../../../src/main/backends/openai-request'
 import type { Task } from '../../../src/shared/types'
 
-function makeTask(params: Record<string, unknown>, model = 'gpt-image-1.5'): Task {
+function makeTask(params: Record<string, unknown>, model = 'gpt-image-2.5-flare'): Task {
   return {
     id: 't1',
     prompt: 'a cat',
@@ -21,16 +21,36 @@ function makeTask(params: Record<string, unknown>, model = 'gpt-image-1.5'): Tas
 }
 
 describe('buildOpenAIImageParams', () => {
-  it('applies defaults when params are empty', () => {
-    const p = buildOpenAIImageParams(makeTask({}))
-    expect(p.model).toBe('gpt-image-1.5')
-    expect(p.size).toBe('1024x1024')
-    expect(p.output_format).toBe('png')
-    // Default-valued optional fields are omitted, not sent.
-    expect('moderation' in p).toBe(false)
-    expect('quality' in p).toBe(false)
-    expect('background' in p).toBe(false)
-    expect('output_compression' in p).toBe(false)
+  it.each(['gpt-image-2.5-flare', 'gpt-image-2'])('sends %s every field as chosen, auto and opaque included, and moderation low', (model) => {
+    expect(buildOpenAIImageParams(makeTask({ width: 1536, height: 1024, quality: 'auto', outputFormat: 'png', background: 'opaque' }, model))).toEqual({
+      model, size: '1536x1024', quality: 'auto', background: 'opaque', output_format: 'png', moderation: 'low',
+    })
+  })
+
+  it('sends each value a row lists as chosen', () => {
+    for (const quality of ['auto', 'low', 'medium', 'high', 'xhigh', 'max']) {
+      expect(buildOpenAIImageParams(makeTask({ quality })).quality).toBe(quality)
+    }
+    for (const background of ['auto', 'transparent', 'opaque']) {
+      expect(buildOpenAIImageParams(makeTask({ background })).background).toBe(background)
+    }
+    for (const outputFormat of ['png', 'jpeg', 'webp']) {
+      expect(buildOpenAIImageParams(makeTask({ outputFormat })).output_format).toBe(outputFormat)
+    }
+  })
+
+  it('sends the field defaults for a task that carries none, and omits nothing for equalling them', () => {
+    expect(buildOpenAIImageParams(makeTask({}))).toEqual({
+      model: 'gpt-image-2.5-flare', size: '1024x1024', quality: 'auto', background: 'auto', output_format: 'png', moderation: 'low',
+    })
+  })
+
+  it('sends compression for jpeg and webp only, including its default and zero', () => {
+    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'png', outputCompression: 80 }))).not.toHaveProperty('output_compression')
+    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'jpeg', outputCompression: 80 })).output_compression).toBe(80)
+    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'webp', outputCompression: 0 })).output_compression).toBe(0)
+    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'webp', outputCompression: 100 })).output_compression).toBe(100)
+    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'jpeg' })).output_compression).toBe(100)
   })
 
   it('does not include the envelope fields (prompt/n/stream) — openai.ts adds those', () => {
@@ -40,67 +60,24 @@ describe('buildOpenAIImageParams', () => {
     expect('stream' in p).toBe(false)
   })
 
-  it('builds the size string from width/height', () => {
-    const p = buildOpenAIImageParams(makeTask({ width: 1536, height: 1024 }))
-    expect(p.size).toBe('1536x1024')
+  it.each(['gpt-image-2.5-flare', 'gpt-image-2'])('validates the custom-size rule for %s', (model) => {
+    expect(() => buildOpenAIImageParams(makeTask({ width: 1000, height: 1024 }, model))).toThrow()
+    expect(buildOpenAIImageParams(makeTask({ width: 2048, height: 2048 }, model)).size).toBe('2048x2048')
   })
 
-  it('omits moderation when auto, includes it otherwise', () => {
-    expect('moderation' in buildOpenAIImageParams(makeTask({ moderation: 'auto' }))).toBe(false)
-    expect(buildOpenAIImageParams(makeTask({ moderation: 'low' })).moderation).toBe('low')
-  })
-
-  it('omits quality when auto, includes it otherwise', () => {
-    expect('quality' in buildOpenAIImageParams(makeTask({ quality: 'auto' }))).toBe(false)
-    expect(buildOpenAIImageParams(makeTask({ quality: 'high' })).quality).toBe('high')
-  })
-
-  it('omits background when opaque, includes it otherwise', () => {
-    expect('background' in buildOpenAIImageParams(makeTask({ background: 'opaque' }))).toBe(false)
-    expect(buildOpenAIImageParams(makeTask({ background: 'transparent' })).background).toBe('transparent')
-    expect(buildOpenAIImageParams(makeTask({ background: 'auto' })).background).toBe('auto')
-  })
-
-  it('includes output_compression only when set, including zero', () => {
-    expect('output_compression' in buildOpenAIImageParams(makeTask({}))).toBe(false)
-    expect(buildOpenAIImageParams(makeTask({ outputCompression: 80 })).output_compression).toBe(80)
-    // 0 is a real value, not "unset" — must be included.
-    expect(buildOpenAIImageParams(makeTask({ outputCompression: 0 })).output_compression).toBe(0)
-  })
-
-  it('passes output_format through', () => {
-    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'jpeg' })).output_format).toBe('jpeg')
-    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'webp' })).output_format).toBe('webp')
-  })
-
-  it('validates size for gpt-image-2 and rejects an invalid one', () => {
-    expect(() => buildOpenAIImageParams(makeTask({ width: 1000, height: 1024 }, 'gpt-image-2'))).toThrow()
-  })
-
-  it('accepts a large custom size for gpt-image-2', () => {
-    const p = buildOpenAIImageParams(makeTask({ width: 2048, height: 2048 }, 'gpt-image-2'))
-    expect(p.size).toBe('2048x2048')
-  })
-
-  it('does not validate size for non-gpt-image-2 models', () => {
-    // Same off-grid size that throws for gpt-image-2 is accepted for gpt-image-1.5.
-    const p = buildOpenAIImageParams(makeTask({ width: 1000, height: 1024 }, 'gpt-image-1.5'))
-    expect(p.size).toBe('1000x1024')
-  })
-
-  it('sends an unlisted id the plain request: the model alone', () => {
-    expect(buildOpenAIImageParams(makeTask({ width: 1000, height: 1024, quality: 'high' }, 'gpt-image-1'))).toEqual({ model: 'gpt-image-1' })
+  it.each(['gpt-image-1', 'gpt-image-1.5', 'gpt-image-1-mini', 'unlisted-model'])('sends %s, an id with no row, the plain request: the model alone', (model) => {
+    expect(buildOpenAIImageParams(makeTask({ width: 1000, height: 1024, quality: 'high', background: 'opaque' }, model))).toEqual({ model })
   })
 })
 
-describe('validateGptImage2Size', () => {
+describe('validateGptImageSize', () => {
   it('accepts a valid size', () => {
-    expect(() => validateGptImage2Size(1024, 1024)).not.toThrow()
-    expect(() => validateGptImage2Size(2048, 1024)).not.toThrow()
+    expect(() => validateGptImageSize(1024, 1024)).not.toThrow()
+    expect(() => validateGptImageSize(2048, 1024)).not.toThrow()
   })
 
   it('rejects non-integer dimensions', () => {
-    expect(() => validateGptImage2Size(1024.5, 1024)).toThrow(/whole-number/)
+    expect(() => validateGptImageSize(1024.5, 1024)).toThrow(/whole-number/)
   })
 
   it('rejects a total pixel count below the floor (not a per-edge minimum)', () => {
@@ -108,27 +85,27 @@ describe('validateGptImage2Size', () => {
     // 512x512 = 262,144 px: valid 1:1 ratio, both edges multiples of 16 and in range,
     // yet rejected for too few pixels. 1024x512 = 524,288 px is the exact case the
     // old "512px min edge" rule wrongly accepted.
-    expect(() => validateGptImage2Size(512, 512)).toThrow(/at least .* pixels total/)
-    expect(() => validateGptImage2Size(1024, 512)).toThrow(/at least .* pixels total/)
+    expect(() => validateGptImageSize(512, 512)).toThrow(/at least .* pixels total/)
+    expect(() => validateGptImageSize(1024, 512)).toThrow(/at least .* pixels total/)
     // Just above the floor is accepted: 1024x1024 = 1,048,576 px.
-    expect(() => validateGptImage2Size(1024, 1024)).not.toThrow()
+    expect(() => validateGptImageSize(1024, 1024)).not.toThrow()
   })
 
   it('rejects dimensions above the maximum edge', () => {
-    expect(() => validateGptImage2Size(4096, 1024)).toThrow(/must not exceed/)
+    expect(() => validateGptImageSize(4096, 1024)).toThrow(/must not exceed/)
   })
 
   it('rejects dimensions that are not multiples of the size step', () => {
-    expect(() => validateGptImage2Size(1000, 1024)).toThrow(/multiples of/)
+    expect(() => validateGptImageSize(1000, 1024)).toThrow(/multiples of/)
   })
 
   it('rejects an aspect ratio beyond the limit', () => {
     // 512x2048 = 4:1, exceeds the 3:1 cap (both edges valid multiples in range).
-    expect(() => validateGptImage2Size(512, 2048)).toThrow(/aspect ratio/)
+    expect(() => validateGptImageSize(512, 2048)).toThrow(/aspect ratio/)
   })
 
   it('rejects a total pixel count above the cap', () => {
     // 3840x2176: edges in range, multiples of 16, ratio < 3, but > 8.29M pixels.
-    expect(() => validateGptImage2Size(3840, 2176)).toThrow(/at or below/)
+    expect(() => validateGptImageSize(3840, 2176)).toThrow(/at or below/)
   })
 })

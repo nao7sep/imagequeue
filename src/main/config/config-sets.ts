@@ -86,16 +86,13 @@ export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean
   if (key === 'general.theme') return ['system', 'light', 'dark'].includes(String(value))
   if (key === 'general.language') return value === 'system' || isLanguage(value)
   if (key === 'provider') return value === 'gemini' || value === 'openai'
+  // An image column's model and its parameters. Which parameters a model takes,
+  // and their values, are the column's to judge per row, so a record saved for a
+  // model or a field that has since changed still loads.
   if (key.endsWith('.defaults')) {
     if (!isObject(value) || typeof value.model !== 'string' || !isObject(value.default_params)) return false
-    const expected = (builtIn as { default_params: Record<string, unknown> }).default_params
-    const optional = key.includes('.nanobanana.') ? Object.keys(expected) : key.includes('.grok.') ? ['quality'] : []
-    return Object.entries(expected).every(([member, shape]) =>
-      (value.default_params as Record<string, unknown>)[member] === undefined && optional.includes(member)
-        || hasSetShape((value.default_params as Record<string, unknown>)[member], shape))
-      && Object.entries(value.default_params).every(([member, item]) =>
-        member in expected ? hasSetShape(item, expected[member])
-          : (member === 'steps' || member === 'guidance') && typeof item === 'number' && Number.isFinite(item))
+    return Object.values(value.default_params).every((item) =>
+      item === null || typeof item === 'string' || (typeof item === 'number' && Number.isFinite(item)))
   }
   if (builtIn === null) return value === null || (typeof value === 'number' && Number.isFinite(value))
   if (Array.isArray(builtIn)) return Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))

@@ -10,7 +10,6 @@ import {
   NANO_BANANA_SIZES_FLASH2,
   NANO_BANANA_SIZES_LITE,
   NANO_BANANA_SIZES_PRO,
-  OPENAI_SIZES,
   STANDARD_SIZE_PRESETS,
   type FluxModelDef,
   type GrokModelDef,
@@ -56,34 +55,22 @@ export const SUPPORTED_MODELS: readonly SupportedModel[] = [
   { provider: 'openai', id: 'gpt-5.6-terra', kinds: ['text-balanced'], defaultFor: ['text-balanced'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'medium' },
   { provider: 'openai', id: 'gpt-6-luna', kinds: ['text-fast'], defaultFor: ['text-fast'], thinking: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultThinking: 'none' },
 
-  // OpenAI images.
+  // OpenAI images. ImageQueue only generates, so the editing Sunburst is not listed.
+  {
+    provider: 'openai', id: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare', backend: 'openai',
+    kinds: ['image-generate'], defaultFor: ['image-generate'],
+    qualities: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+    sizes: STANDARD_SIZE_PRESETS,
+    outputFormats: ['png', 'jpeg', 'webp'],
+    backgrounds: ['auto', 'transparent', 'opaque'],
+  },
   {
     provider: 'openai', id: 'gpt-image-2', label: 'GPT Image 2', backend: 'openai',
-    kinds: ['image-generate'], defaultFor: ['image-generate'],
+    kinds: ['image-generate'], defaultFor: [],
     qualities: ['auto', 'low', 'medium', 'high'],
-    moderations: ['auto', 'low'],
     sizes: STANDARD_SIZE_PRESETS,
-    supportsCustomSizes: true,
     outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'auto'],
-  },
-  {
-    provider: 'openai', id: 'gpt-image-1.5', label: 'GPT Image 1.5', backend: 'openai',
-    kinds: ['image-generate'], defaultFor: [],
-    qualities: ['auto', 'low', 'medium', 'high'],
-    moderations: ['auto', 'low'],
-    sizes: OPENAI_SIZES,
-    outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'transparent', 'auto'],
-  },
-  {
-    provider: 'openai', id: 'gpt-image-1-mini', label: 'GPT Image 1 Mini', backend: 'openai',
-    kinds: ['image-generate'], defaultFor: [],
-    qualities: ['auto', 'low', 'medium', 'high'],
-    moderations: ['auto', 'low'],
-    sizes: OPENAI_SIZES,
-    outputFormats: ['png', 'jpeg', 'webp'],
-    backgrounds: ['opaque', 'transparent', 'auto'],
+    backgrounds: ['auto', 'transparent', 'opaque'],
   },
 
   // Gemini images (Nano Banana).

@@ -8,6 +8,8 @@ const OPTION_LABELS: Record<string, MessageKey> = {
   low: 'option.low',
   medium: 'option.medium',
   high: 'option.high',
+  xhigh: 'option.xhigh',
+  max: 'option.max',
   auto: 'option.auto',
   opaque: 'option.opaque',
   transparent: 'option.transparent',

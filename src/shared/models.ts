@@ -19,33 +19,30 @@ export interface SizePreset {
   height: number
 }
 
-// gpt-image-2 custom-size limits (OpenAI image-generation docs).
+// The GPT Image custom-size rule (OpenAI image-generation docs), shared by
+// every OpenAI image row.
 //
 // The API's real lower bound is a MINIMUM TOTAL PIXEL COUNT, not a per-edge
 // minimum — a small-area size like 1024x512 (524,288 px) is rejected by the API
-// even though both edges are large. That area rule is OPENAI_GPT2_MIN_PIXELS,
-// enforced at request time in validateGptImage2Size (openai-request.ts).
+// even though both edges are large. That area rule is OPENAI_IMAGE_MIN_PIXELS,
+// enforced at request time in validateGptImageSize (openai-request.ts).
 //
-// OPENAI_GPT2_MIN_EDGE is a separate, softer concern: the per-edge floor the
+// OPENAI_IMAGE_MIN_EDGE is a separate, softer concern: the per-edge floor the
 // renderer clamps the width/height INPUT controls to, so a single dimension can't
 // be normalized to something absurd. It is NOT the API constraint — a per-edge-valid
 // pair can still be too small in area and is rejected by the min-pixels check.
-export const OPENAI_GPT2_MIN_EDGE = 512
-export const OPENAI_GPT2_MIN_PIXELS = 655_360
-export const OPENAI_GPT2_MAX_EDGE = 3840
-export const OPENAI_GPT2_SIZE_STEP = 16
-export const OPENAI_GPT2_MAX_ASPECT_RATIO = 3
-export const OPENAI_GPT2_MAX_PIXELS = 8_294_400
+export const OPENAI_IMAGE_MIN_EDGE = 512
+export const OPENAI_IMAGE_MIN_PIXELS = 655_360
+export const OPENAI_IMAGE_MAX_EDGE = 3840
+export const OPENAI_IMAGE_SIZE_STEP = 16
+export const OPENAI_IMAGE_MAX_ASPECT_RATIO = 3
+export const OPENAI_IMAGE_MAX_PIXELS = 8_294_400
 
-// Sizes for GPT Image 1.x models (exactly these three)
-export const OPENAI_SIZES: SizePreset[] = [
-  { shape: 'square', width: 1024, height: 1024 },
-  { shape: '3:2', width: 1536, height: 1024 },
-  { shape: '2:3', width: 1024, height: 1536 }
-]
+// Output compression, for jpeg and webp only.
+export const OPENAI_COMPRESSION_RANGE = { min: 0, max: 100, default: 100 }
 
 // The app's general-purpose size ladder, shared by every surface that offers free
-// choice of dimensions rather than a model-dictated list: gpt-image-2's custom
+// choice of dimensions rather than a model-dictated list: GPT Image's custom
 // sizing, FLUX (filtered to its 4MP ceiling), and Draw Things. Shared deliberately
 // — editing an entry moves all three, which is the intent; a backend needing its
 // own ladder gets its own constant rather than a divergent copy of this one.
@@ -84,15 +81,17 @@ export const FLUX_SIZES: SizePreset[] = STANDARD_SIZE_PRESETS.filter(
 
 // --- Model definitions ---
 
-export type OpenAIQuality = 'low' | 'medium' | 'high' | 'auto'
-export type OpenAIModeration = 'low' | 'auto'
+export type OpenAIQuality = 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type OpenAIOutputFormat = 'png' | 'jpeg' | 'webp'
-export type OpenAIBackground = 'opaque' | 'transparent' | 'auto'
+export type OpenAIBackground = 'auto' | 'transparent' | 'opaque'
+
+// The formats a transparent background can be saved in.
+export const OPENAI_TRANSPARENT_FORMATS: readonly OpenAIOutputFormat[] = ['png', 'webp']
 
 // Display names for the one option set whose wire values do not survive a
 // mechanical prettify ('webp' → 'WebP'). Each model declares which values it
-// supports; these name them. Quality, moderation, and background are single
-// lowercase words and are capitalized at the call site.
+// supports; these name them. Quality and background values are labelled in the
+// interface language at the call site.
 export const OPENAI_OUTPUT_FORMAT_LABELS: Record<OpenAIOutputFormat, string> = {
   png: 'PNG',
   jpeg: 'JPEG',
@@ -116,9 +115,8 @@ export interface OpenAIModelDef extends ModelDef {
   provider: 'openai'
   backend: 'openai'
   qualities: OpenAIQuality[]
-  moderations: OpenAIModeration[]
+  // Presets for the size field; any size within the custom-size rule is also taken.
   sizes: SizePreset[]
-  supportsCustomSizes?: boolean
   outputFormats: OpenAIOutputFormat[]
   backgrounds: OpenAIBackground[]
 }

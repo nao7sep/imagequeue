@@ -25,10 +25,10 @@ export interface OpenAIBackendConfig {
   default_params: {
     width: number
     height: number
-    moderation: 'low' | 'auto'
-    quality: 'low' | 'medium' | 'high' | 'auto'
+    quality: string
     outputFormat: 'png' | 'jpeg' | 'webp'
-    background: 'opaque' | 'transparent' | 'auto'
+    outputCompression: number
+    background: 'auto' | 'transparent' | 'opaque'
   }
   concurrency: number
   timeout_ms: number

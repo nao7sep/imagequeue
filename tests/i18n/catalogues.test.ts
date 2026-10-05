@@ -28,7 +28,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
   de: [
     "dependencies.updatesTitle", "dependencies.optional", "about.version", "settings.tab.prompts",
     "settings.languageSystem", "settings.themeSystem", "settings.audioFilter",
-    "option.transparent", "backend.moderation", "backend.format", "backend.guidance", "backend.seed",
+    "option.transparent", "backend.format", "backend.guidance", "backend.seed",
     "task.param.outputFormat", "menu.elaborationPrompts", "shortcuts.app", "elabSettings.formatPart", "elaborators.name",
     "option.auto", "records.levelInfo", "records.levelDebug", "records.backend", "records.details", "records.status", "records.signal",
   ],
@@ -41,7 +41,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
     "nativeMenu.services", "nativeMenu.zoom", "about.version", "settings.tab.notifications", "settings.tab.prompts",
     "settings.volume", "settings.audioFilter", "option.opaque", "option.transparent", "menu.sessions",
     "menu.elaborationPrompts", "shortcuts.app", "details.prompt", "elaborator.kind.composition", "elaborator.kind.style",
-    "promptLength.long", "advanced.prompt", "conceptLibrary.conceptCount", "option.auto", "backend.format", "toasts.region",
+    "promptLength.long", "advanced.prompt", "conceptLibrary.conceptCount", "option.auto", "backend.format", "backend.compression", "toasts.region",
     "task.param.outputFormat", "records.session", "records.signal", "records.arguments",
   ],
   it: [

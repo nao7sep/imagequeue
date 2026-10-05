@@ -1,4 +1,5 @@
 import OpenAI, { APIConnectionTimeoutError, APIError } from 'openai'
+import type { ImageGenerateParamsNonStreaming } from 'openai/resources/images'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { resolveApiKey } from '../config/api-keys-store'
@@ -28,7 +29,8 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
 
   const response = await withProviderRetry((attemptSignal) => recordAiCall(
     { backend: 'openai', model: task.model, purpose: 'image', taskId: task.id, request },
-    () => client.images.generate(request, { signal: attemptSignal }),
+    // The SDK's quality type predates xhigh and max; the body is sent as built.
+    () => client.images.generate(request as ImageGenerateParamsNonStreaming, { signal: attemptSignal }),
     // The image bytes are the saved file's.
     (answer) => ({ ...answer, data: answer.data?.map(({ b64_json: _bytes, ...rest }) => rest) }),
   ).catch((err: unknown) => {

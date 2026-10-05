@@ -6,7 +6,7 @@ Elaborate one idea into varied, concrete prompts, send them to several image mod
 
 | Backend | Initial image model | API key |
 |---|---|---|
-| OpenAI GPT Image | GPT Image 2 | Required |
+| OpenAI GPT Image | GPT Image 2.5 Flare | Required |
 | Nano Banana (Gemini) | Nano Banana 2 | Required |
 | Grok Imagine | Grok Imagine 2.0 | Required |
 | FLUX (Black Forest Labs) | FLUX.2 Pro | Required |

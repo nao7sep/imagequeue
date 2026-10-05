@@ -226,6 +226,20 @@ describe('settings by set', () => {
     updateConfig((draft) => { draft.notifications.sounds_enabled = false })
     expect(stored()).toEqual({ notifications: { sounds_enabled: false } })
   })
+  // Which parameters a model takes is the column's to judge, so a record saved
+  // before a field was added or removed (v0.1.0's moderation) still loads whole.
+  it('loads an image column\'s saved model and parameters whatever fields they carry', async () => {
+    const saved = { model: 'gpt-image-1.5', default_params: { width: 1024, height: 1024, moderation: 'auto', quality: 'high', outputFormat: 'png', background: 'opaque' } }
+    fs.writeFileSync(file(), JSON.stringify({ image_backends: { openai: { defaults: saved } } }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().image_backends.openai.model).toBe('gpt-image-1.5')
+    expect(loadConfig().image_backends.openai.default_params).toEqual(saved.default_params)
+  })
+  it('refuses an image column\'s saved parameters that are not plain values', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ image_backends: { openai: { defaults: { model: 'x', default_params: { width: { nested: 1 } } } } } }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().image_backends.openai).toEqual(createDefaultConfig().image_backends.openai)
+  })
   it('stores model and parameters in one renamed set without migrating old sibling keys', async () => {
     fs.writeFileSync(file(), JSON.stringify({ image_backends: { openai: { model: 'old', default_params: {}, concurrency: 1 } } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')

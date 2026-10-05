@@ -408,10 +408,9 @@ describe('openai column', () => {
     expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalledWith('openai', 'gpt-image-2', {
       width: 1024,
       height: 1024,
-      moderation: 'auto',
       quality: 'high',
       outputFormat: 'png',
-      background: 'opaque',
+      background: 'auto',
     })
   })
 
@@ -443,17 +442,46 @@ describe('openai column', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('clamps a background the newly selected model does not offer', async () => {
-    vi.useFakeTimers()
-    // gpt-image-1.5 offers 'transparent'; gpt-image-2 does not.
-    stageSettings('openai', 'gpt-image-1.5', { background: 'transparent' })
+  it('shows each row\'s fields in order, with their defaults', async () => {
+    stageSettings('openai', 'gpt-image-2.5-flare')
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
-    expect((rowControl(container, 'Background') as HTMLSelectElement).value).toBe('transparent')
+    const labels = Array.from(container.querySelectorAll('.setting-row label')).map((label) => label.textContent)
+    expect(labels).toEqual(['Model', 'Size', 'Width', 'Height', 'Quality', 'Background', 'Format'])
+    const options = (label: string) => [...(rowControl(container, label) as HTMLSelectElement).options].map((option) => option.value)
+    expect(options('Quality')).toEqual(['auto', 'low', 'medium', 'high', 'xhigh', 'max'])
+    expect(options('Background')).toEqual(['auto', 'transparent', 'opaque'])
+    expect(options('Format')).toEqual(['png', 'jpeg', 'webp'])
+    expect(rowControl(container, 'Quality').value).toBe('auto')
+    expect(rowControl(container, 'Background').value).toBe('auto')
+    expect(rowControl(container, 'Format').value).toBe('png')
+    expect(screen.queryByText('Moderation')).toBeNull()
+  })
 
+  it('resets a quality the newly selected model does not offer', async () => {
+    stageSettings('openai', 'gpt-image-2.5-flare', { quality: 'max' })
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    expect(rowControl(container, 'Quality').value).toBe('max')
     fireEvent.change(rowControl(container, 'Model'), { target: { value: 'gpt-image-2' } })
     await flush()
-    expect((rowControl(container, 'Background') as HTMLSelectElement).value).toBe('opaque')
+    expect(rowControl(container, 'Quality').value).toBe('auto')
+    expect([...(rowControl(container, 'Quality') as HTMLSelectElement).options].map((option) => option.value)).toEqual(['auto', 'low', 'medium', 'high'])
+  })
+
+  it('shows compression for jpeg and webp only, and limits a transparent background to png and webp', async () => {
+    stageSettings('openai', 'gpt-image-2.5-flare', { outputFormat: 'jpeg' })
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    expect(rowControl(container, 'Compression').value).toBe('100')
+    fireEvent.change(rowControl(container, 'Background'), { target: { value: 'transparent' } })
+    await flush()
+    expect(rowControl(container, 'Format').value).toBe('png')
+    expect([...(rowControl(container, 'Format') as HTMLSelectElement).options].map((option) => option.value)).toEqual(['png', 'webp'])
+    expect(screen.queryByText('Compression')).toBeNull()
+    fireEvent.change(rowControl(container, 'Format'), { target: { value: 'webp' } })
+    await flush()
+    expect(rowControl(container, 'Compression')).toBeTruthy()
   })
 
   it('shows custom width/height inputs only for a model that supports them', async () => {

@@ -22,10 +22,10 @@ describe('defaults', () => {
     expect(openaiBackend.defaults()).toEqual({
       width: 1024,
       height: 1024,
-      moderation: 'auto',
       quality: 'auto',
       outputFormat: 'png',
-      background: 'opaque',
+      outputCompression: 100,
+      background: 'auto',
     })
     expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K' })
     expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
@@ -35,19 +35,27 @@ describe('defaults', () => {
 
 describe('clampToModel', () => {
   it('keeps valid OpenAI enum values and resets invalid ones to the model defaults', () => {
-    const modelDef = findModel('openai', 'gpt-image-2')!
-    const valid = openaiBackend.clampToModel(
-      { width: 1024, height: 1024, moderation: 'low', quality: 'high', outputFormat: 'webp', background: 'auto' },
-      modelDef
-    )
-    expect(valid).toEqual({ width: 1024, height: 1024, moderation: 'low', quality: 'high', outputFormat: 'webp', background: 'auto' })
+    const flare = findModel('openai', 'gpt-image-2.5-flare')!
+    const gpt2 = findModel('openai', 'gpt-image-2')!
+    const chosen = { width: 1024, height: 1024, quality: 'xhigh' as const, outputFormat: 'webp' as const, outputCompression: 80, background: 'opaque' as const }
+    expect(openaiBackend.clampToModel(chosen, flare)).toEqual(chosen)
+    // gpt-image-2 does not take xhigh, so a switch to it resets quality to auto.
+    expect(openaiBackend.clampToModel(chosen, gpt2)).toEqual({ ...chosen, quality: 'auto' })
+  })
 
-    // gpt-image-2 offers no 'transparent' background — it falls to 'opaque'.
-    const clamped = openaiBackend.clampToModel(
-      { width: 1024, height: 1024, moderation: 'auto', quality: 'auto', outputFormat: 'png', background: 'transparent' },
-      modelDef
-    )
-    expect(clamped.background).toBe('opaque')
+  it('limits a transparent background to png and webp', () => {
+    const flare = findModel('openai', 'gpt-image-2.5-flare')!
+    const jpeg = { ...openaiBackend.defaults(), outputFormat: 'jpeg' as const, background: 'transparent' as const }
+    expect(openaiBackend.clampToModel(jpeg, flare).outputFormat).toBe('png')
+    const webp = { ...jpeg, outputFormat: 'webp' as const }
+    expect(openaiBackend.clampToModel(webp, flare).outputFormat).toBe('webp')
+  })
+
+  it('enqueues compression for jpeg and webp only', () => {
+    const flare = findModel('openai', 'gpt-image-2.5-flare')!
+    const params = openaiBackend.defaults()
+    expect(openaiBackend.toEnqueueParams(params, flare)).toEqual({ width: 1024, height: 1024, quality: 'auto', outputFormat: 'png', background: 'auto' })
+    expect(openaiBackend.toEnqueueParams({ ...params, outputFormat: 'jpeg', outputCompression: 0 }, flare)).toHaveProperty('outputCompression', 0)
   })
 
   it('resets a FLUX ranged value to the new model\'s range DEFAULT on a model switch', () => {

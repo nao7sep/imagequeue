@@ -39,10 +39,10 @@ export function createDefaultConfig(): AppConfig {
         default_params: {
           width: 1024,
           height: 1024,
-          moderation: 'auto',
           quality: 'auto',
           outputFormat: 'png',
-          background: 'opaque'
+          outputCompression: 100,
+          background: 'auto'
         },
         concurrency: 3,
         timeout_ms: 180000
