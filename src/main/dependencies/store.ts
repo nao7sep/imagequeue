@@ -63,12 +63,7 @@ function readStoredCache(): StoredCache {
       cache: {
         lastAttemptAtUtc: typeof parsed.lastAttemptAtUtc === 'string' ? parsed.lastAttemptAtUtc : null,
         cli: { ...base.cli, ...parsed.cli },
-        // A pre-release store kept a bare check time here with no server time;
-        // that fact is obsolete, and trusting it would skip a due check.
-        recommendations:
-          typeof parsed.recommendations?.lastKnownModifiedUtc === 'string'
-            ? { ...base.recommendations, ...parsed.recommendations }
-            : base.recommendations,
+        recommendations: { ...base.recommendations, ...parsed.recommendations },
       },
     }
   } catch (err) {

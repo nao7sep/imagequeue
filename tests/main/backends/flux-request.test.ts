@@ -6,7 +6,7 @@ function makeTask(model: string, params: Record<string, unknown>): Task {
   return {
     id: 't1', prompt: 'a cat', backend: 'flux', model, params, status: 'queued',
     enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null, completedAt: null, durationMs: null,
-    imagePath: null, baseName: null, error: null,
+    imagePath: null, baseName: null, error: null, providerMessage: null,
   }
 }
 
@@ -15,7 +15,6 @@ describe('buildFluxBody', () => {
     expect(buildFluxBody(makeTask('flux-3-image', { aspectRatio: 'auto', resolution: '768sq', width: 1024, seed: 7, outputFormat: 'png' }))).toEqual({
       prompt: 'a cat', aspect_ratio: 'auto', resolution: '768sq', safety_tolerance: 4,
     })
-    expect(buildFluxBody(makeTask('flux-3-image', {}))).toEqual({ prompt: 'a cat', aspect_ratio: '1:1', resolution: '1k', safety_tolerance: 4 })
   })
 
   it.each(['flux-2-max', 'flux-2-pro', 'flux-2-klein-9b', 'flux-2-klein-4b'])('sends %s its size, format and seed with safety 5', (model) => {

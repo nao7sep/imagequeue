@@ -4,12 +4,13 @@ import { buildGeminiImageRequest } from '../../../src/main/backends/nanobanana-r
 import { GEMINI_SAFETY_SETTINGS } from '../../../src/main/text-ai/request'
 import { getModelsForBackend } from '../../../src/shared/ai-models'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
 function makeTask(model: string, params: Record<string, unknown>): Task {
   return {
     id: 't1', prompt: 'a cat', backend: 'nanobanana', model, params, status: 'queued',
     enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null, completedAt: null, durationMs: null,
-    imagePath: null, baseName: null, error: null,
+    imagePath: null, baseName: null, error: null, providerMessage: null,
   }
 }
 
@@ -37,16 +38,9 @@ describe('buildGeminiImageRequest', () => {
     }
   })
 
-  it('sends a task that carries no choices the defaults: 1:1, 1K and the row\'s own thinking', () => {
-    expect(buildGeminiImageRequest(makeTask('gemini-3-pro-image', {})).config).toMatchObject({
-      imageConfig: { aspectRatio: '1:1', imageSize: '1K' }, thinkingConfig: { thinkingLevel: 'MEDIUM' },
-    })
-    expect(buildGeminiImageRequest(makeTask('gemini-3.1-flash-lite-image', { thinking: '' })).config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' })
-  })
-
   it('sends every listed row its safety settings', () => {
     for (const row of getModelsForBackend('nanobanana')) {
-      expect(buildGeminiImageRequest(makeTask(row.id, {})).config.safetySettings, row.id).toEqual(GEMINI_SAFETY_SETTINGS)
+      expect(buildGeminiImageRequest(makeTask(row.id, columnParams('nanobanana', row.id))).config.safetySettings, row.id).toEqual(GEMINI_SAFETY_SETTINGS)
     }
   })
 

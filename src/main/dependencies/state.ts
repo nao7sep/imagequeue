@@ -40,9 +40,7 @@ export function isLaunchCheckDue(lastAttemptAtUtc: string | null, nowMs: number)
  * Compare the local configs.json with the server's by modification time.
  * Install/Refresh stamps the file with the server's Last-Modified, so a current
  * copy carries exactly that time and a copy from before the server's last change
- * carries an earlier one. A file written before stamping began carries its
- * download time instead, which is later than any server change it was fetched
- * after, so it too reads current. 'unknown' when either time is missing.
+ * carries an earlier one. 'unknown' when either time is missing.
  */
 export function compareRecommendations(
   localModifiedUtc: string | null,

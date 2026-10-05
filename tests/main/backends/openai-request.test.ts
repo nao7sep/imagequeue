@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { buildOpenAIImageParams, validateGptImageSize } from '../../../src/main/backends/openai-request'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
+// A task as a column at its defaults queues it, with `params` chosen on top.
 function makeTask(params: Record<string, unknown>, model = 'gpt-image-2.5-flare'): Task {
   return {
     id: 't1',
     prompt: 'a cat',
     backend: 'openai',
     model,
-    params,
+    params: { ...columnParams('openai', model), ...params },
     status: 'queued',
     enqueuedAt: '2026-01-01T00:00:00.000Z',
     startedAt: null,
@@ -17,6 +19,7 @@ function makeTask(params: Record<string, unknown>, model = 'gpt-image-2.5-flare'
     imagePath: null,
     baseName: null,
     error: null,
+    providerMessage: null,
   }
 }
 
@@ -39,18 +42,11 @@ describe('buildOpenAIImageParams', () => {
     }
   })
 
-  it('sends the field defaults for a task that carries none, and omits nothing for equalling them', () => {
-    expect(buildOpenAIImageParams(makeTask({}))).toEqual({
-      model: 'gpt-image-2.5-flare', size: '1024x1024', quality: 'auto', background: 'auto', output_format: 'png', moderation: 'low',
-    })
-  })
-
-  it('sends compression for jpeg and webp only, including its default and zero', () => {
+  it('sends compression for jpeg and webp only, zero included', () => {
     expect(buildOpenAIImageParams(makeTask({ outputFormat: 'png', outputCompression: 80 }))).not.toHaveProperty('output_compression')
     expect(buildOpenAIImageParams(makeTask({ outputFormat: 'jpeg', outputCompression: 80 })).output_compression).toBe(80)
     expect(buildOpenAIImageParams(makeTask({ outputFormat: 'webp', outputCompression: 0 })).output_compression).toBe(0)
     expect(buildOpenAIImageParams(makeTask({ outputFormat: 'webp', outputCompression: 100 })).output_compression).toBe(100)
-    expect(buildOpenAIImageParams(makeTask({ outputFormat: 'jpeg' })).output_compression).toBe(100)
   })
 
   it('does not include the envelope fields (prompt/n/stream) — openai.ts adds those', () => {

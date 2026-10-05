@@ -18,7 +18,8 @@ function makeTask(id: string, status: TaskStatus, backend: BackendId = 'openai')
     durationMs: 1000,
     imagePath: '/x.png',
     baseName: 'x',
-    error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } }
+    error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } },
+    providerMessage: null,
   }
 }
 

@@ -9,7 +9,7 @@ export function buildXaiImageBody(task: Task): Record<string, unknown> {
   switch (task.model) {
     // 2.0 takes a quality beside its ratio and resolution.
     case 'grok-imagine-image-2.0':
-      return { ...plain, ...ratioAndResolution(task), quality: chosen(task, 'quality', 'auto') }
+      return { ...plain, ...ratioAndResolution(task), quality: task.params.quality }
     // grok-imagine-image takes no quality, only its ratio and resolution.
     case 'grok-imagine-image':
       return { ...plain, ...ratioAndResolution(task) }
@@ -18,13 +18,7 @@ export function buildXaiImageBody(task: Task): Record<string, unknown> {
   }
 }
 
-// Every value is sent as chosen, auto included; a value a task does not carry
-// (one queued before the field existed) is sent as the field's default.
-function chosen(task: Task, key: string, fallback: string): string {
-  const value = task.params[key]
-  return typeof value === 'string' && value !== '' ? value : fallback
-}
-
+// Every value is sent as chosen, auto included.
 function ratioAndResolution(task: Task): Record<string, unknown> {
-  return { aspect_ratio: chosen(task, 'aspectRatio', '1:1'), resolution: chosen(task, 'resolution', '1k') }
+  return { aspect_ratio: task.params.aspectRatio, resolution: task.params.resolution }
 }

@@ -18,7 +18,7 @@ function isActiveTask(task: Task): boolean {
 export function normalizeTaskRecord(task: Task): Task {
   return {
     ...task,
-    params: { ...(task.params ?? {}) }
+    params: { ...task.params }
   }
 }
 

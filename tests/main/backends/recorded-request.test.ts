@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
 // Nothing is cut (data-lifecycle-conventions): the FLUX and Grok backends hand
 // the records the request they send, its headers and the key they carry included.
@@ -23,9 +24,9 @@ const { generateFlux } = await import('../../../src/main/backends/flux')
 const { generateGrok } = await import('../../../src/main/backends/grok')
 
 const task = (backend: 'flux' | 'grok', model: string): Task => ({
-  id: 't1', prompt: 'a fox', backend, model, params: {},
+  id: 't1', prompt: 'a fox', backend, model, params: columnParams(backend, model),
   status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
-  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
+  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null, providerMessage: null,
 })
 
 afterEach(() => {

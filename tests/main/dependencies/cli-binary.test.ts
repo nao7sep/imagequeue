@@ -49,6 +49,7 @@ describe('publishCliBinary', () => {
       tag: 'v1.20260101.0',
       sha256: 'b'.repeat(64),
       installedAt: '2026-01-01T00:00:00.000Z',
+      binaryId: String(fs.statSync(getCliBinaryPath(), { bigint: true }).ino),
     }))
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
@@ -58,7 +59,7 @@ describe('publishCliBinary', () => {
     vi.spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
       if (path.resolve(String(destination)) === path.resolve(getCliMetaPath())) {
         metaPublications += 1
-        if (metaPublications === 2) throw new Error('sidecar publication failed')
+        if (metaPublications === 1) throw new Error('sidecar publication failed')
       }
       // POSIX atomically replaces the prior binary. Emulate that behavior on
       // Windows, where renameSync does not replace an existing destination.
@@ -83,6 +84,7 @@ describe('publishCliBinary', () => {
       tag: 'v1.20260101.0',
       sha256: 'b'.repeat(64),
       installedAt: '2026-01-01T00:00:00.000Z',
+      binaryId: String(fs.statSync(getCliBinaryPath(), { bigint: true }).ino),
     }))
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
@@ -116,18 +118,13 @@ describe('readInstalledCliTag', () => {
     }))
   }
 
-  it('still knows the binary after macOS renumbers its device', () => {
-    installWithSidecar((ino, dev) => `${dev + 1n}:${ino}`)
-    expect(readInstalledCliTag()).toBe('v1.20260716.0')
-  })
-
   it('reads a sidecar that records the inode alone', () => {
     installWithSidecar((ino) => String(ino))
     expect(readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
   it('does not name a different file with the recorded tag', () => {
-    installWithSidecar((ino, dev) => `${dev}:${ino + 1n}`)
+    installWithSidecar((ino) => String(ino + 1n))
     expect(readInstalledCliTag()).toBeNull()
   })
 })

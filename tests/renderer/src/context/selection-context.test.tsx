@@ -19,6 +19,7 @@ function task(id: string, status: Task['status'], baseName: string | null = null
     durationMs: null,
     imagePath: baseName ? `/out/${baseName}.png` : null,
     baseName,
+    providerMessage: null,
     error: null,
   }
 }

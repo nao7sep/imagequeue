@@ -18,10 +18,8 @@ import {
 import { createEmptySessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
-import { isMessage } from '../../shared/i18n/translate'
-import { storedProviderReason } from '../provider-reason'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
-import { cloneTask, createEmptyQueues, normalizeTaskRecord, queueManager } from '../queue/queue-manager'
+import { cloneTask, createEmptyQueues, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 import { writeJsonAtomic } from '../utils/atomic-write'
@@ -133,10 +131,7 @@ function getManifestPath(sessionDir = getSessionDir()): string {
   return path.join(sessionDir, SESSION_MANIFEST_FILENAME)
 }
 
-// A stored elaborated-prompt entry: a record, or the bare string of an older
-// manifest (normalized to a record on read).
-function isElaboratedPromptEntry(entry: unknown): boolean {
-  if (typeof entry === 'string') return true
+function isElaboratedPromptEntry(entry: unknown): entry is ElaboratedPromptRecord {
   if (!entry || typeof entry !== 'object') return false
   const candidate = entry as Partial<ElaboratedPromptRecord>
   return (
@@ -150,29 +145,17 @@ function isElaboratedPromptEntry(entry: unknown): boolean {
   )
 }
 
-/** Repair one stored entry: legacy strings become credit-less records, and
- *  anything neither shape yields null for the caller to drop. */
-function normalizeElaboratedPrompt(entry: unknown): ElaboratedPromptRecord | null {
-  if (typeof entry === 'string') return { text: entry, concepts: [] }
-  if (!isElaboratedPromptEntry(entry)) return null
-  const record = entry as ElaboratedPromptRecord
-  return { text: record.text, concepts: record.concepts.map((c) => ({ ...c })) }
-}
-
-/** All entries, repaired; unrecognizable ones dropped with a warn. Exported
- *  for the tests that pin the repair behavior. */
+/** The entries that are records; anything else is dropped with a warn.
+ *  Exported for the tests that pin it. */
 export function normalizeElaboratedPrompts(entries: readonly unknown[]): ElaboratedPromptRecord[] {
-  const repaired: ElaboratedPromptRecord[] = []
-  let dropped = 0
-  for (const entry of entries) {
-    const record = normalizeElaboratedPrompt(entry)
-    if (record) repaired.push(record)
-    else dropped++
+  const kept = entries.filter(isElaboratedPromptEntry).map((record) => ({
+    text: record.text,
+    concepts: record.concepts.map((c) => ({ ...c })),
+  }))
+  if (kept.length < entries.length) {
+    log('warn', 'Dropped unrecognizable elaborated-prompt entries', { dropped: entries.length - kept.length, kept: kept.length })
   }
-  if (dropped > 0) {
-    log('warn', 'Dropped unrecognizable elaborated-prompt entries', { dropped, kept: repaired.length })
-  }
-  return repaired
+  return kept
 }
 
 // A manifest as read: its format version is checked and set aside before this.
@@ -185,13 +168,11 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
-  // Shape only — entries are repaired on read, not validated here. This field
-  // sits inside the all-or-nothing manifest check, and no prompt entry ever
-  // justifies costing a session its task history: like the draft below, bad
-  // entries are dropped by normalizeElaboratedPrompts instead of failing the
-  // whole file. (An earlier cut validated each entry and would have made one
-  // truncated write unresumable.)
+  // Shape only: no prompt entry justifies costing a session its task history,
+  // so an entry that is not a record is dropped by normalizeElaboratedPrompts,
+  // and a malformed draft field reads as its empty value.
   if (!Array.isArray(candidate.elaboratedPrompts)) return false
+  if (!candidate.draft || typeof candidate.draft !== 'object') return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
@@ -214,18 +195,10 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
-    const normalizedTasks = createEmptyQueues()
-    for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-      normalizedTasks[backend] = parsed.tasks[backend].map(readStoredTask)
-    }
     return { manifest: {
       ...parsed,
       elaboratedPrompts: normalizeElaboratedPrompts(parsed.elaboratedPrompts),
-      // draft is intentionally not validated by isSessionManifest: a missing or
-      // malformed draft must not discard an otherwise-good session, so it is
-      // repaired to a clean draft here instead.
-      draft: normalizeSessionDraft((parsed as Partial<SessionManifest>).draft),
-      tasks: normalizedTasks,
+      draft: normalizeSessionDraft(parsed.draft),
     } }
   } catch (error) {
     // An unreadable or newer manifest is listed, never opened, so nothing
@@ -236,21 +209,6 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
       error: serializeError(error),
     })
     return { manifest: null, problem: newer ? 'newer' : 'unreadable' }
-  }
-}
-
-// A task as a stored session brings it back. A failure recorded as plain words
-// is dropped, since an older build stored the raw diagnostic there, and a
-// provider message an older build kept as the whole error body is reduced to
-// the provider's reason.
-export function readStoredTask(task: Task): Task {
-  const stored = normalizeTaskRecord(task)
-  return {
-    ...stored,
-    error: isMessage(stored.error) ? stored.error : null,
-    ...(typeof stored.providerMessage === 'string'
-      ? { providerMessage: storedProviderReason(stored.providerMessage, stored.backend) }
-      : {}),
   }
 }
 

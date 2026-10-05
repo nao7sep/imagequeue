@@ -14,8 +14,8 @@ export function buildFluxBody(task: Task): Record<string, unknown> {
     case 'flux-3-image':
       return {
         ...plain,
-        aspect_ratio: chosen(task, 'aspectRatio', '1:1'),
-        resolution: chosen(task, 'resolution', '1k'),
+        aspect_ratio: task.params.aspectRatio,
+        resolution: task.params.resolution,
         safety_tolerance: 4,
       }
     // Flex alone takes steps and guidance.
@@ -36,18 +36,11 @@ export function buildFluxBody(task: Task): Record<string, unknown> {
   }
 }
 
-// A value a task does not carry (one queued before the field existed) is sent
-// as the field's default.
-function chosen(task: Task, key: string, fallback: string): string {
-  const value = task.params[key]
-  return typeof value === 'string' && value !== '' ? value : fallback
-}
-
 // Prompt upsampling is not sent, so BFL's default applies; 5 is FLUX.2's most
 // permissive safety tolerance. A seed is sent only when the user gave one.
 function flux2Body(task: Task, plain: { prompt: string }): Record<string, unknown> {
-  const width = (task.params.width as number) || 1024
-  const height = (task.params.height as number) || 1024
+  const width = task.params.width as number
+  const height = task.params.height as number
   // The same limits the size ladder is built from, so a preset can never fail here.
   if (width % FLUX_SIZE_STEP !== 0 || height % FLUX_SIZE_STEP !== 0) {
     throw new Error(`FLUX dimensions must be multiples of ${FLUX_SIZE_STEP}`)
@@ -59,7 +52,7 @@ function flux2Body(task: Task, plain: { prompt: string }): Record<string, unknow
     ...plain,
     width,
     height,
-    output_format: chosen(task, 'outputFormat', 'png'),
+    output_format: task.params.outputFormat,
     safety_tolerance: 5,
     ...(task.params.seed != null ? { seed: task.params.seed } : {}),
   }

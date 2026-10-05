@@ -170,14 +170,12 @@ export interface Task {
   durationMs: number | null
   imagePath: string | null
   baseName: string | null
-  // Why the task failed, as a message rendered in the current language. Words an
-  // older build stored here are dropped when the session is read.
+  // Why the task failed, as a message rendered in the current language.
   error: Message | null
   // The provider's human-readable reason when this attempt failed — the message
   // field of its error body as the provider wrote it, never the raw body; null when
-  // the failure was not a provider answer or it gave no reason. Absent on tasks a session
-  // recorded before this was kept — unknown, not inferred.
-  providerMessage?: string | null
+  // the failure was not a provider answer or it gave no reason.
+  providerMessage: string | null
 }
 
 export interface EnqueueRequest {
@@ -203,8 +201,7 @@ export interface ConceptCredit {
 
 /**
  * One elaborated prompt with the ledger assignment that grounded it. `concepts`
- * is empty for prompts that predate concept credits (older manifests store bare
- * strings, normalized on read) and for anything not produced by a brainstorm.
+ * is empty for anything not produced by a brainstorm.
  */
 export interface ElaboratedPromptRecord {
   text: string
@@ -230,9 +227,7 @@ export interface SessionManifest {
   taskCounts: SessionTaskCounts
   elaboratedPrompts: ElaboratedPromptRecord[]
   // The renderer's working state for this session (prompt + Advanced Prompting
-  // selections). Optional on disk: manifests written before this field existed,
-  // or with a malformed draft, load fine and are backfilled with an empty draft
-  // on read (see normalizeSessionDraft).
+  // selections); a malformed field reads as its empty value (normalizeSessionDraft).
   draft: SessionDraft
   tasks: Record<BackendId, Task[]>
 }

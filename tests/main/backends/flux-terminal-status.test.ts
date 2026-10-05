@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
 // BFL ends a moderated request with a status of its own ("Request Moderated",
 // "Content Moderated", "Task not found"). Only Ready/Error/Failed used to stop
@@ -22,9 +23,9 @@ const generationFailurePresentation = (...args: Parameters<typeof failurePresent
   english.text(failurePresentation.generationFailurePresentation(...args))
 
 const task: Task = {
-  id: 't1', prompt: 'p', backend: 'flux', model: 'flux-2-pro', params: {},
+  id: 't1', prompt: 'p', backend: 'flux', model: 'flux-2-pro', params: columnParams('flux', 'flux-2-pro'),
   status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
-  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
+  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null, providerMessage: null,
 }
 
 function stubPolls(statuses: string[]): ReturnType<typeof vi.fn> {

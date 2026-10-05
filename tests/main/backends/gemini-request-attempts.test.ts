@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
 // Each Gemini client passes `retryOptions: { attempts: 1 }`, so the SDK sends
 // one request per call and the app's own retry policy decides every resend:
@@ -34,9 +35,9 @@ afterEach(() => {
 })
 
 const task: Task = {
-  id: 't1', prompt: 'a cat', backend: 'nanobanana', model: 'gemini-3-pro-image', params: {},
+  id: 't1', prompt: 'a cat', backend: 'nanobanana', model: 'gemini-3-pro-image', params: columnParams('nanobanana', 'gemini-3-pro-image'),
   status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
-  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
+  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null, providerMessage: null,
 }
 
 describe('Gemini request attempt ownership', () => {

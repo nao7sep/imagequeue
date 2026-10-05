@@ -21,7 +21,7 @@ const { generateGrok } = await import('../../../src/main/backends/grok')
 const task: Task = {
   id: 't1', prompt: 'p', backend: 'grok', model: 'grok-imagine-image', params: {},
   status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
-  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
+  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null, providerMessage: null,
 }
 
 afterEach(() => {

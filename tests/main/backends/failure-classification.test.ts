@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
 // Presentation reads a failure's type and status, never its message. These run
 // the errors the backends actually throw through it, so a backend that goes back
@@ -37,9 +38,9 @@ const generationFailurePresentation = (...args: Parameters<typeof failurePresent
 
 function task(backend: Task['backend'], model: string): Task {
   return {
-    id: 't1', prompt: 'p', backend, model, params: {},
+    id: 't1', prompt: 'p', backend, model, params: columnParams(backend, model),
     status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
-    completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
+    completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null, providerMessage: null,
   }
 }
 

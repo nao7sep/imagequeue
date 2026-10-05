@@ -97,7 +97,10 @@ describe('a present CLI whose version cannot be read', () => {
     placeBinaryWithoutSidecar()
     fs.writeFileSync(
       path.join(home, 'bin', 'draw-things-cli.json'),
-      JSON.stringify({ formatVersion: 1, tag: 'v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z' }),
+      JSON.stringify({
+        formatVersion: 1, tag: 'v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z',
+        binaryId: String(fs.statSync(path.join(home, 'bin', 'draw-things-cli'), { bigint: true }).ino),
+      }),
     )
     resolveMock.mockResolvedValue({ tag: 'v1.20260430.0', assetUrl: 'https://x', sha256: 'a' })
 

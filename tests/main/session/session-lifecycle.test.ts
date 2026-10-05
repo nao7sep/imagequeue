@@ -69,6 +69,7 @@ function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Ta
     imagePath: status === 'completed' || status === 'kept' ? '/x.png' : null,
     baseName: status === 'completed' || status === 'kept' ? `base-${id}` : null,
     error: null,
+    providerMessage: null,
     ...extra,
   }
 }
@@ -280,28 +281,23 @@ describe('resuming a session', () => {
     expect(readManifest(staged).lastResumedAt, 'the resume is stamped on disk').not.toBeNull()
   })
 
-  it('keeps a failed task failed, with its reason and no raw provider body', async () => {
-    const raw = '{"code":"imagine:content-moderated","error":"Generated image rejected by content moderation.","usage":{"cost_in_usd_ticks":600000000}}'
+  it('keeps a failed task failed, with its reason and the provider\'s words', async () => {
     const refusal = { key: 'taskFailure.refused', values: { name: 'Grok' } } as const
-    const staged = stageSession('20260111-000000-utc', {
+    stageSession('20260111-000000-utc', {
       tasks: withTasks([
-        makeTask('refused', 'failed', { backend: 'grok', error: refusal, providerMessage: raw }),
-        makeTask('old', 'failed', { backend: 'grok', error: `Grok API error 400: ${raw}` as unknown as Task['error'] }),
+        makeTask('refused', 'failed', { backend: 'grok', error: refusal, providerMessage: 'Generated image rejected by content moderation.' }),
       ]),
     })
 
     await resumeSession('20260111-000000-utc')
 
-    const [refused, old] = queueManager.getAllStoredTasks().grok
-    expect(refused).toMatchObject({
+    expect(queueManager.getAllStoredTasks().grok).toEqual([expect.objectContaining({
       status: 'failed',
       error: refusal,
       providerMessage: 'Generated image rejected by content moderation.',
       startedAt: '2026-01-01T00:00:01.000Z',
-    })
-    expect(old).toMatchObject({ status: 'failed', error: null })
+    })])
     expect(sent('session:interruptedTasks')).toEqual([])
-    expect(fs.readFileSync(path.join(staged, 'session.json'), 'utf-8')).not.toContain('cost_in_usd_ticks')
   })
 
   it('says nothing about interruptions when everything had finished', async () => {

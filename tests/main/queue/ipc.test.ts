@@ -75,6 +75,7 @@ function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Ta
     imagePath: null,
     baseName: null,
     error: null,
+    providerMessage: null,
     ...extra,
   }
 }

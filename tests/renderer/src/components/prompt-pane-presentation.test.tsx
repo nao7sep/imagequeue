@@ -49,6 +49,7 @@ const selectedTask: Task = {
   imagePath: null,
   baseName: null,
   error: null,
+  providerMessage: null,
 }
 
 const completedTask: Task = {

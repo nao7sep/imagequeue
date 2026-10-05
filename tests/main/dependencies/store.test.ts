@@ -89,23 +89,6 @@ describe('dependencies cache', () => {
     fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: 1, lastAttemptAtUtc: 42 }))
     expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
   })
-
-  it('ignores obsolete recommendation-check facts from a pre-release store', () => {
-    fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-    fs.writeFileSync(
-      getDependenciesStatePath(),
-      JSON.stringify({
-        formatVersion: 1,
-        cli: { lastKnownLatest: 'v1.0.0', lastCheckedAtUtc: null },
-        recommendations: { lastCheckedAtUtc: '2026-06-30T01:00:00.000Z' },
-      })
-    )
-    expect(readDependenciesCache()).toEqual({
-      lastAttemptAtUtc: null,
-      cli: { lastKnownLatest: 'v1.0.0', lastCheckedAtUtc: null },
-      recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
-    })
-  })
 })
 
 describe('dependencies cache format version', () => {

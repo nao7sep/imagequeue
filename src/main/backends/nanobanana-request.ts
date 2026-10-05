@@ -1,6 +1,5 @@
 import type { GenerateContentConfig, ThinkingLevel } from '@google/genai'
 import type { Task } from '../../shared/types'
-import { findModel } from '../../shared/ai-models'
 import { GEMINI_SAFETY_SETTINGS } from '../text-ai/request'
 
 // Pure request-shaping for the Gemini image backend; nanobanana.ts performs the
@@ -29,16 +28,10 @@ export function buildGeminiImageRequest(task: Task): GeminiImageRequest {
   }
 }
 
-// A value a task does not carry (one queued before the field existed) is sent
-// as the field's default.
 function imageConfig(task: Task): { aspectRatio: string; imageSize: string } {
-  return {
-    aspectRatio: (task.params.aspectRatio as string | undefined) ?? '1:1',
-    imageSize: (task.params.imageSize as string | undefined) ?? '1K',
-  }
+  return { aspectRatio: task.params.aspectRatio as string, imageSize: task.params.imageSize as string }
 }
 
 function thinking(task: Task): string {
-  const chosen = task.params.thinking
-  return typeof chosen === 'string' && chosen !== '' ? chosen : findModel('nanobanana', task.model)!.defaultThinking
+  return task.params.thinking as string
 }

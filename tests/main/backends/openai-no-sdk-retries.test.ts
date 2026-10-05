@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
+import { columnParams } from './column-params'
 
 // The OpenAI SDK resends a timed-out, 408/409/429 or 5xx request twice by
 // default. An image generation is paid and not idempotent, so every resend can
@@ -34,9 +35,9 @@ afterEach(() => {
 })
 
 const task: Task = {
-  id: 't1', prompt: 'a cat', backend: 'openai', model: 'gpt-image-2', params: {},
+  id: 't1', prompt: 'a cat', backend: 'openai', model: 'gpt-image-2', params: columnParams('openai', 'gpt-image-2'),
   status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
-  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null,
+  completedAt: null, durationMs: null, imagePath: null, baseName: null, error: null, providerMessage: null,
 }
 
 describe('OpenAI clients send each paid request once', () => {

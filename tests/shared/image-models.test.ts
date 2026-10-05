@@ -30,7 +30,7 @@ const BUILDERS: Record<CloudBackendId, (task: Task) => unknown> = {
 // Params every row of the backend takes, so a branch has something to send.
 const SAMPLE_PARAMS: Record<CloudBackendId, Record<string, unknown>> = {
   openai: { width: 1024, height: 1024 },
-  nanobanana: { aspectRatio: '1:1', imageSize: '1K' },
+  nanobanana: { aspectRatio: '1:1', imageSize: '1K', thinking: 'high' },
   grok: { aspectRatio: '1:1', resolution: '1k' },
   flux: { width: 1024, height: 1024, aspectRatio: '1:1', resolution: '1k' },
 }
@@ -39,7 +39,7 @@ function imageTask(backend: CloudBackendId, model: string, params: Record<string
   return {
     id: 't1', prompt: 'a cat', backend, model, params, status: 'queued',
     enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null, completedAt: null, durationMs: null,
-    imagePath: null, baseName: null, error: null,
+    imagePath: null, baseName: null, error: null, providerMessage: null,
   }
 }
 

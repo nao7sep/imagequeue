@@ -245,9 +245,6 @@ function isElaborator(value: unknown): value is Elaborator {
   if (!value || typeof value !== 'object') return false
   const v = value as Partial<Elaborator>
   if (typeof v.id !== 'string' || !v.id) return false
-  // A stored file from before the content lane was removed will carry
-  // kind: 'content' rows; they fail this check and are dropped on read, which is
-  // the intended outcome — the lane no longer exists and nothing consumes them.
   if (!(v.kind === 'composition' || v.kind === 'style')) return false
   if (typeof v.name !== 'string') return false
   if (typeof v.template !== 'string') return false

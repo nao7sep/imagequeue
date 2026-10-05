@@ -175,6 +175,7 @@ function task(status: Task['status'], error: Message | null = null): Task {
     imagePath: null,
     baseName: null,
     error,
+    providerMessage: null,
   }
 }
 

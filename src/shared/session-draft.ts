@@ -127,11 +127,11 @@ function normalizeStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string')
 }
 
-// Rebuilds a complete, valid SessionDraft from arbitrary input. Unknown or
-// malformed fields fall back to their empty-draft defaults rather than the whole
-// object being rejected, so a partial draft (written by an older build) or a
-// corrupted one degrades to a clean draft without taking the session's task
-// history down with it. Also serves as a deep clone for trusted input.
+// Rebuilds a complete, valid SessionDraft from a draft the renderer sends or a
+// session stores. A malformed field falls back to its empty-draft value rather
+// than the whole object being rejected, so a corrupted draft degrades to a
+// clean one without taking the session's task history down with it. Also
+// serves as a deep clone for trusted input.
 export function normalizeSessionDraft(value: unknown): SessionDraft {
   const base = createEmptySessionDraft()
   if (!value || typeof value !== 'object' || Array.isArray(value)) return base

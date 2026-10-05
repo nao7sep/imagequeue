@@ -1,7 +1,6 @@
 import type { ImageGenerateParamsNonStreaming } from 'openai/resources/images'
 import type { Task } from '../../shared/types'
 import {
-  OPENAI_COMPRESSION_RANGE,
   OPENAI_IMAGE_MAX_ASPECT_RATIO,
   OPENAI_IMAGE_MAX_EDGE,
   OPENAI_IMAGE_MAX_PIXELS,
@@ -56,25 +55,23 @@ export function buildOpenAIImageParams(task: Task): OpenAIImageParams {
   }
 }
 
-// Every field is sent as chosen, `auto` included; a value a task does not carry
-// (one queued before the field existed) is sent as the field's default.
-// Moderation is not a choice: the most permissive value is always sent.
+// Every field is sent as chosen, `auto` included. Moderation is not a choice:
+// the most permissive value is always sent.
 function gptImageParams(task: Task): OpenAIImageParams {
-  const width = (task.params.width as number) || 1024
-  const height = (task.params.height as number) || 1024
+  const width = task.params.width as number
+  const height = task.params.height as number
   validateGptImageSize(width, height)
-  const outputFormat = (task.params.outputFormat as OpenAIOutputFormat | undefined) ?? 'png'
-  const compression = task.params.outputCompression as number | undefined
+  const outputFormat = task.params.outputFormat as OpenAIOutputFormat
   return {
     model: task.model,
     // The SDK's `size` type is `(string & {}) | 'auto' | '1024x1024' | … | null`,
     // so an arbitrary WIDTHxHEIGHT string is accepted directly.
     size: `${width}x${height}`,
-    quality: (task.params.quality as OpenAIQuality | undefined) ?? 'auto',
-    background: (task.params.background as OpenAIBackground | undefined) ?? 'auto',
+    quality: task.params.quality as OpenAIQuality,
+    background: task.params.background as OpenAIBackground,
     output_format: outputFormat,
     // Compression applies to jpeg and webp only.
-    ...(outputFormat !== 'png' && { output_compression: compression ?? OPENAI_COMPRESSION_RANGE.default }),
+    ...(outputFormat !== 'png' && { output_compression: task.params.outputCompression as number }),
     moderation: 'low',
   }
 }
