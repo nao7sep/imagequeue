@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
 import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
 import type { DependenciesState } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 afterEach(cleanup)
 
@@ -49,7 +50,7 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
 
-    const cliRow = (await screen.findByRole('heading', { name: 'Draw Things CLI' })).closest('section')
+    const cliRow = (await until(() => screen.getByRole('heading', { name: 'Draw Things CLI' }))).closest('section')
     const recommendationsRow = screen.getByRole('heading', { name: 'Recommended parameters' }).closest('section')
     expect(cliRow).not.toBeNull()
     expect(recommendationsRow).not.toBeNull()
@@ -75,7 +76,7 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Managed tools could not be checked')
+    expect((await until(() => screen.getByRole('alert'))).textContent).toContain('Managed tools could not be checked')
     expect(screen.getByRole('alert').textContent).not.toContain('state unavailable')
     expect(screen.getByText('Couldn’t load managed-tool status.')).toBeTruthy()
   })
@@ -96,7 +97,7 @@ describe('DependenciesModal cancellation', () => {
 
     renderModal()
 
-    expect(await screen.findByText(/^Version unreadable/)).toBeTruthy()
+    expect(await until(() => screen.getByText(/^Version unreadable/))).toBeTruthy()
     expect(screen.queryByText(/^version unreadable/)).toBeNull()
   })
 
@@ -113,9 +114,9 @@ describe('DependenciesModal cancellation', () => {
     window.electronAPI = api as unknown as typeof window.electronAPI
 
     renderModal(onClose)
-    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(installButtons[0])
-    await waitFor(() => expect(installCli).toHaveBeenCalledTimes(1))
+    await until(() => expect(installCli).toHaveBeenCalledTimes(1))
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel and close' }))
 
@@ -149,14 +150,14 @@ describe('DependenciesModal cancellation', () => {
     }
 
     render(<Harness />)
-    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(installButtons[0])
-    await waitFor(() => expect(installCli).toHaveBeenCalledTimes(1))
+    await until(() => expect(installCli).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel and close' }))
-    await waitFor(() => expect(cancelDependencyOperations).toHaveBeenCalledTimes(1))
+    await until(() => expect(cancelDependencyOperations).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
 
-    expect(await screen.findByRole('status')).toBeTruthy()
+    expect(await until(() => screen.getByRole('status'))).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0])
     expect(screen.queryByText('Cancelled')).toBeNull()
   })
@@ -175,10 +176,10 @@ describe('DependenciesModal cancellation', () => {
     window.electronAPI = api as unknown as typeof window.electronAPI
 
     renderModal()
-    await screen.findAllByRole('button', { name: 'Install' })
+    await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
 
-    expect((await screen.findByRole('alert')).textContent).toContain('managed-tool operation could not be completed')
+    expect((await until(() => screen.getByRole('alert'))).textContent).toContain('managed-tool operation could not be completed')
     expect(screen.getByRole('alert').textContent).not.toContain('Draw Things CLI: offline')
     expect(getDependenciesState).toHaveBeenCalledTimes(2)
   })
@@ -200,10 +201,10 @@ describe('DependenciesModal cancellation', () => {
     } as unknown as typeof window.electronAPI
 
     renderModal()
-    await screen.findAllByRole('button', { name: 'Install' })
+    await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
 
-    const result = await screen.findByRole('alert')
+    const result = await until(() => screen.getByRole('alert'))
     expect(result.textContent).toContain('managed-tool operation could not be completed')
     expect(result.textContent).not.toContain('IMAGEQUEUE_RECONCILE_SENTINEL')
     expect(appLog).toHaveBeenCalledWith(
@@ -231,10 +232,10 @@ describe('DependenciesModal cancellation', () => {
     } as unknown as typeof window.electronAPI
 
     renderModal()
-    const refresh = await screen.findByRole('button', { name: 'Refresh' })
+    const refresh = await until(() => screen.getByRole('button', { name: 'Refresh' }))
     const recommendationsRow = refresh.closest('section')
     fireEvent.click(refresh)
-    await waitFor(() => expect(downloadRecommendations).toHaveBeenCalledTimes(1))
+    await until(() => expect(downloadRecommendations).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('dialog', { name: 'Managed tools' })).toBeTruthy()
     expect(recommendationsRow?.textContent).not.toContain('never checked')
   })
@@ -272,15 +273,15 @@ describe('DependenciesModal cancellation', () => {
     }
 
     render(<Harness />)
-    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(installButtons[0])
-    await waitFor(() => expect(installCli).toHaveBeenCalledTimes(1))
+    await until(() => expect(installCli).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Replace view' }))
     finishInstall?.(installed)
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Managed tools' })).toBeNull())
+    await until(() => expect(screen.queryByRole('dialog', { name: 'Managed tools' })).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
 
-    expect(await screen.findByText(/^1\.2\.3/)).toBeTruthy()
+    expect(await until(() => screen.getByText(/^1\.2\.3/))).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
   })
 
@@ -305,13 +306,13 @@ describe('DependenciesModal cancellation', () => {
     }
 
     render(<Harness />)
-    await screen.findAllByRole('button', { name: 'Install' })
+    await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
-    expect(await screen.findByText(/managed-tool operation could not be completed/)).toBeTruthy()
+    expect(await until(() => screen.getByText(/managed-tool operation could not be completed/))).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[1])
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
 
-    expect(await screen.findByText(/managed-tool operation could not be completed/)).toBeTruthy()
+    expect(await until(() => screen.getByText(/managed-tool operation could not be completed/))).toBeTruthy()
     expect(screen.queryByText('CLI service unavailable')).toBeNull()
   })
 
@@ -348,14 +349,14 @@ describe('DependenciesModal cancellation', () => {
     } as unknown as typeof window.electronAPI
 
     renderModal()
-    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
     fireEvent.click(installButtons[0])
     fireEvent.click(installButtons[1])
     finishCli?.(cliInstalled)
-    await screen.findByText(/^2\.0\.0/)
+    await until(() => screen.getByText(/^2\.0\.0/))
     finishRecommendations?.(recommendationsInstalled)
 
-    expect(await screen.findByText(/^24 entries/)).toBeTruthy()
+    expect(await until(() => screen.getByText(/^24 entries/))).toBeTruthy()
     expect(screen.getByText(/^2\.0\.0/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
@@ -385,14 +386,14 @@ describe('DependenciesModal cancellation', () => {
     } as unknown as typeof window.electronAPI
 
     renderModal()
-    const installButtons = await screen.findAllByRole('button', { name: 'Install' })
+    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
     window.dispatchEvent(new Event('focus'))
-    await waitFor(() => expect(getDependenciesState).toHaveBeenCalledTimes(2))
+    await until(() => expect(getDependenciesState).toHaveBeenCalledTimes(2))
     fireEvent.click(installButtons[0])
-    expect(await screen.findByText(/^3\.0\.0/)).toBeTruthy()
+    expect(await until(() => screen.getByText(/^3\.0\.0/))).toBeTruthy()
     finishStaleRefresh?.(initialState)
 
-    await waitFor(() => {
+    await until(() => {
       expect(screen.getByText(/^3\.0\.0/)).toBeTruthy()
       expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1)
     })
@@ -431,7 +432,7 @@ describe('DependenciesModal checking', () => {
     }))
     renderModal()
 
-    const row = (await screen.findByRole('heading', { name: 'Recommended parameters' })).closest('section')
+    const row = (await until(() => screen.getByRole('heading', { name: 'Recommended parameters' }))).closest('section')
     expect(within(row as HTMLElement).getByText('Update available', { selector: '.dependency-badge' })).toBeTruthy()
     expect(within(row as HTMLElement).getByRole('button', { name: 'Update' })).toBeTruthy()
     expect(within(row as HTMLElement).queryByRole('button', { name: 'Refresh' })).toBeNull()
@@ -444,7 +445,7 @@ describe('DependenciesModal checking', () => {
     }))
     renderModal()
 
-    const updates = (await screen.findByRole('heading', { name: 'Updates' })).closest('section') as HTMLElement
+    const updates = (await until(() => screen.getByRole('heading', { name: 'Updates' }))).closest('section') as HTMLElement
     expect(within(updates).getByText('Never')).toBeTruthy()
     expect(within(updates).getByRole('button', { name: 'Check for updates' })).toBeTruthy()
     expect(within(updates).getByRole('checkbox', { name: 'Check for updates at launch' })).toBeTruthy()

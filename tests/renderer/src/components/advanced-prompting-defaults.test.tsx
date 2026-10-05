@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createEmptySessionDraft } from '../../../../src/shared/session-draft'
 import type { Elaborator } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 // Opening Advanced Prompting fills its defaults on screen and saves nothing;
 // the draft changes only when the user edits a field.
@@ -68,7 +69,7 @@ describe('Advanced Prompting defaults', () => {
     render(<AdvancedPromptingModal onClose={() => {}} />)
 
     expect(seedField().value).toBe('a cat on a shelf')
-    expect(((await screen.findByRole('radio', { name: /Wide shot/ })) as HTMLInputElement).checked).toBe(true)
+    expect(((await until(() => screen.getByRole('radio', { name: /Wide shot/ }))) as HTMLInputElement).checked).toBe(true)
     expect((screen.getByRole('radio', { name: /Watercolour/ }) as HTMLInputElement).checked, 'a vanished choice shows the first').toBe(true)
     expect(update).not.toHaveBeenCalled()
   })
@@ -79,14 +80,14 @@ describe('Advanced Prompting defaults', () => {
     render(<AdvancedPromptingModal onClose={() => {}} />)
 
     expect(seedField().value).toBe('a dog')
-    expect(((await screen.findByRole('radio', { name: /Close-up/ })) as HTMLInputElement).checked).toBe(true)
+    expect(((await until(() => screen.getByRole('radio', { name: /Close-up/ }))) as HTMLInputElement).checked).toBe(true)
     expect(update).not.toHaveBeenCalled()
   })
 
   it('saves what the user edits, and an emptied seed stays empty', async () => {
     render(<AdvancedPromptingModal onClose={() => {}} />)
 
-    fireEvent.click(await screen.findByRole('radio', { name: /Close-up/ }))
+    fireEvent.click(await until(() => screen.getByRole('radio', { name: /Close-up/ })))
     expect(update).toHaveBeenCalledWith({ selectedCompositionElaboratorId: 'c2' })
 
     fireEvent.change(seedField(), { target: { value: '' } })

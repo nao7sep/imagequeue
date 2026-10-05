@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { until } from '../../until'
 
 // The theme is one Settings › General choice of System, Light, or Dark, staged
 // with the rest of the form and applied only by Save (app-chrome conventions).
@@ -84,7 +85,7 @@ describe('Settings theme choice', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    await until(() => expect(save).toHaveBeenCalledTimes(1))
     expect((save.mock.calls[0]![1] as { general: { theme: string } }).general.theme).toBe('light')
   })
 })

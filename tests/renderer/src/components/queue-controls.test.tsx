@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, act, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, act, cleanup } from '@testing-library/react'
 import type { QueueControlState } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 // Four commands on two orthogonal axes. Pause/Resume is a MODE — the user's
 // standing choice that nothing new starts. Stop, Retry, and Clear are ACTS on
@@ -64,14 +65,14 @@ describe('QueuePausedBadge', () => {
   it('says nothing while the queue is running', async () => {
     stubApi({ paused: false })
     render(<QueuePausedBadge />)
-    await waitFor(() => expect(window.electronAPI.getQueueControlState).toHaveBeenCalled())
+    await until(() => expect(window.electronAPI.getQueueControlState).toHaveBeenCalled())
     expect(screen.queryByText('Paused')).toBeNull()
   })
 
   it('shows the standing state once the queue is paused', async () => {
     stubApi({ paused: true })
     render(<QueuePausedBadge />)
-    await waitFor(() => expect(screen.getByText('Paused')).toBeTruthy())
+    await until(() => expect(screen.getByText('Paused')).toBeTruthy())
   })
 })
 

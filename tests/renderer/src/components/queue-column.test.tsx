@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, act, cleanup, within, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react'
 import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task } from '../../../../src/shared/types'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend, getModelsForBackend } from '../../../../src/shared/ai-models'
@@ -519,9 +519,13 @@ describe('cloud columns: a field the current model does not take', () => {
   // The settings the app reads back after each autosave hold only the current
   // model's fields; reading them back must not reset what the column holds for
   // another model or format.
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   async function saveAndReadBack(rerender: (ui: React.ReactElement) => void, ui: () => React.ReactElement): Promise<void> {
-    await waitFor(() => expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalled(), { timeout: 3000 })
-    await flush()
+    await advanceAutosave()
+    expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalled()
     const [backend, model, params] = settingsValue.saveImageBackendDefaults.mock.lastCall as [string, string, Record<string, unknown>]
     settingsValue.settings = { image_backends: { [backend]: { model, default_params: params } } }
     rerender(ui())

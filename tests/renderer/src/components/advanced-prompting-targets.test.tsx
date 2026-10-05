@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createEmptySessionDraft } from '../../../../src/shared/session-draft'
+import { until } from '../../until'
 
 // A column whose saved model is not in the list still queues, with the plain
 // request, and is a target here as from the column itself; its row warns that
@@ -63,10 +64,10 @@ describe('Advanced Prompting targets', () => {
     expect(openai.disabled).toBe(false)
     expect(screen.getAllByText('Model not in the list')).toHaveLength(1)
 
-    const queue = await screen.findByRole('button', { name: /Queue/ })
-    await waitFor(() => expect((queue as HTMLButtonElement).disabled).toBe(false))
+    const queue = await until(() => screen.getByRole('button', { name: /Queue/ }))
+    await until(() => expect((queue as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(queue)
-    await waitFor(() => expect(enqueueBatch).toHaveBeenCalledOnce())
+    await until(() => expect(enqueueBatch).toHaveBeenCalledOnce())
     const units = enqueueBatch.mock.calls[0]![0] as { backend: string; model: string; params: unknown }[]
     expect(units.map(({ backend, model, params }) => ({ backend, model, params }))).toEqual([
       { backend: 'openai', model: 'gpt-image-1.5', params: {} },

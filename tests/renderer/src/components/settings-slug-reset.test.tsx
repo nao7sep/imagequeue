@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { until } from '../../until'
 
 // Reset slug template fills the draft with the shipped template and stores
 // nothing of its own: Save sends the draft like any other edit, and main removes
@@ -64,7 +65,7 @@ afterEach(cleanup)
 
 async function resetSlug(): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'Reset slug template', hidden: true }))
-  await waitFor(() => expect(screen.getByDisplayValue('shipped slug')).toBeTruthy())
+  await until(() => expect(screen.getByDisplayValue('shipped slug')).toBeTruthy())
 }
 
 describe('Reset slug template', () => {
@@ -74,7 +75,7 @@ describe('Reset slug template', () => {
     expect(settingsValue.saveChangedSettings).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    await until(() => expect(save).toHaveBeenCalledTimes(1))
     expect(save.mock.calls[0]).toHaveLength(2)
     expect((save.mock.calls[0]![1] as { prompts: { slug: string } }).prompts.slug).toBe('shipped slug')
   })
@@ -84,7 +85,7 @@ describe('Reset slug template', () => {
     renderWith('system', onClose)
     await resetSlug()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    await until(() => expect(onClose).toHaveBeenCalled())
     expect(settingsValue.saveChangedSettings).not.toHaveBeenCalled()
   })
 })

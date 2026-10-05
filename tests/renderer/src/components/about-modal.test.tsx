@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../../until'
 
 const { AboutModal } = await import('../../../../src/renderer/src/components/AboutModal')
 
@@ -25,7 +26,7 @@ describe('AboutModal external links', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /GitHub/ }))
     fireEvent.click(screen.getByRole('link', { name: /Report Issue/ }))
-    expect(await screen.findAllByRole('alert')).toHaveLength(2)
+    expect(await until(() => screen.getAllByRole('alert'))).toHaveLength(2)
 
     const presented = screen.getAllByRole('alert').map((alert) => alert.textContent).join(' ')
     expect(presented).toContain('GitHub page could not be opened')
@@ -37,7 +38,7 @@ describe('AboutModal external links', () => {
     )
 
     fireEvent.click(screen.getByRole('link', { name: /GitHub/ }))
-    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(1))
+    await until(() => expect(screen.getAllByRole('alert')).toHaveLength(1))
     expect(screen.queryByText(/GitHub page could not be opened/)).toBeNull()
     expect(screen.getByText(/issue page could not be opened/)).toBeTruthy()
   })

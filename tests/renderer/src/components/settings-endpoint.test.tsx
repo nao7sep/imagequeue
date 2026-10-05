@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { until } from '../../until'
 
 // An endpoint is the provider's address and has no empty default: Save refuses
 // an empty one and stores nothing.
@@ -65,7 +66,7 @@ describe('Endpoint at Save', () => {
     const endpoint = screen.getAllByLabelText('Endpoint', { selector: 'input' })[1] as HTMLInputElement
     fireEvent.change(endpoint, { target: { value: '  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Every text provider needs an endpoint.'))
+    await until(() => expect(screen.getByRole('alert').textContent).toBe('Every text provider needs an endpoint.'))
     expect(settingsValue.saveChangedSettings).not.toHaveBeenCalled()
   })
 })

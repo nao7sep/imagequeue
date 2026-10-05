@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { I18nProvider } from '../../../../src/renderer/src/i18n/I18nContext'
 import type { Language } from '../../../../src/shared/i18n/languages'
 import { loadTranslator, type Translator } from '../../../../src/shared/i18n/translate'
+import { until } from '../../until'
 
 // The interface language is one Settings › General choice: System first, then
 // each language by its own name, staged with the rest of the form and applied
@@ -105,7 +106,7 @@ describe('Settings language choice', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    await until(() => expect(save).toHaveBeenCalledTimes(1))
     expect((save.mock.calls[0]![1] as { general: { language: string } }).general.language).toBe('ru')
   })
 })

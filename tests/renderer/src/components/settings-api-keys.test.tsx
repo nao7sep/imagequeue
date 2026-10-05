@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import type { SecretId } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 // API keys are stored outside config.json, so they are outside the settings
 // payload too: the form stages them separately and saves them on their own
@@ -112,7 +113,7 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     fireEvent.change(gemini, { target: { value: 'gemini-text-EDITED' } })
     fireEvent.click(saveButton())
 
-    await waitFor(() => expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1))
+    await until(() => expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1))
     // Exactly one id — an untouched key must never be rewritten, least of all
     // one whose stored value is empty because it comes from the environment.
     expect(settingsValue.saveApiKeys.mock.calls[0][0]).toEqual({
@@ -126,7 +127,7 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     fireEvent.change(xai, { target: { value: '' } })
     fireEvent.click(saveButton())
 
-    await waitFor(() => expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1))
+    await until(() => expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1))
     // Blank is a real instruction ("delete this key"), so it must reach the
     // store. Omitting it would silently leave the old key in place.
     expect(settingsValue.saveApiKeys.mock.calls[0][0]).toEqual({ xai: '' })
@@ -138,7 +139,7 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     fireEvent.click(screen.getByText('Confirm remove'))
     fireEvent.click(saveButton())
 
-    await waitFor(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledTimes(1))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledTimes(1))
     expect(settingsValue.saveApiKeys).not.toHaveBeenCalled()
   })
 
@@ -160,7 +161,7 @@ describe('Settings immediate notification writes', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Notifications' }))
     fireEvent.click(screen.getByRole('checkbox', { name: /Show notifications/ }))
 
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Settings could not be saved.'))
+    await until(() => expect(screen.getByRole('alert').textContent).toContain('Settings could not be saved.'))
     expect(screen.getByRole('alert').textContent).not.toContain(hostile)
     expect((screen.getByRole('checkbox', { name: /Show notifications/ }) as HTMLInputElement).checked).toBe(true)
   })
@@ -172,7 +173,7 @@ describe('Settings status icon preference', () => {
     fireEvent.click(screen.getByText('Show in menu bar'))
     fireEvent.click(saveButton())
 
-    await waitFor(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledOnce())
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledOnce())
     const next = settingsValue.saveChangedSettings.mock.calls[0][1] as Record<string, Record<string, unknown>>
     expect(next.general.show_status_icon).toBe(false)
   })
@@ -191,7 +192,7 @@ describe('Settings save result', () => {
     fireEvent.click(screen.getByText('Confirm remove'))
     fireEvent.click(saveButton())
 
-    const alert = await screen.findByRole('alert')
+    const alert = await until(() => screen.getByRole('alert'))
     expect(alert.textContent).toContain('Settings could not be saved')
     expect(alert.textContent).not.toContain('settings disk unavailable')
     expect(alert.closest('.settings-overlay')).toBeTruthy()

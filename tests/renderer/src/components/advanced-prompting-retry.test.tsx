@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createEmptySessionDraft } from '../../../../src/shared/session-draft'
+import { until } from '../../until'
 
 // A refusal cannot change on a retry, so Advanced Prompting offers no Retry for
 // it; every other failure keeps Retry. The provider's reason shows either way.
@@ -43,10 +44,10 @@ async function elaborateFailingWith(failure: { rejects: unknown } | { resolves: 
   if ('rejects' in failure) run.mockRejectedValue(failure.rejects)
   else run.mockResolvedValue(failure.resolves)
   render(<AdvancedPromptingModal onClose={() => {}} />)
-  const elaborate = await screen.findByRole('button', { name: 'Elaborate' })
-  await waitFor(() => expect((elaborate as HTMLButtonElement).disabled).toBe(false))
+  const elaborate = await until(() => screen.getByRole('button', { name: 'Elaborate' }))
+  await until(() => expect((elaborate as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(elaborate)
-  await screen.findByRole('alert')
+  await until(() => screen.getByRole('alert'))
 }
 
 describe('Advanced Prompting failure Retry', () => {
