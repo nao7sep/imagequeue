@@ -308,16 +308,16 @@ describe('concept store format version', () => {
     }
   }
 
-  it('reads a ledger with no version as version 1 and records it', () => {
+  it('refuses every request on an existing ledger with no format version and leaves it as it was', () => {
     ensureFacet('place')
     closeConceptStore()
     const unversioned = new DatabaseSync(storeFile)
-    unversioned.exec('PRAGMA user_version = 0')
+    unversioned.exec('PRAGMA journal_mode = DELETE; PRAGMA user_version = 0')
     unversioned.close()
+    const bytes = fs.readFileSync(storeFile)
 
-    expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['place'])
-    closeConceptStore()
-    expect(userVersion()).toBe(FORMAT_VERSIONS.concepts)
+    expect(() => listFacetsWithStats()).toThrow(/no format version/)
+    expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
   })
 
   it('writes its version and reads the ledger back on the next open', () => {

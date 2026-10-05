@@ -243,14 +243,15 @@ describe('write-through backup store', () => {
       }
     }
 
-    it('reads a store with no version as version 1 and records it', () => {
+    it('records nothing into an existing store with no format version, and leaves its bytes as they were', () => {
       const seeded = new DatabaseSync(storeFile)
       seeded.exec('CREATE TABLE kept (value TEXT)')
       seeded.close()
-      record(path.join(tmpRoot, 'config.json'), Buffer.from('{}'))
+      const bytes = fs.readFileSync(storeFile)
+      expect(() => record(path.join(tmpRoot, 'config.json'), Buffer.from('{}'))).not.toThrow()
       closeBackupStore()
-      expect(userVersion()).toBe(FORMAT_VERSIONS.backups)
-      expect(readAllRows(storeFile)).toHaveLength(1)
+      expect(userVersion()).toBe(0)
+      expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
     })
 
     it('writes its version and keeps recording on the next open', () => {

@@ -82,7 +82,7 @@ describe('elaborator sets', () => {
   })
   it('drops an untouched kind equal to its shipped templates at the next save of the other kind', async () => {
     const shipped = listElaborators()
-    fs.writeFileSync(file(), JSON.stringify({ composition: shipped.filter((item) => item.kind === 'composition') }))
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, composition: shipped.filter((item) => item.kind === 'composition') }))
     vi.resetModules()
     ;({ createElaborator } = await import('../../src/main/elaborators'))
     createElaborator({ kind: 'style', name: 'My style', template: 'My template' })
@@ -96,12 +96,12 @@ describe('elaborator sets', () => {
     }
   })
   it('accepts an empty kind as an authored empty list', () => {
-    fs.writeFileSync(file(), JSON.stringify({ style: [] }))
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [] }))
     expect(listElaborators().some((item) => item.kind === 'style')).toBe(false)
   })
   it('reads a malformed kind as its shipped templates, warning once, and drops it at the next save', async () => {
     const initial = listElaborators()
-    fs.writeFileSync(file(), JSON.stringify({ style: [{ kind: 'wrong' }] }))
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [{ kind: 'wrong' }] }))
     vi.resetModules()
     const warn = vi.spyOn(await import('../../src/main/logger'), 'log')
     ;({ createElaborator, listElaborators } = await import('../../src/main/elaborators'))
@@ -114,7 +114,7 @@ describe('elaborator sets', () => {
   })
   it('reads its file once, where it is loaded', () => {
     const initial = listElaborators()
-    fs.writeFileSync(file(), JSON.stringify({ style: [] }))
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [] }))
     expect(listElaborators()).toEqual(initial)
   })
   it('quarantines bad JSON and leaves the live file absent', () => {
@@ -132,10 +132,14 @@ describe('elaborator sets', () => {
     expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
     expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'quarantine-failed', path: file(), error: 'locked' }])
   })
-  it('reads a file with no format version as version 1', () => {
-    fs.writeFileSync(file(), JSON.stringify({ style: [] }))
-    expect(listElaborators().filter((item) => item.kind === 'style')).toEqual([])
-    expect(drainElaboratorRecoveryNotices()).toEqual([])
+  it('quarantines a file with no format version and reads the shipped templates', () => {
+    const bytes = JSON.stringify({ style: [] })
+    fs.writeFileSync(file(), bytes)
+    expect(listElaborators().some((item) => item.kind === 'style')).toBe(true)
+    expect(fs.existsSync(file())).toBe(false)
+    const invalid = fs.readdirSync(root).find((name) => name.endsWith('.invalid'))!
+    expect(fs.readFileSync(path.join(root, invalid), 'utf8')).toBe(bytes)
+    expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'recovered', path: path.join(root, invalid) }])
   })
   it('writes its format version first and reads it back', async () => {
     const { FORMAT_VERSIONS } = await import('../../src/main/store-format')

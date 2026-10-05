@@ -531,14 +531,13 @@ describe('the updated time', () => {
 })
 
 describe('the manifest format version', () => {
-  it('reads a manifest with no version as version 1, and writes the version when it is opened', async () => {
+  it('lists a manifest with no format version as unreadable and leaves it as it was', async () => {
     const dir = stageSession('20260110-000000-utc', { formatVersion: undefined })
-    expect(readManifest(dir)).not.toHaveProperty('formatVersion')
+    const before = fs.readFileSync(path.join(dir, 'session.json'))
 
-    expect(listSessions().map((summary) => summary.sessionId)).toContain('20260110-000000-utc')
-    await resumeSession('20260110-000000-utc')
-
-    expect(readManifest(dir).formatVersion).toBe(FORMAT_VERSIONS.session)
+    expect(listSessions()).toContainEqual({ sessionId: '20260110-000000-utc', unopenable: 'unreadable' })
+    await expect(resumeSession('20260110-000000-utc')).rejects.toThrow(/missing a readable session.json/)
+    expect(fs.readFileSync(path.join(dir, 'session.json')).equals(before)).toBe(true)
   })
 
   it('reads back the version it writes', () => {

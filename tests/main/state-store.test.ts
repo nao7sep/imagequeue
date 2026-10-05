@@ -46,13 +46,13 @@ describe('ui state store', () => {
 
   it('heals a wrong-typed column width to the default on read', () => {
     fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 'wide' }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, columnWidth: 'wide' }))
     expect(readUiState()).toEqual(defaultUiState())
   })
 
   it('preserves a stored numeric column width', () => {
     fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 288 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, columnWidth: 288 }))
     expect(readUiState()).toEqual({ ...defaultUiState(), columnWidth: 288 })
   })
 
@@ -66,11 +66,11 @@ describe('ui state store', () => {
   // merely type-checking.
   it('clamps a stored volume into the playable range', () => {
     fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ notificationVolume: 4 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, notificationVolume: 4 }))
     expect(readUiState().notificationVolume).toBe(1)
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ notificationVolume: -2 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, notificationVolume: -2 }))
     expect(readUiState().notificationVolume).toBe(0)
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ notificationVolume: 'loud' }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, notificationVolume: 'loud' }))
     expect(readUiState().notificationVolume).toBe(NOTIFICATION_VOLUME_DEFAULT)
   })
 
@@ -79,17 +79,17 @@ describe('ui state store', () => {
     updateUiState({ columnWidth: 240 })
     expect(updateUiState({ recordsListWidth: 512 })).toMatchObject({ columnWidth: 240, recordsListWidth: 512 })
     expect(readUiState()).toMatchObject({ columnWidth: 240, recordsListWidth: 512 })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ recordsListWidth: 9999 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, recordsListWidth: 9999 }))
     expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.max)
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ recordsListWidth: 'wide' }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, recordsListWidth: 'wide' }))
     expect(readUiState().recordsListWidth).toBe(RECORDS_LIST_WIDTH.default)
   })
 })
 
 describe('ui state format version', () => {
-  it('reads a file with no format version as version 1', () => {
+  it('reads a file with no format version as defaults', () => {
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 288 }))
-    expect(readUiState().columnWidth).toBe(288)
+    expect(readUiState()).toEqual(defaultUiState())
   })
 
   it('writes its format version first and reads it back', () => {

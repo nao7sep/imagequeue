@@ -45,6 +45,7 @@ describe('publishCliBinary', () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
+      formatVersion: 1,
       tag: 'v1.20260101.0',
       sha256: 'b'.repeat(64),
       installedAt: '2026-01-01T00:00:00.000Z',
@@ -78,6 +79,7 @@ describe('publishCliBinary', () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
+      formatVersion: 1,
       tag: 'v1.20260101.0',
       sha256: 'b'.repeat(64),
       installedAt: '2026-01-01T00:00:00.000Z',
@@ -106,6 +108,7 @@ describe('readInstalledCliTag', () => {
     fs.writeFileSync(getCliBinaryPath(), 'binary')
     const { ino, dev } = fs.statSync(getCliBinaryPath(), { bigint: true })
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
+      formatVersion: 1,
       tag: 'v1.20260716.0',
       sha256: 'c'.repeat(64),
       installedAt: '2026-08-22T20:13:13.750Z',
@@ -142,9 +145,9 @@ describe('the sidecar format version', () => {
     }))
   }
 
-  it('reads a sidecar with no format version as version 1', () => {
+  it('reads a sidecar with no format version as unknown', () => {
     installWithSidecar({})
-    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+    expect(readInstalledCliTag()).toBeNull()
   })
 
   it('writes its format version first and reads it back', () => {

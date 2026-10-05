@@ -161,12 +161,13 @@ describe('binary-store archive', () => {
     const manifest = JSON.parse(strFromU8(unzipSync(fs.readFileSync(result.archivePath!))['manifest.json']))
     expect(Object.entries(manifest)[0]).toEqual(['formatVersion', FORMAT_VERSIONS.backupManifest])
   })
-  it('reads a previous manifest with no format version as version 1', async () => {
+  it('treats a previous manifest with no format version as unreadable and archives anew', async () => {
     const first = await archiveStores(root, getArchivedStores(root), time)
     rewriteManifest(first.archivePath!, ({ formatVersion: _formatVersion, ...rest }) => rest)
     const next = await archiveStores(root, getArchivedStores(root), new Date(time.getTime() + 1000))
-    expect(next.warnings).toEqual([])
-    expect(archives()).toHaveLength(1)
+    expect(next.warnings).toHaveLength(1)
+    expect(next.archivePath).toBeDefined()
+    expect(archives()).toHaveLength(2)
   })
   it('writes and thins nothing beside an archive from a newer version, and leaves its bytes as they were', async () => {
     const first = await archiveStores(root, getArchivedStores(root), time)

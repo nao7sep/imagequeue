@@ -87,7 +87,7 @@ describe('api-keys-store', () => {
     process.env['GEMINI_API_KEY'] = 'conventional-gemini'
     fs.writeFileSync(
       path.join(tmpRoot, 'api-keys.json'),
-      JSON.stringify({ keys: { gemini: 'sk-bare-stored' } })
+      JSON.stringify({ formatVersion: 1, keys: { gemini: 'sk-bare-stored' } })
     )
     expect(resolveApiKey('gemini.text')).toBe('')
     expect(hasApiKey('gemini.text')).toBe(false)
@@ -111,7 +111,7 @@ describe('api-keys-store', () => {
   it('treats an untagged stored value as plaintext', () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
     fs.mkdirSync(tmpRoot, { recursive: true })
-    fs.writeFileSync(secretsPath, JSON.stringify({ keys: { xai: 'sk-pasted-raw' } }))
+    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, keys: { xai: 'sk-pasted-raw' } }))
     expect(resolveApiKey('xai')).toBe('sk-pasted-raw')
   })
 
@@ -133,7 +133,7 @@ describe('api-keys-store', () => {
     // Node's lenient base64 decoder would otherwise turn a payload like this
     // (invalid characters, non-canonical shape) into non-empty garbage that
     // gets sent to the provider as an API key.
-    fs.writeFileSync(secretsPath, JSON.stringify({ keys: { xai: 'obf:not-valid-base64!!' } }))
+    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, keys: { xai: 'obf:not-valid-base64!!' } }))
 
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -174,7 +174,7 @@ describe('api-keys-store', () => {
 
   it('preserves a valid-JSON secret store with the wrong root before a later edit', () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    const original = JSON.stringify({ xai: 'do-not-overwrite-these-bytes' })
+    const original = JSON.stringify({ formatVersion: 1, xai: 'do-not-overwrite-these-bytes' })
     fs.writeFileSync(secretsPath, original)
 
     setStoredApiKey('openai.image', 'new-key')
@@ -188,7 +188,7 @@ describe('api-keys-store', () => {
 
   it('preserves a valid-JSON secret store whose keys container has the wrong shape', () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    const original = JSON.stringify({ keys: ['xai', 'not-an-object-container'] })
+    const original = JSON.stringify({ formatVersion: 1, keys: ['xai', 'not-an-object-container'] })
     fs.writeFileSync(secretsPath, original)
 
     setStoredApiKey('xai', 'new-key')
@@ -202,7 +202,7 @@ describe('api-keys-store', () => {
 
   it('fails a mutation closed when a wrong-shaped store cannot be quarantined', () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    const original = JSON.stringify({ xai: 'must-remain-byte-identical' })
+    const original = JSON.stringify({ formatVersion: 1, xai: 'must-remain-byte-identical' })
     fs.writeFileSync(secretsPath, original)
     const realRename = fs.renameSync.bind(fs)
     const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
@@ -259,11 +259,14 @@ describe('api-keys-store', () => {
   describe('format version', () => {
     const secretsPath = () => path.join(tmpRoot, 'api-keys.json')
 
-    it('reads a file with no format version as version 1', () => {
-      setStoredApiKey('openai.image', 'sk-stored')
-      const { formatVersion: _formatVersion, ...unmarked } = JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))
-      fs.writeFileSync(secretsPath(), JSON.stringify(unmarked))
-      expect(getStoredApiKey('openai.image')).toBe('sk-stored')
+    it('sets aside a file with no format version and reads no keys', () => {
+      const bytes = JSON.stringify({ keys: { xai: 'sk-pasted-raw' } })
+      fs.writeFileSync(secretsPath(), bytes)
+      expect(getStoredApiKey('xai')).toBe('')
+      expect(fs.existsSync(secretsPath())).toBe(false)
+      const invalid = fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.invalid'))
+      expect(invalid).toHaveLength(1)
+      expect(fs.readFileSync(path.join(tmpRoot, invalid[0]), 'utf8')).toBe(bytes)
     })
 
     it('writes its format version first and reads it back', () => {

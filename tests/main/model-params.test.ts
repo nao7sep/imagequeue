@@ -26,11 +26,14 @@ describe('params.json format version', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it('reads a file with no format version as version 1', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ 'model.ckpt': params }))
-    const { getModelParams, getAllModelParams } = await import('../../src/main/model-params')
-    expect(getModelParams('model.ckpt')).toEqual(params)
-    expect(getAllModelParams()).toEqual({ 'model.ckpt': params })
+  it('refuses to save over a file with no format version and leaves it as it was', async () => {
+    const bytes = JSON.stringify({ 'model.ckpt': params })
+    fs.writeFileSync(file(), bytes)
+    const { getModelParams, setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
+    expect(getModelParams('model.ckpt')).toBeNull()
+    expect(() => setModelParams('model.ckpt', params)).toThrow(/unreadable/)
+    drainPendingWrites()
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
   })
 
   it('writes its format version first and reads it back', async () => {

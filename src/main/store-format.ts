@@ -43,8 +43,9 @@ export class NewerFormatError extends Error {
 }
 
 /**
- * Checks a parsed JSON store's marker and returns the map without it. A marker
- * that is not a positive integer throws a plain Error, the store's shape failure.
+ * Checks a parsed JSON store's marker and returns the map without it. A missing
+ * marker, or one that is not a positive integer, throws a plain Error: the
+ * store is unreadable.
  */
 export function checkFormat(
   map: Record<string, unknown>,
@@ -52,10 +53,9 @@ export function checkFormat(
   file: string,
   key: string = FORMAT_VERSION_KEY,
 ): Record<string, unknown> {
-  const { [key]: marker, ...rest } = map
-  const found = marker === undefined ? 1 : marker
+  const { [key]: found, ...rest } = map
   if (typeof found !== 'number' || !Number.isSafeInteger(found) || found < 1) {
-    throw new Error(`${key} is not a positive integer`)
+    throw new Error(`${key} is missing or not a positive integer`)
   }
   if (found > supported) throw new NewerFormatError(file, found, supported)
   return rest
@@ -68,11 +68,15 @@ export function markFormat<T extends object>(map: T, version: number, key: strin
 
 /**
  * Checks an open SQLite store's version before anything else touches it, so a
- * newer store throws having had nothing written. An unversioned one (0) is
- * stamped with this build's version.
+ * store this build cannot use throws having had nothing written. A version of
+ * 0 is a missing marker, unreadable, except on a database with nothing in it
+ * yet, which is new and is stamped with this build's version.
  */
 export function claimSqliteFormat(db: DatabaseSync, supported: number, file: string): void {
   const { user_version: found } = db.prepare('PRAGMA user_version').get() as { user_version: number }
   if (found > supported) throw new NewerFormatError(file, found, supported)
-  if (found === 0) db.exec(`PRAGMA user_version = ${supported}`)
+  if (found !== 0) return
+  const { objects } = db.prepare('SELECT count(*) AS objects FROM sqlite_master').get() as { objects: number }
+  if (objects > 0) throw new Error(`${file} has no format version`)
+  db.exec(`PRAGMA user_version = ${supported}`)
 }

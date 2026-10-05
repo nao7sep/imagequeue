@@ -75,7 +75,7 @@ describe('dependencies cache', () => {
 
   it('backfills missing sections from a partial file', () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ cli: { lastKnownLatest: 'v1.0.0' } }))
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: 1, cli: { lastKnownLatest: 'v1.0.0' } }))
     const cache = readDependenciesCache()
     expect(cache.cli.lastKnownLatest).toBe('v1.0.0')
     expect(cache.cli.lastCheckedAtUtc).toBeNull()
@@ -86,7 +86,7 @@ describe('dependencies cache', () => {
       cache.lastAttemptAtUtc = '2026-10-02T00:00:00.000Z'
     })
     expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-10-02T00:00:00.000Z')
-    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: 42 }))
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: 1, lastAttemptAtUtc: 42 }))
     expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
   })
 
@@ -95,6 +95,7 @@ describe('dependencies cache', () => {
     fs.writeFileSync(
       getDependenciesStatePath(),
       JSON.stringify({
+        formatVersion: 1,
         cli: { lastKnownLatest: 'v1.0.0', lastCheckedAtUtc: null },
         recommendations: { lastCheckedAtUtc: '2026-06-30T01:00:00.000Z' },
       })
@@ -108,9 +109,9 @@ describe('dependencies cache', () => {
 })
 
 describe('dependencies cache format version', () => {
-  it('reads a file with no format version as version 1', () => {
+  it('reads a file with no format version as empty', () => {
     fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
-    expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
+    expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
   })
 
   it('writes its format version first and reads it back', () => {

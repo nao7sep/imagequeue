@@ -210,17 +210,22 @@ describe('the records format version', () => {
     }
   }
 
-  it('reads a database with no version as version 1 and records it', () => {
+  it('keeps records in the fallback file beside a database with no format version, and leaves its bytes as they were', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-unversioned-'))
-    const seeded = new DatabaseSync(path.join(dir, 'records.sqlite3'))
+    const file = path.join(dir, 'records.sqlite3')
+    const seeded = new DatabaseSync(file)
     seeded.exec('CREATE TABLE kept (value TEXT)')
     seeded.close()
+    const bytes = fs.readFileSync(file)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     openRecords(dir)
-    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Stored', {})
-    closeRecords()
+    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Kept anyway', {})
+    consoleError.mockRestore()
 
-    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FORMAT_VERSIONS.records)
-    expect(readLog(dir).map((row) => row.message)).toEqual(['Stored'])
+    expect(recordsDatabasePath()).toBeNull()
+    expect(fallbackLines(dir).map((line) => line.message)).toEqual(['Records database could not be opened', 'Kept anyway'])
+    expect(fs.readFileSync(file).equals(bytes)).toBe(true)
+    closeRecords()
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
