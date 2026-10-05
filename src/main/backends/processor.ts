@@ -54,22 +54,21 @@ function totalActive(): number {
 }
 
 // Returns the per-backend default extension, used when both the MIME hint
-// and magic-byte detection fail to identify the image type.
-// OpenAI supports jpeg/webp/png via outputFormat param; others are fixed.
+// and magic-byte detection fail to identify the image type: the format the
+// task chose where the backend takes one, else the backend's fixed format.
 function getFallbackExt(backend: BackendId, params: Task['params']): ImageExt {
-  if (backend === 'openai') {
+  if (backend === 'openai' || backend === 'flux') {
     const fmt = params?.outputFormat as string | undefined
     if (fmt === 'jpeg') return 'jpg'
     if (fmt === 'webp') return 'webp'
     return 'png'
   }
-  const staticExts: Record<Exclude<BackendId, 'openai'>, ImageExt> = {
+  const staticExts: Record<'nanobanana' | 'grok' | 'drawthings', ImageExt> = {
     nanobanana: 'png',
     grok: 'jpg',
-    flux: 'png',
     drawthings: 'png'
   }
-  return staticExts[backend as Exclude<BackendId, 'openai'>]
+  return staticExts[backend]
 }
 
 // Starts the queue processor loop. Call once at app startup.

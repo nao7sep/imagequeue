@@ -1,5 +1,7 @@
 import type { CloudBackendId, TextAIBackendId } from './types'
 import {
+  FLUX_3_ASPECT_RATIOS,
+  FLUX_3_RESOLUTIONS,
   FLUX_SIZES,
   GROK_ASPECT_RATIOS,
   GROK_QUALITY_VALUES,
@@ -12,6 +14,7 @@ import {
   NANO_BANANA_SIZES_PRO,
   STANDARD_SIZE_PRESETS,
   type FluxModelDef,
+  type FluxOutputFormat,
   type GrokModelDef,
   type ImageKind,
   type ImageProviderId,
@@ -39,6 +42,9 @@ export interface TextModel {
 
 export type ImageModel = OpenAIModelDef | NanoBananaModelDef | GrokModelDef | FluxModelDef
 export type SupportedModel = TextModel | ImageModel
+
+// FLUX.2's formats; png, ImageQueue's own default, first (BFL's default is jpeg).
+const FLUX_2_FORMATS: FluxOutputFormat[] = ['png', 'jpeg', 'webp']
 
 // The lineup research document these rows and defaults rest on.
 export const MODEL_LINEUP = 'ai-model-lineup-20261004'
@@ -114,19 +120,27 @@ export const SUPPORTED_MODELS: readonly SupportedModel[] = [
     resolutions: GROK_RESOLUTIONS,
   },
 
-  // Black Forest Labs images (FLUX).
-  { provider: 'bfl', id: 'flux-2-max', label: 'FLUX.2 Max', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES },
-  { provider: 'bfl', id: 'flux-2-pro', label: 'FLUX.2 Pro', backend: 'flux', kinds: ['image-generate'], defaultFor: ['image-generate'], sizes: FLUX_SIZES },
+  // Black Forest Labs images (FLUX). FLUX 3 is the newest, whatever its preview
+  // label; the FLUX.2 preview endpoints are not listed, BFL advising the stable ones.
+  {
+    provider: 'bfl', id: 'flux-3-image', label: 'FLUX 3', backend: 'flux',
+    kinds: ['image-generate'], defaultFor: ['image-generate'],
+    aspectRatios: FLUX_3_ASPECT_RATIOS,
+    resolutions: FLUX_3_RESOLUTIONS,
+  },
+  { provider: 'bfl', id: 'flux-2-max', label: 'FLUX.2 Max', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES, outputFormats: FLUX_2_FORMATS },
+  { provider: 'bfl', id: 'flux-2-pro', label: 'FLUX.2 Pro', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES, outputFormats: FLUX_2_FORMATS },
   {
     provider: 'bfl', id: 'flux-2-flex', label: 'FLUX.2 Flex', backend: 'flux',
     kinds: ['image-generate'], defaultFor: [],
     sizes: FLUX_SIZES,
+    outputFormats: FLUX_2_FORMATS,
     // Source: https://api.bfl.ai/openapi.json — Flux2FlexInputs
     stepsRange: { min: 1, max: 50, default: 50 },
     guidanceRange: { min: 1.5, max: 10, default: 5 },
   },
-  { provider: 'bfl', id: 'flux-2-klein-9b', label: 'FLUX.2 Klein 9B', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES },
-  { provider: 'bfl', id: 'flux-2-klein-4b', label: 'FLUX.2 Klein 4B', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES },
+  { provider: 'bfl', id: 'flux-2-klein-9b', label: 'FLUX.2 Klein 9B', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES, outputFormats: FLUX_2_FORMATS },
+  { provider: 'bfl', id: 'flux-2-klein-4b', label: 'FLUX.2 Klein 4B', backend: 'flux', kinds: ['image-generate'], defaultFor: [], sizes: FLUX_SIZES, outputFormats: FLUX_2_FORMATS },
 ]
 
 export const AI_ROLES = [

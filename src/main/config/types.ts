@@ -36,13 +36,17 @@ export interface OpenAIBackendConfig {
 
 export interface FluxBackendConfig {
   model: string
+  // FLUX 3 takes a ratio and a resolution; FLUX.2 a size, format and seed, and
+  // Flex steps and guidance.
   default_params: {
-    width: number
-    height: number
-    // Present only once the user has used a model that exposes them (FLUX Flex).
+    aspectRatio?: string
+    resolution?: string
+    width?: number
+    height?: number
+    outputFormat?: string
     steps?: number
     guidance?: number
-    seed: number | null
+    seed?: number | null
   }
   concurrency: number
   timeout_ms: number

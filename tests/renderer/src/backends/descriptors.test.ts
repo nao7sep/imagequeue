@@ -29,7 +29,7 @@ describe('defaults', () => {
     })
     expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'minimal' })
     expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
-    expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, steps: 50, guidance: 5, seed: '' })
+    expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, outputFormat: 'png', steps: 50, guidance: 5, seed: '', aspectRatio: '1:1', resolution: '1k' })
   })
 })
 
@@ -61,7 +61,7 @@ describe('clampToModel', () => {
   it('resets a FLUX ranged value to the new model\'s range DEFAULT on a model switch', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const outOfRange = fluxBackend.clampToModel(
-      { sizeIdx: 0, steps: flex.stepsRange!.max + 1, guidance: 5, seed: '' },
+      { ...fluxBackend.defaults(), steps: flex.stepsRange!.max + 1 },
       flex
     )
     // Not clamped to the bound: a model switch takes the new model's default.
@@ -70,8 +70,27 @@ describe('clampToModel', () => {
 
   it('floors a FLUX size index that falls off a shorter ladder', () => {
     const flex = findModel('flux', 'flux-2-flex')!
-    const clamped = fluxBackend.clampToModel({ sizeIdx: 999, steps: 30, guidance: 3, seed: '' }, flex)
+    const clamped = fluxBackend.clampToModel({ ...fluxBackend.defaults(), sizeIdx: 999 }, flex)
     expect(clamped.sizeIdx).toBe(0)
+  })
+
+  it('enqueues FLUX 3 its ratio and resolution only, and FLUX.2 its size, format and seed', () => {
+    const flux3 = findModel('flux', 'flux-3-image')!
+    const pro = findModel('flux', 'flux-2-pro')!
+    const params = { ...fluxBackend.defaults(), outputFormat: 'webp' as const, seed: '7', aspectRatio: 'auto', resolution: '768sq' }
+    expect(fluxBackend.toEnqueueParams(params, flux3)).toEqual({ aspectRatio: 'auto', resolution: '768sq' })
+    expect(fluxBackend.toEnqueueParams(params, pro)).toEqual({ width: 1024, height: 1024, outputFormat: 'webp', seed: 7 })
+  })
+
+  it('keeps each FLUX kind\'s choices across a switch, and falls to 1:1, 1k and png', () => {
+    const flux3 = findModel('flux', 'flux-3-image')!
+    const pro = findModel('flux', 'flux-2-pro')!
+    expect(fluxBackend.fromSaved({}, flux3)).toMatchObject({ aspectRatio: '1:1', resolution: '1k', outputFormat: 'png' })
+    expect(fluxBackend.fromSaved({ aspectRatio: '9:21', resolution: '4k' }, flux3)).toMatchObject({ aspectRatio: '9:21', resolution: '4k' })
+    expect(fluxBackend.fromSaved({ aspectRatio: '8:1', resolution: '8k' }, flux3)).toMatchObject({ aspectRatio: '1:1', resolution: '1k' })
+    const onPro = fluxBackend.clampToModel({ ...fluxBackend.defaults(), aspectRatio: '16:9', outputFormat: 'jpeg' }, pro)
+    expect(onPro).toMatchObject({ aspectRatio: '16:9', outputFormat: 'jpeg' })
+    expect(fluxBackend.clampToModel(onPro, flux3)).toMatchObject({ aspectRatio: '16:9', outputFormat: 'jpeg' })
   })
 
   it('resets Gemini thinking to the new model\'s default and keeps a ratio and size it takes', () => {

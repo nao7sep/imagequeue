@@ -9,7 +9,7 @@ Elaborate one idea into varied, concrete prompts, send them to several image mod
 | OpenAI GPT Image | GPT Image 2.5 Flare | Required |
 | Nano Banana (Gemini) | Nano Banana 2 | Required |
 | Grok Imagine | Grok Imagine 2.0 | Required |
-| FLUX (Black Forest Labs) | FLUX.2 Pro | Required |
+| FLUX (Black Forest Labs) | FLUX 3 | Required |
 | Draw Things (local, macOS only) | Your installed model | Not required |
 
 Each cloud column offers its currently supported model choices and model-specific size or quality controls. ImageQueue keeps image-generation credentials separate from Text AI credentials: OpenAI image and text keys use different slots, as do Nano Banana and Gemini text keys. A key is resolved from its purpose-specific environment variable first, then from the app's secured key file; it is never copied into ordinary settings.

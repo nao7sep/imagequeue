@@ -71,13 +71,12 @@ export function createDefaultConfig(): AppConfig {
       },
       flux: {
         model: getDefaultModelForBackend('flux').id,
-        // No steps/guidance: they apply only to a model that declares their ranges,
-        // and that model's own defaults are the source. Seeding numbers here made a
-        // copy of FLUX Flex's defaults that would quietly go stale against them.
+        // The default row's parameters. No steps/guidance: they apply only to a
+        // model that declares their ranges, and that model's own defaults are the
+        // source.
         default_params: {
-          width: 1024,
-          height: 1024,
-          seed: null
+          aspectRatio: '1:1',
+          resolution: '1k'
         },
         concurrency: 3,
         timeout_ms: 180000

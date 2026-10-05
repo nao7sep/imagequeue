@@ -514,6 +514,23 @@ describe('flux column', () => {
     expect(rowControl(container, 'Steps')).toBeTruthy()
     expect(rowControl(container, 'Guidance')).toBeTruthy()
   })
+
+  it('shows FLUX 3 a ratio and resolution and no seed, and FLUX.2 a size, format and seed', async () => {
+    stageSettings('flux', 'flux-3-image', { aspectRatio: '1:1', resolution: '1k' })
+    const { container } = render(<QueueColumn backendId="flux" label="FLUX" prompt="a cat" />)
+    await flush()
+    const labels = () => Array.from(container.querySelectorAll('.setting-row label')).map((l) => l.textContent)
+    const options = (label: string) => [...(rowControl(container, label) as HTMLSelectElement).options].map((option) => option.value)
+    expect(labels()).toEqual(['Model', 'Aspect', 'Size'])
+    expect(options('Aspect')).toEqual(['auto', '21:9', '2:1', '16:9', '3:2', '7:5', '4:3', '5:4', '1:1', '4:5', '3:4', '5:7', '2:3', '9:16', '1:2', '9:21'])
+    expect(options('Size')).toEqual(['768sq', '1k', '1.5k', '2k', '4k'])
+    expect([rowControl(container, 'Aspect').value, rowControl(container, 'Size').value]).toEqual(['1:1', '1k'])
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'flux-2-max' } })
+    await flush()
+    expect(labels()).toEqual(['Model', 'Size', 'Format', 'Seed'])
+    expect(options('Format')).toEqual(['png', 'jpeg', 'webp'])
+    expect(rowControl(container, 'Format').value).toBe('png')
+  })
 })
 
 describe('nano banana column', () => {

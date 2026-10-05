@@ -8,7 +8,7 @@ import {
   isImageModel,
 } from '../../src/shared/ai-models'
 import type { CloudBackendId, Task } from '../../src/shared/types'
-import { STANDARD_SIZE_PRESETS } from '../../src/shared/models'
+import { FLUX_SIZES, STANDARD_SIZE_PRESETS } from '../../src/shared/models'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../src/shared/types'
 import { buildOpenAIImageParams } from '../../src/main/backends/openai-request'
 import { buildGeminiImageRequest } from '../../src/main/backends/nanobanana-request'
@@ -32,7 +32,7 @@ const SAMPLE_PARAMS: Record<CloudBackendId, Record<string, unknown>> = {
   openai: { width: 1024, height: 1024 },
   nanobanana: { aspectRatio: '1:1', imageSize: '1K' },
   grok: { aspectRatio: '1:1', resolution: '1k' },
-  flux: { width: 1024, height: 1024 },
+  flux: { width: 1024, height: 1024, aspectRatio: '1:1', resolution: '1k' },
 }
 
 function imageTask(backend: CloudBackendId, model: string, params: Record<string, unknown>): Task {
@@ -54,13 +54,13 @@ describe('image routing guard', () => {
       openai: ['gpt-image-2.5-flare', 'gpt-image-2'],
       nanobanana: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image'],
       grok: ['grok-imagine-image-2.0', 'grok-imagine-image'],
-      flux: ['flux-2-max', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b', 'flux-2-klein-4b'],
+      flux: ['flux-3-image', 'flux-2-max', 'flux-2-pro', 'flux-2-flex', 'flux-2-klein-9b', 'flux-2-klein-4b'],
     })
     expect(Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, getDefaultModelForBackend(backend)?.id]))).toEqual({
       openai: 'gpt-image-2.5-flare',
       nanobanana: 'gemini-3.1-flash-image',
       grok: 'grok-imagine-image-2.0',
-      flux: 'flux-2-pro',
+      flux: 'flux-3-image',
     })
   })
 
@@ -110,6 +110,20 @@ describe('image routing guard', () => {
       ['grok-imagine-image-2.0', ratios, ['1k', '1.5k', '2k'], ['auto', 'low', 'medium']],
       ['grok-imagine-image', ratios, ['1k', '2k'], undefined],
     ])
+  })
+
+  it('pins each FLUX row\'s fields in order', () => {
+    const [flux3, ...flux2] = getModelsForBackend('flux')
+    expect(flux3!.aspectRatios!.map((item) => item.value)).toEqual(['auto', '21:9', '2:1', '16:9', '3:2', '7:5', '4:3', '5:4', '1:1', '4:5', '3:4', '5:7', '2:3', '9:16', '1:2', '9:21'])
+    expect(flux3!.resolutions!.map((item) => item.value)).toEqual(['768sq', '1k', '1.5k', '2k', '4k'])
+    expect([flux3!.sizes, flux3!.outputFormats]).toEqual([undefined, undefined])
+    for (const row of flux2) {
+      expect(row.outputFormats, row.id).toEqual(['png', 'jpeg', 'webp'])
+      expect(row.sizes, row.id).toBe(FLUX_SIZES)
+      expect(row.aspectRatios, row.id).toBeUndefined()
+      expect([row.stepsRange, row.guidanceRange], row.id).toEqual(row.id === 'flux-2-flex'
+        ? [{ min: 1, max: 50, default: 50 }, { min: 1.5, max: 10, default: 5 }] : [undefined, undefined])
+    }
   })
 
   it('treats a removed image id as an id not in the list', () => {

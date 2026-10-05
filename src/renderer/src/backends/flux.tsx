@@ -1,7 +1,7 @@
-import type { FluxModelDef } from '../../../shared/models'
+import { OPENAI_OUTPUT_FORMAT_LABELS, type FluxModelDef, type FluxOutputFormat } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
-import { sizePresetLabel } from '../i18n/optionLabels'
+import { optionLabel, sizePresetLabel } from '../i18n/optionLabels'
 
 // The UI keeps steps/guidance values even for a model that declares no range
 // (the fields are hidden and never enqueued); these are the numbers a fresh
@@ -9,13 +9,19 @@ import { sizePresetLabel } from '../i18n/optionLabels'
 const FALLBACK_STEPS = 50
 const FALLBACK_GUIDANCE = 5
 
+// The column holds every row kind's fields, so a switch between FLUX 3 and
+// FLUX.2 and back keeps each one's choices; only the row's own reach the request.
 export type FluxParams = {
-  /** Index into the model's own size ladder (each model brings its own list). */
+  /** FLUX.2: index into the model's own size ladder (each model brings its own list). */
   sizeIdx: number
+  outputFormat: FluxOutputFormat
   steps: number
   guidance: number
   /** Raw seed field text; parsed (or dropped) at enqueue time. */
   seed: string
+  /** FLUX 3: a ratio and a resolution level in place of width and height. */
+  aspectRatio: string
+  resolution: string
 }
 
 // A range-bounded param (steps, guidance) exists only for models that declare
@@ -33,15 +39,68 @@ function resolveRangedParam(
   return Math.max(range.min, Math.min(range.max, saved))
 }
 
+function listed<T extends string>(values: readonly T[] | undefined, value: unknown, fallback: T): T {
+  return typeof value === 'string' && (values ?? []).includes(value as T) ? value as T : fallback
+}
+
+// The ratio falls to 1:1, the app's default, and the resolution to 1k, BFL's.
+function ratioAndResolution(saved: Record<string, unknown>, modelDef: FluxModelDef): Pick<FluxParams, 'aspectRatio' | 'resolution'> {
+  if (!modelDef.aspectRatios) {
+    return {
+      aspectRatio: typeof saved.aspectRatio === 'string' ? saved.aspectRatio : '1:1',
+      resolution: typeof saved.resolution === 'string' ? saved.resolution : '1k',
+    }
+  }
+  return {
+    aspectRatio: listed(modelDef.aspectRatios.map((item) => item.value), saved.aspectRatio, '1:1'),
+    resolution: listed(modelDef.resolutions?.map((item) => item.value), saved.resolution, '1k'),
+  }
+}
+
+function outputFormat(saved: Record<string, unknown>, modelDef: FluxModelDef): FluxOutputFormat {
+  if (!modelDef.outputFormats) return listed(['png', 'jpeg', 'webp'] as const, saved.outputFormat, 'png')
+  return listed(modelDef.outputFormats, saved.outputFormat, 'png')
+}
+
 function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParams, FluxModelDef>): React.JSX.Element {
   const { t } = useI18n()
+  if (modelDef.aspectRatios) {
+    return (
+      <>
+        <div className="setting-row">
+          <label>{t('backend.aspect')}</label>
+          <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
+            {modelDef.aspectRatios.map((ar) => (
+              <option key={ar.value} value={ar.value}>{optionLabel(t, ar.value)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="setting-row">
+          <label>{t('backend.size')}</label>
+          <select value={params.resolution} onChange={(e) => onChange({ ...params, resolution: e.target.value })}>
+            {(modelDef.resolutions ?? []).map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+        </div>
+      </>
+    )
+  }
   return (
     <>
       <div className="setting-row">
         <label>{t('backend.size')}</label>
         <select value={params.sizeIdx} onChange={(e) => onChange({ ...params, sizeIdx: Number.parseInt(e.target.value, 10) })}>
-          {modelDef.sizes.map((s, i) => (
+          {(modelDef.sizes ?? []).map((s, i) => (
             <option key={i} value={i}>{sizePresetLabel(t, s)}</option>
+          ))}
+        </select>
+      </div>
+      <div className="setting-row">
+        <label>{t('backend.format')}</label>
+        <select value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as FluxOutputFormat })}>
+          {(modelDef.outputFormats ?? []).map((fmt) => (
+            <option key={fmt} value={fmt}>{OPENAI_OUTPUT_FORMAT_LABELS[fmt]}</option>
           ))}
         </select>
       </div>
@@ -93,9 +152,12 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
 export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
   defaults: () => ({
     sizeIdx: 0,
+    outputFormat: 'png',
     steps: FALLBACK_STEPS,
     guidance: FALLBACK_GUIDANCE,
     seed: '',
+    aspectRatio: '1:1',
+    resolution: '1k',
   }),
 
   // Model switch: an index off the new model's shorter ladder falls to the
@@ -103,7 +165,8 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
   // the new range's DEFAULT — the old number was tuned for another model, so
   // clamping it to a bound would preserve a meaningless value.
   clampToModel: (params, modelDef) => ({
-    sizeIdx: modelDef.sizes[params.sizeIdx] ? params.sizeIdx : 0,
+    sizeIdx: modelDef.sizes?.[params.sizeIdx] ? params.sizeIdx : 0,
+    outputFormat: outputFormat(params, modelDef),
     steps: modelDef.stepsRange
       ? (params.steps >= modelDef.stepsRange.min && params.steps <= modelDef.stepsRange.max
         ? params.steps
@@ -115,27 +178,32 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
         : modelDef.guidanceRange.default)
       : params.guidance,
     seed: params.seed,
+    ...ratioAndResolution(params, modelDef),
   }),
 
   // Saved record: unlike a model switch, an out-of-range saved number is user
   // data — clamp it to the nearest bound instead of resetting to the default.
   fromSaved: (saved, modelDef) => {
-    const sizeIdx = modelDef.sizes.findIndex(
+    const sizeIdx = (modelDef.sizes ?? []).findIndex(
       (size) => size.width === saved.width && size.height === saved.height
     )
     return {
       sizeIdx: sizeIdx >= 0 ? sizeIdx : 0,
+      outputFormat: outputFormat(saved, modelDef),
       steps: resolveRangedParam(modelDef.stepsRange, saved.steps) ?? FALLBACK_STEPS,
       guidance: resolveRangedParam(modelDef.guidanceRange, saved.guidance) ?? FALLBACK_GUIDANCE,
       seed: saved.seed == null ? '' : String(saved.seed),
+      ...ratioAndResolution(saved, modelDef),
     }
   },
 
   toEnqueueParams: (params, modelDef) => {
+    if (modelDef.aspectRatios) return { aspectRatio: params.aspectRatio, resolution: params.resolution }
     // The ladder is the model's own, so an index carried over from a model with
     // a longer list can fall off the end; the first size is the safe floor.
-    const size = modelDef.sizes[params.sizeIdx] ?? modelDef.sizes[0]
-    const result: Record<string, unknown> = { width: size.width, height: size.height }
+    const sizes = modelDef.sizes ?? []
+    const size = sizes[params.sizeIdx] ?? sizes[0]!
+    const result: Record<string, unknown> = { width: size.width, height: size.height, outputFormat: params.outputFormat }
     if (modelDef.stepsRange) result.steps = params.steps
     if (modelDef.guidanceRange) result.guidance = params.guidance
     const parsedSeed = params.seed ? Number.parseInt(params.seed, 10) : NaN

@@ -9,6 +9,15 @@ import { FLUX_MAX_PIXELS, FLUX_SIZE_STEP } from '../../shared/models'
 export function buildFluxBody(task: Task): Record<string, unknown> {
   const plain = { prompt: task.prompt }
   switch (task.model) {
+    // FLUX 3 takes a ratio and a resolution level, refuses an output format
+    // (422) and returns png; 4 is its most permissive safety tolerance.
+    case 'flux-3-image':
+      return {
+        ...plain,
+        aspect_ratio: chosen(task, 'aspectRatio', '1:1'),
+        resolution: chosen(task, 'resolution', '1k'),
+        safety_tolerance: 4,
+      }
     // Flex alone takes steps and guidance.
     case 'flux-2-flex':
       return {
@@ -16,7 +25,7 @@ export function buildFluxBody(task: Task): Record<string, unknown> {
         ...(task.params.steps ? { steps: task.params.steps } : {}),
         ...(task.params.guidance ? { guidance: task.params.guidance } : {}),
       }
-    // The other FLUX.2 models take a size and a seed.
+    // The other FLUX.2 models take a size, a format and a seed.
     case 'flux-2-max':
     case 'flux-2-pro':
     case 'flux-2-klein-9b':
@@ -27,6 +36,15 @@ export function buildFluxBody(task: Task): Record<string, unknown> {
   }
 }
 
+// A value a task does not carry (one queued before the field existed) is sent
+// as the field's default.
+function chosen(task: Task, key: string, fallback: string): string {
+  const value = task.params[key]
+  return typeof value === 'string' && value !== '' ? value : fallback
+}
+
+// Prompt upsampling is not sent, so BFL's default applies; 5 is FLUX.2's most
+// permissive safety tolerance. A seed is sent only when the user gave one.
 function flux2Body(task: Task, plain: { prompt: string }): Record<string, unknown> {
   const width = (task.params.width as number) || 1024
   const height = (task.params.height as number) || 1024
@@ -41,7 +59,8 @@ function flux2Body(task: Task, plain: { prompt: string }): Record<string, unknow
     ...plain,
     width,
     height,
-    output_format: 'png',
+    output_format: chosen(task, 'outputFormat', 'png'),
+    safety_tolerance: 5,
     ...(task.params.seed != null ? { seed: task.params.seed } : {}),
   }
 }

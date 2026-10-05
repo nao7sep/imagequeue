@@ -121,14 +121,34 @@ export interface OpenAIModelDef extends ModelDef {
   backgrounds: OpenAIBackground[]
 }
 
+export type FluxOutputFormat = 'png' | 'jpeg' | 'webp'
+
 export interface FluxModelDef extends ModelDef {
   provider: 'bfl'
   backend: 'flux'
-  sizes: SizePreset[]
+  // FLUX.2 takes a width and height from this ladder, an output format and a seed.
+  sizes?: SizePreset[]
+  outputFormats?: FluxOutputFormat[]
+  // FLUX 3 takes an aspect ratio and a resolution level instead, and returns png.
+  aspectRatios?: { label: string; value: string }[]
+  resolutions?: { label: string; value: string }[]
   // Only FLUX.2 Flex exposes steps and guidance in the public API.
   stepsRange?: { min: number; max: number; default: number }
   guidanceRange?: { min: number; max: number; default: number }
 }
+
+// FLUX 3's ratios: auto, then BFL's own order from 21:9 to 9:21.
+export const FLUX_3_ASPECT_RATIOS: { label: string; value: string }[] = [
+  'auto', '21:9', '2:1', '16:9', '3:2', '7:5', '4:3', '5:4', '1:1', '4:5', '3:4', '5:7', '2:3', '9:16', '1:2', '9:21',
+].map((value) => ({ label: value === 'auto' ? 'Auto' : value, value }))
+
+export const FLUX_3_RESOLUTIONS: { label: string; value: string }[] = [
+  { label: '768 sq', value: '768sq' },
+  { label: '1K', value: '1k' },
+  { label: '1.5K', value: '1.5k' },
+  { label: '2K', value: '2k' },
+  { label: '4K', value: '4k' },
+]
 
 // Nano Banana (Gemini native image generation) aspect ratios and sizes.
 // Source: https://ai.google.dev/gemini-api/docs/image-generation
