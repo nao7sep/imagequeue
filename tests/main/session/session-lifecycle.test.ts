@@ -3,7 +3,7 @@ import path from 'path'
 import os from 'os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BackendId, SessionManifest, Task, TaskStatus } from '../../../src/shared/types'
+import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } from '../../../src/shared/types'
 
 // Sessions are folders of the user's generated images with a manifest beside
 // them, so these paths are exercised against a real output directory: what the
@@ -200,7 +200,7 @@ describe('listing sessions', () => {
       tasks: withTasks([makeTask('a', 'completed'), makeTask('b', 'kept'), makeTask('c', 'failed')]),
     })
 
-    const summaries = listSessions()
+    const summaries = listSessions() as SessionSummary[]
 
     expect(summaries.map((summary) => summary.sessionId)).toEqual([
       getSessionId(),
@@ -226,14 +226,31 @@ describe('listing sessions', () => {
     expect(fs.existsSync(original), 'the original survives deleting its copy').toBe(true)
   })
 
-  it('passes over a folder with no manifest and one it cannot read', () => {
+  it('passes over a folder with no manifest', () => {
     fs.mkdirSync(path.join(getOutputDir(), 'not-a-session'), { recursive: true })
+
+    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+  })
+
+  it('lists a folder whose manifest it cannot open in place, by folder and reason, after the sessions it can open, and leaves its files as they were', async () => {
     const broken = path.join(getOutputDir(), '20260104-000000-utc')
     fs.mkdirSync(broken, { recursive: true })
     fs.writeFileSync(path.join(broken, 'session.json'), '{ not json', 'utf-8')
+    fs.writeFileSync(path.join(broken, 'image.png'), 'image bytes')
+    const newer = stageSession('20260105-000000-utc', { formatVersion: FORMAT_VERSIONS.session + 1 })
+    const snapshot = (dir: string) => Object.fromEntries(fs.readdirSync(dir).map((name) => [name, fs.readFileSync(path.join(dir, name), 'utf-8')]))
+    const before = { broken: snapshot(broken), newer: snapshot(newer) }
 
-    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+    expect(listSessions()).toEqual([
+      expect.objectContaining({ sessionId: getSessionId(), isCurrent: true }),
+      { sessionId: '20260105-000000-utc', unopenable: 'newer' },
+      { sessionId: '20260104-000000-utc', unopenable: 'unreadable' },
+    ])
     expect(log).toHaveBeenCalledWith('warn', 'Ignoring unreadable session manifest', expect.anything())
+    await expect(resumeSession('20260104-000000-utc')).rejects.toThrow(/missing a readable session.json/)
+    await expect(resumeSession('20260105-000000-utc')).rejects.toThrow(/missing a readable session.json/)
+
+    expect({ broken: snapshot(broken), newer: snapshot(newer) }).toEqual(before)
   })
 })
 
@@ -531,11 +548,11 @@ describe('the manifest format version', () => {
     expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
   })
 
-  it('passes over a manifest from a newer version, refuses to open it, and leaves its bytes as they were', async () => {
+  it('lists a manifest from a newer version as unopenable, refuses to open it, and leaves its bytes as they were', async () => {
     const dir = stageSession('20260111-000000-utc', { formatVersion: FORMAT_VERSIONS.session + 1 })
     const before = fs.readFileSync(path.join(dir, 'session.json'))
 
-    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId(), '20260111-000000-utc'])
     expect(log).toHaveBeenCalledWith('warn', 'Ignoring a session manifest from a newer version', expect.objectContaining({
       error: expect.stringContaining(NewerFormatError.name),
     }))

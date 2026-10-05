@@ -16,6 +16,7 @@ import {
   DependenciesState,
   DependencyProgress,
   DrawThingsModelParams,
+  SessionListEntry,
   SessionSummary,
   ApiKeyPresence,
   SecretId,
@@ -114,7 +115,7 @@ const api = {
   createSession: (): Promise<void> =>
     ipcRenderer.invoke('session:create'),
 
-  listSessions: (): Promise<SessionSummary[]> =>
+  listSessions: (): Promise<SessionListEntry[]> =>
     ipcRenderer.invoke('session:list'),
 
   resumeSession: (sessionId: string): Promise<void> =>

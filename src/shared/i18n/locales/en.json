@@ -730,6 +730,8 @@
   "sessions.created": "Created {date}",
   "sessions.resumed": "Resumed {date}",
   "sessions.openFolder": "Open Folder",
+  "sessions.unreadable": "ImageQueue can’t read this session’s session.json, so the session can’t be opened. Its files were left unchanged.",
+  "sessions.newer": "A newer version of ImageQueue wrote this session’s session.json, so this version can’t open the session. Its files were left unchanged.",
   "dtModels.catalog": "Catalog",
   "dtModels.unimportedMessage": "You have an unimported model path. Discard and close?",
   "dtModels.unavailable": "Models unavailable.",

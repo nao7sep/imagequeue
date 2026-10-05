@@ -708,6 +708,8 @@
   "sessions.created": "作成 {date}",
   "sessions.resumed": "再開 {date}",
   "sessions.openFolder": "フォルダを開く",
+  "sessions.unreadable": "このセッションの session.json を ImageQueue が読み取れないため、セッションを開けません。ファイルは変更せずにそのまま残してあります。",
+  "sessions.newer": "このセッションの session.json は新しいバージョンの ImageQueue で書き込まれたため、このバージョンではセッションを開けません。ファイルは変更せずにそのまま残してあります。",
   "dtModels.catalog": "カタログ",
   "dtModels.unimportedMessage": "読み込んでいないモデルのパスがあります。破棄して閉じますか？",
   "dtModels.unavailable": "モデルを利用できません。",

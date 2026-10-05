@@ -708,6 +708,8 @@
   "sessions.created": "创建于 {date}",
   "sessions.resumed": "恢复于 {date}",
   "sessions.openFolder": "打开文件夹",
+  "sessions.unreadable": "ImageQueue 无法读取此会话的 session.json，因此无法打开该会话。其文件已保持原样。",
+  "sessions.newer": "此会话的 session.json 由更新版本的 ImageQueue 写入，因此此版本无法打开该会话。其文件已保持原样。",
   "dtModels.catalog": "目录",
   "dtModels.unimportedMessage": "你有一个尚未导入的模型路径。要放弃并关闭吗？",
   "dtModels.unavailable": "模型不可用。",

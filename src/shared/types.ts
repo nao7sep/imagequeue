@@ -335,3 +335,19 @@ export interface SessionSummary {
   thumbnails: SessionThumbnail[]
   isCurrent: boolean
 }
+
+/**
+ * A session folder whose session.json this build cannot open: unreadable, or
+ * written by a newer ImageQueue. It is listed in place and its files are left
+ * as they are (store-recovery-conventions).
+ */
+export interface UnopenableSession {
+  sessionId: string
+  unopenable: 'unreadable' | 'newer'
+}
+
+export type SessionListEntry = SessionSummary | UnopenableSession
+
+export function isUnopenableSession(entry: SessionListEntry): entry is UnopenableSession {
+  return 'unopenable' in entry
+}

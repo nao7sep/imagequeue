@@ -3,9 +3,9 @@ import { Modal } from './Modal'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useSettings } from '../context/SettingsContext'
-import { useListbox } from '../hooks/useListbox'
+import { useListbox, type OptionProps } from '../hooks/useListbox'
 import { useImeGuard } from '../utils/imeGuard'
-import { shouldDeleteToTrash, type SessionSummary, type SessionThumbnail } from '../../../shared'
+import { isUnopenableSession, shouldDeleteToTrash, type SessionListEntry, type SessionSummary, type SessionThumbnail, type UnopenableSession } from '../../../shared'
 import { useI18n, type Translator } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
@@ -55,6 +55,39 @@ function SessionPreviewStrip({ sessionId, thumbnails }: { sessionId: string; thu
   )
 }
 
+const UNOPENABLE_REASON: Record<UnopenableSession['unopenable'], MessageKey> = {
+  unreadable: 'sessions.unreadable',
+  newer: 'sessions.newer',
+}
+
+// A session folder whose session.json cannot be opened, listed in place under
+// its folder name with the reason. It offers no Resume and no Delete: its files
+// are left as they are, and Open Folder lets the user deal with them.
+function UnopenableSessionCard({ session, selected, optionProps, onOpenFolder, openFolderDisabled }: {
+  session: UnopenableSession
+  selected: boolean
+  optionProps: OptionProps
+  onOpenFolder: () => void
+  openFolderDisabled: boolean
+}): React.JSX.Element {
+  const { t } = useI18n()
+  return (
+    <div className={`session-card${selected ? ' selected' : ''}`} {...optionProps}>
+      <div className="session-card-header">
+        <div className="session-card-title-row">
+          <div className="session-card-title">{session.sessionId}</div>
+        </div>
+        <div className="session-card-summary">{t(UNOPENABLE_REASON[session.unopenable])}</div>
+      </div>
+      <div className="session-card-actions">
+        <button tabIndex={-1} className="modal-btn" onClick={onOpenFolder} disabled={openFolderDisabled}>
+          {t('sessions.openFolder')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const { tasks } = useQueue()
   const confirm = useConfirm()
@@ -62,7 +95,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const { t } = i18n
   const date = (iso: string): string => i18n.dateTime(iso)
   const { settings } = useSettings()
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
+  const [sessions, setSessions] = useState<SessionListEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<MessageKey | null>(null)
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
@@ -186,7 +219,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     }
   }, [confirm, deleteToTrash, refreshSessions, t])
 
-  const handleOpenFolder = useCallback(async (session: SessionSummary): Promise<void> => {
+  const handleOpenFolder = useCallback(async (session: SessionListEntry): Promise<void> => {
     setBusySessionId(session.sessionId)
     setMessage(null)
     try {
@@ -207,7 +240,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     activation: 'manual',
     onPrimary: (id) => {
       const session = sessions.find((s) => s.sessionId === id)
-      if (session) void handleResume(session)
+      if (session && !isUnopenableSession(session)) void handleResume(session)
     },
     isComposing,
   })
@@ -260,6 +293,18 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
             {sessions.map((session) => {
               const busy = busySessionId === session.sessionId
               const selected = selectedSessionId === session.sessionId
+              if (isUnopenableSession(session)) {
+                return (
+                  <UnopenableSessionCard
+                    key={session.sessionId}
+                    session={session}
+                    selected={selected}
+                    optionProps={getOptionProps(session.sessionId)}
+                    onOpenFolder={() => void handleOpenFolder(session)}
+                    openFolderDisabled={busy || creatingSession}
+                  />
+                )
+              }
               return (
                 <div
                   key={session.sessionId}

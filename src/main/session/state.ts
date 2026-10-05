@@ -8,7 +8,9 @@ import {
   BACKEND_IDS_IN_UI_ORDER,
   BackendId,
   SessionManifest,
+  SessionListEntry,
   SessionSummary,
+  UnopenableSession,
   SessionTaskCounts,
   SessionThumbnail,
   Task,
@@ -195,9 +197,15 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
 }
 
-function readManifestFromDir(sessionDir: string): StoredSessionManifest | null {
+// A folder with no session.json is not a session; one whose session.json cannot
+// be opened is, and says why.
+type ManifestRead =
+  | { manifest: StoredSessionManifest }
+  | { manifest: null; problem: 'missing' | UnopenableSession['unopenable'] }
+
+function readManifestFromDir(sessionDir: string): ManifestRead {
   const filePath = getManifestPath(sessionDir)
-  if (!fs.existsSync(filePath)) return null
+  if (!fs.existsSync(filePath)) return { manifest: null, problem: 'missing' }
 
   try {
     const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown
@@ -210,7 +218,7 @@ function readManifestFromDir(sessionDir: string): StoredSessionManifest | null {
     for (const backend of BACKEND_IDS_IN_UI_ORDER) {
       normalizedTasks[backend] = parsed.tasks[backend].map(readStoredTask)
     }
-    return {
+    return { manifest: {
       ...parsed,
       elaboratedPrompts: normalizeElaboratedPrompts(parsed.elaboratedPrompts),
       // draft is intentionally not validated by isSessionManifest: a missing or
@@ -218,17 +226,16 @@ function readManifestFromDir(sessionDir: string): StoredSessionManifest | null {
       // repaired to a clean draft here instead.
       draft: normalizeSessionDraft((parsed as Partial<SessionManifest>).draft),
       tasks: normalizedTasks,
-    }
+    } }
   } catch (error) {
-    // A newer manifest is skipped like an unreadable one, and its session is
-    // never opened, so nothing writes over it.
-    log('warn', error instanceof NewerFormatError
-      ? 'Ignoring a session manifest from a newer version'
-      : 'Ignoring unreadable session manifest', {
+    // An unreadable or newer manifest is listed, never opened, so nothing
+    // writes over it.
+    const newer = error instanceof NewerFormatError
+    log('warn', newer ? 'Ignoring a session manifest from a newer version' : 'Ignoring unreadable session manifest', {
       filePath,
       error: serializeError(error),
     })
-    return null
+    return { manifest: null, problem: newer ? 'newer' : 'unreadable' }
   }
 }
 
@@ -300,7 +307,7 @@ function newSessionState(): AdoptedSession {
 // pass. Skipped entirely once create/resume have adopted state directly.
 function ensureActiveSessionLoaded(): ActiveSessionState {
   if (activeSession) return activeSession
-  const manifest = readManifestFromDir(getSessionDir())
+  const { manifest } = readManifestFromDir(getSessionDir())
   return manifest
     ? adoptActiveSession({
         elaboratedPrompts: [...manifest.elaboratedPrompts],
@@ -497,16 +504,23 @@ export async function createSession(): Promise<void> {
   }
 }
 
-export function listSessions(): SessionSummary[] {
+// Sessions it can open, most recently updated first, then those it cannot,
+// newest folder first.
+export function listSessions(): SessionListEntry[] {
   const outputDir = getOutputDir()
   const currentSessionId = getSessionId()
   const entries = fs.readdirSync(outputDir, { withFileTypes: true })
   const summaries: SessionSummary[] = []
+  const unopenable: UnopenableSession[] = []
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const manifest = readManifestFromDir(path.join(outputDir, entry.name))
-    if (!manifest) continue
+    const read = readManifestFromDir(path.join(outputDir, entry.name))
+    if (!read.manifest) {
+      if (read.problem !== 'missing') unopenable.push({ sessionId: entry.name, unopenable: read.problem })
+      continue
+    }
+    const { manifest } = read
     const displayCounts = createSessionDisplayCounts(manifest.tasks)
     // The folder is the session's identity: resume, delete and thumbnails all
     // resolve the folder by this id. The manifest's own sessionId goes stale when
@@ -525,11 +539,13 @@ export function listSessions(): SessionSummary[] {
     })
   }
 
-  return summaries.sort((a, b) => {
+  summaries.sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     if (updatedDiff !== 0) return updatedDiff
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
+  unopenable.sort((a, b) => (a.sessionId < b.sessionId ? 1 : a.sessionId > b.sessionId ? -1 : 0))
+  return [...summaries, ...unopenable]
 }
 
 export async function resumeSession(sessionId: string): Promise<void> {
@@ -549,7 +565,7 @@ export async function resumeSession(sessionId: string): Promise<void> {
   else draftWriter.drain()
 
   const sessionDir = resolveSessionDir(sessionId)
-  const manifest = readManifestFromDir(sessionDir)
+  const { manifest } = readManifestFromDir(sessionDir)
   if (!manifest) {
     throw new Error('That session is missing a readable session.json file.')
   }

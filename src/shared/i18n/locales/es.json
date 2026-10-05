@@ -752,6 +752,8 @@
   "sessions.created": "Creada el {date}",
   "sessions.resumed": "Reanudada el {date}",
   "sessions.openFolder": "Abrir carpeta",
+  "sessions.unreadable": "ImageQueue no puede leer el archivo session.json de esta sesión, así que la sesión no se puede abrir. Sus archivos se dejaron sin cambios.",
+  "sessions.newer": "Una versión más reciente de ImageQueue escribió el archivo session.json de esta sesión, así que esta versión no puede abrirla. Sus archivos se dejaron sin cambios.",
   "dtModels.catalog": "Catálogo",
   "dtModels.unimportedMessage": "Tienes una ruta de modelo sin importar. ¿Descartarla y cerrar?",
   "dtModels.unavailable": "Modelos no disponibles.",

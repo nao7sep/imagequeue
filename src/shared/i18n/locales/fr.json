@@ -752,6 +752,8 @@
   "sessions.created": "Créée le {date}",
   "sessions.resumed": "Reprise le {date}",
   "sessions.openFolder": "Ouvrir le dossier",
+  "sessions.unreadable": "ImageQueue ne peut pas lire le fichier session.json de cette session, la session ne peut donc pas être ouverte. Ses fichiers ont été laissés tels quels.",
+  "sessions.newer": "Une version plus récente d’ImageQueue a écrit le fichier session.json de cette session, cette version ne peut donc pas ouvrir la session. Ses fichiers ont été laissés tels quels.",
   "dtModels.catalog": "Catalogue",
   "dtModels.unimportedMessage": "Vous avez un chemin de modèle non importé. Ignorer et fermer\u00a0?",
   "dtModels.unavailable": "Modèles indisponibles.",

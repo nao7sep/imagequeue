@@ -774,6 +774,8 @@
   "sessions.created": "Создан {date}",
   "sessions.resumed": "Возобновлён {date}",
   "sessions.openFolder": "Открыть папку",
+  "sessions.unreadable": "ImageQueue не удаётся прочитать файл session.json этого сеанса, поэтому сеанс нельзя открыть. Его файлы оставлены без изменений.",
+  "sessions.newer": "Файл session.json этого сеанса записан более новой версией ImageQueue, поэтому эта версия не может открыть сеанс. Его файлы оставлены без изменений.",
   "dtModels.catalog": "Каталог",
   "dtModels.unimportedMessage": "Путь к модели не импортирован. Отбросить и закрыть?",
   "dtModels.unavailable": "Модели недоступны.",

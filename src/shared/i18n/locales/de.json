@@ -730,6 +730,8 @@
   "sessions.created": "Erstellt am {date}",
   "sessions.resumed": "Fortgesetzt am {date}",
   "sessions.openFolder": "Ordner öffnen",
+  "sessions.unreadable": "ImageQueue kann die Datei session.json dieser Sitzung nicht lesen, daher lässt sich die Sitzung nicht öffnen. Die Dateien der Sitzung wurden unverändert gelassen.",
+  "sessions.newer": "Die Datei session.json dieser Sitzung wurde von einer neueren Version von ImageQueue geschrieben, daher kann diese Version die Sitzung nicht öffnen. Die Dateien der Sitzung wurden unverändert gelassen.",
   "dtModels.catalog": "Katalog",
   "dtModels.unimportedMessage": "Sie haben einen nicht importierten Modellpfad. Verwerfen und schließen?",
   "dtModels.unavailable": "Modelle nicht verfügbar.",

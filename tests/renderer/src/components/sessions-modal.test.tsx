@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BackendId, SessionSummary, Task } from '../../../../src/shared/types'
+import type { BackendId, SessionListEntry, SessionSummary, Task } from '../../../../src/shared/types'
 
 // The Sessions window follows the app's own jobs while it is open: each queue
 // change reads the sessions again, and only the latest read applies.
@@ -36,16 +36,20 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve }
 }
 
-const listSessions = vi.fn<() => Promise<SessionSummary[]>>()
+const listSessions = vi.fn<() => Promise<SessionListEntry[]>>()
+const resumeSession = vi.fn(async (_sessionId: string) => {})
+const openSessionFolder = vi.fn(async (_sessionId: string) => {})
 
 beforeEach(() => {
   queueValue = { tasks: emptyTasks() }
-  window.electronAPI = { listSessions } as unknown as typeof window.electronAPI
+  window.electronAPI = { listSessions, resumeSession, openSessionFolder } as unknown as typeof window.electronAPI
 })
 
 afterEach(() => {
   cleanup()
   listSessions.mockReset()
+  resumeSession.mockClear()
+  openSessionFolder.mockClear()
 })
 
 describe('SessionsModal', () => {
@@ -75,5 +79,35 @@ describe('SessionsModal', () => {
     await act(async () => { earlier.resolve([session(1, '2026-10-04T12:00:00.000Z')]) })
     expect(screen.queryByText(/1 complete/)).toBeNull()
     expect(screen.getByText(/2 complete/)).toBeTruthy()
+  })
+
+  it('lists a session it cannot open in place, by folder and reason, offering only Open Folder', async () => {
+    listSessions.mockResolvedValueOnce([
+      session(1, '2026-10-04T12:00:00.000Z'),
+      { ...session(3, '2026-10-03T12:00:00.000Z'), sessionId: '20261003-120000-000-utc', isCurrent: false },
+      { sessionId: '20261003-090000-123-utc', unopenable: 'newer' },
+      { sessionId: '20261002-090000-123-utc copy', unopenable: 'unreadable' },
+    ])
+    render(<SessionsModal onClose={() => undefined} />)
+
+    const newer = (await screen.findByText('20261003-090000-123-utc')).closest('[role="option"]') as HTMLElement
+    const unreadable = screen.getByText('20261002-090000-123-utc copy').closest('[role="option"]') as HTMLElement
+    expect(within(newer).getByText(/A newer version of ImageQueue wrote this session’s session.json/)).toBeTruthy()
+    expect(within(unreadable).getByText(/ImageQueue can’t read this session’s session.json/)).toBeTruthy()
+    for (const card of [newer, unreadable]) {
+      expect(within(card).getAllByRole('button').map((button) => button.textContent)).toEqual(['Open Folder'])
+    }
+
+    await act(async () => { fireEvent.click(within(newer).getByRole('button', { name: 'Open Folder' })) })
+    expect(openSessionFolder).toHaveBeenCalledExactlyOnceWith('20261003-090000-123-utc')
+
+    act(() => newer.focus())
+    await act(async () => { fireEvent.keyDown(newer, { key: 'Enter' }) })
+    expect(resumeSession).not.toHaveBeenCalled()
+    // Enter on a session it can open does resume it.
+    const readable = screen.getByText('20261003-120000').closest('[role="option"]') as HTMLElement
+    act(() => readable.focus())
+    await act(async () => { fireEvent.keyDown(readable, { key: 'Enter' }) })
+    expect(resumeSession).toHaveBeenCalledExactlyOnceWith('20261003-120000-000-utc')
   })
 })

@@ -31,7 +31,7 @@ interface UseListboxParams {
   isComposing?: (event?: { isComposing?: boolean; keyCode?: number }) => boolean
 }
 
-interface OptionProps {
+export interface OptionProps {
   role: 'option'
   'aria-selected': boolean
   tabIndex: 0 | -1
