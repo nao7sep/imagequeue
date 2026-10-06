@@ -227,7 +227,7 @@ export interface SessionManifest {
   taskCounts: SessionTaskCounts
   elaboratedPrompts: ElaboratedPromptRecord[]
   // The renderer's working state for this session (prompt + Advanced Prompting
-  // selections); a malformed field reads as its empty value (normalizeSessionDraft).
+  // selections); an absent field reads as its empty value (normalizeSessionDraft).
   draft: SessionDraft
   tasks: Record<BackendId, Task[]>
 }

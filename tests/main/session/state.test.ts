@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  normalizeElaboratedPrompts,
   collectSessionThumbnails,
   createTaskCounts,
   isSessionManifest,
@@ -165,22 +164,20 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest(valid)).toBe(true)
   })
 
-  // Per-entry junk must never invalidate the manifest — that costs the session
-  // its whole task history for a display field. Junk is dropped on read.
-  it('accepts a manifest whose prompt entries include junk', () => {
-    expect(isSessionManifest({ ...valid, elaboratedPrompts: [42] })).toBe(true)
-    expect(isSessionManifest({ ...valid, elaboratedPrompts: ['a bare string'] })).toBe(true)
+  // A member the app would drop or rewrite makes the session unreadable, so it
+  // is listed in place and nothing saves a repaired copy over it.
+  it('rejects a manifest whose prompt entries include junk', () => {
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [42] })).toBe(false)
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: ['a bare string'] })).toBe(false)
+    expect(isSessionManifest({ ...valid, elaboratedPrompts: [{ text: 'x', concepts: [{ facet: 1 }] }] })).toBe(false)
   })
 
-  it('keeps the records on read and drops every other entry', () => {
-    const kept = normalizeElaboratedPrompts([
-      'a bare string',
-      42,
-      { text: 7, concepts: [] },
-      { text: 'good', concepts: [{ facet: 'place', concept: 'quay' }] },
-      { text: 'x', concepts: [{ facet: 1 }] },
-    ])
-    expect(kept).toEqual([{ text: 'good', concepts: [{ facet: 'place', concept: 'quay' }] }])
+  it('rejects a task list holding anything but tasks', () => {
+    const tasks = (list: unknown[]) => ({ ...createEmptyQueues(), openai: list })
+    expect(isSessionManifest({ ...valid, tasks: tasks([makeTask('a', 'completed')]) })).toBe(true)
+    expect(isSessionManifest({ ...valid, tasks: tasks([null]) })).toBe(false)
+    expect(isSessionManifest({ ...valid, tasks: tasks([{ ...makeTask('a', 'completed'), status: 'done' }]) })).toBe(false)
+    expect(isSessionManifest({ ...valid, tasks: tasks([{ ...makeTask('a', 'completed'), baseName: 7 }]) })).toBe(false)
   })
 
   it('rejects missing fields and malformed task maps', () => {
@@ -190,12 +187,13 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest({ ...valid, tasks: { openai: 'not-an-array' } })).toBe(false)
   })
 
-  it('rejects a manifest without its draft, and accepts one whose draft fields are malformed', () => {
+  it('rejects a manifest without its draft or with a malformed draft field, and accepts one missing a field', () => {
     const { draft: _draft, ...withoutDraft } = valid
     expect(isSessionManifest(withoutDraft)).toBe(false)
     expect(isSessionManifest({ ...valid, draft: 'garbage' })).toBe(false)
     expect(isSessionManifest({ ...valid, draft: null })).toBe(false)
-    expect(isSessionManifest({ ...valid, draft: { prompt: 7 } })).toBe(true)
+    expect(isSessionManifest({ ...valid, draft: { prompt: 7 } })).toBe(false)
+    expect(isSessionManifest({ ...valid, draft: { prompt: 'a cat' } })).toBe(true)
   })
 
   // A session written before the Imagen backend was removed still carries an

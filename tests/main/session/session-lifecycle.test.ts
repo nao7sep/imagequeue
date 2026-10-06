@@ -547,6 +547,27 @@ describe('the updated time', () => {
   })
 })
 
+describe('a manifest member that cannot be used', () => {
+  it('lists that session in place, keeps its bytes, and still lists the others', async () => {
+    const damaged = stageSession('20260111-000000-utc', {
+      tasks: { ...createEmptyQueues(), openai: [null] } as unknown as SessionManifest['tasks'],
+    })
+    const authored = stageSession('20260112-000000-utc', {
+      draft: { ...createEmptySessionDraft(), prompt: 7 } as unknown as SessionManifest['draft'],
+    })
+    stageSession('20260113-000000-utc')
+    const bytes = [damaged, authored].map((dir) => fs.readFileSync(path.join(dir, 'session.json')))
+
+    const listed = listSessions()
+    expect(listed).toContainEqual({ sessionId: '20260111-000000-utc', unopenable: 'unreadable' })
+    expect(listed).toContainEqual({ sessionId: '20260112-000000-utc', unopenable: 'unreadable' })
+    expect(listed.some((entry) => entry.sessionId === '20260113-000000-utc' && !('unopenable' in entry))).toBe(true)
+
+    await expect(resumeSession('20260112-000000-utc')).rejects.toThrow(/missing a readable session.json/)
+    expect([damaged, authored].map((dir) => fs.readFileSync(path.join(dir, 'session.json')))).toEqual(bytes)
+  })
+})
+
 describe('the manifest format version', () => {
   it('lists a manifest with no format version as unreadable and leaves it as it was', async () => {
     const dir = stageSession('20260110-000000-utc', { formatVersion: undefined })

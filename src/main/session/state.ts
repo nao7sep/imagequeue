@@ -14,8 +14,10 @@ import {
   SessionTaskCounts,
   SessionThumbnail,
   Task,
+  TaskStatus,
 } from '../../shared/types'
-import { createEmptySessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
+import { createEmptySessionDraft, isStoredSessionDraft, normalizeSessionDraft, type SessionDraft } from '../../shared/session-draft'
+import { isMessage } from '../../shared/i18n/translate'
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
@@ -150,22 +152,42 @@ function isElaboratedPromptEntry(entry: unknown): entry is ElaboratedPromptRecor
   )
 }
 
-/** The entries that are records; anything else is dropped with a warn.
- *  Exported for the tests that pin it. */
-export function normalizeElaboratedPrompts(entries: readonly unknown[]): ElaboratedPromptRecord[] {
-  const kept = entries.filter(isElaboratedPromptEntry).map((record) => ({
-    text: record.text,
-    concepts: record.concepts.map((c) => ({ ...c })),
-  }))
-  if (kept.length < entries.length) {
-    log('warn', 'Dropped unrecognizable elaborated-prompt entries', { dropped: entries.length - kept.length, kept: kept.length })
-  }
-  return kept
-}
-
 // A manifest as read: its format version is checked and set aside before this.
 type StoredSessionManifest = Omit<SessionManifest, 'formatVersion'>
 
+const TASK_STATUSES: readonly TaskStatus[] = ['queued', 'generating', 'completed', 'kept', 'failed', 'interrupted']
+
+// A stored task holds every field the app reads or writes back; an absent
+// nullable field reads as null.
+function isStoredTask(value: unknown): value is Task {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const task = value as Record<string, unknown>
+  const nullable = (field: unknown, check: (present: unknown) => boolean): boolean =>
+    field === undefined || field === null || check(field)
+  const isString = (field: unknown): boolean => typeof field === 'string'
+  return (
+    typeof task.id === 'string' &&
+    typeof task.prompt === 'string' &&
+    typeof task.backend === 'string' &&
+    typeof task.model === 'string' &&
+    !!task.params && typeof task.params === 'object' && !Array.isArray(task.params) &&
+    TASK_STATUSES.includes(task.status as TaskStatus) &&
+    typeof task.enqueuedAt === 'string' &&
+    nullable(task.startedAt, isString) &&
+    nullable(task.completedAt, isString) &&
+    nullable(task.durationMs, (field) => typeof field === 'number') &&
+    nullable(task.imagePath, isString) &&
+    nullable(task.baseName, isString) &&
+    nullable(task.error, isMessage) &&
+    nullable(task.providerMessage, isString)
+  )
+}
+
+// The manifest's members the app consumes or writes back are checked here, at
+// the read boundary: one that is not usable makes the session unreadable,
+// listed in place with its bytes untouched, rather than repaired and saved
+// over (store-recovery conventions). A task list for a backend this build does
+// not have is not read.
 export function isSessionManifest(value: unknown): value is StoredSessionManifest {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<StoredSessionManifest>
@@ -173,14 +195,14 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
-  // Shape only: no prompt entry justifies costing a session its task history,
-  // so an entry that is not a record is dropped by normalizeElaboratedPrompts,
-  // and a malformed draft field reads as its empty value.
-  if (!Array.isArray(candidate.elaboratedPrompts)) return false
-  if (!candidate.draft || typeof candidate.draft !== 'object') return false
+  if (!Array.isArray(candidate.elaboratedPrompts) || !candidate.elaboratedPrompts.every(isElaboratedPromptEntry)) return false
+  if (!isStoredSessionDraft(candidate.draft)) return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
-  return BACKEND_IDS_IN_UI_ORDER.every((backend) => Array.isArray(candidate.tasks?.[backend]))
+  return BACKEND_IDS_IN_UI_ORDER.every((backend) => {
+    const tasks: unknown = candidate.tasks?.[backend]
+    return Array.isArray(tasks) && tasks.every(isStoredTask)
+  })
 }
 
 // A folder with no session.json is not a session; one whose session.json cannot
@@ -202,7 +224,10 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
     }
     return { manifest: {
       ...parsed,
-      elaboratedPrompts: normalizeElaboratedPrompts(parsed.elaboratedPrompts),
+      elaboratedPrompts: parsed.elaboratedPrompts.map((record) => ({
+        text: record.text,
+        concepts: record.concepts.map((credit) => ({ ...credit })),
+      })),
       draft: normalizeSessionDraft(parsed.draft),
     } }
   } catch (error) {

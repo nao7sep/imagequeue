@@ -127,6 +127,35 @@ function normalizeStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string')
 }
 
+const isString = (value: unknown): boolean => typeof value === 'string'
+const isNullableString = (value: unknown): boolean => value === null || typeof value === 'string'
+
+// Whether a stored draft can be used as it is: every field it holds is one the
+// draft can hold. An absent field takes its empty-draft value through
+// normalizeSessionDraft; a malformed one makes the session unreadable rather
+// than being replaced and saved over (store-recovery conventions).
+export function isStoredSessionDraft(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const v = value as Record<string, unknown>
+  const fieldChecks: Record<keyof SessionDraft, (field: unknown) => boolean> = {
+    prompt: isString,
+    seed: isString,
+    elaborated: isString,
+    selectedCompositionElaboratorId: isNullableString,
+    selectedStyleElaboratorId: isNullableString,
+    selectedProprietary: (field) =>
+      !!field && typeof field === 'object' && !Array.isArray(field) &&
+      Object.values(field).every((selected) => typeof selected === 'boolean'),
+    selectedDtFiles: (field) => Array.isArray(field) && field.every(isString),
+    promptMode: (field) => PROMPT_MODES.includes(field as PromptMode),
+    targetScope: (field) => TARGET_SCOPES.includes(field as TargetScope),
+    count: (field) => normalizeCount(field) === field,
+    promptFormat: (field) => PROMPT_FORMATS.includes(field as PromptFormat),
+    promptLength: (field) => PROMPT_LENGTHS.includes(field as PromptLength),
+  }
+  return Object.entries(fieldChecks).every(([key, check]) => v[key] === undefined || check(v[key]))
+}
+
 // Rebuilds a complete, valid SessionDraft from a draft the renderer sends or a
 // session stores. A malformed field falls back to its empty-draft value rather
 // than the whole object being rejected, so a corrupted draft degrades to a
