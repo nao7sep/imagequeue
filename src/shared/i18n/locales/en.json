@@ -94,7 +94,7 @@
   "notice.drawThingsParamsResetTitle": "Draw Things parameters were reset",
   "notice.drawThingsParamsResetMessage": "ImageQueue couldn’t read your saved Draw Things parameters, so it set the file aside at {path}. Each model now uses its recommended or default parameters. Your earlier parameters remain in the set-aside copy.",
   "notice.conceptLibraryResetTitle": "Concept Library was reset",
-  "notice.conceptLibraryResetMessage": "ImageQueue couldn’t read its concept library, so it set the file aside at {path} and started a new, empty one. The concepts and use history from before remain in the set-aside copy, so new prompts may reuse concepts used earlier.",
+  "notice.conceptLibraryResetMessage": "ImageQueue couldn’t read its concept library, so it set the file aside at {path} and started a new, empty one. New prompts may reuse concepts used before, because the new library has no record of them. The earlier concepts and use history remain in the set-aside copy.",
   "taskFailure.notSaved": "The image was generated, but ImageQueue could not save it. Check that the output location is available and has enough free space, then retry.",
   "taskFailure.missingKey": "No {name} API key is set. Add it in Settings, then retry.",
   "taskFailure.refused": "{name} refused this prompt. Change the prompt, then retry.",

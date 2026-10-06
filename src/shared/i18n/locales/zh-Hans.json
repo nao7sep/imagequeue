@@ -94,7 +94,7 @@
   "notice.drawThingsParamsResetTitle": "Draw Things 参数已重置",
   "notice.drawThingsParamsResetMessage": "ImageQueue 无法读取你保存的 Draw Things 参数，因此已将该文件移至 {path}。现在每个模型都使用其推荐参数或默认参数。你之前的参数仍保留在该文件中。",
   "notice.conceptLibraryResetTitle": "概念库已重置",
-  "notice.conceptLibraryResetMessage": "ImageQueue 无法读取其概念库，因此已将该文件移至 {path}，并新建了一个空的概念库。之前的概念和使用记录仍保留在该文件中，因此新的提示词可能会再次用到以前用过的概念。",
+  "notice.conceptLibraryResetMessage": "ImageQueue 无法读取其概念库，因此已将该文件移至 {path}，并新建了一个空的概念库。由于新的概念库没有以前的使用记录，新的提示词可能会再次用到以前用过的概念。之前的概念和使用记录仍保留在该文件中。",
   "taskFailure.notSaved": "图像已生成，但 ImageQueue 无法保存它。请检查输出位置是否可用且有足够的可用空间，然后重试。",
   "taskFailure.missingKey": "尚未设置 {name} 的 API 密钥。请在设置中添加后重试。",
   "taskFailure.refused": "{name} 拒绝了此提示词。请修改提示词后重试。",

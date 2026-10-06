@@ -94,7 +94,7 @@
   "notice.drawThingsParamsResetTitle": "Die Draw-Things-Parameter wurden zurückgesetzt",
   "notice.drawThingsParamsResetMessage": "ImageQueue konnte Ihre gespeicherten Draw-Things-Parameter nicht lesen und hat die Datei daher unter {path} beiseitegelegt. Jedes Modell verwendet jetzt seine empfohlenen oder Standardparameter. Ihre bisherigen Parameter sind in der beiseitegelegten Kopie erhalten.",
   "notice.conceptLibraryResetTitle": "Die Konzeptbibliothek wurde zurückgesetzt",
-  "notice.conceptLibraryResetMessage": "ImageQueue konnte seine Konzeptbibliothek nicht lesen, hat die Datei daher unter {path} beiseitegelegt und eine neue, leere angelegt. Die bisherigen Konzepte und ihr Nutzungsverlauf sind in der beiseitegelegten Kopie erhalten, daher können neue Prompts bereits verwendete Konzepte erneut verwenden.",
+  "notice.conceptLibraryResetMessage": "ImageQueue konnte seine Konzeptbibliothek nicht lesen, hat die Datei daher unter {path} beiseitegelegt und eine neue, leere angelegt. Neue Prompts können bereits verwendete Konzepte erneut verwenden, da die neue Bibliothek sie nicht kennt. Die bisherigen Konzepte und ihr Nutzungsverlauf sind in der beiseitegelegten Kopie erhalten.",
   "taskFailure.notSaved": "Das Bild wurde erzeugt, aber ImageQueue konnte es nicht speichern. Prüfen Sie, ob der Ausgabeort verfügbar ist und genügend freien Speicher hat, und versuchen Sie es dann erneut.",
   "taskFailure.missingKey": "Es ist kein API-Schlüssel für {name} festgelegt. Fügen Sie ihn in den Einstellungen hinzu und versuchen Sie es dann erneut.",
   "taskFailure.refused": "{name} hat diesen Prompt abgelehnt. Ändern Sie den Prompt und versuchen Sie es dann erneut.",

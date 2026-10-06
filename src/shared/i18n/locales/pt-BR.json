@@ -94,7 +94,7 @@
   "notice.drawThingsParamsResetTitle": "Os parâmetros do Draw Things foram redefinidos",
   "notice.drawThingsParamsResetMessage": "O ImageQueue não conseguiu ler seus parâmetros salvos do Draw Things, então guardou o arquivo à parte em {path}. Agora cada modelo usa os parâmetros recomendados ou padrão. Seus parâmetros anteriores continuam na cópia guardada à parte.",
   "notice.conceptLibraryResetTitle": "A biblioteca de conceitos foi redefinida",
-  "notice.conceptLibraryResetMessage": "O ImageQueue não conseguiu ler a biblioteca de conceitos, então guardou o arquivo à parte em {path} e criou uma nova, vazia. Os conceitos e o histórico de uso anteriores continuam na cópia guardada à parte, então novos prompts podem reutilizar conceitos já usados.",
+  "notice.conceptLibraryResetMessage": "O ImageQueue não conseguiu ler a biblioteca de conceitos, então guardou o arquivo à parte em {path} e criou uma nova, vazia. Novos prompts podem reutilizar conceitos já usados, porque a nova biblioteca não tem registro deles. Os conceitos e o histórico de uso anteriores continuam na cópia guardada à parte.",
   "taskFailure.notSaved": "A imagem foi gerada, mas o ImageQueue não conseguiu salvá-la. Verifique se o local de saída está disponível e tem espaço livre suficiente e tente novamente.",
   "taskFailure.missingKey": "Nenhuma chave de API do {name} foi definida. Adicione-a nos Ajustes e tente novamente.",
   "taskFailure.refused": "O {name} recusou este prompt. Altere o prompt e tente novamente.",
