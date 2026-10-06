@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { createHash } from 'crypto'
 
 // Mock the network release lookup so the service runs offline and deterministically.
 vi.mock('../../../src/main/dependencies/cli-release', () => ({
@@ -23,6 +24,7 @@ import {
 } from '../../../src/main/dependencies/service'
 import { readDependenciesCache, updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 const resolveMock = resolveLatestCliRelease as unknown as ReturnType<typeof vi.fn>
 const serverTimeMock = fetchLatestRecommendationsModified as unknown as ReturnType<typeof vi.fn>
@@ -128,12 +130,17 @@ describe('a present CLI whose version cannot be read', () => {
 describe('recommendations lifecycle', () => {
   const server = '2026-09-11T20:46:05.000Z'
 
+  // A file as Install/Refresh leaves it: the bytes, and their server time beside them.
   function writeFile(modifiedUtc: string): void {
     const models = path.join(home, 'models')
     fs.mkdirSync(models, { recursive: true })
-    const file = path.join(models, 'configs.json')
-    fs.writeFileSync(file, JSON.stringify([{ name: 'current', configuration: { model: 'm' } }]))
-    fs.utimesSync(file, new Date(), new Date(modifiedUtc))
+    const bytes = JSON.stringify([{ name: 'current', configuration: { model: 'm' } }])
+    fs.writeFileSync(path.join(models, 'configs.json'), bytes)
+    fs.writeFileSync(path.join(models, 'configs.imagequeue.json'), JSON.stringify({
+      formatVersion: FORMAT_VERSIONS.recommendationsSidecar,
+      lastModifiedUtc: modifiedUtc,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    }))
   }
 
   it('keeps a present file installed-unchecked with no synthetic latest/check facts before any check', () => {
@@ -157,6 +164,16 @@ describe('recommendations lifecycle', () => {
     resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
     const state = await checkAllDependencies()
     expect(state.recommendations.state).toBe('update-available')
+  })
+
+  it('stays unchecked with no date for a file no install recorded, whatever its modification time', async () => {
+    writeFile(server)
+    fs.rmSync(path.join(home, 'models', 'configs.imagequeue.json'))
+    fs.utimesSync(path.join(home, 'models', 'configs.json'), new Date(), new Date(server))
+    resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
+    const state = await checkAllDependencies()
+    expect(state.recommendations.state).toBe('installed-unchecked')
+    expect(state.recommendations.updatedAtUtc).toBeNull()
   })
 
   it('records the CLI result and no file facts when only the file check fails', async () => {

@@ -6,8 +6,9 @@
 //   temp/<stem>-<nanoid>.tmp   deletable staging for in-flight downloads
 //   dependencies.json          ephemeral check cache (last-known-latest, timestamps)
 //
-// configs.json (the recommendations file) lives in the effective models dir
-// alongside Draw Things' own custom.json — see recommendations.ts. bin/ is the one
+// configs.json (the recommendations file) and its sidecar, configs.imagequeue.json,
+// live in the effective models dir alongside Draw Things' own custom.json — see
+// recommendations.ts. bin/ is the one
 // kept artifact here; temp/ and dependencies.json are safe to delete (the app
 // rebuilds them on the next check/install).
 

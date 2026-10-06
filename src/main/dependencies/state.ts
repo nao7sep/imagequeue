@@ -1,7 +1,7 @@
 // The pure mapping from raw facts to one of the four dependency lifecycle states,
 // kept free of I/O so it is directly unit-testable. Both dependencies derive
 // their state through this one function: the caller reduces its specifics (a
-// version comparison for the CLI, a byte-compare result for configs.json) to a
+// version comparison for the CLI, a server-time comparison for configs.json) to a
 // `comparison` verdict, and presence to a boolean.
 
 import type { DependencyState } from '../../shared/types'
@@ -37,10 +37,10 @@ export function isLaunchCheckDue(lastAttemptAtUtc: string | null, nowMs: number)
 }
 
 /**
- * Compare the local configs.json with the server's by modification time.
- * Install/Refresh stamps the file with the server's Last-Modified, so a current
- * copy carries exactly that time and a copy from before the server's last change
- * carries an earlier one. 'unknown' when either time is missing.
+ * Compare the local configs.json with the server's by the server's Last-Modified.
+ * Install/Refresh records that time for the bytes it publishes, so a current copy
+ * holds exactly the server's time and a copy from before its last change holds an
+ * earlier one. 'unknown' when either time is missing.
  */
 export function compareRecommendations(
   localModifiedUtc: string | null,

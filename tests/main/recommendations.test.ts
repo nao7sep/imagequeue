@@ -11,10 +11,12 @@ vi.mock('../../src/main/dependencies/download', async (importOriginal) => ({
 
 import {
   downloadLatestRecommendations,
+  getRecommendationsMetaPath,
   getRecommendationsStatus,
   lastModifiedOf,
   resolveRecommendedParams,
 } from '../../src/main/recommendations'
+import { FORMAT_VERSIONS, NewerFormatError } from '../../src/main/store-format'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
 let home: string
@@ -60,7 +62,12 @@ describe('getRecommendationsStatus', () => {
     expect(status.exists).toBe(true)
     expect(status.valid).toBe(true)
     expect(status.entryCount).toBe(1)
-    expect(status.updatedAt).not.toBeNull()
+  })
+
+  it('gives a file no install recorded no date, whatever its modification time', () => {
+    writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
+    fs.utimesSync(configsPath(), new Date(), new Date('2026-09-11T20:46:05.000Z'))
+    expect(getRecommendationsStatus().updatedAt).toBeNull()
   })
 })
 
@@ -84,20 +91,42 @@ describe('lastModifiedOf', () => {
 describe('downloadLatestRecommendations', () => {
   const body = Buffer.from(JSON.stringify([{ name: 'a', configuration: { model: 'm' } }]))
 
-  it('stamps the file with the server time it was served with', async () => {
-    network.fetchBytesWithHeaders.mockResolvedValueOnce({
-      body,
-      headers: { 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' },
-    })
+  const served = { body, headers: { 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' } }
+
+  it('records the server time it was served with beside the file', async () => {
+    network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
     const status = await downloadLatestRecommendations()
     expect(status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
-    expect(fs.statSync(configsPath()).mtime.toISOString()).toBe('2026-09-11T20:46:05.000Z')
+    const meta = JSON.parse(fs.readFileSync(getRecommendationsMetaPath(), 'utf8'))
+    expect(Object.entries(meta)[0]).toEqual(['formatVersion', FORMAT_VERSIONS.recommendationsSidecar])
   })
 
-  it('keeps the write time when the server gives no time', async () => {
-    network.fetchBytesWithHeaders.mockResolvedValueOnce({ body, headers: {} })
-    const before = Date.now()
+  it('shows no date when the server gives no valid time, and drops an earlier record', async () => {
+    network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
+    await downloadLatestRecommendations()
+    network.fetchBytesWithHeaders.mockResolvedValueOnce({ body, headers: { 'last-modified': 'yesterday-ish' } })
     const status = await downloadLatestRecommendations()
-    expect(Date.parse(status.updatedAt as string)).toBeGreaterThanOrEqual(before - 1000)
+    expect(status.updatedAt).toBeNull()
+    expect(fs.existsSync(getRecommendationsMetaPath())).toBe(false)
+  })
+
+  it('shows no date once the file no longer holds the bytes the time was recorded for', async () => {
+    network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
+    await downloadLatestRecommendations()
+    writeConfigs(configsPath(), [{ name: 'other', configuration: { model: 'm' } }])
+    expect(getRecommendationsStatus().updatedAt).toBeNull()
+  })
+
+  it('refuses before downloading when a newer build wrote the sidecar, leaving both files as they are', async () => {
+    writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
+    const newer = JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsSidecar + 1, lastModifiedUtc: '2026-09-11T20:46:05.000Z' })
+    fs.writeFileSync(getRecommendationsMetaPath(), newer)
+    const configs = fs.readFileSync(configsPath())
+    network.fetchBytesWithHeaders.mockClear()
+    await expect(downloadLatestRecommendations()).rejects.toBeInstanceOf(NewerFormatError)
+    expect(network.fetchBytesWithHeaders).not.toHaveBeenCalled()
+    expect(fs.readFileSync(getRecommendationsMetaPath(), 'utf8')).toBe(newer)
+    expect(fs.readFileSync(configsPath())).toEqual(configs)
+    expect(getRecommendationsStatus().updatedAt).toBeNull()
   })
 })
