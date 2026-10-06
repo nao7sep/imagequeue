@@ -42,8 +42,8 @@ function cliBinaryId(): string {
 
 let newerWarned = false
 
-// A sidecar a newer build wrote reads as unknown and is never rewritten in
-// place; installing a binary replaces it with the binary it describes.
+// A sidecar a newer build wrote reads as unknown and is never rewritten, and
+// Install/Update refuses rather than replace it or the binary it describes.
 function readCliMeta(): CliMeta | null {
   try {
     const file = getCliMetaPath()
@@ -61,6 +61,24 @@ function readCliMeta(): CliMeta | null {
       log('warn', 'The Draw Things CLI sidecar is from a newer version; its version reads as unknown', { error: serializeError(err) })
     }
     return null
+  }
+}
+
+// A newer build's sidecar and binary stay exactly as they are, so that build
+// can still use both (store-recovery conventions); the refusal names the file.
+function refuseNewerCliSidecar(): void {
+  const file = getCliMetaPath()
+  let raw: unknown
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return
+  try {
+    checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.cliSidecar, file)
+  } catch (err) {
+    if (err instanceof NewerFormatError) throw err
   }
 }
 
@@ -144,6 +162,7 @@ export async function installCliRelease(
   if (!release.sha256) {
     throw new Error('Release asset has no published checksum; refusing to install unverified binary')
   }
+  refuseNewerCliSidecar()
 
   const tempPath = allocateTempPath(getCliBinaryPath())
   try {

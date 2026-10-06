@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  installCliRelease,
   publishCliBinary,
   readInstalledCliTag,
 } from '../../../src/main/dependencies/cli-binary'
@@ -11,7 +12,7 @@ import {
   getCliBinaryPath,
   getCliMetaPath,
 } from '../../../src/main/dependencies/paths'
-import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
 
 let home: string
 let previousHome: string | undefined
@@ -161,5 +162,16 @@ describe('the sidecar format version', () => {
     const bytes = fs.readFileSync(getCliMetaPath(), 'utf8')
     expect(readInstalledCliTag()).toBeNull()
     expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(bytes)
+  })
+
+  it('refuses Install/Update over a newer sidecar, keeping it and its binary', async () => {
+    installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
+    const sidecar = fs.readFileSync(getCliMetaPath(), 'utf8')
+    const release = { tag: 'v1.20261004.0', assetUrl: 'https://fixture.invalid/draw-things-cli', sha256: 'b'.repeat(64) }
+    const refusal = await installCliRelease(release).catch((error: unknown) => error)
+    expect(refusal).toBeInstanceOf(NewerFormatError)
+    expect((refusal as NewerFormatError).path).toBe(getCliMetaPath())
+    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(sidecar)
+    expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('binary')
   })
 })
