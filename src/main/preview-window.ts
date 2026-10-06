@@ -7,6 +7,7 @@ import { mainTranslator } from './i18n'
 import { log, serializeError } from './logger'
 import { loadRendererSurface } from './renderer-surface'
 import { onSelectionPublished, SELECTION_SNAPSHOT_CHANNEL } from './selection-snapshot'
+import { notifySettingsChanged } from './settings-changed'
 import { dismissSurfaceConfirms } from './surface-confirm'
 import { trackThemedWindow, windowBackground } from './theme'
 import { hardenWindow } from './utils/harden-window'
@@ -19,8 +20,6 @@ import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 // button turns the setting off. A durable secondary window with its own
 // placement (window-conventions, Placement). It never takes focus when it
 // appears, so the keyboard stays in the main window.
-
-export const SETTINGS_CHANGED_CHANNEL = 'settings:changed'
 
 let previewWindow: BrowserWindow | null = null
 let getMainWin: () => BrowserWindow | null = () => null
@@ -59,8 +58,7 @@ function turnSettingOff(): void {
     log('error', 'The preview window setting could not be turned off', { error: serializeError(error) })
     return
   }
-  const main = getMainWin()
-  if (main && !main.isDestroyed()) main.webContents.send(SETTINGS_CHANGED_CHANNEL)
+  notifySettingsChanged(getMainWin())
 }
 
 function openPreviewWindow(): void {

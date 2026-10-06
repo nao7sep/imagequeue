@@ -99,7 +99,8 @@ const PREVIEW_WINDOW_GAP = 8
 const PREVIEW_IMAGE_MIN_HEIGHT = 120
 const PREVIEW_FAILURE_MAX_HEIGHT = Math.ceil(11 * 1.4 * 5) + 8 * 2 + 2
 
-// Derived — do not hand-edit. Wide enough for the placeholder's hint on two lines.
+// Chosen: wide enough for the placeholder's hint on two lines.
 export const PREVIEW_WINDOW_MIN_WIDTH = 320
+// Derived — do not hand-edit.
 export const PREVIEW_WINDOW_MIN_HEIGHT =
   PREVIEW_WINDOW_PADDING * 2 + PREVIEW_IMAGE_MIN_HEIGHT + PREVIEW_WINDOW_GAP + PREVIEW_FAILURE_MAX_HEIGHT

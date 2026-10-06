@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PREVIEW_WINDOW_MIN_HEIGHT, PREVIEW_WINDOW_MIN_WIDTH } from '../../src/shared/viewing'
+import { SETTINGS_CHANGED_CHANNEL } from '../../src/main/settings-changed'
 
 const mocks = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
@@ -141,7 +142,7 @@ describe('the setting', () => {
     preview.syncPreviewWindow(true)
     previews()[0]!.userClose()
     expect(mocks.saved).toHaveBeenCalledWith({ general: { show_preview_window: false } })
-    expect(main.sent).toEqual([preview.SETTINGS_CHANGED_CHANNEL])
+    expect(main.sent).toEqual([SETTINGS_CHANGED_CHANNEL])
   })
 
   it('leaves the setting on when a Windows logoff or restart closes the window', () => {

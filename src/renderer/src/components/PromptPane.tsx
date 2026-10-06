@@ -169,7 +169,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
   const selectedImage = useMemo(() => selectedImageOf(selectedTask), [selectedTask])
   const handleImageLoad = useCallback((taskId: string, loaded: boolean): void => {
     if (loaded) clearTaskActionResult(taskId, 'preview')
-    else reportTaskActionFailure(taskId, 'preview', 'task.previewFailed', 'Failed to load selected image', new Error(`Preview request failed for task ${taskId}`))
+    else reportTaskActionFailure(taskId, 'preview', 'task.previewFailed', 'Failed to load selected image', new Error(`The image of task ${taskId} did not load`))
   }, [clearTaskActionResult, reportTaskActionFailure])
 
   const getExt = useCallback(
