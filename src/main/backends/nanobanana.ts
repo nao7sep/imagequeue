@@ -29,6 +29,8 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
 
   const request = buildGeminiImageRequest(task)
 
+  // The record keeps the request body the app built, not the HTTP request:
+  // @google/genai takes no fetch or request hook to capture what it sends.
   const response = await withProviderRetry((attemptSignal) => recordAiCall(
     { backend: 'nanobanana', model: task.model, purpose: 'image', taskId: task.id, request },
     // No cast: GenerateContentConfig declares every field here, so the

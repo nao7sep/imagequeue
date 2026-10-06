@@ -21,6 +21,8 @@ export class GeminiProvider implements TextAIProvider {
       contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
       config: geminiTextParams(this.model, this.thinking, opts.schema),
     }
+    // The record keeps the request body the app built, not the HTTP request:
+    // @google/genai takes no fetch or request hook to capture what it sends.
     const response = await recordAiCall(
       { backend: 'gemini', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request } },
       () => ai.models.generateContent({
