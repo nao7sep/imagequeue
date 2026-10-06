@@ -5,23 +5,25 @@ import { openaiTextParams } from './request'
 import { assertUsableOpenAIResponse } from '../provider-response'
 import { ProviderHttpError } from '../provider-errors'
 import { openaiReasonField, reasonFromParsed } from '../provider-reason'
-import { recordAiCall } from '../records'
+import { recordAiCall, recordingFetch, type AiCall } from '../records'
 
 export class OpenAIProvider implements TextAIProvider {
   constructor(private model: string, private apiKey: string, private endpoint: string, private thinking?: string) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
-    const client = new OpenAI({
-      apiKey: this.apiKey, baseURL: this.endpoint,
-      timeout: opts.timeoutMs, maxRetries: 0,
-    })
     const request = {
       model: this.model,
       messages: opts.messages.map((m) => ({ role: m.role === 'model' ? 'assistant' as const : 'user' as const, content: m.text })),
       ...openaiTextParams(this.model, this.thinking, opts.schema),
     }
+    // The record keeps the HTTP request the SDK sends.
+    const call: AiCall = { backend: 'openai', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request } }
+    const client = new OpenAI({
+      apiKey: this.apiKey, baseURL: this.endpoint,
+      timeout: opts.timeoutMs, maxRetries: 0, fetch: recordingFetch(call),
+    })
     const response = await recordAiCall(
-      { backend: 'openai', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request } },
+      call,
       () => client.chat.completions.create(request, { signal: opts.signal }),
     ).catch((error: unknown) => {
       if (error instanceof APIError && typeof error.status === 'number') {

@@ -230,20 +230,21 @@ export interface AiCallRecord {
 }
 
 /** Starts one call's record at the moment its request is sent; the record is written
- *  once, when the call first finishes or fails. */
+ *  once, when the call first finishes or fails, with the request the call then holds
+ *  (an SDK's recordingFetch puts the HTTP request it sent there). */
 export function startAiCall(call: AiCall): AiCallRecord {
   const started = Date.now()
   const base = {
     time: new Date(started).toISOString(), launch, session_id: activeSessionId,
     task_id: call.taskId ?? null, request_id: call.requestId ?? null,
-    backend: call.backend, model: call.model, purpose: call.purpose, request: json(call.request),
+    backend: call.backend, model: call.model, purpose: call.purpose,
   }
   let written = false
   const end = (response: unknown, error: unknown): void => {
     if (written) return
     written = true
     write('ai_calls', {
-      ...base, duration_ms: Date.now() - started,
+      ...base, request: json(call.request), duration_ms: Date.now() - started,
       response: response === undefined ? null : json(response),
       error: error === undefined ? null : json(serializeError(error)),
     })
@@ -266,6 +267,29 @@ export async function recordAiCall<T>(call: AiCall, send: () => Promise<T>, kept
   }
   record.finish(kept(response))
   return response
+}
+
+/** A fetch to give an SDK for one call: the HTTP request the SDK sends becomes the
+ *  call's recorded request, its URL, method, headers and body whole (data-lifecycle
+ *  conventions, Nothing is cut). Until it sends, the call keeps what the app built. */
+export function recordingFetch(call: AiCall): typeof fetch {
+  return (input, init) => {
+    let body: unknown = init?.body ?? null
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body)
+      } catch {
+        // Not JSON: kept as the text that was sent.
+      }
+    }
+    call.request = {
+      url: input instanceof Request ? input.url : String(input),
+      method: init?.method ?? 'GET',
+      headers: Object.fromEntries(new Headers(init?.headers)),
+      body,
+    }
+    return fetch(input, init)
+  }
 }
 
 /** Sends one HTTP request and records it with the answer's status, headers and body,
