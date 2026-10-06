@@ -169,6 +169,45 @@ describe('following the selection', () => {
   })
 })
 
+describe('a lost renderer', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const gone = (win: FakeWindow) => win.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
+
+  it('answers no for its confirmation and opens the window again, leaving the setting on', async () => {
+    const confirms = await import('../../src/main/surface-confirm')
+    preview.syncPreviewWindow(true)
+    const [win] = previews()
+    win!.emit('ready-to-show')
+    await settle()
+    const answer = confirms.askSurface('preview-window', win!.webContents as unknown as Electron.WebContents, { message: 'Delete?' })
+    gone(win!)
+    await expect(answer).resolves.toBe(false)
+    expect(win!.destroyed).toBe(true)
+    expect(mocks.saved).not.toHaveBeenCalled()
+    const [, reopened] = previews()
+    expect(reopened?.destroyed).toBe(false)
+    expect(reopened?.loaded).toEqual([[expect.stringMatching(/renderer[/\\]index\.html$/), { query: { surface: 'preview-window' } }]])
+  })
+
+  it('waits for the main window to return when the window was hidden or its page had not loaded', async () => {
+    preview.syncPreviewWindow(true)
+    previews()[0]!.emit('ready-to-show')
+    gone(previews()[0]!)
+    expect(previews()).toHaveLength(1)
+
+    preview.showPreviewWindow()
+    const [, second] = previews()
+    second!.emit('ready-to-show')
+    await settle()
+    preview.hidePreviewWindow()
+    gone(second!)
+    expect(previews()).toHaveLength(2)
+    expect(second!.destroyed).toBe(true)
+    preview.showPreviewWindow()
+    expect(previews().filter((win) => !win.destroyed)).toHaveLength(1)
+  })
+})
+
 describe('following the main window', () => {
   it('hides with the main window and returns with it, without taking focus', () => {
     preview.syncPreviewWindow(true)

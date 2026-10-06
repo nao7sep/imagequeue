@@ -92,7 +92,21 @@ function openPreviewWindow(): void {
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) win.showInactive()
   })
-  void loadRendererSurface(win, 'preview-window').catch((error) => {
+  // A lost renderer never leaves a blank window or a confirmation no one can
+  // answer: the window goes, its confirmations are answered no, and a window
+  // that was showing opens again. A page lost before it loaded would be lost
+  // again at once, so that one, like a hidden one, waits for the main window
+  // to return.
+  let loaded = false
+  win.webContents.on('render-process-gone', (_event, details) => {
+    if (previewWindow !== win) return
+    log('warn', 'Preview window renderer is gone', { reason: details.reason, exitCode: details.exitCode })
+    const reopen = loaded && win.isVisible()
+    dismissSurfaceConfirms('preview-window')
+    destroy(win)
+    if (reopen) syncPreviewWindow(loadConfig().general.show_preview_window)
+  })
+  void loadRendererSurface(win, 'preview-window').then(() => { loaded = true }, (error) => {
     log('error', 'The preview window could not load', { error: serializeError(error) })
     destroy(win)
   })
