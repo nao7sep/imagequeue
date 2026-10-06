@@ -21,9 +21,10 @@ import { holdsBytes, holdsBytesAsync } from './holds-bytes'
 // This module is the single managed-text atomic-write choke point and —
 // crucially — the ONE place the data-backup hook lives (data-backup
 // conventions). A managed-text write that bypasses these sync/async helpers is
-// a silent backup gap. The only other temp+rename writers are api-keys-store,
-// which is a SECRET and never recorded, and file-output, which writes binary
-// output the user harvests.
+// a silent backup gap. The only other staged writers are api-keys-store,
+// which is a SECRET and never recorded, and the generated-output and export
+// writers, which publish binary output the user harvests through the staging
+// helpers below.
 //
 // `records` is the per-write-site record/no-record decision, made at authoring
 // time by the caller that knows what the file IS (data-backup conventions:
@@ -41,6 +42,54 @@ import { holdsBytes, holdsBytesAsync } from './holds-bytes'
 // are the new content's own and are never carried over.
 function keptMode(target: fs.Stats): number {
   return target.mode & 0o7777
+}
+
+/** The staging name beside a file: `<stem>-<nanoid>.tmp` in its own directory. */
+export function stagingPathFor(filePath: string): string {
+  const stem = path.basename(filePath, path.extname(filePath))
+  return path.join(path.dirname(filePath), `${stem}-${nanoid()}.tmp`)
+}
+
+/** Writes and syncs complete bytes to a fresh staging file beside filePath, for
+ * a caller that publishes it itself; on failure the staging file is removed. */
+export function stageBeside(filePath: string, bytes: NodeJS.ArrayBufferView): string {
+  const tempPath = stagingPathFor(filePath)
+  try {
+    const fd = fs.openSync(tempPath, 'wx')
+    try {
+      fs.writeFileSync(fd, bytes)
+      fs.fsyncSync(fd)
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch (error) {
+    fs.rmSync(tempPath, { force: true })
+    throw error
+  }
+  return tempPath
+}
+
+/** Publishes complete staged bytes under destination without replacing a file
+ * already there (storage-path conventions, "A publish that must not overwrite
+ * claims the final name exclusively"): a hard link, or an exclusive copy on a
+ * volume without hard links. False when the name is taken. */
+export function claimFinalName(staging: string, destination: string): boolean {
+  try {
+    fs.linkSync(staging, destination)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? ''
+    if (code === 'EEXIST') return false
+    if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code)) throw error
+  }
+  try {
+    fs.copyFileSync(staging, destination, fs.constants.COPYFILE_EXCL)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false
+    fs.rmSync(destination, { force: true })
+    throw error
+  }
 }
 
 export function writeFileAtomic(

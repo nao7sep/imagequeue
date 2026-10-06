@@ -7,7 +7,9 @@ import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-s
 import { applyChangedFields } from './settings-changes'
 import { refreshMainWindowMinimumSize } from './main-window-layout'
 import { getSessionDir } from './session'
-import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter } from './utils/file-output'
+import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter, stageExportCopy } from './utils/file-output'
+import { claimFinalName } from './utils/atomic-write'
+import { syncDirectory } from './utils/fsync'
 import { AppConfig } from './config/types'
 import { openOutputFolder } from './session/open-output-folder'
 import { log, serializeError } from './logger'
@@ -256,15 +258,17 @@ export function registerSettingsIpc(
     const exportDir = config.general.export_dir || app.getPath('desktop')
     fs.mkdirSync(exportDir, { recursive: true })
     const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
-    let destName = `${safeBase}.${safeExt}`
-    let destPath = path.join(exportDir, destName)
-    let n = 2
-    while (fs.existsSync(destPath)) {
-      destName = `${safeBase}-${n}.${safeExt}`
-      destPath = path.join(exportDir, destName)
-      n++
+    let destPath = path.join(exportDir, `${safeBase}.${safeExt}`)
+    const staging = stageExportCopy(src, destPath)
+    try {
+      // An earlier export of the same image keeps its name; this one takes the next free one.
+      for (let n = 2; !claimFinalName(staging, destPath); n++) {
+        destPath = path.join(exportDir, `${safeBase}-${n}.${safeExt}`)
+      }
+      syncDirectory(exportDir)
+    } finally {
+      fs.rmSync(staging, { force: true })
     }
-    fs.copyFileSync(src, destPath)
     return destPath
   })
 
@@ -283,7 +287,15 @@ export function registerSettingsIpc(
     if (result.canceled || !result.filePath) return null
     const destPath = exportPathForFormat(result.filePath, safeExt)
     fs.mkdirSync(path.dirname(destPath), { recursive: true })
-    fs.copyFileSync(src, destPath)
+    // The user chose this name, replacing any file there; it is replaced only
+    // once the complete copy is in place beside it.
+    const staging = stageExportCopy(src, destPath)
+    try {
+      fs.renameSync(staging, destPath)
+      syncDirectory(path.dirname(destPath))
+    } finally {
+      fs.rmSync(staging, { force: true })
+    }
     return destPath
   })
 

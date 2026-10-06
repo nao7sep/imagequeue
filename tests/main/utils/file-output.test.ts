@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -20,6 +20,11 @@ vi.mock('../../../src/main/session', () => ({ getSessionDir: () => sessionDir })
 
 beforeEach(() => {
   sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-fileout-'))
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  fs.rmSync(sessionDir, { recursive: true, force: true })
 })
 
 describe('imageExtFromPath', () => {
@@ -92,6 +97,27 @@ describe('writeImageOutput', () => {
     expect(second).toBe('20260604-093015-utc-cat-openai-2')
     expect(fs.existsSync(path.join(sessionDir, `${first}.png`))).toBe(true)
     expect(fs.existsSync(path.join(sessionDir, `${second}.png`))).toBe(true)
+  })
+
+  // A full disk while staging the sidecar must not publish the image alone,
+  // nor leave a truncated file under either final name.
+  it('publishes neither file when the pair cannot be staged complete', () => {
+    const write = fs.writeFileSync
+    let calls = 0
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(((...args: Parameters<typeof fs.writeFileSync>) => {
+      if (++calls === 2) throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
+      return write(...args)
+    }) as typeof fs.writeFileSync)
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow('simulated full disk')
+    expect(fs.readdirSync(sessionDir)).toEqual([])
+  })
+
+  it('leaves no staging file beside a published pair', () => {
+    writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(fs.readdirSync(sessionDir).sort()).toEqual([
+      '20260604-093015-utc-cat-openai.json',
+      '20260604-093015-utc-cat-openai.png',
+    ])
   })
 })
 

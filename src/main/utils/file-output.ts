@@ -7,6 +7,8 @@ import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log } from '../logger'
 import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
+import { stageBeside, stagingPathFor } from './atomic-write'
+import { syncDirectory, syncFile } from './fsync'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
 
@@ -69,6 +71,20 @@ export function imageFormatFilter(ext: ImageExt, translator: Translator): { name
 export function exportPathForFormat(filePath: string, ext: ImageExt): string {
   const typed = path.extname(filePath).slice(1).toLowerCase()
   return IMAGE_FORMATS[ext].extensions.includes(typed) ? filePath : `${filePath}.${ext}`
+}
+
+// Copies an exported image byte for byte to a complete, synced staging file
+// beside its destination, for the export to publish under its final name.
+export function stageExportCopy(src: string, destination: string): string {
+  const staging = stagingPathFor(destination)
+  try {
+    fs.copyFileSync(src, staging)
+    syncFile(staging)
+  } catch (error) {
+    fs.rmSync(staging, { force: true })
+    throw error
+  }
+  return staging
 }
 
 // Composes the base filename (without extension) for an output. The ordinal
@@ -137,9 +153,23 @@ export function writeImageOutput(
   // managed-text hook) — the binary can't be recorded and the sidecar rides along into exclusion as
   // colocated with a binary (data-backup conventions: "Harvest-then-discard output"; "Binaries";
   // "Anything colocated in a binary-bearing directory").
-  fs.writeFileSync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
+  //
+  // Both files are staged complete before either is published, so a failed
+  // write (a full disk, an I/O error) leaves neither a truncated file nor an
+  // image without its sidecar under a final name.
+  const imagePath = path.join(dir, `${baseName}.${ext}`)
+  const sidecarPath = path.join(dir, `${baseName}.json`)
   const sidecar = markFormat(metadata, FORMAT_VERSIONS.imageSidecar, SNAKE_FORMAT_VERSION_KEY)
-  fs.writeFileSync(path.join(dir, `${baseName}.json`), JSON.stringify(sidecar, null, 2), 'utf-8')
+  const staged: string[] = []
+  try {
+    staged.push(stageBeside(imagePath, imageBuffer))
+    staged.push(stageBeside(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8')))
+    fs.renameSync(staged[0], imagePath)
+    fs.renameSync(staged[1], sidecarPath)
+    syncDirectory(dir)
+  } finally {
+    for (const tempPath of staged) fs.rmSync(tempPath, { force: true })
+  }
 
   return baseName
 }

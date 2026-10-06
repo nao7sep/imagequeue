@@ -97,6 +97,27 @@ describe('exporting an image', () => {
     expect(fs.readFileSync(second, 'utf-8')).toBe('second version')
   })
 
+  it('leaves nothing under a final name when the copy fails', async () => {
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+      throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
+    })
+    await expect(invoke('shell:exportImage', BASE, 'png')).rejects.toThrow('simulated full disk')
+    copy.mockRestore()
+    expect(fs.readdirSync(mocks.desktop)).toEqual([])
+  })
+
+  it('still numbers exports on a volume without hard links', async () => {
+    const first = (await invoke('shell:exportImage', BASE, 'png')) as string
+    const link = vi.spyOn(fs, 'linkSync').mockImplementation(() => {
+      throw Object.assign(new Error('simulated exFAT'), { code: 'EPERM' })
+    })
+    const second = (await invoke('shell:exportImage', BASE, 'png')) as string
+    link.mockRestore()
+    expect(path.basename(second)).toBe(`${BASE}-2.png`)
+    expect(fs.readFileSync(first, 'utf-8')).toBe('image bytes')
+    expect(fs.readdirSync(mocks.desktop).sort()).toEqual([`${BASE}-2.png`, `${BASE}.png`])
+  })
+
   it.each([
     ['a name that climbs out of the session folder', '../../etc/passwd', 'png'],
     ['a name with a separator', 'sub/cat', 'png'],
@@ -115,6 +136,25 @@ describe('exporting an image to a chosen place', () => {
     await expect(invoke('shell:exportImageAs', BASE, 'png')).resolves.toBe(chosen)
 
     expect(fs.readFileSync(chosen, 'utf-8')).toBe('image bytes')
+  })
+
+  it('replaces the file the user chose to replace, and keeps it when the copy fails', async () => {
+    const chosen = path.join(root, 'Chosen', 'cat.png')
+    fs.mkdirSync(path.dirname(chosen), { recursive: true })
+    fs.writeFileSync(chosen, 'earlier export')
+    mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath: chosen })
+
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+      throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
+    })
+    await expect(invoke('shell:exportImageAs', BASE, 'png')).rejects.toThrow('simulated full disk')
+    copy.mockRestore()
+    expect(fs.readFileSync(chosen, 'utf-8'), 'the earlier export survives').toBe('earlier export')
+    expect(fs.readdirSync(path.dirname(chosen))).toEqual(['cat.png'])
+
+    await expect(invoke('shell:exportImageAs', BASE, 'png')).resolves.toBe(chosen)
+    expect(fs.readFileSync(chosen, 'utf-8')).toBe('image bytes')
+    expect(fs.readdirSync(path.dirname(chosen))).toEqual(['cat.png'])
   })
 
   it('offers only the image’s own format, since the export is a byte copy', async () => {
