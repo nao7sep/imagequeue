@@ -3,6 +3,7 @@ import path from 'path'
 import { nanoid } from 'nanoid'
 import { record } from '../backup/backup-store'
 import { syncDirectory, syncDirectoryAsync } from './fsync'
+import { holdsBytes, holdsBytesAsync } from './holds-bytes'
 
 // Writes data to filePath atomically via temp file + rename. On POSIX the
 // rename is atomic; on Windows it is atomic as long as the target file
@@ -51,6 +52,7 @@ export function writeFileAtomic(
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf-8') : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+  if (holdsBytes(filePath, bytes)) return
   try {
     const fd = fs.openSync(tempPath, 'w')
     try {
@@ -100,6 +102,7 @@ export async function writeFileAtomicAsync(
   let handle: fs.promises.FileHandle | null = null
   try {
     signal?.throwIfAborted()
+    if (await holdsBytesAsync(filePath, bytes)) return
     handle = await fs.promises.open(tempPath, 'w')
     const chunkSize = 1024 * 1024
     let offset = 0

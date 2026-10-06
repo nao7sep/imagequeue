@@ -7,6 +7,7 @@ import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import { utcStampForFilename } from '../../shared/utc-stamp'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { holdsBytes } from '../utils/holds-bytes'
 
 // The secret store, realized per the fleet api-key-storage-conventions. Secrets
 // live in their own file under the storage root (`~/.imagequeue/api-keys.json`),
@@ -195,9 +196,11 @@ function writeSecretsFile(file: SecretsFile): void {
   // what keeps backups.sqlite3 no more sensitive than ordinary user text. A key lost to a wipe is
   // re-entered by the user. This write deliberately does its own 0600 temp+rename rather than routing
   // through writeFileAtomic — the separate path is itself the exclusion, by construction.
+  const content = Buffer.from(`${JSON.stringify(markFormat(file, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, 'utf-8')
+  if (holdsBytes(filePath, content)) return
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
-  fs.writeFileSync(tempPath, `${JSON.stringify(markFormat(file, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, { mode: SECRETS_FILE_MODE })
+  fs.writeFileSync(tempPath, content, { mode: SECRETS_FILE_MODE })
   if (ENFORCE_FILE_MODE) fs.chmodSync(tempPath, SECRETS_FILE_MODE)
   fs.renameSync(tempPath, filePath)
 }

@@ -256,6 +256,18 @@ describe('api-keys-store', () => {
     expect(path.basename(tempPath)).toMatch(/^api-keys-[A-Za-z0-9_-]+\.tmp$/)
     spy.mockRestore()
   })
+
+  it('leaves the file untouched when saving the key it already holds', () => {
+    setStoredApiKey('openai.image', 'sk-stored')
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    const old = new Date('2001-02-03T04:05:06.000Z')
+    fs.utimesSync(secretsPath, old, old)
+    const rename = vi.spyOn(fs, 'renameSync')
+    setStoredApiKey('openai.image', 'sk-stored')
+    expect(rename).not.toHaveBeenCalled()
+    rename.mockRestore()
+    expect(fs.statSync(secretsPath).mtimeMs).toBe(old.getTime())
+  })
   describe('format version', () => {
     const secretsPath = () => path.join(tmpRoot, 'api-keys.json')
 

@@ -52,7 +52,7 @@ describe('config store (atomic write of config.json)', () => {
     saveConfig(config)
 
     const tempCall = spy.mock.calls.find((call) =>
-      typeof call[0] === 'string' && (call[0] as string).includes('config-')
+      typeof call[0] === 'string' && (call[0] as string).endsWith('.tmp')
     )
     expect(tempCall).toBeDefined()
     const tempPath = tempCall![0] as string

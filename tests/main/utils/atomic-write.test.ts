@@ -1,12 +1,12 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeFileAtomic, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
 // A replacement made through a temp file and a rename keeps what the file had:
 // its permission mode (content-lifecycle conventions). Its times are the new
-// content's own.
+// content's own, and content identical to the file's is not written at all.
 let dir: string
 
 beforeEach(() => {
@@ -57,5 +57,19 @@ describe('atomic replacement', () => {
     expect(fs.readFileSync(path.join(dir, 'fresh.json'), 'utf-8')).toBe('one')
     expect(fs.readFileSync(path.join(dir, 'fresh-async.json'), 'utf-8')).toBe('two')
     expect(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('skips a write whose bytes the file already holds', async () => {
+    const filePath = existing('same.json', 0o644)
+    const rename = vi.spyOn(fs, 'renameSync')
+    writeFileAtomic(filePath, 'old', false)
+    expect(rename).not.toHaveBeenCalled()
+    rename.mockRestore()
+    const asyncRename = vi.spyOn(fs.promises, 'rename')
+    await writeFileAtomicAsync(filePath, Buffer.from('old'), false)
+    expect(asyncRename).not.toHaveBeenCalled()
+    asyncRename.mockRestore()
+    expect(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
+    expect(fs.statSync(filePath).mtimeMs).toBe(OLD_TIME.getTime())
   })
 })
