@@ -6,6 +6,7 @@ import { loadConfig, updateConfig } from './config'
 import { mainTranslator } from './i18n'
 import { log, serializeError } from './logger'
 import { loadRendererSurface } from './renderer-surface'
+import { onSelectionPublished, SELECTION_SNAPSHOT_CHANNEL } from './selection-snapshot'
 import { dismissSurfaceConfirms } from './surface-confirm'
 import { trackThemedWindow, windowBackground } from './theme'
 import { hardenWindow } from './utils/harden-window'
@@ -136,4 +137,10 @@ export function previewWindowContents(): Electron.WebContents | null {
 
 export function initPreviewWindow(getMain: () => BrowserWindow | null): void {
   getMainWin = getMain
+  // The window follows every selection, hidden too, so it returns with the
+  // current one; a page still loading asks for the latest itself.
+  onSelectionPublished((snapshot) => {
+    const win = previewWindow
+    if (win && !win.isDestroyed()) win.webContents.send(SELECTION_SNAPSHOT_CHANNEL, snapshot)
+  })
 }

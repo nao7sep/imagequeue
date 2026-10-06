@@ -17,9 +17,13 @@ const mocks = await vi.hoisted(async () => {
     focused = 0
     shownInactive = 0
     sent: string[] = []
+    payloads: Array<[string, unknown]> = []
     loaded: unknown[] = []
     webContents = Object.assign(new EventEmitter(), {
-      send: (channel: string) => { this.sent.push(channel) },
+      send: (channel: string, payload?: unknown) => {
+        this.sent.push(channel)
+        this.payloads.push([channel, payload])
+      },
       setWindowOpenHandler: vi.fn(),
       replaceMisspelling: vi.fn(),
       isDestroyed: () => this.destroyed,
@@ -74,6 +78,7 @@ vi.mock('../../src/main/window-state-recovery', () => ({
 }))
 
 let preview: typeof import('../../src/main/preview-window')
+let snapshots: typeof import('../../src/main/selection-snapshot')
 let main: FakeWindow
 
 const previews = (): FakeWindow[] => (mocks.windows as FakeWindow[]).filter((win) => win !== main)
@@ -86,6 +91,7 @@ beforeEach(async () => {
   mocks.saved.mockClear()
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined)
   preview = await import('../../src/main/preview-window')
+  snapshots = await import('../../src/main/selection-snapshot')
   main = new mocks.FakeWindow({})
   preview.initPreviewWindow(() => main as unknown as Electron.BrowserWindow)
 })
@@ -142,6 +148,23 @@ describe('the setting', () => {
     previews()[0]!.emit('session-end')
     previews()[0]!.userClose()
     expect(mocks.saved).not.toHaveBeenCalled()
+  })
+})
+
+describe('following the selection', () => {
+  it('sends each published selection to the window\'s page, hidden too', () => {
+    snapshots.publishSelection(null)
+    preview.syncPreviewWindow(true)
+    const [win] = previews()
+    win!.emit('ready-to-show')
+    const task = { taskId: 'a', status: 'completed', baseName: 'a', error: null, providerMessage: null } as const
+    snapshots.publishSelection(task)
+    preview.hidePreviewWindow()
+    snapshots.publishSelection(null)
+    expect(win!.payloads).toEqual([
+      [snapshots.SELECTION_SNAPSHOT_CHANNEL, { version: 2, task }],
+      [snapshots.SELECTION_SNAPSHOT_CHANNEL, { version: 3, task: null }],
+    ])
   })
 })
 
