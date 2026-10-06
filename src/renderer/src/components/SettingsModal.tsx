@@ -10,6 +10,7 @@ import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import { presentFailure } from '../utils/failurePresentation'
+import { rebaseSettingsDraft } from '../utils/settingsDraft'
 import { serializeError } from '../../../shared/serialize-error'
 import { normalizeThemePreference, type ThemePreference } from '../../../shared/theme'
 import { LANGUAGE_NAMES, LANGUAGES, normalizeLanguagePreference } from '../../../shared/i18n/languages'
@@ -78,15 +79,20 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   // Volume is state, not config: it lives in state.json and is shared with the
   // prompt pane's slider through the one context, so the two never disagree.
   const { uiState, patchUiState } = useUiState()
-  useEffect(() => {
-    if (config || !settings) return
-    const next = cloneSettings(settings)
-    setConfig(next)
-    setBaseConfig(cloneSettings(settings))
-  }, [config, settings])
+  // Settings that change while the form is open reach it, the main process's
+  // own changes included (closing the preview window turns its setting off);
+  // the user's edits stay, and Save diffs against what is now stored.
+  const [settingsSeen, setSettingsSeen] = useState(settings)
+  if (settings !== settingsSeen) {
+    setSettingsSeen(settings)
+    if (settings) {
+      setConfig(config && baseConfig ? rebaseSettingsDraft(baseConfig, config, cloneSettings(settings)!) : cloneSettings(settings))
+      setBaseConfig(cloneSettings(settings))
+    }
+  }
 
   // Keys arrive on their own channel and may land after the first render; adopt
-  // them once, exactly as the config above is adopted, without discarding edits.
+  // them once, without discarding edits.
   const keysLoaded = apiKeys !== null
   useEffect(() => {
     if (!apiKeys) return

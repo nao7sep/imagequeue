@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import type { RenderResult } from '@testing-library/react'
 import { until } from '../../until'
 
 // "Also show in a separate window" is one Settings › General choice beside
@@ -43,7 +44,7 @@ function baseConfig(previewWindow: boolean | undefined): Record<string, unknown>
   }
 }
 
-function renderWith(previewWindow: boolean | undefined): void {
+function renderWith(previewWindow: boolean | undefined): RenderResult {
   settingsValue = {
     settings: baseConfig(previewWindow),
     apiKeys: {},
@@ -54,7 +55,7 @@ function renderWith(previewWindow: boolean | undefined): void {
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
   }
-  render(<SettingsModal onClose={() => {}} />)
+  return render(<SettingsModal onClose={() => {}} />)
 }
 
 function checkbox(): HTMLInputElement {
@@ -82,5 +83,23 @@ describe('Settings preview window choice', () => {
     const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
     await until(() => expect(save).toHaveBeenCalledTimes(1))
     expect((save.mock.calls[0]![1] as { general: { show_preview_window: boolean } }).general.show_preview_window).toBe(true)
+  })
+
+  it('follows the setting turned off while Settings is open, keeping the user\'s other edits', async () => {
+    const view = renderWith(true)
+    const autoPreview = (): HTMLInputElement => screen.getByText('Auto-preview (s)').parentElement!.querySelector('input')!
+    fireEvent.change(autoPreview(), { target: { value: '45' } })
+
+    settingsValue = { ...settingsValue, settings: baseConfig(false) }
+    view.rerender(<SettingsModal onClose={() => {}} />)
+    expect(checkbox().checked).toBe(false)
+    expect(autoPreview().value).toBe('45')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
+    await until(() => expect(save).toHaveBeenCalledTimes(1))
+    const [base, next] = save.mock.calls[0]! as [{ general: Record<string, unknown> }, { general: Record<string, unknown> }]
+    expect(base.general.show_preview_window).toBe(false)
+    expect(next.general).toMatchObject({ show_preview_window: false, auto_preview_idle_seconds: 45 })
   })
 })
