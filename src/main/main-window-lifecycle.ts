@@ -24,7 +24,9 @@ interface MainWindowControllerOptions<TWindow extends MainWindowLifecycleWindow>
   platform: NodeJS.Platform
   createWindow: () => TWindow
   isStatusIconAvailable: () => boolean
-  closeViewerWindow: () => void
+  // The secondary windows follow the main window into the background and back.
+  onHiddenToBackground: () => void
+  onRestored: () => void
   onPrimaryWindowClosed: () => void
   dock?: MainWindowDock
   now?: () => number
@@ -96,7 +98,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     win.on('close', (event) => {
       if (this.shutdownStarted || this.systemSessionEnding || !this.options.isStatusIconAvailable()) return
       event.preventDefault()
-      this.options.closeViewerWindow()
+      this.options.onHiddenToBackground()
       if (this.options.platform === 'win32') win.setSkipTaskbar(true)
       win.hide()
       if (this.options.platform === 'darwin') this.scheduleDockHide()
@@ -112,7 +114,6 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     win.on('closed', () => {
       if (this.mainWindow !== win) return
       this.mainWindow = null
-      this.options.closeViewerWindow()
       this.options.onPrimaryWindowClosed()
     })
 
@@ -139,6 +140,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
+    this.options.onRestored()
   }
 
   private scheduleDockHide(): void {

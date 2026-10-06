@@ -43,9 +43,13 @@ describe('buildMainWindowOptions', () => {
 
   it('is a framed window, not frameless', () => {
     const opts = buildMainWindowOptions(5) as unknown as Record<string, unknown>
-    // The main window keeps the native frame (only the secondary viewer/
-    // notification windows are frameless). `frame:false` must never appear here.
+    // The main window keeps the native frame (only the fullscreen view and the
+    // notification window are frameless). `frame:false` must never appear here.
     expect(opts['frame']).not.toBe(false)
+  })
+
+  it('cannot be made Spaces fullscreen, so the green button zooms', () => {
+    expect(buildMainWindowOptions(1).fullscreenable).toBe(false)
   })
 
   it('persists main-window bounds and Windows display mode', () => {

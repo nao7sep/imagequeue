@@ -40,17 +40,19 @@ function makeController(options: {
 } = {}) {
   const win = options.window ?? makeWindow()
   const createWindow = vi.fn(() => win)
-  const closeViewerWindow = vi.fn()
+  const onHiddenToBackground = vi.fn()
+  const onRestored = vi.fn()
   const onPrimaryWindowClosed = vi.fn()
   const controller = new MainWindowController({
     platform: options.platform ?? 'win32',
     createWindow,
     isStatusIconAvailable: options.statusAvailable ?? (() => true),
-    closeViewerWindow,
+    onHiddenToBackground,
+    onRestored,
     onPrimaryWindowClosed,
     dock: options.dock,
   })
-  return { controller, win, createWindow, closeViewerWindow, onPrimaryWindowClosed }
+  return { controller, win, createWindow, onHiddenToBackground, onRestored, onPrimaryWindowClosed }
 }
 
 afterEach(() => {
@@ -80,7 +82,7 @@ describe('MainWindowController', () => {
 
   it('hides instead of destroying on Windows only while a recovery icon exists', async () => {
     let available = true
-    const { controller, win, closeViewerWindow } = makeController({
+    const { controller, win, onHiddenToBackground, onRestored } = makeController({
       statusAvailable: () => available,
     })
     controller.createInitialWindow()
@@ -88,7 +90,7 @@ describe('MainWindowController', () => {
 
     const hidden = win.emitClose()
     expect(hidden.preventDefault).toHaveBeenCalledOnce()
-    expect(closeViewerWindow).toHaveBeenCalledOnce()
+    expect(onHiddenToBackground).toHaveBeenCalledOnce()
     expect(win.setSkipTaskbar).toHaveBeenCalledWith(true)
     expect(win.hide).toHaveBeenCalledOnce()
 
@@ -96,6 +98,7 @@ describe('MainWindowController', () => {
     expect(controller.getWindow()).toBe(win)
     expect(win.setSkipTaskbar).toHaveBeenLastCalledWith(false)
     expect(win.show).toHaveBeenCalledOnce()
+    expect(onRestored).toHaveBeenCalledOnce()
 
     available = false
     const ordinaryClose = win.emitClose()
@@ -104,14 +107,14 @@ describe('MainWindowController', () => {
   })
 
   it('releases the primary window only after an ordinary close', () => {
-    const { controller, win, closeViewerWindow, onPrimaryWindowClosed } = makeController({
+    const { controller, win, onHiddenToBackground, onPrimaryWindowClosed } = makeController({
       statusAvailable: () => false,
     })
     controller.createInitialWindow()
     win.emitClosed()
 
     expect(controller.getWindow()).toBeNull()
-    expect(closeViewerWindow).toHaveBeenCalledOnce()
+    expect(onHiddenToBackground).not.toHaveBeenCalled()
     expect(onPrimaryWindowClosed).toHaveBeenCalledOnce()
   })
 
@@ -121,13 +124,13 @@ describe('MainWindowController', () => {
     const createWindow = vi.fn()
       .mockReturnValueOnce(oldWindow)
       .mockReturnValueOnce(replacement)
-    const closeViewerWindow = vi.fn()
     const onPrimaryWindowClosed = vi.fn()
     const controller = new MainWindowController({
       platform: 'win32',
       createWindow,
       isStatusIconAvailable: () => false,
-      closeViewerWindow,
+      onHiddenToBackground: vi.fn(),
+      onRestored: vi.fn(),
       onPrimaryWindowClosed,
     })
     controller.createInitialWindow()
@@ -137,7 +140,6 @@ describe('MainWindowController', () => {
     oldWindow.emitClosed()
 
     expect(controller.getWindow()).toBe(replacement)
-    expect(closeViewerWindow).not.toHaveBeenCalled()
     expect(onPrimaryWindowClosed).not.toHaveBeenCalled()
   })
 

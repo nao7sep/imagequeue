@@ -88,8 +88,7 @@ describe('ToastStack', () => {
   it('keeps every independent failure, with no count limit', () => {
     render(<ToastStack />)
     const keys = ['operation.outputFolderFailed', 'operation.enqueueFailed', 'operation.uiStateSaveFailed',
-      'operation.viewerOpenFailed', 'operation.viewerCloseFailed', 'operation.queueCommandFailed',
-      'operation.viewerUpdateFailed'] as const
+      'operation.fullscreenViewOpenFailed', 'operation.fullscreenViewCloseFailed', 'operation.queueCommandFailed'] as const
     act(() => keys.forEach((key, index) => reportOperationalFailure(`op-${index}`, key, 'failed', new Error(key))))
     expect(toastTexts()).toHaveLength(keys.length)
     expect(stack().textContent).not.toMatch(/more/)

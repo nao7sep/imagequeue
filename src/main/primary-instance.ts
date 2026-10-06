@@ -4,7 +4,6 @@ import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config
 import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
-import { registerPreviewIpc } from './preview-ipc'
 import { registerImageProtocol, registerImageSchemeAsPrivileged } from './image-protocol'
 import { registerSettingsIpc } from './settings-ipc'
 import { registerStateIpc } from './state-ipc'
@@ -18,7 +17,8 @@ import { archiveSession } from './backup/archive'
 import { registerConceptsIpc } from './concepts-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { registerAppNoticeIpc } from './app-notice-ipc'
-import { closeViewerWindow, registerViewerIpc } from './viewer'
+import { closeFullscreenView, destroyFullscreenView } from './fullscreen-view'
+import { registerViewingIpc } from './viewing-ipc'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
 import { onRecordStored, openRecords } from './records'
@@ -244,8 +244,12 @@ async function startUp(): Promise<void> {
     platform: process.platform,
     createWindow,
     isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
-    closeViewerWindow,
+    onHiddenToBackground: () => {
+      closeFullscreenView({ refocusMain: false })
+    },
+    onRestored: () => {},
     onPrimaryWindowClosed: () => {
+      destroyFullscreenView()
       if (startupFailureWindow) return
       if (process.platform !== 'darwin') app.quit()
     },
@@ -281,7 +285,6 @@ async function startUp(): Promise<void> {
   })
   registerSessionIpc()
   registerQueueIpc()
-  registerPreviewIpc()
   registerSettingsIpc(async (config) => {
     // Settings apply on Save, the theme and language included (app-chrome
     // conventions, Theme; localization conventions).
@@ -296,7 +299,7 @@ async function startUp(): Promise<void> {
   registerAppLogIpc()
   registerRecordsIpc()
   registerAppNoticeIpc()
-  registerViewerIpc(() => mainWindowController?.getWindow() ?? null)
+  registerViewingIpc(() => mainWindowController?.getWindow() ?? null)
   registerNotificationIpc()
   initNotificationWindow()
   startProcessor()
@@ -327,10 +330,10 @@ async function startUp(): Promise<void> {
 // .catch().finally(app.exit) at the call site so an unexpected throw can't
 // strand the process or escape as an unhandled rejection.
 //
-// We close the viewer and notification windows here, before Electron starts
-// sending close events to the main window. The viewer's own close handler
-// calls event.preventDefault() to convert OS-close into a hide; if that fired
-// during quit, the app would get stuck.
+// We close the fullscreen view and notification windows here, before Electron
+// starts sending close events to the main window. The fullscreen view's own
+// close handler calls event.preventDefault() to convert OS-close into a hide;
+// if that fired during quit, the app would get stuck.
 async function gracefulShutdown(reason: string): Promise<void> {
   const guarded = async (name: string, fn: () => unknown): Promise<void> => {
     try {
@@ -371,7 +374,7 @@ async function gracefulShutdown(reason: string): Promise<void> {
       log('info', 'Marked in-flight tasks interrupted on shutdown', { count })
     }
   })
-  await guarded('closeViewerWindow', () => closeViewerWindow())
+  await guarded('destroyFullscreenView', () => destroyFullscreenView())
   await guarded('closeRecordsWindow', () => closeRecordsWindow())
   await guarded('closeRecordsReader', () => closeRecordsReader())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())

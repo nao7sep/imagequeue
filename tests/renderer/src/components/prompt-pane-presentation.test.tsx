@@ -24,6 +24,13 @@ vi.mock('../../../../src/renderer/src/components/AdvancedPromptingModal', () => 
 vi.mock('../../../../src/renderer/src/components/NotificationVolumeSlider', () => ({
   NotificationVolumeSlider: () => null,
 }))
+const selection = vi.hoisted(() => ({
+  reportTaskActionFailure: vi.fn(),
+  clearTaskActionResult: vi.fn(),
+}))
+vi.mock('../../../../src/renderer/src/context/SelectionContext', () => ({
+  useSelection: () => selection,
+}))
 
 const { PromptPane } = await import('../../../../src/renderer/src/components/PromptPane')
 
@@ -62,8 +69,15 @@ const completedTask: Task = {
 let appLog: ReturnType<typeof vi.fn>
 let clipboardWriteText: ReturnType<typeof vi.fn>
 
+let decode: ReturnType<typeof vi.fn>
+
 beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn()
+  selection.reportTaskActionFailure.mockClear()
+  selection.clearTaskActionResult.mockClear()
+  // jsdom loads no images; the preview decodes before it draws.
+  decode = vi.fn(async () => undefined)
+  HTMLImageElement.prototype.decode = decode as unknown as () => Promise<void>
   appLog = vi.fn(async () => undefined)
   clipboardWriteText = vi.fn(async () => undefined)
   Object.defineProperty(navigator, 'clipboard', {
@@ -84,6 +98,23 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('PromptPane presentation', () => {
+  it('draws a completed task\'s image from the app\'s image scheme once it has decoded, and clears an earlier load failure', async () => {
+    const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
+    await waitFor(() => expect(container.querySelector('.preview-image')).not.toBeNull())
+    expect(container.querySelector('.preview-image')?.getAttribute('src')).toBe('iq-image://output/current/image')
+    expect(selection.clearTaskActionResult).toHaveBeenCalledWith('task-1', 'preview')
+    expect(selection.reportTaskActionFailure).not.toHaveBeenCalled()
+  })
+
+  it('puts the load-failure note on the task when its image cannot load, missing or unreadable alike', async () => {
+    decode.mockRejectedValueOnce(new Error('EncodingError'))
+    const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
+    await waitFor(() => expect(selection.reportTaskActionFailure).toHaveBeenCalledOnce())
+    expect(selection.reportTaskActionFailure).toHaveBeenCalledWith('task-1', 'preview', 'task.previewFailed', 'Failed to load selected image', expect.any(Error))
+    expect(container.querySelector('.preview-image')).toBeNull()
+    expect(container.querySelector('.preview-placeholder')).not.toBeNull()
+  })
+
   it('shows a failed task\'s whole reason in its own strip under the preview: the authored lead-in, then the provider\'s words', () => {
     const said = 'Your request was rejected by the safety system. '.repeat(8).trim()
     const failedTask: Task = {
@@ -93,7 +124,7 @@ describe('PromptPane presentation', () => {
       providerMessage: said,
     }
     const { container } = render(
-      <PromptPane selectedTask={failedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
+      <PromptPane selectedTask={failedTask} prompt="" onPromptChange={vi.fn()} />
     )
     const failure = container.querySelector('.preview-failure') as HTMLElement
     expect(failure.textContent).toContain('OpenAI refused this prompt (“moderation_blocked”)')
@@ -106,7 +137,7 @@ describe('PromptPane presentation', () => {
 
   it('shows no failure strip for a task that has not failed', () => {
     const { container } = render(
-      <PromptPane selectedTask={selectedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
+      <PromptPane selectedTask={selectedTask} prompt="" onPromptChange={vi.fn()} />
     )
     expect(container.querySelector('.preview-failure')).toBeNull()
   })
@@ -114,7 +145,7 @@ describe('PromptPane presentation', () => {
   it('shows the lead-in alone when the provider said nothing', () => {
     const failedTask: Task = { ...selectedTask, status: 'failed', error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } } }
     const { container } = render(
-      <PromptPane selectedTask={failedTask} previewDataUrl={null} prompt="" onPromptChange={vi.fn()} />
+      <PromptPane selectedTask={failedTask} prompt="" onPromptChange={vi.fn()} />
     )
     expect(container.querySelector('.preview-failure')?.textContent).toContain('OpenAI could not generate this image')
     expect(container.querySelector('.preview-failure-provider')).toBeNull()
@@ -124,7 +155,6 @@ describe('PromptPane presentation', () => {
     const { container } = render(
       <PromptPane
         selectedTask={selectedTask}
-        previewDataUrl={null}
         prompt="a cat"
         onPromptChange={vi.fn()}
       />
@@ -157,7 +187,6 @@ describe('PromptPane presentation', () => {
     render(
       <PromptPane
         selectedTask={null}
-        previewDataUrl={null}
         prompt=""
         onPromptChange={onPromptChange}
       />
@@ -189,7 +218,6 @@ describe('PromptPane presentation', () => {
     render(
       <PromptPane
         selectedTask={completedTask}
-        previewDataUrl="data:image/png;base64,AA=="
         prompt="a cat"
         onPromptChange={vi.fn()}
       />
@@ -222,7 +250,6 @@ describe('PromptPane presentation', () => {
     render(
       <PromptPane
         selectedTask={completedTask}
-        previewDataUrl="data:image/png;base64,AA=="
         prompt="a cat"
         onPromptChange={vi.fn()}
       />

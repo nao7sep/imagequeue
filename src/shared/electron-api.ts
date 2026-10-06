@@ -32,6 +32,8 @@ import type { StartupFailureMeasurement } from './startup-failure'
 import type { Message } from './i18n/translate'
 import type { LanguageEnvironment } from './i18n/languages'
 import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery } from './records'
+import type { ConfirmOptions } from './confirm'
+import type { ListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface } from './viewing'
 
 // The Node platform string (member set of NodeJS.Platform), spelled out as a
 // portable union so this shared contract carries no @types/node dependency — it
@@ -149,9 +151,6 @@ export interface ElectronAPI {
     callback: (event: { done: number; total: number; phase: BrainstormPhase }) => void
   ) => (() => void)
 
-  // Preview operations
-  getImage: (baseName: string) => Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null>
-
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<{ success: boolean }>
@@ -215,13 +214,23 @@ export interface ElectronAPI {
   hasClipboardText: () => Promise<boolean>
   copyImageToClipboard: (baseName: string, ext: string) => Promise<void>
   openDirectoryDialog: () => Promise<string | null>
-  openViewer: (dataUrl: string) => Promise<void>
-  closeViewer: () => Promise<void>
-  viewerNavigate: (dir: 'up' | 'down' | 'left' | 'right') => Promise<void>
-  viewerAction: (action: 'remove' | 'delete') => Promise<void>
-  onViewerNavigate: (callback: (dir: 'up' | 'down' | 'left' | 'right') => void) => (() => void)
-  onViewerAction: (callback: (action: 'remove' | 'delete') => void) => (() => void)
-  onViewerStateChanged: (callback: (open: boolean) => void) => (() => void)
+  // The views of the selected image (shared/viewing). The main window publishes
+  // the selection; the preview window and the fullscreen view follow it and hand
+  // list keys and confirmations back and forth through the main process.
+  publishSelection: (task: SelectedImage | null) => Promise<void>
+  getLatestSelection: () => Promise<SelectionSnapshot>
+  onSelectionSnapshot: (callback: (snapshot: SelectionSnapshot) => void) => (() => void)
+  openFullscreenView: () => Promise<void>
+  closeFullscreenView: () => Promise<void>
+  reportFullscreenViewPainted: (version: number, painted: boolean) => Promise<void>
+  onFullscreenViewStateChanged: (callback: (open: boolean) => void) => (() => void)
+  sendListKey: (key: ListKey) => Promise<void>
+  onListKey: (callback: (event: { key: ListKey; surface: ViewingSurface }) => void) => (() => void)
+  // Null when the view is gone; the caller then asks in its own window.
+  confirmInSurface: (surface: ViewingSurface, options: ConfirmOptions) => Promise<boolean | null>
+  answerSurfaceConfirm: (id: number, ok: boolean) => Promise<void>
+  onSurfaceConfirm: (callback: (request: SurfaceConfirmRequest) => void) => (() => void)
+  onSurfaceConfirmDismissed: (callback: (id: number) => void) => (() => void)
   showNotification: (type: 'success' | 'failure') => Promise<void>
   loadAudioFile: (filePath: string) => Promise<string | null>
 

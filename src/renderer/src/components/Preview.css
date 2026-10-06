@@ -1,0 +1,67 @@
+/* The selected image and its failure strip: the preview in the main window's
+   prompt pane and the whole of the preview window. */
+
+.preview-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--preview-bg);
+  /* The one flexible block: whatever varies with the selection below it (the
+     completed task's toolbar, the failure strip) takes its height from here,
+     down to this floor, so the controls above never move. */
+  min-height: 120px;
+  overflow: hidden;
+}
+
+.preview-placeholder {
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 20px;
+}
+
+.preview-placeholder-hint {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+/* A failed task's reason, in the app's error style, in its own strip between
+   the preview and Details. It never shrinks; the preview above gives up the
+   height. A long reason scrolls within the strip's cap rather than squeezing
+   the preview. The text is selectable and wraps, keeping any line breaks the
+   provider sent. */
+.preview-failure {
+  flex-shrink: 0;
+  /* Five lines, plus the padding and border. */
+  max-height: calc(1.4em * 5 + 2 * var(--space-2) + 2px);
+  overflow-y: auto;
+  padding: var(--space-2) 10px;
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.preview-failure-provider {
+  margin-top: var(--space-2);
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-area:has(.preview-image) {
+  align-items: stretch;
+  justify-content: stretch;
+}

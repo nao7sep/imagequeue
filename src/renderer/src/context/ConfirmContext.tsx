@@ -2,17 +2,18 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { ConfirmModal } from '../components/ConfirmModal'
 import { AppNoticeModal } from '../components/AppNoticeModal'
 import type { AppNotice } from '../../../shared/app-notice'
+import type { ConfirmOptions } from '../../../shared/confirm'
+import type { ViewingSurface } from '../../../shared/viewing'
+import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 
-export interface ConfirmOptions {
-  title?: string
-  message: string
-  confirmLabel?: string
-  cancelLabel?: string
-  danger?: boolean
-}
+export type { ConfirmOptions }
+
+/** Asks for a confirmation in this window, or in the view the gesture came
+ *  from (the preview window or the fullscreen view), where the user is looking. */
+export type Confirm = (options: ConfirmOptions, surface?: ViewingSurface) => Promise<boolean>
 
 interface ConfirmContextValue {
-  confirm: (options: ConfirmOptions) => Promise<boolean>
+  confirm: Confirm
 }
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null)
@@ -52,7 +53,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
     }
   }, [])
 
-  const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
+  const confirmHere = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
       const nextPending = { options, resolve }
       if (!pendingRef.current) {
@@ -63,6 +64,18 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
       }
     })
   }, [])
+
+  const confirm = useCallback<Confirm>((options, surface) => {
+    if (!surface) return confirmHere(options)
+    // A view that has closed in the meantime answers null: ask here instead.
+    return window.electronAPI.confirmInSurface(surface, options).then(
+      (answer) => answer ?? confirmHere(options),
+      (error) => {
+        recordOperationalDiagnostic('Failed to ask for a confirmation in another view', error, { surface })
+        return false
+      },
+    )
+  }, [confirmHere])
 
   const settle = useCallback((value: boolean): void => {
     const p = pendingRef.current
@@ -102,7 +115,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }): React.JS
   )
 }
 
-export function useConfirm(): (options: ConfirmOptions) => Promise<boolean> {
+export function useConfirm(): Confirm {
   const ctx = useContext(ConfirmContext)
   if (!ctx) throw new Error('useConfirm must be used within ConfirmProvider')
   return ctx.confirm

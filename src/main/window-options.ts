@@ -7,8 +7,8 @@
 // adding only the environment-bound bits (the preload path and the background of
 // the resolved theme, see mainWindowBackground).
 //
-// The window is framed (not frameless — only the secondary viewer/notification
-// windows are frameless), and the minimum size is the sum of the panes' minimums
+// The window is framed (not frameless — only the fullscreen view and the
+// notification window are frameless), and the minimum size is the sum of the panes' minimums
 // plus chrome, derived from shared/layout-metrics — never a magic literal.
 
 import {
@@ -28,6 +28,7 @@ export interface MainWindowOptions {
     bounds: true
     displayMode: boolean
   }
+  fullscreenable: false
   show: false
 }
 
@@ -58,6 +59,9 @@ export function buildMainWindowOptions(paneCount: number): MainWindowOptions {
       bounds: true,
       displayMode: process.platform === 'win32'
     },
+    // Only the fullscreen view is ever fullscreen: the main window has no
+    // Spaces fullscreen, so the green button zooms.
+    fullscreenable: false,
     show: false,
   }
 }

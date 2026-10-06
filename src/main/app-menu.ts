@@ -78,8 +78,6 @@ export function buildAppMenuTemplate(t: Translator, platform: NodeJS.Platform): 
         { role: 'resetZoom', label: l('nativeMenu.actualSize') },
         { role: 'zoomIn', label: l('nativeMenu.zoomIn') },
         { role: 'zoomOut', label: l('nativeMenu.zoomOut') },
-        { type: 'separator' },
-        { role: 'togglefullscreen', label: l('nativeMenu.fullscreen') },
       ],
     },
     {

@@ -15,6 +15,55 @@ export interface TaskRef {
   id: string
 }
 
+/** The task in column `b` whose row is vertically nearest to `cy`; the first
+ *  task when there is no center to compare against; null for an empty column. */
+function nearestInColumn(
+  b: BackendId,
+  lists: Partial<Record<BackendId, TaskRef[]>>,
+  cy: number | null,
+  centerOf: (taskId: string) => number | null
+): RecoverySelection | null {
+  const colTasks = lists[b]
+  if (!colTasks || colTasks.length === 0) return null
+  if (cy === null) return { backend: b, taskId: colTasks[0].id }
+  let bestId: string | null = null
+  let bestDist = Infinity
+  for (const t of colTasks) {
+    const tcy = centerOf(t.id)
+    if (tcy === null) continue
+    const d = Math.abs(tcy - cy)
+    if (d < bestDist) {
+      bestDist = d
+      bestId = t.id
+    }
+  }
+  return { backend: b, taskId: bestId ?? colTasks[0].id }
+}
+
+/**
+ * Left and Right on the queue board: the nearest task, by its row's vertical
+ * center, in the next non-empty column in that direction, skipping empty
+ * columns. Null at the edge of the board. Shared by the lists and the views that
+ * hand their arrows to the main window, which pick by the same on-screen position.
+ */
+export function nearestInAdjacentColumn(
+  current: RecoverySelection,
+  lists: Partial<Record<BackendId, TaskRef[]>>,
+  visibleBackends: BackendId[],
+  dir: 'left' | 'right',
+  centerOf: (taskId: string) => number | null
+): RecoverySelection | null {
+  const colIdx = visibleBackends.indexOf(current.backend)
+  if (colIdx < 0) return null
+  const step = dir === 'right' ? 1 : -1
+  const cy = centerOf(current.taskId)
+  for (let i = colIdx + step; i >= 0 && i < visibleBackends.length; i += step) {
+    const next = nearestInColumn(visibleBackends[i], lists, cy, centerOf)
+    if (next) return next
+  }
+  return null
+}
+
 /**
  * General recovery order: the next task in the same column, then the previous in
  * the same column, then the nearest task in the adjacent columns (rightward
@@ -45,25 +94,8 @@ export function nextSelectionAfterRemoval(
   const colIdx = visibleBackends.indexOf(target.backend)
   if (colIdx < 0) return null
 
-  const findNearestInCol = (b: BackendId): RecoverySelection | null => {
-    const colTasks = lists[b]
-    if (!colTasks || colTasks.length === 0) return null
-    if (removedCy === null) {
-      return { backend: b, taskId: colTasks[0].id }
-    }
-    let bestId: string | null = null
-    let bestDist = Infinity
-    for (const t of colTasks) {
-      const cy = centerOf(t.id)
-      if (cy === null) continue
-      const d = Math.abs(cy - removedCy)
-      if (d < bestDist) {
-        bestDist = d
-        bestId = t.id
-      }
-    }
-    return { backend: b, taskId: bestId ?? colTasks[0].id }
-  }
+  const findNearestInCol = (b: BackendId): RecoverySelection | null =>
+    nearestInColumn(b, lists, removedCy, centerOf)
 
   // 3. Rightward
   for (let i = colIdx + 1; i < visibleBackends.length; i++) {

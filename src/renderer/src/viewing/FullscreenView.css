@@ -1,0 +1,14 @@
+/* The image alone on black, whatever the theme; a confirmation over it keeps
+   the app's own dialog styling. */
+.fullscreen-view {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+.fullscreen-view-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}

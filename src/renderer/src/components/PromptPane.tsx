@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
 import { useUiState } from '../context/UiStateContext'
@@ -9,7 +9,10 @@ import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
-import { taskFailureText, taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
+import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
+import { selectedImageOf } from '../../../shared/viewing'
+import { useSelection } from '../context/SelectionContext'
+import { Preview } from './Preview'
 import { serializeError } from '../../../shared/serialize-error'
 import { AdvancedPromptingModal } from './AdvancedPromptingModal'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
@@ -19,7 +22,6 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 interface Props {
   selectedTask: Task | null
-  previewDataUrl: string | null
   prompt: string
   onPromptChange: (p: string) => void
 }
@@ -86,7 +88,7 @@ function ActionFailures({
   )
 }
 
-export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChange }: Props): React.JSX.Element {
+export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): React.JSX.Element {
   const { settings, saveNotificationField } = useSettings()
   const i18n = useI18n()
   const { t } = i18n
@@ -161,7 +163,14 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
     })
   }, [])
 
-  const failureText = selectedTask ? taskFailureText(i18n, selectedTask) : null
+  // The image either loaded or did not; a failure stays on the task, as a
+  // thumbnail's does, until a later load of it succeeds.
+  const { reportTaskActionFailure, clearTaskActionResult } = useSelection()
+  const selectedImage = useMemo(() => selectedImageOf(selectedTask), [selectedTask])
+  const handleImageLoad = useCallback((taskId: string, loaded: boolean): void => {
+    if (loaded) clearTaskActionResult(taskId, 'preview')
+    else reportTaskActionFailure(taskId, 'preview', 'task.previewFailed', 'Failed to load selected image', new Error(`Preview request failed for task ${taskId}`))
+  }, [clearTaskActionResult, reportTaskActionFailure])
 
   const getExt = useCallback(
     () => selectedTask?.imagePath?.split('.').pop() ?? 'png',
@@ -377,28 +386,7 @@ export function PromptPane({ selectedTask, previewDataUrl, prompt, onPromptChang
           </button>
         </div>
 
-        <div className="preview-area">
-          {previewDataUrl ? (
-            <img className="preview-image" src={previewDataUrl} alt={t('prompt.previewAlt')} />
-          ) : (
-            <div className="preview-placeholder">
-              <p>{t('prompt.noImage')}</p>
-              <p className="preview-placeholder-hint">{t('prompt.noImageHint')}</p>
-            </div>
-          )}
-        </div>
-
-        {failureText !== null && (
-          // Why the selected task failed, whole: the authored lead-in, then the
-          // provider's reason. Its own strip under the preview, which gives up
-          // the height, so nothing above moves.
-          <div className="preview-failure">
-            <p>{failureText}</p>
-            {selectedTask?.providerMessage && (
-              <p className="preview-failure-provider">{selectedTask.providerMessage}</p>
-            )}
-          </div>
-        )}
+        <Preview task={selectedImage} onImageLoad={handleImageLoad} />
 
         {(selectedTask?.status === 'completed' || selectedTask?.status === 'kept') && selectedTask?.baseName && (
           <div className="preview-toolbar">

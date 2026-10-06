@@ -15,8 +15,8 @@ import {
 import './ToastStack.css'
 
 // The app's one in-window toast host. It holds only app-level operation
-// failures that have no other home (the draft-save warning, enqueue, the image
-// viewer, the output folder, window preferences, queue controls) above the
+// failures that have no other home (the draft-save warning, enqueue, the
+// fullscreen view, the output folder, window preferences, queue controls) above the
 // download and import cards, which stay nearest the corner. Generation
 // failures never come here: each task card and its preview own them.
 //

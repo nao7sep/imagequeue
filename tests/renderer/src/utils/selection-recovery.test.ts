@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextSelectionAfterRemoval, type TaskRef } from '../../../../src/renderer/src/utils/selection-recovery'
+import { nearestInAdjacentColumn, nextSelectionAfterRemoval, type TaskRef } from '../../../../src/renderer/src/utils/selection-recovery'
 import type { BackendId } from '../../../../src/shared'
 
 const ids = (...names: string[]): TaskRef[] => names.map((id) => ({ id }))
@@ -68,5 +68,33 @@ describe('nextSelectionAfterRemoval', () => {
     expect(
       nextSelectionAfterRemoval({ backend: 'drawthings', taskId: 'solo' }, { drawthings: ids('solo') }, visible, noGeometry)
     ).toBeNull()
+  })
+})
+
+describe('nearestInAdjacentColumn', () => {
+  const visible: BackendId[] = ['openai', 'nanobanana', 'flux']
+  const centers: Record<string, number> = { a: 50, b: 150, c: 250, x: 40, y: 160, z: 260, p: 10 }
+  const centerOf = (taskId: string): number | null => centers[taskId] ?? null
+
+  it('picks the task in the next column whose row is nearest the selected row', () => {
+    const lists = { openai: ids('a', 'b', 'c'), nanobanana: ids('x', 'y', 'z') }
+    expect(nearestInAdjacentColumn({ backend: 'openai', taskId: 'b' }, lists, visible, 'right', centerOf))
+      .toEqual({ backend: 'nanobanana', taskId: 'y' })
+    expect(nearestInAdjacentColumn({ backend: 'nanobanana', taskId: 'z' }, lists, visible, 'left', centerOf))
+      .toEqual({ backend: 'openai', taskId: 'c' })
+  })
+
+  it('skips empty columns and stops at the edge of the board', () => {
+    const lists = { openai: ids('a'), nanobanana: [], flux: ids('p') }
+    expect(nearestInAdjacentColumn({ backend: 'openai', taskId: 'a' }, lists, visible, 'right', centerOf))
+      .toEqual({ backend: 'flux', taskId: 'p' })
+    expect(nearestInAdjacentColumn({ backend: 'openai', taskId: 'a' }, lists, visible, 'left', centerOf)).toBeNull()
+    expect(nearestInAdjacentColumn({ backend: 'flux', taskId: 'p' }, lists, visible, 'right', centerOf)).toBeNull()
+  })
+
+  it('takes the first task of the column when the selected row has no position', () => {
+    const lists = { openai: ids('gone'), nanobanana: ids('x', 'y') }
+    expect(nearestInAdjacentColumn({ backend: 'openai', taskId: 'gone' }, lists, visible, 'right', centerOf))
+      .toEqual({ backend: 'nanobanana', taskId: 'x' })
   })
 })

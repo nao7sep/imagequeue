@@ -45,6 +45,14 @@ describe('application menu', () => {
     expect(submenu(template[0]!).find((item) => item.role === 'about')?.label).toBe(de.t('nativeMenu.about', { app: 'ImageQueue' }))
   })
 
+  it('offers no Spaces fullscreen on either platform; only the fullscreen view is fullscreen', async () => {
+    const en = await loadTranslator('en')
+    for (const platform of ['darwin', 'win32'] as const) {
+      const roles = buildAppMenuTemplate(en, platform).flatMap((menu) => submenu(menu) ?? []).map((item) => item.role)
+      expect(roles).not.toContain('togglefullscreen')
+    }
+  })
+
   it('carries Exit in File and no app menu on Windows', async () => {
     const en = await loadTranslator('en')
     const template = buildAppMenuTemplate(en, 'win32')

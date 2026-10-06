@@ -1,5 +1,5 @@
 import { Modal } from './Modal'
-import type { ConfirmOptions } from '../context/ConfirmContext'
+import type { ConfirmOptions } from '../../../shared/confirm'
 import { useI18n } from '../i18n/I18nContext'
 
 interface Props {

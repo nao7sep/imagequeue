@@ -3,6 +3,7 @@ import path from 'path'
 import { RECORDS_WINDOW_MIN_HEIGHT, RECORDS_WINDOW_MIN_WIDTH } from '../shared/records-layout'
 import { buildTextContextMenuTemplate } from './app-menu'
 import { mainTranslator } from './i18n'
+import { loadRendererSurface } from './renderer-surface'
 import { log, serializeError } from './logger'
 import { trackThemedWindow, windowBackground } from './theme'
 import { hardenWindow } from './utils/harden-window'
@@ -76,14 +77,7 @@ export async function openRecordsWindow(): Promise<void> {
   })
 
   try {
-    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-    if (rendererUrl) {
-      const url = new URL(rendererUrl)
-      url.searchParams.set('surface', 'records')
-      await win.loadURL(url.toString())
-    } else {
-      await win.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { surface: 'records' } })
-    }
+    await loadRendererSurface(win, 'records')
   } catch (error) {
     if (!win.isDestroyed()) win.destroy()
     throw error

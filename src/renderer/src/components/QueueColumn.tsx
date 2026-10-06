@@ -10,6 +10,8 @@ import { CLOUD_BACKENDS } from '../backends'
 import { useDrawThingsColumn, DrawThingsControls } from './DrawThingsColumn'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
+import { canShowImage } from '../../../shared/viewing'
+import { FULLSCREEN_VIEW_TOGGLE_EVENT } from '../utils/fullscreenView'
 import { useAutosavedImageBackendDefaults } from '../hooks/useAutosavedImageBackendDefaults'
 import {
   resolveSavedImageBackendDefaults,
@@ -238,9 +240,9 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     if (e.key === ' ') {
       if (isComposing(e.nativeEvent)) return
       const task = tasks[sel.backend]?.find((t) => t.id === sel.taskId)
-      if (task?.status !== 'completed' && task?.status !== 'kept') return
+      if (!canShowImage(task)) return
       e.preventDefault()
-      window.dispatchEvent(new CustomEvent('viewer:toggle'))
+      window.dispatchEvent(new CustomEvent(FULLSCREEN_VIEW_TOGGLE_EVENT))
     }
   }, [selection, navigate, selectEdge, backendId, tasks, deleteSelected, restoreSelected, removeSelected, isComposing])
 
@@ -487,6 +489,9 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
         aria-labelledby={`${promptId} ${statusId}`}
         tabIndex={isTabbable ? 0 : -1}
         onClick={onSelect}
+        // A double-click opens the fullscreen view, as Space does; its first
+        // click has already selected the row.
+        onDoubleClick={() => { if (canShowImage(task)) window.dispatchEvent(new CustomEvent(FULLSCREEN_VIEW_TOGGLE_EVENT)) }}
         // Activation follows focus: Tab-ing into the column (or focusing a row any
         // other way) commits that row as the selection, the single source of truth
         // the arrows and command keys then read. `select` only sets state — it

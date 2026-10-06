@@ -30,7 +30,9 @@ import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
-import { clearOperationalFailure, reportOperationalFailure } from '../utils/operationalFailure'
+import { clearOperationalFailure, recordOperationalDiagnostic, reportOperationalFailure } from '../utils/operationalFailure'
+import { canShowImage, selectedImageOf } from '../../../shared/viewing'
+import { FULLSCREEN_VIEW_TOGGLE_EVENT } from '../utils/fullscreenView'
 import { useI18n } from '../i18n/I18nContext'
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
@@ -46,8 +48,6 @@ export function Layout(): React.JSX.Element {
     removeSelected,
     restoreSelected,
     deleteSelected,
-    reportTaskActionFailure,
-    clearTaskActionResult,
   } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   // The right-hand group's panes, reactive to key presence and task counts.
@@ -59,8 +59,6 @@ export function Layout(): React.JSX.Element {
   const { uiState, patchUiState } = useUiState()
   const prompt = draft.prompt
   const setPrompt = useCallback((value: string): void => updateDraft({ prompt: value }), [updateDraft])
-  const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
-  const [viewerOpen, setViewerOpen] = useState(false)
   const [overlay, setOverlay] = useState<Overlay>(null)
 
   // Provider-column width. The persisted INTENT (px, or null = the default)
@@ -194,96 +192,66 @@ export function Layout(): React.JSX.Element {
     return () => window.removeEventListener('open-dependencies-modal', handler)
   }, [])
 
-  // Load image data when a completed task is selected
+  // The selection, as the preview window and the fullscreen view follow it. A
+  // new snapshot goes out only when what they show changes, not on every queue
+  // update that hands the same task back as a new object.
+  const selectedImage = selectedImageOf(selectedTask)
+  const selectedImageKey = JSON.stringify(selectedImage)
+  const selectedImageRef = useRef(selectedImage)
+  selectedImageRef.current = selectedImage
   useEffect(() => {
-    if (
-      !selectedTask ||
-      (selectedTask.status !== 'completed' && selectedTask.status !== 'kept') ||
-      !selectedTask.baseName
-    ) {
-      setPreviewDataUrl(null)
-      return
-    }
+    void window.electronAPI.publishSelection(selectedImageRef.current)
+      .catch((error) => recordOperationalDiagnostic('Failed to publish the selection to the other views', error))
+  }, [selectedImageKey])
 
-    let active = true
-    window.electronAPI.getImage(selectedTask.baseName).then((result) => {
-      if (!active) return
-      clearTaskActionResult(selectedTask.id, 'preview')
-      if (result) {
-        const mime = result.ext === 'jpg' ? 'image/jpeg' : `image/${result.ext}`
-        setPreviewDataUrl(`data:${mime};base64,${result.data}`)
-      } else {
-        setPreviewDataUrl(null)
-      }
-    }).catch((error) => {
-      if (!active) return
-      setPreviewDataUrl(null)
-      reportTaskActionFailure(selectedTask.id, 'preview', 'task.previewFailed', 'Failed to load selected image', error)
-    })
-    return () => { active = false }
-  }, [selectedTask, clearTaskActionResult, reportTaskActionFailure])
-
-  // Open the fullscreen viewer window when Space is pressed on a completed task.
-  // If the viewer is already open, Space toggles it closed.
+  const [fullscreenViewOpen, setFullscreenViewOpen] = useState(false)
   useEffect(() => {
-    const handler = (): void => {
-      if (viewerOpen) {
-        void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer-close', 'operation.viewerCloseFailed', 'Failed to close image viewer', error))
-      } else if (previewDataUrl) {
-        void window.electronAPI.openViewer(previewDataUrl).catch((error) => reportOperationalFailure('viewer-open', 'operation.viewerOpenFailed', 'Failed to open image viewer', error))
-      }
-    }
-    window.addEventListener('viewer:toggle', handler)
-    return () => window.removeEventListener('viewer:toggle', handler)
-  }, [previewDataUrl, viewerOpen])
-
-  // Track viewer open/closed state so we know when to push updates vs. open
-  // fresh, and so Space can toggle.
-  useEffect(() => {
-    return window.electronAPI.onViewerStateChanged((open) => setViewerOpen(open))
+    return window.electronAPI.onFullscreenViewStateChanged(setFullscreenViewOpen)
   }, [])
 
-  // Forward arrow keys pressed in the fullscreen viewer to the same nav
-  // function the main window uses. Selection (and main-window scroll) updates
-  // immediately; the next two effects push the image or close the viewer.
-  useEffect(() => {
-    return window.electronAPI.onViewerNavigate((dir) => navigate(dir))
-  }, [navigate])
+  // Space or a double-click on a task with an image opens the fullscreen view.
+  // The view takes the keyboard while open and closes itself on Space, so the
+  // close here is only for a toggle that arrives while it is still open.
+  const toggleFullscreenView = useCallback((): void => {
+    if (fullscreenViewOpen) {
+      void window.electronAPI.closeFullscreenView()
+        .catch((error) => reportOperationalFailure('fullscreen-view-close', 'operation.fullscreenViewCloseFailed', 'Failed to close the fullscreen view', error))
+    } else if (canShowImage(selectedImageRef.current)) {
+      void window.electronAPI.openFullscreenView()
+        .then(() => clearOperationalFailure('fullscreen-view-open'))
+        .catch((error) => reportOperationalFailure('fullscreen-view-open', 'operation.fullscreenViewOpenFailed', 'Failed to open the fullscreen view', error))
+    }
+  }, [fullscreenViewOpen])
 
   useEffect(() => {
-    return window.electronAPI.onViewerAction((action) => {
-      if (action === 'delete') {
-        void deleteSelected()
-        return
-      }
-      if (selectedTask?.status === 'kept') {
-        void restoreSelected()
-      } else {
-        void removeSelected()
+    window.addEventListener(FULLSCREEN_VIEW_TOGGLE_EVENT, toggleFullscreenView)
+    return () => window.removeEventListener(FULLSCREEN_VIEW_TOGGLE_EVENT, toggleFullscreenView)
+  }, [toggleFullscreenView])
+
+  // Keys pressed in the preview window or the fullscreen view act on the lists
+  // as they do here. Arrows move the selection and scroll without taking focus
+  // (navigate), and a confirmation shows in the view the key came from.
+  useEffect(() => {
+    return window.electronAPI.onListKey(({ key, surface }) => {
+      switch (key) {
+        case 'up':
+        case 'down':
+        case 'left':
+        case 'right':
+          navigate(key)
+          return
+        case 'space':
+          toggleFullscreenView()
+          return
+        case 'remove':
+          if (selectedImageRef.current?.status === 'kept') void restoreSelected()
+          else void removeSelected(surface)
+          return
+        case 'delete':
+          void deleteSelected(surface)
       }
     })
-  }, [deleteSelected, removeSelected, restoreSelected, selectedTask?.status])
-
-  // While the viewer is open, push new image data whenever the selected task's
-  // image finishes loading. The main viewer code awaits img.decode() before
-  // showing, so swaps are flash-free.
-  useEffect(() => {
-    if (!viewerOpen || !previewDataUrl) return
-    // A later successful update proves the viewer is current again.
-    void window.electronAPI.openViewer(previewDataUrl)
-      .then(() => clearOperationalFailure('viewer-update'))
-      .catch((error) => reportOperationalFailure('viewer-update', 'operation.viewerUpdateFailed', 'Failed to update image viewer', error))
-  }, [viewerOpen, previewDataUrl])
-
-  // While the viewer is open, close it if navigation lands on a task without
-  // a viewable image (queued/generating/failed, or selection cleared). The
-  // main process refocuses the main window on close.
-  useEffect(() => {
-    if (!viewerOpen) return
-    const status = selectedTask?.status
-    const canShow = (status === 'completed' || status === 'kept') && !!selectedTask?.baseName
-    if (!canShow) void window.electronAPI.closeViewer().catch((error) => reportOperationalFailure('viewer-close', 'operation.viewerCloseFailed', 'Failed to close image viewer after selection change', error))
-  }, [viewerOpen, selectedTask])
+  }, [navigate, toggleFullscreenView, removeSelected, restoreSelected, deleteSelected])
 
   return (
     <div className="layout-viewport">
@@ -380,7 +348,6 @@ export function Layout(): React.JSX.Element {
         </div>
         <PromptPane
             selectedTask={selectedTask}
-            previewDataUrl={previewDataUrl}
             prompt={prompt}
             onPromptChange={setPrompt}
           />

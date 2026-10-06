@@ -9,7 +9,8 @@ import { mainWindowBackground } from './window-options'
 // System itself.
 
 // Only windows painted with the app surface follow the theme's background: the
-// viewer stays black behind its image and the toast window stays transparent.
+// fullscreen view stays black behind its image and the toast window stays
+// transparent.
 const themedWindows = new Set<BrowserWindow>()
 
 export function windowBackground(dark: boolean = nativeTheme.shouldUseDarkColors): string {

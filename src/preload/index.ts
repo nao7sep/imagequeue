@@ -47,6 +47,8 @@ import {
   type StartupFailureMeasurement,
 } from '../shared/startup-failure'
 import type { Message } from '../shared/i18n/translate'
+import type { ConfirmOptions } from '../shared/confirm'
+import type { ListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface } from '../shared/viewing'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
@@ -236,10 +238,6 @@ const api = {
     return () => { ipcRenderer.removeListener('brainstorm:progress', handler) }
   },
 
-  // Preview operations
-  getImage: (baseName: string): Promise<{ data: string; ext: 'png' | 'jpg' | 'webp' } | null> =>
-    ipcRenderer.invoke('preview:getImage', baseName),
-
   // Settings operations
   getSettings: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('settings:get'),
@@ -403,43 +401,71 @@ const api = {
   openDirectoryDialog: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory'),
 
-  openViewer: (dataUrl: string): Promise<void> =>
-    ipcRenderer.invoke('viewer:open', dataUrl),
+  publishSelection: (task: SelectedImage | null): Promise<void> =>
+    ipcRenderer.invoke('selection:publish', task),
 
-  closeViewer: (): Promise<void> =>
-    ipcRenderer.invoke('viewer:close'),
+  getLatestSelection: (): Promise<SelectionSnapshot> =>
+    ipcRenderer.invoke('selection:latest'),
 
-  viewerNavigate: (dir: 'up' | 'down' | 'left' | 'right'): Promise<void> =>
-    ipcRenderer.invoke('viewer:navigate', dir),
-
-  viewerAction: (action: 'remove' | 'delete'): Promise<void> =>
-    ipcRenderer.invoke('viewer:action', action),
-
-  onViewerNavigate: (callback: (dir: 'up' | 'down' | 'left' | 'right') => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, dir: 'up' | 'down' | 'left' | 'right'): void => {
-      callback(dir)
+  onSelectionSnapshot: (callback: (snapshot: SelectionSnapshot) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, snapshot: SelectionSnapshot): void => {
+      callback(snapshot)
     }
-    ipcRenderer.on('viewer:navigate', handler)
-    return () => { ipcRenderer.removeListener('viewer:navigate', handler) }
+    ipcRenderer.on('selection:snapshot', handler)
+    return () => { ipcRenderer.removeListener('selection:snapshot', handler) }
   },
 
-  onViewerAction: (callback: (action: 'remove' | 'delete') => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, action: 'remove' | 'delete'): void => {
-      callback(action)
-    }
-    ipcRenderer.on('viewer:action', handler)
-    return () => { ipcRenderer.removeListener('viewer:action', handler) }
-  },
+  openFullscreenView: (): Promise<void> =>
+    ipcRenderer.invoke('fullscreenView:open'),
 
-  onViewerStateChanged: (callback: (open: boolean) => void): (() => void) => {
+  closeFullscreenView: (): Promise<void> =>
+    ipcRenderer.invoke('fullscreenView:close'),
+
+  reportFullscreenViewPainted: (version: number, painted: boolean): Promise<void> =>
+    ipcRenderer.invoke('fullscreenView:painted', version, painted),
+
+  onFullscreenViewStateChanged: (callback: (open: boolean) => void): (() => void) => {
     const opened = (): void => callback(true)
     const closed = (): void => callback(false)
-    ipcRenderer.on('viewer:opened', opened)
-    ipcRenderer.on('viewer:closed', closed)
+    ipcRenderer.on('fullscreenView:opened', opened)
+    ipcRenderer.on('fullscreenView:closed', closed)
     return () => {
-      ipcRenderer.removeListener('viewer:opened', opened)
-      ipcRenderer.removeListener('viewer:closed', closed)
+      ipcRenderer.removeListener('fullscreenView:opened', opened)
+      ipcRenderer.removeListener('fullscreenView:closed', closed)
     }
+  },
+
+  sendListKey: (key: ListKey): Promise<void> =>
+    ipcRenderer.invoke('list:key', key),
+
+  onListKey: (callback: (event: { key: ListKey; surface: ViewingSurface }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { key: ListKey; surface: ViewingSurface }): void => {
+      callback(payload)
+    }
+    ipcRenderer.on('list:key', handler)
+    return () => { ipcRenderer.removeListener('list:key', handler) }
+  },
+
+  confirmInSurface: (surface: ViewingSurface, options: ConfirmOptions): Promise<boolean | null> =>
+    ipcRenderer.invoke('surface:confirm', surface, options),
+
+  answerSurfaceConfirm: (id: number, ok: boolean): Promise<void> =>
+    ipcRenderer.invoke('surface:answerConfirm', id, ok),
+
+  onSurfaceConfirm: (callback: (request: SurfaceConfirmRequest) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, request: SurfaceConfirmRequest): void => {
+      callback(request)
+    }
+    ipcRenderer.on('surface:confirm', handler)
+    return () => { ipcRenderer.removeListener('surface:confirm', handler) }
+  },
+
+  onSurfaceConfirmDismissed: (callback: (id: number) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, id: number): void => {
+      callback(id)
+    }
+    ipcRenderer.on('surface:confirmDismissed', handler)
+    return () => { ipcRenderer.removeListener('surface:confirmDismissed', handler) }
   },
 
   showNotification: (type: 'success' | 'failure'): Promise<void> =>

@@ -13,9 +13,10 @@ import { useQueue } from './QueueContext'
 import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
-import { nextSelectionAfterRemoval } from '../utils/selection-recovery'
+import { nearestInAdjacentColumn, nextSelectionAfterRemoval } from '../utils/selection-recovery'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 import { useI18n } from '../i18n/I18nContext'
+import type { ViewingSurface } from '../../../shared/viewing'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export interface Selection {
@@ -37,12 +38,13 @@ interface SelectionContextValue {
   clear: () => void
   navigate: (dir: NavDirection, step?: number) => void
   selectEdge: (backend: BackendId, edge: 'first' | 'last') => void
-  removeTask: (backend: BackendId, taskId: string) => Promise<void>
+  // `surface` names the view a forwarded key came from, so a confirmation shows there.
+  removeTask: (backend: BackendId, taskId: string, surface?: ViewingSurface) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
-  deleteTask: (backend: BackendId, taskId: string) => Promise<void>
-  removeSelected: () => Promise<void>
+  deleteTask: (backend: BackendId, taskId: string, surface?: ViewingSurface) => Promise<void>
+  removeSelected: (surface?: ViewingSurface) => Promise<void>
   restoreSelected: () => Promise<void>
-  deleteSelected: () => Promise<void>
+  deleteSelected: (surface?: ViewingSurface) => Promise<void>
   taskActionResults: TaskActionResults
   reportTaskActionFailure: (taskId: string, action: TaskResultAction, message: MessageKey, diagnosticMessage: string, error: unknown) => void
   clearTaskActionResult: (taskId: string, action: TaskResultAction) => void
@@ -61,6 +63,14 @@ const SelectionContext = createContext<SelectionContextValue | null>(null)
 // Resolve a task's row element by its data-task-id (set on every TaskItem).
 function getTaskElement(taskId: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(taskId)}"]`)
+}
+
+// A task row's vertical center on screen, or null when it has no row.
+function centerOfTask(taskId: string): number | null {
+  const el = getTaskElement(taskId)
+  if (!el) return null
+  const rect = el.getBoundingClientRect()
+  return rect.top + rect.height / 2
 }
 
 // True when DOM focus currently sits on a task row inside one of the queue's
@@ -197,12 +207,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // lives in selection-recovery.ts; this wrapper supplies the live task lists and
   // the DOM geometry — a row's vertical center, measured before the row is gone.
   const computeNextAfterRemoval = (target: Selection): Selection | null =>
-    nextSelectionAfterRemoval(target, tasksRef.current, visibleBackends, (taskId) => {
-      const el = getTaskElement(taskId)
-      if (!el) return null
-      const rect = el.getBoundingClientRect()
-      return rect.top + rect.height / 2
-    })
+    nextSelectionAfterRemoval(target, tasksRef.current, visibleBackends, centerOfTask)
 
   // If the task being removed is the currently selected one, the fallback
   // picks the next one. Otherwise selection is left alone. When the gesture came
@@ -218,7 +223,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     return true
   }
 
-  const removeTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
+  const removeTask = useCallback(async (backend: BackendId, taskId: string, surface?: ViewingSurface): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task) return
     if (task.status === 'generating') return
@@ -230,7 +235,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
         title: t(keepingCompleted ? 'task.keepTitle' : 'task.removeTitle'),
         message: t(keepingCompleted ? 'task.keepConfirm' : 'task.removeConfirm'),
         confirmLabel: t(keepingCompleted ? 'task.keep' : 'task.remove'),
-      })
+      }, surface)
       if (!ok) return
     }
 
@@ -258,7 +263,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // refused here as it is in removeTask, and this is the only place that refuses
   // it — queue:deleteWithFiles, unlike queue:removeTask, has no guard of its own,
   // so dropping this one would let a task vanish while its image is being written.
-  const deleteTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
+  const deleteTask = useCallback(async (backend: BackendId, taskId: string, surface?: ViewingSurface): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task) return
     if (task.status === 'generating') return
@@ -277,7 +282,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
             : 'task.deleteConfirmPermanent'),
         confirmLabel: t('task.delete'),
         danger: true
-      })
+      }, surface)
       if (!ok) return
     }
 
@@ -309,16 +314,16 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     })
   }, [runTaskAction])
 
-  const removeSelected = useCallback(async (): Promise<void> => {
+  const removeSelected = useCallback(async (surface?: ViewingSurface): Promise<void> => {
     const sel = selectionRef.current
     if (!sel) return
-    await removeTask(sel.backend, sel.taskId)
+    await removeTask(sel.backend, sel.taskId, surface)
   }, [removeTask])
 
-  const deleteSelected = useCallback(async (): Promise<void> => {
+  const deleteSelected = useCallback(async (surface?: ViewingSurface): Promise<void> => {
     const sel = selectionRef.current
     if (!sel) return
-    await deleteTask(sel.backend, sel.taskId)
+    await deleteTask(sel.backend, sel.taskId, surface)
   }, [deleteTask])
 
   const restoreSelected = useCallback(async (): Promise<void> => {
@@ -339,8 +344,9 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   //
   // Two call sites: the focused column's keydown (focus lives in a `.task-list`,
   // so we move DOM focus to the new row — the roving tab stop follows the
-  // selection) and the fullscreen viewer bridge (the main window's list is not
-  // focused, so we only update selection and scroll, never grabbing focus). The
+  // selection) and the arrows the preview window and the fullscreen view hand
+  // back (the main window's list is not focused, so we only update selection
+  // and scroll, never grabbing focus). The
   // focusIsInTaskList guard distinguishes the two without a flag.
   const navigate = useCallback((dir: NavDirection, pageStep = 1): void => {
     const sel = selectionRef.current
@@ -368,42 +374,12 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       return
     }
 
-    const colIdx = visibleBackends.indexOf(sel.backend)
-    if (colIdx < 0) return
-    const step = dir === 'right' ? 1 : -1
-    const selEl = getTaskElement(sel.taskId)
-    const selRect = selEl?.getBoundingClientRect()
-    const cy = selRect ? selRect.top + selRect.height / 2 : null
-
-    for (let i = colIdx + step; i >= 0 && i < visibleBackends.length; i += step) {
-      const b = visibleBackends[i]
-      const colTasks = map[b]
-      if (!colTasks || colTasks.length === 0) continue
-      let bestId: string | null = null
-      if (cy === null) {
-        bestId = colTasks[0].id
-      } else {
-        let bestDist = Infinity
-        for (const t of colTasks) {
-          const el = getTaskElement(t.id)
-          if (!el) continue
-          const r = el.getBoundingClientRect()
-          const elCy = r.top + r.height / 2
-          const d = Math.abs(elCy - cy)
-          if (d < bestDist) {
-            bestDist = d
-            bestId = t.id
-          }
-        }
-        if (!bestId) bestId = colTasks[0].id
-      }
-      commit(b, bestId)
-      return
-    }
+    const next = nearestInAdjacentColumn(sel, map, visibleBackends, dir, centerOfTask)
+    if (next) commit(next.backend, next.taskId)
   }, [visibleBackends, setSelectionInternal])
 
   // Home/End within a column: select the first/last task of that column and
-  // follow focus to it. Local to the queue board (the viewer has no equivalent).
+  // follow focus to it. Local to the queue board (the views have no equivalent).
   const selectEdge = useCallback((backend: BackendId, edge: 'first' | 'last'): void => {
     const list = tasksRef.current[backend]
     if (!list || list.length === 0) return
