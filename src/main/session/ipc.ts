@@ -35,7 +35,8 @@ export function registerSessionIpc(): void {
   })
 
   handle('session:openFolder', async (_event, sessionId: string) => {
-    await shell.openPath(resolveSessionDir(sessionId))
+    const error = await shell.openPath(resolveSessionDir(sessionId))
+    if (error) throw new Error(`Could not open the session folder: ${error}`)
   })
 
   handle('session:getDraft', () => {
