@@ -47,6 +47,27 @@ describe('params.json format version', () => {
     expect(setAsideCopies()).toEqual([copy])
   })
 
+  it('reads a malformed set as absent, keeps the valid ones, and drops it at the next save', async () => {
+    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+    fs.writeFileSync(file(), JSON.stringify({
+      formatVersion: FORMAT_VERSIONS.modelParams,
+      'good.ckpt': params,
+      'numeric-negative.ckpt': { ...params, negativePrompt: 7 },
+      'missing-steps.ckpt': { width: 512, height: 512, guidance: 2, seed: '', negativePrompt: '' },
+      'not-a-set.ckpt': 'x',
+    }))
+    const { getModelParams, getAllModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } =
+      await import('../../src/main/model-params')
+    expect(getAllModelParams()).toEqual({ 'good.ckpt': params })
+    expect(getModelParams('numeric-negative.ckpt')).toBeNull()
+    expect(getModelParams('missing-steps.ckpt')).toBeNull()
+    expect(drainSetAsideModelParamsPaths(), 'a bad set is not a bad file').toEqual([])
+
+    setModelParams('other.ckpt', params)
+    drainPendingWrites()
+    expect(Object.keys(JSON.parse(fs.readFileSync(file(), 'utf8')))).toEqual(['formatVersion', 'good.ckpt', 'other.ckpt'])
+  })
+
   it('stops the request and leaves the file in place when it cannot be set aside', async () => {
     const { StoreLeftInPlaceError } = await import('../../src/main/store-format')
     const bytes = '{ not json'

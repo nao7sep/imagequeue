@@ -33,6 +33,26 @@ export function drainSetAsideModelParamsPaths(): string[] {
   return setAsidePaths.splice(0)
 }
 
+function isParamsSet(value: unknown): value is DrawThingsModelParams {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const set = value as Record<string, unknown>
+  return (['width', 'height', 'steps', 'guidance'] as const).every((key) => typeof set[key] === 'number' && Number.isFinite(set[key]))
+    && typeof set.seed === 'string'
+    && typeof set.negativePrompt === 'string'
+}
+
+// Each model's set is checked as it is read; one that fails reads as absent, so
+// the model takes its recommended or default set whole, and the next save drops
+// it (config-sets conventions, Reading and healing).
+function validSets(stored: Record<string, unknown>): ParamsStore {
+  const sets: ParamsStore = {}
+  for (const [modelFile, value] of Object.entries(stored)) {
+    if (isParamsSet(value)) sets[modelFile] = value
+    else log('warn', 'Invalid Draw Things parameter set; using recommended or default parameters', { modelFile })
+  }
+  return sets
+}
+
 function readStoredParams(file: string): ParamsStore {
   let text: string
   try {
@@ -43,7 +63,7 @@ function readStoredParams(file: string): ParamsStore {
   try {
     const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('params.json must be a JSON object')
-    return checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file) as ParamsStore
+    return validSets(checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file))
   } catch (err) {
     // A newer file refuses every request, reads included, and stays exactly
     // where it is; store stays null, so nothing is ever written over it.
