@@ -54,7 +54,7 @@ function recommendationsInfo(): DependencyInfo {
   const status = getRecommendationsStatus()
   const present = status.exists
   // configs.json has no version; its identity is when the server last changed
-  // it, recorded in a sidecar beside the file (see recommendations).
+  // it, recorded with the hash of its bytes (see recommendations-times).
   const comparison: DependencyComparison = present
     ? compareRecommendations(status.updatedAt, cache.recommendations.lastKnownModifiedUtc)
     : 'unknown'

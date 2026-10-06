@@ -17,8 +17,8 @@ export const FORMAT_VERSIONS = {
   dependencies: 1,
   /** bin/draw-things-cli.json */
   cliSidecar: 1,
-  /** <models dir>/configs.imagequeue.json */
-  recommendationsSidecar: 1,
+  /** recommendations-times.json */
+  recommendationsTimes: 1,
   /** output/<session>/session.json */
   session: 1,
   /** output/<session>/<image>.json, whose keys are snake_case */

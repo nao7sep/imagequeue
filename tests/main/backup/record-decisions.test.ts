@@ -8,6 +8,7 @@ import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { createElaborator } from '../../../src/main/elaborators'
 import { setModelParams } from '../../../src/main/model-params'
 import { updateDependenciesCache } from '../../../src/main/dependencies/store'
+import { recordServerTime } from '../../../src/main/dependencies/recommendations-times'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
 
 // The record/no-record wiring at REAL managed-text write sites, end to end through the shared
@@ -16,7 +17,8 @@ import { closeBackupStore } from '../../../src/main/backup/backup-store'
 // store, rather than only unit-testing record() in isolation.
 //
 //   RECORDED   config.json, elaborators.json, params.json, session.json — durable user data and authored text.
-//   NO-RECORD  dependencies.json — a re-derivable dependency-check cache.
+//   NO-RECORD  dependencies.json — a re-derivable dependency-check cache; recommendations-times.json —
+//              the server times of re-fetchable configs.json files.
 //
 // (state.json, the api-keys.json secret, the models-dir configs.json dependency, and
 // the bin/ CLI sidecar are the other no-record sites; they are exercised by their own stores' tests
@@ -89,6 +91,16 @@ describe('record/no-record decisions at real write sites', () => {
     closeBackupStore()
     // ...but never recorded into the backup store.
     expect(recordedPaths(tmpRoot)).not.toContain(path.join(tmpRoot, 'dependencies.json'))
+  })
+
+  it('does NOT record recommendations-times.json (it describes re-fetchable files)', () => {
+    const configs = path.join(tmpRoot, 'models', 'configs.json')
+    fs.mkdirSync(path.dirname(configs), { recursive: true })
+    fs.writeFileSync(configs, '[]')
+    recordServerTime(configs, Buffer.from('[]'), '2026-09-11T20:46:05.000Z')
+    expect(fs.existsSync(path.join(tmpRoot, 'recommendations-times.json'))).toBe(true)
+    closeBackupStore()
+    expect(recordedPaths(tmpRoot)).not.toContain(path.join(tmpRoot, 'recommendations-times.json'))
   })
 
   it('a no-record-only session never creates the store file at all', () => {

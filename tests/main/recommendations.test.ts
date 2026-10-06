@@ -11,11 +11,11 @@ vi.mock('../../src/main/dependencies/download', async (importOriginal) => ({
 
 import {
   downloadLatestRecommendations,
-  getRecommendationsMetaPath,
   getRecommendationsStatus,
   lastModifiedOf,
   resolveRecommendedParams,
 } from '../../src/main/recommendations'
+import { getRecommendationsTimesPath } from '../../src/main/dependencies/paths'
 import { FORMAT_VERSIONS, NewerFormatError } from '../../src/main/store-format'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
@@ -93,12 +93,15 @@ describe('downloadLatestRecommendations', () => {
 
   const served = { body, headers: { 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' } }
 
-  it('records the server time it was served with beside the file', async () => {
+  it('records the server time it was served with under the storage root, writing nothing else beside the file', async () => {
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
     const status = await downloadLatestRecommendations()
     expect(status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
-    const meta = JSON.parse(fs.readFileSync(getRecommendationsMetaPath(), 'utf8'))
-    expect(Object.entries(meta)[0]).toEqual(['formatVersion', FORMAT_VERSIONS.recommendationsSidecar])
+    expect(path.dirname(getRecommendationsTimesPath())).toBe(home)
+    const times = JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8'))
+    expect(Object.entries(times)[0]).toEqual(['formatVersion', FORMAT_VERSIONS.recommendationsTimes])
+    expect(Object.keys(times.files)).toEqual([path.resolve(configsPath())])
+    expect(fs.readdirSync(modelsDir)).toEqual(['configs.json'])
   })
 
   it('shows no date when the server gives no valid time, and drops an earlier record', async () => {
@@ -107,7 +110,7 @@ describe('downloadLatestRecommendations', () => {
     network.fetchBytesWithHeaders.mockResolvedValueOnce({ body, headers: { 'last-modified': 'yesterday-ish' } })
     const status = await downloadLatestRecommendations()
     expect(status.updatedAt).toBeNull()
-    expect(fs.existsSync(getRecommendationsMetaPath())).toBe(false)
+    expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).files).toEqual({})
   })
 
   it('shows no date once the file no longer holds the bytes the time was recorded for', async () => {
@@ -117,15 +120,23 @@ describe('downloadLatestRecommendations', () => {
     expect(getRecommendationsStatus().updatedAt).toBeNull()
   })
 
-  it('refuses before downloading when a newer build wrote the sidecar, leaving both files as they are', async () => {
+  it('reads an unreadable record as none, and replaces it on the next install', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
-    const newer = JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsSidecar + 1, lastModifiedUtc: '2026-09-11T20:46:05.000Z' })
-    fs.writeFileSync(getRecommendationsMetaPath(), newer)
+    fs.writeFileSync(getRecommendationsTimesPath(), '{ not json')
+    expect(getRecommendationsStatus().updatedAt).toBeNull()
+    network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
+    expect((await downloadLatestRecommendations()).updatedAt).toBe('2026-09-11T20:46:05.000Z')
+  })
+
+  it('refuses before downloading when a newer build wrote the record, leaving both files as they are', async () => {
+    writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
+    const newer = JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsTimes + 1, files: {} })
+    fs.writeFileSync(getRecommendationsTimesPath(), newer)
     const configs = fs.readFileSync(configsPath())
     network.fetchBytesWithHeaders.mockClear()
     await expect(downloadLatestRecommendations()).rejects.toBeInstanceOf(NewerFormatError)
     expect(network.fetchBytesWithHeaders).not.toHaveBeenCalled()
-    expect(fs.readFileSync(getRecommendationsMetaPath(), 'utf8')).toBe(newer)
+    expect(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).toBe(newer)
     expect(fs.readFileSync(configsPath())).toEqual(configs)
     expect(getRecommendationsStatus().updatedAt).toBeNull()
   })

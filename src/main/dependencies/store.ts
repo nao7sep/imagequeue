@@ -4,8 +4,8 @@
 //
 // Nothing here describes an artifact on disk, deliberately: the installed CLI's
 // identity (its release tag) lives in the binary's sidecar, and configs.json's
-// (its server time) in the sidecar beside it, so neither can drift from the
-// artifact it describes (managed-runtime-dependencies-conventions). What is left
+// (its server time) in recommendations-times.json with the hash of the bytes it
+// describes, so neither can drift from the artifact it describes (managed-runtime-dependencies-conventions). What is left
 // is only what each check observed on the network and when, which have no
 // on-disk source at all.
 
