@@ -17,4 +17,10 @@ describe('the test environment', () => {
     expect(path.basename(path.dirname(root))).toMatch(/^imagequeue-test-home-/)
     expect(path.dirname(os.homedir())).toBe(path.resolve(os.tmpdir()))
   })
+
+  it('starts the data-root override inside the throwaway home, whatever the shell exported', () => {
+    const root = resolveStorageRoot()
+    expect(path.dirname(root)).toBe(os.homedir())
+    expect(process.env.IMAGEQUEUE_DATA_DIR).toBe(root)
+  })
 })
