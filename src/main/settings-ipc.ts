@@ -1,5 +1,6 @@
 import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard, nativeImage } from 'electron'
 import path from 'path'
+import os from 'os'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig, updateConfig } from './config'
@@ -43,10 +44,11 @@ import {
 } from '../shared/types'
 
 // The configured Export Folder, expanded and made absolute the way every
-// user-typed path is (storage-path conventions); unset, the Desktop.
+// user-typed path is (storage-path conventions), a relative one against the
+// home directory; unset, the Desktop.
 function configuredExportDir(): string {
   const configured = loadConfig().general.export_dir
-  return configured ? expandUserPath(configured) : app.getPath('desktop')
+  return configured ? expandUserPath(configured, os.homedir()) : app.getPath('desktop')
 }
 
 function readClipboardText(): Promise<string> {

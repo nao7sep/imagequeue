@@ -47,6 +47,12 @@ describe('notification:loadAudioFile', () => {
     await expect(loadAudioFile(configured)).resolves.toBe(`data:audio/wav;base64,${Buffer.from('RIFF').toString('base64')}`)
   })
 
+  it('reads a configured path relative to the home directory', async () => {
+    const configured = path.join(path.basename(soundDir), 'done.wav')
+    mocks.notifications.success_file = configured
+    await expect(loadAudioFile(configured)).resolves.toBe(`data:audio/wav;base64,${Buffer.from('RIFF').toString('base64')}`)
+  })
+
   it('still refuses a path the user did not configure', async () => {
     mocks.notifications.success_file = path.join('~', path.basename(soundDir), 'done.wav')
     await expect(loadAudioFile(path.join(soundDir, 'other.wav'))).resolves.toBeNull()

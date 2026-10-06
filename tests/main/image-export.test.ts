@@ -93,6 +93,14 @@ describe('exporting an image', () => {
     fs.rmSync(path.join(os.homedir(), 'Exports'), { recursive: true, force: true })
   })
 
+  it('resolves a relative folder the user typed against the home directory', async () => {
+    mocks.config.general.export_dir = 'Relative Exports'
+    const destination = (await invoke('shell:exportImage', BASE, 'png')) as string
+    expect(destination).toBe(path.join(os.homedir(), 'Relative Exports', `${BASE}.png`))
+    expect(fs.existsSync(destination)).toBe(true)
+    fs.rmSync(path.join(os.homedir(), 'Relative Exports'), { recursive: true, force: true })
+  })
+
   it('falls back to the Desktop when no folder is configured', async () => {
     const destination = (await invoke('shell:exportImage', BASE, 'png')) as string
 

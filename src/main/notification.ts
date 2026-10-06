@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from 'electron'
 import path from 'path'
+import os from 'os'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig } from './config'
@@ -221,11 +222,12 @@ export function registerNotificationIpc(): void {
     // the file dialog — this was the one IPC read not pinned to a known
     // location, making it an arbitrary-file read for a compromised renderer.
     // Configured paths are user-typed, so both sides are expanded and made
-    // absolute before they are compared or read (storage-path conventions).
+    // absolute, a relative one against the home directory, before they are
+    // compared or read (storage-path conventions).
     const notifications = loadConfig().notifications
-    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map(expandUserPath)
+    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map((p) => expandUserPath(p, os.homedir()))
     if (!filePath) return null
-    const requested = expandUserPath(filePath)
+    const requested = expandUserPath(filePath, os.homedir())
     if (!allowed.includes(requested)) return null
     if (!fs.existsSync(requested)) return null
     const data = await fs.promises.readFile(requested)
