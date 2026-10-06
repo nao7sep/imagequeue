@@ -43,7 +43,8 @@ export function reportOperationalFailure(
 /**
  * A later success of the same operation supersedes its failure. Only an
  * operation whose success proves the earlier problem is gone calls this: a
- * saved preference, a refreshed state, an updated viewer, a completed command.
+ * saved preference, a refreshed state, an opened fullscreen view, a completed
+ * command.
  */
 export function clearOperationalFailure(key: string): void {
   window.dispatchEvent(new CustomEvent<OperationalResolvedDetail>(OPERATIONAL_RESOLVED_EVENT, { detail: { key } }))
