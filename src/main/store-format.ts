@@ -42,6 +42,14 @@ export class NewerFormatError extends Error {
   }
 }
 
+/** A populated SQLite store without its format version: unreadable (store-recovery-conventions). */
+export class MissingFormatError extends Error {
+  constructor(readonly path: string) {
+    super(`${path} has no format version`)
+    this.name = 'MissingFormatError'
+  }
+}
+
 /**
  * A store that could be neither read nor set aside: the operation that needed
  * it stops and the file stays exactly where it is (store-recovery-conventions).
@@ -88,6 +96,6 @@ export function claimSqliteFormat(db: DatabaseSync, supported: number, file: str
   if (found > supported) throw new NewerFormatError(file, found, supported)
   if (found !== 0) return
   const { objects } = db.prepare('SELECT count(*) AS objects FROM sqlite_master').get() as { objects: number }
-  if (objects > 0) throw new Error(`${file} has no format version`)
+  if (objects > 0) throw new MissingFormatError(file)
   db.exec(`PRAGMA user_version = ${supported}`)
 }

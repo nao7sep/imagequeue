@@ -93,6 +93,8 @@
   "notice.fileLeftInPlaceMessage": "ImageQueue は {path} にあるファイルを読み取ることも退避することもできなかったため、変更せずにそのまま残し、処理を中止しました。ファイルを読み取りと移動ができる状態にするか、ご自身で別の場所へ移動してから、もう一度お試しください。",
   "notice.drawThingsParamsResetTitle": "Draw Things のパラメータをリセットしました",
   "notice.drawThingsParamsResetMessage": "保存済みの Draw Things のパラメータを読み取れなかったため、ImageQueue はそのファイルを {path} に退避しました。各モデルでは推奨パラメータまたは初期設定のパラメータを使用します。以前のパラメータは退避したファイルに残っています。",
+  "notice.conceptLibraryResetTitle": "コンセプトライブラリをリセットしました",
+  "notice.conceptLibraryResetMessage": "ImageQueue はコンセプトライブラリを読み取れなかったため、そのファイルを {path} に退避し、新しい空のライブラリを作成しました。これまでのコンセプトと使用履歴は退避したファイルに残っているため、新しいプロンプトで以前使ったコンセプトが再び使われることがあります。",
   "taskFailure.notSaved": "画像は生成されましたが、ImageQueue が保存できませんでした。出力先が利用でき、十分な空き容量があることを確認してから、再試行してください。",
   "taskFailure.missingKey": "{name} の API キーが設定されていません。設定で追加してから、再試行してください。",
   "taskFailure.refused": "{name} がこのプロンプトを拒否しました。プロンプトを変更してから、再試行してください。",

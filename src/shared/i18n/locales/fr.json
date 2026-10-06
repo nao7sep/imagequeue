@@ -93,6 +93,8 @@
   "notice.fileLeftInPlaceMessage": "ImageQueue n’a pas pu lire le fichier situé à l’emplacement {path} ni le mettre de côté\u00a0; il l’a laissé tel quel et n’a pas poursuivi. Vérifiez que le fichier peut être lu et déplacé, ou déplacez-le vous-même ailleurs, puis réessayez.",
   "notice.drawThingsParamsResetTitle": "Les paramètres Draw Things ont été réinitialisés",
   "notice.drawThingsParamsResetMessage": "ImageQueue n’a pas pu lire vos paramètres Draw Things enregistrés\u00a0; il a mis le fichier de côté à l’emplacement {path}. Chaque modèle utilise désormais ses paramètres recommandés ou par défaut. Vos anciens paramètres se trouvent dans la copie mise de côté.",
+  "notice.conceptLibraryResetTitle": "La bibliothèque de concepts a été réinitialisée",
+  "notice.conceptLibraryResetMessage": "ImageQueue n’a pas pu lire sa bibliothèque de concepts\u00a0; il a mis le fichier de côté à l’emplacement {path} et en a créé une nouvelle, vide. Les concepts et l’historique d’utilisation précédents se trouvent dans la copie mise de côté\u00a0; les nouveaux prompts peuvent donc réutiliser des concepts déjà employés.",
   "taskFailure.notSaved": "L’image a été générée, mais ImageQueue n’a pas pu l’enregistrer. Vérifiez que l’emplacement de sortie est disponible et dispose d’assez d’espace libre, puis réessayez.",
   "taskFailure.missingKey": "Aucune clé API {name} n’est définie. Ajoutez-la dans les réglages, puis réessayez.",
   "taskFailure.refused": "{name} a refusé ce prompt. Modifiez le prompt, puis réessayez.",

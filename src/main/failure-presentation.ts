@@ -124,6 +124,14 @@ export function modelParamsResetPresentation(path: string): AppNotice {
   }
 }
 
+/** concepts.sqlite3 was unreadable and set aside at `path`; a new, empty concept library started. */
+export function conceptLibraryResetPresentation(path: string): AppNotice {
+  return {
+    title: message('notice.conceptLibraryResetTitle'),
+    message: message('notice.conceptLibraryResetMessage', { path }),
+  }
+}
+
 export function configResetPresentation(path: string): AppNotice {
   return {
     title: message('notice.settingsResetTitle'),

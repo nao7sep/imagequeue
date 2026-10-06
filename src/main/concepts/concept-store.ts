@@ -3,7 +3,9 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { getDataDir } from '../config'
 import { cleanDisplay, normalizeKey } from './normalize'
-import { claimSqliteFormat, FORMAT_VERSIONS } from '../store-format'
+import { claimSqliteFormat, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceError } from '../store-format'
+import { log, serializeError } from '../logger'
+import { utcStampForFilename } from '../../shared/utc-stamp'
 
 // The concept ledger: every facet, probe (the narrow domain an ask mined), and
 // concept value the text AI has ever produced, plus one row per time a value
@@ -12,7 +14,8 @@ import { claimSqliteFormat, FORMAT_VERSIONS } from '../store-format'
 // not session state — and unlike the best-effort backup store it is FUNCTIONAL:
 // a failure here throws and fails the brainstorm run, because generating with
 // broken bookkeeping would silently reintroduce the repetition the ledger
-// exists to prevent.
+// exists to prevent. An unreadable ledger is set aside and replaced, and the
+// user is told what was lost.
 //
 // SQLite binding: Node's built-in `node:sqlite`, same as backup-store.ts and
 // for the same packaging reason (no native addon to rebuild per Electron bump).
@@ -73,6 +76,44 @@ function storeFile(): string {
   return path.join(getDataDir(), 'concepts.sqlite3')
 }
 
+// The ledger is app-recorded fact, so a file that is not a database, is
+// damaged, or has no format version is set aside and a new, empty ledger
+// starts (store-recovery conventions). A newer ledger,
+// or a failure that moving the file would not fix, refuses the request and
+// leaves the file where it is. Each set-aside path waits here for the window
+// that made the request to name it.
+const setAsidePaths: string[] = []
+
+export function drainSetAsideConceptStorePaths(): string[] {
+  return setAsidePaths.splice(0)
+}
+
+const SQLITE_CORRUPT = 11
+const SQLITE_NOTADB = 26
+
+function isUnreadableLedger(error: unknown): boolean {
+  if (error instanceof MissingFormatError) return true
+  const { code, errcode } = error as { code?: unknown; errcode?: unknown }
+  return code === 'ERR_SQLITE_ERROR' && (errcode === SQLITE_CORRUPT || errcode === SQLITE_NOTADB)
+}
+
+function setAside(file: string, error: unknown): void {
+  const movedTo = path.join(path.dirname(file), `${path.basename(file, path.extname(file))}-${utcStampForFilename()}.invalid`)
+  // Closing the only connection has already folded any write-ahead log into
+  // the database file and removed it, so the file alone is the whole ledger.
+  try {
+    fs.renameSync(file, movedTo)
+  } catch (renameError) {
+    throw new StoreLeftInPlaceError(file, { cause: renameError })
+  }
+  setAsidePaths.push(movedTo)
+  log('warn', 'Set aside an unreadable concept library; starting a new one', {
+    from: file,
+    to: movedTo,
+    error: serializeError(error),
+  })
+}
+
 function open(): DatabaseSync {
   if (db) return db
   const file = storeFile()
@@ -86,7 +127,9 @@ function open(): DatabaseSync {
     opened.exec(SCHEMA)
   } catch (err) {
     opened.close()
-    throw err
+    if (!isUnreadableLedger(err)) throw err
+    setAside(file, err)
+    return open()
   }
   db = opened
   return db

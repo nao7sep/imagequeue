@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addConcepts,
   addProbes,
@@ -10,6 +10,7 @@ import {
   deleteConcept,
   deleteFacet,
   deleteProbe,
+  drainSetAsideConceptStorePaths,
   listProbesWithStats,
   drawConcept,
   ensureFacet,
@@ -20,7 +21,7 @@ import {
   recordUse,
   unexpandedProbes,
 } from '../../../src/main/concepts/concept-store'
-import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
 
 // The concept ledger, tested against a real SQLite file under a throwaway
 // IMAGEQUEUE_DATA_DIR. The draw rules ARE the dedup mechanism — no similarity
@@ -308,7 +309,9 @@ describe('concept store format version', () => {
     }
   }
 
-  it('refuses every request on an existing ledger with no format version and leaves it as it was', () => {
+  const setAside = () => fs.readdirSync(tmpRoot).filter((name) => /^concepts-\d{8}-\d{6}-\d{3}-utc\.invalid/.test(name)).sort()
+
+  it('sets aside a populated ledger with no format version, names it once, and starts a new one', () => {
     ensureFacet('place')
     closeConceptStore()
     const unversioned = new DatabaseSync(storeFile)
@@ -316,8 +319,36 @@ describe('concept store format version', () => {
     unversioned.close()
     const bytes = fs.readFileSync(storeFile)
 
-    expect(() => listFacetsWithStats()).toThrow(/no format version/)
+    expect(listFacetsWithStats()).toEqual([])
+    const [copy] = setAside()
+    expect(fs.readFileSync(path.join(tmpRoot, copy)).equals(bytes), 'the old ledger is preserved').toBe(true)
+    expect(drainSetAsideConceptStorePaths()).toEqual([path.join(tmpRoot, copy)])
+    expect(drainSetAsideConceptStorePaths()).toEqual([])
+    ensureFacet('time')
+    expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['time'])
+    expect(userVersion()).toBe(FORMAT_VERSIONS.concepts)
+  })
+
+  it('sets aside a file that is not a database and starts a new ledger', () => {
+    const bytes = Buffer.from('not a database'.repeat(100))
+    fs.writeFileSync(storeFile, bytes)
+    expect(ensureFacet('place').display).toBe('place')
+    const [copy] = setAside()
+    expect(fs.readFileSync(path.join(tmpRoot, copy)).equals(bytes)).toBe(true)
+    expect(drainSetAsideConceptStorePaths()).toEqual([path.join(tmpRoot, copy)])
+  })
+
+  it('refuses the request and leaves the ledger in place when it cannot be set aside', () => {
+    fs.writeFileSync(storeFile, 'not a database'.repeat(100))
+    const bytes = fs.readFileSync(storeFile)
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('simulated permission failure'), { code: 'EACCES' })
+    })
+    expect(() => listFacetsWithStats()).toThrow(StoreLeftInPlaceError)
+    rename.mockRestore()
     expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
+    expect(setAside()).toEqual([])
+    expect(drainSetAsideConceptStorePaths()).toEqual([])
   })
 
   it('writes its version and reads the ledger back on the next open', () => {

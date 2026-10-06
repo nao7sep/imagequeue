@@ -6,6 +6,7 @@ import {
   generationFailurePresentation,
   newerFilePresentation,
   modelParamsResetPresentation,
+  conceptLibraryResetPresentation,
   storeLeftInPlacePresentation,
   startupFailurePresentation,
 } from '../../src/main/failure-presentation'
@@ -106,6 +107,11 @@ describe('generationFailurePresentation', () => {
     expect(text(left.title)).toBe('File left unchanged')
     expect(text(left.message)).toContain(`the file at ${params}`)
     expect(text(left.message)).toContain('left it unchanged')
+
+    const ledger = '/Users/me/.imagequeue/concepts-20261006-031340-123-utc.invalid'
+    const ledgerReset = conceptLibraryResetPresentation(ledger)
+    expect(text(ledgerReset.title)).toBe('Concept Library was reset')
+    expect(text(ledgerReset.message)).toContain(`set the file aside at ${ledger}`)
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

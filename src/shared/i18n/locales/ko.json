@@ -93,6 +93,8 @@
   "notice.fileLeftInPlaceMessage": "ImageQueue가 {path}에 있는 파일을 읽거나 따로 보관할 수 없어 파일을 변경하지 않고 그대로 두었으며 작업을 계속하지 않았습니다. 파일을 읽고 옮길 수 있는지 확인하거나 직접 다른 위치로 옮긴 다음 다시 시도하십시오.",
   "notice.drawThingsParamsResetTitle": "Draw Things 매개변수가 재설정되었습니다",
   "notice.drawThingsParamsResetMessage": "저장된 Draw Things 매개변수를 읽을 수 없어 ImageQueue가 해당 파일을 {path}에 따로 보관했습니다. 이제 각 모델은 권장 매개변수 또는 기본 매개변수를 사용합니다. 이전 매개변수는 따로 보관한 사본에 남아 있습니다.",
+  "notice.conceptLibraryResetTitle": "콘셉트 라이브러리가 재설정되었습니다",
+  "notice.conceptLibraryResetMessage": "ImageQueue가 콘셉트 라이브러리를 읽을 수 없어 해당 파일을 {path}에 따로 보관하고 비어 있는 새 라이브러리를 만들었습니다. 이전 콘셉트와 사용 기록은 따로 보관한 사본에 남아 있으므로 새 프롬프트에 이전에 사용한 콘셉트가 다시 쓰일 수 있습니다.",
   "taskFailure.notSaved": "이미지는 생성되었지만 ImageQueue가 저장할 수 없었습니다. 출력 위치를 사용할 수 있고 여유 공간이 충분한지 확인한 다음 다시 시도하십시오.",
   "taskFailure.missingKey": "{name} API 키가 설정되지 않았습니다. 설정에서 추가한 다음 다시 시도하십시오.",
   "taskFailure.refused": "{name}이(가) 이 프롬프트를 거부했습니다. 프롬프트를 변경한 다음 다시 시도하십시오.",

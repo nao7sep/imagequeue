@@ -15,13 +15,17 @@ import {
 } from './elaborators'
 import type { ElaboratorKind } from '../shared/types'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
-import { elaboratorRecoveryPresentation } from './failure-presentation'
+import { conceptLibraryResetPresentation, elaboratorRecoveryPresentation } from './failure-presentation'
+import { drainSetAsideConceptStorePaths } from './concepts/concept-store'
 
 export function registerElaboratorsIpc(): void {
   const reportRecovery = (target: WebContents): void => {
     for (const notice of drainElaboratorRecoveryNotices()) {
       const presentation = elaboratorRecoveryPresentation(notice)
       if (presentation) target.send('app:notice', presentation)
+    }
+    for (const movedTo of drainSetAsideConceptStorePaths()) {
+      target.send('app:notice', conceptLibraryResetPresentation(movedTo))
     }
   }
 

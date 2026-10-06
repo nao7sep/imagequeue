@@ -93,6 +93,8 @@
   "notice.fileLeftInPlaceMessage": "ImageQueue no pudo leer el archivo en {path} ni guardarlo aparte, así que lo dejó sin cambios y no continuó. Comprueba que el archivo se pueda leer y mover, o muévelo tú a otra ubicación, y vuelve a intentarlo.",
   "notice.drawThingsParamsResetTitle": "Se restablecieron los parámetros de Draw Things",
   "notice.drawThingsParamsResetMessage": "ImageQueue no pudo leer tus parámetros guardados de Draw Things, así que guardó el archivo aparte en {path}. Ahora cada modelo usa sus parámetros recomendados o predeterminados. Tus parámetros anteriores siguen en la copia guardada aparte.",
+  "notice.conceptLibraryResetTitle": "Se restableció la biblioteca de conceptos",
+  "notice.conceptLibraryResetMessage": "ImageQueue no pudo leer su biblioteca de conceptos, así que guardó el archivo aparte en {path} y creó una nueva vacía. Los conceptos y el historial de uso anteriores siguen en la copia guardada aparte, así que los nuevos prompts pueden reutilizar conceptos ya usados.",
   "taskFailure.notSaved": "La imagen se generó, pero ImageQueue no pudo guardarla. Comprueba que la ubicación de salida esté disponible y tenga espacio libre suficiente y luego vuelve a intentarlo.",
   "taskFailure.missingKey": "No hay ninguna clave de API de {name}. Agrégala en Configuración y luego vuelve a intentarlo.",
   "taskFailure.refused": "{name} rechazó este prompt. Cambia el prompt y luego vuelve a intentarlo.",

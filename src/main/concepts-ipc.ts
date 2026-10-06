@@ -1,6 +1,9 @@
+import type { IpcMainInvokeEvent } from 'electron'
 import { handle } from './ipc-boundary'
+import { conceptLibraryResetPresentation } from './failure-presentation'
 import {
   deleteConcept,
+  drainSetAsideConceptStorePaths,
   deleteFacet,
   deleteProbe,
   listConceptRows,
@@ -12,16 +15,28 @@ import {
 // rows, and delete a concept or a whole facet. Writes into the ledger itself
 // (probes, concepts, uses) happen only inside a brainstorm run.
 export function registerConceptsIpc(): void {
-  handle('concepts:listFacets', () => listFacetsWithStats())
-  handle('concepts:listConcepts', (_event, facetId: number) => listConceptRows(facetId))
-  handle('concepts:listProbes', (_event, facetId: number) => listProbesWithStats(facetId))
-  handle('concepts:deleteProbe', (_event, probeId: number) => {
-    deleteProbe(probeId)
+  // The first request to open the ledger may set aside an unreadable one; the
+  // window that made it names the preserved copy.
+  const withLedgerRecovery = <T>(event: IpcMainInvokeEvent, operation: () => T): T => {
+    try {
+      return operation()
+    } finally {
+      for (const movedTo of drainSetAsideConceptStorePaths()) {
+        event.sender.send('app:notice', conceptLibraryResetPresentation(movedTo))
+      }
+    }
+  }
+
+  handle('concepts:listFacets', (event) => withLedgerRecovery(event, listFacetsWithStats))
+  handle('concepts:listConcepts', (event, facetId: number) => withLedgerRecovery(event, () => listConceptRows(facetId)))
+  handle('concepts:listProbes', (event, facetId: number) => withLedgerRecovery(event, () => listProbesWithStats(facetId)))
+  handle('concepts:deleteProbe', (event, probeId: number) => {
+    withLedgerRecovery(event, () => deleteProbe(probeId))
   })
-  handle('concepts:deleteConcept', (_event, conceptId: number) => {
-    deleteConcept(conceptId)
+  handle('concepts:deleteConcept', (event, conceptId: number) => {
+    withLedgerRecovery(event, () => deleteConcept(conceptId))
   })
-  handle('concepts:deleteFacet', (_event, facetId: number) => {
-    deleteFacet(facetId)
+  handle('concepts:deleteFacet', (event, facetId: number) => {
+    withLedgerRecovery(event, () => deleteFacet(facetId))
   })
 }
