@@ -82,6 +82,17 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     return next
   }, [])
 
+  // The main process changed a setting itself (closing the preview window
+  // turns its setting off); read the settings again.
+  useEffect(() => {
+    return window.electronAPI.onSettingsChanged(() => {
+      void refreshSettings().catch((error) => {
+        void window.electronAPI.appLog('error', 'Failed to reread settings after a change', { error: serializeError(error) })
+          .catch((logError) => console.error('Failed to record settings reread diagnostic', logError))
+      })
+    })
+  }, [refreshSettings])
+
   const saveApiKeys = useCallback(
     async (changes: Partial<Record<SecretId, string>>): Promise<Record<string, unknown>> => {
       await window.electronAPI.saveApiKeys(changes)

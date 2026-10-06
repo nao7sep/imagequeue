@@ -88,3 +88,18 @@ export interface SurfaceConfirmRequest {
   id: number
   options: ConfirmOptions
 }
+
+// The preview window's layout: the image above the failure strip, with 12px
+// (--space-3) around and 8px (--space-2) between them. PreviewWindow.css
+// mirrors these by value.
+const PREVIEW_WINDOW_PADDING = 12
+const PREVIEW_WINDOW_GAP = 8
+// .preview-area's floor and .preview-failure's cap: five 11px lines at 1.4,
+// 8px padding above and below, and the border.
+const PREVIEW_IMAGE_MIN_HEIGHT = 120
+const PREVIEW_FAILURE_MAX_HEIGHT = Math.ceil(11 * 1.4 * 5) + 8 * 2 + 2
+
+// Derived — do not hand-edit. Wide enough for the placeholder's hint on two lines.
+export const PREVIEW_WINDOW_MIN_WIDTH = 320
+export const PREVIEW_WINDOW_MIN_HEIGHT =
+  PREVIEW_WINDOW_PADDING * 2 + PREVIEW_IMAGE_MIN_HEIGHT + PREVIEW_WINDOW_GAP + PREVIEW_FAILURE_MAX_HEIGHT

@@ -214,6 +214,8 @@ export interface ElectronAPI {
   hasClipboardText: () => Promise<boolean>
   copyImageToClipboard: (baseName: string, ext: string) => Promise<void>
   openDirectoryDialog: () => Promise<string | null>
+  // The main process changed a setting on its own (closing the preview window).
+  onSettingsChanged: (callback: () => void) => (() => void)
   // The views of the selected image (shared/viewing). The main window publishes
   // the selection; the preview window and the fullscreen view follow it and hand
   // list keys and confirmations back and forth through the main process.

@@ -19,6 +19,7 @@ import { registerAppLogIpc } from './app-log-ipc'
 import { registerAppNoticeIpc } from './app-notice-ipc'
 import { closeFullscreenView, destroyFullscreenView } from './fullscreen-view'
 import { registerViewingIpc } from './viewing-ipc'
+import { closePreviewWindow, hidePreviewWindow, showPreviewWindow, syncPreviewWindow } from './preview-window'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
 import { onRecordStored, openRecords } from './records'
@@ -246,10 +247,12 @@ async function startUp(): Promise<void> {
     isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
     onHiddenToBackground: () => {
       closeFullscreenView({ refocusMain: false })
+      hidePreviewWindow()
     },
-    onRestored: () => {},
+    onRestored: showPreviewWindow,
     onPrimaryWindowClosed: () => {
       destroyFullscreenView()
+      closePreviewWindow()
       if (startupFailureWindow) return
       if (process.platform !== 'darwin') app.quit()
     },
@@ -291,6 +294,7 @@ async function startUp(): Promise<void> {
     applyThemePreference(config.general.theme)
     await applyLanguagePreference(config.general.language)
     await statusIconController?.reconcile(config.general.show_status_icon)
+    syncPreviewWindow(config.general.show_preview_window)
   })
   registerStateIpc()
   registerDependenciesIpc()
@@ -318,6 +322,7 @@ async function startUp(): Promise<void> {
 
   void statusIconController.reconcile(loadConfig().general.show_status_icon)
   mainWindowController.createInitialWindow()
+  syncPreviewWindow(loadConfig().general.show_preview_window)
   mainWindowController.markStartupComplete()
 
   app.on('activate', () => {
@@ -375,6 +380,7 @@ async function gracefulShutdown(reason: string): Promise<void> {
     }
   })
   await guarded('destroyFullscreenView', () => destroyFullscreenView())
+  await guarded('closePreviewWindow', () => closePreviewWindow())
   await guarded('closeRecordsWindow', () => closeRecordsWindow())
   await guarded('closeRecordsReader', () => closeRecordsReader())
   await guarded('closeNotificationWindow', () => closeNotificationWindow())

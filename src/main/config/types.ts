@@ -157,6 +157,9 @@ export interface GeneralConfig {
   drop_empty_sessions: boolean
   keep_awake_during_work: boolean
   show_status_icon: boolean
+  // Whether the preview also shows in its own window beside the main window.
+  // Closing that window turns it off.
+  show_preview_window: boolean
 }
 
 export interface NotificationsConfig {

@@ -9,6 +9,7 @@ import {
   initFullscreenView,
   openFullscreenView,
 } from './fullscreen-view'
+import { initPreviewWindow, previewWindowContents } from './preview-window'
 import type { ConfirmOptions } from '../shared/confirm'
 import type { ListKey, SelectedImage, ViewingSurface } from '../shared/viewing'
 
@@ -20,7 +21,7 @@ const LIST_KEYS = new Set<string>(['up', 'down', 'left', 'right', 'space', 'remo
 // confirmation.
 const surfaces: Record<ViewingSurface, () => WebContents | null> = {
   'fullscreen-view': fullscreenViewContents,
-  'preview-window': () => null,
+  'preview-window': previewWindowContents,
 }
 
 function surfaceOf(sender: WebContents): ViewingSurface | null {
@@ -34,6 +35,7 @@ function surfaceOf(sender: WebContents): ViewingSurface | null {
  *  views that follow it. */
 export function registerViewingIpc(getMain: () => BrowserWindow | null): void {
   initFullscreenView(getMain)
+  initPreviewWindow(getMain)
   const isMain = (sender: WebContents): boolean => getMain()?.webContents === sender
 
   handle('selection:publish', (event, task: SelectedImage | null) => {

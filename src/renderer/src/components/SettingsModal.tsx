@@ -323,6 +323,22 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             />
             <p className="settings-hint">{t('settings.autoPreviewHint')}</p>
           </div>
+          <div className="settings-field settings-field-full settings-panel-after-hint">
+            <div className="settings-option-panel">
+              <div className="settings-option-title">{t('settings.previewTitle')}</div>
+              <label className="settings-panel-check">
+                <input
+                  type="checkbox"
+                  checked={(general.show_preview_window as boolean) ?? false}
+                  onChange={(e) => updateGeneral('show_preview_window', e.target.checked)}
+                />
+                <span className="settings-panel-check-copy">
+                  <span>{t('settings.previewWindow')}</span>
+                  <span className="settings-panel-check-desc">{t('settings.previewWindowHint')}</span>
+                </span>
+              </label>
+            </div>
+          </div>
           <div className="settings-field">
             <label>{t('settings.exportFolder')}</label>
             <div className="settings-browse">

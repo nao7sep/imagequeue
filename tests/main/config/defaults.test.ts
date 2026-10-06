@@ -23,6 +23,10 @@ describe('createDefaultConfig', () => {
     expect(createDefaultConfig().general.show_status_icon).toBe(true)
   })
 
+  it('shows the preview in the main window only, by default', () => {
+    expect(createDefaultConfig().general.show_preview_window).toBe(false)
+  })
+
   // The UI font defaults to blank (meaning the built-in --font-ui stack), and a pre-existing config
   // without the key uses the built-in blank.
   it('defaults the UI font to blank and backfills it for an older config', () => {

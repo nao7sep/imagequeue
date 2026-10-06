@@ -5,6 +5,7 @@ type Handler = (event: { sender: unknown }, ...args: unknown[]) => unknown
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   fullscreenContents: null as unknown,
+  previewContents: null as unknown,
 }))
 
 vi.mock('../../src/main/ipc-boundary', () => ({
@@ -16,6 +17,10 @@ vi.mock('../../src/main/fullscreen-view', () => ({
   closeFullscreenView: vi.fn(),
   fullscreenViewPainted: vi.fn(),
   fullscreenViewContents: () => mocks.fullscreenContents,
+}))
+vi.mock('../../src/main/preview-window', () => ({
+  initPreviewWindow: vi.fn(),
+  previewWindowContents: () => mocks.previewContents,
 }))
 
 function contents() {
@@ -33,6 +38,7 @@ beforeEach(async () => {
   vi.resetModules()
   mocks.handlers.clear()
   mocks.fullscreenContents = null
+  mocks.previewContents = null
   main = contents()
   const { registerViewingIpc } = await import('../../src/main/viewing-ipc')
   snapshots = await import('../../src/main/selection-snapshot')
@@ -63,6 +69,19 @@ describe('list keys from a view', () => {
     ])
   })
 
+  it('hands the preview window\'s keys, Space included, to the main window, named with the view', async () => {
+    const previewWindow = contents()
+    mocks.previewContents = previewWindow
+    await call('list:key', previewWindow, 'right')
+    await call('list:key', previewWindow, 'space')
+    await call('list:key', previewWindow, 'remove')
+    expect(main.sent).toEqual([
+      ['list:key', { key: 'right', surface: 'preview-window' }],
+      ['list:key', { key: 'space', surface: 'preview-window' }],
+      ['list:key', { key: 'remove', surface: 'preview-window' }],
+    ])
+  })
+
   it('ignores an unknown key and a sender that is not an open view', async () => {
     const fullscreen = contents()
     mocks.fullscreenContents = fullscreen
@@ -84,6 +103,15 @@ describe('confirmations in a view', () => {
     await call('surface:answerConfirm', contents(), request.id, true)
     await call('surface:answerConfirm', fullscreen, request.id, true)
     await expect(answer).resolves.toBe(true)
+  })
+
+  it('shows a confirmation for a key pressed in the preview window in the preview window', async () => {
+    const previewWindow = contents()
+    mocks.previewContents = previewWindow
+    const answer = call('surface:confirm', main, 'preview-window', { message: 'Delete?' }) as Promise<boolean>
+    const request = previewWindow.sent[0]![1] as { id: number }
+    await call('surface:answerConfirm', previewWindow, request.id, false)
+    await expect(answer).resolves.toBe(false)
   })
 
   it('answers no for a dialog still open when its view closes, and withdraws it', async () => {

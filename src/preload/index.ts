@@ -401,6 +401,12 @@ const api = {
   openDirectoryDialog: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory'),
 
+  onSettingsChanged: (callback: () => void): (() => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('settings:changed', handler)
+    return () => { ipcRenderer.removeListener('settings:changed', handler) }
+  },
+
   publishSelection: (task: SelectedImage | null): Promise<void> =>
     ipcRenderer.invoke('selection:publish', task),
 
