@@ -29,6 +29,7 @@ import {
   killCliJob,
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
+import { expandUserPath } from './local-cli'
 import { applyDimensionsToModels, drainSetAsideModelParamsPaths, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
 import { modelParamsResetPresentation } from './failure-presentation'
 import { getModelParamsPersistenceState } from './model-params-persistence'
@@ -40,6 +41,13 @@ import {
   type DrawThingsModelParams,
   type SecretId,
 } from '../shared/types'
+
+// The configured Export Folder, expanded and made absolute the way every
+// user-typed path is (storage-path conventions); unset, the Desktop.
+function configuredExportDir(): string {
+  const configured = loadConfig().general.export_dir
+  return configured ? expandUserPath(configured) : app.getPath('desktop')
+}
 
 function readClipboardText(): Promise<string> {
   return clipboard.readText()
@@ -255,8 +263,7 @@ export function registerSettingsIpc(
   handle('shell:exportImage', async (_event, baseName: string, ext: string) => {
     const safeBase = assertSafeBaseName(baseName)
     const safeExt = assertImageExt(ext)
-    const config = loadConfig()
-    const exportDir = config.general.export_dir || app.getPath('desktop')
+    const exportDir = configuredExportDir()
     fs.mkdirSync(exportDir, { recursive: true })
     const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
     let destPath = path.join(exportDir, `${safeBase}.${safeExt}`)
@@ -276,8 +283,7 @@ export function registerSettingsIpc(
   handle('shell:exportImageAs', async (event, baseName: string, ext: string) => {
     const safeBase = assertSafeBaseName(baseName)
     const safeExt = assertImageExt(ext)
-    const config = loadConfig()
-    const exportDir = config.general.export_dir || app.getPath('desktop')
+    const exportDir = configuredExportDir()
     const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
     const owner = BrowserWindow.fromWebContents(event.sender)
     const options = {

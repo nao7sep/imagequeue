@@ -79,6 +79,20 @@ describe('exporting an image', () => {
     expect(fs.existsSync(path.join(mocks.sessionDir, `${BASE}.png`)), 'the session keeps its copy').toBe(true)
   })
 
+  it('expands a home-relative or environment folder the user typed, wherever the app was launched from', async () => {
+    mocks.config.general.export_dir = path.join('~', 'Exports')
+    const fromHome = (await invoke('shell:exportImage', BASE, 'png')) as string
+    expect(fromHome).toBe(path.join(os.homedir(), 'Exports', `${BASE}.png`))
+
+    vi.stubEnv('IMAGEQUEUE_EXPORT_TEST', path.join(root, 'FromEnv'))
+    mocks.config.general.export_dir = path.join('$IMAGEQUEUE_EXPORT_TEST', 'imagequeue')
+    const fromEnv = (await invoke('shell:exportImage', BASE, 'png')) as string
+    vi.unstubAllEnvs()
+    expect(fromEnv).toBe(path.join(root, 'FromEnv', 'imagequeue', `${BASE}.png`))
+    expect(fs.existsSync(fromEnv)).toBe(true)
+    fs.rmSync(path.join(os.homedir(), 'Exports'), { recursive: true, force: true })
+  })
+
   it('falls back to the Desktop when no folder is configured', async () => {
     const destination = (await invoke('shell:exportImage', BASE, 'png')) as string
 

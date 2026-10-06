@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig } from './config'
+import { expandUserPath } from './local-cli'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
 import { mainTranslator } from './i18n'
@@ -219,12 +220,16 @@ export function registerNotificationIpc(): void {
     // The renderer may only ask for the two paths the user configured through
     // the file dialog — this was the one IPC read not pinned to a known
     // location, making it an arbitrary-file read for a compromised renderer.
+    // Configured paths are user-typed, so both sides are expanded and made
+    // absolute before they are compared or read (storage-path conventions).
     const notifications = loadConfig().notifications
-    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean)
-    if (!filePath || !allowed.includes(filePath)) return null
-    if (!fs.existsSync(filePath)) return null
-    const data = await fs.promises.readFile(filePath)
-    const ext = path.extname(filePath).slice(1).toLowerCase()
+    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map(expandUserPath)
+    if (!filePath) return null
+    const requested = expandUserPath(filePath)
+    if (!allowed.includes(requested)) return null
+    if (!fs.existsSync(requested)) return null
+    const data = await fs.promises.readFile(requested)
+    const ext = path.extname(requested).slice(1).toLowerCase()
     const mimeMap: Record<string, string> = {
       mp3: 'audio/mpeg',
       wav: 'audio/wav',
