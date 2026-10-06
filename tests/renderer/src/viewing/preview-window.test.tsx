@@ -56,11 +56,11 @@ describe('preview window page', () => {
     expect(container.querySelector('.preview-placeholder')).not.toBeNull()
   })
 
-  it('hands arrows, Space, Backspace and Delete to the main window', async () => {
+  it('hands arrows, Backspace and Delete to the main window, and not Space', async () => {
     render(<PreviewWindowApp />)
     for (const key of ['ArrowUp', 'ArrowRight', ' ', 'Backspace', 'Delete']) fireEvent.keyDown(document, { key })
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(api.sendListKey.mock.calls.map(([key]) => key)).toEqual(['up', 'right', 'space', 'remove', 'delete'])
+    expect(api.sendListKey.mock.calls.map(([key]) => key)).toEqual(['up', 'right', 'remove', 'delete'])
   })
 
   it('shows a confirmation asked of it and keeps keys from the lists while it is open', async () => {

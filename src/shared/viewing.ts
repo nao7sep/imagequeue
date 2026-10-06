@@ -50,9 +50,10 @@ export function canShowImage(task: Pick<SelectedImage, 'status' | 'baseName'> | 
   return !!task && (task.status === 'completed' || task.status === 'kept') && !!task.baseName
 }
 
-/** A key a view hands back to the main window's lists: arrows navigate, Space
- *  opens the fullscreen view, Backspace removes or restores, Delete deletes. */
-export type ListKey = 'up' | 'down' | 'left' | 'right' | 'space' | 'remove' | 'delete'
+/** A key a view hands back to the main window's lists: arrows navigate,
+ *  Backspace removes or restores, Delete deletes. Space is not among them: the
+ *  fullscreen view opens only from the lists, and closes itself on Space. */
+export type ListKey = 'up' | 'down' | 'left' | 'right' | 'remove' | 'delete'
 
 interface KeyLike {
   key: string
@@ -79,7 +80,6 @@ function keyOf(e: KeyLike): ListKey | null {
   if (e.metaKey || e.ctrlKey || e.altKey) return null
   if (e.key === 'Backspace') return 'remove'
   if (e.key === 'Delete') return 'delete'
-  if (e.key === ' ') return 'space'
   return ARROWS[e.key] ?? null
 }
 

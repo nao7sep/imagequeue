@@ -16,7 +16,7 @@ import type { ListKey, SelectedImage, ViewingSurface } from '../shared/viewing'
 
 export const LIST_KEY_CHANNEL = 'list:key'
 
-const LIST_KEYS = new Set<string>(['up', 'down', 'left', 'right', 'space', 'remove', 'delete'] satisfies ListKey[])
+const LIST_KEYS = new Set<string>(['up', 'down', 'left', 'right', 'remove', 'delete'] satisfies ListKey[])
 
 // The page of each view outside the main window, while it can take a key or a
 // confirmation.

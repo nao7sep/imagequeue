@@ -23,7 +23,6 @@ describe('listKeyFor', () => {
     expect(key('ArrowDown')).toBe('down')
     expect(key('ArrowLeft')).toBe('left')
     expect(key('ArrowRight')).toBe('right')
-    expect(key(' ')).toBe('space')
     expect(key('Backspace')).toBe('remove')
     expect(key('Delete')).toBe('delete')
     expect(key('Backspace', { metaKey: true })).toBe('delete')
@@ -32,6 +31,7 @@ describe('listKeyFor', () => {
 
   it('ignores other keys and modified ones', () => {
     expect(key('Escape')).toBeNull()
+    expect(key(' ')).toBeNull()
     expect(key('a')).toBeNull()
     expect(key('ArrowUp', { metaKey: true })).toBeNull()
     expect(key('Backspace', { altKey: true })).toBeNull()
@@ -40,7 +40,6 @@ describe('listKeyFor', () => {
 
   it('repeats only arrows while a key is held', () => {
     expect(key('ArrowRight', { repeat: true })).toBe('right')
-    expect(key(' ', { repeat: true })).toBeNull()
     expect(key('Backspace', { repeat: true })).toBeNull()
     expect(key('Delete', { repeat: true })).toBeNull()
   })

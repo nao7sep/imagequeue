@@ -240,9 +240,6 @@ export function Layout(): React.JSX.Element {
         case 'right':
           navigate(key)
           return
-        case 'space':
-          toggleFullscreenView()
-          return
         case 'remove':
           if (selectedImageRef.current?.status === 'kept') void restoreSelected()
           else void removeSelected(surface)
@@ -251,7 +248,7 @@ export function Layout(): React.JSX.Element {
           void deleteSelected(surface)
       }
     })
-  }, [navigate, toggleFullscreenView, removeSelected, restoreSelected, deleteSelected])
+  }, [navigate, removeSelected, restoreSelected, deleteSelected])
 
   return (
     <div className="layout-viewport">

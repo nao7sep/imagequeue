@@ -106,7 +106,7 @@ describe('list keys from a view', () => {
     ])
   })
 
-  it('hands the preview window\'s keys, Space included, to the main window, named with the view', async () => {
+  it('hands the preview window\'s keys to the main window, named with the view, and not Space', async () => {
     const previewWindow = contents()
     mocks.previewContents = previewWindow
     await call('list:key', previewWindow, 'right')
@@ -114,7 +114,6 @@ describe('list keys from a view', () => {
     await call('list:key', previewWindow, 'remove')
     expect(main.sent).toEqual([
       ['list:key', { key: 'right', surface: 'preview-window' }],
-      ['list:key', { key: 'space', surface: 'preview-window' }],
       ['list:key', { key: 'remove', surface: 'preview-window' }],
     ])
   })
