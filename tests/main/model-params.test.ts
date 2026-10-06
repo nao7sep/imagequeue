@@ -26,14 +26,41 @@ describe('params.json format version', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  it('refuses to save over a file with no format version and leaves it as it was', async () => {
-    const bytes = JSON.stringify({ 'model.ckpt': params })
+  const setAsideCopies = () => fs.readdirSync(root).filter((name) => /^params-\d{8}-\d{6}-\d{3}-utc\.invalid$/.test(name))
+
+  it.each([
+    ['no format version', JSON.stringify({ 'model.ckpt': params })],
+    ['text that is not JSON', '{ "model.ckpt": '],
+    ['a value that is not a map of sets', JSON.stringify([params])],
+  ])('sets aside a file with %s and continues from recommended or default parameters', async (_case, bytes) => {
+    fs.writeFileSync(file(), bytes)
+    const { getModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } = await import('../../src/main/model-params')
+    expect(getModelParams('model.ckpt')).toBeNull()
+    const [copy] = setAsideCopies()
+    expect(fs.readFileSync(path.join(root, copy), 'utf8'), 'the authored bytes are preserved').toBe(bytes)
+    expect(drainSetAsideModelParamsPaths()).toEqual([path.join(root, copy)])
+    expect(drainSetAsideModelParamsPaths(), 'each set-aside copy is named once').toEqual([])
+
+    setModelParams('model.ckpt', params)
+    drainPendingWrites()
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8'))['model.ckpt']).toEqual(params)
+    expect(setAsideCopies()).toEqual([copy])
+  })
+
+  it('stops the request and leaves the file in place when it cannot be set aside', async () => {
+    const { StoreLeftInPlaceError } = await import('../../src/main/store-format')
+    const bytes = '{ not json'
     fs.writeFileSync(file(), bytes)
     const { getModelParams, setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
-    expect(getModelParams('model.ckpt')).toBeNull()
-    expect(() => setModelParams('model.ckpt', params)).toThrow(/unreadable/)
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('simulated permission failure'), { code: 'EACCES' })
+    })
+    expect(() => getModelParams('model.ckpt')).toThrow(StoreLeftInPlaceError)
+    expect(() => setModelParams('model.ckpt', params)).toThrow(StoreLeftInPlaceError)
+    rename.mockRestore()
     drainPendingWrites()
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(setAsideCopies()).toEqual([])
   })
 
   it('writes its format version first and reads it back', async () => {

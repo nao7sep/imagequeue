@@ -5,6 +5,8 @@ import {
   elaboratorRecoveryPresentation,
   generationFailurePresentation,
   newerFilePresentation,
+  modelParamsResetPresentation,
+  storeLeftInPlacePresentation,
   startupFailurePresentation,
 } from '../../src/main/failure-presentation'
 import { ConfigFileHaltError } from '../../src/main/config/config-store'
@@ -91,6 +93,19 @@ describe('generationFailurePresentation', () => {
     const notice = newerFilePresentation(elaborators)
     expect(text(notice.title)).toBe('File from a newer version')
     expect(text(notice.message)).toContain(`newer version of ImageQueue wrote the file at ${elaborators}`)
+  })
+
+  it('names the set-aside copy of unreadable Draw Things parameters, and a file left in place', () => {
+    const setAside = '/Users/me/.imagequeue/params-20261006-031340-123-utc.invalid'
+    const reset = modelParamsResetPresentation(setAside)
+    expect(text(reset.title)).toBe('Draw Things parameters were reset')
+    expect(text(reset.message)).toContain(`set the file aside at ${setAside}`)
+
+    const params = '/Users/me/.imagequeue/params.json'
+    const left = storeLeftInPlacePresentation(params)
+    expect(text(left.title)).toBe('File left unchanged')
+    expect(text(left.message)).toContain(`the file at ${params}`)
+    expect(text(left.message)).toContain('left it unchanged')
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

@@ -9,7 +9,8 @@ import {
   markModelParamsPersistenceFailed,
   markModelParamsPersistenceSaved,
 } from './model-params-persistence'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from './store-format'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { utcStampForFilename } from '../shared/utc-stamp'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -21,49 +22,61 @@ type ParamsStore = Record<string, DrawThingsModelParams>
 const WRITE_DEBOUNCE_MS = 200
 
 let store: ParamsStore | null = null
-// When params.json exists but cannot be parsed or has the wrong shape, we refuse to write rather than
-// overwrite the corrupted-but-possibly-recoverable file with an empty store.
-// Reads degrade to empty (UI shows missing values) and writes throw with an
-// actionable message naming the file. The bad file is left untouched so the
-// user can inspect or repair it manually.
-let loadFailed = false
-let loadFailedMessage = ''
+// params.json is authored settings, so a file that does not parse or fit its
+// shape is set aside and the store starts empty, as on first run; a file that
+// cannot be read or set aside stops the request and stays where it is
+// (store-recovery conventions). Each set-aside path waits here for the window
+// that made the request to name it.
+const setAsidePaths: string[] = []
 
-function ensureLoaded(): ParamsStore {
-  if (store !== null) return store
-  const file = getParamsFilePath()
-  if (!fs.existsSync(file)) {
-    store = {}
-    return store
+export function drainSetAsideModelParamsPaths(): string[] {
+  return setAsidePaths.splice(0)
+}
+
+function readStoredParams(file: string): ParamsStore {
+  let text: string
+  try {
+    text = fs.readFileSync(file, 'utf-8')
+  } catch (err) {
+    throw new StoreLeftInPlaceError(file, { cause: err })
   }
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf-8'))
+    const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('params.json must be a JSON object')
-    store = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file) as ParamsStore
+    return checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file) as ParamsStore
   } catch (err) {
     // A newer file refuses every request, reads included, and stays exactly
     // where it is; store stays null, so nothing is ever written over it.
     if (err instanceof NewerFormatError) throw err
-    const message = (err as Error).message
-    loadFailed = true
-    loadFailedMessage =
-      `Cannot save Draw Things model parameters: ${file} is unreadable. ` +
-      `Move or repair the file and restart ImageQueue. (parse error: ${message})`
-    log('error', 'params.json: failed to parse; halting writes until resolved', {
-      path: file,
-      error: serializeError(err),
-    })
-    store = {}
+    setAside(file, err)
+    return {}
   }
+}
+
+function setAside(file: string, error: unknown): void {
+  const movedTo = path.join(path.dirname(file), `${path.basename(file, '.json')}-${utcStampForFilename()}.invalid`)
+  try {
+    fs.renameSync(file, movedTo)
+  } catch (renameError) {
+    throw new StoreLeftInPlaceError(file, { cause: renameError })
+  }
+  setAsidePaths.push(movedTo)
+  log('warn', 'Set aside an unusable params.json; using recommended or default parameters', {
+    from: file,
+    to: movedTo,
+    error: serializeError(error),
+  })
+}
+
+function ensureLoaded(): ParamsStore {
+  if (store !== null) return store
+  const file = getParamsFilePath()
+  store = fs.existsSync(file) ? readStoredParams(file) : {}
   return store
 }
 
 function writeNow(): void {
   if (store === null) return
-  // Defensive: public setters already throw when loadFailed, so this branch
-  // should be unreachable. Kept so drainPendingWrites on quit can't slip
-  // through and clobber a corrupted file.
-  if (loadFailed) return
   // recorded: params.json is durable, user-authored managed text — the
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
@@ -92,12 +105,7 @@ export function getAllModelParams(): ParamsStore {
 }
 
 export function setModelParams(modelFile: string, params: DrawThingsModelParams): void {
-  ensureLoaded()
-  if (loadFailed) {
-    markModelParamsPersistenceFailed()
-    throw new Error(loadFailedMessage)
-  }
-  const s = store as ParamsStore
+  const s = ensureLoaded()
   s[modelFile] = params
   writer.schedule()
 }
@@ -106,12 +114,7 @@ export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'he
 
 export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): void {
   if (modelFiles.length === 0) return
-  ensureLoaded()
-  if (loadFailed) {
-    markModelParamsPersistenceFailed()
-    throw new Error(loadFailedMessage)
-  }
-  const s = store as ParamsStore
+  const s = ensureLoaded()
   for (const modelFile of modelFiles) {
     const existing = s[modelFile]
     s[modelFile] = existing

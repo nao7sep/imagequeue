@@ -108,6 +108,22 @@ export function newerFilePresentation(path: string): AppNotice {
   }
 }
 
+/** A store could be neither read nor set aside, so it was left at `path` and the operation stopped. */
+export function storeLeftInPlacePresentation(path: string): AppNotice {
+  return {
+    title: message('notice.fileLeftInPlaceTitle'),
+    message: message('notice.fileLeftInPlaceMessage', { path }),
+  }
+}
+
+/** params.json was unreadable and set aside at `path`; each model uses its recommended or default parameters. */
+export function modelParamsResetPresentation(path: string): AppNotice {
+  return {
+    title: message('notice.drawThingsParamsResetTitle'),
+    message: message('notice.drawThingsParamsResetMessage', { path }),
+  }
+}
+
 export function configResetPresentation(path: string): AppNotice {
   return {
     title: message('notice.settingsResetTitle'),

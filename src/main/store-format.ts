@@ -43,6 +43,17 @@ export class NewerFormatError extends Error {
 }
 
 /**
+ * A store that could be neither read nor set aside: the operation that needed
+ * it stops and the file stays exactly where it is (store-recovery-conventions).
+ */
+export class StoreLeftInPlaceError extends Error {
+  constructor(readonly path: string, options: { cause: unknown }) {
+    super(`${path} could not be used or set aside; it was left unchanged`, options)
+    this.name = 'StoreLeftInPlaceError'
+  }
+}
+
+/**
  * Checks a parsed JSON store's marker and returns the map without it. A missing
  * marker, or one that is not a positive integer, throws a plain Error: the
  * store is unreadable.

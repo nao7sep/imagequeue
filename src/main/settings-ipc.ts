@@ -29,7 +29,8 @@ import {
   killCliJob,
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
-import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
+import { applyDimensionsToModels, drainSetAsideModelParamsPaths, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
+import { modelParamsResetPresentation } from './failure-presentation'
 import { getModelParamsPersistenceState } from './model-params-persistence'
 import {
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
@@ -327,23 +328,35 @@ export function registerSettingsIpc(
     return result.canceled ? null : result.filePaths[0]
   })
 
-  handle('drawthings:getModelParams', (_event, modelFile: string) => {
-    return getModelParams(modelFile)
+  // The first request to read params.json may set aside an unreadable file;
+  // the window that made it names the preserved copy.
+  const withParamsRecovery = <T>(event: Electron.IpcMainInvokeEvent, operation: () => T): T => {
+    try {
+      return operation()
+    } finally {
+      for (const movedTo of drainSetAsideModelParamsPaths()) {
+        event.sender.send('app:notice', modelParamsResetPresentation(movedTo))
+      }
+    }
+  }
+
+  handle('drawthings:getModelParams', (event, modelFile: string) => {
+    return withParamsRecovery(event, () => getModelParams(modelFile))
   })
 
-  handle('drawthings:getAllModelParams', () => {
-    return getAllModelParams()
+  handle('drawthings:getAllModelParams', (event) => {
+    return withParamsRecovery(event, getAllModelParams)
   })
 
   handle('drawthings:getParamsPersistenceState', () => {
     return getModelParamsPersistenceState()
   })
 
-  handle('drawthings:setModelParams', (_event, modelFile: string, params: DrawThingsModelParams) => {
-    setModelParams(modelFile, params)
+  handle('drawthings:setModelParams', (event, modelFile: string, params: DrawThingsModelParams) => {
+    withParamsRecovery(event, () => setModelParams(modelFile, params))
   })
 
-  handle('drawthings:applyParamsToAll', (_event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
-    applyDimensionsToModels(modelFiles, patch)
+  handle('drawthings:applyParamsToAll', (event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
+    withParamsRecovery(event, () => applyDimensionsToModels(modelFiles, patch))
   })
 }
