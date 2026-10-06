@@ -489,6 +489,7 @@
   "prompt.previewAlt": "Imagem gerada",
   "prompt.noImage": "Nenhuma imagem selecionada",
   "prompt.noImageHint": "Gere uma imagem e clique na miniatura dela para pré-visualizá-la.",
+  "prompt.imageLoadFailed": "Não foi possível carregar esta imagem.",
   "prompt.copied": "Copiado",
   "prompt.copyPrompt": "Copiar prompt",
   "prompt.reveal": "Mostrar",

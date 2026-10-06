@@ -471,6 +471,7 @@
   "prompt.previewAlt": "生成的图像",
   "prompt.noImage": "未选择图像",
   "prompt.noImageHint": "生成图像后，点按其缩略图即可预览。",
+  "prompt.imageLoadFailed": "无法载入此图像。",
   "prompt.copied": "已复制",
   "prompt.copyPrompt": "复制提示词",
   "prompt.reveal": "显示位置",

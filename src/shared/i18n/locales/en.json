@@ -480,6 +480,7 @@
   "prompt.previewAlt": "Generated",
   "prompt.noImage": "No image selected",
   "prompt.noImageHint": "Generate an image and click its thumbnail to preview it.",
+  "prompt.imageLoadFailed": "This image could not be loaded.",
   "prompt.copied": "Copied",
   "prompt.copyPrompt": "Copy Prompt",
   "prompt.reveal": "Reveal",

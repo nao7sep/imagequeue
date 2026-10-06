@@ -112,7 +112,19 @@ describe('PromptPane presentation', () => {
     await waitFor(() => expect(selection.reportTaskActionFailure).toHaveBeenCalledOnce())
     expect(selection.reportTaskActionFailure).toHaveBeenCalledWith('task-1', 'preview', 'task.previewFailed', 'Failed to load selected image', expect.any(Error))
     expect(container.querySelector('.preview-image')).toBeNull()
-    expect(container.querySelector('.preview-placeholder')).not.toBeNull()
+    // It says the image did not load, never that nothing is selected.
+    expect(container.querySelector('.preview-placeholder')?.textContent).toBe('This image could not be loaded.')
+  })
+
+  it('says nothing in the preview while a selected image is still loading', () => {
+    decode.mockImplementationOnce(() => new Promise<void>(() => {}))
+    const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
+    expect(container.querySelector('.preview-area')?.textContent).toBe('')
+  })
+
+  it('keeps the usual placeholder for a selected task that has no image', () => {
+    const { container } = render(<PromptPane selectedTask={selectedTask} prompt="" onPromptChange={vi.fn()} />)
+    expect(container.querySelector('.preview-placeholder')?.textContent).toContain('No image selected')
   })
 
   it('shows a failed task\'s whole reason in its own strip under the preview: the authored lead-in, then the provider\'s words', () => {

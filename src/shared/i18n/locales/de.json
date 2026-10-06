@@ -480,6 +480,7 @@
   "prompt.previewAlt": "Erzeugtes Bild",
   "prompt.noImage": "Kein Bild ausgewählt",
   "prompt.noImageHint": "Erzeugen Sie ein Bild und klicken Sie auf seine Miniatur, um es in der Vorschau zu sehen.",
+  "prompt.imageLoadFailed": "Dieses Bild konnte nicht geladen werden.",
   "prompt.copied": "Kopiert",
   "prompt.copyPrompt": "Prompt kopieren",
   "prompt.reveal": "Zeigen",

@@ -498,6 +498,7 @@
   "prompt.previewAlt": "Созданное изображение",
   "prompt.noImage": "Изображение не выбрано",
   "prompt.noImageHint": "Создайте изображение и нажмите на его миниатюру, чтобы посмотреть его.",
+  "prompt.imageLoadFailed": "Не удалось загрузить это изображение.",
   "prompt.copied": "Скопировано",
   "prompt.copyPrompt": "Копировать промпт",
   "prompt.reveal": "Показать",

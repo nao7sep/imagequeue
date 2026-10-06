@@ -489,6 +489,7 @@
   "prompt.previewAlt": "Image générée",
   "prompt.noImage": "Aucune image sélectionnée",
   "prompt.noImageHint": "Générez une image et cliquez sur sa vignette pour la prévisualiser.",
+  "prompt.imageLoadFailed": "Cette image n’a pas pu être chargée.",
   "prompt.copied": "Copié",
   "prompt.copyPrompt": "Copier le prompt",
   "prompt.reveal": "Afficher",

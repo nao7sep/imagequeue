@@ -33,7 +33,13 @@ export function Preview({ task, onImageLoad }: Props): React.JSX.Element {
       <div className="preview-area">
         {url && image.src ? (
           <img className="preview-image" src={image.src} alt={t('prompt.previewAlt')} />
-        ) : (
+        ) : url && image.settled === url ? (
+          // The selected task has an image that did not load, missing or
+          // unreadable; the note on its task says the same.
+          <div className="preview-placeholder">
+            <p>{t('prompt.imageLoadFailed')}</p>
+          </div>
+        ) : url ? null : (
           <div className="preview-placeholder">
             <p>{t('prompt.noImage')}</p>
             <p className="preview-placeholder-hint">{t('prompt.noImageHint')}</p>

@@ -471,6 +471,7 @@
   "prompt.previewAlt": "生成された画像",
   "prompt.noImage": "画像が選択されていません",
   "prompt.noImageHint": "画像を生成し、サムネイルをクリックするとプレビューできます。",
+  "prompt.imageLoadFailed": "この画像を読み込めませんでした。",
   "prompt.copied": "コピーしました",
   "prompt.copyPrompt": "プロンプトをコピー",
   "prompt.reveal": "場所を表示",
