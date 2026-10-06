@@ -102,13 +102,14 @@ afterEach(() => {
 })
 
 describe('preview window options', () => {
-  it('is a durable window with its own placement and a minimum from its content', () => {
+  it('is a durable window with its own placement, a minimum from its content, and no Spaces fullscreen', () => {
     expect(preview.buildPreviewWindowOptions('Preview')).toMatchObject({
       name: 'preview',
       title: 'Preview',
       windowStatePersistence: { bounds: true, displayMode: process.platform === 'win32' },
       minWidth: PREVIEW_WINDOW_MIN_WIDTH,
       minHeight: PREVIEW_WINDOW_MIN_HEIGHT,
+      fullscreenable: false,
       show: false,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
     })

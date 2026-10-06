@@ -87,7 +87,7 @@ afterEach(() => {
 })
 
 describe('records window options', () => {
-  it('is a durable window with its own placement and the derived minimum', () => {
+  it('is a durable window with its own placement, the derived minimum, and no Spaces fullscreen', () => {
     const options = buildRecordsWindowOptions('Records')
     expect(options).toMatchObject({
       name: 'records',
@@ -95,6 +95,7 @@ describe('records window options', () => {
       windowStatePersistence: { bounds: true, displayMode: process.platform === 'win32' },
       minWidth: RECORDS_WINDOW_MIN_WIDTH,
       minHeight: RECORDS_WINDOW_MIN_HEIGHT,
+      fullscreenable: false,
       show: false,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
     })

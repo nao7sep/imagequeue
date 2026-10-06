@@ -25,6 +25,8 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
     height: 1,
     show: false,
     minWidth: 420,
+    // Only the fullscreen view is ever fullscreen; the green button zooms.
+    fullscreenable: false,
     // The resolved theme's app surface (the OS appearance when config.json
     // could not be read).
     backgroundColor: windowBackground(),

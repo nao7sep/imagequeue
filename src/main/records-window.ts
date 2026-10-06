@@ -29,6 +29,8 @@ export function buildRecordsWindowOptions(title: string): Electron.BrowserWindow
     height: 820,
     minWidth: RECORDS_WINDOW_MIN_WIDTH,
     minHeight: RECORDS_WINDOW_MIN_HEIGHT,
+    // Only the fullscreen view is ever fullscreen; the green button zooms.
+    fullscreenable: false,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {

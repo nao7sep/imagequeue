@@ -37,6 +37,8 @@ export function buildPreviewWindowOptions(title: string): Electron.BrowserWindow
     height: 560,
     minWidth: PREVIEW_WINDOW_MIN_WIDTH,
     minHeight: PREVIEW_WINDOW_MIN_HEIGHT,
+    // Only the fullscreen view is ever fullscreen; the green button zooms.
+    fullscreenable: false,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
