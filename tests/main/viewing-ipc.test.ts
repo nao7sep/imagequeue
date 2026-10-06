@@ -5,7 +5,11 @@ type Handler = (event: { sender: unknown }, ...args: unknown[]) => unknown
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   fullscreenContents: null as unknown,
+  fullscreenPage: null as unknown,
   previewContents: null as unknown,
+  open: vi.fn(),
+  close: vi.fn(),
+  painted: vi.fn(),
 }))
 
 vi.mock('../../src/main/ipc-boundary', () => ({
@@ -13,9 +17,10 @@ vi.mock('../../src/main/ipc-boundary', () => ({
 }))
 vi.mock('../../src/main/fullscreen-view', () => ({
   initFullscreenView: vi.fn(),
-  openFullscreenView: vi.fn(),
-  closeFullscreenView: vi.fn(),
-  fullscreenViewPainted: vi.fn(),
+  openFullscreenView: mocks.open,
+  closeFullscreenView: mocks.close,
+  fullscreenViewPainted: mocks.painted,
+  isFullscreenViewPage: (sender: unknown) => sender === mocks.fullscreenPage,
   fullscreenViewContents: () => mocks.fullscreenContents,
 }))
 vi.mock('../../src/main/preview-window', () => ({
@@ -38,7 +43,11 @@ beforeEach(async () => {
   vi.resetModules()
   mocks.handlers.clear()
   mocks.fullscreenContents = null
+  mocks.fullscreenPage = null
   mocks.previewContents = null
+  mocks.open.mockClear()
+  mocks.close.mockClear()
+  mocks.painted.mockClear()
   main = contents()
   const { registerViewingIpc } = await import('../../src/main/viewing-ipc')
   snapshots = await import('../../src/main/selection-snapshot')
@@ -54,6 +63,34 @@ describe('selection', () => {
     await call('selection:publish', main, null)
     expect(await call('selection:latest', view)).toEqual({ version: 2, task: null })
     expect(snapshots.latestSelection().version).toBe(2)
+  })
+})
+
+describe('opening and closing the fullscreen view', () => {
+  it('opens from the main window alone', async () => {
+    await call('fullscreenView:open', contents())
+    expect(mocks.open).not.toHaveBeenCalled()
+    await call('fullscreenView:open', main)
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes from the main window or the view\'s own page alone', async () => {
+    const page = contents()
+    mocks.fullscreenPage = page
+    await call('fullscreenView:close', contents())
+    expect(mocks.close).not.toHaveBeenCalled()
+    await call('fullscreenView:close', main)
+    await call('fullscreenView:close', page)
+    expect(mocks.close).toHaveBeenCalledTimes(2)
+  })
+
+  it('takes what was painted from the view\'s own page alone', async () => {
+    const page = contents()
+    mocks.fullscreenPage = page
+    await call('fullscreenView:painted', main, 3, true)
+    await call('fullscreenView:painted', contents(), 3, true)
+    await call('fullscreenView:painted', page, 3, true)
+    expect(mocks.painted.mock.calls).toEqual([[3, true]])
   })
 })
 

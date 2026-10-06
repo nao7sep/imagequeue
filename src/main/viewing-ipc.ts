@@ -7,6 +7,7 @@ import {
   fullscreenViewContents,
   fullscreenViewPainted,
   initFullscreenView,
+  isFullscreenViewPage,
   openFullscreenView,
 } from './fullscreen-view'
 import { initPreviewWindow, previewWindowContents } from './preview-window'
@@ -43,10 +44,16 @@ export function registerViewingIpc(getMain: () => BrowserWindow | null): void {
   })
   handle('selection:latest', () => latestSelection())
 
-  handle('fullscreenView:open', () => openFullscreenView())
-  handle('fullscreenView:close', () => closeFullscreenView({ refocusMain: true }))
-  handle('fullscreenView:painted', (_event, version: number, painted: boolean) => {
-    fullscreenViewPainted(Number(version), painted === true)
+  // The lists open the view; it closes from the lists or from itself, and only
+  // its own page reports what it painted.
+  handle('fullscreenView:open', async (event) => {
+    if (isMain(event.sender)) await openFullscreenView()
+  })
+  handle('fullscreenView:close', (event) => {
+    if (isMain(event.sender) || isFullscreenViewPage(event.sender)) closeFullscreenView({ refocusMain: true })
+  })
+  handle('fullscreenView:painted', (event, version: number, painted: boolean) => {
+    if (isFullscreenViewPage(event.sender)) fullscreenViewPainted(Number(version), painted === true)
   })
 
   // A view hands list keys to the main window, named with the view they came

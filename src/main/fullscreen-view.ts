@@ -203,6 +203,11 @@ export function destroyFullscreenView(): void {
   if (win) forgetView(win)
 }
 
+/** Whether the sender is the view's page, open or hidden. */
+export function isFullscreenViewPage(sender: Electron.WebContents): boolean {
+  return !!view && !view.isDestroyed() && view.webContents === sender
+}
+
 /** The view's page while it is open or opening, for routing keys and confirmations. */
 export function fullscreenViewContents(): Electron.WebContents | null {
   if (!view || view.isDestroyed() || (!shown && !opening)) return null
