@@ -74,11 +74,22 @@ export function exportPathForFormat(filePath: string, ext: ImageExt): string {
 }
 
 // Copies an exported image byte for byte to a complete, synced staging file
-// beside its destination, for the export to publish under its final name.
+// beside its destination, for the export to publish under its final name. A
+// copy keeps its source's modified time and permission mode (content-lifecycle
+// conventions); a volume that cannot hold the mode keeps the rest without a
+// warning. Node has no portable call that carries birth time, extended
+// attributes or Finder tags, so those are not copied.
 export function stageExportCopy(src: string, destination: string): string {
   const staging = stagingPathFor(destination)
   try {
     fs.copyFileSync(src, staging)
+    const source = fs.statSync(src)
+    try {
+      fs.chmodSync(staging, source.mode & 0o7777)
+    } catch {
+      // The destination volume has no POSIX modes; the copy keeps what it can.
+    }
+    fs.utimesSync(staging, source.atime, source.mtime)
     syncFile(staging)
   } catch (error) {
     fs.rmSync(staging, { force: true })

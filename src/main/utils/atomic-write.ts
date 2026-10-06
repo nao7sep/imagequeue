@@ -72,7 +72,8 @@ export function stageBeside(filePath: string, bytes: NodeJS.ArrayBufferView): st
 /** Publishes complete staged bytes under destination without replacing a file
  * already there (storage-path conventions, "A publish that must not overwrite
  * claims the final name exclusively"): a hard link, or an exclusive copy on a
- * volume without hard links. False when the name is taken. */
+ * volume without hard links, which keeps the staged file's modified time. False
+ * when the name is taken. */
 export function claimFinalName(staging: string, destination: string): boolean {
   try {
     fs.linkSync(staging, destination)
@@ -82,11 +83,15 @@ export function claimFinalName(staging: string, destination: string): boolean {
     if (code === 'EEXIST') return false
     if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code)) throw error
   }
+  let claimed = false
   try {
     fs.copyFileSync(staging, destination, fs.constants.COPYFILE_EXCL)
+    claimed = true
+    const staged = fs.statSync(staging)
+    fs.utimesSync(destination, staged.atime, staged.mtime)
     return true
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false
+    if (!claimed && (error as NodeJS.ErrnoException).code === 'EEXIST') return false
     fs.rmSync(destination, { force: true })
     throw error
   }
