@@ -37,21 +37,32 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/config', () => ({ getConfigPath: () => '/tmp/imagequeue-test/config.json' }))
 
 import { readSavedPreference } from '../../src/main/i18n'
+import { FORMAT_VERSIONS } from '../../src/main/store-format'
 
 // Main reads the saved language straight from config.json before anything is
 // drawn; anything it cannot use follows the computer.
 describe('readSavedPreference', () => {
+  const marked = (general: unknown): string => JSON.stringify({ formatVersion: FORMAT_VERSIONS.config, general })
+
   it('takes a supported tag from the general section', () => {
-    expect(readSavedPreference(JSON.stringify({ general: { language: 'ja' } }))).toBe('ja')
-    expect(readSavedPreference(JSON.stringify({ general: { language: 'zh-Hans' } }))).toBe('zh-Hans')
+    expect(readSavedPreference(marked({ language: 'ja' }))).toBe('ja')
+    expect(readSavedPreference(marked({ language: 'zh-Hans' }))).toBe('zh-Hans')
   })
 
   it('is System for a missing, unreadable, corrupt, or unknown value', () => {
     expect(readSavedPreference(null)).toBe('system')
     expect(readSavedPreference('{ not json')).toBe('system')
-    expect(readSavedPreference(JSON.stringify({}))).toBe('system')
-    expect(readSavedPreference(JSON.stringify({ general: { language: 'pt' } }))).toBe('system')
-    expect(readSavedPreference(JSON.stringify({ general: { language: 'system' } }))).toBe('system')
+    expect(readSavedPreference(JSON.stringify({ formatVersion: FORMAT_VERSIONS.config }))).toBe('system')
+    expect(readSavedPreference(marked({ language: 'pt' }))).toBe('system')
+    expect(readSavedPreference(marked({ language: 'system' }))).toBe('system')
+  })
+
+  // The load path sets aside a file without its marker and refuses a newer
+  // one; neither file's language is ever the interface's.
+  it('is System for a file the config store would not use', () => {
+    expect(readSavedPreference(JSON.stringify({ general: { language: 'ja' } }))).toBe('system')
+    expect(readSavedPreference(JSON.stringify({ formatVersion: FORMAT_VERSIONS.config + 1, general: { language: 'ja' } }))).toBe('system')
+    expect(readSavedPreference(JSON.stringify([{ general: { language: 'ja' } }]))).toBe('system')
   })
 })
 

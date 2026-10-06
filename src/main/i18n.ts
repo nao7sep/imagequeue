@@ -23,6 +23,7 @@ import { ENGLISH } from '../shared/i18n/catalogues'
 import { getConfigPath } from './config'
 import { handle } from './ipc-boundary'
 import { log, serializeError } from './logger'
+import { checkFormat, FORMAT_VERSIONS } from './store-format'
 
 export const LANGUAGE_CHANGED_CHANNEL = 'language:changed'
 
@@ -41,13 +42,19 @@ const listeners = new Set<(translator: Translator) => void>()
 /**
  * The saved choice, read straight from config.json without the store, as the
  * theme's first paint is: a missing, unreadable, or corrupt file is System, and
- * recovering a corrupt one stays with the load path.
+ * recovering a corrupt one stays with the load path. A file without this
+ * build's format version is one the load path sets aside or refuses, so its
+ * language is never used either.
  */
 export function readSavedPreference(configText: string | null): LanguagePreference {
   if (configText === null) return 'system'
   try {
-    const parsed = JSON.parse(configText) as { general?: { language?: unknown } }
-    return normalizeLanguagePreference(parsed?.general?.language)
+    const parsed: unknown = JSON.parse(configText)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'system'
+    const stored = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.config, 'config.json') as {
+      general?: { language?: unknown }
+    }
+    return normalizeLanguagePreference(stored.general?.language)
   } catch {
     return 'system'
   }
