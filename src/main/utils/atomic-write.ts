@@ -34,6 +34,14 @@ import { syncDirectory, syncDirectoryAsync } from './fsync'
 // in hand — never a re-read of the file. The record is best-effort and silent;
 // it never throws back into this write and never affects the save's success
 // (see backup/backup-store.ts).
+// A replacement keeps the file's permission mode (content-lifecycle conventions,
+// "A replace keeps what it can"). Node has no portable call that carries
+// extended attributes or Finder tags, so those are not copied; the file's times
+// are the new content's own and are never carried over.
+function keptMode(target: fs.Stats): number {
+  return target.mode & 0o7777
+}
+
 export function writeFileAtomic(
   filePath: string,
   data: string | NodeJS.ArrayBufferView,
@@ -51,6 +59,8 @@ export function writeFileAtomic(
     } finally {
       fs.closeSync(fd)
     }
+    const target = fs.statSync(filePath, { throwIfNoEntry: false })
+    if (target) fs.chmodSync(tempPath, keptMode(target))
     fs.renameSync(tempPath, filePath)
     syncDirectory(dir)
     // After the rename: the file is exactly where it belongs, so record the bytes
@@ -103,6 +113,11 @@ export async function writeFileAtomicAsync(
     await handle.sync()
     await handle.close()
     handle = null
+    const target = await fs.promises.stat(filePath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (target) await fs.promises.chmod(tempPath, keptMode(target))
     signal?.throwIfAborted()
     await fs.promises.rename(tempPath, filePath)
     await syncDirectoryAsync(dir)
