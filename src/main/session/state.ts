@@ -38,16 +38,21 @@ const SESSION_MANIFEST_FILENAME = 'session.json'
 // every session transition sets them all together — a new field can't be wired
 // into one transition and silently forgotten in another.
 //
-// updatedAt follows the content-lifecycle-conventions' Modified rule.
-// savedContent is the sessionContentKey of the content last saved, which
-// persistActiveSession judges each write against.
+// updatedAt follows the content-lifecycle-conventions' Modified rule, at the
+// time of the edit. saved is the content last saved, which persistActiveSession
+// judges each write against. The draft is saved a pause after it is typed, so
+// draftEditedAt keeps when it last changed; everything else is saved by the
+// call that changed it, so restSeen keeps when a save first found it as it is,
+// and a failed write does not move that time to a later save.
 interface ActiveSessionState {
   elaboratedPrompts: ElaboratedPromptRecord[]
   draft: SessionDraft
   createdAt: string
   updatedAt: string
   lastResumedAt: string | null
-  savedContent: string
+  saved: SessionContent
+  draftEditedAt: string | null
+  restSeen: { rest: string; at: string }
 }
 let activeSession: ActiveSessionState | null = null
 
@@ -215,18 +220,34 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
 // The part of a session the Modified rule counts as content: the draft, the
 // elaborated prompts, and each task's request and saved image. A task's status,
 // timing and failure are its lifecycle, not content.
+interface SessionContent {
+  draft: string
+  rest: string
+}
+
+function sessionContent(
+  draft: SessionDraft,
+  elaboratedPrompts: ElaboratedPromptRecord[],
+  tasksByBackend: Record<BackendId, Task[]>,
+): SessionContent {
+  return {
+    draft: JSON.stringify(draft),
+    rest: JSON.stringify({
+      elaboratedPrompts,
+      tasks: BACKEND_IDS_IN_UI_ORDER.map((backend) =>
+        (tasksByBackend[backend] ?? []).map((task) => [task.id, task.prompt, task.model, task.params, task.baseName])
+      ),
+    }),
+  }
+}
+
 export function sessionContentKey(
   draft: SessionDraft,
   elaboratedPrompts: ElaboratedPromptRecord[],
   tasksByBackend: Record<BackendId, Task[]>,
 ): string {
-  return JSON.stringify({
-    draft,
-    elaboratedPrompts,
-    tasks: BACKEND_IDS_IN_UI_ORDER.map((backend) =>
-      (tasksByBackend[backend] ?? []).map((task) => [task.id, task.prompt, task.model, task.params, task.baseName])
-    ),
-  })
+  const { draft: draftKey, rest } = sessionContent(draft, elaboratedPrompts, tasksByBackend)
+  return `${draftKey}\n${rest}`
 }
 
 interface AdoptedSession {
@@ -241,9 +262,12 @@ interface AdoptedSession {
 // can't set some fields and forget others. `tasks` is what the session holds as
 // it is adopted: the content later writes are judged against.
 function adoptActiveSession(state: AdoptedSession, tasks: Record<BackendId, Task[]>): ActiveSessionState {
+  const saved = sessionContent(state.draft, state.elaboratedPrompts, tasks)
   activeSession = {
     ...state,
-    savedContent: sessionContentKey(state.draft, state.elaboratedPrompts, tasks),
+    saved,
+    draftEditedAt: null,
+    restSeen: { rest: saved.rest, at: state.updatedAt },
   }
   return activeSession
 }
@@ -411,15 +435,21 @@ export function persistActiveSession(): SessionManifest {
   fs.mkdirSync(sessionDir, { recursive: true })
   const session = ensureActiveSessionLoaded()
   const tasks = queueManager.getAllStoredTasks()
-  const content = sessionContentKey(session.draft, session.elaboratedPrompts, tasks)
-  const updatedAt = content === session.savedContent ? session.updatedAt : new Date().toISOString()
+  const now = new Date().toISOString()
+  const content = sessionContent(session.draft, session.elaboratedPrompts, tasks)
+  if (content.rest !== session.restSeen.rest) session.restSeen = { rest: content.rest, at: now }
+  const editTimes = [
+    ...(content.draft !== session.saved.draft ? [session.draftEditedAt ?? now] : []),
+    ...(content.rest !== session.saved.rest ? [session.restSeen.at] : []),
+  ]
+  const updatedAt = editTimes.length === 0 ? session.updatedAt : editTimes.sort().at(-1)!
   const manifest = buildManifest(getSessionId(), session, updatedAt, tasks)
   // recorded: session.json holds the draft prompt, seed and elaborated prompts — reloaded user
   // work, so it keeps a history even though it sits under output/<session>/.
   writeJsonAtomic(getManifestPath(sessionDir), manifest, true)
   // Only a write that landed moves the baseline, so content a failed write
   // never saved still counts as an edit on the next one.
-  session.savedContent = content
+  session.saved = content
   session.updatedAt = updatedAt
   return manifest
 }
@@ -583,7 +613,9 @@ export function getActiveSessionDraft(): SessionDraft {
 
 export function setActiveSessionDraft(draft: SessionDraft): void {
   // Trust boundary: the draft arrives over IPC, so normalize it here.
-  ensureActiveSessionLoaded().draft = normalizeSessionDraft(draft)
+  const session = ensureActiveSessionLoaded()
+  session.draft = normalizeSessionDraft(draft)
+  session.draftEditedAt = new Date().toISOString()
   draftWriter.schedule()
 }
 

@@ -514,6 +514,27 @@ describe('the updated time', () => {
     expect(updatedAt()).toBe('2026-05-01T00:00:00.000Z')
   })
 
+  it('records a draft edit at the moment it was typed, not when the pause ends', () => {
+    later()
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
+    vi.setSystemTime(new Date('2026-03-02T00:00:00.000Z'))
+    drainPendingDraftWrites()
+    expect(updatedAt()).toBe('2026-03-01T00:00:00.000Z')
+  })
+
+  it('keeps an edit whose save failed at its own time when a later save writes it', () => {
+    later()
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+      throw new Error('simulated full disk')
+    })
+    expect(() => appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])).toThrow('simulated full disk')
+    rename.mockRestore()
+
+    vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
+    expect(persistActiveSession().updatedAt).toBe('2026-03-01T00:00:00.000Z')
+    expect(updatedAt()).toBe('2026-03-01T00:00:00.000Z')
+  })
+
   it('stays when the draft saved is the content already saved', () => {
     const before = updatedAt()
     later()
