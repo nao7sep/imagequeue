@@ -63,7 +63,9 @@ export function stageBeside(filePath: string, bytes: NodeJS.ArrayBufferView): st
       fs.closeSync(fd)
     }
   } catch (error) {
-    fs.rmSync(tempPath, { force: true })
+    try { fs.rmSync(tempPath, { force: true }) } catch {
+      // A staging cleanup failure cannot replace the original write/sync cause.
+    }
     throw error
   }
   return tempPath

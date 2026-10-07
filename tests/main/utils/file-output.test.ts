@@ -13,6 +13,7 @@ import {
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
 import { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
+import * as fsync from '../../../src/main/utils/fsync'
 
 // writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
 // test. The closure reads `sessionDir` only when getSessionDir() is called, by
@@ -118,12 +119,119 @@ describe('writeImageOutput', () => {
     expect(fs.readdirSync(sessionDir)).toEqual([])
   })
 
+  it('preserves a staging write failure when removal of that stage also fails', () => {
+    const failure = new Error('primary stage write failure')
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(() => { throw failure })
+    vi.spyOn(fs, 'rmSync').mockImplementation(() => { throw new Error('secondary cleanup failure') })
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
+  })
+
   it('leaves no staging file beside a published pair', () => {
     writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
     expect(fs.readdirSync(sessionDir).sort()).toEqual([
       '20260604-093015-utc-cat-openai.json',
       '20260604-093015-utc-cat-openai.png',
     ])
+  })
+
+  it('rolls back its image if exclusive sidecar publication fails, preserving the cause', () => {
+    const link = fs.linkSync
+    const failure = new Error('sidecar I/O failure')
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
+      if (String(target).endsWith('.json')) throw failure
+      link(source, target)
+    })
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
+    expect(fs.readdirSync(sessionDir)).toEqual([])
+  })
+
+  it('preserves a foreign sidecar and saves the pair at the next occupied-name ordinal', () => {
+    const link = fs.linkSync
+    let conflict = true
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
+      if (String(target).endsWith('.json') && conflict) {
+        conflict = false
+        fs.writeFileSync(target, 'foreign sidecar')
+      }
+      link(source, target)
+    })
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(base).toBe('20260604-093015-utc-cat-openai-2')
+    expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.json'), 'utf8')).toBe('foreign sidecar')
+    expect(fs.existsSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'))).toBe(false)
+    expect(fs.readdirSync(sessionDir).sort()).toEqual([`${base}.json`, `${base}.png`, '20260604-093015-utc-cat-openai.json'].sort())
+  })
+
+  it('never rolls back a replaced image when sidecar publication fails', () => {
+    const link = fs.linkSync
+    const failure = new Error('sidecar I/O failure')
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
+      if (String(target).endsWith('.json')) {
+        const image = String(target).replace(/\.json$/, '.png')
+        fs.unlinkSync(image)
+        fs.writeFileSync(image, 'foreign image')
+        throw failure
+      }
+      link(source, target)
+    })
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
+    expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'), 'utf8')).toBe('foreign image')
+  })
+
+  it.each(['file', 'symlink'] as const)('never adopts a foreign %s identity returned after image claim', (replacement) => {
+    const link = fs.linkSync
+    const failure = new Error('sidecar publication failed')
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
+      if (String(target).endsWith('.json')) throw failure
+      link(source, target)
+      fs.unlinkSync(target)
+      if (replacement === 'symlink') fs.symlinkSync(source, target)
+      else fs.writeFileSync(target, 'foreign image')
+    })
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
+    const image = path.join(sessionDir, '20260604-093015-utc-cat-openai.png')
+    if (replacement === 'symlink') expect(fs.lstatSync(image).isSymbolicLink()).toBe(true)
+    else expect(fs.readFileSync(image, 'utf8')).toBe('foreign image')
+  })
+
+  it('publishes through exclusive handles on a volume without hard links', () => {
+    vi.spyOn(fs, 'linkSync').mockImplementation(() => { throw Object.assign(new Error('unsupported'), { code: 'ENOTSUP' }) })
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
+    expect(fs.readdirSync(sessionDir)).toHaveLength(2)
+  })
+
+  it('rolls back both owned copies when the sidecar copy fails', () => {
+    vi.spyOn(fs, 'linkSync').mockImplementation(() => { throw Object.assign(new Error('unsupported'), { code: 'ENOTSUP' }) })
+    const write = fs.writeFileSync
+    const failure = new Error('sidecar copy failed')
+    let calls = 0
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(((...args: Parameters<typeof fs.writeFileSync>) => {
+      if (++calls === 4) throw failure
+      return write(...args)
+    }) as typeof fs.writeFileSync)
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
+    expect(fs.readdirSync(sessionDir)).toEqual([])
+  })
+
+  it('preserves the original publish cause when owned rollback and staging cleanup also fail', () => {
+    const link = fs.linkSync
+    const failure = new Error('primary sidecar failure')
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
+      if (String(target).endsWith('.json')) throw failure
+      link(source, target)
+    })
+    vi.spyOn(fs, 'unlinkSync').mockImplementation(() => { throw new Error('secondary rollback failure') })
+    vi.spyOn(fs, 'rmSync').mockImplementation(() => { throw new Error('secondary staging cleanup failure') })
+    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
+  })
+
+  it('returns the complete paid output after secondary directory sync failure', () => {
+    vi.spyOn(fsync, 'syncDirectory').mockImplementationOnce(() => { throw new Error('directory sync failed') })
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
+    expect(JSON.parse(fs.readFileSync(path.join(sessionDir, `${base}.json`), 'utf8')).format_version).toBe(FORMAT_VERSIONS.imageSidecar)
+    expect(fs.readdirSync(sessionDir)).toHaveLength(2)
   })
 })
 

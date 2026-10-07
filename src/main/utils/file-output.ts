@@ -5,7 +5,7 @@ import { shell } from 'electron'
 import { getSessionDir } from '../session'
 import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
-import { log } from '../logger'
+import { log, serializeError } from '../logger'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
 import { stageBeside, stagingPathFor } from './atomic-write'
 import { syncDirectory, syncFile } from './fsync'
@@ -116,6 +116,50 @@ export function outputBaseName(
 
 // Writes the image file and its JSON sidecar to the session directory.
 // Returns the base filename (without extension).
+function removeOwnedOutput(file: string, owned: fs.Stats): void {
+  try {
+    const current = fs.lstatSync(file, { throwIfNoEntry: false })
+    if (current?.ino === owned.ino && current.dev === owned.dev && !current.isSymbolicLink()) fs.unlinkSync(file)
+  } catch (error) {
+    log('warn', 'Could not remove an unpaired generated output', { file, error: serializeError(error) })
+  }
+}
+
+// The identity comes from our stage for links, or our exclusively opened
+// target handle for copies. Looking up the final path after claiming it could
+// instead capture a replacement file and incorrectly authorize its rollback.
+function claimOutputFile(staging: string, destination: string): fs.Stats | null {
+  const staged = fs.lstatSync(staging)
+  try {
+    fs.linkSync(staging, destination)
+    return staged
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') return null
+    if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code ?? '')) throw error
+  }
+  let fd: number
+  try { fd = fs.openSync(destination, 'wx') } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null
+    throw error
+  }
+  let owned: fs.Stats | undefined
+  try {
+    owned = fs.fstatSync(fd)
+    fs.writeFileSync(fd, fs.readFileSync(staging))
+    fs.futimesSync(fd, staged.atime, staged.mtime)
+    fs.fsyncSync(fd)
+    return owned
+  } catch (error) {
+    if (owned) removeOwnedOutput(destination, owned)
+    throw error
+  } finally {
+    try { fs.closeSync(fd) } catch (error) {
+      log('warn', 'Could not close generated-output publication handle', { destination, error: serializeError(error) })
+    }
+  }
+}
+
 export function writeImageOutput(
   timestamp: string,
   ordinal: number,
@@ -175,11 +219,39 @@ export function writeImageOutput(
   try {
     staged.push(stageBeside(imagePath, imageBuffer))
     staged.push(stageBeside(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8')))
-    fs.renameSync(staged[0], imagePath)
-    fs.renameSync(staged[1], sidecarPath)
-    syncDirectory(dir)
+    for (;;) {
+      const image = path.join(dir, `${baseName}.${ext}`)
+      const sidecarFile = path.join(dir, `${baseName}.json`)
+      const owned = claimOutputFile(staged[0], image)
+      if (owned) {
+        let paired = false
+        try {
+          paired = claimOutputFile(staged[1], sidecarFile) !== null
+        } finally {
+          if (!paired) {
+            removeOwnedOutput(image, owned)
+          }
+        }
+        if (paired) break
+      }
+      // Only an occupied final name advances the ordinal; I/O failures escape.
+      attempt++
+      baseName = outputBaseName(timestamp, attempt, slug, backend)
+      while (collides(baseName)) baseName = outputBaseName(timestamp, ++attempt, slug, backend)
+    }
+    try {
+      syncDirectory(dir)
+    } catch (error) {
+      // The complete pair is already published. A secondary durability warning
+      // must not mark the paid output failed and invite another generation.
+      log('warn', 'Generated image and metadata were saved but directory sync failed', { baseName, error: serializeError(error) })
+    }
   } finally {
-    for (const tempPath of staged) fs.rmSync(tempPath, { force: true })
+    for (const tempPath of staged) {
+      try { fs.rmSync(tempPath, { force: true }) } catch (error) {
+        log('warn', 'Could not remove generated-output staging', { tempPath, error: serializeError(error) })
+      }
+    }
   }
 
   return baseName
