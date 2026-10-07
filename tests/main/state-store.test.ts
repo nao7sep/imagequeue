@@ -92,9 +92,9 @@ describe('ui state format version', () => {
     expect(readUiState()).toEqual(defaultUiState())
   })
 
-  it('writes its format version first and reads it back', () => {
+  it('writes its owned format version and reads it back', () => {
     updateUiState({ columnWidth: 240 })
-    expect(Object.entries(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.uiState])
+    expect(Object.entries(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).at(-1)).toEqual(['formatVersion', FORMAT_VERSIONS.uiState])
     expect(readUiState().columnWidth).toBe(240)
   })
 

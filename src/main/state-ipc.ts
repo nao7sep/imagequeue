@@ -4,9 +4,8 @@
 
 import { handle } from './ipc-boundary'
 import { readUiState, updateUiState } from './state-store'
-import type { UiState } from '../shared/ui-state'
 
 export function registerStateIpc(): void {
   handle('state:get', () => readUiState())
-  handle('state:update', (_event, patch: Partial<UiState>) => updateUiState(patch))
+  handle('state:update', (_event, patch: unknown) => updateUiState(patch))
 }

@@ -19,7 +19,7 @@ import { getDataDir } from './config'
 import type { UiState } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
 import { clampRecordsListWidth } from '../shared/records-layout'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from './store-format'
+import { checkFormat, FORMAT_VERSIONS, NewerFormatError } from './store-format'
 
 export function getUiStatePath(): string {
   return path.join(getDataDir(), 'state.json')
@@ -83,11 +83,32 @@ function writeUiState(state: UiState): void {
   // Not recorded: state.json is volatile state and nothing else (column width,
   // notification volume, the Records list width), which the data-backup conventions
   // exclude from history.
-  writeJsonAtomic(getUiStatePath(), markFormat(state, FORMAT_VERSIONS.uiState), false)
+  writeJsonAtomic(getUiStatePath(), { ...state, formatVersion: FORMAT_VERSIONS.uiState }, false)
+}
+
+export function validateUiStatePatch(value: unknown): Partial<UiState> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid UI state patch.')
+  const patch: Partial<UiState> = {}
+  for (const key of Reflect.ownKeys(value)) {
+    if (key !== 'columnWidth' && key !== 'notificationVolume' && key !== 'recordsListWidth') {
+      throw new Error('Invalid UI state patch field.')
+    }
+    const field = (value as Record<string, unknown>)[key]
+    if (key === 'columnWidth' && field === null) {
+      patch.columnWidth = null
+      continue
+    }
+    if (typeof field !== 'number' || !Number.isFinite(field)) throw new Error('Invalid UI state patch value.')
+    if (key === 'columnWidth') patch.columnWidth = field
+    else if (key === 'notificationVolume') patch.notificationVolume = Math.min(1, Math.max(0, field))
+    else patch.recordsListWidth = clampRecordsListWidth(field)
+  }
+  return patch
 }
 
 /** Read, apply the patch, and persist in one step. Returns the new full state. */
-export function updateUiState(patch: Partial<UiState>): UiState {
+export function updateUiState(value: unknown): UiState {
+  const patch = validateUiStatePatch(value)
   const stored = readStoredUiState()
   const next: UiState = { ...stored.state, ...patch }
   if (stored.writable) writeUiState(next)
