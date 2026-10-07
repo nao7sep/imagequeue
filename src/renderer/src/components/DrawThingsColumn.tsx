@@ -231,7 +231,7 @@ export function useDrawThingsColumn({
     if (!active || downloadedModels.length <= 1) return false
     return downloadedModels.some((m) => {
       if (m.file === model) return false
-      const entry = allModelParams[m.file]
+      const entry = Object.hasOwn(allModelParams, m.file) ? allModelParams[m.file] : undefined
       if (!entry) return true
       return entry.width !== localWidth
         || entry.height !== localHeight

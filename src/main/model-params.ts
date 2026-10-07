@@ -9,7 +9,7 @@ import {
   markModelParamsPersistenceFailed,
   markModelParamsPersistenceSaved,
 } from './model-params-persistence'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 import { utcStampForFilename } from '../shared/utc-stamp'
 
 function getParamsFilePath(): string {
@@ -45,7 +45,7 @@ function isParamsSet(value: unknown): value is DrawThingsModelParams {
 // the model takes its recommended or default set whole, and the next save drops
 // it (config-sets conventions, Reading and healing).
 function validSets(stored: Record<string, unknown>): ParamsStore {
-  const sets: ParamsStore = {}
+  const sets: ParamsStore = Object.create(null)
   for (const [modelFile, value] of Object.entries(stored)) {
     if (isParamsSet(value)) sets[modelFile] = value
     else log('warn', 'Invalid Draw Things parameter set; using recommended or default parameters', { modelFile })
@@ -63,13 +63,17 @@ function readStoredParams(file: string): ParamsStore {
   try {
     const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('params.json must be a JSON object')
-    return validSets(checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file))
+    const envelope = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file)
+    if (!Object.hasOwn(envelope, 'models') || !envelope.models || typeof envelope.models !== 'object' || Array.isArray(envelope.models)) {
+      throw new Error('params.json must contain a model parameter map')
+    }
+    return validSets(envelope.models as Record<string, unknown>)
   } catch (err) {
     // A newer file refuses every request, reads included, and stays exactly
     // where it is; store stays null, so nothing is ever written over it.
     if (err instanceof NewerFormatError) throw err
     setAside(file, err)
-    return {}
+    return Object.create(null)
   }
 }
 
@@ -91,7 +95,7 @@ function setAside(file: string, error: unknown): void {
 function ensureLoaded(): ParamsStore {
   if (store !== null) return store
   const file = getParamsFilePath()
-  store = fs.existsSync(file) ? readStoredParams(file) : {}
+  store = fs.existsSync(file) ? readStoredParams(file) : Object.create(null) as ParamsStore
   return store
 }
 
@@ -100,7 +104,7 @@ function writeNow(): void {
   // recorded: params.json is durable, user-authored managed text — the
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
-  writeJsonAtomic(getParamsFilePath(), markFormat(store, FORMAT_VERSIONS.modelParams), true)
+  writeJsonAtomic(getParamsFilePath(), { formatVersion: FORMAT_VERSIONS.modelParams, models: store }, true)
   markModelParamsPersistenceSaved()
 }
 
@@ -117,7 +121,8 @@ const writer = createCoalescedWriter({
 })
 
 export function getModelParams(modelFile: string): DrawThingsModelParams | null {
-  return ensureLoaded()[modelFile] ?? null
+  const s = ensureLoaded()
+  return Object.hasOwn(s, modelFile) ? s[modelFile] : null
 }
 
 export function getAllModelParams(): ParamsStore {
@@ -136,7 +141,7 @@ export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsD
   if (modelFiles.length === 0) return
   const s = ensureLoaded()
   for (const modelFile of modelFiles) {
-    const existing = s[modelFile]
+    const existing = Object.hasOwn(s, modelFile) ? s[modelFile] : undefined
     s[modelFile] = existing
       ? { ...existing, ...patch }
       : { ...patch, seed: '', negativePrompt: '' }

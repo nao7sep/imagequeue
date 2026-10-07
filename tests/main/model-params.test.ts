@@ -32,6 +32,8 @@ describe('params.json format version', () => {
     ['no format version', JSON.stringify({ 'model.ckpt': params })],
     ['text that is not JSON', '{ "model.ckpt": '],
     ['a value that is not a map of sets', JSON.stringify([params])],
+    ['the disposable flat development format', JSON.stringify({ formatVersion: 1, 'model.ckpt': params })],
+    ['an invalid model map', JSON.stringify({ formatVersion: 1, models: [] })],
   ])('sets aside a file with %s and continues from recommended or default parameters', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
     const { getModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } = await import('../../src/main/model-params')
@@ -43,7 +45,7 @@ describe('params.json format version', () => {
 
     setModelParams('model.ckpt', params)
     drainPendingWrites()
-    expect(JSON.parse(fs.readFileSync(file(), 'utf8'))['model.ckpt']).toEqual(params)
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).models['model.ckpt']).toEqual(params)
     expect(setAsideCopies()).toEqual([copy])
   })
 
@@ -51,10 +53,12 @@ describe('params.json format version', () => {
     const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
     fs.writeFileSync(file(), JSON.stringify({
       formatVersion: FORMAT_VERSIONS.modelParams,
-      'good.ckpt': params,
-      'numeric-negative.ckpt': { ...params, negativePrompt: 7 },
-      'missing-steps.ckpt': { width: 512, height: 512, guidance: 2, seed: '', negativePrompt: '' },
-      'not-a-set.ckpt': 'x',
+      models: {
+        'good.ckpt': params,
+        'numeric-negative.ckpt': { ...params, negativePrompt: 7 },
+        'missing-steps.ckpt': { width: 512, height: 512, guidance: 2, seed: '', negativePrompt: '' },
+        'not-a-set.ckpt': 'x',
+      },
     }))
     const { getModelParams, getAllModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } =
       await import('../../src/main/model-params')
@@ -65,7 +69,7 @@ describe('params.json format version', () => {
 
     setModelParams('other.ckpt', params)
     drainPendingWrites()
-    expect(Object.keys(JSON.parse(fs.readFileSync(file(), 'utf8')))).toEqual(['formatVersion', 'good.ckpt', 'other.ckpt'])
+    expect(Object.keys(JSON.parse(fs.readFileSync(file(), 'utf8')).models)).toEqual(['good.ckpt', 'other.ckpt'])
   })
 
   it('stops the request and leaves the file in place when it cannot be set aside', async () => {
@@ -91,11 +95,45 @@ describe('params.json format version', () => {
     drainPendingWrites()
     expect(Object.entries(JSON.parse(fs.readFileSync(file(), 'utf8')))).toEqual([
       ['formatVersion', FORMAT_VERSIONS.modelParams],
-      ['model.ckpt', params],
+      ['models', { 'model.ckpt': params }],
     ])
     vi.resetModules()
     const reloaded = await import('../../src/main/model-params')
     expect(reloaded.getAllModelParams()).toEqual({ 'model.ckpt': params })
+  })
+
+  it('treats inherited names as absent on a fresh store', async () => {
+    const { getModelParams, getAllModelParams } = await import('../../src/main/model-params')
+    for (const name of ['constructor', '__proto__', 'formatVersion', 'toString']) {
+      expect(getModelParams(name)).toBeNull()
+      expect(Object.hasOwn(getAllModelParams(), name)).toBe(false)
+    }
+    expect(fs.existsSync(file())).toBe(false)
+  })
+
+  it('saves, reloads, and applies dimensions to arbitrary model names without changing its marker', async () => {
+    const names = ['constructor', '__proto__', 'formatVersion', 'models']
+    const api = await import('../../src/main/model-params')
+    for (const name of names) api.setModelParams(name, { ...params, seed: name })
+    api.drainPendingWrites()
+    const stored = JSON.parse(fs.readFileSync(file(), 'utf8'))
+    expect(stored.formatVersion).toBe(1)
+    expect(Object.keys(stored.models)).toEqual(names)
+    vi.resetModules()
+    const reloaded = await import('../../src/main/model-params')
+    for (const name of names) {
+      expect(reloaded.getModelParams(name)).toEqual({ ...params, seed: name })
+      expect(Object.hasOwn(structuredClone(reloaded.getAllModelParams()), name)).toBe(true)
+    }
+    const patch = { width: 512, height: 512, steps: 8, guidance: 1 }
+    reloaded.applyDimensionsToModels([...names, 'toString'], patch)
+    reloaded.drainPendingWrites()
+    vi.resetModules()
+    const applied = await import('../../src/main/model-params')
+    for (const name of names) expect(applied.getModelParams(name)).toEqual({ ...params, seed: name, ...patch })
+    expect(applied.getModelParams('toString')).toEqual({ ...patch, seed: '', negativePrompt: '' })
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).formatVersion).toBe(1)
+    expect(setAsideCopies()).toEqual([])
   })
 
   it('refuses every request on a file from a newer version and leaves its bytes as they were', async () => {
