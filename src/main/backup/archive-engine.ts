@@ -42,6 +42,27 @@ function archiveNames(directory: string): string[] {
   return fs.readdirSync(directory).filter((name) => /^\d{8}-\d{6}-\d{3}-utc\.zip$/.test(name)).sort().reverse()
 }
 
+function readArchiveManifest(archive: string): ArchiveManifest {
+  const contents = unzipSync(fs.readFileSync(archive), { filter: (file) => file.name === 'manifest.json' })
+  if (!contents['manifest.json']) throw new Error('Archive is missing manifest.json')
+  const raw: unknown = JSON.parse(strFromU8(contents['manifest.json']))
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('manifest.json must be a JSON object')
+  const manifest = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.backupManifest, archive)
+  if (typeof manifest.writtenAtUtc !== 'string' || !Number.isFinite(Date.parse(manifest.writtenAtUtc)) || !Array.isArray(manifest.entries)) {
+    throw new Error('Archive manifest has an invalid shape')
+  }
+  for (const value of manifest.entries) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Archive manifest entry has an invalid shape')
+    const entry = value as Record<string, unknown>
+    if (typeof entry.path !== 'string' || typeof entry.entryName !== 'string'
+      || (entry.sha256 !== undefined && typeof entry.sha256 !== 'string')
+      || (entry.skipped !== undefined && typeof entry.skipped !== 'string')) {
+      throw new Error('Archive manifest entry has an invalid shape')
+    }
+  }
+  return manifest as unknown as ArchiveManifest
+}
+
 export async function archiveStores(root: string, stores: ArchivedStore[], now: Date = new Date()): Promise<ArchiveResult> {
   const result: ArchiveResult = { warnings: [] }
   const directory = archiveDirectory(root)
@@ -83,10 +104,7 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
     if (existing[0]) {
       const latest = path.join(directory, existing[0])
       try {
-        const bytes = unzipSync(fs.readFileSync(latest), { filter: (file) => file.name === 'manifest.json' })
-        const raw: unknown = JSON.parse(strFromU8(bytes['manifest.json']))
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('manifest.json must be a JSON object')
-        const previous = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.backupManifest, latest) as Partial<ArchiveManifest>
+        const previous = readArchiveManifest(latest)
         if (JSON.stringify(previous.entries) === JSON.stringify(entries)) return result
       } catch (error) {
         result.warnings.push({ path: latest, error: serializeError(error) })
@@ -105,9 +123,17 @@ export async function archiveStores(root: string, stores: ArchivedStore[], now: 
       if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
       fs.copyFileSync(staging, destination, fs.constants.COPYFILE_EXCL)
     }
-    syncDirectory(directory)
     result.archivePath = destination
-    for (const name of archivesToThin(archiveNames(directory), now)) fs.unlinkSync(path.join(directory, name))
+    syncDirectory(directory)
+    for (const name of archivesToThin(archiveNames(directory), now)) {
+      const candidate = path.join(directory, name)
+      try {
+        readArchiveManifest(candidate)
+        fs.unlinkSync(candidate)
+      } catch (error) {
+        result.warnings.push({ path: candidate, error: serializeError(error) })
+      }
+    }
   } catch (error) {
     result.warnings.push({ path: directory, error: serializeError(error) })
   } finally {

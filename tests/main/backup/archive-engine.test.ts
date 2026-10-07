@@ -7,6 +7,8 @@ import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { archiveStores, clearAbandonedRun, runArchiveSession, type ArchiveManifest } from '../../../src/main/backup/archive-engine'
 import { getArchivedStores } from '../../../src/main/config/storage-root'
+import * as fsync from '../../../src/main/utils/fsync'
+import { archivesToThin } from '../../../src/main/backup/archive-thinning'
 import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 describe('binary-store archive', () => {
@@ -141,6 +143,25 @@ describe('binary-store archive', () => {
     expect(next.archivePath).toBeDefined()
     expect(archives()).toHaveLength(2)
   })
+  it.each(['link', 'copy'] as const)('retains the published %s archive path after directory sync fails', async (publication) => {
+    if (publication === 'copy') {
+      vi.spyOn(fs, 'linkSync').mockImplementationOnce(() => {
+        throw Object.assign(new Error('Hard links unsupported'), { code: 'ENOTSUP' })
+      })
+    }
+    const failure = new Error('Directory sync failed')
+    vi.spyOn(fsync, 'syncDirectory').mockImplementationOnce(() => { throw failure })
+
+    const result = await archiveStores(root, getArchivedStores(root), time)
+
+    expect(result.archivePath).toBe(path.join(directory(), '20261001-100000-000-utc.zip'))
+    const contents = unzipSync(fs.readFileSync(result.archivePath!))
+    expect(contents['concepts.sqlite3']).toBeDefined()
+    expect(JSON.parse(strFromU8(contents['manifest.json']))).toMatchObject({ writtenAtUtc: time.toISOString() })
+    expect(result.warnings).toEqual([{ path: directory(), error: expect.objectContaining({ message: failure.message }) }])
+    expect(fs.readdirSync(directory())).toEqual([path.basename(result.archivePath!)])
+  })
+
   it('does not replace an archive when the clock gives the same filename', async () => {
     const result = await archiveStores(root, getArchivedStores(root), time)
     const original = fs.readFileSync(result.archivePath!)
@@ -181,6 +202,46 @@ describe('binary-store archive', () => {
     expect(archives()).toEqual(['20260801-090000-000-utc.zip', path.basename(first.archivePath!)])
     expect(fs.readFileSync(first.archivePath!).equals(bytes)).toBe(true)
   })
+  it.each([
+    'newer', 'invalid zip', 'missing manifest', 'invalid JSON', 'missing marker',
+    'invalid time', 'invalid entries', 'invalid entry', 'invalid optional field',
+  ])('preserves and names an actual %s retention candidate while thinning supported peers', async (problem) => {
+    const first = await archiveStores(root, getArchivedStores(root), time)
+    const original = fs.readFileSync(first.archivePath!)
+    const candidateName = '20260801-090000-000-utc.zip'
+    const supportedName = '20260801-080000-000-utc.zip'
+    const keptName = '20260801-180000-000-utc.zip'
+    const candidate = path.join(directory(), candidateName)
+    for (const name of [candidateName, supportedName, keptName]) fs.writeFileSync(path.join(directory(), name), original)
+    if (problem === 'invalid zip') fs.writeFileSync(candidate, 'invalid zip')
+    else if (problem === 'missing manifest') fs.writeFileSync(candidate, zipSync({ 'concepts.sqlite3': new Uint8Array([1]) }))
+    else if (problem === 'invalid JSON') fs.writeFileSync(candidate, zipSync({ 'manifest.json': strToU8('{ invalid') }))
+    else rewriteManifest(candidate, (manifest) => {
+      if (problem === 'newer') return { ...manifest, formatVersion: FORMAT_VERSIONS.backupManifest + 1 }
+      if (problem === 'missing marker') {
+        const { formatVersion: _version, ...rest } = manifest
+        return rest
+      }
+      if (problem === 'invalid time') return { ...manifest, writtenAtUtc: 'invalid' }
+      if (problem === 'invalid entries') return { ...manifest, entries: {} }
+      if (problem === 'invalid entry') return { ...manifest, entries: [{ path: 3, entryName: 'concepts.sqlite3' }] }
+      return { ...manifest, entries: [{ path: '/concepts.sqlite3', entryName: 'concepts.sqlite3', skipped: 3 }] }
+    })
+    const bytes = fs.readFileSync(candidate)
+    expect(archivesToThin(archives(), time)).toEqual(expect.arrayContaining([candidateName, supportedName]))
+    database.exec("INSERT INTO concepts VALUES ('changed')")
+
+    const result = await archiveStores(root, getArchivedStores(root), new Date(time.getTime() + 1000))
+
+    expect(result.archivePath).toBeDefined()
+    expect(fs.existsSync(result.archivePath!)).toBe(true)
+    expect(result.warnings).toEqual([{ path: candidate, error: expect.objectContaining({ message: expect.any(String) }) }])
+    if (problem === 'newer') expect(result.warnings[0].error).toMatchObject({ name: 'NewerFormatError' })
+    expect(fs.readFileSync(candidate)).toEqual(bytes)
+    expect(fs.existsSync(path.join(directory(), supportedName))).toBe(false)
+    expect(fs.readFileSync(path.join(directory(), keptName))).toEqual(original)
+  })
+
   it('reports archive failures without escaping into startup or quit', async () => {
     vi.spyOn(fs, 'mkdirSync').mockImplementationOnce(() => { throw new Error('full') })
     const result = await runArchiveSession('begin', root, getArchivedStores(root))
