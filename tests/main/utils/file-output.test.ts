@@ -9,7 +9,8 @@ import {
   outputBaseName,
   writeImageOutput,
   deleteImageOutput,
-  trashImageOutput
+  trashImageOutput,
+  imageOutputFileStates
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
 import { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
@@ -264,6 +265,13 @@ describe('assertImageExt', () => {
 
 
 describe('governing image-sidecar deletion admission', () => {
+  it('keeps inaccessible and unsafe cleanup outcomes unknown rather than claiming removal', () => {
+    vi.spyOn(fs, 'lstatSync').mockImplementation(() => { throw Object.assign(new Error('access denied'), { code: 'EACCES' }) })
+    expect(imageOutputFileStates('image', 'png')).toEqual({ image: 'unknown', metadata: 'unknown' })
+    vi.mocked(fs.lstatSync).mockClear()
+    expect(imageOutputFileStates('../outside', 'png')).toEqual({ image: 'unknown', metadata: 'unknown' })
+    expect(fs.lstatSync).not.toHaveBeenCalled()
+  })
   it.each(['permanent', 'Trash'] as const)('preserves both outputs with a future sidecar during %s deletion', async (operation) => {
     const image = path.join(sessionDir, 'image.png')
     const sidecar = path.join(sessionDir, 'image.json')

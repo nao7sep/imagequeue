@@ -5,6 +5,7 @@ import { useSessionDraft } from '../context/SessionDraftContext'
 import { CliJobRow } from './CliJobsPanel'
 import { Icon } from './Icon'
 import { useI18n } from '../i18n/I18nContext'
+import type { Message } from '../../../shared/i18n/translate'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import {
   OPERATIONAL_FAILURE_EVENT,
@@ -30,18 +31,18 @@ import './ToastStack.css'
 // hooks/useNotifications.ts) are a separate, out-of-app signal and never show
 // while this window has focus.
 
-interface FailureEntry { message: MessageKey; seq: number }
+interface FailureEntry { message: MessageKey | Message; seq: number }
 
 interface ToastView {
   id: string
   seq: number
   title?: MessageKey
-  body: MessageKey
+  body: MessageKey | Message
   closeLabel: MessageKey
   onClose: () => void
 }
 
-interface Announcement { seq: number; parts: MessageKey[] }
+interface Announcement { seq: number; parts: (MessageKey | Message)[] }
 
 function without<T>(record: Record<string, T>, key: string): Record<string, T> {
   if (!(key in record)) return record
@@ -51,7 +52,8 @@ function without<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 export function ToastStack(): React.JSX.Element {
-  const { t } = useI18n()
+  const { t, text } = useI18n()
+  const renderMessage = (value: MessageKey | Message): string => typeof value === 'string' ? t(value) : text(value)
   const { jobs, removeJob } = useCliJobs()
   const { draftIssue, dismissDraftIssue } = useSessionDraft()
 
@@ -132,7 +134,7 @@ export function ToastStack(): React.JSX.Element {
           mounted; the visible toasts carry no live role, so nothing is read
           twice and focus never moves. */}
       <div className="visually-hidden" role="alert" aria-live="assertive">
-        {announcement && <span key={announcement.seq}>{announcement.parts.map((part) => t(part)).join(' ')}</span>}
+        {announcement && <span key={announcement.seq}>{announcement.parts.map((part) => renderMessage(part)).join(' ')}</span>}
       </div>
       {hasContent && (
         <section className="toast-stack" aria-label={t('toasts.region')} ref={stackRef}>
@@ -140,7 +142,7 @@ export function ToastStack(): React.JSX.Element {
             <div key={toast.id} className={`toast${toast.title ? ' toast-titled' : ''}`} data-toast-id={toast.id}>
               <div className="toast-copy">
                 {toast.title && <strong>{t(toast.title)}</strong>}
-                <span>{t(toast.body)}</span>
+                <span>{renderMessage(toast.body)}</span>
               </div>
               <button className="toast-close" type="button" aria-label={t(toast.closeLabel)} onClick={toast.onClose}>
                 <Icon name="close" />

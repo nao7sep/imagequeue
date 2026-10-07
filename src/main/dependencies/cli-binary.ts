@@ -5,8 +5,9 @@
 //
 // Install is verify-once-at-acquisition: download to temp/, verify the SHA-256
 // against the release's published digest, confirm the slice runs native arm64,
-// then atomically move it into bin/. A failure at any step leaves no partial
-// artifact and throws a clean error; nothing is verified again on later use.
+// then atomically move it into bin/. Pre-publication failures reject; once the
+// binary is published, secondary persistence failures return warnings. Nothing
+// is verified again on later use.
 
 import fs from 'fs'
 import { execFile } from 'child_process'
@@ -18,7 +19,7 @@ import { getBinDir, getCliBinaryPath, getCliMetaPath, allocateTempPath, discardT
 import { downloadToFile, sha256File, type DownloadProgress } from './download'
 import type { CliRelease } from './cli-release'
 import { isCliReleaseTag } from './cli-version'
-import type { DependencyProgress } from '../../shared/types'
+import type { CliInstallWarning, DependencyProgress } from '../../shared/types'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 
 const execFileAsync = promisify(execFile)
@@ -124,7 +125,8 @@ export function publishCliBinary(
   tempPath: string,
   tag: string,
   sha256: string
-): void {
+): CliInstallWarning[] {
+  refuseNewerCliSidecar()
   fs.mkdirSync(getBinDir(), { recursive: true })
   if (!isCliInstalled()) {
     // An orphan sidecar has no artifact to preserve and must not label the first
@@ -133,32 +135,43 @@ export function publishCliBinary(
     syncDirectory(getBinDir())
   }
   fs.renameSync(tempPath, getCliBinaryPath())
-  syncDirectory(getBinDir())
-  const meta: CliMeta = {
-    tag,
-    sha256,
-    installedAt: new Date().toISOString(),
-    binaryId: cliBinaryId(),
+  const warnings: CliInstallWarning[] = []
+  try { syncDirectory(getBinDir()) } catch (error) {
+    warnings.push('sync-incomplete')
+    log('warn', 'Draw Things CLI was published but directory sync failed', { error: serializeError(error) })
   }
-  // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
-  // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
-  // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
-  // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
-  // colocated in a binary-bearing directory").
-  writeJsonAtomic(getCliMetaPath(), markFormat(meta, FORMAT_VERSIONS.cliSidecar), false)
+  try {
+    const meta: CliMeta = {
+      tag,
+      sha256,
+      installedAt: new Date().toISOString(),
+      binaryId: cliBinaryId(),
+    }
+    // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
+    // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
+    // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
+    // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
+    // colocated in a binary-bearing directory").
+    writeJsonAtomic(getCliMetaPath(), markFormat(meta, FORMAT_VERSIONS.cliSidecar), false)
+  } catch (error) {
+    const warning = readInstalledCliTag() === tag ? 'sync-incomplete' : 'identity-unavailable'
+    if (!warnings.includes(warning)) warnings.push(warning)
+    log('warn', 'Draw Things CLI was published but identity persistence failed', { error: serializeError(error) })
+  }
+  return warnings
 }
 
 /**
  * Download, verify, arch-gate, and install the given release into bin/, recording
- * its tag. Reports progress while the body streams. Throws (leaving no partial
- * artifact) when the release has no published digest, the hash mismatches, the
- * binary is not native arm64, or any I/O step fails.
+ * its tag. Reports progress while the body streams. Pre-publication failures
+ * reject and discard staging. After publication, identity or directory-sync
+ * failures retain the installed binary and return secondary warnings.
  */
 export async function installCliRelease(
   release: CliRelease,
   onProgress?: (progress: DependencyProgress) => void,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<CliInstallWarning[]> {
   if (!release.sha256) {
     throw new Error('Release asset has no published checksum; refusing to install unverified binary')
   }
@@ -201,8 +214,9 @@ export async function installCliRelease(
     // version-unknown and remains re-acquirable; the new binary can never inherit
     // the old binary's release tag after a sync or sidecar-write failure.
     signal?.throwIfAborted()
-    publishCliBinary(tempPath, release.tag, release.sha256)
+    const warnings = publishCliBinary(tempPath, release.tag, release.sha256)
     log('info', 'draw-things-cli installed', { tag: release.tag })
+    return warnings
   } catch (err) {
     discardTempPath(tempPath)
     throw err

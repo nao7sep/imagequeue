@@ -13,6 +13,7 @@ import {
   getCliMetaPath,
 } from '../../../src/main/dependencies/paths'
 import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
+import * as fsync from '../../../src/main/utils/fsync'
 
 let home: string
 let previousHome: string | undefined
@@ -31,6 +32,31 @@ afterEach(() => {
 })
 
 describe('publishCliBinary', () => {
+  it.each([false, true])('refuses a newer governing sidecar at final publication (orphan: %s)', (orphan) => {
+    fs.mkdirSync(getBinDir(), { recursive: true })
+    if (!orphan) fs.writeFileSync(getCliBinaryPath(), 'newer binary')
+    const newer = JSON.stringify({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
+    fs.writeFileSync(getCliMetaPath(), newer)
+    const staged = path.join(home, 'new-cli')
+    fs.writeFileSync(staged, 'staged binary')
+    expect(() => publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64))).toThrow(NewerFormatError)
+    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(newer)
+    expect(fs.existsSync(getCliBinaryPath())).toBe(!orphan)
+    if (!orphan) expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('newer binary')
+    expect(fs.readFileSync(staged, 'utf8')).toBe('staged binary')
+  })
+
+  it('returns installed with a secondary warning after postcommit directory sync fails', () => {
+    fs.mkdirSync(getBinDir(), { recursive: true })
+    fs.writeFileSync(getCliBinaryPath(), 'old binary')
+    const staged = path.join(home, 'new-cli')
+    fs.writeFileSync(staged, 'new binary')
+    vi.spyOn(fsync, 'syncDirectory').mockImplementationOnce(() => { throw new Error('sync failed') })
+    expect(publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64))).toEqual(['sync-incomplete'])
+    expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('new binary')
+    expect(readInstalledCliTag()).toBe('v1.20260822.0')
+  })
+
   it('publishes the binary and its matching identity', () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     const staged = path.join(home, 'new-cli')
@@ -70,8 +96,7 @@ describe('publishCliBinary', () => {
       realRename(source, destination)
     })
 
-    expect(() => publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64)))
-      .toThrow('sidecar publication failed')
+    expect(publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64))).toEqual(['identity-unavailable'])
     expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('new binary')
     expect(fs.existsSync(getCliMetaPath())).toBe(true)
     expect(readInstalledCliTag()).toBeNull()

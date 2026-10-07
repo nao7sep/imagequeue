@@ -10,6 +10,8 @@ import {
 } from 'react'
 import type {
   DependenciesState,
+  CliInstallResult,
+  CliInstallWarning,
   DependencyId,
   DependencyProgress,
 } from '../../../shared/types'
@@ -27,6 +29,7 @@ interface ControllerState {
   progress: DependencyProgress | null
   errors: Partial<Record<DependencyOperation | 'load' | 'cancel', MessageKey>>
   terminalOutcomes: Partial<Record<DependencyOperation, DependencyTerminalOutcome>>
+  warnings: Partial<Record<DependencyOperation, CliInstallWarning[]>>
 }
 
 type Action =
@@ -39,6 +42,7 @@ type Action =
       snapshot: DependenciesState | null
       error: MessageKey | null
       cancelled: boolean
+      warnings: CliInstallWarning[]
     }
   | { type: 'progress'; progress: DependencyProgress }
   | { type: 'cancel-failure'; error: MessageKey }
@@ -49,6 +53,7 @@ const INITIAL_STATE: ControllerState = {
   progress: null,
   errors: {},
   terminalOutcomes: {},
+  warnings: {},
 }
 
 function withoutError(
@@ -124,6 +129,13 @@ function reducer(state: ControllerState, action: Action): ControllerState {
       const terminalOutcomes = { ...state.terminalOutcomes }
       delete terminalOutcomes[action.operation]
       if (action.cancelled) terminalOutcomes[action.operation] = 'cancelled'
+      const warnings = { ...state.warnings }
+      if (action.snapshot && !action.error && !action.cancelled) warnings[action.operation] = action.warnings
+      if (action.operation === 'check' && action.snapshot && !action.error && !action.cancelled) {
+        // A check repairs check facts only; it cannot repair artifact identity
+        // or establish that an earlier file sync completed.
+        warnings.cli = warnings.cli?.filter((warning) => warning !== 'check-not-saved')
+      }
       return {
         ...state,
         snapshot: action.snapshot
@@ -133,6 +145,7 @@ function reducer(state: ControllerState, action: Action): ControllerState {
         progress: action.operation === 'cli' ? null : state.progress,
         errors,
         terminalOutcomes,
+        warnings,
       }
     }
     case 'progress':
@@ -210,7 +223,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
 
   const run = useCallback(async (
     operation: DependencyOperation,
-    invoke: () => Promise<DependenciesState>,
+    invoke: () => Promise<DependenciesState | CliInstallResult>,
   ): Promise<void> => {
     if (active.current.has(operation)) return
     active.current.add(operation)
@@ -218,8 +231,13 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     dispatch({ type: 'start', operation })
     let snapshot: DependenciesState | null = null
     let error: MessageKey | null = null
+    let warnings: CliInstallWarning[] = []
+    let committed = false
     try {
-      snapshot = await invoke()
+      const result = await invoke()
+      committed = true
+      snapshot = 'warnings' in result ? result.state : result
+      if ('warnings' in result) warnings = result.warnings
     } catch (operationError) {
       if (!cancelled.current.has(operation)) error = presentFailure('dependencies-change', operationError)
       try {
@@ -233,7 +251,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
       const wasCancelled = cancelled.current.has(operation)
       active.current.delete(operation)
       cancelled.current.delete(operation)
-      dispatch({ type: 'settle', operation, snapshot, error, cancelled: wasCancelled })
+      dispatch({ type: 'settle', operation, snapshot, error, warnings, cancelled: wasCancelled && !committed })
       if (snapshot) announceChange()
     }
   }, [announceChange])
@@ -276,7 +294,15 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   }, [])
 
   // Several failures stack line by line through one entry, never a joined string.
-  const errorMessages = Object.values(controller.errors).map((key) => message(key))
+  const warningKeys: Record<CliInstallWarning, MessageKey> = {
+    'identity-unavailable': 'dependencies.cliIdentityNotSaved',
+    'sync-incomplete': 'dependencies.cliSyncIncomplete',
+    'check-not-saved': 'dependencies.cliCheckNotSaved',
+  }
+  const errorMessages = [
+    ...Object.values(controller.errors).map((key) => message(key)),
+    ...Object.values(controller.warnings).flatMap((warnings) => warnings.map((warning) => message(warningKeys[warning]))),
+  ]
   const error: Message | null = errorMessages.length === 0
     ? null
     : errorMessages.reduceRight((rest, first) => message('common.lines', { first, rest }))

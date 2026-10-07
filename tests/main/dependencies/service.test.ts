@@ -15,11 +15,14 @@ vi.mock('../../../src/main/recommendations', async (importOriginal) => ({
 }))
 
 import { resolveLatestCliRelease } from '../../../src/main/dependencies/cli-release'
+import * as cliBinary from '../../../src/main/dependencies/cli-binary'
+import * as fsync from '../../../src/main/utils/fsync'
 import { fetchLatestRecommendationsModified } from '../../../src/main/recommendations'
 import {
   checkAllDependencies,
   checkDependenciesAtLaunch,
   getDependenciesState,
+  installOrUpdateCli,
 } from '../../../src/main/dependencies/service'
 import { readDependenciesCache, updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
@@ -45,12 +48,52 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   if (prevHome === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
   else process.env.IMAGEQUEUE_DATA_DIR = prevHome
   fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 })
 
 describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
+  it('reports a secondary sync warning when check facts were published before their sync failed', async () => {
+    const tag = 'v1.20261004.0'
+    resolveMock.mockResolvedValue({ tag, assetUrl: 'https://fixture.invalid/cli', sha256: 'a'.repeat(64) })
+    vi.spyOn(cliBinary, 'installCliRelease').mockImplementation(async () => {
+      const staged = path.join(home, 'verified-cli')
+      fs.writeFileSync(staged, 'verified fixture')
+      return cliBinary.publishCliBinary(staged, tag, 'a'.repeat(64))
+    })
+    const sync = fsync.syncDirectory
+    vi.spyOn(fsync, 'syncDirectory').mockImplementation((directory) => {
+      if (directory === home) throw new Error('check-cache sync failed')
+      sync(directory)
+    })
+    const result = await installOrUpdateCli()
+    expect(result.warnings).toEqual(['sync-incomplete'])
+    expect(result.state.cli).toMatchObject({ state: 'up-to-date', installedLabel: tag, latestLabel: tag })
+    expect(readDependenciesCache().cli.lastKnownLatest).toBe(tag)
+  })
+
+  it('returns the physically installed CLI with a warning when secondary check-cache persistence fails', async () => {
+    const tag = 'v1.20261004.0'
+    resolveMock.mockResolvedValue({ tag, assetUrl: 'https://fixture.invalid/cli', sha256: 'a'.repeat(64) })
+    vi.spyOn(cliBinary, 'installCliRelease').mockImplementation(async () => {
+      const staged = path.join(home, 'verified-cli')
+      fs.writeFileSync(staged, 'verified fixture')
+      return cliBinary.publishCliBinary(staged, tag, 'a'.repeat(64))
+    })
+    const rename = fs.renameSync
+    vi.spyOn(fs, 'renameSync').mockImplementation((source, target) => {
+      if (String(target) === path.join(home, 'dependencies.json')) throw new Error('EACCES /private SECRET_SENTINEL')
+      rename(source, target)
+    })
+    const result = await installOrUpdateCli()
+    expect(result.warnings).toEqual(['check-not-saved'])
+    expect(result.state.cli).toMatchObject({ state: 'installed-unchecked', installedLabel: tag })
+    expect(fs.readFileSync(path.join(home, 'bin', 'draw-things-cli'), 'utf8')).toBe('verified fixture')
+    expect(JSON.stringify(result)).not.toContain('SECRET_SENTINEL')
+  })
+
   it('writes NO persisted CLI fact when the latest-release lookup fails', async () => {
     resolveMock.mockResolvedValue(null) // offline / rate-limited / non-200
     await expect(checkAllDependencies()).rejects.toThrow('Could not reach')

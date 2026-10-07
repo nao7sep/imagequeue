@@ -708,6 +708,35 @@ describe('manifest identity and consumed task parameters', () => {
 })
 
 describe('governing session manifest mutation admission', () => {
+  it.each([false, true])('returns committed removal and the exact remaining metadata after partial file cleanup (Trash: %s)', async (toTrash) => {
+    settings.deleteToTrash = toTrash
+    const dir = getSessionDir()
+    const image = path.join(dir, 'partial.png')
+    const sidecar = path.join(dir, 'partial.json')
+    fs.writeFileSync(image, 'image')
+    fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar }))
+    queueManager.replaceAllTasks(withTasks([makeTask('partial', 'completed', { baseName: 'partial', imagePath: image })]))
+    persistActiveSession()
+    const hostile = new Error('EACCES /private/staging SECRET_SENTINEL')
+    if (toTrash) trashItem.mockImplementation(async (file) => {
+      if (file === sidecar) throw hostile
+      fs.unlinkSync(file)
+    })
+    else {
+      const unlink = fs.unlinkSync
+      vi.spyOn(fs, 'unlinkSync').mockImplementation((file) => {
+        if (file === sidecar) throw hostile
+        unlink(file)
+      })
+    }
+    const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'partial')
+    expect(result).toEqual({ removed: true, sessionId: getSessionId(), baseName: 'partial', ext: 'png', files: { image: 'removed', metadata: 'remaining' } })
+    expect(readManifest(dir).tasks.openai).toEqual([])
+    expect(fs.existsSync(image)).toBe(false)
+    expect(fs.existsSync(sidecar)).toBe(true)
+    expect(JSON.stringify(result)).not.toContain('SECRET_SENTINEL')
+  })
+
   it.each([false, true])('refuses Delete after listing when the governing manifest becomes newer (Trash: %s)', async (toTrash) => {
     settings.deleteToTrash = toTrash
     const id = '20260115-000000-utc'
@@ -741,7 +770,8 @@ describe('governing session manifest mutation admission', () => {
     fs.writeFileSync(sidecar, bytes)
     queueManager.replaceAllTasks(withTasks([makeTask('protected', 'completed', { baseName: 'protected', imagePath: image })]))
     persistActiveSession()
-    await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'protected')
+    const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'protected')
+    expect(result).toMatchObject({ removed: true, files: { image: 'remaining', metadata: 'remaining' } })
     expect(readManifest(dir).tasks.openai).toEqual([])
     expect(queueManager.getTask('openai', 'protected')).toBeUndefined()
     expect(fs.readFileSync(image, 'utf8')).toBe('image')

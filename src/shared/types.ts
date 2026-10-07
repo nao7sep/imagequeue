@@ -77,6 +77,21 @@ export interface DependenciesState {
   platformSupported: boolean
 }
 
+export type CliInstallWarning = 'identity-unavailable' | 'sync-incomplete' | 'check-not-saved'
+export interface CliInstallResult {
+  state: DependenciesState
+  warnings: CliInstallWarning[]
+}
+
+export type OutputFileState = 'removed' | 'remaining' | 'unknown'
+export interface TaskDeletionResult {
+  removed: boolean
+  sessionId?: string
+  baseName?: string
+  ext?: 'png' | 'jpg' | 'webp'
+  files?: { image: OutputFileState; metadata: OutputFileState }
+}
+
 // Progress for the CLI binary download (the only long-running dependency op).
 // Streamed over 'dependencies:progress' while installCli/updateCli runs.
 export interface DependencyProgress {

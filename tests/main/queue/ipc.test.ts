@@ -43,6 +43,7 @@ vi.mock('../../../src/main/session', () => ({
     mocks.sessionMutationPending = true
     try { return await operation() } finally { mocks.sessionMutationPending = false }
   },
+  getSessionId: () => 'A',
   getSessionDir: () => mocks.sessionDir,
 }))
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState }))

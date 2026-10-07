@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
 vi.mock('../../../src/main/session', () => ({
   persistActiveSession: () => undefined,
   mutateSession: (operation: () => Promise<unknown>) => operation(),
+  getSessionId: () => 'A',
   getSessionDir: () => '/output/A',
 }))
 vi.mock('../../../src/main/config', () => ({ loadConfig: () => ({ general: { delete_to_trash: false } }) }))

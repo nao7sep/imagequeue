@@ -41,6 +41,35 @@ function renderModal(onClose = vi.fn()): ReturnType<typeof render> {
 }
 
 describe('DependenciesModal cancellation', () => {
+  it('retains committed installation warnings and clears only check facts repaired by a successful check', async () => {
+    const installed: DependenciesState = { ...initialState, cli: { ...initialState.cli, state: 'installed-unchecked' } }
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      installCli: vi.fn(async () => ({ state: installed, warnings: ['identity-unavailable', 'check-not-saved'] })),
+      checkDependencies: vi.fn().mockRejectedValueOnce(new Error('SECRET_SENTINEL')).mockResolvedValueOnce(installed),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+    renderModal()
+    fireEvent.click((await until(() => screen.getAllByRole('button', { name: 'Install' })))[0])
+    await until(() => {
+      expect(screen.getByRole('alert').textContent).toContain('Draw Things CLI was installed, but its version is unavailable.')
+      expect(screen.getByRole('alert').textContent).toContain('update-check information could not be saved')
+      expect(screen.getByText(/^Version unreadable/)).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+    await until(() => {
+      expect(screen.getByRole('alert').textContent).toContain('update-check information could not be saved')
+      expect(screen.getByRole('alert').textContent).toContain('The managed-tool operation could not be completed')
+      expect(screen.getByRole('alert').textContent).not.toContain('SECRET_SENTINEL')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+    await until(() => {
+      expect(screen.getByRole('alert').textContent).toContain('its version is unavailable')
+      expect(screen.getByRole('alert').textContent).not.toContain('update-check information could not be saved')
+    })
+  })
+
   it('emphasizes required absence without coloring optional absence as a warning', async () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),

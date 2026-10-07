@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // download is replaced, by copying the fixture's bytes into the staging file
 // with a quarantine flag, as a browser download would carry.
 
-const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0) as Buffer }))
+const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0) as Buffer, afterDownload: () => {} }))
 
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../../src/main/dependencies/download', async (importOriginal) => ({
@@ -18,11 +18,12 @@ vi.mock('../../../src/main/dependencies/download', async (importOriginal) => ({
   downloadToFile: async (_url: string, destination: string) => {
     fs.writeFileSync(destination, fixture.bytes)
     execFileSync('xattr', ['-w', 'com.apple.quarantine', '0081;00000000;Fixture;', destination])
+    fixture.afterDownload()
   },
 }))
 
 const { installCliRelease, readInstalledCliTag } = await import('../../../src/main/dependencies/cli-binary')
-const { getCliBinaryPath, getTempDir } = await import('../../../src/main/dependencies/paths')
+const { getCliBinaryPath, getCliMetaPath, getBinDir, getTempDir } = await import('../../../src/main/dependencies/paths')
 
 // The smallest Mach-O lipo reads: a 64-bit executable header of one architecture.
 function machO(cpuType: number, cpuSubtype: number): Buffer {
@@ -50,6 +51,7 @@ let home: string
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-cli-install-'))
   vi.stubEnv('IMAGEQUEUE_DATA_DIR', home)
+  fixture.afterDownload = () => {}
 })
 
 afterEach(() => {
@@ -58,6 +60,19 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform !== 'darwin')('installCliRelease on macOS', () => {
+  it('refuses a sidecar that became newer during acquisition and removes only its staging', async () => {
+    const bytes = JSON.stringify({ formatVersion: 999 })
+    fixture.afterDownload = () => {
+      fs.mkdirSync(getBinDir(), { recursive: true })
+      fs.writeFileSync(getCliBinaryPath(), 'newer binary')
+      fs.writeFileSync(getCliMetaPath(), bytes)
+    }
+    await expect(installCliRelease(release(ARM64))).rejects.toMatchObject({ name: 'NewerFormatError', path: getCliMetaPath() })
+    expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('newer binary')
+    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(getTempDir())).toEqual([])
+  })
+
   it('installs an arm64 binary executable, with the quarantine flag removed, and records its release', async () => {
     const arm64 = release(ARM64)
     await installCliRelease(arm64)

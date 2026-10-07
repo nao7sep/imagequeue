@@ -1,10 +1,10 @@
 import { handle } from '../ipc-boundary'
 import { queueManager } from './queue-manager'
-import { BackendId, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
-import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
+import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult } from '../../shared/types'
+import { deleteImageOutput, trashImageOutput, imageExtFromPath, imageOutputFileStates } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
-import { getSessionDir, mutateSession, persistActiveSession } from '../session'
+import { getSessionDir, getSessionId, mutateSession, persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
 import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
@@ -78,13 +78,16 @@ export function registerQueueIpc(): void {
     if (!task) return
     return mutateSession(async () => {
       const sessionDir = getSessionDir()
+      const result: TaskDeletionResult = { removed: false, sessionId: getSessionId() }
       const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
       log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
       // File cleanup is best-effort. Settlement below applies only to the
       // captured session and task, following PLAYBOOK's Own the work in flight.
       if (task.baseName) {
+        result.baseName = task.baseName
         const ext = imageExtFromPath(task.imagePath)
         if (ext) {
+          result.ext = ext
           try {
             if (toTrash) {
               await trashImageOutput(task.baseName, ext)
@@ -93,17 +96,21 @@ export function registerQueueIpc(): void {
             }
           } catch (err) {
             log('error', 'Failed to remove task files; removing the queue entry anyway', { taskId, toTrash, error: serializeError(err) })
+            result.files = imageOutputFileStates(task.baseName, ext)
           }
         } else {
           log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
+          result.files = { image: 'unknown', metadata: 'unknown' }
         }
       } else {
         log('warn', 'Task has no baseName; nothing to remove on disk', { taskId, backend })
       }
-      if (getSessionDir() !== sessionDir || queueManager.getTask(backend, taskId) !== task) return
+      if (getSessionDir() !== sessionDir || queueManager.getTask(backend, taskId) !== task) return result
       queueManager.removeTask(backend, taskId)
       persistActiveSession()
       publishQueueState()
+      result.removed = true
+      return result
     })
   })
 

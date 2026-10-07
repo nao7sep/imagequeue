@@ -14,9 +14,10 @@ import { useSettings } from './SettingsContext'
 import { useConfirm } from './ConfirmContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { nearestInAdjacentColumn, nextSelectionAfterRemoval } from '../utils/selection-recovery'
-import { recordOperationalDiagnostic } from '../utils/operationalFailure'
+import { OPERATIONAL_FAILURE_EVENT, recordOperationalDiagnostic } from '../utils/operationalFailure'
 import { useI18n } from '../i18n/I18nContext'
 import type { ViewingSurface } from '../../../shared/viewing'
+import { message } from '../../../shared/i18n/translate'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export interface Selection {
@@ -293,7 +294,22 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       ownershipKey: 'queue-mutation',
       message: 'task.deleteFailed',
       diagnosticMessage: 'Failed to delete selected task',
-      invoke: () => window.electronAPI.deleteWithFiles(backend, taskId),
+      invoke: async () => {
+        const result = await window.electronAPI.deleteWithFiles(backend, taskId)
+        if (!result?.removed || !result.files || !result.baseName) return
+        const { image, metadata } = result.files
+        const key = image === 'unknown' || metadata === 'unknown' ? 'task.deleteFilesUnknown'
+          : image === 'remaining' && metadata === 'remaining' ? 'task.deleteFilesRemain'
+            : image === 'remaining' ? 'task.deleteImageRemains'
+              : metadata === 'remaining' ? 'task.deleteMetadataRemains' : null
+        if (!key) return
+        const name = key === 'task.deleteImageRemains' ? `${result.baseName}.${result.ext}`
+          : key === 'task.deleteMetadataRemains' ? `${result.baseName}.json` : result.baseName
+        window.dispatchEvent(new CustomEvent(OPERATIONAL_FAILURE_EVENT, { detail: {
+          key: `task-delete:${result.sessionId}:${result.baseName}`,
+          message: message(key, { name }),
+        } }))
+      },
     })
     if (outcome === 'failed' && movedSelection) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })

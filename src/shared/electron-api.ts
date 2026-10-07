@@ -13,6 +13,8 @@ import {
   LocalModelInfo,
   RecommendedParams,
   DependenciesState,
+  CliInstallResult,
+  TaskDeletionResult,
   DependencyProgress,
   DrawThingsModelParams,
   SessionListEntry,
@@ -84,7 +86,7 @@ export interface ElectronAPI {
   getAllStoredTasks: () => Promise<Record<BackendId, Task[]>>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
-  deleteWithFiles: (backend: BackendId, taskId: string) => Promise<void>
+  deleteWithFiles: (backend: BackendId, taskId: string) => Promise<TaskDeletionResult | void>
   retryTask: (backend: BackendId, taskId: string) => Promise<void>
   resumeInterruptedTasks: () => Promise<number>
   // Queue control (the queue mini-menu)
@@ -185,7 +187,7 @@ export interface ElectronAPI {
   // returns the full DependenciesState so the renderer re-renders from one snapshot.
   getDependenciesState: () => Promise<DependenciesState>
   checkDependencies: () => Promise<DependenciesState>
-  installCli: () => Promise<DependenciesState>
+  installCli: () => Promise<CliInstallResult>
   downloadRecommendations: () => Promise<DependenciesState>
   setCheckUpdatesAtLaunch: (value: boolean) => Promise<DependenciesState>
   cancelDependencyOperations: () => Promise<void>

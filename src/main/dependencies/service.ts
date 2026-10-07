@@ -24,7 +24,7 @@ import {
   type DependencyComparison,
 } from './state'
 import { readDependenciesCache, updateDependenciesCache } from './store'
-import type { DependenciesState, DependencyInfo, DependencyProgress } from '../../shared/types'
+import type { CliInstallResult, DependenciesState, DependencyInfo, DependencyProgress } from '../../shared/types'
 
 function checkUpdatesAtLaunch(): boolean {
   return loadConfig().image_backends.drawthings.check_updates_at_launch
@@ -178,7 +178,7 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
 export async function installOrUpdateCli(
   onProgress?: (progress: DependencyProgress) => void,
   signal?: AbortSignal
-): Promise<DependenciesState> {
+): Promise<CliInstallResult> {
   return withWholeOperationTimeout(
     signal,
     CLI_DOWNLOAD_LIMITS.wholeTimeoutMs,
@@ -188,12 +188,19 @@ export async function installOrUpdateCli(
       if (!release) {
         throw new Error('Could not reach the Draw Things release server')
       }
-      await installCliRelease(release, onProgress, boundedSignal)
-      updateDependenciesCache((cache) => {
+      const warnings = await installCliRelease(release, onProgress, boundedSignal)
+      const checkedAt = new Date().toISOString()
+      try { updateDependenciesCache((cache) => {
         cache.cli.lastKnownLatest = release.tag
-        cache.cli.lastCheckedAtUtc = new Date().toISOString()
-      })
-      return getDependenciesState()
+        cache.cli.lastCheckedAtUtc = checkedAt
+      }) } catch (error) {
+        const saved = readDependenciesCache().cli
+        const warning = saved.lastKnownLatest === release.tag && saved.lastCheckedAtUtc === checkedAt
+          ? 'sync-incomplete' : 'check-not-saved'
+        if (!warnings.includes(warning)) warnings.push(warning)
+        log('warn', 'Draw Things CLI was installed but update-check information was not saved', { error: serializeError(error) })
+      }
+      return { state: getDependenciesState(), warnings }
     }
   )
 }

@@ -1,10 +1,11 @@
 import { serializeError } from '../../../shared/serialize-error'
+import type { Message } from '../../../shared/i18n/translate'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export const OPERATIONAL_FAILURE_EVENT = 'imagequeue-operational-failure'
 export const OPERATIONAL_RESOLVED_EVENT = 'imagequeue-operational-resolved'
 
-export interface OperationalFailureDetail { key: string; message: MessageKey }
+export interface OperationalFailureDetail { key: string; message: MessageKey | Message }
 export interface OperationalResolvedDetail { key: string }
 
 export function recordOperationalDiagnostic(

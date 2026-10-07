@@ -14,6 +14,8 @@ import {
   LocalModelInfo,
   RecommendedParams,
   DependenciesState,
+  CliInstallResult,
+  TaskDeletionResult,
   DependencyProgress,
   DrawThingsModelParams,
   SessionListEntry,
@@ -92,7 +94,7 @@ const api = {
   restoreTask: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:restoreTask', backend, taskId),
 
-  deleteWithFiles: (backend: BackendId, taskId: string): Promise<void> =>
+  deleteWithFiles: (backend: BackendId, taskId: string): Promise<TaskDeletionResult | void> =>
     ipcRenderer.invoke('queue:deleteWithFiles', backend, taskId),
 
   retryTask: (backend: BackendId, taskId: string): Promise<void> =>
@@ -321,7 +323,7 @@ const api = {
   checkDependencies: (): Promise<DependenciesState> =>
     ipcRenderer.invoke('dependencies:check'),
 
-  installCli: (): Promise<DependenciesState> =>
+  installCli: (): Promise<CliInstallResult> =>
     ipcRenderer.invoke('dependencies:installCli'),
 
   downloadRecommendations: (): Promise<DependenciesState> =>

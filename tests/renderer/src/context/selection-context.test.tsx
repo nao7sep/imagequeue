@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, cleanup } from '@testing-library/react'
 import type { BackendId, Task } from '../../../../src/shared/types'
+import { OPERATIONAL_FAILURE_EVENT } from '../../../../src/renderer/src/utils/operationalFailure'
 
 // Drives the real SelectionContext against stubbed queue/settings/confirm, so the
 // delete rules are exercised where they live rather than through a column's
@@ -111,6 +112,27 @@ async function deleteById(taskId: string): Promise<void> {
 }
 
 describe('deleteTask', () => {
+  it.each([
+    ['remaining', 'remaining', 'task.deleteFilesRemain', 'img-1'],
+    ['removed', 'remaining', 'task.deleteMetadataRemains', 'img-1.json'],
+    ['remaining', 'removed', 'task.deleteImageRemains', 'img-1.png'],
+    ['unknown', 'remaining', 'task.deleteFilesUnknown', 'img-1'],
+  ])('retains a surviving named consequence for image %s, metadata %s', async (image, metadata, key, name) => {
+    const notices: unknown[] = []
+    const listener = (event: Event): void => { notices.push((event as CustomEvent).detail) }
+    window.addEventListener(OPERATIONAL_FAILURE_EVENT, listener)
+    try {
+      api.deleteWithFiles.mockResolvedValueOnce({ removed: true, sessionId: 'A', baseName: 'img-1', ext: 'png', files: { image, metadata } })
+      const { ctx } = mountSelection()
+      await act(async () => { await ctx().deleteTask('openai', 't-done') })
+      expect(notices).toEqual([{ key: 'task-delete:A:img-1', message: { key, values: { name } } }])
+      expect(ctx().taskActionResults['t-done']).toBeUndefined()
+      expect(api.appLog).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener(OPERATIONAL_FAILURE_EVENT, listener)
+    }
+  })
+
   it('deletes a task that never produced an image', async () => {
     await deleteById('t-queued')
     expect(api.deleteWithFiles).toHaveBeenCalledWith('openai', 't-queued')

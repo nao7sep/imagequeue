@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { shell } from 'electron'
 import { getSessionDir } from '../session'
-import { BackendId } from '../../shared/types'
+import { BackendId, OutputFileState } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log, serializeError } from '../logger'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
@@ -267,6 +267,21 @@ function admitImageSidecar(file: string): void {
     if (error instanceof NewerFormatError) throw error
     throw new StoreLeftInPlaceError(file, { cause: error })
   }
+}
+
+/** Inspect settled cleanup without treating an inaccessible path as removed. */
+export function imageOutputFileStates(baseName: string, ext: ImageExt): { image: OutputFileState; metadata: OutputFileState } {
+  try { assertSafeBaseName(baseName) } catch {
+    return { image: 'unknown', metadata: 'unknown' }
+  }
+  assertImageExt(ext)
+  const dir = getSessionDir()
+  const state = (file: string): OutputFileState => {
+    try { fs.lstatSync(file); return 'remaining' } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'removed' : 'unknown'
+    }
+  }
+  return { image: state(path.join(dir, `${baseName}.${ext}`)), metadata: state(path.join(dir, `${baseName}.json`)) }
 }
 
 // Deletes both the image and metadata files for a given base filename.
