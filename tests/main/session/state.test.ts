@@ -94,7 +94,7 @@ describe('normalizeResumedQueues', () => {
     expect(byId).toEqual({ done: 'completed', refused: 'failed', mid: 'interrupted', wait: 'interrupted' })
   })
 
-  it('repairs duplicate task ids across backend queues while preserving every task', () => {
+  it('preserves task identities without repairing them', () => {
     const first = makeTask('same-id', 'completed')
     const second = makeTask('same-id', 'failed', { backend: 'grok' })
     const normalized = normalizeResumedQueues(queuesWith([first, second]))
@@ -102,8 +102,7 @@ describe('normalizeResumedQueues', () => {
 
     expect(tasks).toHaveLength(2)
     expect(tasks[0].id).toBe('same-id')
-    expect(tasks[1].id).not.toBe('same-id')
-    expect(new Set(tasks.map((task) => task.id)).size).toBe(2)
+    expect(tasks[1].id).toBe('same-id')
   })
 })
 

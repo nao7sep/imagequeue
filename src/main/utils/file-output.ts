@@ -6,7 +6,7 @@ import { getSessionDir } from '../session'
 import { BackendId } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log } from '../logger'
-import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
 import { stageBeside, stagingPathFor } from './atomic-write'
 import { syncDirectory, syncFile } from './fsync'
 
@@ -185,12 +185,27 @@ export function writeImageOutput(
   return baseName
 }
 
+function admitImageSidecar(file: string): void {
+  if (!fs.existsSync(file)) return
+  try {
+    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid image sidecar shape')
+    checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.imageSidecar, file, SNAKE_FORMAT_VERSION_KEY)
+  } catch (error) {
+    if (error instanceof NewerFormatError) throw error
+    throw new StoreLeftInPlaceError(file, { cause: error })
+  }
+}
+
 // Deletes both the image and metadata files for a given base filename.
 export function deleteImageOutput(baseName: string, ext: ImageExt): void {
   const dir = getSessionDir()
+  assertSafeBaseName(baseName)
+  assertImageExt(ext)
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
+  admitImageSidecar(metaPath)
   if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath)
   if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath)
 }
@@ -198,9 +213,15 @@ export function deleteImageOutput(baseName: string, ext: ImageExt): void {
 // Moves the image and metadata files for a given base filename to the OS trash.
 export async function trashImageOutput(baseName: string, ext: ImageExt): Promise<void> {
   const dir = getSessionDir()
+  assertSafeBaseName(baseName)
+  assertImageExt(ext)
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
+  admitImageSidecar(metaPath)
   if (fs.existsSync(imagePath)) await shell.trashItem(imagePath)
-  if (fs.existsSync(metaPath)) await shell.trashItem(metaPath)
+  if (fs.existsSync(metaPath)) {
+    admitImageSidecar(metaPath)
+    await shell.trashItem(metaPath)
+  }
 }

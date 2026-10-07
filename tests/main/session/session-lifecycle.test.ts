@@ -10,6 +10,10 @@ import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } fro
 // manifest says, which folder is current, and — for the drop/delete paths —
 // whether a folder is really gone. Only Electron, the config file, the log sink
 // and the renderer publisher are substituted.
+const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>())
+vi.mock('../../../src/main/ipc-boundary', () => ({
+  handle: (channel: string, handler: (...args: unknown[]) => unknown) => handlers.set(channel, handler),
+}))
 const send = vi.hoisted(() => vi.fn())
 const trashItem = vi.hoisted(() => vi.fn(async (_path: string) => {}))
 vi.mock('electron', () => ({
@@ -51,8 +55,10 @@ const {
 } = await import('../../../src/main/session/state')
 const { getOutputDir, getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
 const { createEmptyQueues, queueManager } = await import('../../../src/main/queue/queue-manager')
+const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
+registerQueueIpc()
 const { createEmptySessionDraft } = await import('../../../src/shared/session-draft')
-const { FORMAT_VERSIONS, NewerFormatError } = await import('../../../src/main/store-format')
+const { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } = await import('../../../src/main/store-format')
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
   return {
@@ -120,6 +126,7 @@ beforeEach(async () => {
   // current session rather than whatever the previous test left behind.
   setSessionDir(path.join(getOutputDir(), '20260101-000000-utc'))
   queueManager.replaceAllTasks(createEmptyQueues())
+  stageSession('20260101-000000-utc')
   // Dropped as it is left, so each test starts with exactly one session folder.
   settings.dropEmptySessions = true
   await createSession()
@@ -372,6 +379,103 @@ describe('deleting a session', () => {
   })
 })
 
+describe('session operations awaiting Trash', () => {
+  it.each(['resume', 'new'] as const)('refuses to reopen outgoing A during %s cleanup', async (operation) => {
+    settings.dropEmptySessions = true
+    settings.deleteToTrash = true
+    const previousDir = getSessionDir()
+    const previousId = getSessionId()
+    const targetId = '20260114-000000-utc'
+    stageSession(targetId, { tasks: withTasks([makeTask('B', 'completed')]) })
+    let settle!: () => void
+    trashItem.mockImplementationOnce((dir) => new Promise<void>((resolve) => {
+      settle = () => { fs.rmSync(dir, { recursive: true, force: true }); resolve() }
+    }))
+    const mutation = operation === 'resume' ? resumeSession(targetId) : createSession()
+    const adoptedDir = getSessionDir()
+    try {
+      expect(adoptedDir).not.toBe(previousDir)
+      await expect(resumeSession(previousId)).rejects.toThrow(/current session operation/)
+      await expect(createSession()).rejects.toThrow(/current session operation/)
+      await expect(deleteSession(previousId)).rejects.toThrow(/current session operation/)
+      expect(getSessionDir()).toBe(adoptedDir)
+    } finally {
+      settle()
+      await mutation
+    }
+    expect(fs.existsSync(previousDir)).toBe(false)
+    expect(fs.existsSync(adoptedDir)).toBe(true)
+    settings.dropEmptySessions = false
+    await createSession()
+  })
+
+  it('refuses to adopt a session whose explicit deletion is in flight', async () => {
+    settings.deleteToTrash = true
+    const targetId = '20260114-000000-utc'
+    const targetDir = stageSession(targetId)
+    const currentDir = getSessionDir()
+    let settle!: () => void
+    trashItem.mockImplementationOnce((dir) => new Promise<void>((resolve) => {
+      settle = () => { fs.rmSync(dir, { recursive: true, force: true }); resolve() }
+    }))
+    const deletion = deleteSession(targetId)
+    try {
+      await expect(resumeSession(targetId)).rejects.toThrow(/current session operation/)
+      expect(getSessionDir()).toBe(currentDir)
+    } finally {
+      settle()
+      await deletion
+    }
+    expect(fs.existsSync(targetDir)).toBe(false)
+  })
+
+  it.each([false, true])('finishes durable A task deletion before allowing Resume B (Trash failure: %s)', async (fail) => {
+    settings.deleteToTrash = true
+    const originalDir = getSessionDir()
+    const originalId = getSessionId()
+    const targetId = '20260114-000000-utc'
+    stageSession(targetId, { tasks: withTasks([makeTask('same', 'completed', { prompt: 'B image' })]) })
+    queueManager.replaceAllTasks(withTasks([makeTask('same', 'completed', {
+      baseName: 'A-image', imagePath: path.join(originalDir, 'A-image.png'),
+    })]))
+    fs.writeFileSync(path.join(originalDir, 'A-image.png'), 'image')
+    persistActiveSession()
+    let settle!: () => void
+    trashItem.mockImplementationOnce((file) => new Promise<void>((resolve, reject) => {
+      settle = () => {
+        if (fail) reject(new Error('Trash failed'))
+        else { fs.unlinkSync(file); resolve() }
+      }
+    }))
+    const deletion = handlers.get('queue:deleteWithFiles')!({}, 'openai', 'same')
+    try {
+      await expect(resumeSession(targetId)).rejects.toThrow(/current session operation/)
+      expect(getSessionDir()).toBe(originalDir)
+    } finally {
+      settle()
+      await deletion
+    }
+    expect(readManifest(originalDir).tasks.openai).toEqual([])
+    await resumeSession(targetId)
+    expect(queueManager.getTask('openai', 'same')).toMatchObject({ prompt: 'B image' })
+    await resumeSession(originalId)
+    expect(queueManager.getAllStoredTasks().openai).toEqual([])
+  })
+
+  it('releases the claim after failed Trash without undoing adoption', async () => {
+    settings.dropEmptySessions = true
+    settings.deleteToTrash = true
+    const previousDir = getSessionDir()
+    const targetId = '20260114-000000-utc'
+    const targetDir = stageSession(targetId, { tasks: withTasks([makeTask('B', 'completed')]) })
+    trashItem.mockRejectedValueOnce(new Error('Trash failed'))
+    await expect(resumeSession(targetId)).rejects.toThrow('Trash failed')
+    expect(getSessionDir()).toBe(targetDir)
+    expect(fs.existsSync(previousDir)).toBe(true)
+    await createSession()
+  })
+})
+
 describe('dropping the open session on quit', () => {
   it('leaves a session that holds work', async () => {
     settings.dropEmptySessions = true
@@ -565,6 +669,116 @@ describe('a manifest member that cannot be used', () => {
 
     await expect(resumeSession('20260112-000000-utc')).rejects.toThrow(/missing a readable session.json/)
     expect([damaged, authored].map((dir) => fs.readFileSync(path.join(dir, 'session.json')))).toEqual(bytes)
+  })
+})
+
+describe('manifest identity and consumed task parameters', () => {
+  it.each([
+    ['empty ID', withTasks([makeTask('', 'completed')])],
+    ['same-queue duplicate', withTasks([makeTask('same', 'completed'), makeTask('same', 'failed')])],
+    ['cross-queue duplicate', withTasks([makeTask('same', 'completed'), makeTask('same', 'failed', { backend: 'grok' })])],
+    ['wrong backend', { ...createEmptyQueues(), openai: [makeTask('wrong', 'completed', { backend: 'grok' })] }],
+    ['invalid consumed number', withTasks([makeTask('bad', 'failed', { backend: 'drawthings', params: { width: 'wide' } })])],
+    ['invalid consumed string', withTasks([makeTask('bad', 'failed', { model: 'gpt-image-2', params: { outputFormat: 4 } })])],
+    ['missing consumed thinking', withTasks([makeTask('bad', 'failed', { backend: 'nanobanana', model: 'gemini-3-pro-image' })])],
+  ] as const)('leaves a %s manifest unreadable without repairing or rewriting it', async (_case, tasks) => {
+    const id = '20260115-000000-utc'
+    const dir = stageSession(id, { tasks: tasks as Record<BackendId, Task[]> })
+    const bytes = fs.readFileSync(path.join(dir, 'session.json'))
+    expect(listSessions()).toContainEqual({ sessionId: id, unopenable: 'unreadable' })
+    await expect(resumeSession(id)).rejects.toThrow(/missing a readable session.json/)
+    expect(fs.readFileSync(path.join(dir, 'session.json'))).toEqual(bytes)
+  })
+
+  it('retains missing optional task fields and unlisted-model plain request parameters', async () => {
+    const task: Partial<Task> = makeTask('failed', 'failed', { model: 'unlisted', params: { thinking: {}, width: 'provider-owned' } })
+    delete task.startedAt
+    delete task.completedAt
+    delete task.durationMs
+    delete task.imagePath
+    delete task.baseName
+    delete task.error
+    delete task.providerMessage
+    const id = '20260115-000000-utc'
+    stageSession(id, { tasks: withTasks([task as Task]), draft: { prompt: 'draft' } as SessionManifest['draft'] })
+    await resumeSession(id)
+    expect(queueManager.getTask('openai', 'failed')).toMatchObject({ id: 'failed', status: 'failed', params: task.params })
+    expect(getActiveSessionDraft().prompt).toBe('draft')
+  })
+})
+
+describe('governing session manifest mutation admission', () => {
+  it.each([false, true])('refuses Delete after listing when the governing manifest becomes newer (Trash: %s)', async (toTrash) => {
+    settings.deleteToTrash = toTrash
+    const id = '20260115-000000-utc'
+    const dir = stageSession(id)
+    expect(listSessions()).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
+    stageSession(id, { formatVersion: FORMAT_VERSIONS.session + 1 })
+    const bytes = fs.readFileSync(path.join(dir, 'session.json'))
+    await expect(deleteSession(id)).rejects.toMatchObject({ name: 'NewerFormatError', path: path.join(dir, 'session.json') })
+    expect(fs.readFileSync(path.join(dir, 'session.json'))).toEqual(bytes)
+    expect(trashItem).not.toHaveBeenCalled()
+  })
+
+  it.each(['missing', 'unreadable'] as const)('preserves a folder whose governing manifest is %s', async (problem) => {
+    const id = '20260115-000000-utc'
+    const dir = stageSession(id)
+    const file = path.join(dir, 'session.json')
+    if (problem === 'missing') fs.unlinkSync(file)
+    else fs.writeFileSync(file, '{ invalid')
+    await expect(deleteSession(id)).rejects.toBeInstanceOf(StoreLeftInPlaceError)
+    expect(fs.existsSync(dir)).toBe(true)
+    if (problem === 'unreadable') expect(fs.readFileSync(file, 'utf8')).toBe('{ invalid')
+  })
+
+  it.each([false, true])('removes the requested task best-effort while preserving its future sidecar (Trash: %s)', async (toTrash) => {
+    settings.deleteToTrash = toTrash
+    const dir = getSessionDir()
+    const image = path.join(dir, 'protected.png')
+    const sidecar = path.join(dir, 'protected.json')
+    const bytes = JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })
+    fs.writeFileSync(image, 'image')
+    fs.writeFileSync(sidecar, bytes)
+    queueManager.replaceAllTasks(withTasks([makeTask('protected', 'completed', { baseName: 'protected', imagePath: image })]))
+    persistActiveSession()
+    await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'protected')
+    expect(readManifest(dir).tasks.openai).toEqual([])
+    expect(queueManager.getTask('openai', 'protected')).toBeUndefined()
+    expect(fs.readFileSync(image, 'utf8')).toBe('image')
+    expect(fs.readFileSync(sidecar, 'utf8')).toBe(bytes)
+    expect(trashItem).not.toHaveBeenCalled()
+    expect(log).toHaveBeenCalledWith('error', 'Failed to remove task files; removing the queue entry anyway', expect.objectContaining({ error: expect.stringContaining(sidecar) }))
+  })
+
+  it('refuses active persistence when the named manifest becomes newer', () => {
+    const file = path.join(getSessionDir(), 'session.json')
+    const newer = JSON.stringify({ ...readManifest(getSessionDir()), formatVersion: FORMAT_VERSIONS.session + 1 })
+    fs.writeFileSync(file, newer)
+    expect(() => persistActiveSession()).toThrow(NewerFormatError)
+    expect(fs.readFileSync(file, 'utf8')).toBe(newer)
+  })
+
+  it.each(['new', 'resume', 'quit'] as const)('protects the outgoing future manifest from %s auto-drop', async (operation) => {
+    settings.dropEmptySessions = true
+    settings.deleteToTrash = true
+    const dir = getSessionDir()
+    const file = path.join(dir, 'session.json')
+    const newer = JSON.stringify({ ...readManifest(dir), formatVersion: FORMAT_VERSIONS.session + 1 })
+    fs.writeFileSync(file, newer)
+    const target = stageSession('20260115-000000-utc')
+    const targetBytes = fs.readFileSync(path.join(target, 'session.json'))
+    const folders = fs.readdirSync(getOutputDir())
+    const previousId = getSessionId()
+    vi.clearAllMocks()
+    const pending = operation === 'new' ? createSession() : operation === 'resume' ? resumeSession('20260115-000000-utc') : dropCurrentSessionIfEmpty('quit')
+    await expect(pending).rejects.toThrow(NewerFormatError)
+    expect(fs.readFileSync(file, 'utf8')).toBe(newer)
+    expect(getSessionId()).toBe(previousId)
+    expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(targetBytes)
+    expect(fs.readdirSync(getOutputDir())).toEqual(folders)
+    expect(publishQueueState).not.toHaveBeenCalled()
+    expect(sent('session:changed')).toEqual([])
+    expect(trashItem).not.toHaveBeenCalled()
   })
 })
 

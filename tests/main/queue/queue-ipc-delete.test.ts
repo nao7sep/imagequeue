@@ -9,7 +9,11 @@ vi.mock('electron', () => ({
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => unknown) => handlers.set(channel, fn) },
   BrowserWindow: { getAllWindows: () => [] },
 }))
-vi.mock('../../../src/main/session', () => ({ persistActiveSession: () => undefined }))
+vi.mock('../../../src/main/session', () => ({
+  persistActiveSession: () => undefined,
+  mutateSession: (operation: () => Promise<unknown>) => operation(),
+  getSessionDir: () => '/output/A',
+}))
 vi.mock('../../../src/main/config', () => ({ loadConfig: () => ({ general: { delete_to_trash: false } }) }))
 vi.mock('../../../src/main/utils/file-output', () => ({
   deleteImageOutput,

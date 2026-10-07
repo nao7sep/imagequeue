@@ -11,6 +11,8 @@ type Handler = (...args: unknown[]) => unknown
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   deleteToTrash: false,
+  sessionDir: '/output/A',
+  sessionMutationPending: false,
   log: vi.fn(),
   logEnqueue: vi.fn(),
   persistActiveSession: vi.fn(),
@@ -34,7 +36,15 @@ vi.mock('../../../src/main/logger', () => ({
   logEnqueue: mocks.logEnqueue,
   serializeError: (error: unknown) => ({ error }),
 }))
-vi.mock('../../../src/main/session', () => ({ persistActiveSession: mocks.persistActiveSession }))
+vi.mock('../../../src/main/session', () => ({
+  persistActiveSession: mocks.persistActiveSession,
+  mutateSession: async (operation: () => Promise<unknown>) => {
+    if (mocks.sessionMutationPending) throw new Error('Wait for the current session operation to finish.')
+    mocks.sessionMutationPending = true
+    try { return await operation() } finally { mocks.sessionMutationPending = false }
+  },
+  getSessionDir: () => mocks.sessionDir,
+}))
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState }))
 vi.mock('../../../src/main/queue/control-actions', () => ({
   setQueuePausedAndPublish: mocks.setQueuePausedAndPublish,
@@ -93,6 +103,7 @@ function statuses(backend: BackendId = 'openai'): [string, TaskStatus][] {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.deleteToTrash = false
+  mocks.sessionDir = '/output/A'
   mocks.handlers.clear()
   queueManager.replaceAllTasks(createEmptyQueues())
   registerQueueIpc()
@@ -208,6 +219,62 @@ describe('deleting a row together with its image', () => {
 
     expect(mocks.trashImageOutput).toHaveBeenCalledExactlyOnceWith('base-done', 'png')
     expect(statuses()).toEqual([])
+  })
+
+  it.each([false, true])('keeps B same-ID task after old Trash settles (failure: %s)', async (fail) => {
+    mocks.deleteToTrash = true
+    seed([withFile()])
+    let settle!: () => void
+    mocks.trashImageOutput.mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+      settle = () => fail ? reject(new Error('Trash failed')) : resolve()
+    }))
+    const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
+    try {
+      mocks.sessionDir = '/output/B'
+      seed([makeTask('done', 'completed', { prompt: 'B image', baseName: 'B-done' })])
+    } finally {
+      settle()
+      await deletion
+    }
+    expect(queueManager.getTask('openai', 'done')).toMatchObject({ prompt: 'B image', baseName: 'B-done' })
+    expect(mocks.persistActiveSession).not.toHaveBeenCalled()
+    expect(mocks.publishQueueState).not.toHaveBeenCalled()
+  })
+
+  it('claims one task deletion until its Trash settles', async () => {
+    mocks.deleteToTrash = true
+    seed([withFile()])
+    let settle!: () => void
+    mocks.trashImageOutput.mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve }))
+    const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
+    try {
+      await expect(invoke('queue:deleteWithFiles', 'openai', 'done')).rejects.toThrow(/current session operation/)
+      expect(mocks.trashImageOutput).toHaveBeenCalledOnce()
+    } finally {
+      settle()
+      await deletion
+    }
+    expect(statuses()).toEqual([])
+    expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a re-adopted same-ID task after returning to the original folder', async () => {
+    mocks.deleteToTrash = true
+    seed([withFile()])
+    let settle!: () => void
+    mocks.trashImageOutput.mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve }))
+    const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
+    try {
+      mocks.sessionDir = '/output/B'
+      seed([])
+      mocks.sessionDir = '/output/A'
+      seed([withFile()])
+    } finally {
+      settle()
+      await deletion
+    }
+    expect(statuses()).toEqual([['done', 'completed']])
+    expect(mocks.persistActiveSession).not.toHaveBeenCalled()
   })
 
   it('still takes the row out when the file cannot be removed', async () => {

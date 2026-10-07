@@ -4,7 +4,7 @@ import { BackendId, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
-import { persistActiveSession } from '../session'
+import { getSessionDir, mutateSession, persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
 import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
@@ -76,32 +76,35 @@ export function registerQueueIpc(): void {
       return
     }
     if (!task) return
-    const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
-    log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
-    // File removal is best-effort: whatever happens on disk, the user asked to delete
-    // the task, so the queue entry is always removed (and broadcast) afterwards — a
-    // failed/partial file removal must never leave the queue diverged from disk.
-    if (task.baseName) {
-      const ext = imageExtFromPath(task.imagePath)
-      if (ext) {
-        try {
-          if (toTrash) {
-            await trashImageOutput(task.baseName, ext)
-          } else {
-            deleteImageOutput(task.baseName, ext)
+    return mutateSession(async () => {
+      const sessionDir = getSessionDir()
+      const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
+      log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
+      // File cleanup is best-effort. Settlement below applies only to the
+      // captured session and task, following PLAYBOOK's Own the work in flight.
+      if (task.baseName) {
+        const ext = imageExtFromPath(task.imagePath)
+        if (ext) {
+          try {
+            if (toTrash) {
+              await trashImageOutput(task.baseName, ext)
+            } else {
+              deleteImageOutput(task.baseName, ext)
+            }
+          } catch (err) {
+            log('error', 'Failed to remove task files; removing the queue entry anyway', { taskId, toTrash, error: serializeError(err) })
           }
-        } catch (err) {
-          log('error', 'Failed to remove task files; removing the queue entry anyway', { taskId, toTrash, error: serializeError(err) })
+        } else {
+          log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
         }
       } else {
-        log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
+        log('warn', 'Task has no baseName; nothing to remove on disk', { taskId, backend })
       }
-    } else {
-      log('warn', 'Task has no baseName; nothing to remove on disk', { taskId, backend })
-    }
-    queueManager.removeTask(backend, taskId)
-    persistActiveSession()
-    publishQueueState()
+      if (getSessionDir() !== sessionDir || queueManager.getTask(backend, taskId) !== task) return
+      queueManager.removeTask(backend, taskId)
+      persistActiveSession()
+      publishQueueState()
+    })
   })
 
   handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {

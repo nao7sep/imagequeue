@@ -1,6 +1,5 @@
 import fs from 'fs'
 import path from 'path'
-import { nanoid } from 'nanoid'
 import { BrowserWindow, shell } from 'electron'
 import {
   ConceptCredit,
@@ -28,7 +27,9 @@ import { writeJsonAtomic } from '../utils/atomic-write'
 import { createCoalescedWriter } from '../utils/coalesced-writer'
 import { publishQueueState } from '../queue/publisher'
 import { markDraftPersistenceFailed, markDraftPersistenceSaved } from './draft-persistence'
-import { checkFormat, FORMAT_VERSIONS, NewerFormatError } from '../store-format'
+import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
+
+import { isStoredTaskParams } from './stored-task-params'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -57,6 +58,18 @@ interface ActiveSessionState {
   restSeen: { rest: string; at: string }
 }
 let activeSession: ActiveSessionState | null = null
+
+let sessionMutationPending = false
+
+export async function mutateSession<T>(operation: () => Promise<T>): Promise<T> {
+  if (sessionMutationPending) throw new Error('Wait for the current session operation to finish.')
+  sessionMutationPending = true
+  try {
+    return await operation()
+  } finally {
+    sessionMutationPending = false
+  }
+}
 
 // The draft changes on every keystroke in the prompt/seed/elaborated fields, so
 // its write-through is coalesced (the renderer sends each change un-debounced,
@@ -166,11 +179,12 @@ function isStoredTask(value: unknown): value is Task {
     field === undefined || field === null || check(field)
   const isString = (field: unknown): boolean => typeof field === 'string'
   return (
-    typeof task.id === 'string' &&
+    typeof task.id === 'string' && task.id.length > 0 &&
     typeof task.prompt === 'string' &&
-    typeof task.backend === 'string' &&
+    BACKEND_IDS_IN_UI_ORDER.includes(task.backend as BackendId) &&
     typeof task.model === 'string' &&
     !!task.params && typeof task.params === 'object' && !Array.isArray(task.params) &&
+    isStoredTaskParams(task.backend as BackendId, task.model as string, task.params as Record<string, unknown>) &&
     TASK_STATUSES.includes(task.status as TaskStatus) &&
     typeof task.enqueuedAt === 'string' &&
     nullable(task.startedAt, isString) &&
@@ -199,9 +213,14 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
   if (!isStoredSessionDraft(candidate.draft)) return false
   if (!candidate.taskCounts || typeof candidate.taskCounts !== 'object') return false
   if (!candidate.tasks || typeof candidate.tasks !== 'object') return false
+  const ids = new Set<string>()
   return BACKEND_IDS_IN_UI_ORDER.every((backend) => {
     const tasks: unknown = candidate.tasks?.[backend]
-    return Array.isArray(tasks) && tasks.every(isStoredTask)
+    return Array.isArray(tasks) && tasks.every((task: unknown) => {
+      if (!isStoredTask(task) || task.backend !== backend || ids.has(task.id)) return false
+      ids.add(task.id)
+      return true
+    })
   })
 }
 
@@ -209,7 +228,7 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
 // be opened is, and says why.
 type ManifestRead =
   | { manifest: StoredSessionManifest }
-  | { manifest: null; problem: 'missing' | UnopenableSession['unopenable'] }
+  | { manifest: null; problem: 'missing' | UnopenableSession['unopenable']; error?: unknown }
 
 function readManifestFromDir(sessionDir: string): ManifestRead {
   const filePath = getManifestPath(sessionDir)
@@ -238,8 +257,17 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
       filePath,
       error: serializeError(error),
     })
-    return { manifest: null, problem: newer ? 'newer' : 'unreadable' }
+    return { manifest: null, problem: newer ? 'newer' : 'unreadable', error }
   }
+}
+
+function admitSessionManifest(sessionDir: string, allowMissing = false): void {
+  const read = readManifestFromDir(sessionDir)
+  if (read.manifest || (allowMissing && read.problem === 'missing')) return
+  if (read.error instanceof NewerFormatError) throw read.error
+  throw new StoreLeftInPlaceError(getManifestPath(sessionDir), {
+    cause: read.error ?? new Error('Session manifest is missing'),
+  })
 }
 
 // The part of a session the Modified rule counts as content: the draft, the
@@ -375,23 +403,8 @@ export function toResumedTask(task: Task): Task {
 
 export function normalizeResumedQueues(tasksByBackend: Record<BackendId, Task[]>): Record<BackendId, Task[]> {
   const normalized = createEmptyQueues()
-  const usedIds = new Set<string>()
-  let repairedIds = 0
   for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-    normalized[backend] = (tasksByBackend[backend] ?? []).map((task) => {
-      const resumed = toResumedTask(task)
-      if (typeof resumed.id !== 'string' || resumed.id.length === 0 || usedIds.has(resumed.id)) {
-        do {
-          resumed.id = nanoid()
-        } while (usedIds.has(resumed.id))
-        repairedIds++
-      }
-      usedIds.add(resumed.id)
-      return resumed
-    })
-  }
-  if (repairedIds > 0) {
-    log('warn', 'Repaired missing or duplicate task ids while resuming session', { repairedIds })
+    normalized[backend] = (tasksByBackend[backend] ?? []).map(toResumedTask)
   }
   return normalized
 }
@@ -413,6 +426,7 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 // records what was attempted even if the op then throws.
 async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
   if (!fs.existsSync(sessionDir)) return
+  admitSessionManifest(sessionDir)
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   log('info', 'Dropping empty session', { reason, sessionId, path: sessionDir, toTrash })
   if (toTrash) {
@@ -427,7 +441,11 @@ function shouldAutoDropSession(tasksByBackend: Record<BackendId, Task[]>): boole
   return !sessionHasUserValue(tasksByBackend)
 }
 
-export async function dropCurrentSessionIfEmpty(reason: string): Promise<boolean> {
+export function dropCurrentSessionIfEmpty(reason: string): Promise<boolean> {
+  return mutateSession(() => dropCurrentSessionIfEmptyOwned(reason))
+}
+
+async function dropCurrentSessionIfEmptyOwned(reason: string): Promise<boolean> {
   if (!shouldAutoDropSession(queueManager.getAllStoredTasks())) return false
   await dropSession(getSessionDir(), getSessionId(), reason)
   return true
@@ -457,6 +475,7 @@ export function resolveSessionDir(sessionId: string): string {
 
 export function persistActiveSession(): SessionManifest {
   const sessionDir = getSessionDir()
+  admitSessionManifest(sessionDir, true)
   fs.mkdirSync(sessionDir, { recursive: true })
   const session = ensureActiveSessionLoaded()
   const tasks = queueManager.getAllStoredTasks()
@@ -486,7 +505,11 @@ export function drainPendingDraftWrites(): void {
   draftWriter.drain()
 }
 
-export async function createSession(): Promise<void> {
+export function createSession(): Promise<void> {
+  return mutateSession(() => createSessionOwned())
+}
+
+async function createSessionOwned(): Promise<void> {
   if (queueManager.hasGeneratingTasks()) {
     throw new Error('Wait for active generation to finish before starting a new session.')
   }
@@ -494,6 +517,7 @@ export async function createSession(): Promise<void> {
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
+  if (dropPrevious && fs.existsSync(previousSessionDir)) admitSessionManifest(previousSessionDir)
 
   // The explicit persist below captures the outgoing draft when the session is
   // kept; either way, cancel the pending timer so it can't fire after the
@@ -561,7 +585,11 @@ export function listSessions(): SessionListEntry[] {
   return [...summaries, ...unopenable]
 }
 
-export async function resumeSession(sessionId: string): Promise<void> {
+export function resumeSession(sessionId: string): Promise<void> {
+  return mutateSession(() => resumeSessionOwned(sessionId))
+}
+
+async function resumeSessionOwned(sessionId: string): Promise<void> {
   if (sessionId === getSessionId()) return
   if (queueManager.hasGeneratingTasks()) {
     throw new Error('Wait for active generation to finish before resuming another session.')
@@ -570,6 +598,7 @@ export async function resumeSession(sessionId: string): Promise<void> {
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
+  if (dropPrevious && fs.existsSync(previousSessionDir)) admitSessionManifest(previousSessionDir)
 
   // Capture the outgoing session's pending draft before we switch away (unless
   // it's being dropped). Unlike createSession, resume does not persist the
@@ -589,8 +618,7 @@ export async function resumeSession(sessionId: string): Promise<void> {
   queueManager.replaceAllTasks(resumedQueues)
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)
-  // Judged against the queues as resumed: interrupting in-flight work and
-  // repairing ids are the app's own rewrites, not edits.
+  // Judged against the resumed queues: lifecycle changes are not content edits.
   adoptActiveSession({
     elaboratedPrompts: [...manifest.elaboratedPrompts],
     // manifest.draft is already normalized by readManifestFromDir.
@@ -612,7 +640,11 @@ export async function resumeSession(sessionId: string): Promise<void> {
   }
 }
 
-export async function deleteSession(sessionId: string): Promise<void> {
+export function deleteSession(sessionId: string): Promise<void> {
+  return mutateSession(() => deleteSessionOwned(sessionId))
+}
+
+async function deleteSessionOwned(sessionId: string): Promise<void> {
   if (sessionId === getSessionId()) {
     throw new Error('The current session cannot be deleted while it is open.')
   }
@@ -621,6 +653,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
   if (!fs.existsSync(sessionDir)) {
     throw new Error('That session folder no longer exists.')
   }
+  admitSessionManifest(sessionDir)
 
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   if (toTrash) {

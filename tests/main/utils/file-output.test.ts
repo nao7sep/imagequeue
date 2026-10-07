@@ -7,18 +7,24 @@ import {
   assertSafeBaseName,
   imageExtFromPath,
   outputBaseName,
-  writeImageOutput
+  writeImageOutput,
+  deleteImageOutput,
+  trashImageOutput
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
-import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
 
 // writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
 // test. The closure reads `sessionDir` only when getSessionDir() is called, by
 // which time beforeEach has set it.
+const trashItem = vi.hoisted(() => vi.fn(async (file: string) => { fs.unlinkSync(file) }))
+vi.mock('electron', () => ({ shell: { trashItem } }))
+
 let sessionDir = ''
 vi.mock('../../../src/main/session', () => ({ getSessionDir: () => sessionDir }))
 
 beforeEach(() => {
+  trashItem.mockClear()
   sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-fileout-'))
 })
 
@@ -145,5 +151,60 @@ describe('assertImageExt', () => {
     expect(() => assertImageExt('json')).toThrow()
     expect(() => assertImageExt('exe')).toThrow()
     expect(() => assertImageExt('')).toThrow()
+  })
+})
+
+
+describe('governing image-sidecar deletion admission', () => {
+  it.each(['permanent', 'Trash'] as const)('preserves both outputs with a future sidecar during %s deletion', async (operation) => {
+    const image = path.join(sessionDir, 'image.png')
+    const sidecar = path.join(sessionDir, 'image.json')
+    fs.writeFileSync(image, 'image')
+    const bytes = JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })
+    fs.writeFileSync(sidecar, bytes)
+    if (operation === 'Trash') await expect(trashImageOutput('image', 'png')).rejects.toMatchObject({ name: 'NewerFormatError', path: sidecar })
+    else expect(() => deleteImageOutput('image', 'png')).toThrow(NewerFormatError)
+    expect(fs.readFileSync(image, 'utf8')).toBe('image')
+    expect(fs.readFileSync(sidecar, 'utf8')).toBe(bytes)
+    expect(trashItem).not.toHaveBeenCalled()
+  })
+
+  it.each(['{ invalid', '{}', '[]'])('preserves both outputs when sidecar is unreadable: %s', async (bytes) => {
+    fs.writeFileSync(path.join(sessionDir, 'image.png'), 'image')
+    fs.writeFileSync(path.join(sessionDir, 'image.json'), bytes)
+    expect(() => deleteImageOutput('image', 'png')).toThrow(StoreLeftInPlaceError)
+    await expect(trashImageOutput('image', 'png')).rejects.toBeInstanceOf(StoreLeftInPlaceError)
+    expect(fs.readFileSync(path.join(sessionDir, 'image.png'), 'utf8')).toBe('image')
+    expect(fs.readFileSync(path.join(sessionDir, 'image.json'), 'utf8')).toBe(bytes)
+    expect(trashItem).not.toHaveBeenCalled()
+  })
+
+  it('checks the sidecar again after awaited image Trash before its own handoff', async () => {
+    const image = path.join(sessionDir, 'image.png')
+    const sidecar = path.join(sessionDir, 'image.json')
+    fs.writeFileSync(image, 'image')
+    fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar }))
+    let settle!: () => void
+    trashItem.mockImplementationOnce((file) => new Promise<void>((resolve) => {
+      settle = () => { fs.unlinkSync(file); resolve() }
+    }))
+    const deletion = trashImageOutput('image', 'png')
+    const newer = JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })
+    try {
+      fs.writeFileSync(sidecar, newer)
+    } finally {
+      settle()
+    }
+    await expect(deletion).rejects.toMatchObject({ name: 'NewerFormatError', path: sidecar })
+    expect(fs.existsSync(image)).toBe(false)
+    expect(fs.readFileSync(sidecar, 'utf8')).toBe(newer)
+    expect(trashItem).toHaveBeenCalledExactlyOnceWith(image)
+  })
+
+  it.each([false, true])('cleans up an orphan image without a sidecar (Trash: %s)', async (toTrash) => {
+    fs.writeFileSync(path.join(sessionDir, 'image.png'), 'image')
+    if (toTrash) await trashImageOutput('image', 'png')
+    else deleteImageOutput('image', 'png')
+    expect(fs.existsSync(path.join(sessionDir, 'image.png'))).toBe(false)
   })
 })
