@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import { BrowserWindow, shell } from 'electron'
+import { shell } from 'electron'
+import { broadcastPresentation } from '../presentation'
 import {
   ConceptCredit,
   ElaboratedPromptRecord,
@@ -455,17 +456,13 @@ async function dropCurrentSessionIfEmptyOwned(reason: string): Promise<boolean> 
 // Renderer-side session-scoped contexts (e.g. SessionDraftContext) listen to
 // this to re-hydrate their in-memory state from the now-active session.
 function broadcastSessionChanged(sessionId: string): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('session:changed', { sessionId })
-  }
+  broadcastPresentation('session:changed', { sessionId })
 }
 
 // Fired after resuming a session that still has tasks left unfinished when it
 // was last open. The renderer uses this to prompt the user to re-queue them.
 function broadcastInterruptedOnResume(count: number): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('session:interruptedTasks', { count })
-  }
+  broadcastPresentation('session:interruptedTasks', { count })
 }
 
 export function resolveSessionDir(sessionId: string): string {

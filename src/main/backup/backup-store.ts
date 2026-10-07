@@ -28,7 +28,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { getDataDir } from '../config'
 import { log, serializeError } from '../logger'
-import { claimSqliteFormat, FORMAT_VERSIONS } from '../store-format'
+import { claimSqliteFormat, openSqliteStore, FORMAT_VERSIONS } from '../store-format'
 
 /** The store file under the resolved storage root. Computed lazily (not frozen into a module constant
  *  at import time) so `IMAGEQUEUE_DATA_DIR` is read after the environment is set, per the storage-path
@@ -83,19 +83,7 @@ function ensureOpen(): DatabaseSync | null {
     // the first thing written on a fresh root. getDataDir() already mkdir -p's the root, but the parent
     // is derived here defensively so a relocated/deleted root still self-heals.
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    const opened = new DatabaseSync(file)
-    try {
-      // A newer store stays as it is, and recording is disabled like any failed open.
-      claimSqliteFormat(opened, FORMAT_VERSIONS.backups, file)
-    } catch (err) {
-      opened.close()
-      throw err
-    }
-    opened.exec('PRAGMA journal_mode = WAL')
-    // busy_timeout: under the tolerated two-instance case, a contended write waits up to this long for
-    // SQLite's write lock instead of immediately failing with SQLITE_BUSY and dropping that record.
-    opened.exec('PRAGMA busy_timeout = 5000')
-    opened.exec(SCHEMA)
+    const opened = openSqliteStore(file, FORMAT_VERSIONS.backups, SCHEMA)
     db = opened
   } catch (err) {
     log('warn', 'backup store: could not open; recording disabled for this session', {
@@ -136,6 +124,7 @@ export function record(absolutePath: string, bytes: Buffer): void {
     // recorder observes the earlier recorder's committed successor.
     store.exec('BEGIN IMMEDIATE')
     transactionOpen = true
+    claimSqliteFormat(store, FORMAT_VERSIONS.backups, storeFile())
     const latest = store
       .prepare('SELECT content_sha256 AS h FROM backups WHERE path = ? ORDER BY id DESC LIMIT 1')
       .get(absolutePath) as { h: string } | undefined

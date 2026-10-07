@@ -3,7 +3,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { getDataDir } from '../config'
 import { cleanDisplay, normalizeKey } from './normalize'
-import { claimSqliteFormat, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceError } from '../store-format'
+import { claimSqliteFormat, openSqliteStore, sqliteStoreOperation, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceError } from '../store-format'
 import { log, serializeError } from '../logger'
 import { utcStampForFilename } from '../../shared/utc-stamp'
 
@@ -118,15 +118,10 @@ function open(): DatabaseSync {
   if (db) return db
   const file = storeFile()
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  const opened = new DatabaseSync(file)
+  let opened: DatabaseSync
   try {
-    // A newer ledger refuses every request and stays as it is.
-    claimSqliteFormat(opened, FORMAT_VERSIONS.concepts, file)
-    opened.exec('PRAGMA journal_mode = WAL')
-    opened.exec('PRAGMA busy_timeout = 5000')
-    opened.exec(SCHEMA)
+    opened = openSqliteStore(file, FORMAT_VERSIONS.concepts, SCHEMA)
   } catch (err) {
-    opened.close()
     if (!isUnreadableLedger(err)) throw err
     setAside(file, err)
     return open()
@@ -147,20 +142,24 @@ export interface FacetRow {
 }
 
 export function ensureFacet(display: string): FacetRow {
-  const d = open()
-  const key = normalizeKey(display)
-  if (!key) throw new Error('Facet name is empty after normalization.')
-  const existing = d.prepare('SELECT id, display FROM facets WHERE key = ?').get(key) as unknown as FacetRow | undefined
-  if (existing) return existing
-  const cleaned = cleanDisplay(display)
-  const res = d.prepare('INSERT INTO facets (key, display, created_at) VALUES (?, ?, ?)')
-    .run(key, cleaned, new Date().toISOString())
-  return { id: Number(res.lastInsertRowid), display: cleaned }
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), true, () => {
+    const d = open()
+    const key = normalizeKey(display)
+    if (!key) throw new Error('Facet name is empty after normalization.')
+    const existing = d.prepare('SELECT id, display FROM facets WHERE key = ?').get(key) as unknown as FacetRow | undefined
+    if (existing) return existing
+    const cleaned = cleanDisplay(display)
+    const res = d.prepare('INSERT INTO facets (key, display, created_at) VALUES (?, ?, ?)')
+      .run(key, cleaned, new Date().toISOString())
+    return { id: Number(res.lastInsertRowid), display: cleaned }
+  })
 }
 
 export function listFacetDisplays(): string[] {
-  const rows = open().prepare('SELECT display FROM facets ORDER BY display').all() as unknown as { display: string }[]
-  return rows.map((r) => r.display)
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    const rows = open().prepare('SELECT display FROM facets ORDER BY display').all() as unknown as { display: string }[]
+    return rows.map((r) => r.display)
+  })
 }
 
 /** Insert probes, skipping any whose normalized key this facet already holds. */
@@ -169,8 +168,9 @@ export function addProbes(facetId: number, displays: readonly string[]): number 
   const now = new Date().toISOString()
   const stmt = d.prepare('INSERT OR IGNORE INTO probes (facet_id, key, display, expanded, created_at) VALUES (?, ?, ?, 0, ?)')
   let added = 0
-  d.exec('BEGIN')
+  d.exec('BEGIN IMMEDIATE')
   try {
+    claimSqliteFormat(d, FORMAT_VERSIONS.concepts, storeFile())
     for (const display of displays) {
       const key = normalizeKey(display)
       if (!key) continue
@@ -192,10 +192,12 @@ export function addProbes(facetId: number, displays: readonly string[]): number 
  *  the model's repeat-candidates are its recent favourites, and exact dedupe
  *  is enforced separately by the normalized-key UNIQUE constraint on insert. */
 export function listProbeDisplays(facetId: number, limit: number): string[] {
-  const rows = open().prepare(
-    'SELECT display FROM (SELECT id, display FROM probes WHERE facet_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id'
-  ).all(facetId, limit) as unknown as { display: string }[]
-  return rows.map((r) => r.display)
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    const rows = open().prepare(
+      'SELECT display FROM (SELECT id, display FROM probes WHERE facet_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id'
+    ).all(facetId, limit) as unknown as { display: string }[]
+    return rows.map((r) => r.display)
+  })
 }
 
 export interface ProbeRow {
@@ -204,13 +206,17 @@ export interface ProbeRow {
 }
 
 export function unexpandedProbes(facetId: number, limit: number): ProbeRow[] {
-  return open()
-    .prepare('SELECT id, display FROM probes WHERE facet_id = ? AND expanded = 0 ORDER BY id LIMIT ?')
-    .all(facetId, limit) as unknown as ProbeRow[]
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    return open()
+      .prepare('SELECT id, display FROM probes WHERE facet_id = ? AND expanded = 0 ORDER BY id LIMIT ?')
+      .all(facetId, limit) as unknown as ProbeRow[]
+  })
 }
 
 export function markProbeExpanded(probeId: number): void {
-  open().prepare('UPDATE probes SET expanded = 1 WHERE id = ?').run(probeId)
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), true, () => {
+    open().prepare('UPDATE probes SET expanded = 1 WHERE id = ?').run(probeId)
+  })
 }
 
 /** Insert a probe's concepts, skipping keys this facet already holds. */
@@ -219,8 +225,9 @@ export function addConcepts(facetId: number, probeId: number, displays: readonly
   const now = new Date().toISOString()
   const stmt = d.prepare('INSERT OR IGNORE INTO concepts (facet_id, probe_id, key, display, created_at) VALUES (?, ?, ?, ?, ?)')
   let added = 0
-  d.exec('BEGIN')
+  d.exec('BEGIN IMMEDIATE')
   try {
+    claimSqliteFormat(d, FORMAT_VERSIONS.concepts, storeFile())
     for (const display of displays) {
       const key = normalizeKey(display)
       if (!key) continue
@@ -260,48 +267,51 @@ const BLOCKED_PROBES_SQL =
   'SELECT k.probe_id FROM uses u JOIN concepts k ON k.id = u.concept_id WHERE u.id > ? OR u.session_id = ?'
 
 export function drawConcept(facetId: number, opts: DrawOptions): DrawnConcept | null {
-  const d = open()
-  const maxRow = d.prepare('SELECT COALESCE(MAX(id), 0) AS maxId FROM uses').get() as unknown as { maxId: number }
-  const floor = maxRow.maxId - opts.windowDraws
-  const exclConcepts = opts.excludeConceptIds.length > 0 ? [...opts.excludeConceptIds] : [-1]
-  const exclProbes = opts.excludeProbeIds.length > 0 ? [...opts.excludeProbeIds] : [-1]
-  const cIn = exclConcepts.map(() => '?').join(', ')
-  const pIn = exclProbes.map(() => '?').join(', ')
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    const d = open()
+    const maxRow = d.prepare('SELECT COALESCE(MAX(id), 0) AS maxId FROM uses').get() as unknown as { maxId: number }
+    const floor = maxRow.maxId - opts.windowDraws
+    const exclConcepts = opts.excludeConceptIds.length > 0 ? [...opts.excludeConceptIds] : [-1]
+    const exclProbes = opts.excludeProbeIds.length > 0 ? [...opts.excludeProbeIds] : [-1]
+    const cIn = exclConcepts.map(() => '?').join(', ')
+    const pIn = exclProbes.map(() => '?').join(', ')
 
-  const fresh = d.prepare(`
-    SELECT c.id, c.probe_id AS probeId, c.display FROM concepts c
-    WHERE c.facet_id = ? AND c.use_count = 0
-      AND c.id NOT IN (${cIn})
-      AND c.probe_id NOT IN (${pIn})
-      AND c.probe_id NOT IN (${BLOCKED_PROBES_SQL})
-    ORDER BY RANDOM() LIMIT 1
-  `).get(facetId, ...exclConcepts, ...exclProbes, floor, opts.sessionId) as unknown as DrawnConcept | undefined
-  if (fresh) return fresh
-  if (!opts.allowStale) return null
+    const fresh = d.prepare(`
+      SELECT c.id, c.probe_id AS probeId, c.display FROM concepts c
+      WHERE c.facet_id = ? AND c.use_count = 0
+        AND c.id NOT IN (${cIn})
+        AND c.probe_id NOT IN (${pIn})
+        AND c.probe_id NOT IN (${BLOCKED_PROBES_SQL})
+      ORDER BY RANDOM() LIMIT 1
+    `).get(facetId, ...exclConcepts, ...exclProbes, floor, opts.sessionId) as unknown as DrawnConcept | undefined
+    if (fresh) return fresh
+    if (!opts.allowStale) return null
 
-  // Stale fallback: reuse the value that has gone longest unused, provided it
-  // (and its cluster) sit outside the window and outside this session.
-  const stale = d.prepare(`
-    SELECT c.id, c.probe_id AS probeId, c.display FROM concepts c
-    WHERE c.facet_id = ? AND c.use_count > 0
-      AND c.id NOT IN (${cIn})
-      AND c.probe_id NOT IN (${pIn})
-      AND c.id NOT IN (SELECT concept_id FROM uses WHERE id > ? OR session_id = ?)
-      AND c.probe_id NOT IN (${BLOCKED_PROBES_SQL})
-    ORDER BY c.last_used_draw ASC LIMIT 1
-  `).get(
-    facetId, ...exclConcepts, ...exclProbes,
-    floor, opts.sessionId, floor, opts.sessionId
-  ) as unknown as DrawnConcept | undefined
-  return stale ?? null
+    // Stale fallback: reuse the value that has gone longest unused, provided it
+    // (and its cluster) sit outside the window and outside this session.
+    const stale = d.prepare(`
+      SELECT c.id, c.probe_id AS probeId, c.display FROM concepts c
+      WHERE c.facet_id = ? AND c.use_count > 0
+        AND c.id NOT IN (${cIn})
+        AND c.probe_id NOT IN (${pIn})
+        AND c.id NOT IN (SELECT concept_id FROM uses WHERE id > ? OR session_id = ?)
+        AND c.probe_id NOT IN (${BLOCKED_PROBES_SQL})
+      ORDER BY c.last_used_draw ASC LIMIT 1
+    `).get(
+      facetId, ...exclConcepts, ...exclProbes,
+      floor, opts.sessionId, floor, opts.sessionId
+    ) as unknown as DrawnConcept | undefined
+    return stale ?? null
+  })
 }
 
 /** Record that a value was woven into a prompt that actually came back. */
 export function recordUse(conceptId: number, sessionId: string): void {
   const d = open()
   const now = new Date().toISOString()
-  d.exec('BEGIN')
+  d.exec('BEGIN IMMEDIATE')
   try {
+    claimSqliteFormat(d, FORMAT_VERSIONS.concepts, storeFile())
     const res = d.prepare('INSERT INTO uses (concept_id, session_id, created_at) VALUES (?, ?, ?)')
       .run(conceptId, sessionId, now)
     d.prepare('UPDATE concepts SET use_count = use_count + 1, last_used_draw = ?, last_used_at = ? WHERE id = ?')
@@ -325,14 +335,16 @@ export interface ConceptFacetSummary {
 }
 
 export function listFacetsWithStats(): ConceptFacetSummary[] {
-  return open().prepare(`
-    SELECT f.id, f.display,
-      (SELECT COUNT(*) FROM concepts c WHERE c.facet_id = f.id) AS conceptCount,
-      (SELECT COUNT(*) FROM concepts c WHERE c.facet_id = f.id AND c.use_count = 0) AS unusedCount,
-      (SELECT COUNT(*) FROM probes p WHERE p.facet_id = f.id) AS probeCount,
-      (SELECT MAX(c.last_used_at) FROM concepts c WHERE c.facet_id = f.id) AS lastUsedAt
-    FROM facets f ORDER BY f.display
-  `).all() as unknown as ConceptFacetSummary[]
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    return open().prepare(`
+      SELECT f.id, f.display,
+        (SELECT COUNT(*) FROM concepts c WHERE c.facet_id = f.id) AS conceptCount,
+        (SELECT COUNT(*) FROM concepts c WHERE c.facet_id = f.id AND c.use_count = 0) AS unusedCount,
+        (SELECT COUNT(*) FROM probes p WHERE p.facet_id = f.id) AS probeCount,
+        (SELECT MAX(c.last_used_at) FROM concepts c WHERE c.facet_id = f.id) AS lastUsedAt
+      FROM facets f ORDER BY f.display
+    `).all() as unknown as ConceptFacetSummary[]
+  })
 }
 
 export interface ConceptListRow {
@@ -346,13 +358,15 @@ export interface ConceptListRow {
 }
 
 export function listConceptRows(facetId: number): ConceptListRow[] {
-  return open().prepare(`
-    SELECT c.id, c.probe_id AS probeId, c.display, p.display AS probe,
-           c.use_count AS useCount, c.last_used_at AS lastUsedAt, c.created_at AS createdAt
-    FROM concepts c JOIN probes p ON p.id = c.probe_id
-    WHERE c.facet_id = ?
-    ORDER BY c.use_count DESC, c.display ASC
-  `).all(facetId) as unknown as ConceptListRow[]
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    return open().prepare(`
+      SELECT c.id, c.probe_id AS probeId, c.display, p.display AS probe,
+             c.use_count AS useCount, c.last_used_at AS lastUsedAt, c.created_at AS createdAt
+      FROM concepts c JOIN probes p ON p.id = c.probe_id
+      WHERE c.facet_id = ?
+      ORDER BY c.use_count DESC, c.display ASC
+    `).all(facetId) as unknown as ConceptListRow[]
+  })
 }
 
 export interface ConceptProbeSummary {
@@ -365,12 +379,14 @@ export interface ConceptProbeSummary {
 
 /** Domains of a facet with their cluster statistics, creation order. */
 export function listProbesWithStats(facetId: number): ConceptProbeSummary[] {
-  return open().prepare(`
-    SELECT p.id, p.display, p.expanded,
-      (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id) AS conceptCount,
-      (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0) AS unusedCount
-    FROM probes p WHERE p.facet_id = ? ORDER BY p.id
-  `).all(facetId) as unknown as ConceptProbeSummary[]
+  return sqliteStoreOperation(open(), FORMAT_VERSIONS.concepts, storeFile(), false, () => {
+    return open().prepare(`
+      SELECT p.id, p.display, p.expanded,
+        (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id) AS conceptCount,
+        (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0) AS unusedCount
+      FROM probes p WHERE p.facet_id = ? ORDER BY p.id
+    `).all(facetId) as unknown as ConceptProbeSummary[]
+  })
 }
 
 /** Delete one domain with its whole cluster: concepts and their use history.
@@ -378,8 +394,9 @@ export function listProbesWithStats(facetId: number): ConceptProbeSummary[] {
  *  probe-generation ask may re-propose a similar domain. */
 export function deleteProbe(probeId: number): void {
   const d = open()
-  d.exec('BEGIN')
+  d.exec('BEGIN IMMEDIATE')
   try {
+    claimSqliteFormat(d, FORMAT_VERSIONS.concepts, storeFile())
     d.prepare('DELETE FROM uses WHERE concept_id IN (SELECT id FROM concepts WHERE probe_id = ?)').run(probeId)
     d.prepare('DELETE FROM concepts WHERE probe_id = ?').run(probeId)
     d.prepare('DELETE FROM probes WHERE id = ?').run(probeId)
@@ -394,8 +411,9 @@ export function deleteProbe(probeId: number): void {
  *  future planning ask — deletion is "drop this row", not a blocklist. */
 export function deleteConcept(conceptId: number): void {
   const d = open()
-  d.exec('BEGIN')
+  d.exec('BEGIN IMMEDIATE')
   try {
+    claimSqliteFormat(d, FORMAT_VERSIONS.concepts, storeFile())
     d.prepare('DELETE FROM uses WHERE concept_id = ?').run(conceptId)
     d.prepare('DELETE FROM concepts WHERE id = ?').run(conceptId)
     d.exec('COMMIT')
@@ -408,8 +426,9 @@ export function deleteConcept(conceptId: number): void {
 /** Delete a facet with everything under it: probes, concepts, uses. */
 export function deleteFacet(facetId: number): void {
   const d = open()
-  d.exec('BEGIN')
+  d.exec('BEGIN IMMEDIATE')
   try {
+    claimSqliteFormat(d, FORMAT_VERSIONS.concepts, storeFile())
     d.prepare('DELETE FROM uses WHERE concept_id IN (SELECT id FROM concepts WHERE facet_id = ?)').run(facetId)
     d.prepare('DELETE FROM concepts WHERE facet_id = ?').run(facetId)
     d.prepare('DELETE FROM probes WHERE facet_id = ?').run(facetId)

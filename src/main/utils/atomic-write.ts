@@ -54,16 +54,19 @@ export function stagingPathFor(filePath: string): string {
  * a caller that publishes it itself; on failure the staging file is removed. */
 export function stageBeside(filePath: string, bytes: NodeJS.ArrayBufferView): string {
   const tempPath = stagingPathFor(filePath)
+  let owned = false
   try {
-    const fd = fs.openSync(tempPath, 'wx')
+    const fd = fs.openSync(tempPath, 'wx', 0o600)
+    owned = true
     try {
       fs.writeFileSync(fd, bytes)
+      fs.fchmodSync(fd, 0o666 & ~process.umask())
       fs.fsyncSync(fd)
     } finally {
       fs.closeSync(fd)
     }
   } catch (error) {
-    try { fs.rmSync(tempPath, { force: true }) } catch {
+    try { if (owned) fs.rmSync(tempPath, { force: true }) } catch {
       // A staging cleanup failure cannot replace the original write/sync cause.
     }
     throw error
@@ -109,8 +112,10 @@ export function writeFileAtomic(
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf-8') : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
   if (holdsBytes(filePath, bytes)) return
+  let owned = false
   try {
-    const fd = fs.openSync(tempPath, 'w')
+    const fd = fs.openSync(tempPath, 'wx', 0o600)
+    owned = true
     try {
       fs.writeFileSync(fd, bytes)
       fs.fsyncSync(fd)
@@ -118,7 +123,7 @@ export function writeFileAtomic(
       fs.closeSync(fd)
     }
     const target = fs.statSync(filePath, { throwIfNoEntry: false })
-    if (target) fs.chmodSync(tempPath, keptMode(target))
+    fs.chmodSync(tempPath, target ? keptMode(target) : 0o666 & ~process.umask())
     fs.renameSync(tempPath, filePath)
     syncDirectory(dir)
     // After the rename: the file is exactly where it belongs, so record the bytes
@@ -129,7 +134,7 @@ export function writeFileAtomic(
     // The path no longer exists after publication. On every pre-publication
     // failure this removes the unique staging file without masking the cause.
     try {
-      fs.rmSync(tempPath, { force: true })
+      if (owned) fs.rmSync(tempPath, { force: true })
     } catch {
       // Cleanup is best-effort; the original write/publish error is authoritative.
     }
@@ -156,10 +161,12 @@ export async function writeFileAtomicAsync(
     ? Buffer.from(data, 'utf-8')
     : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
   let handle: fs.promises.FileHandle | null = null
+  let owned = false
   try {
     signal?.throwIfAborted()
     if (await holdsBytesAsync(filePath, bytes)) return
-    handle = await fs.promises.open(tempPath, 'w')
+    handle = await fs.promises.open(tempPath, 'wx', 0o600)
+    owned = true
     const chunkSize = 1024 * 1024
     let offset = 0
     while (offset < bytes.length) {
@@ -176,13 +183,13 @@ export async function writeFileAtomicAsync(
       if (error.code === 'ENOENT') return null
       throw error
     })
-    if (target) await fs.promises.chmod(tempPath, keptMode(target))
+    await fs.promises.chmod(tempPath, target ? keptMode(target) : 0o666 & ~process.umask())
     signal?.throwIfAborted()
     await fs.promises.rename(tempPath, filePath)
     await syncDirectoryAsync(dir)
     if (records) record(filePath, bytes)
   } finally {
     await handle?.close().catch(() => undefined)
-    await fs.promises.rm(tempPath, { force: true }).catch(() => undefined)
+    if (owned) await fs.promises.rm(tempPath, { force: true }).catch(() => undefined)
   }
 }

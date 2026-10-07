@@ -1,12 +1,10 @@
-import { BrowserWindow } from 'electron'
+import { broadcastPresentation } from '../presentation'
 import { type SessionDraftPersistenceState } from '../../shared/electron-api'
 
 let persistenceState: SessionDraftPersistenceState = { status: 'saved' }
 
 function broadcast(state: SessionDraftPersistenceState): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('session:draftPersistenceState', state)
-  }
+  broadcastPresentation('session:draftPersistenceState', state)
 }
 
 export function getDraftPersistenceState(): SessionDraftPersistenceState {

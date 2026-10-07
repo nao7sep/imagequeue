@@ -174,7 +174,7 @@ describe('opening and closing', () => {
     expect(views()[0]!.visible).toBe(true)
   })
 
-  it('closes when its page cannot paint the selection, and gives the main window back its focus', async () => {
+  it('closes when its page cannot paint without restoring or focusing the main window', async () => {
     const a = snapshots.publishSelection(image('a'))
     const opened = view.openFullscreenView()
     view.fullscreenViewPainted(a.version, true)
@@ -185,7 +185,7 @@ describe('opening and closing', () => {
     view.fullscreenViewPainted(none.version, false)
     expect(views()[0]!.visible).toBe(false)
     expect(mainSent()).toEqual([view.FULLSCREEN_VIEW_OPENED_CHANNEL, view.FULLSCREEN_VIEW_CLOSED_CHANNEL])
-    expect(main!.focused).toBe(focusedBefore + 1)
+    expect(main!.focused).toBe(focusedBefore)
   })
 
   it('closes when ImageQueue stops being the active app, without taking focus back', async () => {

@@ -24,6 +24,7 @@ vi.mock('node:worker_threads', async () => {
 await import('../../src/main/records-reader-worker')
 
 afterAll(() => {
+  port.emitter!.emit('close')
   removeRecordsRoots()
 })
 

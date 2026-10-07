@@ -32,6 +32,17 @@ const {
 } = await import('../../../src/main/queue/publisher')
 
 describe('queue control publication', () => {
+  it('keeps committed publication successful despite renderer and geometry failure', () => {
+    mocks.send.mockImplementationOnce(() => { throw new Error('renderer destroyed') })
+    mocks.refreshMinimum.mockImplementationOnce(() => { throw new Error('geometry unavailable') })
+    const healthy = vi.fn()
+    const unsubscribe = subscribeQueueControlState(healthy)
+    try {
+      expect(() => publishQueueState()).not.toThrow()
+      expect(healthy).toHaveBeenLastCalledWith(mocks.state)
+      expect(mocks.send).toHaveBeenCalledWith('queue:controlState', mocks.state)
+    } finally { unsubscribe() }
+  })
   it('isolates native presentation failures from queue publication', () => {
     const throwing = vi.fn(() => { throw new Error('menu failed') })
     const healthy = vi.fn()

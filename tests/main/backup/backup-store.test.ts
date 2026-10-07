@@ -158,6 +158,7 @@ describe('write-through backup store', () => {
   })
 
   it('takes the SQLite write reservation before reading the latest row and commits the decision', () => {
+    record(path.join(tmpRoot, 'warmup.json'), Buffer.from('{}'))
     const exec = vi.spyOn(DatabaseSync.prototype, 'exec')
     const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare')
     const get = vi.spyOn(StatementSync.prototype, 'get')

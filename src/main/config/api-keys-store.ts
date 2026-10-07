@@ -126,7 +126,6 @@ let newerWarned = false
 
 function readSecretsFile(forMutation = false): SecretsFile {
   const filePath = getSecretsPath()
-  warnIfInsecureMode(filePath)
   let text: string
   try {
     text = fs.readFileSync(filePath, 'utf-8')
@@ -174,7 +173,10 @@ function readSecretsFile(forMutation = false): SecretsFile {
     }
     return { keys: {} }
   }
-  if (normalized) return normalized
+  if (normalized) {
+    warnIfInsecureMode(filePath)
+    return normalized
+  }
   const movedTo = moveAsideInvalid(filePath)
   log('warn', 'API keys file had the wrong shape; set aside and treating as empty', {
     path: filePath,
@@ -200,9 +202,22 @@ function writeSecretsFile(file: SecretsFile): void {
   if (holdsBytes(filePath, content)) return
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
-  fs.writeFileSync(tempPath, content, { mode: SECRETS_FILE_MODE })
-  if (ENFORCE_FILE_MODE) fs.chmodSync(tempPath, SECRETS_FILE_MODE)
-  fs.renameSync(tempPath, filePath)
+  let owned = false
+  try {
+    const descriptor = fs.openSync(tempPath, 'wx', SECRETS_FILE_MODE)
+    owned = true
+    try {
+      fs.writeFileSync(descriptor, content)
+      fs.fsyncSync(descriptor)
+    } finally {
+      fs.closeSync(descriptor)
+    }
+    fs.renameSync(tempPath, filePath)
+  } finally {
+    if (owned) {
+      try { fs.rmSync(tempPath, { force: true }) } catch { /* Preserve the save's cause. */ }
+    }
+  }
 }
 
 // A stored value that fails the canonical `obf:` shape check is malformed —

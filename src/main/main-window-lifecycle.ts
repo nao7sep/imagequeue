@@ -13,6 +13,7 @@ export interface MainWindowLifecycleWindow {
   on(event: 'close', listener: (event: MainWindowLifecycleEvent) => void): unknown
   on(event: 'closed', listener: () => void): unknown
   on(event: 'session-end', listener: () => void): unknown
+  on(event: 'ready-to-show', listener: () => void): unknown
 }
 
 export interface MainWindowDock {
@@ -41,6 +42,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
   private shutdownStarted = false
   private systemSessionEnding = false
   private restoreInFlight: Promise<void> | null = null
+  private revealWanted = true
   private dockHideTimer: ReturnType<typeof setTimeout> | null = null
   private dockHidden = false
   private lastDockShowAt = Number.NEGATIVE_INFINITY
@@ -77,6 +79,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
   }
 
   restoreOrCreate(): Promise<void> {
+    this.revealWanted = true
     if (this.restoreInFlight) return this.restoreInFlight
 
     const operation = this.restoreOrCreateInner()
@@ -91,11 +94,26 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     this.cancelDockHide()
   }
 
+  /** Keep an explicit activation route when the status icon is removed. */
+  async retainActivationSurface(): Promise<void> {
+    this.cancelDockHide()
+    if (this.options.platform === 'darwin' && this.options.dock && this.dockHidden) {
+      await this.options.dock.show()
+      this.dockHidden = false
+    }
+    if (this.options.platform === 'win32') this.getWindow()?.setSkipTaskbar(false)
+  }
+
   private createAndRegisterWindow(): TWindow {
     const win = this.options.createWindow()
     this.mainWindow = win
 
+    win.on('ready-to-show', () => {
+      if (this.mainWindow === win && this.revealWanted && !this.shutdownStarted && !win.isDestroyed()) win.show()
+    })
+
     win.on('close', (event) => {
+      this.revealWanted = false
       if (this.shutdownStarted || this.systemSessionEnding || !this.options.isStatusIconAvailable()) return
       event.preventDefault()
       this.options.onHiddenToBackground()
@@ -114,6 +132,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     win.on('closed', () => {
       if (this.mainWindow !== win) return
       this.mainWindow = null
+      this.revealWanted = false
       this.options.onPrimaryWindowClosed()
     })
 
@@ -135,7 +154,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     }
 
     // The window may have been destroyed while Dock restoration was awaiting.
-    if (this.mainWindow !== win || win.isDestroyed() || this.shutdownStarted) return
+    if (this.mainWindow !== win || win.isDestroyed() || this.shutdownStarted || !this.revealWanted) return
     if (this.options.platform === 'win32') win.setSkipTaskbar(false)
     if (win.isMinimized()) win.restore()
     win.show()

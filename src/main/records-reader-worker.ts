@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { DatabaseSync } from 'node:sqlite'
+import { sqliteStoreOperation, FORMAT_VERSIONS } from './store-format'
 import { runRecordsRead } from './records-query'
 import type { RecordsReaderRequest, RecordsReaderResponse } from './records-reader'
 
@@ -10,11 +11,16 @@ import type { RecordsReaderRequest, RecordsReaderResponse } from './records-read
 const databasePath = (workerData as { databasePath: string }).databasePath
 let db: DatabaseSync | null = null
 
+parentPort?.once('close', () => {
+  db?.close()
+  db = null
+})
+
 parentPort?.on('message', ({ id, read }: RecordsReaderRequest) => {
   let response: RecordsReaderResponse
   try {
     db ??= new DatabaseSync(databasePath, { readOnly: true })
-    response = { id, ok: true, value: runRecordsRead(db, read) }
+    response = { id, ok: true, value: sqliteStoreOperation(db, FORMAT_VERSIONS.records, databasePath, false, () => runRecordsRead(db!, read)) }
   } catch (error) {
     // A connection that failed is opened afresh for the next read.
     try {

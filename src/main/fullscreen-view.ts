@@ -180,7 +180,7 @@ export function fullscreenViewPainted(version: number, painted: boolean): void {
   if (painted) paintedVersion = Math.max(paintedVersion, version)
   if (version < latestSelection().version) return
   if (!painted) {
-    closeFullscreenView({ refocusMain: true })
+    closeFullscreenView({ refocusMain: false })
     return
   }
   if (opening && version >= opening.version) showView()

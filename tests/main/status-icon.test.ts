@@ -149,11 +149,12 @@ describe('StatusIconController', () => {
     expect(restore).toHaveBeenCalledOnce()
   })
 
-  it('restores the window before destroying the only recovery icon', async () => {
+  it('retains explicit activation without revealing the window before removing the status icon', async () => {
     const order: string[] = []
     const controller = new StatusIconController({
       platform: 'win32',
-      restoreMainWindow: async () => { order.push('restore') },
+      restoreMainWindow: vi.fn(),
+      retainActivationSurface: async () => { order.push('activation') },
       requestQuit: vi.fn(),
       openOutputFolder: vi.fn(),
       setQueuePaused: vi.fn(),
@@ -165,7 +166,7 @@ describe('StatusIconController', () => {
 
     await controller.reconcile(false)
 
-    expect(order).toEqual(['restore', 'destroy'])
+    expect(order).toEqual(['activation', 'destroy'])
     expect(controller.isAvailable()).toBe(false)
     expect(mocks.unsubscribe).toHaveBeenCalledOnce()
   })
@@ -175,7 +176,8 @@ describe('StatusIconController', () => {
     const restorePromise = new Promise<void>((resolve) => { finishRestore = resolve })
     const controller = new StatusIconController({
       platform: 'win32',
-      restoreMainWindow: () => restorePromise,
+      restoreMainWindow: vi.fn(),
+      retainActivationSurface: () => restorePromise,
       requestQuit: vi.fn(),
       openOutputFolder: vi.fn(),
       setQueuePaused: vi.fn(),
@@ -191,10 +193,11 @@ describe('StatusIconController', () => {
     expect(mocks.FakeTray.instances[0].destroyed).toBe(false)
   })
 
-  it('keeps the recovery icon when foreground restoration fails', async () => {
+  it('keeps the icon if its alternative activation surface fails', async () => {
     const controller = new StatusIconController({
       platform: 'win32',
-      restoreMainWindow: async () => { throw new Error('Dock unavailable') },
+      restoreMainWindow: vi.fn(),
+      retainActivationSurface: async () => { throw new Error('Dock unavailable') },
       requestQuit: vi.fn(),
       openOutputFolder: vi.fn(),
       setQueuePaused: vi.fn(),
@@ -205,7 +208,7 @@ describe('StatusIconController', () => {
     expect(controller.isAvailable()).toBe(true)
     expect(mocks.log).toHaveBeenCalledWith(
       'error',
-      expect.stringContaining('main window was not restored'),
+      expect.stringContaining('explicit activation was unavailable'),
       expect.any(Object),
     )
   })

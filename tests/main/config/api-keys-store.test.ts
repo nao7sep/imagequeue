@@ -224,6 +224,25 @@ describe('api-keys-store', () => {
     expect(mode).toBe(0o600)
   })
 
+  it('removes private staging after publication fails and preserves the primary error', () => {
+    setStoredApiKey('openai.image', 'original')
+    const failure = new Error('publication unavailable')
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw failure })
+    try {
+      expect(() => setStoredApiKey('openai.image', 'replacement')).toThrow(failure)
+      expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+      expect(getStoredApiKey('openai.image')).toBe('original')
+    } finally { rename.mockRestore() }
+  })
+
+  it.runIf(isPosix)('does not tighten permissions of a newer secret file', () => {
+    const file = path.join(tmpRoot, 'api-keys.json')
+    fs.writeFileSync(file, JSON.stringify({ formatVersion: 2, keys: {} }), { mode: 0o644 })
+    fs.chmodSync(file, 0o644)
+    expect(getStoredApiKey('openai.image')).toBe('')
+    expect(fs.statSync(file).mode & 0o777).toBe(0o644)
+  })
+
   it.runIf(isPosix)('re-tightens a secrets file widened mid-session, not only once per session', () => {
     setStoredApiKey('openai.image', 'sk-stored')
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
@@ -244,7 +263,7 @@ describe('api-keys-store', () => {
   })
 
   it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', () => {
-    const spy = vi.spyOn(fs, 'writeFileSync')
+    const spy = vi.spyOn(fs, 'openSync')
     setStoredApiKey('openai.image', 'sk-stored')
 
     const tempCall = spy.mock.calls.find(

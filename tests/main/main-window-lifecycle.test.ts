@@ -8,6 +8,7 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
   let closeListener: ((event: MainWindowLifecycleEvent) => void) | null = null
   let closedListener: (() => void) | null = null
   let sessionEndListener: (() => void) | null = null
+  let readyListener: (() => void) | null = null
   const win = {
     isDestroyed: vi.fn(() => options.destroyed ?? false),
     isMinimized: vi.fn(() => options.minimized ?? false),
@@ -16,10 +17,11 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
     focus: vi.fn(),
     hide: vi.fn(),
     setSkipTaskbar: vi.fn(),
-    on: vi.fn((event: 'close' | 'closed' | 'session-end', listener: ((event: MainWindowLifecycleEvent) => void) | (() => void)) => {
+    on: vi.fn((event: 'close' | 'closed' | 'session-end' | 'ready-to-show', listener: ((event: MainWindowLifecycleEvent) => void) | (() => void)) => {
       if (event === 'close') closeListener = listener as (event: MainWindowLifecycleEvent) => void
       else if (event === 'closed') closedListener = listener as () => void
-      else sessionEndListener = listener as () => void
+      else if (event === 'session-end') sessionEndListener = listener as () => void
+      else readyListener = listener as () => void
     }),
     emitClose: () => {
       const event = { preventDefault: vi.fn() }
@@ -28,6 +30,7 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
     },
     emitClosed: () => { closedListener?.() },
     emitSessionEnd: () => { sessionEndListener?.() },
+    emitReady: () => { readyListener?.() },
   }
   return win
 }
@@ -60,6 +63,50 @@ afterEach(() => {
 })
 
 describe('MainWindowController', () => {
+  it('a later close defeats pending Dock restoration and late ready-to-show', async () => {
+    let finish!: () => void
+    const dock = { hide: vi.fn(), show: vi.fn(() => new Promise<void>((resolve) => { finish = resolve })) }
+    const { controller, win } = makeController({ platform: 'darwin', dock })
+    controller.createInitialWindow()
+    controller.markStartupComplete()
+    win.emitClose()
+    const opening = controller.restoreOrCreate()
+    win.emitClose()
+    win.emitReady()
+    finish()
+    await opening
+    expect(win.show).not.toHaveBeenCalled()
+    expect(win.focus).not.toHaveBeenCalled()
+  })
+
+  it('honors the latest explicit activation after a close during pending Dock restoration', async () => {
+    let finish!: () => void
+    const dock = { hide: vi.fn(), show: vi.fn(() => new Promise<void>((resolve) => { finish = resolve })) }
+    const { controller, win } = makeController({ platform: 'darwin', dock })
+    controller.createInitialWindow()
+    controller.markStartupComplete()
+    win.emitClose()
+    const first = controller.restoreOrCreate()
+    win.emitClose()
+    const latest = controller.restoreOrCreate()
+    expect(latest).toBe(first)
+    finish()
+    await latest
+    expect(dock.show).toHaveBeenCalledOnce()
+    expect(win.show).toHaveBeenCalledOnce()
+    expect(win.focus).toHaveBeenCalledOnce()
+  })
+
+  it('makes a hidden app explicitly activatable without revealing it', async () => {
+    const dock = { hide: vi.fn(), show: vi.fn(async () => {}) }
+    const { controller, win } = makeController({ platform: 'darwin', dock })
+    controller.createInitialWindow()
+    win.emitClose()
+    await controller.retainActivationSurface()
+    expect(dock.show).toHaveBeenCalledOnce()
+    expect(win.show).not.toHaveBeenCalled()
+    expect(win.focus).not.toHaveBeenCalled()
+  })
   it('does not create a competing window while startup is incomplete', async () => {
     const { controller, createWindow } = makeController()
     await controller.restoreOrCreate()

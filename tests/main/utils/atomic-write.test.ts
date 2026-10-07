@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { writeFileAtomic, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
+import { stageBeside, claimFinalName, writeFileAtomic, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
 // A replacement made through a temp file and a rename keeps what the file had:
 // its permission mode (content-lifecycle conventions). Its times are the new
@@ -40,6 +40,29 @@ describe('atomic replacement', () => {
     await writeFileAtomicAsync(filePath, 'new', false)
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('new')
     expect(fs.statSync(filePath).mode & 0o7777).toBe(0o604)
+  })
+
+  it.skipIf(process.platform === 'win32')('keeps unfinished stages private and publishes ordinary new files with normal permissions', async () => {
+    const expected = 0o666 & ~process.umask()
+    const originalWrite = fs.writeFileSync
+    const privateStages: number[] = []
+    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof fs.writeFileSync>) => {
+      if (typeof args[0] === 'number') privateStages.push(fs.fstatSync(args[0]).mode & 0o777)
+      return originalWrite(...args)
+    })
+    try {
+      const ordinary = path.join(dir, 'new.json')
+      writeFileAtomic(ordinary, 'new', false)
+      const output = path.join(dir, 'image.png')
+      const stage = stageBeside(output, Buffer.from('complete'))
+      expect(claimFinalName(stage, output)).toBe(true)
+      expect(privateStages).toEqual([0o600, 0o600])
+      expect(fs.statSync(ordinary).mode & 0o777).toBe(expected)
+      expect(fs.statSync(output).mode & 0o777).toBe(expected)
+      const asyncPath = path.join(dir, 'async.json')
+      await writeFileAtomicAsync(asyncPath, 'new', false)
+      expect(fs.statSync(asyncPath).mode & 0o777).toBe(expected)
+    } finally { write.mockRestore() }
   })
 
   it('never carries the replaced file\'s times onto the new content', async () => {

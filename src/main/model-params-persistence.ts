@@ -1,12 +1,10 @@
-import { BrowserWindow } from 'electron'
+import { broadcastPresentation } from './presentation'
 import { type DrawThingsParamsPersistenceState } from '../shared/electron-api'
 
 let persistenceState: DrawThingsParamsPersistenceState = { status: 'saved' }
 
 function broadcast(state: DrawThingsParamsPersistenceState): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('drawthings:paramsPersistenceState', state)
-  }
+  broadcastPresentation('drawthings:paramsPersistenceState', state)
 }
 
 export function getModelParamsPersistenceState(): DrawThingsParamsPersistenceState {

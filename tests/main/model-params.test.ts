@@ -149,4 +149,15 @@ describe('params.json format version', () => {
     drainPendingWrites()
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
   })
+
+  it('does not overwrite a newer file installed after the model map was cached', async () => {
+    const module = await import('../../src/main/model-params')
+    module.setModelParams('model.ckpt', params)
+    module.drainPendingWrites()
+    const bytes = JSON.stringify({ formatVersion: 2, models: { future: params } })
+    fs.writeFileSync(file(), bytes)
+    module.setModelParams('model.ckpt', { ...params, steps: 99 })
+    module.drainPendingWrites()
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+  })
 })

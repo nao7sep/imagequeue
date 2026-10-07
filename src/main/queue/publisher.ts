@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { broadcastPresentation } from '../presentation'
 import { refreshMainWindowMinimumSize } from '../main-window-layout'
 import { log, serializeError } from '../logger'
 import { buildControlState } from './control-state'
@@ -33,9 +33,7 @@ export function subscribeQueueControlState(listener: QueueControlListener): () =
 
 export function publishQueueControlState(): void {
   const controlState = buildControlState()
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('queue:controlState', controlState)
-  }
+  broadcastPresentation('queue:controlState', controlState)
   notifyControlListeners(controlState)
 }
 
@@ -44,17 +42,17 @@ export function publishQueueControlState(): void {
 export function publishQueueState(): void {
   const tasks = queueManager.getAllStoredTasks()
   const controlState = buildControlState()
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('queue:updated', tasks)
-    win.webContents.send('queue:controlState', controlState)
-  }
+  broadcastPresentation('queue:updated', tasks)
+  broadcastPresentation('queue:controlState', controlState)
   notifyControlListeners(controlState)
-  refreshMainWindowMinimumSize()
+  try {
+    refreshMainWindowMinimumSize()
+  } catch (error) {
+    log('warn', 'Window geometry presentation failed', { error: serializeError(error) })
+  }
 }
 
 /** An app-wide notice from queue work no renderer request is waiting on. */
 export function publishAppNotice(notice: AppNotice): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('app:notice', notice)
-  }
+  broadcastPresentation('app:notice', notice)
 }

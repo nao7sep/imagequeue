@@ -101,10 +101,18 @@ function ensureLoaded(): ParamsStore {
 
 function writeNow(): void {
   if (store === null) return
+  const file = getParamsFilePath()
+  if (fs.existsSync(file)) {
+    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new StoreLeftInPlaceError(file, { cause: new Error('Invalid model parameter store') })
+    }
+    checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file)
+  }
   // recorded: params.json is durable, user-authored managed text — the
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
-  writeJsonAtomic(getParamsFilePath(), { formatVersion: FORMAT_VERSIONS.modelParams, models: store }, true)
+  writeJsonAtomic(file, { formatVersion: FORMAT_VERSIONS.modelParams, models: store }, true)
   markModelParamsPersistenceSaved()
 }
 

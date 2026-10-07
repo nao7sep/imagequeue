@@ -64,26 +64,50 @@ export async function startApp(home: string) {
   const { drainPendingWrites } = await import('../../../src/main/model-params')
   const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
 
-  // The app starts once per process; this harness starts it again in the same
-  // process, so the shutdown signal the last stop aborted is replaced first, or
-  // every slug would take the shutdown path and fall back to a random name.
-  resetCancellationState()
-  config.ensureDataDir()
-  openRecords(config.getDataDir())
-  clearTempDir()
-  session.initSession()
-  session.resetOutputTimestampAllocators()
-  session.persistActiveSession()
-  session.registerSessionIpc()
-  registerQueueIpc()
-  registerSettingsIpc(async () => {})
-  registerStateIpc()
-  registerDependenciesIpc()
-  registerElaboratorsIpc()
-  registerConceptsIpc()
-  startProcessor()
-
   const contents = new RendererContents()
+  async function shutdown(): Promise<void> {
+    const failures: unknown[] = []
+    const clean = async (step: () => unknown): Promise<void> => {
+      try { await step() } catch (error) { failures.push(error) }
+    }
+    await clean(stopProcessor)
+    await clean(drainPendingWrites)
+    await clean(() => session.drainPendingDraftWrites())
+    await Promise.all([
+      clean(() => cancelAllInFlightAndWait(5_000)),
+      clean(() => killAllCliJobsAndWait({ timeoutMs: 5_000 })),
+    ])
+    await clean(() => { if (queueManager.interruptGeneratingTasks() > 0) session.persistActiveSession() })
+    await clean(() => session.dropCurrentSessionIfEmpty('quit'))
+    await clean(() => contents.destroy())
+    await clean(closeBackupStore)
+    await clean(closeRecords)
+    if (failures.length > 0) throw new AggregateError(failures, 'Live app cleanup failed')
+  }
+  try {
+    // The app starts once per process; this harness starts it again in the same
+    // process, so the shutdown signal the last stop aborted is replaced first, or
+    // every slug would take the shutdown path and fall back to a random name.
+    resetCancellationState()
+    config.ensureDataDir()
+    openRecords(config.getDataDir())
+    clearTempDir()
+    session.initSession()
+    session.resetOutputTimestampAllocators()
+    session.persistActiveSession()
+    session.registerSessionIpc()
+    registerQueueIpc()
+    registerSettingsIpc(async () => {})
+    registerStateIpc()
+    registerDependenciesIpc()
+    registerElaboratorsIpc()
+    registerConceptsIpc()
+    startProcessor()
+  } catch (error) {
+    try { await shutdown() } catch (cleanupError) { console.error('Partial live app cleanup failed', cleanupError) }
+    throw error
+  }
+
   /** Invokes a handler as the renderer does; IPC copies what crosses it both ways. */
   const invoke = async <T>(channel: string, ...args: unknown[]): Promise<T> => {
     const handler = handlers.get(channel)
@@ -128,19 +152,7 @@ export async function startApp(home: string) {
       }
     },
 
-    /** src/main/primary-instance.ts's graceful shutdown, in its order, then the renderer goes away. */
-    shutdown: async (): Promise<void> => {
-      stopProcessor()
-      drainPendingWrites()
-      await session.drainPendingDraftWrites()
-      await cancelAllInFlightAndWait(5_000)
-      await killAllCliJobsAndWait({ timeoutMs: 5_000 })
-      if (queueManager.interruptGeneratingTasks() > 0) session.persistActiveSession()
-      await session.dropCurrentSessionIfEmpty('quit')
-      contents.destroy()
-      closeBackupStore()
-      closeRecords()
-    },
+    shutdown,
   }
 }
 

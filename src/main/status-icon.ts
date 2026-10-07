@@ -33,6 +33,7 @@ export function buildStatusIconTooltip(state: QueueControlState, translator: Tra
 interface StatusIconControllerOptions {
   platform?: NodeJS.Platform
   restoreMainWindow: () => Promise<void> | void
+  retainActivationSurface?: () => Promise<void> | void
   requestQuit: () => void
   openOutputFolder: () => Promise<void> | void
   setQueuePaused: (paused: boolean) => Promise<void> | void
@@ -70,11 +71,11 @@ export class StatusIconController {
     }
 
     if (this.isAvailable()) {
-      // Keep the recovery path alive until the ordinary window is reachable.
+      // Keep explicit activation reachable without revealing the workspace.
       try {
-        await this.options.restoreMainWindow()
+        await this.options.retainActivationSurface?.()
       } catch (err) {
-        log('error', 'Status icon could not be disabled because the main window was not restored', {
+        log('error', 'Status icon could not be disabled because explicit activation was unavailable', {
           error: serializeError(err),
         })
         return true

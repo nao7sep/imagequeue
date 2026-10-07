@@ -116,6 +116,7 @@ export function runPrimaryInstance(): void {
   registerImageSchemeAsPrivileged()
 
   app.whenReady().then(async () => {
+    try {
     // The language is settled before any window or native menu exists, so the
     // first words on every surface, a startup failure included, are already in it.
     await settleLanguage()
@@ -126,7 +127,6 @@ export function runPrimaryInstance(): void {
     // the rejection lands in the unhandledRejection hook, which logs and does NOT
     // exit — a running process with no window and no dialog is not a halt
     // (storage-path conventions: a halt names the store and reaches the user).
-    try {
       await startUp()
     } catch (err) {
       enterStartupFailure(err)
@@ -190,10 +190,6 @@ function createWindow(): BrowserWindow {
   }))
   registerMainWindowForLayout(win)
   trackThemedWindow(win)
-
-  win.once('ready-to-show', () => {
-    win.show()
-  })
 
   hardenWindow(win)
 
@@ -282,6 +278,7 @@ async function startUp(): Promise<void> {
   persistActiveSession()
   statusIconController = new StatusIconController({
     restoreMainWindow: () => mainWindowController?.restoreOrCreate(),
+    retainActivationSurface: () => mainWindowController?.retainActivationSurface(),
     requestQuit: () => app.quit(),
     openOutputFolder,
     setQueuePaused: setQueuePausedAndPublish,

@@ -1,4 +1,5 @@
-import type { DatabaseSync } from 'node:sqlite'
+import fs from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 
 // Every store's format version, and the one way each store reads and writes
 // its marker (store-recovery-conventions).
@@ -90,14 +91,57 @@ export function markFormat<T extends object>(map: T, version: number, key: strin
 /**
  * Checks an open SQLite store's version before anything else touches it, so a
  * store this build cannot use throws having had nothing written. A version of
- * 0 is a missing marker, unreadable, except on a database with nothing in it
- * yet, which is new and is stamped with this build's version.
+ * 0 is a missing marker and is unreadable. Only creation can admit a fresh file.
  */
 export function claimSqliteFormat(db: DatabaseSync, supported: number, file: string): void {
   const { user_version: found } = db.prepare('PRAGMA user_version').get() as { user_version: number }
   if (found > supported) throw new NewerFormatError(file, found, supported)
-  if (found !== 0) return
-  const { objects } = db.prepare('SELECT count(*) AS objects FROM sqlite_master').get() as { objects: number }
-  if (objects > 0) throw new MissingFormatError(file)
-  db.exec(`PRAGMA user_version = ${supported}`)
+  if (found < 1) throw new MissingFormatError(file)
+}
+
+/** Creation owns the fresh-file fact; schema and marker commit together. */
+export function openSqliteStore(file: string, supported: number, schema: string): DatabaseSync {
+  let fresh = false
+  try {
+    const descriptor = fs.openSync(file, 'wx')
+    fresh = true
+    fs.closeSync(descriptor)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  }
+  const db = new DatabaseSync(file, { timeout: 5_000 })
+  try {
+    const { user_version: found } = db.prepare('PRAGMA user_version').get() as { user_version: number }
+    if (!(fresh && found === 0)) claimSqliteFormat(db, supported, file)
+    db.exec('PRAGMA journal_mode = WAL')
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const { user_version: current } = db.prepare('PRAGMA user_version').get() as { user_version: number }
+      if (!(fresh && current === 0)) claimSqliteFormat(db, supported, file)
+      db.exec(schema)
+      db.exec(`PRAGMA user_version = ${supported}`)
+      db.exec('COMMIT')
+    } catch (error) {
+      try { db.exec('ROLLBACK') } catch { /* Preserve initialization failure. */ }
+      throw error
+    }
+    return db
+  } catch (error) {
+    try { db.close() } catch { /* Preserve initialization failure. */ }
+    throw error
+  }
+}
+
+/** The marker and the operation share one SQLite snapshot/claim. */
+export function sqliteStoreOperation<T>(db: DatabaseSync, supported: number, file: string, write: boolean, operation: () => T): T {
+  db.exec(write ? 'BEGIN IMMEDIATE' : 'BEGIN')
+  try {
+    claimSqliteFormat(db, supported, file)
+    const result = operation()
+    db.exec('COMMIT')
+    return result
+  } catch (error) {
+    try { db.exec('ROLLBACK') } catch { /* Preserve operation failure. */ }
+    throw error
+  }
 }

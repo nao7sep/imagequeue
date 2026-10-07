@@ -3,7 +3,7 @@ import path from 'path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
-import { claimSqliteFormat, FORMAT_VERSIONS } from './store-format'
+import { openSqliteStore, sqliteStoreOperation, FORMAT_VERSIONS } from './store-format'
 
 // The app's records, per the logging-conventions and the data-lifecycle-conventions'
 // Records: one `records.sqlite3` under the storage root, written only by the main
@@ -88,11 +88,7 @@ export function openRecords(dataDir: string): string {
   fallbackFile = path.join(dataDir, 'logs', `${utcStampForFilename(launchStarted)}.log`)
   let opened: DatabaseSync | undefined
   try {
-    opened = new DatabaseSync(file)
-    // A newer database stays as it is; records go to the fallback file.
-    claimSqliteFormat(opened, FORMAT_VERSIONS.records, file)
-    opened.exec('PRAGMA journal_mode = WAL')
-    opened.exec(SCHEMA)
+    opened = openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA)
     inserts = {
       log_records: insertStatement(opened, 'log_records', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'level', 'message', 'fields']),
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),
@@ -185,7 +181,7 @@ function reportFailure(message: string, error: unknown): void {
 function write(table: Table, row: Row): void {
   if (inserts) {
     try {
-      inserts[table].run(row)
+      sqliteStoreOperation(db!, FORMAT_VERSIONS.records, databaseFile!, true, () => inserts![table].run(row))
     } catch (error) {
       reportFailure('Records database write failed', error)
       writeFallback(table, row)
