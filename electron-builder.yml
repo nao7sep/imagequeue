@@ -17,6 +17,7 @@ directories:
 # production dependencies from package.json (node-pty, openai, @google/genai, …).
 files:
   - 'out/**'
+  - '!out/measure-lines/**'
   - 'package.json'
   # No runtime path consumes source maps or TypeScript declarations. Excluding
   # them keeps provider SDK development metadata out of the reviewed artifact.
@@ -45,7 +46,7 @@ asarUnpack:
   - '**/node_modules/node-pty/prebuilds/**'
 
 # Tahoe "Liquid Glass" icon: ship the pre-compiled asset catalog (committed in
-# company/assets, deployed here by the liquid-glass-icon tool) into Contents/Resources.
+# build/Assets.car; regeneration uses the private liquid-glass-icon tool) into Contents/Resources.
 # macOS 26 reads CFBundleIconName below → this catalog; older macOS falls back to
 # CFBundleIconFile → build/icon.icns (mac.icon). Building does NOT need Xcode — the
 # Assets.car is prebuilt; only re-generating the icon does.
@@ -54,6 +55,8 @@ extraResources:
     to: Assets.car
   - from: LICENSE
     to: LICENSE.txt
+  - from: THIRD_PARTY_NOTICES
+    to: THIRD_PARTY_NOTICES.txt
   - from: node_modules/electron/dist/LICENSE
     to: electron/LICENSE
   - from: node_modules/electron/dist/LICENSES.chromium.html

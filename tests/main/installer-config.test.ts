@@ -29,6 +29,8 @@ describe("packaged license texts", () => {
     for (const line of [
       "  - from: LICENSE",
       "    to: LICENSE.txt",
+      "  - from: THIRD_PARTY_NOTICES",
+      "    to: THIRD_PARTY_NOTICES.txt",
       "  - from: node_modules/electron/dist/LICENSE",
       "    to: electron/LICENSE",
       "  - from: node_modules/electron/dist/LICENSES.chromium.html",
@@ -50,6 +52,12 @@ describe("packaged license texts", () => {
 });
 
 describe("node-pty package shape", () => {
+  it("preserves the excluded winpty source notice in the packaged notices", () => {
+    const notices = readFileSync(new URL("../../THIRD_PARTY_NOTICES", import.meta.url), "utf8");
+    const upstream = readFileSync(new URL("../../node_modules/node-pty/deps/winpty/LICENSE", import.meta.url), "utf8");
+    expect(notices).toContain(upstream.trim());
+  });
+
   it("unpacks only runtime prebuilds and excludes development material", () => {
     expect(builderConfig).toContain("- '**/node_modules/node-pty/prebuilds/**'");
     expect(builderConfig).not.toContain("- '**/node_modules/node-pty/**'");
@@ -65,6 +73,10 @@ describe("node-pty package shape", () => {
 });
 
 describe("packaged development metadata", () => {
+  it("excludes the independent line-measurement build", () => {
+    expect(builderConfig).toContain("- '!out/measure-lines/**'");
+  });
+
   it("excludes source maps and TypeScript declarations", () => {
     for (const exclusion of ["!**/*.map", "!**/*.d.ts", "!**/*.d.mts", "!**/*.d.cts"]) {
       expect(builderConfig).toContain(`  - '${exclusion}'`);
