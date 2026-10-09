@@ -22,7 +22,7 @@ import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
 import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/config'
 import { cloneTask, createEmptyQueues, queueManager } from '../queue/queue-manager'
-import { createSessionDir, getOutputDir, getSessionDir, getSessionId, setSessionDir } from './session'
+import { createSessionDir, getSessionsDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { createCoalescedWriter } from '../utils/coalesced-writer'
@@ -469,7 +469,7 @@ function broadcastInterruptedOnResume(count: number): void {
 
 export function resolveSessionDir(sessionId: string): string {
   const safeSessionId = ensureSessionId(sessionId)
-  return path.join(getOutputDir(), safeSessionId)
+  return path.join(getSessionsDir(), safeSessionId)
 }
 
 export function persistActiveSession(): SessionManifest {
@@ -542,15 +542,15 @@ async function createSessionOwned(): Promise<void> {
 // Sessions it can open, most recently updated first, then those it cannot,
 // newest folder first.
 export function listSessions(): SessionListEntry[] {
-  const outputDir = getOutputDir()
+  const sessionsDir = getSessionsDir()
   const currentSessionId = getSessionId()
-  const entries = fs.readdirSync(outputDir, { withFileTypes: true })
+  const entries = fs.readdirSync(sessionsDir, { withFileTypes: true })
   const summaries: SessionSummary[] = []
   const unopenable: UnopenableSession[] = []
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const read = readManifestFromDir(path.join(outputDir, entry.name))
+    const read = readManifestFromDir(path.join(sessionsDir, entry.name))
     if (!read.manifest) {
       if (read.problem !== 'missing') unopenable.push({ sessionId: entry.name, unopenable: read.problem })
       continue

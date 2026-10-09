@@ -12,7 +12,7 @@ import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFil
 import { claimFinalName } from './utils/atomic-write'
 import { syncDirectory } from './utils/fsync'
 import { AppConfig } from './config/types'
-import { openOutputFolder } from './session/open-output-folder'
+import { openSessionsFolder } from './session/open-sessions-folder'
 import { log, serializeError } from './logger'
 import { mainTranslator } from './i18n'
 import {
@@ -250,7 +250,7 @@ export function registerSettingsIpc(
     await shell.openExternal(url)
   })
 
-  handle('shell:openOutputFolder', openOutputFolder)
+  handle('shell:openSessionsFolder', openSessionsFolder)
 
   handle('shell:revealFile', (_event, baseName: string, ext: string) => {
     const safeBase = assertSafeBaseName(baseName)

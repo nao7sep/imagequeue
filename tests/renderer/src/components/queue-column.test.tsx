@@ -358,7 +358,7 @@ describe('task status presentation', () => {
       ...task('completed'),
       id: 'task-complete',
       baseName: 'image-1',
-      imagePath: '/output/image-1.png',
+      imagePath: '/sessions/image-1.png',
     }
     queueValue.tasks.openai = [task('failed'), completed]
     electronAPI.retryTask.mockRejectedValueOnce(new Error('IMAGEQUEUE_RETRY_SENTINEL'))
@@ -405,7 +405,7 @@ describe('task thumbnails', () => {
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
     const thumbnail = container.querySelector<HTMLImageElement>('img.task-thumbnail')!
-    expect(thumbnail.getAttribute('src')).toBe('iq-image://output/current/image-1')
+    expect(thumbnail.getAttribute('src')).toBe('iq-image://sessions/current/image-1')
     expect(thumbnail.getAttribute('loading')).toBe('lazy')
   })
 })

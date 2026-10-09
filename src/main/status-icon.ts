@@ -35,7 +35,7 @@ interface StatusIconControllerOptions {
   restoreMainWindow: () => Promise<void> | void
   retainActivationSurface?: () => Promise<void> | void
   requestQuit: () => void
-  openOutputFolder: () => Promise<void> | void
+  openSessionsFolder: () => Promise<void> | void
   setQueuePaused: (paused: boolean) => Promise<void> | void
 }
 
@@ -155,8 +155,8 @@ export class StatusIconController {
         click: () => { this.runAction('restore main window', this.options.restoreMainWindow) },
       },
       {
-        label: t('statusIcon.openOutputFolder'),
-        click: () => { this.runAction('open output folder', this.options.openOutputFolder) },
+        label: t('statusIcon.openSessionsFolder'),
+        click: () => { this.runAction('open sessions folder', this.options.openSessionsFolder) },
       },
       { type: 'separator' },
       {

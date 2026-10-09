@@ -11,7 +11,7 @@ type Handler = (...args: unknown[]) => unknown
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   deleteToTrash: false,
-  sessionDir: '/output/A',
+  sessionDir: '/sessions/A',
   sessionMutationPending: false,
   log: vi.fn(),
   logEnqueue: vi.fn(),
@@ -104,7 +104,7 @@ function statuses(backend: BackendId = 'openai'): [string, TaskStatus][] {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.deleteToTrash = false
-  mocks.sessionDir = '/output/A'
+  mocks.sessionDir = '/sessions/A'
   mocks.handlers.clear()
   queueManager.replaceAllTasks(createEmptyQueues())
   registerQueueIpc()
@@ -231,7 +231,7 @@ describe('deleting a row together with its image', () => {
     }))
     const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
     try {
-      mocks.sessionDir = '/output/B'
+      mocks.sessionDir = '/sessions/B'
       seed([makeTask('done', 'completed', { prompt: 'B image', baseName: 'B-done' })])
     } finally {
       settle()
@@ -266,9 +266,9 @@ describe('deleting a row together with its image', () => {
     mocks.trashImageOutput.mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve }))
     const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
     try {
-      mocks.sessionDir = '/output/B'
+      mocks.sessionDir = '/sessions/B'
       seed([])
-      mocks.sessionDir = '/output/A'
+      mocks.sessionDir = '/sessions/A'
       seed([withFile()])
     } finally {
       settle()

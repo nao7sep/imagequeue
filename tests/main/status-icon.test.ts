@@ -127,7 +127,7 @@ describe('StatusIconController', () => {
       platform: 'win32',
       restoreMainWindow: restore,
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused,
     })
 
@@ -136,7 +136,7 @@ describe('StatusIconController', () => {
     expect(mocks.FakeTray.instances).toHaveLength(1)
     const tray = mocks.FakeTray.instances[0]
     expect(tray.menu.map((item) => item.label).filter(Boolean)).toEqual([
-      'Open ImageQueue', 'Open Output Folder', 'Pause', 'Exit ImageQueue',
+      'Open ImageQueue', 'Open Sessions Folder', 'Pause', 'Exit ImageQueue',
     ])
 
     mocks.queueListener?.({ paused: true, generating: 1, queued: 2, interrupted: 0 })
@@ -156,7 +156,7 @@ describe('StatusIconController', () => {
       restoreMainWindow: vi.fn(),
       retainActivationSurface: async () => { order.push('activation') },
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
     await controller.reconcile(true)
@@ -179,7 +179,7 @@ describe('StatusIconController', () => {
       restoreMainWindow: vi.fn(),
       retainActivationSurface: () => restorePromise,
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
     await controller.reconcile(true)
@@ -199,7 +199,7 @@ describe('StatusIconController', () => {
       restoreMainWindow: vi.fn(),
       retainActivationSurface: async () => { throw new Error('Dock unavailable') },
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
     await controller.reconcile(true)
@@ -218,7 +218,7 @@ describe('StatusIconController', () => {
       platform: 'win32',
       restoreMainWindow: vi.fn(),
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
     await controller.reconcile(true)
@@ -237,7 +237,7 @@ describe('StatusIconController', () => {
       platform: 'win32',
       restoreMainWindow: vi.fn(),
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
 
@@ -252,7 +252,7 @@ describe('StatusIconController', () => {
       platform: 'darwin',
       restoreMainWindow: vi.fn(),
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
     expect(await mac.reconcile(true)).toBe(true)
@@ -264,7 +264,7 @@ describe('StatusIconController', () => {
       platform: 'win32',
       restoreMainWindow: vi.fn(),
       requestQuit: vi.fn(),
-      openOutputFolder: vi.fn(),
+      openSessionsFolder: vi.fn(),
       setQueuePaused: vi.fn(),
     })
     expect(await broken.reconcile(true)).toBe(false)

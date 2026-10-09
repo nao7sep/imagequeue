@@ -13,7 +13,7 @@ vi.mock('../../../src/main/session', () => ({
   persistActiveSession: () => undefined,
   mutateSession: (operation: () => Promise<unknown>) => operation(),
   getSessionId: () => 'A',
-  getSessionDir: () => '/output/A',
+  getSessionDir: () => '/sessions/A',
 }))
 vi.mock('../../../src/main/config', () => ({ loadConfig: () => ({ general: { delete_to_trash: false } }) }))
 vi.mock('../../../src/main/utils/file-output', () => ({

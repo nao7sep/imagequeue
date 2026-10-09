@@ -14,9 +14,9 @@ describe('image scheme URLs', () => {
   it('rejects other schemes, hosts and shapes', () => {
     expect(parseImageUrl('file:///etc/passwd')).toBeNull()
     expect(parseImageUrl('iq-image://elsewhere/current/x')).toBeNull()
-    expect(parseImageUrl('iq-image://output/current/')).toBeNull()
-    expect(parseImageUrl('iq-image://output/session/only-id')).toBeNull()
-    expect(parseImageUrl('iq-image://output/current/a/b')).toBeNull()
+    expect(parseImageUrl('iq-image://sessions/current/')).toBeNull()
+    expect(parseImageUrl('iq-image://sessions/session/only-id')).toBeNull()
+    expect(parseImageUrl('iq-image://sessions/current/a/b')).toBeNull()
     expect(parseImageUrl('not a url')).toBeNull()
   })
 })

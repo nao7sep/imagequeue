@@ -18,7 +18,7 @@ export function registerImageSchemeAsPrivileged(): void {
 }
 
 /** The on-disk file a request names, or null when it names nothing servable.
- *  Session id and base name are checked so a URL cannot leave the output tree. */
+ *  Session id and base name are checked so a URL cannot leave the sessions folder. */
 export async function resolveImageRequest(url: string): Promise<string | null> {
   const target = parseImageUrl(url)
   if (!target) return null

@@ -4,7 +4,7 @@ export {
   getSessionDir,
   setSessionDir,
   getSessionId,
-  getOutputDir,
+  getSessionsDir,
 } from './session'
 export { TimestampAllocator, type OutputTimestamp } from './timestamp-allocator'
 export { allocateOutputTimestamp, resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'

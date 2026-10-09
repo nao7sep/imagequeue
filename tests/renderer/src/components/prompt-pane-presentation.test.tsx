@@ -101,7 +101,7 @@ describe('PromptPane presentation', () => {
   it('draws a completed task\'s image from the app\'s image scheme once it has decoded, and clears an earlier load failure', async () => {
     const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
     await waitFor(() => expect(container.querySelector('.preview-image')).not.toBeNull())
-    expect(container.querySelector('.preview-image')?.getAttribute('src')).toBe('iq-image://output/current/image')
+    expect(container.querySelector('.preview-image')?.getAttribute('src')).toBe('iq-image://sessions/current/image')
     expect(selection.clearTaskActionResult).toHaveBeenCalledWith('task-1', 'preview')
     expect(selection.reportTaskActionFailure).not.toHaveBeenCalled()
   })

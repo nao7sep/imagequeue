@@ -40,7 +40,7 @@ describe('fullscreen view page', () => {
   it('draws the selected image once decoded and reports that snapshot painted', async () => {
     const { container } = render(<FullscreenViewApp />)
     await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
-    expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://output/current/a')
+    expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/a')
   })
 
   it('keeps the current image up until the next one has decoded', async () => {
@@ -49,9 +49,9 @@ describe('fullscreen view page', () => {
     await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
     decode.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     act(() => pushSnapshot({ version: 4, task: image('b') }))
-    expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://output/current/a')
+    expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/a')
     await act(async () => finish())
-    await waitFor(() => expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://output/current/b'))
+    await waitFor(() => expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/b'))
     expect(api.reportFullscreenViewPainted).toHaveBeenLastCalledWith(4, true)
   })
 

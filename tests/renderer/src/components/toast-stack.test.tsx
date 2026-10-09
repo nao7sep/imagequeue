@@ -69,25 +69,25 @@ describe('ToastStack', () => {
     render(<ToastStack />)
     const before = document.activeElement
     act(() => reportOperationalFailure(
-      'output-folder',
-      'operation.outputFolderFailed',
-      'Failed to open output folder',
+      'sessions-folder',
+      'operation.sessionsFolderFailed',
+      'Failed to open sessions folder',
       new Error('EACCES /private/tmp/IMAGEQUEUE_FOLDER_SENTINEL'),
     ))
-    expect(toastTexts()[0]).toContain('output folder could not be opened')
-    expect(screen.getByRole('alert').textContent).toContain('output folder could not be opened')
+    expect(toastTexts()[0]).toContain('sessions folder could not be opened')
+    expect(screen.getByRole('alert').textContent).toContain('sessions folder could not be opened')
     expect(document.body.textContent).not.toContain('IMAGEQUEUE_FOLDER_SENTINEL')
     expect(document.activeElement).toBe(before)
     expect(window.electronAPI.appLog).toHaveBeenCalledWith(
       'error',
-      'Failed to open output folder',
+      'Failed to open sessions folder',
       expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('IMAGEQUEUE_FOLDER_SENTINEL') }) }),
     )
   })
 
   it('keeps every independent failure, with no count limit', () => {
     render(<ToastStack />)
-    const keys = ['operation.outputFolderFailed', 'operation.enqueueFailed', 'operation.uiStateSaveFailed',
+    const keys = ['operation.sessionsFolderFailed', 'operation.enqueueFailed', 'operation.uiStateSaveFailed',
       'operation.fullscreenViewOpenFailed', 'operation.fullscreenViewCloseFailed', 'operation.queueCommandFailed'] as const
     act(() => keys.forEach((key, index) => reportOperationalFailure(`op-${index}`, key, 'failed', new Error(key))))
     expect(toastTexts()).toHaveLength(keys.length)
@@ -98,12 +98,12 @@ describe('ToastStack', () => {
     render(<ToastStack />)
     act(() => {
       reportOperationalFailure('queue-controls-load', 'operation.queueControlsLoadFailed', 'failed', new Error('a'))
-      reportOperationalFailure('output-folder', 'operation.outputFolderFailed', 'failed', new Error('b'))
+      reportOperationalFailure('sessions-folder', 'operation.sessionsFolderFailed', 'failed', new Error('b'))
     })
     act(() => reportOperationalFailure('queue-controls-load', 'operation.queueControlsRefreshFailed', 'failed', new Error('c')))
     const texts = toastTexts()
     expect(texts).toHaveLength(2)
-    expect(texts[0]).toContain('The output folder could not be opened.')
+    expect(texts[0]).toContain('The sessions folder could not be opened.')
     expect(texts[1]).toContain('Queue controls could not be refreshed.')
     expect(stack().textContent).not.toContain('×')
   })
@@ -112,20 +112,20 @@ describe('ToastStack', () => {
     render(<ToastStack />)
     act(() => {
       reportOperationalFailure('ui-state-save', 'operation.uiStateSaveFailed', 'UI state failed', new Error('a'))
-      reportOperationalFailure('output-folder', 'operation.outputFolderFailed', 'Folder open failed', new Error('b'))
+      reportOperationalFailure('sessions-folder', 'operation.sessionsFolderFailed', 'Folder open failed', new Error('b'))
     })
     act(() => clearOperationalFailure('ui-state-save'))
-    expect(toastTexts()).toEqual([expect.stringContaining('The output folder could not be opened.')])
+    expect(toastTexts()).toEqual([expect.stringContaining('The sessions folder could not be opened.')])
   })
 
   it('closes one failure at a time', () => {
     render(<ToastStack />)
     act(() => {
       reportOperationalFailure('queue-enqueue', 'operation.enqueueFailed', 'failed', new Error('a'))
-      reportOperationalFailure('output-folder', 'operation.outputFolderFailed', 'failed', new Error('b'))
+      reportOperationalFailure('sessions-folder', 'operation.sessionsFolderFailed', 'failed', new Error('b'))
     })
     fireEvent.click(screen.getAllByRole('button', { name: 'Close operation result' })[0])
-    expect(toastTexts()).toEqual([expect.stringContaining('The output folder could not be opened.')])
+    expect(toastTexts()).toEqual([expect.stringContaining('The sessions folder could not be opened.')])
   })
 
   it('stacks failure toasts above the download cards', () => {

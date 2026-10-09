@@ -4,7 +4,7 @@
 // on the main thread and shipped over IPC as base64.
 
 export const IMAGE_SCHEME = 'iq-image'
-const HOST = 'output'
+const HOST = 'sessions'
 
 export type ImageUrlTarget =
   | { session: 'current'; baseName: string }
@@ -21,7 +21,7 @@ export function sessionImageUrl(sessionId: string, baseName: string): string {
 }
 
 /** Reads a URL built above; anything else is null. Names are not validated
- *  here — the main process checks them against the output tree. */
+ *  here — the main process checks them against the sessions folder. */
 export function parseImageUrl(url: string): ImageUrlTarget | null {
   let parsed: URL
   try {

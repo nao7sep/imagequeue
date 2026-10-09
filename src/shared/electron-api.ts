@@ -208,7 +208,7 @@ export interface ElectronAPI {
 
   openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
   openExternal: (url: string) => Promise<void>
-  openOutputFolder: () => Promise<void>
+  openSessionsFolder: () => Promise<void>
   revealFile: (baseName: string, ext: string) => Promise<void>
   exportImage: (baseName: string, ext: string) => Promise<string>
   exportImageAs: (baseName: string, ext: string) => Promise<string | null>

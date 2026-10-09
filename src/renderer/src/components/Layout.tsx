@@ -310,7 +310,7 @@ export function Layout(): React.JSX.Element {
               </button>
             )}
           >
-            <MenuItem onSelect={() => { void window.electronAPI.openOutputFolder().catch((error) => reportOperationalFailure('output-folder', 'operation.outputFolderFailed', 'Failed to open output folder', error)) }}>{t('menu.openOutputFolder')}</MenuItem>
+            <MenuItem onSelect={() => { void window.electronAPI.openSessionsFolder().catch((error) => reportOperationalFailure('sessions-folder', 'operation.sessionsFolderFailed', 'Failed to open sessions folder', error)) }}>{t('menu.openSessionsFolder')}</MenuItem>
             <MenuItem onSelect={() => setOverlay('sessions')}>{t('menu.sessions')}</MenuItem>
             <QueueControlSubmenu />
             <MenuCheckboxItem checked={showKeptImages} onToggle={toggleShowKeptImages}>

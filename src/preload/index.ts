@@ -379,8 +379,8 @@ const api = {
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
 
-  openOutputFolder: (): Promise<void> =>
-    ipcRenderer.invoke('shell:openOutputFolder'),
+  openSessionsFolder: (): Promise<void> =>
+    ipcRenderer.invoke('shell:openSessionsFolder'),
 
   revealFile: (baseName: string, ext: string): Promise<void> =>
     ipcRenderer.invoke('shell:revealFile', baseName, ext),

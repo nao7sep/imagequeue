@@ -56,7 +56,7 @@ const {
   resumeSession,
   setActiveSessionDraft,
 } = await import('../../../src/main/session/state')
-const { getOutputDir, getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
+const { getSessionsDir, getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
 const { createEmptyQueues, queueManager } = await import('../../../src/main/queue/queue-manager')
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 registerQueueIpc()
@@ -95,7 +95,7 @@ function readManifest(sessionDir: string): SessionManifest {
 
 /** A session folder on disk that this process never opened. */
 function stageSession(sessionId: string, manifest: Partial<SessionManifest> = {}): string {
-  const dir = path.join(getOutputDir(), sessionId)
+  const dir = path.join(getSessionsDir(), sessionId)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(
     path.join(dir, 'session.json'),
@@ -127,7 +127,7 @@ beforeEach(async () => {
   settings.dropEmptySessions = false
   // A session this process is "already in", so each test starts from a known
   // current session rather than whatever the previous test left behind.
-  setSessionDir(path.join(getOutputDir(), '20260101-000000-utc'))
+  setSessionDir(path.join(getSessionsDir(), '20260101-000000-utc'))
   queueManager.replaceAllTasks(createEmptyQueues())
   stageSession('20260101-000000-utc')
   // Dropped as it is left, so each test starts with exactly one session folder.
@@ -225,7 +225,7 @@ describe('listing sessions', () => {
 
   it('identifies a copied or renamed folder by its folder, so acting on it never touches the original', async () => {
     const original = stageSession('20260106-000000-utc', { updatedAt: '2026-01-06T00:00:00.000Z' })
-    const copy = path.join(getOutputDir(), '20260106-000000-utc copy')
+    const copy = path.join(getSessionsDir(), '20260106-000000-utc copy')
     fs.cpSync(original, copy, { recursive: true })
 
     const ids = listSessions().map((summary) => summary.sessionId)
@@ -238,13 +238,13 @@ describe('listing sessions', () => {
   })
 
   it('passes over a folder with no manifest', () => {
-    fs.mkdirSync(path.join(getOutputDir(), 'not-a-session'), { recursive: true })
+    fs.mkdirSync(path.join(getSessionsDir(), 'not-a-session'), { recursive: true })
 
     expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
   })
 
   it('lists a folder whose manifest it cannot open in place, by folder and reason, after the sessions it can open, and leaves its files as they were', async () => {
-    const broken = path.join(getOutputDir(), '20260104-000000-utc')
+    const broken = path.join(getSessionsDir(), '20260104-000000-utc')
     fs.mkdirSync(broken, { recursive: true })
     fs.writeFileSync(path.join(broken, 'session.json'), '{ not json', 'utf-8')
     fs.writeFileSync(path.join(broken, 'image.png'), 'image bytes')
@@ -328,7 +328,7 @@ describe('resuming a session', () => {
   })
 
   it('refuses a session with no readable manifest, and one that is not there', async () => {
-    fs.mkdirSync(path.join(getOutputDir(), '20260107-000000-utc'), { recursive: true })
+    fs.mkdirSync(path.join(getSessionsDir(), '20260107-000000-utc'), { recursive: true })
 
     await expect(resumeSession('20260107-000000-utc')).rejects.toThrow(/missing a readable session.json/)
     await expect(resumeSession('20260108-000000-utc')).rejects.toThrow(/missing a readable session.json/)

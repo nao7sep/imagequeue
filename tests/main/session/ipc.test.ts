@@ -12,7 +12,7 @@ vi.mock('../../../src/main/ipc-boundary', () => ({
   handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler),
 }))
 vi.mock('../../../src/main/session/state', () => ({
-  resolveSessionDir: (sessionId: string) => `/imagequeue/output/${sessionId}`,
+  resolveSessionDir: (sessionId: string) => `/imagequeue/sessions/${sessionId}`,
 }))
 vi.mock('../../../src/main/session/draft-persistence', () => ({ getDraftPersistenceState: vi.fn() }))
 
@@ -28,7 +28,7 @@ function openFolder(sessionId: string): unknown {
 describe('session:openFolder', () => {
   it("opens the session's own folder", async () => {
     await openFolder('20260101-000000-utc')
-    expect(mocks.openPath).toHaveBeenCalledWith('/imagequeue/output/20260101-000000-utc')
+    expect(mocks.openPath).toHaveBeenCalledWith('/imagequeue/sessions/20260101-000000-utc')
   })
 
   it('rejects when the OS shell cannot open it', async () => {

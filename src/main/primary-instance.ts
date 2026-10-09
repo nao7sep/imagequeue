@@ -45,7 +45,7 @@ import { createBeforeQuitHandler } from './quit-handler'
 import { startupFailurePresentation } from './failure-presentation'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
-import { openOutputFolder } from './session/open-output-folder'
+import { openSessionsFolder } from './session/open-sessions-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
 import { ownMainWindowContentLoad } from './main-window-content'
 import { applyLanguagePreference, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
@@ -277,7 +277,7 @@ async function startUp(): Promise<void> {
     restoreMainWindow: () => mainWindowController?.restoreOrCreate(),
     retainActivationSurface: () => mainWindowController?.retainActivationSurface(),
     requestQuit: () => app.quit(),
-    openOutputFolder,
+    openSessionsFolder,
     setQueuePaused: setQueuePausedAndPublish,
   })
   registerSessionIpc()

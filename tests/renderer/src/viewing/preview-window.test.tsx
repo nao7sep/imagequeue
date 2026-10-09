@@ -34,9 +34,9 @@ const src = (container: HTMLElement) => container.querySelector('.preview-image'
 describe('preview window page', () => {
   it('shows the selected image and follows the selection', async () => {
     const { container } = render(<PreviewWindowApp />)
-    await waitFor(() => expect(src(container)).toBe('iq-image://output/current/a'))
+    await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/a'))
     act(() => pushSnapshot({ version: 3, task: image('b') }))
-    await waitFor(() => expect(src(container)).toBe('iq-image://output/current/b'))
+    await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/b'))
   })
 
   it('ignores a snapshot older than the one shown, such as a late answer to its first request', async () => {
@@ -44,9 +44,9 @@ describe('preview window page', () => {
     latest = new Promise((resolve) => { answer = resolve })
     const { container } = render(<PreviewWindowApp />)
     act(() => pushSnapshot({ version: 5, task: image('new') }))
-    await waitFor(() => expect(src(container)).toBe('iq-image://output/current/new'))
+    await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/new'))
     await act(async () => answer({ version: 4, task: image('old') }))
-    expect(src(container)).toBe('iq-image://output/current/new')
+    expect(src(container)).toBe('iq-image://sessions/current/new')
   })
 
   it('shows why a failed task failed, as the main window does', async () => {

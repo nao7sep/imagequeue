@@ -134,7 +134,7 @@ describe('Draw Things output staging', () => {
   })
 
   it('stages the CLI output under temp/, never the session directory', async () => {
-    const sessionDir = path.join(tmpRoot, 'output', 'a-session')
+    const sessionDir = path.join(tmpRoot, 'sessions', 'a-session')
     fs.mkdirSync(sessionDir, { recursive: true })
     vi.doMock('../../../src/main/session', () => ({ getSessionDir: () => sessionDir }))
 
