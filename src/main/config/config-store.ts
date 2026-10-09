@@ -105,7 +105,8 @@ function readStoredMap(): Record<string, unknown> | null {
   }
 }
 
-// Each set is checked as it is read (config-sets conventions, Reading and healing).
+// Each set is checked as it is read (config-sets conventions, Loading and
+// fallback); one that fails reads as its built-in and stays in the file.
 function effectiveConfig(stored: Record<string, unknown>): AppConfig {
   const config = createDefaultConfig()
   for (const [key, builtIn] of Object.entries(configSetDefaults())) {
@@ -143,21 +144,48 @@ export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
   return loadConfig()
 }
 
+// Keys a change has deliberately retired; a save drops them. Every other key the
+// file holds that this build does not know is written back as it is
+// (config-sets conventions: an unknown key is not automatically disposable).
+const RETIRED_KEYS: ReadonlySet<string> = new Set()
+
+// Writes each key `stored` holds outside the known sets into `next`, unchanged.
+// A container of known sets is walked into; anything else is kept whole, unless
+// a known set was written at or below the same place.
+function carryUnknownKeys(stored: Record<string, unknown>, next: Record<string, unknown>, known: readonly string[], prefix = ''): void {
+  for (const [name, value] of Object.entries(stored)) {
+    const key = prefix ? `${prefix}.${name}` : name
+    if (known.includes(key) || RETIRED_KEYS.has(key)) continue
+    const container = known.some((set) => set.startsWith(`${key}.`))
+    if (container && isObject(value)) carryUnknownKeys(value, next, known, key)
+    else if (readPath(next, key) === undefined) writePath(next, key, value)
+  }
+}
+
 /**
  * The one owner of what config.json holds. The file is written from the config
  * in memory: every known set is stored, cleaned, only while it differs from its
- * built-in. A set of the wrong shape rejects the save. A result equal to the
- * map last loaded or written writes nothing, and so does an empty result while
- * there is no file.
+ * built-in. A stored set this build rejected, and every key it does not know,
+ * is written back as it is, until a save changes that set. A changed set of the
+ * wrong shape rejects the save. A result equal to the map last loaded or
+ * written writes nothing, and so does an empty result while there is no file.
  */
 export function saveConfig(config: AppConfig): void {
+  const before = loadConfig()
+  const builtIns = configSetDefaults()
   const next: Record<string, unknown> = {}
-  for (const [key, builtIn] of Object.entries(configSetDefaults())) {
+  for (const [key, builtIn] of Object.entries(builtIns)) {
     const value = readConfigSet(config, key)
+    const stored = storedMap === null ? undefined : readPath(storedMap, key)
+    if (stored !== undefined && !hasSetShape(stored, builtIn, key) && valuesEqual(value, readConfigSet(before, key))) {
+      writePath(next, key, stored)
+      continue
+    }
     if (!hasSetShape(value, builtIn, key)) throw new Error(`Cannot save invalid config set: ${key}`)
     const cleaned = cleanConfigSet(key, value)
     if (!equalsBuiltIn(key, cleaned, builtIn, config)) writePath(next, key, cleaned)
   }
+  if (storedMap !== null) carryUnknownKeys(storedMap, next, Object.keys(builtIns))
   const unchanged = storedMap === null ? Object.keys(next).length === 0 : valuesEqual(next, storedMap)
   if (!unchanged) {
     const file = getConfigPath()

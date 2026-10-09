@@ -99,7 +99,7 @@ describe('elaborator sets', () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [] }))
     expect(listElaborators().some((item) => item.kind === 'style')).toBe(false)
   })
-  it('reads a malformed kind as its shipped templates, warning once, and drops it at the next save', async () => {
+  it('reads a malformed kind as its shipped templates, warning once, and keeps it through a save of the other kind', async () => {
     const initial = listElaborators()
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [{ kind: 'wrong' }] }))
     vi.resetModules()
@@ -110,7 +110,17 @@ describe('elaborator sets', () => {
     expect(warn.mock.calls.filter(([, message]) => message === 'Invalid elaborator set; using shipped templates')).toHaveLength(1)
     expect(stored()).toEqual({ style: [{ kind: 'wrong' }] })
     const created = createElaborator({ kind: 'composition', name: 'Mine', template: 'Mine' })
-    expect(stored()).toEqual({ composition: expect.arrayContaining([created]) })
+    expect(stored()).toEqual({ style: [{ kind: 'wrong' }], composition: expect.arrayContaining([created]) })
+  })
+  it('replaces a malformed kind once the user changes that kind', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [{ kind: 'wrong' }] }))
+    const created = createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })
+    expect(stored()).toEqual({ style: expect.arrayContaining([created]) })
+  })
+  it('keeps keys it does not know through a save', () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, later: { kept: true } }))
+    createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })
+    expect(stored()).toMatchObject({ later: { kept: true } })
   })
   it('reads its file once, where it is loaded', () => {
     const initial = listElaborators()
@@ -124,6 +134,21 @@ describe('elaborator sets', () => {
     const invalid = fs.readdirSync(root).find((name) => name.endsWith('.invalid'))!
     expect(fs.readFileSync(path.join(root, invalid), 'utf8')).toBe('{ invalid')
     expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'recovered', path: path.join(root, invalid) }])
+  })
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('refuses every request on a file it cannot read and leaves it in place', async () => {
+    const { StoreLeftInPlaceError } = await import('../../src/main/store-format')
+    const bytes = JSON.stringify({ formatVersion: 1, style: [] })
+    fs.writeFileSync(file(), bytes)
+    fs.chmodSync(file(), 0o000)
+    try {
+      expect(() => listElaborators()).toThrow(StoreLeftInPlaceError)
+      expect(() => createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })).toThrow(StoreLeftInPlaceError)
+    } finally {
+      fs.chmodSync(file(), 0o644)
+    }
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
+    expect(drainElaboratorRecoveryNotices()).toEqual([])
   })
   it('preserves bad bytes and reports a failed quarantine', () => {
     fs.writeFileSync(file(), '{ invalid')

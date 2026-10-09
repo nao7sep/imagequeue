@@ -67,11 +67,13 @@ describe('settings by set', () => {
     expect(loadConfig()).toEqual(defaults)
     expect(stored()).toEqual({ general: { language: 'de' } })
   })
-  it('drops version and unknown keys on the next actual save', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, version: 4, arbitrary: 'unknown', general: { language: 'ja' } }))
+  it('keeps keys it does not know, top-level and within its own sections, on the next save', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] } }))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     updateConfig((draft) => { draft.notifications.sounds_enabled = false })
-    expect(stored()).toEqual({ general: { language: 'ja' }, notifications: { sounds_enabled: false } })
+    expect(stored()).toEqual({
+      version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] }, notifications: { sounds_enabled: false },
+    })
   })
   it('does not write on an unchanged save', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
@@ -80,11 +82,51 @@ describe('settings by set', () => {
   })
   it('keeps a whole cluster, and a save back to the built-in leaves an empty file', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
-    updateConfig((draft) => { draft.brainstorm.concurrency = 2 })
-    expect(stored()).toEqual({ brainstorm: { ...createDefaultConfig().brainstorm, concurrency: 2 } })
-    updateConfig((draft) => { draft.brainstorm = createDefaultConfig().brainstorm })
+    const defaults = createDefaultConfig().image_backends.openai
+    updateConfig((draft) => { draft.image_backends.openai.default_params.width = 512 })
+    expect(stored()).toEqual({ image_backends: { openai: { defaults: {
+      model: defaults.model, default_params: { ...defaults.default_params, width: 512 },
+    } } } })
+    updateConfig((draft) => { draft.image_backends.openai = createDefaultConfig().image_backends.openai })
     expect(stored()).toEqual({})
-    expect(loadConfig().brainstorm).toEqual(createDefaultConfig().brainstorm)
+    expect(loadConfig().image_backends.openai).toEqual(defaults)
+  })
+  it('stores each brainstorm value as its own set', async () => {
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.brainstorm.concurrency = 2 })
+    expect(stored()).toEqual({ brainstorm: { concurrency: 2 } })
+  })
+  it('reads the templates of a brainstorm set stored whole, as the earlier build wrote it', async () => {
+    const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 4, templates: { expansion: 'My expansion {{N}}' } }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().brainstorm).toEqual(brainstorm)
+  })
+  it('keeps the brainstorm templates in effect beside a brainstorm number that fails its check', async () => {
+    const brainstorm = { ...createDefaultConfig().brainstorm, batch_size: 'ten', templates: { expansion: 'My expansion {{N}}' } }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm }))
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().brainstorm.templates.expansion).toBe('My expansion {{N}}')
+    expect(loadConfig().brainstorm.batch_size).toBe(createDefaultConfig().brainstorm.batch_size)
+  })
+  // Saves the user does not see as settings: closing the preview window and an
+  // image column's autosaved defaults.
+  it.each([
+    ['closing the preview window', (draft: ReturnType<typeof createDefaultConfig>) => { draft.general.show_preview_window = false }],
+    ['an image column autosave', (draft: ReturnType<typeof createDefaultConfig>) => { draft.image_backends.grok.default_params.quality = 'low' }],
+  ])('keeps a rejected brainstorm template and an unknown key through %s', async (_save, apply) => {
+    const sets = { brainstorm: { templates: { expansion: 42 } }, general: { show_preview_window: true }, later: { kept: true } }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, ...sets }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().brainstorm.templates).toEqual(createDefaultConfig().brainstorm.templates)
+    updateConfig(apply)
+    expect(stored()).toMatchObject({ brainstorm: { templates: { expansion: 42 } }, later: { kept: true } })
+  })
+  it('replaces a rejected copy once the user changes that set', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { templates: { expansion: 42 } } }))
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    updateConfig((draft) => { draft.brainstorm.templates.expansion = 'Fresh {{N}}' })
+    expect(stored()).toEqual({ brainstorm: { templates: { expansion: 'Fresh {{N}}' } } })
   })
   it('removes a key saved back to its built-in and keeps the others', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
@@ -127,14 +169,15 @@ describe('settings by set', () => {
     expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
     expect(fs.readdirSync(root).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
-  it('drops a rejected copy at the next save and rejects a changed set of the wrong shape', async () => {
+  it('keeps a rejected copy through saves of other sets and rejects a changed set of the wrong shape', async () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'bogus' } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     updateConfig((draft) => { draft.general.language = 'ja' })
-    expect(stored()).toEqual({ general: { language: 'ja' } })
+    expect(stored()).toEqual({ general: { theme: 'bogus', language: 'ja' } })
     expect(() => updateConfig((draft) => { (draft.general as unknown as Record<string, unknown>).auto_preview_idle_seconds = 'soon' })).toThrow('general.auto_preview_idle_seconds')
-    expect(stored()).toEqual({ general: { language: 'ja' } })
+    expect(stored()).toEqual({ general: { theme: 'bogus', language: 'ja' } })
     expect(loadConfig().general.language).toBe('ja')
+    expect(loadConfig().general.theme).toBe('system')
   })
   it('reads a concurrency below one or a timeout not above zero as its built-in, and will not save one', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 0 }
@@ -146,7 +189,10 @@ describe('settings by set', () => {
     expect(loadConfig().image_backends.flux).toEqual(defaults.image_backends.flux)
     expect(() => updateConfig((draft) => { draft.openai.timeout_ms = 0 })).toThrow('openai.timeout_ms')
     updateConfig((draft) => { draft.general.language = 'ja' })
-    expect(stored()).toEqual({ general: { language: 'ja' } })
+    expect(stored()).toEqual({
+      general: { language: 'ja' }, brainstorm: { concurrency: 0 }, gemini: { timeout_ms: 0 },
+      image_backends: { flux: { concurrency: 0, timeout_ms: -1 } },
+    })
   })
   it.each([['unreadable', '{ invalid'], ['not a map of sets', '[]']])('sets aside a file that is %s and starts from built-ins', async (_state, bytes) => {
     fs.writeFileSync(file(), bytes)
@@ -254,10 +300,11 @@ describe('settings by set', () => {
     for (const [key, builtIn] of Object.entries(configSetDefaults())) expect(cleanConfigSet(key, builtIn), key).toEqual(builtIn)
   })
   it('rejects an incomplete cluster as absent without repairing or quarantining the file', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { concurrency: 2 }, general: { theme: 'bogus' } }))
+    const partial = { model: 'x' }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { grok: { defaults: partial } }, general: { theme: 'bogus' } }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig()).toEqual(createDefaultConfig())
-    expect(stored()).toEqual({ brainstorm: { concurrency: 2 }, general: { theme: 'bogus' } })
+    expect(stored()).toEqual({ image_backends: { grok: { defaults: partial } }, general: { theme: 'bogus' } })
   })
   it('writes the file from the config in memory, not from a set changed on disk since load', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
@@ -280,13 +327,13 @@ describe('settings by set', () => {
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig().image_backends.openai).toEqual(createDefaultConfig().image_backends.openai)
   })
-  it('stores model and parameters in one renamed set without migrating old sibling keys', async () => {
+  it('stores model and parameters in one renamed set, keeping the old sibling keys unread', async () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { model: 'old', default_params: {}, concurrency: 1 } } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig().image_backends.openai.model).toBe(createDefaultConfig().image_backends.openai.model)
     updateConfig((draft) => { draft.image_backends.openai.model = 'chosen' })
     expect(stored()).toEqual({ image_backends: { openai: {
-      concurrency: 1,
+      model: 'old', default_params: {}, concurrency: 1,
       defaults: { model: 'chosen', default_params: createDefaultConfig().image_backends.openai.default_params },
     } } })
   })

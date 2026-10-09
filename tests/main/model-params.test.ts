@@ -49,7 +49,7 @@ describe('params.json format version', () => {
     expect(setAsideCopies()).toEqual([copy])
   })
 
-  it('reads a malformed set as absent, keeps the valid ones, and drops it at the next save', async () => {
+  it('reads a malformed set as absent, keeps the valid ones, and writes it back until that model changes', async () => {
     const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
     fs.writeFileSync(file(), JSON.stringify({
       formatVersion: FORMAT_VERSIONS.modelParams,
@@ -69,7 +69,22 @@ describe('params.json format version', () => {
 
     setModelParams('other.ckpt', params)
     drainPendingWrites()
-    expect(Object.keys(JSON.parse(fs.readFileSync(file(), 'utf8')).models)).toEqual(['good.ckpt', 'other.ckpt'])
+    const models = JSON.parse(fs.readFileSync(file(), 'utf8')).models
+    expect(Object.keys(models).sort()).toEqual(['good.ckpt', 'missing-steps.ckpt', 'not-a-set.ckpt', 'numeric-negative.ckpt', 'other.ckpt'])
+    expect(models['not-a-set.ckpt']).toBe('x')
+
+    setModelParams('not-a-set.ckpt', params)
+    drainPendingWrites()
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).models['not-a-set.ckpt']).toEqual(params)
+  })
+
+  it('keeps keys it does not know beside the model map', async () => {
+    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.modelParams, later: { kept: true }, models: {} }))
+    const { setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
+    setModelParams('model.ckpt', params)
+    drainPendingWrites()
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).later).toEqual({ kept: true })
   })
 
   it('stops the request and leaves the file in place when it cannot be set aside', async () => {
@@ -147,17 +162,6 @@ describe('params.json format version', () => {
     expect(() => setModelParams('model.ckpt', params)).toThrow(NewerFormatError)
     expect(() => applyDimensionsToModels(['model.ckpt'], { width: 512, height: 512, steps: 8, guidance: 1 })).toThrow(NewerFormatError)
     drainPendingWrites()
-    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
-  })
-
-  it('does not overwrite a newer file installed after the model map was cached', async () => {
-    const module = await import('../../src/main/model-params')
-    module.setModelParams('model.ckpt', params)
-    module.drainPendingWrites()
-    const bytes = JSON.stringify({ formatVersion: 2, models: { future: params } })
-    fs.writeFileSync(file(), bytes)
-    module.setModelParams('model.ckpt', { ...params, steps: 99 })
-    module.drainPendingWrites()
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
   })
 })

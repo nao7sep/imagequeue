@@ -36,7 +36,10 @@ export function configSetDefaults(): Record<string, unknown> {
     }
   }
   sets['prompts.slug'] = config.prompts.slug
-  sets.brainstorm = config.brainstorm
+  // Each brainstorm value is its own set, so a number that fails its check
+  // cannot take the authored templates down with it. They are stored where the
+  // earlier single brainstorm set kept them, so that set reads without change.
+  for (const [key, value] of Object.entries(config.brainstorm)) sets[`brainstorm.${key}`] = value
   return sets
 }
 
@@ -120,15 +123,14 @@ function cleanEach(record: Record<string, string>, clean: (text: string) => stri
 // Expects a value of the set's shape.
 export function cleanConfigSet(key: string, value: unknown): unknown {
   if (key === 'prompts.slug') return multiline(value as string)
-  if (key === 'brainstorm') {
-    const brainstorm = value as BrainstormConfig
+  if (key === 'brainstorm.templates') {
+    return cleanEach(value as BrainstormConfig['templates'] as unknown as Record<string, string>, (text) => multiline(text))
+  }
+  if (key === 'brainstorm.format_directives') {
+    const directives = value as BrainstormConfig['format_directives']
     return {
-      ...brainstorm,
-      templates: cleanEach(brainstorm.templates as unknown as Record<string, string>, (text) => multiline(text)),
-      format_directives: {
-        formats: cleanEach(brainstorm.format_directives.formats, (text) => singleLine(text)),
-        lengths: cleanEach(brainstorm.format_directives.lengths, (text) => singleLine(text)),
-      },
+      formats: cleanEach(directives.formats, (text) => singleLine(text)),
+      lengths: cleanEach(directives.lengths, (text) => singleLine(text)),
     }
   }
   if (key.endsWith('.defaults') || PATH_SETS.has(key)) return value

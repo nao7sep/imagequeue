@@ -34,7 +34,7 @@ describe('open text model sets', () => {
     expect(config.gemini.elaboration).toBe('unknown-future-id')
     expect(storedSets()).toEqual({ gemini: { elaboration: 'unknown-future-id' } })
   })
-  it('drops renamed keys at the next write without migrating them', async () => {
+  it('keeps renamed keys it does not read at the next write, without migrating them', async () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
       formatVersion: 1,
       text_ai: { backend: 'openai', gemini: { main_model: 'old', light_model: 'old', timeout_ms: 40000 },
@@ -48,6 +48,8 @@ describe('open text model sets', () => {
     expect(loadConfig().gemini.timeout_ms).toBe(30000)
     updateConfig((draft) => { draft.provider = 'openai' })
     expect(storedSets()).toEqual({
+      text_ai: { backend: 'openai', gemini: { main_model: 'old', light_model: 'old', timeout_ms: 40000 },
+        openai: { endpoint: 'https://old.example' } },
       provider: 'openai', gemini: { slug: 'my-slug' },
     })
   })

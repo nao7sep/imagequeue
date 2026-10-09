@@ -8,7 +8,7 @@ import { writeJsonAtomic } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
 import { utcStampForFilename } from '../shared/utc-stamp'
 import { multiline, singleLine } from '../shared/textCleanup'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from './store-format'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 
 function getElaboratorsFilePath(): string {
   ensureDataDir()
@@ -311,13 +311,20 @@ function cleanElaborator(item: Elaborator): Elaborator {
 }
 
 // The file as it is: every key it holds but its format version, or nothing
-// when it is absent.
+// when it is absent. A file that cannot be read refuses the request and stays
+// where it is: moving it would not fix an access problem.
 function readFile(): Record<string, unknown> {
   const file = getElaboratorsFilePath()
-  if (!fs.existsSync(file)) return {}
+  let text: string
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw new StoreLeftInPlaceError(file, { cause: err })
+  }
   let parsed: unknown
   try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    parsed = JSON.parse(text)
   } catch (err) {
     const movedTo = quarantineCorruptFile(file, 'unreadable', err)
     recoveryNotices.push({ kind: 'recovered', path: movedTo })
@@ -340,7 +347,7 @@ function readFile(): Record<string, unknown> {
 }
 
 // The file is read once, where it is loaded, and each set is checked as it is
-// read (config-sets conventions, Reading and healing). `file` is what the file
+// read (config-sets conventions, Loading and fallback). `file` is what the file
 // holds, `sets` what the app uses.
 let loaded: { file: Record<string, unknown>; sets: ElaboratorSets } | null = null
 
@@ -361,15 +368,29 @@ function load(): { file: Record<string, unknown>; sets: ElaboratorSets } {
   return loaded
 }
 
+// Keys a change has deliberately retired; a save drops them. Every other key
+// the file holds that this build does not know is written back as it is.
+const RETIRED_KEYS: ReadonlySet<string> = new Set()
+
 /**
  * The one owner of what elaborators.json holds. The file is written from the
  * sets in memory: each kind is stored, cleaned, only while it differs from the
- * shipped templates. A result equal to the file writes nothing.
+ * shipped templates. A stored kind this build rejected, and every key it does
+ * not know, is written back as it is, until a save changes that kind. A result
+ * equal to the file writes nothing.
  */
 function saveSets(changed: Partial<ElaboratorSets>): void {
   const current = load()
-  const next: Partial<ElaboratorSets> = {}
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(current.file)) {
+    if (!(kinds as string[]).includes(key) && !RETIRED_KEYS.has(key)) next[key] = value
+  }
   for (const kind of kinds) {
+    const stored = current.file[kind]
+    if (!changed[kind] && stored !== undefined && !isElaboratorSet(stored, kind)) {
+      next[kind] = stored
+      continue
+    }
     const cleaned = (changed[kind] ?? current.sets[kind]).map(cleanElaborator)
     if (!valuesEqual(cleaned, defaultElaborators(kind))) next[kind] = cleaned
   }
@@ -377,7 +398,10 @@ function saveSets(changed: Partial<ElaboratorSets>): void {
     writeJsonAtomic(getElaboratorsFilePath(), markFormat(next, FORMAT_VERSIONS.elaborators), true)
   }
   const sets = {} as ElaboratorSets
-  for (const kind of kinds) sets[kind] = next[kind] ?? defaultElaborators(kind)
+  for (const kind of kinds) {
+    const value = next[kind]
+    sets[kind] = value !== undefined && isElaboratorSet(value, kind) ? value : defaultElaborators(kind)
+  }
   loaded = { file: next, sets }
 }
 
