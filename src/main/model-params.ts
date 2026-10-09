@@ -10,7 +10,7 @@ import {
   markModelParamsPersistenceSaved,
 } from './model-params-persistence'
 import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from './store-format'
-import { utcStampForFilename } from '../shared/utc-stamp'
+import { setAsideFile } from './utils/set-aside'
 
 function getParamsFilePath(): string {
   ensureDataDir()
@@ -88,9 +88,9 @@ function readStoredParams(file: string): ParamsStore {
 }
 
 function setAside(file: string, error: unknown): void {
-  const movedTo = path.join(path.dirname(file), `${path.basename(file, '.json')}-${utcStampForFilename()}.invalid`)
+  let movedTo: string
   try {
-    fs.renameSync(file, movedTo)
+    movedTo = setAsideFile(file)
   } catch (renameError) {
     throw new StoreLeftInPlaceError(file, { cause: renameError })
   }

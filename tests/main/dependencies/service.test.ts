@@ -61,7 +61,7 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
     vi.spyOn(cliBinary, 'installCliRelease').mockImplementation(async () => {
       const staged = path.join(home, 'verified-cli')
       fs.writeFileSync(staged, 'verified fixture')
-      return cliBinary.publishCliBinary(staged, tag, 'a'.repeat(64))
+      return cliBinary.publishCliBinary(staged, tag)
     })
     const sync = fsync.syncDirectory
     vi.spyOn(fsync, 'syncDirectory').mockImplementation((directory) => {
@@ -80,7 +80,7 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
     vi.spyOn(cliBinary, 'installCliRelease').mockImplementation(async () => {
       const staged = path.join(home, 'verified-cli')
       fs.writeFileSync(staged, 'verified fixture')
-      return cliBinary.publishCliBinary(staged, tag, 'a'.repeat(64))
+      return cliBinary.publishCliBinary(staged, tag)
     })
     const rename = fs.renameSync
     vi.spyOn(fs, 'renameSync').mockImplementation((source, target) => {

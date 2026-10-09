@@ -5,7 +5,7 @@ import { getDataDir } from '../config'
 import { cleanDisplay, normalizeKey } from './normalize'
 import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceError } from '../store-format'
 import { log, serializeError } from '../logger'
-import { utcStampForFilename } from '../../shared/utc-stamp'
+import { setAsideFile } from '../utils/set-aside'
 
 // The concept ledger: every facet, probe (the narrow domain an ask mined), and
 // concept value the text AI has ever produced, plus one row per time a value
@@ -98,11 +98,11 @@ function isUnreadableLedger(error: unknown): boolean {
 }
 
 function setAside(file: string, error: unknown): void {
-  const movedTo = path.join(path.dirname(file), `${path.basename(file, path.extname(file))}-${utcStampForFilename()}.invalid`)
+  let movedTo: string
   // Closing the only connection has already folded any write-ahead log into
   // the database file and removed it, so the file alone is the whole ledger.
   try {
-    fs.renameSync(file, movedTo)
+    movedTo = setAsideFile(file)
   } catch (renameError) {
     throw new StoreLeftInPlaceError(file, { cause: renameError })
   }

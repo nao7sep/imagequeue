@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { sessionDisplayName } from '../../../../src/renderer/src/utils/sessionName'
 
 describe('sessionDisplayName', () => {
-  it('shows a session by its date and time alone', () => {
+  it('shows a session by its date and time alone, whether named to the second or, as earlier versions did, to the millisecond', () => {
+    expect(sessionDisplayName('20260919-091256-utc')).toBe('20260919-091256')
     expect(sessionDisplayName('20260919-091256-888-utc')).toBe('20260919-091256')
   })
 

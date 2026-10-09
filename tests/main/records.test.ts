@@ -42,7 +42,7 @@ describe('log records', () => {
     closeRecords()
 
     const lines = fallbackLines(dir)
-    expect(fs.readdirSync(path.join(dir, 'logs'))[0]).toMatch(/^\d{8}-\d{6}-\d{3}-utc\.log$/)
+    expect(fs.readdirSync(path.join(dir, 'logs'))[0]).toMatch(/^\d{8}-\d{6}-utc\.log$/)
     expect(lines.map((line) => line.message)).toEqual(['Records database could not be opened', 'Kept anyway'])
     fs.rmSync(dir, { recursive: true, force: true })
   })

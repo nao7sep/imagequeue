@@ -26,7 +26,7 @@ describe('params.json format version', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  const setAsideCopies = () => fs.readdirSync(root).filter((name) => /^params-\d{8}-\d{6}-\d{3}-utc\.invalid$/.test(name))
+  const setAsideCopies = () => fs.readdirSync(root).filter((name) => /^params-\d{8}-\d{6}-utc\.invalid$/.test(name))
 
   it.each([
     ['no format version', JSON.stringify({ 'model.ckpt': params })],

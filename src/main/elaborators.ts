@@ -6,7 +6,7 @@ import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeJsonAtomic } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
-import { utcStampForFilename } from '../shared/utc-stamp'
+import { setAsideFile } from './utils/set-aside'
 import { multiline, singleLine } from '../shared/textCleanup'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 
@@ -265,11 +265,8 @@ export function drainElaboratorRecoveryNotices(): ElaboratorRecoveryNotice[] {
 
 // Preserve user-authored templates before recovery. A failed rename propagates.
 function quarantineCorruptFile(file: string, reason: string, err?: unknown): string {
-  const dir = path.dirname(file)
-  const stem = path.basename(file, path.extname(file))
-  const movedTo = path.join(dir, `${stem}-${utcStampForFilename()}.invalid`)
   try {
-    fs.renameSync(file, movedTo)
+    const movedTo = setAsideFile(file)
     log('warn', `Quarantined ${reason} elaborators file; using shipped templates`, {
       from: file,
       to: movedTo,

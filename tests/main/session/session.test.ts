@@ -3,7 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSessionDir } from '../../../src/main/session/session'
-import { formatTimestamp, formatTimestampMs } from '../../../src/shared/utc-stamp'
+import { formatTimestamp, utcStampForFilename } from '../../../src/shared/utc-stamp'
 
 describe('formatTimestamp', () => {
   it('formats a UTC date as yyyymmdd-hhmmss', () => {
@@ -20,14 +20,9 @@ describe('formatTimestamp', () => {
   })
 })
 
-describe('formatTimestampMs', () => {
-  it('formats a UTC date as yyyymmdd-hhmmss-fff (millisecond precision)', () => {
-    expect(formatTimestampMs(new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 123)))).toBe('20260604-093015-123')
-  })
-
-  it('zero-pads a single/double-digit millisecond field', () => {
-    expect(formatTimestampMs(new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 7)))).toBe('20260604-093015-007')
-    expect(formatTimestampMs(new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 42)))).toBe('20260604-093015-042')
+describe('utcStampForFilename', () => {
+  it('names a file or folder to the second, marked UTC', () => {
+    expect(utcStampForFilename(new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 123)))).toBe('20260604-093015-utc')
   })
 })
 
@@ -48,23 +43,19 @@ describe('createSessionDir (session directory naming)', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('names the session directory yyyymmdd-hhmmss-fff-utc (millisecond precision, per the session-log filename convention)', () => {
+  it('names the session directory yyyymmdd-hhmmss-utc', () => {
     const sessionDir = createSessionDir(new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 123)))
-    expect(path.basename(sessionDir)).toBe('20260604-093015-123-utc')
+    expect(path.basename(sessionDir)).toBe('20260604-093015-utc')
   })
 
-  it('claims a unique directory atomically when the preferred launch timestamp already exists', () => {
+  // One creator under the single-instance lock: a name taken in the same
+  // second fails, and the session already there is left as it was.
+  it('fails on a name already taken in the same second, leaving that folder untouched', () => {
     const launchTime = new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 123))
-    // Simulate the TOCTOU mutation directly: an exists probe lies that the path
-    // is free even after the first creator claimed it. The former
-    // existsSync+recursive-mkdir implementation then returned the same path;
-    // the fixed implementation never consults the probe.
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false)
     const first = createSessionDir(launchTime)
-    const second = createSessionDir(launchTime)
-
-    expect(path.basename(first)).toBe('20260604-093015-123-utc')
-    expect(path.basename(second)).toBe('20260604-093015-124-utc')
-    expect(first).not.toBe(second)
+    fs.writeFileSync(path.join(first, 'session.json'), 'kept')
+    expect(() => createSessionDir(new Date(Date.UTC(2026, 5, 4, 9, 30, 15, 900)))).toThrow(/EEXIST/)
+    expect(fs.readdirSync(first)).toEqual(['session.json'])
+    expect(fs.readFileSync(path.join(first, 'session.json'), 'utf8')).toBe('kept')
   })
 })

@@ -38,6 +38,15 @@ vi.mock('../../../src/main/logger', () => ({ log, serializeError: (error: unknow
 const publishQueueState = vi.hoisted(() => vi.fn())
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState }))
 
+// Sessions are named to the second, so each one these tests start begins a
+// second after the last, as sessions a person starts do; a same-second clash
+// has a test of its own (session.test.ts).
+const sessionClock = vi.hoisted(() => ({ next: Date.UTC(2026, 0, 1) }))
+vi.mock('../../../src/main/session/session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/main/session/session')>()
+  return { ...actual, createSessionDir: () => actual.createSessionDir(new Date(sessionClock.next += 1_000)) }
+})
+
 const recordBackup = vi.hoisted(() => vi.fn())
 vi.mock('../../../src/main/backup/backup-store', () => ({ record: recordBackup, closeBackupStore: async () => undefined }))
 
@@ -347,6 +356,19 @@ describe('resuming a session', () => {
     await resumeSession('20260110-000000-utc')
 
     expect(fs.existsSync(previous)).toBe(false)
+  })
+})
+
+describe('a session an earlier version named to the millisecond', () => {
+  it('lists, opens and deletes like any other', async () => {
+    const id = '20260101-000000-123-utc'
+    stageSession(id, { tasks: withTasks([makeTask('a', 'completed')]) })
+    expect(listSessions().some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
+    await resumeSession(id)
+    expect(getSessionId()).toBe(id)
+    await createSession()
+    await deleteSession(id)
+    expect(fs.existsSync(path.join(getSessionsDir(), id))).toBe(false)
   })
 })
 

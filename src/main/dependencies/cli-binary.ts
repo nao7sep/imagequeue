@@ -24,10 +24,12 @@ import { FORMAT_VERSIONS, FORMAT_VERSION_KEY, markFormat } from '../store-format
 
 const execFileAsync = promisify(execFile)
 
+// What the app reads back: the release and the binary it labels. The download
+// is verified against its published checksum before it is published, so the
+// sidecar keeps no hash or install time; ones an earlier version wrote are
+// ignored.
 interface CliMeta {
   tag: string
-  sha256: string
-  installedAt: string
   /** Inode of the verified binary this sidecar describes. */
   binaryId: string
 }
@@ -51,10 +53,8 @@ function readCliMeta(): CliMeta | null {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
     const { [FORMAT_VERSION_KEY]: _formatVersion, ...meta } = raw as Partial<CliMeta> & Record<string, unknown>
     if (typeof meta.tag !== 'string' || !isCliReleaseTag(meta.tag)) return null
-    if (typeof meta.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(meta.sha256)) return null
-    if (typeof meta.installedAt !== 'string') return null
     if (typeof meta.binaryId !== 'string') return null
-    return meta as CliMeta
+    return { tag: meta.tag, binaryId: meta.binaryId }
   } catch {
     return null
   }
@@ -98,11 +98,7 @@ export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Pro
 /** Publish verified CLI bytes and their release identity. A prior sidecar names
  * the binary it describes, so a failure after the binary commit can only leave
  * the installed version unknown, never falsely identified as an older release. */
-export function publishCliBinary(
-  tempPath: string,
-  tag: string,
-  sha256: string
-): CliInstallWarning[] {
+export function publishCliBinary(tempPath: string, tag: string): CliInstallWarning[] {
   fs.mkdirSync(getBinDir(), { recursive: true })
   if (!isCliInstalled()) {
     // An orphan sidecar has no artifact to preserve and must not label the first
@@ -117,12 +113,7 @@ export function publishCliBinary(
     log('warn', 'Draw Things CLI was published but directory sync failed', { error: serializeError(error) })
   }
   try {
-    const meta: CliMeta = {
-      tag,
-      sha256,
-      installedAt: new Date().toISOString(),
-      binaryId: cliBinaryId(),
-    }
+    const meta: CliMeta = { tag, binaryId: cliBinaryId() }
     // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
     // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
     // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
@@ -189,7 +180,7 @@ export async function installCliRelease(
     // version-unknown and remains re-acquirable; the new binary can never inherit
     // the old binary's release tag after a sync or sidecar-write failure.
     signal?.throwIfAborted()
-    const warnings = publishCliBinary(tempPath, release.tag, release.sha256)
+    const warnings = publishCliBinary(tempPath, release.tag)
     log('info', 'draw-things-cli installed', { tag: release.tag })
     return warnings
   } catch (err) {

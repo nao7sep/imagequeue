@@ -2,15 +2,13 @@
 // formatting over a Date, so main, the logger, and any test can share one
 // implementation — this file imports nothing.
 //
-// Two precisions, because two different things need naming:
-//   formatTimestamp   yyyymmdd-hhmmss       — the per-image output allocator,
-//                                             which paces uniqueness with its
-//                                             own same-second ordinal.
-//   formatTimestampMs yyyymmdd-hhmmss-fff   — everything whose uniqueness comes
-//                                             from the clock alone.
+// Seconds are the precision for every name (timestamp-conventions): the
+// per-image output allocator adds its own same-second ordinal, and sessions,
+// logs and set-aside copies need nothing finer under the single-instance lock.
 // utcStampForFilename adds the `-utc` suffix the conventions put on a name that
-// stands alone as a file (a log, a quarantined file), where the directory around
-// it does not already say the time is UTC.
+// stands alone as a file or folder (a session, a log, a set-aside copy), where
+// the directory around it does not already say the time is UTC. Names an
+// earlier version gave with milliseconds keep working wherever they are read.
 
 export function formatTimestamp(date: Date): string {
   const pad = (n: number, len = 2): string => String(n).padStart(len, '0')
@@ -20,10 +18,6 @@ export function formatTimestamp(date: Date): string {
   )
 }
 
-export function formatTimestampMs(date: Date): string {
-  return `${formatTimestamp(date)}-${String(date.getUTCMilliseconds()).padStart(3, '0')}`
-}
-
 export function utcStampForFilename(date: Date = new Date()): string {
-  return `${formatTimestampMs(date)}-utc`
+  return `${formatTimestamp(date)}-utc`
 }

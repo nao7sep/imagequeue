@@ -309,7 +309,7 @@ describe('concept store format version', () => {
     }
   }
 
-  const setAside = () => fs.readdirSync(tmpRoot).filter((name) => /^concepts-\d{8}-\d{6}-\d{3}-utc\.invalid/.test(name)).sort()
+  const setAside = () => fs.readdirSync(tmpRoot).filter((name) => /^concepts-\d{8}-\d{6}-utc\.invalid/.test(name)).sort()
 
   it('sets aside a populated ledger with no format version, names it once, and starts a new one', () => {
     ensureFacet('place')

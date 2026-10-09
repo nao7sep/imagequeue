@@ -3,6 +3,7 @@ import path from 'path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
+import { setAsideFile } from './utils/set-aside'
 import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError } from './store-format'
 
 // The app's records, per the logging-conventions and the data-lifecycle-conventions'
@@ -88,8 +89,7 @@ function openOrReplace(file: string): { opened: DatabaseSync; movedTo: string | 
     return { opened: openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA), movedTo: null }
   } catch (error) {
     if (!(error instanceof MissingFormatError)) throw error
-    const movedTo = path.join(path.dirname(file), `${path.basename(file, path.extname(file))}-${utcStampForFilename()}.invalid`)
-    fs.renameSync(file, movedTo)
+    const movedTo = setAsideFile(file)
     return { opened: openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA), movedTo }
   }
 }

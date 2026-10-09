@@ -5,7 +5,7 @@ import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
 import { resolveStorageRoot } from './storage-root'
-import { utcStampForFilename } from '../../shared/utc-stamp'
+import { setAsideFile } from '../utils/set-aside'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
@@ -59,9 +59,9 @@ function isMissingFile(error: unknown): boolean {
 // A file that does not parse or is not a map of sets is set aside
 // (store-recovery conventions); a failed rename halts.
 function setAsideUnusableFile(file: string, error: unknown): void {
-  const movedTo = path.join(path.dirname(file), `${path.basename(file, '.json')}-${utcStampForFilename()}.invalid`)
+  let movedTo: string
   try {
-    fs.renameSync(file, movedTo)
+    movedTo = setAsideFile(file)
   } catch (renameError) {
     throw new ConfigFileHaltError(file, { cause: renameError })
   }
