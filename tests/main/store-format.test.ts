@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, expect, it } from 'vitest'
-import { openSqliteStore, sqliteStoreOperation } from '../../src/main/store-format'
+import { MissingFormatError, NewerFormatError, openSqliteStore } from '../../src/main/store-format'
 
 const roots: string[] = []
 afterEach(() => {
@@ -15,14 +15,49 @@ function file(): string {
   return path.join(root, 'store.sqlite3')
 }
 
-it.each([0, -1, 2])('preserves an existing unsupported empty SQLite store at version %s', (version) => {
+it('preserves a store from a newer version', () => {
   const name = file()
   const original = new DatabaseSync(name)
-  original.exec(`PRAGMA user_version = ${version}`)
+  original.exec('PRAGMA user_version = 2')
   original.close()
   const bytes = fs.readFileSync(name)
-  expect(() => openSqliteStore(name, 1, 'CREATE TABLE values_kept (value TEXT)')).toThrow()
+  expect(() => openSqliteStore(name, 1, 'CREATE TABLE values_kept (value TEXT)')).toThrow(NewerFormatError)
   expect(fs.readFileSync(name)).toEqual(bytes)
+})
+
+it('preserves a populated store with no format version', () => {
+  const name = file()
+  const original = new DatabaseSync(name)
+  original.exec("CREATE TABLE values_kept (value TEXT); INSERT INTO values_kept VALUES ('kept')")
+  original.close()
+  const bytes = fs.readFileSync(name)
+  expect(() => openSqliteStore(name, 1, 'CREATE TABLE values_kept (value TEXT)')).toThrow(MissingFormatError)
+  expect(fs.readFileSync(name)).toEqual(bytes)
+})
+
+// An interrupted first creation leaves either an empty file or a database with
+// no schema, and neither may disable the store for good.
+it.each([
+  ['an empty file', (name: string) => fs.writeFileSync(name, '')],
+  ['a database with no schema', (name: string) => { const db = new DatabaseSync(name); db.exec('PRAGMA journal_mode = WAL'); db.close() }],
+])('initializes %s left by an interrupted first creation', (_state, leave) => {
+  const name = file()
+  leave(name)
+  const store = openSqliteStore(name, 1, 'CREATE TABLE kept (value TEXT)')
+  try {
+    expect(store.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 })
+    expect(store.prepare("SELECT name FROM sqlite_master WHERE name = 'kept'").all()).toEqual([{ name: 'kept' }])
+  } finally { store.close() }
+})
+
+it('opens its own current store again without change', () => {
+  const name = file()
+  const first = openSqliteStore(name, 1, 'CREATE TABLE kept (value TEXT)')
+  first.exec("INSERT INTO kept VALUES ('row')")
+  first.close()
+  const again = openSqliteStore(name, 1, 'CREATE TABLE IF NOT EXISTS kept (value TEXT)')
+  try { expect(again.prepare('SELECT value FROM kept').all()).toEqual([{ value: 'row' }]) }
+  finally { again.close() }
 })
 
 it.skipIf(process.platform === 'win32')('creates an ordinary database with normal filesystem permissions', () => {
@@ -40,16 +75,4 @@ it('rolls back schema and marker together after failed initialization', () => {
     expect(reader.prepare('PRAGMA user_version').get()).toEqual({ user_version: 0 })
     expect(reader.prepare("SELECT name FROM sqlite_master WHERE name = 'partial'").all()).toEqual([])
   } finally { reader.close() }
-})
-
-it('refuses a cached writer and reader after another connection upgrades the marker', () => {
-  const name = file()
-  const store = openSqliteStore(name, 1, 'CREATE TABLE kept (value TEXT)')
-  const upgrader = new DatabaseSync(name)
-  try {
-    upgrader.exec('PRAGMA user_version = 2')
-    expect(() => sqliteStoreOperation(store, 1, name, true, () => store.exec("INSERT INTO kept VALUES ('lost')"))).toThrow()
-    expect(() => sqliteStoreOperation(store, 1, name, false, () => store.prepare('SELECT * FROM kept').all())).toThrow()
-    expect(upgrader.prepare('SELECT * FROM kept').all()).toEqual([])
-  } finally { upgrader.close(); store.close() }
 })

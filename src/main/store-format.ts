@@ -1,4 +1,3 @@
-import fs from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 
 // Every store's format version, and the one way each store reads and writes
@@ -45,7 +44,7 @@ export class NewerFormatError extends Error {
   }
 }
 
-/** A populated SQLite store without its format version: unreadable (store-recovery-conventions). */
+/** A SQLite store holding schema objects but no format version: unreadable (store-recovery-conventions). */
 export class MissingFormatError extends Error {
   constructor(readonly path: string) {
     super(`${path} has no format version`)
@@ -88,36 +87,29 @@ export function markFormat<T extends object>(map: T, version: number, key: strin
   return { [key]: version, ...map }
 }
 
-/**
- * Checks an open SQLite store's version before anything else touches it, so a
- * store this build cannot use throws having had nothing written. A version of
- * 0 is a missing marker and is unreadable. Only creation can admit a fresh file.
- */
-export function claimSqliteFormat(db: DatabaseSync, supported: number, file: string): void {
-  const { user_version: found } = db.prepare('PRAGMA user_version').get() as { user_version: number }
-  if (found > supported) throw new NewerFormatError(file, found, supported)
-  if (found < 1) throw new MissingFormatError(file)
+function userVersion(db: DatabaseSync): number {
+  return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
 }
 
-/** Creation owns the fresh-file fact; schema and marker commit together. */
+/**
+ * Opens a SQLite store and checks its version once, here: the single-instance
+ * lock keeps every other writer out, so operations need no recheck. A version
+ * of 0 with no schema objects is a fresh file, including one whose first
+ * creation was interrupted; a version of 0 holding objects has no marker and is
+ * unreadable. Schema and marker commit together.
+ */
 export function openSqliteStore(file: string, supported: number, schema: string): DatabaseSync {
-  let fresh = false
-  try {
-    const descriptor = fs.openSync(file, 'wx')
-    fresh = true
-    fs.closeSync(descriptor)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-  }
   const db = new DatabaseSync(file, { timeout: 5_000 })
   try {
-    const { user_version: found } = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (!(fresh && found === 0)) claimSqliteFormat(db, supported, file)
+    const found = userVersion(db)
+    if (found > supported) throw new NewerFormatError(file, found, supported)
+    if (found < 1) {
+      const { objects } = db.prepare('SELECT count(*) AS objects FROM sqlite_master').get() as { objects: number }
+      if (objects > 0) throw new MissingFormatError(file)
+    }
     db.exec('PRAGMA journal_mode = WAL')
     db.exec('BEGIN IMMEDIATE')
     try {
-      const { user_version: current } = db.prepare('PRAGMA user_version').get() as { user_version: number }
-      if (!(fresh && current === 0)) claimSqliteFormat(db, supported, file)
       db.exec(schema)
       db.exec(`PRAGMA user_version = ${supported}`)
       db.exec('COMMIT')
@@ -128,20 +120,6 @@ export function openSqliteStore(file: string, supported: number, schema: string)
     return db
   } catch (error) {
     try { db.close() } catch { /* Preserve initialization failure. */ }
-    throw error
-  }
-}
-
-/** The marker and the operation share one SQLite snapshot/claim. */
-export function sqliteStoreOperation<T>(db: DatabaseSync, supported: number, file: string, write: boolean, operation: () => T): T {
-  db.exec(write ? 'BEGIN IMMEDIATE' : 'BEGIN')
-  try {
-    claimSqliteFormat(db, supported, file)
-    const result = operation()
-    db.exec('COMMIT')
-    return result
-  } catch (error) {
-    try { db.exec('ROLLBACK') } catch { /* Preserve operation failure. */ }
     throw error
   }
 }

@@ -1,6 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { DatabaseSync } from 'node:sqlite'
-import { sqliteStoreOperation, FORMAT_VERSIONS } from './store-format'
 import { runRecordsRead } from './records-query'
 import type { RecordsReaderRequest, RecordsReaderResponse } from './records-reader'
 
@@ -20,7 +19,14 @@ parentPort?.on('message', ({ id, read }: RecordsReaderRequest) => {
   let response: RecordsReaderResponse
   try {
     db ??= new DatabaseSync(databasePath, { readOnly: true })
-    response = { id, ok: true, value: sqliteStoreOperation(db, FORMAT_VERSIONS.records, databasePath, false, () => runRecordsRead(db!, read)) }
+    // One read transaction, so a read's several queries see one snapshot while
+    // the main process keeps writing on its own connection.
+    db.exec('BEGIN')
+    try {
+      response = { id, ok: true, value: runRecordsRead(db, read) }
+    } finally {
+      db.exec('COMMIT')
+    }
   } catch (error) {
     // A connection that failed is opened afresh for the next read.
     try {

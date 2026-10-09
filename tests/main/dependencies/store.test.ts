@@ -92,9 +92,10 @@ describe('dependencies cache', () => {
 })
 
 describe('dependencies cache format version', () => {
-  it('reads a file with no format version as empty', () => {
+  // A cache: the version is written, never checked.
+  it('reads a file with no format version by its fields', () => {
     fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
-    expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
+    expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
   })
 
   it('writes its format version first and reads it back', () => {
@@ -103,12 +104,13 @@ describe('dependencies cache format version', () => {
     expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
   })
 
-  it('reads a file from a newer version as empty and never writes it', () => {
-    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.dependencies + 1, lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' })
+  it('reads a file from a newer version by its fields and replaces it on the next update', () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-    fs.writeFileSync(getDependenciesStatePath(), bytes)
-    expect(readDependenciesCache().lastAttemptAtUtc).toBeNull()
-    expect(updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-07-01T00:00:00.000Z' }).lastAttemptAtUtc).toBe('2026-07-01T00:00:00.000Z')
-    expect(fs.readFileSync(getDependenciesStatePath(), 'utf8')).toBe(bytes)
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.dependencies + 1, lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
+    expect(readDependenciesCache().lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
+    updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-07-01T00:00:00.000Z' })
+    expect(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8'))).toMatchObject({
+      formatVersion: FORMAT_VERSIONS.dependencies, lastAttemptAtUtc: '2026-07-01T00:00:00.000Z',
+    })
   })
 })

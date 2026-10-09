@@ -20,7 +20,7 @@ import { downloadToFile, sha256File, type DownloadProgress } from './download'
 import type { CliRelease } from './cli-release'
 import { isCliReleaseTag } from './cli-version'
 import type { CliInstallWarning, DependencyProgress } from '../../shared/types'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { FORMAT_VERSIONS, FORMAT_VERSION_KEY, markFormat } from '../store-format'
 
 const execFileAsync = promisify(execFile)
 
@@ -41,45 +41,22 @@ function cliBinaryId(): string {
   return String(fs.statSync(getCliBinaryPath(), { bigint: true }).ino)
 }
 
-let newerWarned = false
-
-// A sidecar a newer build wrote reads as unknown and is never rewritten, and
-// Install/Update refuses rather than replace it or the binary it describes.
+// A cache of the installed binary's identity: its format version is written but
+// never checked, and any field that does not fit reads as an unknown version.
+// Install and Update replace it whatever build wrote it, since the binary it
+// describes is re-fetchable (store-recovery-conventions).
 function readCliMeta(): CliMeta | null {
   try {
-    const file = getCliMetaPath()
-    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const raw: unknown = JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-    const meta = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.cliSidecar, file) as Partial<CliMeta>
+    const { [FORMAT_VERSION_KEY]: _formatVersion, ...meta } = raw as Partial<CliMeta> & Record<string, unknown>
     if (typeof meta.tag !== 'string' || !isCliReleaseTag(meta.tag)) return null
     if (typeof meta.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(meta.sha256)) return null
     if (typeof meta.installedAt !== 'string') return null
     if (typeof meta.binaryId !== 'string') return null
     return meta as CliMeta
-  } catch (err) {
-    if (err instanceof NewerFormatError && !newerWarned) {
-      newerWarned = true
-      log('warn', 'The Draw Things CLI sidecar is from a newer version; its version reads as unknown', { error: serializeError(err) })
-    }
-    return null
-  }
-}
-
-// A newer build's sidecar and binary stay exactly as they are, so that build
-// can still use both (store-recovery conventions); the refusal names the file.
-function refuseNewerCliSidecar(): void {
-  const file = getCliMetaPath()
-  let raw: unknown
-  try {
-    raw = JSON.parse(fs.readFileSync(file, 'utf8'))
   } catch {
-    return
-  }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return
-  try {
-    checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.cliSidecar, file)
-  } catch (err) {
-    if (err instanceof NewerFormatError) throw err
+    return null
   }
 }
 
@@ -126,7 +103,6 @@ export function publishCliBinary(
   tag: string,
   sha256: string
 ): CliInstallWarning[] {
-  refuseNewerCliSidecar()
   fs.mkdirSync(getBinDir(), { recursive: true })
   if (!isCliInstalled()) {
     // An orphan sidecar has no artifact to preserve and must not label the first
@@ -175,7 +151,6 @@ export async function installCliRelease(
   if (!release.sha256) {
     throw new Error('Release asset has no published checksum; refusing to install unverified binary')
   }
-  refuseNewerCliSidecar()
 
   const tempPath = allocateTempPath(getCliBinaryPath())
   try {

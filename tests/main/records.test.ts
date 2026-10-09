@@ -210,22 +210,38 @@ describe('the records format version', () => {
     }
   }
 
-  it('keeps records in the fallback file beside a database with no format version, and leaves its bytes as they were', () => {
+  it('sets aside a populated database with no format version, keeping its bytes, and starts a new one', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-unversioned-'))
     const file = path.join(dir, 'records.sqlite3')
     const seeded = new DatabaseSync(file)
     seeded.exec('CREATE TABLE kept (value TEXT)')
     seeded.close()
     const bytes = fs.readFileSync(file)
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     openRecords(dir)
-    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Kept anyway', {})
-    consoleError.mockRestore()
+    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Kept in the new database', {})
 
-    expect(recordsDatabasePath()).toBeNull()
-    expect(fallbackLines(dir).map((line) => line.message)).toEqual(['Records database could not be opened', 'Kept anyway'])
-    expect(fs.readFileSync(file).equals(bytes)).toBe(true)
+    expect(recordsDatabasePath()).toBe(file)
+    const invalid = fs.readdirSync(dir).filter((name) => /^records-.+\.invalid$/.test(name))
+    expect(invalid).toHaveLength(1)
+    expect(fs.readFileSync(path.join(dir, invalid[0])).equals(bytes)).toBe(true)
+    const db = new DatabaseSync(file, { readOnly: true })
+    try {
+      const messages = (db.prepare('SELECT message FROM log_records ORDER BY id').all() as { message: string }[]).map((row) => row.message)
+      expect(messages).toEqual(['Set aside a records database without a format version; started a new one', 'Kept in the new database'])
+    } finally {
+      db.close()
+    }
     closeRecords()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('initializes a database whose first creation was interrupted', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-interrupted-'))
+    fs.writeFileSync(path.join(dir, 'records.sqlite3'), '')
+    openRecords(dir)
+    expect(recordsDatabasePath()).toBe(path.join(dir, 'records.sqlite3'))
+    closeRecords()
+    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FORMAT_VERSIONS.records)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 

@@ -12,7 +12,7 @@ import {
   getCliBinaryPath,
   getCliMetaPath,
 } from '../../../src/main/dependencies/paths'
-import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 import * as fsync from '../../../src/main/utils/fsync'
 
 let home: string
@@ -32,20 +32,6 @@ afterEach(() => {
 })
 
 describe('publishCliBinary', () => {
-  it.each([false, true])('refuses a newer governing sidecar at final publication (orphan: %s)', (orphan) => {
-    fs.mkdirSync(getBinDir(), { recursive: true })
-    if (!orphan) fs.writeFileSync(getCliBinaryPath(), 'newer binary')
-    const newer = JSON.stringify({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
-    fs.writeFileSync(getCliMetaPath(), newer)
-    const staged = path.join(home, 'new-cli')
-    fs.writeFileSync(staged, 'staged binary')
-    expect(() => publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64))).toThrow(NewerFormatError)
-    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(newer)
-    expect(fs.existsSync(getCliBinaryPath())).toBe(!orphan)
-    if (!orphan) expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('newer binary')
-    expect(fs.readFileSync(staged, 'utf8')).toBe('staged binary')
-  })
-
   it('returns installed with a secondary warning after postcommit directory sync fails', () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
@@ -168,9 +154,10 @@ describe('the sidecar format version', () => {
     }))
   }
 
-  it('reads a sidecar with no format version as unknown', () => {
+  // A cache of the binary's identity: the version is written, never checked.
+  it('reads a sidecar with no format version by its fields', () => {
     installWithSidecar({})
-    expect(readInstalledCliTag()).toBeNull()
+    expect(readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
   it('writes its format version first and reads it back', () => {
@@ -182,21 +169,17 @@ describe('the sidecar format version', () => {
     expect(readInstalledCliTag()).toBe('v1.20260822.0')
   })
 
-  it('reads a sidecar from a newer version as unknown and leaves its bytes as they were', () => {
+  it('reads a sidecar from a newer version by its fields', () => {
     installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
-    const bytes = fs.readFileSync(getCliMetaPath(), 'utf8')
-    expect(readInstalledCliTag()).toBeNull()
-    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(bytes)
+    expect(readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
-  it('refuses Install/Update over a newer sidecar, keeping it and its binary', async () => {
+  it('replaces a sidecar from a newer version when a binary is published', () => {
     installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
-    const sidecar = fs.readFileSync(getCliMetaPath(), 'utf8')
-    const release = { tag: 'v1.20261004.0', assetUrl: 'https://fixture.invalid/draw-things-cli', sha256: 'b'.repeat(64) }
-    const refusal = await installCliRelease(release).catch((error: unknown) => error)
-    expect(refusal).toBeInstanceOf(NewerFormatError)
-    expect((refusal as NewerFormatError).path).toBe(getCliMetaPath())
-    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(sidecar)
-    expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('binary')
+    const staged = path.join(home, 'new-cli')
+    fs.writeFileSync(staged, 'new binary')
+    publishCliBinary(staged, 'v1.20260822.0', 'a'.repeat(64))
+    expect(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))).toMatchObject({ formatVersion: FORMAT_VERSIONS.cliSidecar, tag: 'v1.20260822.0' })
+    expect(readInstalledCliTag()).toBe('v1.20260822.0')
   })
 })

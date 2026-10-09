@@ -3,7 +3,7 @@ import path from 'path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
-import { openSqliteStore, sqliteStoreOperation, FORMAT_VERSIONS } from './store-format'
+import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError } from './store-format'
 
 // The app's records, per the logging-conventions and the data-lifecycle-conventions'
 // Records: one `records.sqlite3` under the storage root, written only by the main
@@ -80,6 +80,20 @@ function insertStatement(store: DatabaseSync, table: Table, columns: string[]): 
   return store.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((c) => `:${c}`).join(', ')})`)
 }
 
+// A populated database without a format version is set aside, never deleted,
+// and a new one is created in its place; the records are diagnostics, so the
+// record naming the copy is the whole report. A copy that cannot be made throws.
+function openOrReplace(file: string): { opened: DatabaseSync; movedTo: string | null } {
+  try {
+    return { opened: openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA), movedTo: null }
+  } catch (error) {
+    if (!(error instanceof MissingFormatError)) throw error
+    const movedTo = path.join(path.dirname(file), `${path.basename(file, path.extname(file))}-${utcStampForFilename()}.invalid`)
+    fs.renameSync(file, movedTo)
+    return { opened: openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA), movedTo }
+  }
+}
+
 /** Opens `records.sqlite3` under `dataDir`; a failed open sends every record to the
  *  plain text file under `logs/`. Returns the database path. */
 export function openRecords(dataDir: string): string {
@@ -87,8 +101,11 @@ export function openRecords(dataDir: string): string {
   const file = path.join(dataDir, 'records.sqlite3')
   fallbackFile = path.join(dataDir, 'logs', `${utcStampForFilename(launchStarted)}.log`)
   let opened: DatabaseSync | undefined
+  let movedTo: string | null = null
   try {
-    opened = openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA)
+    const result = openOrReplace(file)
+    opened = result.opened
+    movedTo = result.movedTo
     inserts = {
       log_records: insertStatement(opened, 'log_records', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'level', 'message', 'fields']),
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),
@@ -103,6 +120,9 @@ export function openRecords(dataDir: string): string {
       console.error('[records] closing the records database failed', closeError)
     }
     reportFailure('Records database could not be opened', error)
+  }
+  if (movedTo) {
+    writeLogRecord(new Date().toISOString(), 'warn', 'Set aside a records database without a format version; started a new one', { from: file, to: movedTo })
   }
   return file
 }
@@ -181,7 +201,7 @@ function reportFailure(message: string, error: unknown): void {
 function write(table: Table, row: Row): void {
   if (inserts) {
     try {
-      sqliteStoreOperation(db!, FORMAT_VERSIONS.records, databaseFile!, true, () => inserts![table].run(row))
+      inserts[table].run(row)
     } catch (error) {
       reportFailure('Records database write failed', error)
       writeFallback(table, row)

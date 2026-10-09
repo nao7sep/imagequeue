@@ -63,11 +63,4 @@ describe('state:update admission', () => {
     expect(invoke({ recordsListWidth: 400.6 })).toEqual({ columnWidth: null, notificationVolume: 0, recordsListWidth: 401 })
     expect(invoke({})).toEqual({ columnWidth: null, notificationVolume: 0, recordsListWidth: 401 })
   })
-
-  it('retains future-file refusal after admitting a valid patch', () => {
-    const bytes = JSON.stringify({ formatVersion: 999, columnWidth: 280 })
-    fs.writeFileSync(getUiStatePath(), bytes)
-    expect(invoke({ columnWidth: 240 })).toEqual({ ...defaultUiState(), columnWidth: 240 })
-    expect(fs.readFileSync(getUiStatePath(), 'utf8')).toBe(bytes)
-  })
 })

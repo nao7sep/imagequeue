@@ -262,9 +262,12 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
   }
 }
 
-function admitSessionManifest(sessionDir: string, allowMissing = false): void {
+// The open session's manifest was checked when it was loaded, and the
+// single-instance lock keeps every other writer out, so only a session that is
+// not open is checked before it is deleted.
+function admitSessionManifest(sessionDir: string): void {
   const read = readManifestFromDir(sessionDir)
-  if (read.manifest || (allowMissing && read.problem === 'missing')) return
+  if (read.manifest) return
   if (read.error instanceof NewerFormatError) throw read.error
   throw new StoreLeftInPlaceError(getManifestPath(sessionDir), {
     cause: read.error ?? new Error('Session manifest is missing'),
@@ -427,7 +430,6 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 // records what was attempted even if the op then throws.
 async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
   if (!fs.existsSync(sessionDir)) return
-  admitSessionManifest(sessionDir)
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   log('info', 'Dropping empty session', { reason, sessionId, path: sessionDir, toTrash })
   if (toTrash) {
@@ -472,7 +474,6 @@ export function resolveSessionDir(sessionId: string): string {
 
 export function persistActiveSession(): SessionManifest {
   const sessionDir = getSessionDir()
-  admitSessionManifest(sessionDir, true)
   fs.mkdirSync(sessionDir, { recursive: true })
   const session = ensureActiveSessionLoaded()
   const tasks = queueManager.getAllStoredTasks()
@@ -514,7 +515,6 @@ async function createSessionOwned(): Promise<void> {
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
-  if (dropPrevious && fs.existsSync(previousSessionDir)) admitSessionManifest(previousSessionDir)
 
   // The explicit persist below captures the outgoing draft when the session is
   // kept; either way, cancel the pending timer so it can't fire after the
@@ -595,7 +595,6 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
-  if (dropPrevious && fs.existsSync(previousSessionDir)) admitSessionManifest(previousSessionDir)
 
   // Capture the outgoing session's pending draft before we switch away (unless
   // it's being dropped). Unlike createSession, resume does not persist the

@@ -60,19 +60,6 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform !== 'darwin')('installCliRelease on macOS', () => {
-  it('refuses a sidecar that became newer during acquisition and removes only its staging', async () => {
-    const bytes = JSON.stringify({ formatVersion: 999 })
-    fixture.afterDownload = () => {
-      fs.mkdirSync(getBinDir(), { recursive: true })
-      fs.writeFileSync(getCliBinaryPath(), 'newer binary')
-      fs.writeFileSync(getCliMetaPath(), bytes)
-    }
-    await expect(installCliRelease(release(ARM64))).rejects.toMatchObject({ name: 'NewerFormatError', path: getCliMetaPath() })
-    expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('newer binary')
-    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(bytes)
-    expect(fs.readdirSync(getTempDir())).toEqual([])
-  })
-
   it('installs an arm64 binary executable, with the quarantine flag removed, and records its release', async () => {
     const arm64 = release(ARM64)
     await installCliRelease(arm64)

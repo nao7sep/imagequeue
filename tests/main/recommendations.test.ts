@@ -16,7 +16,7 @@ import {
   resolveRecommendedParams,
 } from '../../src/main/recommendations'
 import { getRecommendationsTimesPath } from '../../src/main/dependencies/paths'
-import { FORMAT_VERSIONS, NewerFormatError } from '../../src/main/store-format'
+import { FORMAT_VERSIONS } from '../../src/main/store-format'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
 let home: string
@@ -128,16 +128,13 @@ describe('downloadLatestRecommendations', () => {
     expect((await downloadLatestRecommendations()).updatedAt).toBe('2026-09-11T20:46:05.000Z')
   })
 
-  it('refuses before downloading when a newer build wrote the record, leaving both files as they are', async () => {
+  // A cache: the version is written, never checked, so a newer build's record
+  // is replaced like any other.
+  it('replaces a record a newer build wrote on the next install', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
-    const newer = JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsTimes + 1, files: {} })
-    fs.writeFileSync(getRecommendationsTimesPath(), newer)
-    const configs = fs.readFileSync(configsPath())
-    network.fetchBytesWithHeaders.mockClear()
-    await expect(downloadLatestRecommendations()).rejects.toBeInstanceOf(NewerFormatError)
-    expect(network.fetchBytesWithHeaders).not.toHaveBeenCalled()
-    expect(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).toBe(newer)
-    expect(fs.readFileSync(configsPath())).toEqual(configs)
-    expect(getRecommendationsStatus().updatedAt).toBeNull()
+    fs.writeFileSync(getRecommendationsTimesPath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsTimes + 1, files: {} }))
+    network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
+    expect((await downloadLatestRecommendations()).updatedAt).toBe('2026-09-11T20:46:05.000Z')
+    expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).formatVersion).toBe(FORMAT_VERSIONS.recommendationsTimes)
   })
 })

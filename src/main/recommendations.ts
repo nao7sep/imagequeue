@@ -13,7 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { resolveModelsDir, ensureModelsDir } from './local-cli'
-import { recordedServerTime, recordServerTime, refuseNewerRecordedTimes } from './dependencies/recommendations-times'
+import { recordedServerTime, recordServerTime } from './dependencies/recommendations-times'
 import type { IncomingHttpHeaders } from 'http'
 import {
   fetchBytesWithHeaders,
@@ -66,7 +66,6 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
     3 * 60 * 1000,
     'Recommendations acquisition',
     async (boundedSignal) => {
-      refuseNewerRecordedTimes()
       const { body: data, headers } = await fetchBytesWithHeaders(
         RECOMMENDATIONS_URL,
         RECOMMENDATIONS_LIMITS,

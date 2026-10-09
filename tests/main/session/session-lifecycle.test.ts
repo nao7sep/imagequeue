@@ -779,37 +779,6 @@ describe('governing session manifest mutation admission', () => {
     expect(trashItem).not.toHaveBeenCalled()
     expect(log).toHaveBeenCalledWith('error', 'Failed to remove task files; removing the queue entry anyway', expect.objectContaining({ error: expect.stringContaining(sidecar) }))
   })
-
-  it('refuses active persistence when the named manifest becomes newer', () => {
-    const file = path.join(getSessionDir(), 'session.json')
-    const newer = JSON.stringify({ ...readManifest(getSessionDir()), formatVersion: FORMAT_VERSIONS.session + 1 })
-    fs.writeFileSync(file, newer)
-    expect(() => persistActiveSession()).toThrow(NewerFormatError)
-    expect(fs.readFileSync(file, 'utf8')).toBe(newer)
-  })
-
-  it.each(['new', 'resume', 'quit'] as const)('protects the outgoing future manifest from %s auto-drop', async (operation) => {
-    settings.dropEmptySessions = true
-    settings.deleteToTrash = true
-    const dir = getSessionDir()
-    const file = path.join(dir, 'session.json')
-    const newer = JSON.stringify({ ...readManifest(dir), formatVersion: FORMAT_VERSIONS.session + 1 })
-    fs.writeFileSync(file, newer)
-    const target = stageSession('20260115-000000-utc')
-    const targetBytes = fs.readFileSync(path.join(target, 'session.json'))
-    const folders = fs.readdirSync(getOutputDir())
-    const previousId = getSessionId()
-    vi.clearAllMocks()
-    const pending = operation === 'new' ? createSession() : operation === 'resume' ? resumeSession('20260115-000000-utc') : dropCurrentSessionIfEmpty('quit')
-    await expect(pending).rejects.toThrow(NewerFormatError)
-    expect(fs.readFileSync(file, 'utf8')).toBe(newer)
-    expect(getSessionId()).toBe(previousId)
-    expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(targetBytes)
-    expect(fs.readdirSync(getOutputDir())).toEqual(folders)
-    expect(publishQueueState).not.toHaveBeenCalled()
-    expect(sent('session:changed')).toEqual([])
-    expect(trashItem).not.toHaveBeenCalled()
-  })
 })
 
 describe('the manifest format version', () => {

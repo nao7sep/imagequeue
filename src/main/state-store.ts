@@ -19,63 +19,43 @@ import { getDataDir } from './config'
 import type { UiState } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
 import { clampRecordsListWidth } from '../shared/records-layout'
-import { checkFormat, FORMAT_VERSIONS, NewerFormatError } from './store-format'
+import { FORMAT_VERSIONS } from './store-format'
 
 export function getUiStatePath(): string {
   return path.join(getDataDir(), 'state.json')
 }
 
-interface StoredUiState {
-  state: UiState
-  // False for a file a newer build wrote: it is read as the defaults and never
-  // written (store-recovery-conventions).
-  writable: boolean
-}
-
-let newerWarned = false
-
-function readStoredUiState(): StoredUiState {
+// A cache: its format version is written but never checked, since each field is
+// read on its own merits and overwriting a newer build's file loses only
+// presentation state (store-recovery-conventions).
+export function readUiState(): UiState {
   const file = getUiStatePath()
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('state.json must be a JSON object')
-    const parsed = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.uiState, file) as Partial<UiState>
+    const parsed = raw as Partial<UiState>
     const base = defaultUiState()
     return {
-      writable: true,
-      state: {
-        columnWidth:
-          typeof parsed.columnWidth === 'number' && Number.isFinite(parsed.columnWidth)
-            ? parsed.columnWidth
-            : base.columnWidth,
-        // Clamped, not just type-checked: this drives an <audio> volume, which
-        // throws on a value outside 0–1, and the file is hand-editable.
-        notificationVolume:
-          typeof parsed.notificationVolume === 'number' && Number.isFinite(parsed.notificationVolume)
-            ? Math.min(1, Math.max(0, parsed.notificationVolume))
-            : base.notificationVolume,
-        recordsListWidth: clampRecordsListWidth(parsed.recordsListWidth),
-      },
+      columnWidth:
+        typeof parsed.columnWidth === 'number' && Number.isFinite(parsed.columnWidth)
+          ? parsed.columnWidth
+          : base.columnWidth,
+      // Clamped, not just type-checked: this drives an <audio> volume, which
+      // throws on a value outside 0–1, and the file is hand-editable.
+      notificationVolume:
+        typeof parsed.notificationVolume === 'number' && Number.isFinite(parsed.notificationVolume)
+          ? Math.min(1, Math.max(0, parsed.notificationVolume))
+          : base.notificationVolume,
+      recordsListWidth: clampRecordsListWidth(parsed.recordsListWidth),
     }
   } catch (err) {
-    if (err instanceof NewerFormatError) {
-      if (!newerWarned) {
-        newerWarned = true
-        log('warn', 'state.json is from a newer version; using defaults and leaving it unchanged', { error: serializeError(err) })
-      }
-      return { state: defaultUiState(), writable: false }
-    }
     // Absent is an expected probe (silent); present-but-unparseable is an
     // unexpected failure that silently resetting would leave untraceable.
     if (fs.existsSync(file)) {
       log('warn', 'Ignoring unreadable state.json; resetting to defaults', { error: serializeError(err) })
     }
-    return { state: defaultUiState(), writable: true }
+    return defaultUiState()
   }
-}
-
-export function readUiState(): UiState {
-  return readStoredUiState().state
 }
 
 function writeUiState(state: UiState): void {
@@ -109,8 +89,7 @@ export function validateUiStatePatch(value: unknown): Partial<UiState> {
 /** Read, apply the patch, and persist in one step. Returns the new full state. */
 export function updateUiState(value: unknown): UiState {
   const patch = validateUiStatePatch(value)
-  const stored = readStoredUiState()
-  const next: UiState = { ...stored.state, ...patch }
-  if (stored.writable) writeUiState(next)
+  const next: UiState = { ...readUiState(), ...patch }
+  writeUiState(next)
   return next
 }

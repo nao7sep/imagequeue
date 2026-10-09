@@ -5,15 +5,16 @@
 // time never labels a file it was not served with.
 //
 // A re-derived cache (store-recovery-conventions): an unreadable file reads as
-// empty and the next Install/Refresh replaces it; a newer build's file reads as
-// empty and is never written.
+// empty and the next Install/Refresh replaces it. Its format version is written
+// but never checked; overwriting a newer build's file loses only dates the next
+// Install/Refresh records again.
 
 import fs from 'fs'
 import path from 'path'
 import { createHash } from 'crypto'
 import { log, serializeError } from '../logger'
 import { writeJsonAtomic } from '../utils/atomic-write'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { FORMAT_VERSIONS, markFormat } from '../store-format'
 import { getRecommendationsTimesPath } from './paths'
 
 interface RecordedTime {
@@ -43,20 +44,18 @@ function sha256Of(bytes: Buffer): string {
 
 let unreadableWarned = false
 
-/** The stored times, empty when the file is absent or unreadable. Throws
- * NewerFormatError for a file a newer build wrote. */
+/** The stored times, empty when the file is absent or unreadable. */
 function readTimes(): RecordedTimes {
   const file = getRecommendationsTimesPath()
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!isObject(raw)) throw new Error('must be a JSON object')
-    const { files = {} } = checkFormat(raw, FORMAT_VERSIONS.recommendationsTimes, file)
+    const { files = {} } = raw
     if (!isObject(files) || !Object.values(files).every(isRecordedTime)) {
       throw new Error('files must map each configs.json path to its recorded time')
     }
     return files as RecordedTimes
   } catch (err) {
-    if (err instanceof NewerFormatError) throw err
     if (fs.existsSync(file) && !unreadableWarned) {
       unreadableWarned = true
       log('warn', 'Ignoring unreadable recommendations-times.json; the next Install or Refresh replaces it', { error: serializeError(err) })
@@ -69,27 +68,15 @@ function keyOf(filePath: string): string {
   return path.resolve(filePath)
 }
 
-let newerWarned = false
-
 /** The server time recorded for the file's current bytes, or null when none was. */
 export function recordedServerTime(filePath: string): string | null {
+  const entry = readTimes()[keyOf(filePath)]
+  if (!entry) return null
   try {
-    const entry = readTimes()[keyOf(filePath)]
-    if (!entry) return null
     return entry.sha256 === sha256Of(fs.readFileSync(filePath)) ? entry.lastModifiedUtc : null
-  } catch (err) {
-    if (err instanceof NewerFormatError && !newerWarned) {
-      newerWarned = true
-      log('warn', 'recommendations-times.json is from a newer version; the recommended parameters date reads as unknown', { error: serializeError(err) })
-    }
+  } catch {
     return null
   }
-}
-
-/** Throws NewerFormatError, naming the file, when a newer build wrote the
- * times, which stay exactly as they are. */
-export function refuseNewerRecordedTimes(): void {
-  readTimes()
 }
 
 /** Record the server time for the bytes just published at filePath, or drop the

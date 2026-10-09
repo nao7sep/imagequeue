@@ -87,9 +87,11 @@ describe('ui state store', () => {
 })
 
 describe('ui state format version', () => {
-  it('reads a file with no format version as defaults', () => {
+  // A cache: the version is written, never checked, so each field is read on
+  // its own merits whatever build wrote the file.
+  it('reads a file with no format version by its fields', () => {
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 288 }))
-    expect(readUiState()).toEqual(defaultUiState())
+    expect(readUiState()).toEqual({ ...defaultUiState(), columnWidth: 288 })
   })
 
   it('writes its owned format version and reads it back', () => {
@@ -98,11 +100,10 @@ describe('ui state format version', () => {
     expect(readUiState().columnWidth).toBe(240)
   })
 
-  it('reads a file from a newer version as defaults and never writes it', () => {
-    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.uiState + 1, columnWidth: 288 })
-    fs.writeFileSync(getUiStatePath(), bytes)
-    expect(readUiState()).toEqual(defaultUiState())
+  it('reads a file from a newer version by its fields and replaces it on the next update', () => {
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.uiState + 1, columnWidth: 288 }))
+    expect(readUiState().columnWidth).toBe(288)
     expect(updateUiState({ columnWidth: 240 }).columnWidth).toBe(240)
-    expect(fs.readFileSync(getUiStatePath(), 'utf8')).toBe(bytes)
+    expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toMatchObject({ formatVersion: FORMAT_VERSIONS.uiState, columnWidth: 240 })
   })
 })
