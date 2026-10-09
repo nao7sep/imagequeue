@@ -13,7 +13,6 @@ import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
 import { closeConceptStore } from './concepts/concept-store'
 import { closeBackupStore } from './backup/backup-store'
-import { archiveSession } from './backup/archive'
 import { registerConceptsIpc } from './concepts-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { registerAppNoticeIpc } from './app-notice-ipc'
@@ -254,8 +253,6 @@ async function startUp(): Promise<void> {
     },
     dock: app.dock,
   })
-  await archiveSession('begin')
-  if (mainWindowController.isShuttingDown()) return
   clearTempDir()
   // The saved theme reaches the title bar and the renderer's
   // prefers-color-scheme before any window exists, so launch never shows the OS
@@ -310,12 +307,6 @@ async function startUp(): Promise<void> {
   // check attempt is a day old. Fire-and-forget: never blocks startup, and
   // its result is surfaced passively (pane pointer / modal), never as a prompt.
   void checkDependenciesAtLaunch()
-
-  // The just-in-case data backup is no longer a startup pass (data-backup
-  // conventions). It is write-through: every managed-text save records the bytes
-  // it just wrote into ~/.imagequeue/backups.sqlite3 strictly after its atomic
-  // rename lands (see utils/atomic-write.ts → backup/backup-store.ts). There is
-  // nothing to run here — the history is always as current as the last save.
 
   void statusIconController.reconcile(loadConfig().general.show_status_icon)
   mainWindowController.createInitialWindow()
@@ -386,5 +377,4 @@ async function gracefulShutdown(reason: string): Promise<void> {
   await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
   await guarded('closeConceptStore', () => closeConceptStore())
   await guarded('closeBackupStore', () => closeBackupStore())
-  await guarded('archiveBinaryStores', () => archiveSession('finish'))
 }

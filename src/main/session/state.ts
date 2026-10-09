@@ -486,9 +486,10 @@ export function persistActiveSession(): SessionManifest {
   ]
   const updatedAt = editTimes.length === 0 ? session.updatedAt : editTimes.sort().at(-1)!
   const manifest = buildManifest(getSessionId(), session, updatedAt, tasks)
-  // recorded: session.json holds the draft prompt, seed and elaborated prompts — reloaded user
-  // work, so it keeps a history even though it sits under output/<session>/.
-  writeJsonAtomic(getManifestPath(sessionDir), manifest, true)
+  // not recorded: a session, its images and its elaborated prompts are transient
+  // work the user exports what they keep from (data-backup-conventions; the
+  // developer's classification), so session.json has no backup history.
+  writeJsonAtomic(getManifestPath(sessionDir), manifest, false)
   // Only a write that landed moves the baseline, so content a failed write
   // never saved still counts as an edit on the next one.
   session.saved = content

@@ -38,6 +38,9 @@ vi.mock('../../../src/main/logger', () => ({ log, serializeError: (error: unknow
 const publishQueueState = vi.hoisted(() => vi.fn())
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState }))
 
+const recordBackup = vi.hoisted(() => vi.fn())
+vi.mock('../../../src/main/backup/backup-store', () => ({ record: recordBackup, closeBackupStore: async () => undefined }))
+
 const {
   createSession,
   deleteSession,
@@ -789,6 +792,14 @@ describe('the manifest format version', () => {
     expect(listSessions()).toContainEqual({ sessionId: '20260110-000000-utc', unopenable: 'unreadable' })
     await expect(resumeSession('20260110-000000-utc')).rejects.toThrow(/missing a readable session.json/)
     expect(fs.readFileSync(path.join(dir, 'session.json')).equals(before)).toBe(true)
+  })
+
+  // Sessions are transient work, so their manifests keep no backup history.
+  it('records nothing in the backup history when a session is saved', () => {
+    recordBackup.mockClear()
+    persistActiveSession()
+    expect(fs.existsSync(path.join(getSessionDir(), 'session.json'))).toBe(true)
+    expect(recordBackup).not.toHaveBeenCalled()
   })
 
   it('reads back the version it writes', () => {

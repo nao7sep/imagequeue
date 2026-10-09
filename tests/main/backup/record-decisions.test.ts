@@ -16,9 +16,10 @@ import { closeBackupStore } from '../../../src/main/backup/backup-store'
 // backed up and what is not" pin: it proves the per-write-site `records` boolean actually reaches the
 // store, rather than only unit-testing record() in isolation.
 //
-//   RECORDED   config.json, elaborators.json, params.json, session.json — durable user data and authored text.
+//   RECORDED   config.json, elaborators.json, params.json — settings and authored text.
 //   NO-RECORD  dependencies.json — a re-derivable dependency-check cache; recommendations-times.json —
-//              the server times of re-fetchable configs.json files.
+//              the server times of re-fetchable configs.json files. session.json, transient session
+//              work, is pinned in the session lifecycle tests.
 //
 // (state.json, the api-keys.json secret, the models-dir configs.json dependency, and
 // the bin/ CLI sidecar are the other no-record sites; they are exercised by their own stores' tests
@@ -48,8 +49,8 @@ describe('record/no-record decisions at real write sites', () => {
     process.env[ENV_VAR] = tmpRoot
   })
 
-  afterEach(() => {
-    closeBackupStore()
+  afterEach(async () => {
+    await closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })

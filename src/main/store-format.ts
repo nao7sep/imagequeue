@@ -23,14 +23,12 @@ export const FORMAT_VERSIONS = {
   session: 1,
   /** output/<session>/<image>.json, whose keys are snake_case */
   imageSidecar: 1,
-  /** manifest.json inside each backups/<stamp>.zip */
-  backupManifest: 1,
   /** records.sqlite3 */
   records: 1,
   /** concepts.sqlite3 */
   concepts: 1,
-  /** backups.sqlite3 */
-  backups: 1,
+  /** backups.sqlite3; 2 adds one row per file per launch */
+  backups: 2,
 } as const
 
 export const FORMAT_VERSION_KEY = 'formatVersion'
