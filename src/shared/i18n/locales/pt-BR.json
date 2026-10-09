@@ -340,6 +340,7 @@
   "settings.geminiApiKey": "Chave de API do Gemini",
   "settings.modelsDirectory": "Pasta de modelos",
   "settings.modelsDirectoryPlaceholder": "Deixe vazio para usar a pasta de modelos nos dados do app",
+  "settings.modelsDirectoryHint": "O ImageQueue procura modelos apenas nesta pasta. Alterá-la não move os modelos já baixados; mova-os você mesmo para continuar usando-os.",
   "settings.drawThingsTimeoutHint": "Uma geração que durar mais que isso é parada e marcada como falha. Renderizações locais podem levar minutos com modelos grandes, então o padrão é generoso (30 minutos).",
   "settings.fallbackWidth": "Largura alternativa",
   "settings.fallbackHeight": "Altura alternativa",

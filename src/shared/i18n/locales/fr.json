@@ -340,6 +340,7 @@
   "settings.geminiApiKey": "Clé API Gemini",
   "settings.modelsDirectory": "Dossier des modèles",
   "settings.modelsDirectoryPlaceholder": "Laisser vide pour utiliser le dossier des modèles dans les données de l’app",
+  "settings.modelsDirectoryHint": "ImageQueue cherche les modèles uniquement dans ce dossier. Le modifier ne déplace pas les modèles déjà téléchargés\u00a0; déplacez-les vous-même pour continuer à les utiliser.",
   "settings.drawThingsTimeoutHint": "Une génération qui dure plus longtemps est arrêtée et marquée comme échouée. Un rendu local peut légitimement prendre plusieurs minutes avec de gros modèles\u00a0; la valeur par défaut est donc généreuse (30\u00a0minutes).",
   "settings.fallbackWidth": "Largeur de repli",
   "settings.fallbackHeight": "Hauteur de repli",

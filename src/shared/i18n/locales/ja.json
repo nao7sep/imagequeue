@@ -322,6 +322,7 @@
   "settings.geminiApiKey": "Gemini API キー",
   "settings.modelsDirectory": "モデルのフォルダ",
   "settings.modelsDirectoryPlaceholder": "空欄にするとアプリのデータ内のモデルフォルダを使います",
+  "settings.modelsDirectoryHint": "ImageQueue はこのフォルダ内のモデルだけを使用します。変更しても、ダウンロード済みのモデルは移動されません。引き続き使用するには、ご自身で移動してください。",
   "settings.drawThingsTimeoutHint": "これより長くかかった生成は停止され、失敗として扱われます。大きなモデルではローカルでの生成に数分かかることもあるため、既定値は長め（30 分）です。",
   "settings.fallbackWidth": "代替の幅",
   "settings.fallbackHeight": "代替の高さ",

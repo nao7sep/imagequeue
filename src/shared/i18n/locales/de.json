@@ -331,6 +331,7 @@
   "settings.geminiApiKey": "Gemini-API-Schlüssel",
   "settings.modelsDirectory": "Modellordner",
   "settings.modelsDirectoryPlaceholder": "Leer lassen, um den Modellordner in den App-Daten zu verwenden",
+  "settings.modelsDirectoryHint": "ImageQueue sucht Modelle nur in diesem Ordner. Beim Ändern werden bereits heruntergeladene Modelle nicht verschoben; verschieben Sie sie selbst, um sie weiter zu verwenden.",
   "settings.drawThingsTimeoutHint": "Eine Erzeugung, die länger dauert, wird gestoppt und als fehlgeschlagen markiert. Lokales Rendern kann bei großen Modellen durchaus Minuten dauern, daher ist der Standardwert großzügig (30 Minuten).",
   "settings.fallbackWidth": "Ersatzbreite",
   "settings.fallbackHeight": "Ersatzhöhe",

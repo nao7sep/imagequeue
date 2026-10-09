@@ -611,6 +611,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             {/* The placeholder names no literal path: the real default lives
                 under the app's data directory, which IMAGEQUEUE_DATA_DIR moves. */}
             <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder={t('settings.modelsDirectoryPlaceholder')} />
+            <p className="settings-hint">{t('settings.modelsDirectoryHint')}</p>
           </div>
           <div className="settings-field">
             <label>{t('settings.timeout')}</label>

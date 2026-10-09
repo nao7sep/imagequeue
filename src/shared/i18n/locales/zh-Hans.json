@@ -322,6 +322,7 @@
   "settings.geminiApiKey": "Gemini API 密钥",
   "settings.modelsDirectory": "模型文件夹",
   "settings.modelsDirectoryPlaceholder": "留空则使用应用数据中的模型文件夹",
+  "settings.modelsDirectoryHint": "ImageQueue 只在此文件夹中查找模型。更改它不会移动已下载的模型；如需继续使用，请自行移动它们。",
   "settings.drawThingsTimeoutHint": "运行时间超过此值的生成会被停止并标记为失败。大模型在本地渲染可能确实需要几分钟，因此默认值比较宽裕（30 分钟）。",
   "settings.fallbackWidth": "备用宽度",
   "settings.fallbackHeight": "备用高度",

@@ -331,6 +331,7 @@
   "settings.geminiApiKey": "Gemini API Key",
   "settings.modelsDirectory": "Models Directory",
   "settings.modelsDirectoryPlaceholder": "Leave empty to use the app data models folder",
+  "settings.modelsDirectoryHint": "ImageQueue looks for models only in this folder. Changing it does not move models already downloaded; move them yourself to keep using them.",
   "settings.drawThingsTimeoutHint": "A generation running longer than this is stopped and marked failed. Local renders can legitimately take minutes on large models, so the default is generous (30 minutes).",
   "settings.fallbackWidth": "Fallback Width",
   "settings.fallbackHeight": "Fallback Height",
