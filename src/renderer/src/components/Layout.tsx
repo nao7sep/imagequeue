@@ -52,8 +52,8 @@ export function Layout(): React.JSX.Element {
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   // The right-hand group's panes, reactive to key presence and task counts.
   const { panes: PANES } = useVisiblePanes()
-  // The main prompt lives in the session draft: persisted per session and
-  // re-hydrated on session change (new/resume), alongside the Advanced
+  // The main prompt lives in the session draft: kept per session while the app
+  // runs and re-hydrated on session change (new/resume), alongside the Advanced
   // Prompting state. No local reset is needed — the context handles it.
   const { state: draft, update: updateDraft, draftUnavailable, retryDraftHydration } = useSessionDraft()
   const { uiState, patchUiState } = useUiState()

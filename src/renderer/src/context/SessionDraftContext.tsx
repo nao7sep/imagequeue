@@ -60,7 +60,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
   // tracks the last draft sent so re-applying a hydrated draft doesn't
   // immediately echo it back.
   const loadedRef = useRef(false)
-  const lastPersistedDraftRef = useRef('')
+  const lastSentDraftRef = useRef('')
 
   useEffect(() => {
     let cancelled = false
@@ -76,13 +76,13 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
         ])
         if (cancelled || revision !== hydrateRevision) return
         setDraftFailure(null)
-        lastPersistedDraftRef.current = JSON.stringify(draft)
+        lastSentDraftRef.current = JSON.stringify(draft)
         loadedRef.current = true
         setState({ ...draft, elaboratedPrompts })
       } catch (error) {
         if (cancelled || revision !== hydrateRevision) return
         setState(emptyState())
-        lastPersistedDraftRef.current = ''
+        lastSentDraftRef.current = ''
         setDraftFailure({ message: 'draft.hydrationFailed' })
         logDraftFailure('Failed to hydrate the active session draft', error)
       }
@@ -110,8 +110,8 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
   const draftSnapshot = JSON.stringify(extractDraft(state))
   useEffect(() => {
     if (!loadedRef.current) return
-    if (draftSnapshot === lastPersistedDraftRef.current) return
-    lastPersistedDraftRef.current = draftSnapshot
+    if (draftSnapshot === lastSentDraftRef.current) return
+    lastSentDraftRef.current = draftSnapshot
     void window.electronAPI.saveSessionDraft(JSON.parse(draftSnapshot) as SessionDraft)
       .catch((error) => logDraftFailure('Failed to send the session draft to the main process', error))
   }, [draftSnapshot])
