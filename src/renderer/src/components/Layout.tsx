@@ -362,6 +362,7 @@ export function Layout(): React.JSX.Element {
             <WelcomePane
               key={pane}
               onOpenSettings={() => setOverlay('settings')}
+              onOpenManagedTools={() => setOverlay('dependencies')}
             />
           ) : (
             <QueueColumn

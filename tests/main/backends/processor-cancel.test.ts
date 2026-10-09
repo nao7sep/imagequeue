@@ -56,6 +56,7 @@ vi.mock('../../../src/main/backends/slug', () => ({
   },
 }))
 vi.mock('../../../src/main/session', () => ({
+  isSessionMutationPending: () => false,
   allocateOutputTimestamp: () => ({ timestamp: '20260819-000000', utc: '2026-08-19T00:00:00.000Z', ordinal: 1 }),
   persistActiveSession: () => undefined,
 }))
@@ -120,6 +121,7 @@ describe('stopping a generation reaches every backend', () => {
   it.each(BACKENDS)('registers %s while it runs, and aborts it on stop', async (backend) => {
     queueOne(backend)
     processQueues()
+    await Promise.resolve()
     expect(generate).toHaveBeenCalledOnce()
     expect(inFlightCount()).toBe(1)
 
@@ -130,6 +132,7 @@ describe('stopping a generation reaches every backend', () => {
   it.each(BACKENDS)('lands a stopped %s task as interrupted, not failed', async (backend) => {
     queueOne(backend)
     processQueues()
+    await Promise.resolve()
     cancelAllInFlight()
     // What an SDK actually rejects with — its own abort error, not our message.
     captured!.reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
@@ -149,6 +152,7 @@ describe('a stop cannot reach a task past its generation', () => {
   it('counts nothing after generation, and a slug failure lands as failed', async () => {
     queueOne('openai')
     processQueues()
+    await Promise.resolve()
     expect(inFlightCount()).toBe(1)
 
     slugState.failNext = true
@@ -173,6 +177,7 @@ describe('a stop cannot reach a task past its generation', () => {
   it('a stale abort flag cannot reclassify a post-generation failure', async () => {
     queueOne('grok')
     processQueues()
+    await Promise.resolve()
     cancelAllInFlight()
     expect(captured!.signal.aborted).toBe(true)
 
@@ -192,6 +197,7 @@ describe('quitting while a finished image is being named', () => {
     slugState.hangUntilAborted = true
     queueOne('openai')
     processQueues()
+    await Promise.resolve()
     captured!.resolve({ buffer: Buffer.from([1]) })
     await Promise.resolve()
     expect(inFlightCount()).toBe(0)
@@ -210,6 +216,7 @@ describe('the queue broadcasts control state as work starts and settles', () => 
   it('sends queue:controlState alongside queue:updated', async () => {
     queueOne('flux')
     processQueues()
+    await Promise.resolve()
     expect(sentEvents.find((event) => event.channel === 'queue:controlState')?.payload)
       .toMatchObject({ generating: 1 })
 
@@ -225,6 +232,7 @@ describe('the registry is released however the run ended', () => {
   it('drops the entry after a stop', async () => {
     queueOne('flux')
     processQueues()
+    await Promise.resolve()
     cancelAllInFlight()
     captured!.reject(new Error('Generation stopped.'))
     await settle()
@@ -234,6 +242,7 @@ describe('the registry is released however the run ended', () => {
   it('drops the entry after an ordinary failure', async () => {
     queueOne('openai')
     processQueues()
+    await Promise.resolve()
     captured!.reject(new Error('API error 500'))
     await settle()
     expect(statusOf('openai')).toBe('failed')
@@ -246,6 +255,7 @@ describe('a failed task keeps what the provider said', () => {
     const said = 'Your request was rejected by the safety system. '.repeat(10).trim()
     queueOne('openai')
     processQueues()
+    await Promise.resolve()
     captured!.reject(new ProviderRefusalError('OpenAI blocked this prompt (moderation_blocked).', 'moderation_blocked', said))
     await settle()
     const task = queueManager.getAllStoredTasks().openai[0]
@@ -257,6 +267,7 @@ describe('a failed task keeps what the provider said', () => {
   it('records none for a failure that is not a provider answer', async () => {
     queueOne('openai')
     processQueues()
+    await Promise.resolve()
     captured!.reject(new Error('socket hang up'))
     await settle()
     expect(queueManager.getAllStoredTasks().openai[0].providerMessage).toBeNull()

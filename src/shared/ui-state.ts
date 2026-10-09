@@ -15,6 +15,7 @@ import {
 import { RECORDS_LIST_WIDTH } from './records-layout'
 
 export interface UiState {
+  releaseCheckLastAttemptUtc?: string
   /**
    * The per-provider queue-column width the user dragged to, in CSS px (the
    * INTENT). `null` means never set — columns open at COLUMN_DEFAULT_PX, the width

@@ -71,6 +71,7 @@ const SEARCH_DELAY_MS = 300
 const LIVE_INTERVAL_MS = 1000
 // The keys that move the cursor toward the end of the list.
 const TOWARD_END = new Set(['ArrowDown', 'PageDown', 'End'])
+const RESIZE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 
 type ListState =
   | { status: 'loading' }
@@ -106,6 +107,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const [listWidth, setListWidth] = useState(initialListWidth)
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const [available, setAvailable] = useState<number | null>(null)
+  const keyboardWidth = useRef<number | null>(null)
   const listGeneration = useRef(0)
   // The busy claim for the next page (PLAYBOOK, Own the work in flight).
   const fetchingMore = useRef(false)
@@ -326,8 +328,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     if (focused !== undefined && focused === keys.at(-1)) loadMore()
   }
 
-  // Drag intent: window-conventions, Content-based minimum size. Only the end
-  // of a drag saves.
+  // Resize intent: window-conventions, Content-based minimum size. Only the
+  // end of a pointer or keyboard interaction saves.
   const commitListWidth = (width: number): void => {
     setListWidth(width)
     setDragWidth(null)
@@ -336,8 +338,32 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     )
   }
 
+  const finishKeyboardResize = (): void => {
+    const width = keyboardWidth.current
+    if (width === null) return
+    keyboardWidth.current = null
+    commitListWidth(width)
+  }
+
+  const maxShownWidth = available === null
+    ? RECORDS_LIST_WIDTH.max
+    : displayedRecordsListWidth(RECORDS_LIST_WIDTH.max, available)
+  const onSplitterKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (!RESIZE_KEYS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    const current = keyboardWidth.current ?? shownListWidth
+    const next = event.key === 'Home' ? RECORDS_LIST_WIDTH.min
+      : event.key === 'End' ? maxShownWidth
+        : current + (event.key === 'ArrowLeft' ? -16 : 16)
+    const width = Math.min(maxShownWidth, clampRecordsListWidth(next))
+    if (width === current) return
+    keyboardWidth.current = width
+    setDragWidth(width)
+  }
+
   const onSplitterPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     event.preventDefault()
+    finishKeyboardResize()
     const startX = event.clientX
     const startWidth = shownListWidth
     let latest = startWidth
@@ -463,9 +489,16 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       <div
         className={`pane-splitter${dragWidth !== null ? ' dragging' : ''}`}
         role="separator"
+        tabIndex={0}
         aria-orientation="vertical"
         aria-label={t('records.resizeList')}
+        aria-valuemin={RECORDS_LIST_WIDTH.min}
+        aria-valuemax={maxShownWidth}
+        aria-valuenow={shownListWidth}
         onPointerDown={onSplitterPointerDown}
+        onKeyDown={onSplitterKeyDown}
+        onKeyUp={(event) => { if (RESIZE_KEYS.has(event.key)) finishKeyboardResize() }}
+        onBlur={finishKeyboardResize}
       />
       <section className="records-detail-pane" aria-busy={detail.status === 'loading'}>
         {detail.status === 'ready' ? (

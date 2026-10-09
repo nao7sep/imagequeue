@@ -1,3 +1,4 @@
+import type { AppReleaseResult } from '../shared/app-release'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   ElaboratedPromptRecord,
@@ -57,6 +58,8 @@ export type { ElectronAPI } from '../shared/electron-api'
 
 const api = {
   platform: process.platform,
+  chooseQuit: (choice: 'retry' | 'quit' | 'cancel'): void => { ipcRenderer.send('quit:choice', choice) },
+  reportQuitHeight: (height: number): void => { ipcRenderer.send('quit:height', height) },
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement): void => {
     ipcRenderer.send(STARTUP_FAILURE_MEASUREMENT_CHANNEL, measurement)
   },
@@ -68,6 +71,14 @@ const api = {
     const handler = (_event: Electron.IpcRendererEvent, environment: LanguageEnvironment): void => callback(environment)
     ipcRenderer.on('language:changed', handler)
     return () => { ipcRenderer.removeListener('language:changed', handler) }
+  },
+  appReleaseReady: (): Promise<void> => ipcRenderer.invoke('appRelease:ready'),
+  checkAppRelease: (): Promise<AppReleaseResult | undefined> => ipcRenderer.invoke('appRelease:check'),
+  viewAppRelease: (): Promise<void> => ipcRenderer.invoke('appRelease:view'),
+  onAppReleaseResult: (callback: (result: AppReleaseResult) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, result: AppReleaseResult): void => callback(result)
+    ipcRenderer.on('appRelease:result', handler)
+    return () => { ipcRenderer.removeListener('appRelease:result', handler) }
   },
   onAppNotice: (callback: (notice: AppNotice) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, notice: AppNotice): void => callback(notice)

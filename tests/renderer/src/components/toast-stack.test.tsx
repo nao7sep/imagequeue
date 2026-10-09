@@ -1,3 +1,4 @@
+import type { AppReleaseResult } from '../../../../src/shared/app-release'
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,6 +28,9 @@ function toastTexts(): string[] {
 beforeEach(() => {
   context.jobs = new Map()
   window.electronAPI = {
+    onAppReleaseResult: vi.fn(() => () => {}),
+    appReleaseReady: vi.fn(async () => undefined),
+    viewAppRelease: vi.fn(async () => undefined),
     appLog: vi.fn(async () => undefined),
     onCliJobChunk: vi.fn(() => () => {}),
     onCliJobStatus: vi.fn(() => () => {}),
@@ -113,4 +117,32 @@ describe('ToastStack', () => {
     act(() => reportOperationalFailure('queue-enqueue', 'operation.enqueueFailed', 'failed', new Error('x')))
     expect([...stack().children].map((node) => node.className)).toEqual(['toast', 'cli-job-row'])
   })
+})
+
+it('shows a dismissible nonmodal release notice and opens GitHub only on the action', () => {
+  let present!: (result: AppReleaseResult) => void
+  window.electronAPI.onAppReleaseResult = (callback) => { present = callback; return () => {} }
+  render(<ToastStack />)
+  expect(window.electronAPI.appReleaseReady).toHaveBeenCalledOnce()
+  act(() => present({ kind: 'newer', version: 'v1.2.0' }))
+  expect(screen.getByText('ImageQueue v1.2.0 is available.')).toBeTruthy()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(window.electronAPI.viewAppRelease).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'View Release on GitHub' }))
+  expect(window.electronAPI.viewAppRelease).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole('button', { name: 'Close operation result' }))
+  expect(screen.queryByText('ImageQueue v1.2.0 is available.')).toBeNull()
+})
+
+it('keeps the available release and view action when opening GitHub fails', async () => {
+  let present!: (result: AppReleaseResult) => void
+  window.electronAPI.onAppReleaseResult = (callback) => { present = callback; return () => {} }
+  window.electronAPI.viewAppRelease = vi.fn().mockRejectedValueOnce(new Error('browser unavailable')).mockResolvedValue(undefined)
+  render(<ToastStack />)
+  act(() => present({ kind: 'newer', version: 'v1.2.0' }))
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'View Release on GitHub' })) })
+  expect(screen.getByText('Could not open the release page on GitHub.')).toBeTruthy()
+  expect(screen.getByText('ImageQueue v1.2.0 is available.')).toBeTruthy()
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'View Release on GitHub' })) })
+  expect(screen.queryByText('Could not open the release page on GitHub.')).toBeNull()
 })

@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import { waitForStorage } from './utils/storage-wait'
+import { isQuitting } from './quit-state'
 import { log, serializeError } from './logger'
 import { NewerFormatError, StoreLeftInPlaceError } from './store-format'
 import { newerFilePresentation, storeLeftInPlacePresentation } from './failure-presentation'
@@ -44,10 +46,18 @@ function reportFile(event: Electron.IpcMainInvokeEvent, error: NewerFormatError 
   )
 }
 
+const boundedStorageChannels = new Set(['session:create', 'session:resume', 'session:delete', 'queue:deleteWithFiles', 'shell:exportImage'])
+
 export function handle(channel: string, fn: IpcInvokeHandler): void {
   ipcMain.handle(channel, async (event, ...args) => {
     try {
-      return await fn(event, ...args)
+      // The quit decision surface still needs its own language and response IPC.
+      // All previously admitted operations retain their owner through settlement.
+      if (isQuitting() && !channel.startsWith('quit:') && !channel.startsWith('language:') && channel !== 'app:log') {
+        throw new Error('ImageQueue is quitting')
+      }
+      const operation = Promise.resolve(fn(event, ...args))
+      return await (boundedStorageChannels.has(channel) ? waitForStorage(operation) : operation)
     } catch (err) {
       log('error', 'IPC handler failed', { channel, error: serializeError(err) })
       if (err instanceof NewerFormatError || err instanceof StoreLeftInPlaceError) reportFile(event, err)

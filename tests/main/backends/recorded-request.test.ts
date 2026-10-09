@@ -10,7 +10,7 @@ import { freshRecordsRoot, readRows, removeRecordsRoots } from '../records-fixtu
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { flux: { timeout_ms: 180000 }, grok: { timeout_ms: 180000 } } }),
 }))
-vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => {}, resolveApiKey: () => 'test-key' }))
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 

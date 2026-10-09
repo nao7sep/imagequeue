@@ -11,7 +11,7 @@ import { columnParams } from './column-params'
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { openai: { timeout_ms: 180000 } } }),
 }))
-vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'sk-test' }))
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => undefined, resolveApiKey: () => 'sk-test' }))
 vi.mock('../../../src/main/logger', () => ({
   log: vi.fn(), serializeError: (e: unknown) => e,
 }))

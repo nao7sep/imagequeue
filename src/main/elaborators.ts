@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid'
 import type { Elaborator, ElaboratorKind } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
-import { writeJsonAtomic } from './utils/atomic-write'
+import { writeFileAtomicAsync } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
 import { setAsideFile } from './utils/set-aside'
 import { multiline, singleLine } from '../shared/textCleanup'
@@ -376,7 +376,7 @@ const RETIRED_KEYS: ReadonlySet<string> = new Set()
  * not know, is written back as it is, until a save changes that kind. A result
  * equal to the file writes nothing.
  */
-function saveSets(changed: Partial<ElaboratorSets>): void {
+async function saveSets(changed: Partial<ElaboratorSets>): Promise<void> {
   const current = load()
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(current.file)) {
@@ -392,7 +392,7 @@ function saveSets(changed: Partial<ElaboratorSets>): void {
     if (!valuesEqual(cleaned, defaultElaborators(kind))) next[kind] = cleaned
   }
   if (!valuesEqual(next, current.file)) {
-    writeJsonAtomic(getElaboratorsFilePath(), markFormat(next, FORMAT_VERSIONS.elaborators), true)
+    await writeFileAtomicAsync(getElaboratorsFilePath(), JSON.stringify(markFormat(next, FORMAT_VERSIONS.elaborators), null, 2), true)
   }
   const sets = {} as ElaboratorSets
   for (const kind of kinds) {
@@ -407,16 +407,16 @@ export function listElaborators(): Elaborator[] {
   return kinds.flatMap((kind) => sets[kind])
 }
 
-function writeKind(kind: ElaboratorKind, items: Elaborator[]): void {
-  saveSets({ [kind]: items.filter((item) => item.kind === kind) })
+async function writeKind(kind: ElaboratorKind, items: Elaborator[]): Promise<void> {
+  await saveSets({ [kind]: items.filter((item) => item.kind === kind) })
 }
 
-export function createElaborator(input: {
+async function createElaboratorNow(input: {
   kind: ElaboratorKind
   name: string
   description?: string
   template: string
-}): Elaborator {
+}): Promise<Elaborator> {
   const items = listElaborators()
   // The renderer commit path (ElaboratorsModal.saveDraft) already cleans these
   // via textCleanup; here we only guard the no-content edge cases.
@@ -433,14 +433,14 @@ export function createElaborator(input: {
   } else {
     items.splice(firstIndexOfKind, 0, created)
   }
-  writeKind(input.kind, items)
+  await writeKind(input.kind, items)
   return created
 }
 
-export function updateElaborator(
+async function updateElaboratorNow(
   id: string,
   patch: { name?: string; description?: string; template?: string }
-): Elaborator | null {
+): Promise<Elaborator | null> {
   const items = listElaborators()
   const index = items.findIndex((item) => item.id === id)
   if (index < 0) return null
@@ -455,23 +455,57 @@ export function updateElaborator(
   }
   if (valuesEqual(current, next)) return current
   items[index] = next
-  writeKind(current.kind, items)
+  await writeKind(current.kind, items)
   return next
 }
 
-export function deleteElaborator(id: string): boolean {
+async function deleteElaboratorNow(id: string): Promise<boolean> {
   const items = listElaborators()
   const next = items.filter((item) => item.id !== id)
   if (next.length === items.length) return false
-  writeKind(items.find((item) => item.id === id)!.kind, next)
+  await writeKind(items.find((item) => item.id === id)!.kind, next)
   return true
 }
 
-export function resetElaborators(kind?: ElaboratorKind): Elaborator[] {
-  saveSets(Object.fromEntries((kind ? [kind] : kinds).map((each) => [each, defaultElaborators(each)])))
+async function resetElaboratorsNow(kind?: ElaboratorKind): Promise<Elaborator[]> {
+  await saveSets(Object.fromEntries((kind ? [kind] : kinds).map((each) => [each, defaultElaborators(each)])))
   return listElaborators()
 }
 
 export function getElaborator(id: string): Elaborator | null {
   return listElaborators().find((item) => item.id === id) ?? null
 }
+
+// A mutation owns the collection until its primary file publication settles.
+// Constructing its next value inside this chain prevents concurrent edits from
+// both starting with the same old collection and dropping one another.
+let saving: Promise<unknown> = Promise.resolve()
+let retrySave: (() => Promise<unknown>) | null = null
+export async function retryElaboratorSaves(): Promise<void> {
+  await saving.catch(() => undefined)
+  if (retrySave) {
+    const result = retrySave()
+    saving = result
+    await result
+    retrySave = null
+  }
+}
+
+export function flushElaboratorSaves(): Promise<unknown> { return saving }
+function ordered<T>(operation: () => Promise<T>): Promise<T> {
+  const result = saving.catch(() => undefined).then(async () => {
+    if (retrySave) await retrySave()
+    retrySave = operation
+    return operation().then((value) => { retrySave = null; return value })
+  })
+  saving = result
+  return result
+}
+export function createElaborator(input: Parameters<typeof createElaboratorNow>[0]): Promise<Elaborator> {
+  return ordered(() => createElaboratorNow(input))
+}
+export function updateElaborator(id: string, patch: Parameters<typeof updateElaboratorNow>[1]): Promise<Elaborator | null> {
+  return ordered(() => updateElaboratorNow(id, patch))
+}
+export function deleteElaborator(id: string): Promise<boolean> { return ordered(() => deleteElaboratorNow(id)) }
+export function resetElaborators(kind?: ElaboratorKind): Promise<Elaborator[]> { return ordered(() => resetElaboratorsNow(kind)) }

@@ -138,6 +138,7 @@ export interface BrainstormConfig {
 }
 
 export interface GeneralConfig {
+  check_github_releases_at_launch: boolean
   // The app theme: 'system', 'light', or 'dark'. A `string`, not ThemePreference:
   // the store hands back whatever the file holds, and normalizeThemePreference
   // (shared/theme) resolves a missing or unknown value to System at use.

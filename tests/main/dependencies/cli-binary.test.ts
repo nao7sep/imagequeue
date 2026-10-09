@@ -32,29 +32,29 @@ afterEach(() => {
 })
 
 describe('publishCliBinary', () => {
-  it('returns installed with a secondary warning after postcommit directory sync fails', () => {
+  it('returns installed with a secondary warning after postcommit directory sync fails', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
-    vi.spyOn(fsync, 'syncDirectory').mockImplementationOnce(() => { throw new Error('sync failed') })
-    expect(publishCliBinary(staged, 'v1.20260822.0')).toEqual(['sync-incomplete'])
+    vi.spyOn(fsync, 'syncDirectoryAsync').mockImplementationOnce(() => { throw new Error('sync failed') })
+    expect(await publishCliBinary(staged, 'v1.20260822.0')).toEqual(['sync-incomplete'])
     expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('new binary')
-    expect(readInstalledCliTag()).toBe('v1.20260822.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 
-  it('publishes the binary and its matching identity', () => {
+  it('publishes the binary and its matching identity', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
 
-    publishCliBinary(staged, 'v1.20260822.0')
+    await publishCliBinary(staged, 'v1.20260822.0')
 
     expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('new binary')
-    expect(readInstalledCliTag()).toBe('v1.20260822.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 
-  it('cannot leave a new binary wearing a stale tag when sidecar publication fails', () => {
+  it('cannot leave a new binary wearing a stale tag when sidecar publication fails', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
@@ -69,7 +69,7 @@ describe('publishCliBinary', () => {
 
     const realRename = fs.renameSync.bind(fs)
     let metaPublications = 0
-    vi.spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
+    vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
       if (path.resolve(String(destination)) === path.resolve(getCliMetaPath())) {
         metaPublications += 1
         if (metaPublications === 1) throw new Error('sidecar publication failed')
@@ -82,13 +82,13 @@ describe('publishCliBinary', () => {
       realRename(source, destination)
     })
 
-    expect(publishCliBinary(staged, 'v1.20260822.0')).toEqual(['identity-unavailable'])
+    expect(await publishCliBinary(staged, 'v1.20260822.0')).toEqual(['identity-unavailable'])
     expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('new binary')
     expect(fs.existsSync(getCliMetaPath())).toBe(true)
-    expect(readInstalledCliTag()).toBeNull()
+    expect(await readInstalledCliTag()).toBeNull()
   })
 
-  it('preserves the old binary and identity when binary publication fails', () => {
+  it('preserves the old binary and identity when binary publication fails', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
@@ -102,17 +102,17 @@ describe('publishCliBinary', () => {
     fs.writeFileSync(staged, 'new binary')
 
     const realRename = fs.renameSync.bind(fs)
-    vi.spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
+    vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
       if (path.resolve(String(destination)) === path.resolve(getCliBinaryPath())) {
         throw new Error('binary publication failed')
       }
       realRename(source, destination)
     })
 
-    expect(() => publishCliBinary(staged, 'v1.20260822.0'))
-      .toThrow('binary publication failed')
+    await expect(publishCliBinary(staged, 'v1.20260822.0'))
+      .rejects.toThrow('binary publication failed')
     expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('old binary')
-    expect(readInstalledCliTag()).toBe('v1.20260101.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260101.0')
   })
 })
 
@@ -130,14 +130,14 @@ describe('readInstalledCliTag', () => {
     }))
   }
 
-  it('reads a sidecar that records the inode alone', () => {
+  it('reads a sidecar that records the inode alone', async () => {
     installWithSidecar((ino) => String(ino))
-    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
-  it('does not name a different file with the recorded tag', () => {
+  it('does not name a different file with the recorded tag', async () => {
     installWithSidecar((ino) => String(ino + 1n))
-    expect(readInstalledCliTag()).toBeNull()
+    expect(await readInstalledCliTag()).toBeNull()
   })
 })
 
@@ -155,32 +155,32 @@ describe('the sidecar format version', () => {
   }
 
   // A cache of the binary's identity: the version is written, never checked.
-  it('reads a sidecar with no format version by its fields', () => {
+  it('reads a sidecar with no format version by its fields', async () => {
     installWithSidecar({})
-    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
-  it('writes its format version first and reads it back', () => {
+  it('writes its format version first and reads it back', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
-    publishCliBinary(staged, 'v1.20260822.0')
+    await publishCliBinary(staged, 'v1.20260822.0')
     expect(Object.keys(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')))).toEqual(['formatVersion', 'tag', 'binaryId'])
     expect(Object.entries(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.cliSidecar])
-    expect(readInstalledCliTag()).toBe('v1.20260822.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 
-  it('reads a sidecar from a newer version by its fields', () => {
+  it('reads a sidecar from a newer version by its fields', async () => {
     installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
-    expect(readInstalledCliTag()).toBe('v1.20260716.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
-  it('replaces a sidecar from a newer version when a binary is published', () => {
+  it('replaces a sidecar from a newer version when a binary is published', async () => {
     installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
-    publishCliBinary(staged, 'v1.20260822.0')
+    await publishCliBinary(staged, 'v1.20260822.0')
     expect(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))).toMatchObject({ formatVersion: FORMAT_VERSIONS.cliSidecar, tag: 'v1.20260822.0' })
-    expect(readInstalledCliTag()).toBe('v1.20260822.0')
+    expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 })

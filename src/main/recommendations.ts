@@ -12,7 +12,7 @@
 import fs from 'fs'
 import path from 'path'
 import { writeFileAtomicAsync } from './utils/atomic-write'
-import { resolveModelsDir, ensureModelsDir } from './local-cli'
+import { resolveModelsDir } from './local-cli'
 import { recordedServerTime, recordServerTime } from './dependencies/recommendations-times'
 import type { IncomingHttpHeaders } from 'http'
 import {
@@ -43,18 +43,18 @@ export function getRecommendationsPath(): string {
   return path.join(resolveModelsDir(), RECOMMENDATIONS_FILE)
 }
 
-export function getRecommendationsStatus(): RecommendationStatus {
+export async function getRecommendationsStatus(): Promise<RecommendationStatus> {
   const filePath = getRecommendationsPath()
-  if (!fs.existsSync(filePath)) {
+  if (!await fs.promises.stat(filePath).then(() => true, () => false)) {
     return { exists: false, valid: false, entryCount: 0, updatedAt: null }
   }
 
-  const parsed = parseRecommendationFile(filePath)
+  const parsed = await parseRecommendationFile(filePath)
   return {
     exists: true,
     valid: parsed.error === null,
     entryCount: parsed.specs.length,
-    updatedAt: recordedServerTime(filePath)
+    updatedAt: await recordedServerTime(filePath)
   }
 }
 
@@ -74,7 +74,7 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
       validateRecommendationBytes(data)
       boundedSignal.throwIfAborted()
 
-      ensureModelsDir()
+      await fs.promises.mkdir(resolveModelsDir(), { recursive: true })
       const filePath = getRecommendationsPath()
       // not recorded: configs.json is a re-fetchable managed dependency downloaded verbatim from
       // models.drawthings.ai, living in the effective models dir alongside Draw Things' own model data
@@ -84,7 +84,7 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
       // The server's time is recorded for these bytes, so a later check can tell
       // whether the server has changed the file since. Without a valid header
       // the file's server time is unknown, and no record describes it.
-      recordServerTime(filePath, data, lastModifiedOf(headers))
+      await recordServerTime(filePath, data, lastModifiedOf(headers))
       return getRecommendationsStatus()
     }
   )
@@ -107,8 +107,8 @@ export function lastModifiedOf(headers: IncomingHttpHeaders): string | null {
   return Number.isNaN(time) ? null : new Date(time).toISOString()
 }
 
-export function resolveRecommendedParams(model: string): RecommendedParams | null {
-  const parsed = parseRecommendationFile(getRecommendationsPath())
+export async function resolveRecommendedParams(model: string): Promise<RecommendedParams | null> {
+  const parsed = await parseRecommendationFile(getRecommendationsPath())
   if (parsed.error !== null || parsed.specs.length === 0) return null
   const match = findRecommendedSettings(model, parsed.specs)
   if (!match) return null
@@ -121,9 +121,9 @@ function validateRecommendationBytes(data: Buffer): void {
   }
 }
 
-function parseRecommendationFile(filePath: string): { specs: RecommendationSpec[]; error: string | null } {
+async function parseRecommendationFile(filePath: string): Promise<{ specs: RecommendationSpec[]; error: string | null }> {
   try {
-    const specs = parseRecommendationBytes(fs.readFileSync(filePath))
+    const specs = parseRecommendationBytes(await fs.promises.readFile(filePath))
     return { specs, error: specs.length === 0 ? 'No recommendation entries found' : null }
   } catch (err) {
     return { specs: [], error: (err as Error).message }

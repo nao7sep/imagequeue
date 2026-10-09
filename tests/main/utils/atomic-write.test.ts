@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { stageBeside, claimFinalName, writeFileAtomic, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
+import { stageBesideAsync, claimFinalNameAsync, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
 // A replacement made through a temp file and a rename keeps what the file had:
 // its permission mode (content-lifecycle conventions). Its times are the new
@@ -28,14 +28,7 @@ function existing(name: string, mode: number): string {
 }
 
 describe('atomic replacement', () => {
-  it.skipIf(process.platform === 'win32')('keeps the replaced file\'s permission mode', () => {
-    const filePath = existing('store.json', 0o640)
-    writeFileAtomic(filePath, 'new', false)
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe('new')
-    expect(fs.statSync(filePath).mode & 0o7777).toBe(0o640)
-  })
-
-  it.skipIf(process.platform === 'win32')('keeps the mode on the async path too', async () => {
+  it.skipIf(process.platform === 'win32')('keeps the replaced file permission mode', async () => {
     const filePath = existing('configs.json', 0o604)
     await writeFileAtomicAsync(filePath, 'new', false)
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('new')
@@ -44,50 +37,42 @@ describe('atomic replacement', () => {
 
   it.skipIf(process.platform === 'win32')('keeps unfinished stages private and publishes ordinary new files with normal permissions', async () => {
     const expected = 0o666 & ~process.umask()
-    const originalWrite = fs.writeFileSync
     const privateStages: number[] = []
-    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof fs.writeFileSync>) => {
-      if (typeof args[0] === 'number') privateStages.push(fs.fstatSync(args[0]).mode & 0o777)
-      return originalWrite(...args)
+    const open = fs.promises.open
+    const opened = vi.spyOn(fs.promises, 'open').mockImplementation(async (file, flags, mode) => {
+      const handle = await open(file, flags, mode)
+      if (flags === 'wx') privateStages.push((await handle.stat()).mode & 0o777)
+      return handle
     })
     try {
       const ordinary = path.join(dir, 'new.json')
-      writeFileAtomic(ordinary, 'new', false)
+      await writeFileAtomicAsync(ordinary, 'new', false)
       const output = path.join(dir, 'image.png')
-      const stage = stageBeside(output, Buffer.from('complete'))
-      expect(claimFinalName(stage, output)).toBe(true)
+      const stage = await stageBesideAsync(output, Buffer.from('complete'))
+      expect(await claimFinalNameAsync(stage, output)).toBe(true)
       expect(privateStages).toEqual([0o600, 0o600])
       expect(fs.statSync(ordinary).mode & 0o777).toBe(expected)
       expect(fs.statSync(output).mode & 0o777).toBe(expected)
       const asyncPath = path.join(dir, 'async.json')
       await writeFileAtomicAsync(asyncPath, 'new', false)
       expect(fs.statSync(asyncPath).mode & 0o777).toBe(expected)
-    } finally { write.mockRestore() }
+    } finally { opened.mockRestore() }
   })
 
   it('never carries the replaced file\'s times onto the new content', async () => {
     const filePath = existing('state.json', 0o644)
-    writeFileAtomic(filePath, 'new', false)
+    await writeFileAtomicAsync(filePath, 'new', false)
     expect(fs.statSync(filePath).mtimeMs).not.toBe(OLD_TIME.getTime())
-    const asyncPath = existing('other.json', 0o644)
-    await writeFileAtomicAsync(asyncPath, 'new', false)
-    expect(fs.statSync(asyncPath).mtimeMs).not.toBe(OLD_TIME.getTime())
   })
 
   it('creates a new file when none exists', async () => {
-    writeFileAtomic(path.join(dir, 'fresh.json'), 'one', false)
-    await writeFileAtomicAsync(path.join(dir, 'fresh-async.json'), 'two', false)
+    await writeFileAtomicAsync(path.join(dir, 'fresh.json'), 'one', false)
     expect(fs.readFileSync(path.join(dir, 'fresh.json'), 'utf-8')).toBe('one')
-    expect(fs.readFileSync(path.join(dir, 'fresh-async.json'), 'utf-8')).toBe('two')
     expect(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
   it('skips a write whose bytes the file already holds', async () => {
     const filePath = existing('same.json', 0o644)
-    const rename = vi.spyOn(fs, 'renameSync')
-    writeFileAtomic(filePath, 'old', false)
-    expect(rename).not.toHaveBeenCalled()
-    rename.mockRestore()
     const asyncRename = vi.spyOn(fs.promises, 'rename')
     await writeFileAtomicAsync(filePath, Buffer.from('old'), false)
     expect(asyncRename).not.toHaveBeenCalled()

@@ -8,6 +8,7 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
   let closeListener: ((event: MainWindowLifecycleEvent) => void) | null = null
   let closedListener: (() => void) | null = null
   let sessionEndListener: (() => void) | null = null
+  const nativeListeners: Record<string, () => void> = {}
   let readyListener: (() => void) | null = null
   const win = {
     isDestroyed: vi.fn(() => options.destroyed ?? false),
@@ -17,11 +18,12 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
     focus: vi.fn(),
     hide: vi.fn(),
     setSkipTaskbar: vi.fn(),
-    on: vi.fn((event: 'close' | 'closed' | 'session-end' | 'ready-to-show', listener: ((event: MainWindowLifecycleEvent) => void) | (() => void)) => {
+    on: vi.fn((event: 'close' | 'closed' | 'session-end' | 'query-session-end' | 'ready-to-show' | 'hide' | 'minimize', listener: ((event: MainWindowLifecycleEvent) => void) | (() => void)) => {
       if (event === 'close') closeListener = listener as (event: MainWindowLifecycleEvent) => void
       else if (event === 'closed') closedListener = listener as () => void
       else if (event === 'session-end') sessionEndListener = listener as () => void
-      else readyListener = listener as () => void
+      else if (event === 'ready-to-show') readyListener = listener as () => void
+      else nativeListeners[event] = listener as () => void
     }),
     emitClose: () => {
       const event = { preventDefault: vi.fn() }
@@ -30,6 +32,7 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
     },
     emitClosed: () => { closedListener?.() },
     emitSessionEnd: () => { sessionEndListener?.() },
+    emitNative: (event: string) => { nativeListeners[event]?.() },
     emitReady: () => { readyListener?.() },
   }
   return win
@@ -63,6 +66,18 @@ afterEach(() => {
 })
 
 describe('MainWindowController', () => {
+  it.each(['hide', 'minimize', 'query-session-end'])('does not show after a later %s event', async (event) => {
+    const { controller, win } = makeController()
+    controller.createInitialWindow()
+    win.emitNative(event)
+    win.emitReady()
+    expect(win.show).not.toHaveBeenCalled()
+    if (event === 'query-session-end') {
+      await controller.restoreOrCreate()
+      expect(win.focus).not.toHaveBeenCalled()
+    }
+  })
+
   it('a later close defeats pending Dock restoration and late ready-to-show', async () => {
     let finish!: () => void
     const dock = { hide: vi.fn(), show: vi.fn(() => new Promise<void>((resolve) => { finish = resolve })) }

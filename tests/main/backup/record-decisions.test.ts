@@ -56,14 +56,14 @@ describe('record/no-record decisions at real write sites', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('records config.json on save', () => {
-    saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } })
+  it('records config.json on save', async () => {
+    await saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } })
     closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'config.json'))
   })
 
-  it('records elaborators.json on a mutating write', () => {
-    createElaborator({ kind: 'style', name: 'X', template: 'a template' })
+  it('records elaborators.json on a mutating write', async () => {
+    await createElaborator({ kind: 'style', name: 'X', template: 'a template' })
     closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'elaborators.json'))
   })
@@ -83,8 +83,8 @@ describe('record/no-record decisions at real write sites', () => {
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'params.json'))
   })
 
-  it('does NOT record dependencies.json (a re-derivable cache)', () => {
-    updateDependenciesCache((cache) => {
+  it('does NOT record dependencies.json (a re-derivable cache)', async () => {
+    await updateDependenciesCache((cache) => {
       cache.cli.lastKnownLatest = 'v1.0'
     })
     // The cache file must be on disk...
@@ -94,18 +94,18 @@ describe('record/no-record decisions at real write sites', () => {
     expect(recordedPaths(tmpRoot)).not.toContain(path.join(tmpRoot, 'dependencies.json'))
   })
 
-  it('does NOT record recommendations-times.json (it describes re-fetchable files)', () => {
+  it('does NOT record recommendations-times.json (it describes re-fetchable files)', async () => {
     const configs = path.join(tmpRoot, 'models', 'configs.json')
     fs.mkdirSync(path.dirname(configs), { recursive: true })
     fs.writeFileSync(configs, '[]')
-    recordServerTime(configs, Buffer.from('[]'), '2026-09-11T20:46:05.000Z')
+    await recordServerTime(configs, Buffer.from('[]'), '2026-09-11T20:46:05.000Z')
     expect(fs.existsSync(path.join(tmpRoot, 'recommendations-times.json'))).toBe(true)
     closeBackupStore()
     expect(recordedPaths(tmpRoot)).not.toContain(path.join(tmpRoot, 'recommendations-times.json'))
   })
 
-  it('a no-record-only session never creates the store file at all', () => {
-    updateDependenciesCache((cache) => {
+  it('a no-record-only session never creates the store file at all', async () => {
+    await updateDependenciesCache((cache) => {
       cache.cli.lastCheckedAtUtc = '2026-07-06T00:00:00.000Z'
     })
     closeBackupStore()
@@ -113,8 +113,8 @@ describe('record/no-record decisions at real write sites', () => {
     expect(fs.existsSync(path.join(tmpRoot, 'backups.sqlite3'))).toBe(false)
   })
 
-  it('store-file filter: backups.sqlite3 and its -wal/-shm sidecars are excludable when asserting root contents', () => {
-    saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } }) // triggers a recorded write → store file (+ WAL sidecars) appear
+  it('store-file filter: backups.sqlite3 and its -wal/-shm sidecars are excludable when asserting root contents', async () => {
+    await saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } }) // triggers a recorded write → store file (+ WAL sidecars) appear
     closeBackupStore()
 
     const isStoreArtifact = (name: string) =>

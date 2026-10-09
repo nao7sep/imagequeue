@@ -39,8 +39,8 @@ export function newConceptRunStats(): ConceptRunStats {
   return { draws: 0, mints: 0, probesGenerated: 0, conceptsAdded: 0, staleFallbacks: 0 }
 }
 
-export function ledgerTotals(): { facets: number; domains: number; concepts: number; unused: number } {
-  const all = listFacetsWithStats()
+export async function ledgerTotals(): Promise<{ facets: number; domains: number; concepts: number; unused: number }> {
+  const all = await listFacetsWithStats()
   return {
     facets: all.length,
     domains: all.reduce((count, facet) => count + facet.probeCount, 0),
@@ -49,8 +49,8 @@ export function ledgerTotals(): { facets: number; domains: number; concepts: num
   }
 }
 
-export function facetInventory(facets: readonly FacetRow[]): Record<string, unknown>[] {
-  const byId = new Map(listFacetsWithStats().map((facet) => [facet.id, facet]))
+export async function facetInventory(facets: readonly FacetRow[]): Promise<Record<string, unknown>[]> {
+  const byId = new Map((await listFacetsWithStats()).map((facet) => [facet.id, facet]))
   return facets.map((facet) => {
     const stats = byId.get(facet.id)
     return {
@@ -122,24 +122,24 @@ async function obtainConcept(options: {
     excludeConceptIds: [...excludes.concepts],
     excludeProbeIds: [...excludes.probes],
   }
-  const first = drawConcept(facet.id, { ...baseOpts, allowStale: !preferNew })
+  const first = await drawConcept(facet.id, { ...baseOpts, allowStale: !preferNew })
   if (first) return first
 
   for (let round = 0; round < MAX_REFILL_ROUNDS; round++) {
     const mintStart = Date.now()
     let generated = 0
-    let probes = unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
+    let probes = await unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
     if (probes.length === 0) {
       const requested = planProbeGenerationSize(valuesStillNeeded)
       const texts = await generateProbes(
         ask,
         facet.display,
-        listProbeDisplays(facet.id, PROBE_AVOID_LIST_MAX),
+        await listProbeDisplays(facet.id, PROBE_AVOID_LIST_MAX),
         requested,
       )
-      generated = addProbes(facet.id, texts)
+      generated = await addProbes(facet.id, texts)
       stats.probesGenerated += generated
-      probes = unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
+      probes = await unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
       if (probes.length === 0) {
         log('warn', 'Domain generation added nothing new', {
           requestId,
@@ -167,8 +167,8 @@ async function obtainConcept(options: {
 
     let added = 0
     for (const { probeId, concepts } of clusters) {
-      added += addConcepts(facet.id, probeId, concepts)
-      markProbeExpanded(probeId)
+      added += await addConcepts(facet.id, probeId, concepts)
+      await markProbeExpanded(probeId)
     }
     stats.conceptsAdded += added
     stats.mints++
@@ -182,11 +182,11 @@ async function obtainConcept(options: {
       conceptsAdded: added,
       durationMs: Date.now() - mintStart,
     })
-    const fresh = drawConcept(facet.id, { ...baseOpts, allowStale: false })
+    const fresh = await drawConcept(facet.id, { ...baseOpts, allowStale: false })
     if (fresh) return fresh
   }
 
-  const stale = drawConcept(facet.id, { ...baseOpts, allowStale: true })
+  const stale = await drawConcept(facet.id, { ...baseOpts, allowStale: true })
   if (stale) {
     stats.staleFallbacks++
     log('warn', 'Fell back to a previously used concept', {

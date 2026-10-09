@@ -22,6 +22,7 @@ import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 // appears, so the keyboard stays in the main window.
 
 let previewWindow: BrowserWindow | null = null
+let revealWanted = true
 let getMainWin: () => BrowserWindow | null = () => null
 
 export function buildPreviewWindowOptions(title: string): Electron.BrowserWindowConstructorOptions {
@@ -51,9 +52,9 @@ export function buildPreviewWindowOptions(title: string): Electron.BrowserWindow
 
 // The user closed the window: the setting goes off, saved like any setting
 // change, and the main window's settings follow.
-function turnSettingOff(): void {
+async function turnSettingOff(): Promise<void> {
   try {
-    updateConfig((draft) => { draft.general.show_preview_window = false })
+    await updateConfig((draft) => { draft.general.show_preview_window = false })
   } catch (error) {
     log('error', 'The preview window setting could not be turned off', { error: serializeError(error) })
     return
@@ -88,7 +89,7 @@ function openPreviewWindow(): void {
     if (template) Menu.buildFromTemplate(template).popup({ window: win })
   })
   win.once('ready-to-show', () => {
-    if (!win.isDestroyed()) win.showInactive()
+    if (revealWanted && !win.isDestroyed()) win.showInactive()
   })
   // A lost renderer never leaves a blank window or a confirmation no one can
   // answer: the window goes, its confirmations are answered no, and a window
@@ -123,6 +124,7 @@ export function syncPreviewWindow(enabled: boolean): void {
 
 /** Hides the window with the main window when it goes to the background. */
 export function hidePreviewWindow(): void {
+  revealWanted = false
   if (previewWindow && !previewWindow.isDestroyed()) {
     dismissSurfaceConfirms('preview-window')
     previewWindow.hide()
@@ -132,6 +134,7 @@ export function hidePreviewWindow(): void {
 /** Shows the window again beside the main window, or opens it if the setting
  *  is on and it is not there. */
 export function showPreviewWindow(): void {
+  revealWanted = true
   if (previewWindow && !previewWindow.isDestroyed()) previewWindow.showInactive()
   else syncPreviewWindow(loadConfig().general.show_preview_window)
 }

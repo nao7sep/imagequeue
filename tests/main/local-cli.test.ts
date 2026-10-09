@@ -31,22 +31,22 @@ describe('models directory follows IMAGEQUEUE_DATA_DIR', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('getDefaultModelsDir() resolves under the IMAGEQUEUE_DATA_DIR override, not ~/.imagequeue', () => {
+  it('getDefaultModelsDir() resolves under the IMAGEQUEUE_DATA_DIR override, not ~/.imagequeue', async () => {
     const expected = path.join(tmpRoot, 'models')
     expect(getDefaultModelsDir()).toBe(expected)
     // Guard against a regression to the old hardcoded private dir.
     expect(getDefaultModelsDir()).not.toBe(path.join(os.homedir(), '.imagequeue', 'models'))
   })
 
-  it('resolveModelsDir() falls back to the default when drawthings.models_dir is blank', () => {
+  it('resolveModelsDir() falls back to the default when drawthings.models_dir is blank', async () => {
     // A fresh storage root has no config.json, so loadConfig() seeds defaults
     // (models_dir === ''); resolveModelsDir() must then return the default dir.
     expect(resolveModelsDir()).toBe(getDefaultModelsDir())
     expect(resolveModelsDir()).toBe(path.join(tmpRoot, 'models'))
   })
 
-  it('resolveModelsDir() resolves a relative drawthings.models_dir against the storage root', () => {
-    updateConfig((draft) => {
+  it('resolveModelsDir() resolves a relative drawthings.models_dir against the storage root', async () => {
+    await updateConfig((draft) => {
       draft.image_backends.drawthings.models_dir = 'models-here'
     })
     expect(resolveModelsDir()).toBe(path.join(tmpRoot, 'models-here'))
@@ -60,21 +60,21 @@ describe('expandUserPath', () => {
   // relative resolves against process.cwd(), which is "/" for a double-clicked
   // app — the models dir and configs.json would land somewhere the user never
   // sees, differently between dev and the packaged build.
-  it('resolves a relative path against the given base, never cwd', () => {
+  it('resolves a relative path against the given base, never cwd', async () => {
     expect(expandUserPath('models-here', base)).toBe(path.join(base, 'models-here'))
   })
 
-  it('expands ~ and ~/ to the home directory', () => {
+  it('expands ~ and ~/ to the home directory', async () => {
     expect(expandUserPath('~', base)).toBe(os.homedir())
     expect(expandUserPath('~/models', base)).toBe(path.join(os.homedir(), 'models'))
   })
 
-  it('does not corrupt ~user into <home>user', () => {
+  it('does not corrupt ~user into <home>user', async () => {
     const dir = expandUserPath('~someuser/models', base)
     expect(dir).not.toContain(os.homedir() + 'someuser')
   })
 
-  it('expands $VAR and %VAR% from the environment', () => {
+  it('expands $VAR and %VAR% from the environment', async () => {
     process.env['IQ_TEST_PATH_VAR'] = os.tmpdir()
     try {
       expect(expandUserPath('$IQ_TEST_PATH_VAR/m', base)).toBe(path.join(os.tmpdir(), 'm'))

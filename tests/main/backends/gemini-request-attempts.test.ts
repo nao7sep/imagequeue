@@ -11,7 +11,7 @@ vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: asyn
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { nanobanana: { timeout_ms: 180000 } } }),
 }))
-vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => undefined, resolveApiKey: () => 'test-key' }))
 vi.mock('../../../src/main/logger', () => ({
   log: vi.fn(), serializeError: (e: unknown) => e,
 }))

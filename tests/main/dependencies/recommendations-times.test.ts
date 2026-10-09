@@ -29,27 +29,27 @@ function place(dir: string, bytes: Buffer): string {
 describe('recorded server times', () => {
   const bytes = Buffer.from('[{"name":"a","configuration":{"model":"m"}}]')
 
-  it('dates only the path a time was recorded for, even when another holds the same bytes', () => {
+  it('dates only the path a time was recorded for, even when another holds the same bytes', async () => {
     const first = place(path.join(home, 'models-a'), bytes)
     const second = place(path.join(home, 'models-b'), bytes)
-    recordServerTime(first, bytes, '2026-09-11T20:46:05.000Z')
-    expect(recordedServerTime(first)).toBe('2026-09-11T20:46:05.000Z')
-    expect(recordedServerTime(second)).toBeNull()
+    await recordServerTime(first, bytes, '2026-09-11T20:46:05.000Z')
+    expect(await recordedServerTime(first)).toBe('2026-09-11T20:46:05.000Z')
+    expect(await recordedServerTime(second)).toBeNull()
   })
 
-  it('keeps each path\'s record when another path is recorded or dropped', () => {
+  it('keeps each path\'s record when another path is recorded or dropped', async () => {
     const first = place(path.join(home, 'models-a'), bytes)
     const second = place(path.join(home, 'models-b'), bytes)
-    recordServerTime(first, bytes, '2026-09-11T20:46:05.000Z')
-    recordServerTime(second, bytes, '2026-08-22T20:13:13.000Z')
-    recordServerTime(second, bytes, null)
-    expect(recordedServerTime(first)).toBe('2026-09-11T20:46:05.000Z')
-    expect(recordedServerTime(second)).toBeNull()
+    await recordServerTime(first, bytes, '2026-09-11T20:46:05.000Z')
+    await recordServerTime(second, bytes, '2026-08-22T20:13:13.000Z')
+    await recordServerTime(second, bytes, null)
+    expect(await recordedServerTime(first)).toBe('2026-09-11T20:46:05.000Z')
+    expect(await recordedServerTime(second)).toBeNull()
   })
 
-  it('writes no store when there is nothing to record', () => {
+  it('writes no store when there is nothing to record', async () => {
     const file = place(path.join(home, 'models'), bytes)
-    recordServerTime(file, bytes, null)
+    await recordServerTime(file, bytes, null)
     expect(fs.readdirSync(home)).toEqual(['models'])
   })
 })

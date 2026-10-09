@@ -2,7 +2,7 @@ import OpenAI, { APIConnectionTimeoutError, APIError } from 'openai'
 import type { ImageGenerateParamsNonStreaming } from 'openai/resources/images'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { resolveApiKey } from '../config/api-keys-store'
+import { resolveApiKey, refreshApiKeys } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { recordAiCall, recordingFetch, type AiCall } from '../records'
 import { buildOpenAIImageParams } from './openai-request'
@@ -15,6 +15,7 @@ import { withProviderRetry } from '../provider-retry'
 // MIME-type hint derived from the user-selected output_format.
 export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
+  await refreshApiKeys()
   const apiKey = resolveApiKey('openai.image')
 
   if (!apiKey) {

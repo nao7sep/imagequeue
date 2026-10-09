@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: { getAllWindows: () => [] },
 }))
-vi.mock('../../../src/main/session', () => ({ persistActiveSession: () => undefined }))
+vi.mock('../../../src/main/session', () => ({ persistActiveSession: () => undefined, mutateSession: (operation: () => Promise<unknown>) => operation() }))
 vi.mock('nanoid', () => {
   let n = 0
   return { nanoid: () => `id-${++n}` }

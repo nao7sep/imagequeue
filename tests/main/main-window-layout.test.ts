@@ -26,6 +26,7 @@ vi.mock('../../src/main/config/api-keys-store', () => ({
 const { queueManager } = await import('../../src/main/queue/queue-manager')
 const {
   getVisiblePaneCount,
+  setDrawThingsReady,
   refreshMainWindowMinimumSize,
   registerMainWindowForLayout,
   unregisterMainWindowForLayout,
@@ -35,6 +36,7 @@ let registeredWindow: Parameters<typeof registerMainWindowForLayout>[0] | null =
 
 beforeEach(() => {
   keyed.clear()
+  setDrawThingsReady(false)
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
 })
 
@@ -44,6 +46,15 @@ afterEach(() => {
 })
 
 describe('main-window layout registration and refresh', () => {
+  it('reserves setup width on macOS only while generation is unavailable', () => {
+    expect(getVisiblePaneCount('darwin')).toBe(2)
+    setDrawThingsReady(true)
+    expect(getVisiblePaneCount('darwin')).toBe(1)
+    setDrawThingsReady(false)
+    keyed.add('openai.image')
+    expect(getVisiblePaneCount('darwin')).toBe(2)
+  })
+
   it('derives panes from keyed and occupied cloud backends', () => {
     keyed.add('openai.image')
     queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)

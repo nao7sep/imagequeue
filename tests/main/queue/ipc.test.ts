@@ -111,14 +111,14 @@ beforeEach(() => {
 })
 
 describe('queueing work', () => {
-  it('queues what was asked for, records each one, and saves the session', () => {
-    const tasks = invoke('queue:enqueue', {
+  it('queues what was asked for, records each one, and saves the session', async () => {
+    const tasks = (await invoke('queue:enqueue', {
       prompt: 'a cat',
       backend: 'openai',
       model: 'gpt-image-2',
       params: { size: '1024x1024' },
       count: 2,
-    }) as Task[]
+    })) as Task[]
 
     expect(tasks).toHaveLength(2)
     expect(statuses().map(([, status]) => status)).toEqual(['queued', 'queued'])
@@ -128,71 +128,71 @@ describe('queueing work', () => {
     expect(mocks.publishQueueState).toHaveBeenCalledOnce()
   })
 
-  it('queues a batch across backends and records each unit against its own task', () => {
+  it('queues a batch across backends and records each unit against its own task', async () => {
     const units = [
       { prompt: 'a cat', backend: 'openai' as const, model: 'gpt-image-2', params: {} },
       { prompt: 'a dog', backend: 'flux' as const, model: 'flux.2-pro', params: { steps: 4 } },
     ]
 
-    const tasks = invoke('queue:enqueueBatch', units) as Task[]
+    const tasks = (await invoke('queue:enqueueBatch', units)) as Task[]
 
     expect(tasks.map((task) => task.backend)).toEqual(['openai', 'flux'])
     expect(mocks.logEnqueue).toHaveBeenNthCalledWith(2, tasks[1].id, 'flux', 'flux.2-pro', 'a dog', { steps: 4 }, 1)
     expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
   })
 
-  it('hands back everything it holds', () => {
+  it('hands back everything it holds', async () => {
     seed([makeTask('a', 'queued')])
 
-    expect(invoke('queue:getAllStoredTasks')).toEqual(queueManager.getAllStoredTasks())
+    expect((await invoke('queue:getAllStoredTasks'))).toEqual(queueManager.getAllStoredTasks())
   })
 })
 
 describe('taking a row out of the queue', () => {
-  it('keeps a finished image instead of discarding it', () => {
+  it('keeps a finished image instead of discarding it', async () => {
     seed([makeTask('done', 'completed', { baseName: 'base-done', imagePath: '/out/base-done.png' })])
 
-    invoke('queue:removeTask', 'openai', 'done')
+    await invoke('queue:removeTask', 'openai', 'done')
 
     expect(statuses()).toEqual([['done', 'kept']])
     expect(mocks.log).toHaveBeenCalledWith('info', 'Task marked kept', expect.objectContaining({ taskId: 'done' }))
     expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
   })
 
-  it('removes one that never produced anything', () => {
+  it('removes one that never produced anything', async () => {
     seed([makeTask('waiting', 'queued'), makeTask('other', 'queued')])
 
-    invoke('queue:removeTask', 'openai', 'waiting')
+    await invoke('queue:removeTask', 'openai', 'waiting')
 
     expect(statuses()).toEqual([['other', 'queued']])
   })
 
-  it('refuses to take away work that is running', () => {
+  it('refuses to take away work that is running', async () => {
     seed([makeTask('running', 'generating')])
 
-    invoke('queue:removeTask', 'openai', 'running')
+    await invoke('queue:removeTask', 'openai', 'running')
 
     expect(statuses()).toEqual([['running', 'generating']])
     expect(mocks.log).toHaveBeenCalledWith('warn', 'Refusing to remove generating task', expect.anything())
     expect(mocks.persistActiveSession).not.toHaveBeenCalled()
   })
 
-  it('does nothing for a row that is no longer there', () => {
-    invoke('queue:removeTask', 'openai', 'gone')
+  it('does nothing for a row that is no longer there', async () => {
+    await invoke('queue:removeTask', 'openai', 'gone')
 
     expect(mocks.persistActiveSession).not.toHaveBeenCalled()
     expect(mocks.publishQueueState).not.toHaveBeenCalled()
   })
 
-  it('brings a kept image back into the list', () => {
+  it('brings a kept image back into the list', async () => {
     seed([makeTask('kept', 'kept', { baseName: 'base-kept' })])
 
-    invoke('queue:restoreTask', 'openai', 'kept')
+    await invoke('queue:restoreTask', 'openai', 'kept')
 
     expect(statuses()).toEqual([['kept', 'completed']])
     expect(mocks.publishQueueState).toHaveBeenCalledOnce()
 
-    invoke('queue:restoreTask', 'openai', 'not-there')
+    await invoke('queue:restoreTask', 'openai', 'not-there')
     expect(mocks.publishQueueState, 'nothing to restore, nothing announced').toHaveBeenCalledOnce()
   })
 })
@@ -329,49 +329,49 @@ describe('deleting a row together with its image', () => {
 })
 
 describe('trying again', () => {
-  it('re-queues one failed row', () => {
+  it('re-queues one failed row', async () => {
     seed([makeTask('failed', 'failed', { error: { key: 'taskFailure.rateLimited', values: { name: 'OpenAI' } } })])
 
-    invoke('queue:retryTask', 'openai', 'failed')
+    await invoke('queue:retryTask', 'openai', 'failed')
 
     expect(statuses()).toEqual([['failed', 'queued']])
     expect(mocks.publishQueueState).toHaveBeenCalledOnce()
   })
 
-  it('says nothing when there is nothing to retry', () => {
-    invoke('queue:retryTask', 'openai', 'gone')
+  it('says nothing when there is nothing to retry', async () => {
+    await invoke('queue:retryTask', 'openai', 'gone')
 
     expect(mocks.persistActiveSession).not.toHaveBeenCalled()
   })
 
-  it('re-queues everything interrupted and says how much', () => {
+  it('re-queues everything interrupted and says how much', async () => {
     seed([makeTask('a', 'interrupted'), makeTask('b', 'interrupted'), makeTask('c', 'completed')])
 
-    expect(invoke('queue:resumeInterrupted')).toBe(2)
+    expect((await invoke('queue:resumeInterrupted'))).toBe(2)
     expect(statuses()).toEqual([['a', 'queued'], ['b', 'queued'], ['c', 'completed']])
     expect(mocks.log).toHaveBeenCalledWith('info', 'Resuming interrupted tasks', { count: 2 })
     expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
   })
 
-  it('stays quiet when nothing was interrupted', () => {
-    expect(invoke('queue:resumeInterrupted')).toBe(0)
+  it('stays quiet when nothing was interrupted', async () => {
+    expect((await invoke('queue:resumeInterrupted'))).toBe(0)
     expect(mocks.persistActiveSession).not.toHaveBeenCalled()
     expect(mocks.publishQueueState).not.toHaveBeenCalled()
   })
 })
 
 describe('the queue controls', () => {
-  it('passes Pause and Resume to the one pause flag', () => {
-    invoke('queue:setPaused', true)
-    invoke('queue:setPaused', false)
+  it('passes Pause and Resume to the one pause flag', async () => {
+    await invoke('queue:setPaused', true)
+    await invoke('queue:setPaused', false)
 
     expect(mocks.setQueuePausedAndPublish.mock.calls).toEqual([[true], [false]])
   })
 
-  it('stops what is queued and what is running, and reports both', () => {
+  it('stops what is queued and what is running, and reports both', async () => {
     seed([makeTask('a', 'queued'), makeTask('b', 'queued'), makeTask('c', 'generating')])
 
-    expect(invoke('queue:stopAll')).toEqual({ cancelled: 2, queued: 2 })
+    expect((await invoke('queue:stopAll'))).toEqual({ cancelled: 2, queued: 2 })
     expect(statuses().slice(0, 2)).toEqual([['a', 'interrupted'], ['b', 'interrupted']])
     expect(mocks.log).toHaveBeenCalledWith(
       'info',
@@ -381,16 +381,16 @@ describe('the queue controls', () => {
     expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
   })
 
-  it('clears what has not started and says how much went', () => {
+  it('clears what has not started and says how much went', async () => {
     seed([makeTask('a', 'queued'), makeTask('b', 'completed')])
 
-    expect(invoke('queue:clearPending')).toBe(1)
+    expect((await invoke('queue:clearPending'))).toBe(1)
     expect(statuses()).toEqual([['b', 'completed']])
     expect(mocks.log).toHaveBeenCalledWith('info', 'Cleared pending tasks', { removed: 1 })
   })
 
-  it('answers what the control menu may offer', () => {
-    expect(invoke('queue:getControlState')).toEqual({ canPause: true })
+  it('answers what the control menu may offer', async () => {
+    expect((await invoke('queue:getControlState'))).toEqual({ canPause: true })
     expect(mocks.buildControlState).toHaveBeenCalledOnce()
   })
 })

@@ -229,8 +229,11 @@ export function registerNotificationIpc(): void {
     if (!filePath) return null
     const requested = expandUserPath(filePath, os.homedir())
     if (!allowed.includes(requested)) return null
-    if (!fs.existsSync(requested)) return null
-    const data = await fs.promises.readFile(requested)
+    const data = await fs.promises.readFile(requested).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (!data) return null
     const ext = path.extname(requested).slice(1).toLowerCase()
     const mimeMap: Record<string, string> = {
       mp3: 'audio/mpeg',

@@ -2,7 +2,7 @@ import { ApiError, GoogleGenAI, type GenerateContentResponse } from '@google/gen
 import { withProviderRetry } from '../provider-retry'
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
-import { resolveApiKey } from '../config/api-keys-store'
+import { resolveApiKey, refreshApiKeys } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { recordAiCall } from '../records'
 import { buildGeminiImageRequest } from './nanobanana-request'
@@ -18,6 +18,7 @@ import { geminiReasonField, reasonFromBody } from '../provider-reason'
 // Uses the 'gemini.nanobanana' secret (its own key, not the Gemini text key).
 export async function generateNanoBanana(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
+  await refreshApiKeys()
   const apiKey = resolveApiKey('gemini.nanobanana')
 
   if (!apiKey) {

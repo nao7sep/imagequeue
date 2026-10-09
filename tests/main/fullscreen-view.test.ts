@@ -86,6 +86,19 @@ afterEach(() => {
 })
 
 describe('fullscreen view window', () => {
+  it.each(['hidden', 'minimized', 'crashed'])('does not reveal main after the fullscreen view is %s', async (state) => {
+    snapshots.publishSelection(image('a'))
+    const opening = view.openFullscreenView()
+    view.fullscreenViewPainted(snapshots.latestSelection().version, true)
+    await opening
+    main!.visible = state !== 'hidden'
+    main!.minimized = state === 'minimized'
+    if (state === 'crashed') views()[0]!.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
+    else view.closeFullscreenView({ refocusMain: true })
+    expect(main!.focused).toBe(0)
+    expect(main!.minimized).toBe(state === 'minimized')
+  })
+
   it('is borderless, never Spaces fullscreen, black, and above the Dock, menu bar and taskbar', async () => {
     snapshots.publishSelection(image('a'))
     void view.openFullscreenView()

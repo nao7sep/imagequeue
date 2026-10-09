@@ -4,6 +4,13 @@
   padding: var(--space-4) var(--space-5);
 }
 
+/* Native fieldset disabling covers every staged control, nested editors too. */
+.settings-edit-fields {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+}
+
 /* The Settings tab bar: fixed chrome between the modal header and the scrolling
    overlay (modal-dialog conventions — only the body scrolls). One tab stop,
    arrows move, activation follows focus (useTablist). Flat pills on one

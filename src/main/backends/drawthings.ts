@@ -9,7 +9,7 @@ import { CANCELLED_MESSAGE } from './cancellation'
 import { ProviderTimeoutError } from '../provider-errors'
 import { log, serializeError } from '../logger'
 import { startAiCall } from '../records'
-import { modelsDirArgs, ensureModelsDir, resolveModelsDir, resolveCliPath } from '../local-cli'
+import { modelsDirArgs, resolveCliPath } from '../local-cli'
 
 export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string; seed?: number }> {
   // Same guard as the cloud backends with manual wiring: an already-aborted
@@ -23,7 +23,6 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   const defaults = config.image_backends.drawthings.default_params
   const cliPath = resolveCliPath()
 
-  ensureModelsDir()
 
   // Staged in the app's temp directory, NEVER the session directory. Draw
   // Things is the one backend where an external process owns the file: the CLI
@@ -34,7 +33,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   // that left a permanent `drawthings-<id>.png` the app never handled; here it
   // is a staging file that clearTempDir sweeps at the next launch.
   const outputPath = path.join(getTempDir(), `drawthings-${nanoid()}.png`)
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
 
   const width = task.params.width as number | undefined
   const height = task.params.height as number | undefined
@@ -50,7 +49,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     '--prompt', task.prompt,
     '--output', outputPath,
     '--disable-preview',
-    ...modelsDirArgs()
+    ...await modelsDirArgs()
   ]
 
   if (width != null) args.push('--width', String(width))
@@ -67,6 +66,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   const { timeout_ms } = loadConfig().image_backends.drawthings
   const record = startAiCall({ backend: 'drawthings', model: task.model, purpose: 'image', taskId: task.id, request: { command: cliPath, args } })
 
+  if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
@@ -135,22 +135,15 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     })
   })
 
-  if (!fs.existsSync(outputPath)) {
+  if (!await fs.promises.stat(outputPath).then(() => true, () => false)) {
     log('error', 'draw-things-cli produced no output file', { model: task.model, outputPath })
     throw new Error('draw-things-cli did not produce output file')
   }
 
   try {
-    const buffer = fs.readFileSync(outputPath)
+    const buffer = await fs.promises.readFile(outputPath)
     return { buffer, ...(seed != null && seed > 0 ? { seed } : {}) }
   } finally {
-    try { fs.unlinkSync(outputPath) } catch { /* ignore */ }
+    try { await fs.promises.unlink(outputPath) } catch { /* ignore */ }
   }
-}
-
-// Check if a model file exists in the configured models directory.
-export function checkModelExists(modelFilename: string): boolean {
-  const dir = resolveModelsDir()
-  if (!dir) return false
-  return fs.existsSync(path.join(dir, modelFilename))
 }

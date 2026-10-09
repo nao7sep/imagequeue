@@ -106,7 +106,7 @@ describe('generationFailurePresentation', () => {
     const left = storeLeftInPlacePresentation(params)
     expect(text(left.title)).toBe('File left unchanged')
     expect(text(left.message)).toContain(`the file at ${params}`)
-    expect(text(left.message)).toContain('left it unchanged')
+    expect(text(left.message)).toContain('left the file unchanged')
 
     const ledger = '/Users/me/.imagequeue/concepts-20261006-031340-123-utc.invalid'
     const ledgerReset = conceptLibraryResetPresentation(ledger)

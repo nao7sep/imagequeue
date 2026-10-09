@@ -124,3 +124,8 @@ export function resetCancellationState(): void {
   shutdownController = new AbortController()
   paused = false
 }
+
+/** Cancel quit without reviving cancelled calls; new work gets a fresh signal. */
+export function resumeAfterCancelledShutdown(): void {
+  shutdownController = new AbortController()
+}

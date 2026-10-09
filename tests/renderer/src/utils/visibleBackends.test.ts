@@ -97,8 +97,10 @@ describe('getVisiblePanesForUi', () => {
     expect(getVisiblePanesForUi(presence([]), noTasks())).toEqual(['welcome'])
   })
 
-  it('never shows the welcome pane on macOS, where Draw Things always fills the group', () => {
+  it('shows setup beside Draw Things until a generation path is ready', () => {
     onMac()
-    expect(getVisiblePanesForUi(presence([]), noTasks())).toEqual(['drawthings'])
+    expect(getVisiblePanesForUi(presence([]), noTasks())).toEqual(['drawthings', 'welcome'])
+    expect(getVisiblePanesForUi(presence([]), noTasks(), true)).toEqual(['drawthings'])
+    expect(getVisiblePanesForUi(presence(['openai']), noTasks())).toEqual(['openai', 'drawthings'])
   })
 })

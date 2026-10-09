@@ -1,7 +1,7 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config'
-import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
+import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, drainSessionWrites, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
 import { registerImageProtocol, registerImageSchemeAsPrivileged } from './image-protocol'
@@ -11,6 +11,8 @@ import { registerDependenciesIpc } from './dependencies-ipc'
 import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
+import { listElaborators } from './elaborators'
+import { refreshApiKeys } from './config/api-keys-store'
 import { closeConceptStore } from './concepts/concept-store'
 import { closeBackupStore } from './backup/backup-store'
 import { registerConceptsIpc } from './concepts-ipc'
@@ -21,16 +23,15 @@ import { registerViewingIpc } from './viewing-ipc'
 import { closePreviewWindow, hidePreviewWindow, showPreviewWindow, syncPreviewWindow } from './preview-window'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
-import { onRecordStored, openRecords } from './records'
+import { onRecordStored, openRecords, closeRecords } from './records'
 import { registerRecordsIpc } from './records-ipc'
 import { closeRecordsReader } from './records-reader'
 import { closeRecordsWindow, notifyRecordsChanged } from './records-window'
 import { killAllCliJobsAndWait } from './cli-jobs'
 import { cancelAllInFlightAndWait } from './backends/cancellation'
-import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
+import { getAllModelParams, drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
-import { queueManager } from './queue/queue-manager'
 import { installContentSecurityPolicy } from './csp'
 import { buildMainWindowOptions } from './window-options'
 import { applyThemePreference, followOsThemeChanges, trackThemedWindow, windowBackground } from './theme'
@@ -41,7 +42,16 @@ import {
   unregisterMainWindowForLayout,
 } from './main-window-layout'
 import { createStartupFailureWindow } from './startup-failure-window'
-import { createBeforeQuitHandler } from './quit-handler'
+import { createQuitOwner } from './quit-handler'
+import { forceExit } from './utils/force-exit'
+import { showQuitFailure } from './quit-failure-window'
+import { isQuitting, setQuitting } from './quit-state'
+import { drainBackendDefaults } from './backend-defaults'
+import { resumeAfterCancelledShutdown } from './backends/cancellation'
+import { retrySettingsWrites } from './settings-writes'
+import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
+import { cancelAllDependencyOperations, hasActiveDependencyOperations } from './dependencies/operations'
+import { startAppReleaseCheck } from './app-release-check'
 import { startupFailurePresentation } from './failure-presentation'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
@@ -81,20 +91,73 @@ const DEBUG_ENABLED = shouldEnableDebugLogging({
   imagequeueDebug: process.env['IMAGEQUEUE_DEBUG'],
 })
 
-// before-quit fires for Cmd+Q, Dock → Quit, the application menu Quit, and
-// any programmatic app.quit(). Every quit is held; the first runs the async
-// cleanup and the process ends with app.exit(0) once it settles, so a second
-// quit during cleanup cannot end the process before cleanup finishes.
-//
-// app.exit(0), not a second app.quit(): on macOS, calling app.quit() after the
-// cleanup closes the windows but then stalls — once the last window closes the
-// app stays alive instead of proceeding to will-quit/quit, so the dock dot
-// lingers and the user has to quit a second time to actually terminate. (Note:
-// an in-flight image generation and CLI child is signalled and awaited through
-// a bounded barrier.) A cloud call already issued may still be billed. The
-// whole cleanup is bounded above its own steps' bounds, so a step that hangs
-// still ends in an exit.
+// Ordinary storage waits end in a choice; OS shutdown has one total budget.
 const QUIT_TIMEOUT_MS = 30_000
+const SYSTEM_QUIT_TIMEOUT_MS = 1_500
+let startupWork: Promise<void> | null = null
+let sessionStarted = false
+let backgroundWork: Promise<void> | null = null
+let cleanExit = false
+let backgroundSettled = false
+const quitOwner = createQuitOwner({
+  begin: () => {
+    cleanExit = false
+    backgroundSettled = false
+    setQuitting(true)
+    mainWindowController?.beginShutdown()
+    stopProcessor()
+    cancelAllBrainstorms()
+    cancelAllDependencyOperations()
+    // Signal both families synchronously, before any persistence wait.
+    backgroundWork = Promise.all([
+      cancelAllInFlightAndWait(5_000),
+      killAllCliJobsAndWait({ timeoutMs: 5_000 }),
+    ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
+  },
+  save: async () => {
+    await startupWork
+    if (!sessionStarted) return
+    await retrySettingsWrites()
+    await Promise.all([drainBackendDefaults(), drainPendingModelParamsWrites()])
+    if (!backgroundWork) {
+      backgroundWork = Promise.all([
+        cancelAllInFlightAndWait(5_000), killAllCliJobsAndWait({ timeoutMs: 5_000 }),
+      ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
+    }
+    await backgroundWork
+    backgroundWork = null
+    if (!backgroundSettled) throw new Error('Active image or tool work has not settled before quit')
+    // A prior failed save remains pending; Retry republishes the latest state
+    // through its ordered writer after all existing physical writes settle.
+    try { await drainSessionWrites() } catch (error) {
+      log('warn', 'Retrying the pending session save', { error: serializeError(error) })
+    }
+    await persistActiveSession()
+  },
+  cleanup: async () => {
+    await gracefulShutdown('quit')
+    cleanExit = backgroundSettled && !hasActiveBrainstorms() && !hasActiveDependencyOperations()
+  },
+  cancel: () => {
+    setQuitting(false)
+    mainWindowController?.cancelShutdown()
+    resumeAfterCancelledShutdown()
+    startProcessor()
+  },
+  question: (signal) => showQuitFailure(signal, () => quitOwner.sessionEnd(), mainWindowController?.getWindow() ?? undefined),
+  exit: () => {
+    if (cleanExit) app.exit(0)
+    else {
+      // Electron/Node's exit joins native workers. A worker stuck inside SQLite
+      // can prevent that join forever; OS termination does not join it. Used
+      // only after a deadline or explicit abandonment, never to claim a save.
+      forceExit()
+    }
+  },
+  timeoutMs: QUIT_TIMEOUT_MS,
+  systemTimeoutMs: SYSTEM_QUIT_TIMEOUT_MS,
+  onError: (error) => log('error', 'Saving before quit failed', { error: serializeError(error) }),
+})
 
 // The primary instance: everything ImageQueue does once index.ts holds the
 // single-instance lock.
@@ -118,6 +181,7 @@ export function runPrimaryInstance(): void {
     try {
     // The language is settled before any window or native menu exists, so the
     // first words on every surface, a startup failure included, are already in it.
+    powerMonitor.on('shutdown', quitOwner.sessionEnd)
     await settleLanguage()
     registerLanguageIpc()
     installAppMenu()
@@ -126,24 +190,15 @@ export function runPrimaryInstance(): void {
     // the rejection lands in the unhandledRejection hook, which logs and does NOT
     // exit — a running process with no window and no dialog is not a halt
     // (storage-path conventions: a halt names the store and reaches the user).
-      await startUp()
+      startupWork = startUp()
+      await startupWork
     } catch (err) {
       enterStartupFailure(err)
     }
   })
 
-  app.on('before-quit', createBeforeQuitHandler({
-    shutdown: async () => {
-      mainWindowController?.beginShutdown()
-      statusIconController?.dispose()
-      mainWindowController?.dispose()
-      await gracefulShutdown('quit')
-    },
-    exit: (code) => app.exit(code),
-    timeoutMs: QUIT_TIMEOUT_MS,
-    onError: (err) => log('error', 'Graceful shutdown error', { error: serializeError(err) }),
-    onTimeout: () => log('warn', 'Graceful shutdown did not finish in time; exiting', { timeoutMs: QUIT_TIMEOUT_MS }),
-  }))
+  app.on('before-quit', quitOwner.beforeQuit)
+
 }
 
 function installLastResortHooks(): void {
@@ -155,12 +210,8 @@ function installLastResortHooks(): void {
   process.on('uncaughtException', (err) => {
     log('error', 'Uncaught exception', { error: serializeError(err) })
     console.error('Uncaught exception:', err)
-    // app.exit() skips the before-quit graceful shutdown that normally drains the
-    // debounced model-param writes, so flush them here first — the writer is
-    // synchronous and routes its own errors to onError, so this best-effort
-    // flush cannot itself throw. OS resources (CLI jobs, wake lock) are
-    // reclaimed by the OS on exit and need no cleanup on a crash.
-    drainPendingModelParamsWrites()
+    // Crash handling cannot safely resume application writes. Normal edits
+    // have already reached their main-process owners; the OS reclaims resources.
     app.exit(1)
   })
   process.on('unhandledRejection', (reason) => {
@@ -233,8 +284,7 @@ async function startUp(): Promise<void> {
   openRecords(getDataDir())
   // The Records window, when open, follows each record the database stores.
   onRecordStored(notifyRecordsChanged)
-  // Created before the launch archive, so a quit during it is claimed by the
-  // controller and the rest of startup does not run.
+  // Created before store initialization so quit owns the whole startup lifetime.
   mainWindowController = new MainWindowController({
     platform: process.platform,
     createWindow,
@@ -251,6 +301,7 @@ async function startUp(): Promise<void> {
       if (process.platform !== 'darwin') app.quit()
     },
     dock: app.dock,
+    onSessionEnd: quitOwner.sessionEnd,
   })
   clearTempDir()
   // The saved theme reaches the title bar and the renderer's
@@ -259,7 +310,13 @@ async function startUp(): Promise<void> {
   // the startup failure window follows the OS.
   applyThemePreference(loadConfig().general.theme)
   followOsThemeChanges()
-  initSession()
+  // Load the small settings stores before any interactive window exists;
+  // runtime consumers use their initialized snapshots and asynchronous saves.
+  listElaborators()
+  getAllModelParams()
+  await refreshApiKeys()
+  await initSession()
+  sessionStarted = true
   resetOutputTimestampAllocators()
   log('info', 'App started', {
     version: __APP_VERSION__,
@@ -271,7 +328,7 @@ async function startUp(): Promise<void> {
   // Switching or resuming a session logs its own line from session/state.
   log('info', 'Session started', { sessionDir: getSessionDir() })
 
-  persistActiveSession()
+  await persistActiveSession()
   statusIconController = new StatusIconController({
     restoreMainWindow: () => mainWindowController?.restoreOrCreate(),
     retainActivationSurface: () => mainWindowController?.retainActivationSurface(),
@@ -298,18 +355,21 @@ async function startUp(): Promise<void> {
   registerAppNoticeIpc()
   registerViewingIpc(() => mainWindowController?.getWindow() ?? null)
   registerNotificationIpc()
+  startAppReleaseCheck()
   initNotificationWindow()
-  startProcessor()
+  if (!isQuitting()) startProcessor()
   startWakeLockMonitor()
 
   // Re-check the managed dependencies if the launch toggle is on and the last
   // check attempt is a day old. Fire-and-forget: never blocks startup, and
   // its result is surfaced passively (pane pointer / modal), never as a prompt.
-  void checkDependenciesAtLaunch()
+  if (!isQuitting()) void checkDependenciesAtLaunch()
 
-  void statusIconController.reconcile(loadConfig().general.show_status_icon)
-  mainWindowController.createInitialWindow()
-  syncPreviewWindow(loadConfig().general.show_preview_window)
+  if (!isQuitting()) {
+    void statusIconController.reconcile(loadConfig().general.show_status_icon)
+    mainWindowController.createInitialWindow()
+    syncPreviewWindow(loadConfig().general.show_preview_window)
+  }
   mainWindowController.markStartupComplete()
 
   app.on('activate', () => {
@@ -317,62 +377,22 @@ async function startUp(): Promise<void> {
   })
 }
 
-// Async cleanup run from before-quit. Each step is independently guarded so
-// one failing step doesn't skip the rest, and the whole thing is wrapped in
-// .catch().finally(app.exit) at the call site so an unexpected throw can't
-// strand the process or escape as an unhandled rejection.
-//
-// We close the fullscreen view and notification windows here, before Electron
-// starts sending close events to the main window. The fullscreen view's own
-// close handler calls event.preventDefault() to convert OS-close into a hide;
-// if that fired during quit, the app would get stuck.
+// Only optional work remains here. The quit owner bounds this entire phase;
+// no native worker termination or independent per-step timeout extends it.
 async function gracefulShutdown(reason: string): Promise<void> {
-  const guarded = async (name: string, fn: () => unknown): Promise<void> => {
-    try {
-      await fn()
-    } catch (err) {
-      log('error', 'Shutdown step failed', {
-        step: name,
-        error: serializeError(err),
-      })
-    }
-  }
-  // Freeze scheduling before touching active work. Otherwise the 500ms poller
-  // can promote another queued task between the cancellation snapshot and exit.
-  await guarded('stopProcessor', () => stopProcessor())
-  await guarded('drainPendingModelParamsWrites', () => drainPendingModelParamsWrites())
-
-  // Signal both external-work families before awaiting either one. Each barrier
-  // is bounded and includes its TERM→KILL escalation, so quit cannot strand a
-  // child but also cannot hang forever on a broken process implementation.
-  const generationBarrier = cancelAllInFlightAndWait(5_000)
-  const cliBarrier = killAllCliJobsAndWait({ timeoutMs: 5_000 })
-  await guarded('cancelInFlightGenerations', async () => {
-    const result = await generationBarrier
-    if (!result.settled) log('warn', 'Generation shutdown barrier timed out', result)
-  })
-  await guarded('killAllCliJobs', async () => {
-    const result = await cliBarrier
-    if (!result.settled) log('warn', 'CLI job shutdown barrier timed out', result)
-  })
-
-  // Cancellation normally updates each task itself. This catches any residual
-  // task whose backend failed to settle before the bounded deadline.
-  await guarded('interruptGeneratingTasks', () => {
-    const count = queueManager.interruptGeneratingTasks()
-    if (count > 0) {
-      persistActiveSession()
-      log('info', 'Marked in-flight tasks interrupted on shutdown', { count })
-    }
-  })
-  await guarded('destroyFullscreenView', () => destroyFullscreenView())
-  await guarded('closePreviewWindow', () => closePreviewWindow())
-  await guarded('closeRecordsWindow', () => closeRecordsWindow())
-  await guarded('closeRecordsReader', () => closeRecordsReader())
-  await guarded('closeNotificationWindow', () => closeNotificationWindow())
-  await guarded('releaseWakeLock', () => releaseWakeLock())
+  statusIconController?.dispose()
+  mainWindowController?.dispose()
+  destroyFullscreenView()
+  closePreviewWindow()
+  closeRecordsWindow()
+  closeNotificationWindow()
+  releaseWakeLock()
   log('info', 'Session ended', { reason })
-  await guarded('dropCurrentSessionIfEmpty', () => dropCurrentSessionIfEmpty(reason))
-  await guarded('closeConceptStore', () => closeConceptStore())
-  await guarded('closeBackupStore', () => closeBackupStore())
+  await Promise.all([
+    dropCurrentSessionIfEmpty(reason),
+    closeConceptStore(),
+    closeBackupStore(),
+    closeRecordsReader(),
+  ])
+  await closeRecords()
 }

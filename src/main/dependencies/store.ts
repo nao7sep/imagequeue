@@ -11,7 +11,7 @@
 
 import fs from 'fs'
 import { log, serializeError } from '../logger'
-import { writeJsonAtomic } from '../utils/atomic-write'
+import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { getDependenciesStatePath } from './paths'
 import path from 'path'
 import { FORMAT_VERSIONS, markFormat } from '../store-format'
@@ -45,10 +45,10 @@ function emptyCache(): DependenciesCache {
 // A cache: its format version is written but never checked; overwriting a
 // newer build's file loses only what the next check re-learns
 // (store-recovery-conventions).
-export function readDependenciesCache(): DependenciesCache {
+export async function readDependenciesCache(): Promise<DependenciesCache> {
   const file = getDependenciesStatePath()
   try {
-    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const raw: unknown = JSON.parse(await fs.promises.readFile(file, 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('dependencies.json must be a JSON object')
     const parsed = raw as Partial<DependenciesCache>
     const base = emptyCache()
@@ -60,28 +60,33 @@ export function readDependenciesCache(): DependenciesCache {
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an
     // unexpected failure worth a trace before the silent rebuild.
-    if (fs.existsSync(file)) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       log('warn', 'Ignoring unreadable dependencies.json; rebuilding the cache', { error: serializeError(err) })
     }
     return emptyCache()
   }
 }
 
-function writeDependenciesCache(cache: DependenciesCache): void {
-  fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
+async function writeDependenciesCache(cache: DependenciesCache): Promise<void> {
+  await fs.promises.mkdir(path.dirname(getDependenciesStatePath()), { recursive: true })
   // not recorded: dependencies.json is a re-derivable network-facts cache (the last-known-latest
   // CLI release tag, configs.json's last-known server time, the last check attempt, and last-successful-check times), not
   // durable user-authored data — deleting it just
   // makes the next launch re-check (data-backup conventions: re-fetchable caches are not recorded).
-  writeJsonAtomic(getDependenciesStatePath(), markFormat(cache, FORMAT_VERSIONS.dependencies), false)
+  await writeFileAtomicAsync(getDependenciesStatePath(), JSON.stringify(markFormat(cache, FORMAT_VERSIONS.dependencies), null, 2), false)
 }
 
 /** Read, apply `mutate`, and persist in one step. */
+let saving: Promise<unknown> = Promise.resolve()
 export function updateDependenciesCache(
   mutate: (cache: DependenciesCache) => void
-): DependenciesCache {
-  const cache = readDependenciesCache()
-  mutate(cache)
-  writeDependenciesCache(cache)
-  return cache
+): Promise<DependenciesCache> {
+  const result = saving.catch(() => undefined).then(async () => {
+    const cache = await readDependenciesCache()
+    mutate(cache)
+    await writeDependenciesCache(cache)
+    return cache
+  })
+  saving = result
+  return result
 }

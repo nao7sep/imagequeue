@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../src/main/config/types'
 import fs from 'fs'
 
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   saveConfig: vi.fn(),
   applyChangedFields: vi.fn(),
   log: vi.fn(),
+  showSaveDialog: vi.fn(),
   showItemInFolder: vi.fn(),
   openExternal: vi.fn(),
   readClipboardText: vi.fn(async () => ''),
@@ -30,7 +31,7 @@ vi.mock('electron', () => ({
     constructor(readonly items: Record<string, unknown>) {}
   },
   clipboard: { readText: mocks.readClipboardText, write: mocks.writeClipboard },
-  dialog: { showOpenDialog: vi.fn() },
+  dialog: { showOpenDialog: vi.fn(), showSaveDialog: mocks.showSaveDialog },
   nativeImage: { createFromPath: vi.fn(), createFromBuffer: mocks.createFromBuffer },
   shell: {
     openExternal: mocks.openExternal,
@@ -90,20 +91,22 @@ beforeEach(() => {
   })
 })
 
+afterEach(() => vi.restoreAllMocks())
+
 describe('prompt image action preconditions', () => {
-  it('rejects Reveal when the selected image no longer exists', () => {
-    vi.spyOn(fs, 'existsSync').mockReturnValueOnce(false)
+  it('rejects Reveal when the selected image no longer exists', async () => {
+    vi.spyOn(fs.promises, 'stat').mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     mocks.handlers.clear()
     registerSettingsIpc()
     const handler = mocks.handlers.get('shell:revealFile')
     expect(handler).toBeTruthy()
 
-    expect(() => handler?.({}, 'image', 'png')).toThrow('Cannot reveal missing image')
+    await expect(handler?.({}, 'image', 'png')).rejects.toThrow('Cannot reveal missing image')
     expect(mocks.showItemInFolder).not.toHaveBeenCalled()
   })
 
   it('rejects Copy to Clipboard when the image bytes cannot be decoded', async () => {
-    vi.spyOn(fs, 'readFileSync').mockReturnValueOnce(Buffer.from('not an image'))
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValueOnce(Buffer.from('not an image'))
     mocks.createFromBuffer.mockReturnValueOnce({
       isEmpty: () => true,
       toPNG: () => Buffer.from(''),
@@ -118,7 +121,7 @@ describe('prompt image action preconditions', () => {
   })
 
   it('writes a copied image through the MIME-based clipboard API', async () => {
-    vi.spyOn(fs, 'readFileSync').mockReturnValueOnce(Buffer.from('source image'))
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValueOnce(Buffer.from('source image'))
     mocks.handlers.clear()
     registerSettingsIpc()
     const handler = mocks.handlers.get('clipboard:copyImage')
@@ -195,4 +198,21 @@ describe('status-icon reconciliation after a settings save', () => {
       expect.any(Object),
     )
   })
+})
+
+// The storage deadline begins after a destination is chosen; a person taking
+// time in the native picker has not started a storage operation.
+it('does not time out a Save As picker that remains open beyond the storage deadline', async () => {
+  vi.useFakeTimers()
+  let choose!: (result: { canceled: boolean }) => void
+  mocks.showSaveDialog.mockImplementationOnce(() => new Promise((resolve) => { choose = resolve }))
+  registerSettingsIpc()
+  const handler = mocks.handlers.get('shell:exportImageAs')!
+  let settled = false
+  const result = Promise.resolve(handler({ sender: {} }, 'image', 'png')).finally(() => { settled = true })
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(settled).toBe(false)
+  choose({ canceled: true })
+  await expect(result).resolves.toBeNull()
+  vi.useRealTimers()
 })

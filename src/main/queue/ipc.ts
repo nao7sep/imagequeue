@@ -13,32 +13,32 @@ import { setQueuePausedAndPublish } from './control-actions'
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
-  handle('queue:enqueue', (_event, request: EnqueueRequest) => {
+  handle('queue:enqueue', (_event, request: EnqueueRequest) => mutateSession(async () => {
     const tasks = queueManager.enqueue(request)
     for (const task of tasks) {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
-    persistActiveSession()
+    await persistActiveSession()
     publishQueueState()
     return tasks
-  })
+  }))
 
-  handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[]) => {
+  handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[]) => mutateSession(async () => {
     const tasks = queueManager.enqueueBatch(units)
     tasks.forEach((task, index) => {
       const unit = units[index]
       logEnqueue(task.id, unit.backend, unit.model, unit.prompt, unit.params, 1)
     })
-    persistActiveSession()
+    await persistActiveSession()
     publishQueueState()
     return tasks
-  })
+  }))
 
   handle('queue:getAllStoredTasks', () => {
     return queueManager.getAllStoredTasks()
   })
 
-  handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => {
+  handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
     const task = queueManager.getTask(backend, taskId)
     if (task?.status === 'generating') {
       log('warn', 'Refusing to remove generating task', { taskId, backend })
@@ -53,18 +53,18 @@ export function registerQueueIpc(): void {
       log('info', 'Task removed from queue', { taskId, backend })
       queueManager.removeTask(backend, taskId)
     }
-    persistActiveSession()
+    await persistActiveSession()
     publishQueueState()
-  })
+  }))
 
-  handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => {
+  handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
     const task = queueManager.restoreTask(backend, taskId)
     if (!task) return
 
     log('info', 'Task restored from kept list', { taskId, backend, baseName: task.baseName ?? null })
-    persistActiveSession()
+    await persistActiveSession()
     publishQueueState()
-  })
+  }))
 
   handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
@@ -92,11 +92,11 @@ export function registerQueueIpc(): void {
             if (toTrash) {
               await trashImageOutput(task.baseName, ext)
             } else {
-              deleteImageOutput(task.baseName, ext)
+              await deleteImageOutput(task.baseName, ext)
             }
           } catch (err) {
             log('error', 'Failed to remove task files; removing the queue entry anyway', { taskId, toTrash, error: serializeError(err) })
-            result.files = imageOutputFileStates(task.baseName, ext)
+            result.files = await imageOutputFileStates(task.baseName, ext)
           }
         } else {
           log('warn', 'Cannot determine image extension; skipping file removal', { taskId, imagePath: task.imagePath ?? null })
@@ -107,31 +107,31 @@ export function registerQueueIpc(): void {
       }
       if (queueManager.getTask(backend, taskId) !== task) return result
       queueManager.removeTask(backend, taskId)
-      persistActiveSession()
+      await persistActiveSession()
       publishQueueState()
       result.removed = true
       return result
     })
   })
 
-  handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => {
+  handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
     const task = queueManager.retryTask(backend, taskId)
     if (task) {
       log('info', 'Task retry requested', { taskId, backend })
-      persistActiveSession()
+      await persistActiveSession()
       publishQueueState()
     }
-  })
+  }))
 
-  handle('queue:resumeInterrupted', () => {
+  handle('queue:resumeInterrupted', () => mutateSession(async () => {
     const count = queueManager.retryAllInterrupted()
     if (count > 0) {
       log('info', 'Resuming interrupted tasks', { count })
-      persistActiveSession()
+      await persistActiveSession()
       publishQueueState()
     }
     return count
-  })
+  }))
 
   // Queue control — two orthogonal axes, deliberately not entangled:
   //
@@ -150,24 +150,24 @@ export function registerQueueIpc(): void {
     setQueuePausedAndPublish(paused)
   })
 
-  handle('queue:stopAll', () => {
+  handle('queue:stopAll', async () => {
     // Queued first, then in-flight: both are synchronous within this handler,
     // so no processor tick can interleave — the order is for the reader.
     const queued = queueManager.interruptQueuedTasks()
     const cancelled = cancelAllInFlight()
     log('info', 'Stopped all queue work', { cancelled, queued, paused: isQueuePaused() })
-    persistActiveSession()
+    await persistActiveSession()
     publishQueueState()
     return { cancelled, queued }
   })
 
-  handle('queue:clearPending', () => {
+  handle('queue:clearPending', () => mutateSession(async () => {
     const removed = queueManager.removePendingTasks()
     log('info', 'Cleared pending tasks', { removed })
-    persistActiveSession()
+    await persistActiveSession()
     publishQueueState()
     return removed
-  })
+  }))
 
   handle('queue:getControlState', () => buildControlState())
 

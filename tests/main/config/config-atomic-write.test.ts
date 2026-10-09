@@ -9,7 +9,7 @@ import { writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
-// config-store persists config.json under the storage root via writeJsonAtomic
+// config-store persists config.json under the storage root via writeFileAtomicAsync
 // (temp file + rename). These tests isolate the data dir with IMAGEQUEUE_DATA_DIR
 // and assert the write is atomic: valid JSON lands on disk and no orphaned
 // *.tmp artifact is left behind, mirroring the elaborators atomicity test.
@@ -31,12 +31,12 @@ describe('config store (atomic write of config.json)', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('leaves no orphaned temp file after an explicit saveConfig', () => {
+  it('leaves no orphaned temp file after an explicit saveConfig', async () => {
     const configPath = getConfigPath()
 
     const config = createDefaultConfig()
     config.general.export_dir = '/tmp/atomic-write-marker'
-    saveConfig(config)
+    await saveConfig(config)
 
     const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
     expect(parsed.general.export_dir).toBe('/tmp/atomic-write-marker')
@@ -45,11 +45,11 @@ describe('config store (atomic write of config.json)', () => {
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
-  it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as config.json', () => {
-    const spy = vi.spyOn(fs, 'openSync')
+  it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as config.json', async () => {
+    const spy = vi.spyOn(fs.promises, 'open')
     const config = createDefaultConfig()
     config.general.language = 'ja'
-    saveConfig(config)
+    await saveConfig(config)
 
     const tempCall = spy.mock.calls.find((call) =>
       typeof call[0] === 'string' && (call[0] as string).endsWith('.tmp')
@@ -61,18 +61,32 @@ describe('config store (atomic write of config.json)', () => {
     spy.mockRestore()
   })
 
-  it('syncs staged bytes before publication', () => {
-    const sync = vi.spyOn(fs, 'fsyncSync')
-    updateConfig((draft) => { draft.general.language = loadConfig().general.language === 'ja' ? 'en' : 'ja' })
-    expect(sync).toHaveBeenCalled()
-    sync.mockRestore()
+  it('syncs staged bytes before publication', async () => {
+    const events: string[] = []
+    const originalOpen = fs.promises.open.bind(fs.promises)
+    const open = vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      const handle = await originalOpen(...args)
+      const sync = handle.sync.bind(handle)
+      handle.sync = async () => { events.push('sync'); await sync() }
+      return handle
+    })
+    const renameOriginal = fs.promises.rename.bind(fs.promises)
+    const rename = vi.spyOn(fs.promises, 'rename').mockImplementation(async (...args) => {
+      events.push('rename')
+      await renameOriginal(...args)
+    })
+    await updateConfig((draft) => { draft.general.language = loadConfig().general.language === 'ja' ? 'en' : 'ja' })
+    expect(events.indexOf('sync')).toBeGreaterThanOrEqual(0)
+    expect(events.indexOf('sync')).toBeLessThan(events.indexOf('rename'))
+    open.mockRestore()
+    rename.mockRestore()
   })
 
-  it('removes staging when publication fails', () => {
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+  it('removes staging when publication fails', async () => {
+    const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(() => {
       throw new Error('simulated rename failure')
     })
-    expect(() => updateConfig((draft) => { draft.general.language = loadConfig().general.language === 'ja' ? 'en' : 'ja' })).toThrow('simulated rename failure')
+    await expect(updateConfig((draft) => { draft.general.language = loadConfig().general.language === 'ja' ? 'en' : 'ja' })).rejects.toThrow('simulated rename failure')
     rename.mockRestore()
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
@@ -80,23 +94,23 @@ describe('config store (atomic write of config.json)', () => {
   // The cached config is what the processor and backends read. A save that
   // fails must not leave the new values running in memory, where the next
   // unrelated save would also write them to disk unnoticed.
-  it('keeps the running settings when an update cannot be written', () => {
+  it('keeps the running settings when an update cannot be written', async () => {
     // The cache outlives each test's data root; write it into this one first.
-    const before = updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 180001 })
+    const before = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 180001 })
     const timeout = before.image_backends.openai.timeout_ms
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+    const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(() => {
       throw new Error('simulated disk full')
     })
-    expect(() => updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1 })).toThrow('simulated disk full')
+    await expect(updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1 })).rejects.toThrow('simulated disk full')
     rename.mockRestore()
 
     expect(loadConfig().image_backends.openai.timeout_ms).toBe(timeout)
     expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(timeout)
   })
 
-  it('applies an update once it is written', () => {
+  it('applies an update once it is written', async () => {
     loadConfig()
-    const saved = updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1234 })
+    const saved = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1234 })
     expect(loadConfig()).toBe(saved)
     expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(1234)
   })

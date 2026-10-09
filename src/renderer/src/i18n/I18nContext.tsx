@@ -2,6 +2,7 @@ import { createContext, Fragment, createElement, useContext, useEffect, useMemo,
 import type { LanguageEnvironment } from '../../../shared/i18n/languages'
 import { createTranslator, loadTranslator, type Translator as BaseTranslator } from '../../../shared/i18n/translate'
 import { ENGLISH, type MessageKey } from '../../../shared/i18n/catalogues'
+import { serializeError } from '../../../shared/serialize-error'
 
 export type Translator = BaseTranslator & {
   // Like t, but a placeholder may be filled with markup (a <code> path, say).
@@ -71,6 +72,17 @@ export function MainProcessLanguage({ children }: { children: ReactNode }): Reac
       const request = ++latest
       void loadTranslator(environment.language, environment.locale).then((next) => {
         if (!cancelled && request === latest) setTranslator(next)
+      }).catch((error: unknown) => {
+        // A missing catalogue must not strand a window at its blank launch
+        // gate. Keep readable words, and never let an older request undo a
+        // more recent choice, even when that older request failed.
+        if (!cancelled && request === latest) {
+          setTranslator((current) => current ?? englishTranslator)
+        }
+        void window.electronAPI.appLog('warn', 'Interface catalogue could not be loaded', {
+          language: environment.language,
+          error: serializeError(error),
+        }).catch((logError) => console.error('Failed to record catalogue diagnostic', logError))
       })
     }
     const unsubscribe = window.electronAPI.onLanguageChanged((next) => apply(next, true))

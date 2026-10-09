@@ -48,6 +48,7 @@ export async function startApp(home: string) {
   process.env.IMAGEQUEUE_DATA_DIR = home
   handlers.clear()
   const config = await import('../../../src/main/config')
+  const { closeConceptStore } = await import('../../../src/main/concepts/concept-store')
   const { closeRecords, openRecords } = await import('../../../src/main/records')
   const { clearTempDir } = await import('../../../src/main/dependencies/paths')
   const session = await import('../../../src/main/session')
@@ -76,9 +77,10 @@ export async function startApp(home: string) {
       clean(() => cancelAllInFlightAndWait(5_000)),
       clean(() => killAllCliJobsAndWait({ timeoutMs: 5_000 })),
     ])
-    await clean(() => { if (queueManager.interruptGeneratingTasks() > 0) session.persistActiveSession() })
+    await clean(async () => { if (queueManager.interruptGeneratingTasks() > 0) (await session.persistActiveSession()) })
     await clean(() => session.dropCurrentSessionIfEmpty('quit'))
     await clean(() => contents.destroy())
+    await clean(closeConceptStore)
     await clean(closeBackupStore)
     await clean(closeRecords)
     if (failures.length > 0) throw new AggregateError(failures, 'Live app cleanup failed')
@@ -91,9 +93,9 @@ export async function startApp(home: string) {
     config.ensureDataDir()
     openRecords(config.getDataDir())
     clearTempDir()
-    session.initSession()
+    await session.initSession()
     session.resetOutputTimestampAllocators()
-    session.persistActiveSession()
+    await session.persistActiveSession()
     session.registerSessionIpc()
     registerQueueIpc()
     registerSettingsIpc(async () => {})
@@ -169,10 +171,16 @@ export async function withApp<T>(home: string, body: (app: App) => Promise<T>): 
 
 /** Shuts the app down and proves nothing it started remains. */
 export async function stopApp(app: App): Promise<void> {
-  await app.shutdown()
-  const open = await openAfterClosing()
-  expect(open, 'no child process outlives the app').not.toContain('ProcessWrap')
-  expect(open, 'no server outlives the app').not.toContain('TCPServerWrap')
+  const failures: unknown[] = []
+  try { await app.shutdown() } catch (error) { failures.push(error) }
+  // A failed close is still followed by resource checks, and each failed check
+  // is retained rather than hiding the other leak or the original close error.
+  try {
+    const open = await openAfterClosing()
+    try { expect(open, 'no child process outlives the app').not.toContain('ProcessWrap') } catch (error) { failures.push(error) }
+    try { expect(open, 'no server outlives the app').not.toContain('TCPServerWrap') } catch (error) { failures.push(error) }
+  } catch (error) { failures.push(error) }
+  if (failures.length > 0) throw new AggregateError(failures, 'Live app teardown failed')
 }
 
 /**

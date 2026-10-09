@@ -1,16 +1,13 @@
 import type { Worker } from 'node:worker_threads'
 import createReaderWorker from './records-reader-worker?nodeWorker'
-import { recordsDatabasePath } from './records'
-import { waitForAllSettledWithin } from './utils/bounded-wait'
+import { flushRecords, recordsDatabasePath } from './records'
 import type { RecordsRead, RecordsReadResults } from '../shared/records'
 
-// The one owner of the Records window's reads (PLAYBOOK, Own the work in flight;
-// Bound every external wait): each read runs on a worker thread, and one that
-// does not answer in time ends that worker, so a stalled read is stopped rather
-// than left holding the thread. The next read starts a fresh worker.
+// The one owner of the Records window's reads. A timed-out read requests worker
+// termination, but native SQLite may delay its physical exit. Replacement reads
+// wait for that exit within their own deadline; at most one reader owns SQLite.
 
 export const RECORDS_READ_TIMEOUT_MS = 10_000
-const CLOSE_TIMEOUT_MS = 2_000
 
 export interface RecordsReaderRequest {
   id: number
@@ -70,28 +67,24 @@ function ensureWorker(): Worker {
 
 export function readRecords<R extends RecordsRead>(read: R): Promise<RecordsReadResults[R['op']]> {
   return new Promise((resolve, reject) => {
-    let current: Worker
-    try {
-      current = ensureWorker()
-    } catch (error) {
-      reject(error)
-      return
-    }
     const id = nextId++
+    // The bound includes writer startup/flush and any previous reader's exit,
+    // so neither unavailable storage nor delayed termination extends the wait.
     const timer = setTimeout(() => {
       if (pending.has(id)) stopWorker(new Error('Reading the records timed out.'))
     }, RECORDS_READ_TIMEOUT_MS)
     pending.set(id, { resolve: resolve as (value: never) => void, reject, timer })
-    try {
-      current.postMessage({ id, read } satisfies RecordsReaderRequest)
-    } catch (error) {
-      stopWorker(error instanceof Error ? error : new Error(String(error)))
-    }
+    void flushRecords().then(async () => {
+      await stopping
+      if (!pending.has(id)) return
+      try { ensureWorker().postMessage({ id, read } satisfies RecordsReaderRequest) }
+      catch (error) { stopWorker(error instanceof Error ? error : new Error(String(error))) }
+    }, (error) => stopWorker(error instanceof Error ? error : new Error(String(error))))
   })
 }
 
-/** Ends the reader on quit, within a bound; any read still waiting fails. */
+/** Ends the reader; the quit owner bounds its wait, while termination keeps its owner. */
 export async function closeRecordsReader(): Promise<void> {
   stopWorker(new Error('The records reader closed.'))
-  await waitForAllSettledWithin([stopping], CLOSE_TIMEOUT_MS)
+  await stopping
 }

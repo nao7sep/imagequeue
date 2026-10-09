@@ -342,11 +342,11 @@ describe('RecordsWindow', () => {
     expect(document.body.textContent).not.toContain('No records match these filters.')
   })
 
-  it('offers Needs attention first among the levels, with every filter off', async () => {
+  it('offers Warnings and errors first among the levels, with every filter off', async () => {
     await mount()
     const level = document.querySelectorAll('select')[3]!
     expect(Array.from(level.options).map((option) => option.textContent)).toEqual([
-      'All levels', 'Needs attention', 'Error', 'Warning', 'Info', 'Debug',
+      'All levels', 'Warnings and errors', 'Error', 'Warning', 'Info', 'Debug',
     ])
     for (const select of Array.from(document.querySelectorAll('select'))) expect(select.value).toBe('')
   })
@@ -495,6 +495,43 @@ describe('RecordsWindow', () => {
     await act(async () => root?.unmount())
     root = null
     expect(recordsChanged).toBeNull()
+  })
+
+  it('resizes from the keyboard and saves once on key release or blur', async () => {
+    await mount()
+    const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
+    expect(splitter.tabIndex).toBe(0)
+    await act(async () => {
+      splitter.focus()
+      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, repeat: true }))
+    })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('412')
+    expect(updateUiState).not.toHaveBeenCalled()
+    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true })) })
+    expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 412 })
+    await act(async () => {
+      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+      splitter.blur()
+    })
+    expect(updateUiState).toHaveBeenCalledTimes(2)
+    expect(updateUiState).toHaveBeenLastCalledWith({ recordsListWidth: RECORDS_LIST_WIDTH.min })
+    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'Home', bubbles: true })) })
+    expect(updateUiState).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps keyboard resizing inside the live pane bounds', async () => {
+    box.shellWidth = RECORDS_WINDOW_MIN_WIDTH + 80
+    await mount()
+    const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
+    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('400')
+    expect(splitter.getAttribute('aria-valuemax')).toBe('400')
+    await act(async () => {
+      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }))
+    })
+    expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 400 })
   })
 
   it('saves the list width once when a drag ends, clamped to the pane bounds', async () => {

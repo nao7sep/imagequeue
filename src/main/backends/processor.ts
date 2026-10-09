@@ -1,7 +1,7 @@
 import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
-import { allocateOutputTimestamp, persistActiveSession } from '../session'
+import { allocateOutputTimestamp, persistActiveSession, isSessionMutationPending } from '../session'
 import { writeImageOutput, ImageExt } from '../utils/file-output'
 import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
@@ -90,7 +90,7 @@ export function stopProcessor(): void {
 }
 
 export function processQueues(): void {
-  if (processorStopping) return
+  if (processorStopping || isSessionMutationPending()) return
   // Close out a finished drain before scheduling new work: once nothing is in
   // flight and nothing is queued, the busy period that just ended gets its one
   // summary line. The 500ms tick that observes the idle state may land up to
@@ -124,14 +124,6 @@ export function processQueues(): void {
       // pauses until the user resumes it.
       task.status = 'generating'
       task.startedAt = new Date().toISOString()
-      try {
-        persistActiveSession()
-      } catch (err) {
-        task.status = 'queued'
-        task.startedAt = null
-        pauseForStorageFailure('start', err)
-        return
-      }
       drainTracker.begin(Date.now())
       activeCounts[backend]++
       logGenerationStart(task.id, backend, task.model)
@@ -160,6 +152,17 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
   registerInFlight(task.id, () => controller.abort(), settled)
 
+  try {
+    await persistActiveSession()
+  } catch (error) {
+    task.status = 'queued'
+    task.startedAt = null
+    pauseForStorageFailure('start', error)
+    clearInFlight(task.id)
+    resolveSettled()
+    return
+  }
+
   // Only generate() is cancellable work. Once it resolves, the image exists
   // (and, on a cloud backend, is paid for) — so the canceller is dropped RIGHT
   // THEN, not in the finally: a Stop arriving during the slug/write phase must
@@ -168,6 +171,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   let generated = false
 
   try {
+    controller.signal.throwIfAborted()
     const { buffer: imageBuffer, mimeType, seed } = await generate(task, controller.signal)
     generated = true
     clearInFlight(task.id)
@@ -200,7 +204,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     const ext = detectImageExt(imageBuffer, mimeType, fallback, { backend, model: task.model })
     let baseName: string
     try {
-      baseName = writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)
+      baseName = await writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)
     } catch (writeErr) {
       // Generation already succeeded (and, for cloud backends, was billed), so a
       // write failure here is a distinct, more costly event than a generation
@@ -261,7 +265,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   }
 
   try {
-    persistActiveSession()
+    await persistActiveSession()
   } catch (err) {
     pauseForStorageFailure('finish', err)
   }

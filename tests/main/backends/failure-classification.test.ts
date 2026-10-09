@@ -18,7 +18,7 @@ vi.mock('../../../src/main/config', () => ({
     },
   }),
 }))
-vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => apiKey }))
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => undefined, resolveApiKey: () => apiKey }))
 vi.mock('../../../src/main/logger', () => ({
   log: vi.fn(), serializeError: (e: unknown) => e,
 }))

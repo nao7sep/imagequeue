@@ -47,8 +47,8 @@ afterEach(() => {
 })
 
 describe('getRecommendationsStatus', () => {
-  it('reports absent when no file exists', () => {
-    expect(getRecommendationsStatus()).toEqual({
+  it('reports absent when no file exists', async () => {
+    expect(await getRecommendationsStatus()).toEqual({
       exists: false,
       valid: false,
       entryCount: 0,
@@ -56,33 +56,33 @@ describe('getRecommendationsStatus', () => {
     })
   })
 
-  it('reports a valid file with its entry count', () => {
+  it('reports a valid file with its entry count', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
-    const status = getRecommendationsStatus()
+    const status = await getRecommendationsStatus()
     expect(status.exists).toBe(true)
     expect(status.valid).toBe(true)
     expect(status.entryCount).toBe(1)
   })
 
-  it('gives a file no install recorded no date, whatever its modification time', () => {
+  it('gives a file no install recorded no date, whatever its modification time', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
     fs.utimesSync(configsPath(), new Date(), new Date('2026-09-11T20:46:05.000Z'))
-    expect(getRecommendationsStatus().updatedAt).toBeNull()
+    expect(await (await getRecommendationsStatus()).updatedAt).toBeNull()
   })
 })
 
 describe('resolveRecommendedParams', () => {
-  it('returns null when no configs.json is present', () => {
-    expect(resolveRecommendedParams('any-model.ckpt')).toBeNull()
+  it('returns null when no configs.json is present', async () => {
+    expect(await resolveRecommendedParams('any-model.ckpt')).toBeNull()
   })
 })
 
 describe('lastModifiedOf', () => {
-  it('reads an HTTP date as ISO-8601 UTC', () => {
+  it('reads an HTTP date as ISO-8601 UTC', async () => {
     expect(lastModifiedOf({ 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' })).toBe('2026-09-11T20:46:05.000Z')
   })
 
-  it('is null when the header is absent or unreadable', () => {
+  it('is null when the header is absent or unreadable', async () => {
     expect(lastModifiedOf({})).toBeNull()
     expect(lastModifiedOf({ 'last-modified': 'yesterday-ish' })).toBeNull()
   })
@@ -117,13 +117,13 @@ describe('downloadLatestRecommendations', () => {
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
     await downloadLatestRecommendations()
     writeConfigs(configsPath(), [{ name: 'other', configuration: { model: 'm' } }])
-    expect(getRecommendationsStatus().updatedAt).toBeNull()
+    expect(await (await getRecommendationsStatus()).updatedAt).toBeNull()
   })
 
   it('reads an unreadable record as none, and replaces it on the next install', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
     fs.writeFileSync(getRecommendationsTimesPath(), '{ not json')
-    expect(getRecommendationsStatus().updatedAt).toBeNull()
+    expect(await (await getRecommendationsStatus()).updatedAt).toBeNull()
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
     expect((await downloadLatestRecommendations()).updatedAt).toBe('2026-09-11T20:46:05.000Z')
   })

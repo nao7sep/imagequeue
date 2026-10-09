@@ -3,17 +3,11 @@ import { useI18n } from '../i18n/I18nContext'
 
 interface Props {
   onOpenSettings: () => void
+  onOpenManagedTools: () => void
 }
 
-// Stands in the right-hand pane group when it would otherwise be empty: no cloud
-// backend has a key, and this platform has no Draw Things column to fall back on.
-// It occupies one column slot, and it is not a backend — it holds no tasks and
-// takes no part in column shortcuts or selection navigation.
-//
-// It says nothing about Draw Things. macOS always shows that column, so this pane
-// is unreachable there; the only users who see it are on a platform Draw Things
-// does not run on, and offering them a Mac-only backend would be noise.
-export function WelcomePane({ onOpenSettings }: Props): React.JSX.Element {
+// Setup choices occupy a pane but do not participate in backend navigation.
+export function WelcomePane({ onOpenSettings, onOpenManagedTools }: Props): React.JSX.Element {
   const { t } = useI18n()
   return (
     <div className="welcome-pane">
@@ -29,6 +23,15 @@ export function WelcomePane({ onOpenSettings }: Props): React.JSX.Element {
           </button>
         </div>
 
+        {window.electronAPI.platform === 'darwin' && (
+          <div className="welcome-step">
+            <div className="welcome-step-title">{t('welcome.setupDrawThings')}</div>
+            <p>{t('welcome.setupDrawThingsBody')}</p>
+            <button className="welcome-btn" onClick={onOpenManagedTools}>
+              {t('menu.managedTools')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

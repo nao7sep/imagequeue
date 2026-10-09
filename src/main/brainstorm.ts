@@ -1,3 +1,4 @@
+import { refreshApiKeys } from './config/api-keys-store'
 import { BrowserWindow } from 'electron'
 import type { BrainstormPhase, ElaboratedPromptRecord } from '../shared/types'
 import { getElaborator } from './elaborators'
@@ -71,6 +72,10 @@ function broadcastProgress(progress: BrainstormProgress): void {
 // it on exit, so a cancel arriving after a run finished is a harmless no-op.
 const activeControllers = new Map<string, AbortController>()
 
+export function cancelAllBrainstorms(): void {
+  for (const controller of activeControllers.values()) controller.abort()
+}
+
 export function cancelBrainstorm(requestId: string): void {
   activeControllers.get(requestId)?.abort()
 }
@@ -142,6 +147,13 @@ function extractPromptsFromParsed(parsed: unknown): string[] {
 // is cancelled. On failure, throws the last error — the caller persists
 // nothing for a run that didn't complete and queue its tasks.
 export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
+  const controller = new AbortController()
+  activeControllers.set(req.requestId, controller)
+  try { return await runBrainstorm(req, controller) }
+  finally { activeControllers.delete(req.requestId) }
+}
+
+async function runBrainstorm(req: BrainstormRequest, controller: AbortController): Promise<BrainstormResult> {
   if (req.count < 1) throw new Error('Count must be at least 1.')
   if (!req.seed.trim()) throw new Error('Seed prompt is empty.')
 
@@ -159,6 +171,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
     style: styleElaborator.template,
   })
 
+  await refreshApiKeys()
+  if (controller.signal.aborted) return { prompts: [] }
   const handle = getMainProvider()
   if (!handle) throw new Error('Text AI is not configured.')
 
@@ -182,33 +196,16 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   // failed: the run threw, the caller kept nothing, yet the window blocked
   // those values for 1000 draws.
   const pendingUses: number[][] = []
-  const commitUses = (): void => {
+  const commitUses = async (): Promise<void> => {
     for (const conceptIds of pendingUses) {
-      for (const conceptId of conceptIds) recordUse(conceptId, sessionId)
+      for (const conceptId of conceptIds) await recordUse(conceptId, sessionId)
     }
     pendingUses.length = 0
   }
   let turn = 0
 
-  const controller = new AbortController()
-  activeControllers.set(req.requestId, controller)
   const stats = newConceptRunStats()
 
-  log('info', 'Brainstorm started', {
-    requestId: req.requestId,
-    requested: req.count,
-    seedLength: req.seed.length,
-    format: req.format,
-    length: req.length,
-    compositionElaborator: compositionElaborator.name,
-    styleElaborator: styleElaborator.name,
-    backend: handle.backend,
-    model: handle.modelId,
-    batchSize,
-    concurrency,
-    preferNew,
-    ledger: ledgerTotals(),
-  })
 
   // Planning calls share the prose calls' provider, retry policy, and abort
   // signal; validation is the planner's (it parses and throws on junk).
@@ -254,17 +251,32 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
   }
 
   try {
+    log('info', 'Brainstorm started', {
+      requestId: req.requestId,
+      requested: req.count,
+      seedLength: req.seed.length,
+      format: req.format,
+      length: req.length,
+      compositionElaborator: compositionElaborator.name,
+      styleElaborator: styleElaborator.name,
+      backend: handle.backend,
+      model: handle.modelId,
+      batchSize,
+      concurrency,
+      preferNew,
+      ledger: await ledgerTotals(),
+    })
     broadcastProgress({ requestId: req.requestId, done: 0, total: req.count, phase: 'facets' })
-    const knownFacets = new Set(listFacetDisplays().map((d) => d.toLowerCase()))
-    const facetNames = await resolveFacets(ask, req.seed, listFacetDisplays())
-    const facets = facetNames.map((name) => ensureFacet(name))
+    const knownFacets = new Set((await listFacetDisplays()).map((d) => d.toLowerCase()))
+    const facetNames = await resolveFacets(ask, req.seed, await listFacetDisplays())
+    const facets = await Promise.all(facetNames.map((name) => ensureFacet(name)))
     const newFacets = facetNames.filter((name) => !knownFacets.has(name.toLowerCase()))
     log('info', 'Concept aspects resolved', {
       requestId: req.requestId,
       aspects: facetNames,
       newAspects: newFacets,
       valuesNeededPerAspect: req.count,
-      inventory: facetInventory(facets),
+      inventory: await facetInventory(facets),
     })
     // Values and clusters drawn by this run, per facet. Draws are recorded as
     // uses only when their prompt comes back, so within the run these sets are
@@ -287,14 +299,14 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       turn += waveSizes.length
 
       // Draw EVERY assignment for the wave before any prose call fires. Draws
-      // are the serialization point of the whole mechanism — synchronous store
+      // are the serialization point of the whole mechanism — ordered store
       // reads guarded by the in-run excludes — so concurrent turns hold
       // disjoint assignments by construction, and the prose calls themselves
       // never touch the ledger. Each facet fills its column concurrently.
       broadcastProgress({
         requestId: req.requestId, done: collected.length, total: req.count, phase: 'concepts',
       })
-      const perFacet = await Promise.all(
+      const facetResults = await Promise.allSettled(
         facets.map((facet) =>
           obtainConceptsForFacet({
             facet,
@@ -308,6 +320,11 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
           })
         )
       )
+      // A failed facet must not release the run while another facet still
+      // owns provider/database work and the caller can start a replacement.
+      const facetFailure = facetResults.find((result) => result.status === 'rejected')
+      if (facetFailure?.status === 'rejected') throw facetFailure.reason
+      const perFacet = facetResults.map((result) => (result as PromiseFulfilledResult<DrawnConcept[]>).value)
       const waveAssignments: { facet: FacetRow; concept: DrawnConcept }[][][] = []
       let offset = 0
       for (const size of waveSizes) {
@@ -400,7 +417,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
 
     // Uses commit before the completion log so the inventory and ledger totals
     // it reports are the post-run truth, not the pre-commit snapshot.
-    commitUses()
+    await commitUses()
     log('info', 'Brainstorm complete', {
       requestId: req.requestId,
       compositionElaborator: compositionElaborator.name,
@@ -413,8 +430,8 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       turns: turn,
       durationMs: Date.now() - startTime,
       concepts: stats,
-      inventory: facetInventory(facets),
-      ledger: ledgerTotals(),
+      inventory: await facetInventory(facets),
+      ledger: await ledgerTotals(),
     })
     return { prompts: collected.slice(0, req.count) }
   } catch (err) {
@@ -430,7 +447,7 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
         concepts: stats,
       })
       // The cancel path DELIVERS what was collected, so its uses commit too.
-      commitUses()
+      await commitUses()
       return { prompts: collected.slice(0, req.count) }
     }
     log('error', 'Brainstorm failed', {
@@ -443,11 +460,9 @@ export async function brainstormPrompts(req: BrainstormRequest): Promise<Brainst
       turns: turn,
       durationMs: Date.now() - startTime,
       concepts: stats,
-      ledger: ledgerTotals(),
+      ledger: await ledgerTotals(),
       error: serializeError(err),
     })
     throw err instanceof Error ? err : new Error(String(err))
-  } finally {
-    activeControllers.delete(req.requestId)
   }
 }

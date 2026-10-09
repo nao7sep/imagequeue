@@ -2,8 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 import { record } from '../backup/backup-store'
-import { syncDirectory, syncDirectoryAsync } from './fsync'
-import { holdsBytes, holdsBytesAsync } from './holds-bytes'
+import { syncDirectoryAsync } from './fsync'
+import { holdsBytesAsync } from './holds-bytes'
 
 // Writes data to filePath atomically via temp file + rename. On POSIX the
 // rename is atomic; on Windows it is atomic as long as the target file
@@ -20,7 +20,7 @@ import { holdsBytes, holdsBytesAsync } from './holds-bytes'
 //
 // This module is the single managed-text atomic-write choke point and —
 // crucially — the ONE place the data-backup hook lives (data-backup
-// conventions). A managed-text write that bypasses these sync/async helpers is
+// conventions). A managed-text write that bypasses this helper is
 // a silent backup gap. The only other staged writers are api-keys-store,
 // which is a SECRET and never recorded, and the generated-output and export
 // writers, which publish binary output the user harvests through the staging
@@ -48,101 +48,6 @@ function keptMode(target: fs.Stats): number {
 export function stagingPathFor(filePath: string): string {
   const stem = path.basename(filePath, path.extname(filePath))
   return path.join(path.dirname(filePath), `${stem}-${nanoid()}.tmp`)
-}
-
-/** Writes and syncs complete bytes to a fresh staging file beside filePath, for
- * a caller that publishes it itself; on failure the staging file is removed. */
-export function stageBeside(filePath: string, bytes: NodeJS.ArrayBufferView): string {
-  const tempPath = stagingPathFor(filePath)
-  let owned = false
-  try {
-    const fd = fs.openSync(tempPath, 'wx', 0o600)
-    owned = true
-    try {
-      fs.writeFileSync(fd, bytes)
-      fs.fchmodSync(fd, 0o666 & ~process.umask())
-      fs.fsyncSync(fd)
-    } finally {
-      fs.closeSync(fd)
-    }
-  } catch (error) {
-    try { if (owned) fs.rmSync(tempPath, { force: true }) } catch {
-      // A staging cleanup failure cannot replace the original write/sync cause.
-    }
-    throw error
-  }
-  return tempPath
-}
-
-/** Publishes complete staged bytes under destination without replacing a file
- * already there (storage-path conventions, "A publish that must not overwrite
- * claims the final name exclusively"): a hard link, or an exclusive copy on a
- * volume without hard links, which keeps the staged file's modified time. False
- * when the name is taken. */
-export function claimFinalName(staging: string, destination: string): boolean {
-  try {
-    fs.linkSync(staging, destination)
-    return true
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code ?? ''
-    if (code === 'EEXIST') return false
-    if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code)) throw error
-  }
-  let claimed = false
-  try {
-    fs.copyFileSync(staging, destination, fs.constants.COPYFILE_EXCL)
-    claimed = true
-    const staged = fs.statSync(staging)
-    fs.utimesSync(destination, staged.atime, staged.mtime)
-    return true
-  } catch (error) {
-    if (!claimed && (error as NodeJS.ErrnoException).code === 'EEXIST') return false
-    fs.rmSync(destination, { force: true })
-    throw error
-  }
-}
-
-export function writeFileAtomic(
-  filePath: string,
-  data: string | NodeJS.ArrayBufferView,
-  records: boolean
-): void {
-  const dir = path.dirname(filePath)
-  const stem = path.basename(filePath, path.extname(filePath))
-  const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
-  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf-8') : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
-  if (holdsBytes(filePath, bytes)) return
-  let owned = false
-  try {
-    const fd = fs.openSync(tempPath, 'wx', 0o600)
-    owned = true
-    try {
-      fs.writeFileSync(fd, bytes)
-      fs.fsyncSync(fd)
-    } finally {
-      fs.closeSync(fd)
-    }
-    const target = fs.statSync(filePath, { throwIfNoEntry: false })
-    fs.chmodSync(tempPath, target ? keptMode(target) : 0o666 & ~process.umask())
-    fs.renameSync(tempPath, filePath)
-    syncDirectory(dir)
-    // After the rename: the file is exactly where it belongs, so record the bytes
-    // we just wrote. Best-effort — record() catches, logs once, and swallows every
-    // failure, so a backup problem can never break the save that already succeeded.
-    if (records) record(filePath, bytes)
-  } finally {
-    // The path no longer exists after publication. On every pre-publication
-    // failure this removes the unique staging file without masking the cause.
-    try {
-      if (owned) fs.rmSync(tempPath, { force: true })
-    } catch {
-      // Cleanup is best-effort; the original write/publish error is authoritative.
-    }
-  }
-}
-
-export function writeJsonAtomic(filePath: string, value: unknown, records: boolean): void {
-  writeFileAtomic(filePath, JSON.stringify(value, null, 2), records)
 }
 
 /** Async managed-text publication for user-waiting acquisition paths. Writes in
@@ -191,5 +96,47 @@ export async function writeFileAtomicAsync(
   } finally {
     await handle?.close().catch(() => undefined)
     if (owned) await fs.promises.rm(tempPath, { force: true }).catch(() => undefined)
+  }
+}
+
+/** Async output staging keeps slow destinations off Electron's event loop. */
+export async function stageBesideAsync(filePath: string, bytes: NodeJS.ArrayBufferView): Promise<string> {
+  const staging = stagingPathFor(filePath)
+  const handle = await fs.promises.open(staging, 'wx', 0o600)
+  try {
+    await fs.promises.writeFile(handle, bytes)
+    await handle.chmod(0o666 & ~process.umask())
+    await handle.sync()
+  } catch (error) {
+    await handle.close().catch(() => undefined)
+    await fs.promises.rm(staging, { force: true }).catch(() => undefined)
+    throw error
+  }
+  await handle.close()
+  return staging
+}
+
+export async function claimFinalNameAsync(staging: string, destination: string): Promise<boolean> {
+  try {
+    await fs.promises.link(staging, destination)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? ''
+    if (code === 'EEXIST') return false
+    if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code)) throw error
+  }
+  // Only delete a destination this call actually claimed. A failed exclusive
+  // copy is not evidence that a pre-existing destination belongs to us.
+  let claimed = false
+  try {
+    await fs.promises.copyFile(staging, destination, fs.constants.COPYFILE_EXCL)
+    claimed = true
+    const staged = await fs.promises.stat(staging)
+    await fs.promises.utimes(destination, staged.atime, staged.mtime)
+    return true
+  } catch (error) {
+    if (!claimed && (error as NodeJS.ErrnoException).code === 'EEXIST') return false
+    if (claimed) await fs.promises.rm(destination, { force: true }).catch(() => undefined)
+    throw error
   }
 }

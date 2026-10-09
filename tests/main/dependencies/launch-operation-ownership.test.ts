@@ -97,6 +97,7 @@ describe('launch and manual dependency operation ownership', () => {
     mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
 
     const launchCheck = checkDependenciesAtLaunch()
+    await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
     const recommendations = invoke('dependencies:downloadRecommendations', new FakeSender())
 
     await expect(recommendations).resolves.toBeTruthy()
@@ -118,6 +119,7 @@ describe('launch and manual dependency operation ownership', () => {
     )
 
     const launchCheck = checkDependenciesAtLaunch()
+    await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
     await expect(invoke('dependencies:installCli', new FakeSender())).rejects.toThrow(
       'Dependency cli operation is already running'
     )
@@ -147,7 +149,8 @@ describe('launch and manual dependency operation ownership', () => {
     mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
 
     const launchCheck = checkDependenciesAtLaunch()
-    expect(mocks.fetchLatestRecommendationsModified).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
+    await vi.waitFor(() => expect(mocks.fetchLatestRecommendationsModified).toHaveBeenCalledTimes(1))
     await expect(invoke('dependencies:downloadRecommendations', new FakeSender())).rejects.toThrow(
       'Dependency recommendations operation is already running'
     )

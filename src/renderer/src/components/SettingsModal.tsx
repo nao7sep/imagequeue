@@ -1,4 +1,6 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import type { AppReleaseResult } from '../../../shared/app-release'
+import { reportOperationalFailure, recordOperationalDiagnostic } from '../utils/operationalFailure'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { Modal } from './Modal'
@@ -56,6 +58,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const { settings, apiKeys, saveChangedSettings, saveApiKeys, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   const { t } = useI18n()
+  const [releaseOpenFailed, setReleaseOpenFailed] = useState(false)
+  const [releaseResult, setReleaseResult] = useState<AppReleaseResult | undefined>()
+  const [checkingRelease, setCheckingRelease] = useState(false)
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
@@ -64,6 +69,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [errorMessage, setErrorMessage] = useState<MessageKey | null>(null)
+  const [saving, setSaving] = useState(false)
+  const saveInFlight = useRef(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const handleBrowseFailure = useCallback((error: unknown): void => {
     setErrorMessage('settings.browseFailed')
@@ -117,12 +124,16 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   )
 
   const handleSave = async (): Promise<void> => {
-    if (!config || !baseConfig) return
+    if (!config || !baseConfig || saveInFlight.current) return
     setErrorMessage(null)
     if (TEXT_PROVIDERS.some((provider) => !((config[provider] as Record<string, unknown>).endpoint as string).trim())) {
       setErrorMessage('settings.endpointRequired')
       return
     }
+    // This submitted draft owns the modal until both stores settle. Freezing
+    // it prevents a successful save from closing over edits made afterwards.
+    saveInFlight.current = true
+    setSaving(true)
     try {
       // Clean the slug template (a multiline body) at this commit point before
       // diffing against base, so the stored and compared value is the tidy one.
@@ -141,10 +152,14 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       onClose()
     } catch (e) {
       setErrorMessage(presentFailure('settings-save', e))
+    } finally {
+      saveInFlight.current = false
+      setSaving(false)
     }
   }
 
   const handleClose = useCallback(async (): Promise<void> => {
+    if (saveInFlight.current) return
     if (dirty) {
       const ok = await confirm({
         title: t('settings.unsavedTitle'),
@@ -188,6 +203,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   }
   const keyField = (id: SecretId): React.JSX.Element => (
     <input
+      id={`settings-key-${id}`}
       type="password"
       value={keys[id] ?? ''}
       disabled={!keysLoaded}
@@ -244,10 +260,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       title={t('settings.title')}
       className="settings-modal-box"
       onClose={handleClose}
+      dismissable={!saving}
       footer={
         <>
-          <button className="modal-btn" onClick={() => void handleClose()}>{t('common.cancel')}</button>
-          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty}>{t('common.save')}</button>
+          <button className="modal-btn" onClick={() => void handleClose()} disabled={saving}>{t('common.cancel')}</button>
+          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty || saving} aria-busy={saving}>{t('common.save')}</button>
         </>
       }
     >
@@ -259,15 +276,30 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             type="button"
             className={`app-tab${activeTab === sectionTab ? ' app-tab--active' : ''}`}
             {...tablist.getTabProps(sectionTab)}
+            disabled={saving}
           >
             {t(SETTINGS_TAB_LABELS[sectionTab])}
           </button>
         ))}
       </div>
       </div>
-      <div className="settings-overlay">
+      <fieldset className="settings-overlay settings-edit-fields" disabled={saving} aria-busy={saving}>
       {errorMessage && <div className="settings-error" role="alert">{t(errorMessage)}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>
+        <div className="settings-section">
+          <label><input type="checkbox" checked={(general.check_github_releases_at_launch as boolean) ?? true} onChange={(event) => updateGeneral('check_github_releases_at_launch', event.target.checked)} /> {t('appRelease.atLaunch')}</label>
+          <button type="button" disabled={checkingRelease} onClick={() => {
+            setReleaseOpenFailed(false)
+            setReleaseResult(undefined)
+            setCheckingRelease(true)
+            void window.electronAPI.checkAppRelease().then(setReleaseResult).catch((error) => reportOperationalFailure('app-release', 'appRelease.failed', 'Release check failed', error)).finally(() => setCheckingRelease(false))
+          }}>{t(checkingRelease ? 'appRelease.checking' : 'appRelease.check')}</button>
+          {releaseResult && <div role="status">
+            {releaseResult.kind === 'newer' ? t('appRelease.newer', { version: releaseResult.version }) : t(releaseResult.kind === 'current' ? 'appRelease.current' : 'appRelease.failed')}
+            {releaseResult.kind === 'newer' && <button type="button" onClick={() => { void window.electronAPI.viewAppRelease().then(() => setReleaseOpenFailed(false)).catch((error) => { setReleaseOpenFailed(true); recordOperationalDiagnostic('Opening GitHub release failed', error) }) }}>{t('appRelease.view')}</button>}
+            {releaseOpenFailed && <div>{t('appRelease.openFailed')}</div>}
+          </div>}
+        </div>
         <div className="settings-section">
           {/* Each language is listed by its own name, in its own script, so a
               reader of any of them can find it whatever language is showing.
@@ -309,8 +341,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             <p className="settings-hint">{t('settings.themeHint')}</p>
           </div>
           <div className="settings-field">
-            <label>{t('settings.uiFont')}</label>
-            <input
+            <label htmlFor="settings-uiFont">{t('settings.uiFont')}</label>
+            <input id="settings-uiFont"
               type="text"
               placeholder={t('settings.uiFontPlaceholder')}
               value={(general.ui_font_family as string) ?? ''}
@@ -319,8 +351,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             <p className="settings-hint">{t('settings.uiFontHint')}</p>
           </div>
           <div className="settings-field">
-            <label>{t('settings.autoPreview')}</label>
-            <input
+            <label htmlFor="settings-autoPreview">{t('settings.autoPreview')}</label>
+            <input id="settings-autoPreview"
               type="number"
               min={0}
               step={1}
@@ -346,9 +378,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             </div>
           </div>
           <div className="settings-field">
-            <label>{t('settings.exportFolder')}</label>
+            <label htmlFor="settings-exportFolder">{t('settings.exportFolder')}</label>
             <div className="settings-browse">
-              <input
+              <input id="settings-exportFolder"
                 type="text"
                 placeholder={t('settings.exportFolderPlaceholder')}
                 value={(general.export_dir as string) ?? ''}
@@ -485,16 +517,16 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             </div>
           </div>
           <div className="settings-field">
-            <label>{t('settings.volume')}</label>
-            <NotificationVolumeSlider
+            <label htmlFor="settings-volume">{t('settings.volume')}</label>
+            <NotificationVolumeSlider id="settings-volume"
               value={uiState.notificationVolume}
               onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
             />
           </div>
           <div className="settings-field">
-            <label>{t('settings.successSound')}</label>
+            <label htmlFor="settings-successSound">{t('settings.successSound')}</label>
             <div className="settings-browse">
-              <input
+              <input id="settings-successSound"
                 type="text"
                 placeholder={t('settings.successSoundPlaceholder')}
                 value={(notificationCfg.success_file as string) ?? ''}
@@ -512,9 +544,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
             </div>
           </div>
           <div className="settings-field">
-            <label>{t('settings.failureSound')}</label>
+            <label htmlFor="settings-failureSound">{t('settings.failureSound')}</label>
             <div className="settings-browse">
-              <input
+              <input id="settings-failureSound"
                 type="text"
                 placeholder={t('settings.failureSoundPlaceholder')}
                 value={(notificationCfg.failure_file as string) ?? ''}
@@ -542,64 +574,64 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>GPT Image</h3>
           <div className="settings-field">
-            <label>{t('settings.apiKey')}</label>
+            <label htmlFor={`settings-key-${IMAGE_BACKEND_SECRET.openai}`}>{t('settings.apiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.openai)}
           </div>
           <div className="settings-field">
-            <label>{t('settings.concurrency')}</label>
-            <input type="number" min={1} max={10} value={backends.openai.concurrency as number} onChange={(e) => updateBackend('openai', 'concurrency', parseInt(e.target.value) || 1)} />
+            <label htmlFor="settings-openai-concurrency">{t('settings.concurrency')}</label>
+            <input id="settings-openai-concurrency" type="number" min={1} max={10} value={backends.openai.concurrency as number} onChange={(e) => updateBackend('openai', 'concurrency', parseInt(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.timeout')}</label>
-            <input type="number" min={1} step={1} value={(backends.openai.timeout_ms as number) / 1000} onChange={(e) => updateBackend('openai', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <label htmlFor="settings-openai-timeout">{t('settings.timeout')}</label>
+            <input id="settings-openai-timeout" type="number" min={1} step={1} value={(backends.openai.timeout_ms as number) / 1000} onChange={(e) => updateBackend('openai', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
 
         <div className="settings-section">
           <h3>Nano Banana</h3>
           <div className="settings-field">
-            <label>{t('settings.geminiApiKey')}</label>
+            <label htmlFor={`settings-key-${IMAGE_BACKEND_SECRET.nanobanana}`}>{t('settings.geminiApiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.nanobanana)}
           </div>
           <div className="settings-field">
-            <label>{t('settings.concurrency')}</label>
-            <input type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
+            <label htmlFor="settings-nanobanana-concurrency">{t('settings.concurrency')}</label>
+            <input id="settings-nanobanana-concurrency" type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.timeout')}</label>
-            <input type="number" min={1} step={1} value={(backends.nanobanana.timeout_ms as number) / 1000} onChange={(e) => updateBackend('nanobanana', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <label htmlFor="settings-nanobanana-timeout">{t('settings.timeout')}</label>
+            <input id="settings-nanobanana-timeout" type="number" min={1} step={1} value={(backends.nanobanana.timeout_ms as number) / 1000} onChange={(e) => updateBackend('nanobanana', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
 
         <div className="settings-section">
           <h3>Grok Imagine</h3>
           <div className="settings-field">
-            <label>{t('settings.apiKey')}</label>
+            <label htmlFor={`settings-key-${IMAGE_BACKEND_SECRET.grok}`}>{t('settings.apiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.grok)}
           </div>
           <div className="settings-field">
-            <label>{t('settings.concurrency')}</label>
-            <input type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 3)} />
+            <label htmlFor="settings-grok-concurrency">{t('settings.concurrency')}</label>
+            <input id="settings-grok-concurrency" type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 3)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.timeout')}</label>
-            <input type="number" min={1} step={1} value={(backends.grok.timeout_ms as number) / 1000} onChange={(e) => updateBackend('grok', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <label htmlFor="settings-grok-timeout">{t('settings.timeout')}</label>
+            <input id="settings-grok-timeout" type="number" min={1} step={1} value={(backends.grok.timeout_ms as number) / 1000} onChange={(e) => updateBackend('grok', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
 
         <div className="settings-section">
           <h3>FLUX</h3>
           <div className="settings-field">
-            <label>{t('settings.apiKey')}</label>
+            <label htmlFor={`settings-key-${IMAGE_BACKEND_SECRET.flux}`}>{t('settings.apiKey')}</label>
             {keyField(IMAGE_BACKEND_SECRET.flux)}
           </div>
           <div className="settings-field">
-            <label>{t('settings.concurrency')}</label>
-            <input type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />
+            <label htmlFor="settings-flux-concurrency">{t('settings.concurrency')}</label>
+            <input id="settings-flux-concurrency" type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.timeout')}</label>
-            <input type="number" min={1} step={1} value={(backends.flux.timeout_ms as number) / 1000} onChange={(e) => updateBackend('flux', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <label htmlFor="settings-flux-timeout">{t('settings.timeout')}</label>
+            <input id="settings-flux-timeout" type="number" min={1} step={1} value={(backends.flux.timeout_ms as number) / 1000} onChange={(e) => updateBackend('flux', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
           </div>
         </div>
 
@@ -607,36 +639,36 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         <div className="settings-section">
           <h3>Draw Things</h3>
           <div className="settings-field">
-            <label>{t('settings.modelsDirectory')}</label>
+            <label htmlFor="settings-modelsDirectory">{t('settings.modelsDirectory')}</label>
             {/* The placeholder names no literal path: the real default lives
                 under the app's data directory, which IMAGEQUEUE_DATA_DIR moves. */}
-            <input value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder={t('settings.modelsDirectoryPlaceholder')} />
+            <input id="settings-modelsDirectory" value={backends.drawthings.models_dir as string} onChange={(e) => updateBackend('drawthings', 'models_dir', e.target.value)} placeholder={t('settings.modelsDirectoryPlaceholder')} />
             <p className="settings-hint">{t('settings.modelsDirectoryHint')}</p>
           </div>
           <div className="settings-field">
-            <label>{t('settings.timeout')}</label>
-            <input type="number" min={1} value={Math.round(((backends.drawthings.timeout_ms as number) ?? 1800000) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <label htmlFor="settings-drawthings-timeout">{t('settings.timeout')}</label>
+            <input id="settings-drawthings-timeout" type="number" min={1} value={Math.round(((backends.drawthings.timeout_ms as number) ?? 1800000) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
             <p className="settings-hint">{t('settings.drawThingsTimeoutHint')}</p>
           </div>
           <div className="settings-field">
-            <label>{t('settings.fallbackWidth')}</label>
-            <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />
+            <label htmlFor="settings-fallbackWidth">{t('settings.fallbackWidth')}</label>
+            <input id="settings-fallbackWidth" type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.fallbackHeight')}</label>
-            <input type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_height as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_height', parseInt(e.target.value) || 1024)} />
+            <label htmlFor="settings-fallbackHeight">{t('settings.fallbackHeight')}</label>
+            <input id="settings-fallbackHeight" type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_height as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_height', parseInt(e.target.value) || 1024)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.fallbackSteps')}</label>
-            <input type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_steps', parseInt(e.target.value) || 4)} />
+            <label htmlFor="settings-fallbackSteps">{t('settings.fallbackSteps')}</label>
+            <input id="settings-fallbackSteps" type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_steps', parseInt(e.target.value) || 4)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.fallbackGuidance')}</label>
-            <input type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_guidance as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_guidance', parseFloat(e.target.value) || 1)} />
+            <label htmlFor="settings-fallbackGuidance">{t('settings.fallbackGuidance')}</label>
+            <input id="settings-fallbackGuidance" type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_guidance as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_guidance', parseFloat(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
-            <label>{t('settings.fallbackNegative')}</label>
-            <input type="text" value={(backends.drawthings.default_params as Record<string, unknown>).fallback_negative_prompt as string} onChange={(e) => updateBackendParam('drawthings', 'fallback_negative_prompt', e.target.value)} />
+            <label htmlFor="settings-fallbackNegative">{t('settings.fallbackNegative')}</label>
+            <input id="settings-fallbackNegative" type="text" value={(backends.drawthings.default_params as Record<string, unknown>).fallback_negative_prompt as string} onChange={(e) => updateBackendParam('drawthings', 'fallback_negative_prompt', e.target.value)} />
           </div>
         </div>
         )}
@@ -645,8 +677,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       <div className="app-tabpanel" {...tablist.getPanelProps('prompts')} hidden={activeTab !== 'prompts'}>
         <div className="settings-section">
           <div className="settings-field">
-            <label>{t('settings.slugTemplate')}</label>
-            <textarea rows={5} value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
+            <label htmlFor="settings-slugTemplate">{t('settings.slugTemplate')}</label>
+            <textarea id="settings-slugTemplate" rows={5} value={prompts.slug} onChange={(e) => setConfig({ ...config, prompts: { ...prompts, slug: e.target.value } })} />
           </div>
           <div className="settings-field-reset">
             <button
@@ -670,7 +702,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
-      </div>
+      </fieldset>
     </Modal>
   )
 }

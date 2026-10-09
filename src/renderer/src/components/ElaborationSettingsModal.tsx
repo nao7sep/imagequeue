@@ -236,6 +236,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         title: t('elabSettings.discardTitle'),
         message: t('elabSettings.discardMessage'),
         confirmLabel: t('settings.discard'),
+        cancelLabel: t('settings.keepEditing'),
         danger: true,
       })
       if (!ok) return

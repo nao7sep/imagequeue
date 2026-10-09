@@ -34,7 +34,10 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 function getFocusable(container: HTMLElement): HTMLElement[] {
+  // A disabled fieldset disables its descendants without adding an attribute
+  // to each one; tabindex must not make those controls focus targets either.
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((element) => !element.matches(':disabled'))
 }
 
 export function Modal({

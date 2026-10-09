@@ -3,7 +3,7 @@ import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
 import { ensureDataDir, getDataDir } from './config'
 import { log, serializeError } from './logger'
-import { writeJsonAtomic } from './utils/atomic-write'
+import { writeFileAtomicAsync } from './utils/atomic-write'
 import { createCoalescedWriter } from './utils/coalesced-writer'
 import {
   markModelParamsPersistenceFailed,
@@ -111,13 +111,14 @@ function ensureLoaded(): ParamsStore {
 
 // The file was checked when it was loaded, and the single-instance lock keeps
 // every other writer out, so a write does not read it again.
-function writeNow(): void {
+async function writeNow(): Promise<void> {
   if (store === null) return
-  const file = getParamsFilePath()
+  // Loading established the directory. Do not re-enter synchronous mkdir on quit.
+  const file = path.join(getDataDir(), 'params.json')
   // recorded: params.json is durable, user-authored managed text — the
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
-  writeJsonAtomic(file, { formatVersion: FORMAT_VERSIONS.modelParams, ...otherKeys, models: { ...rejectedSets, ...store } }, true)
+  await writeFileAtomicAsync(file, JSON.stringify({ formatVersion: FORMAT_VERSIONS.modelParams, ...otherKeys, models: { ...rejectedSets, ...store } }, null, 2), true)
   markModelParamsPersistenceSaved()
 }
 
@@ -168,8 +169,8 @@ export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsD
   writer.schedule()
 }
 
-// Cancel any pending debounced write and flush synchronously. Called from
+// Flush pending or failed writes through the same asynchronous owner. Called from
 // before-quit so an edit made just before Cmd+Q can't be lost in the timer gap.
-export function drainPendingWrites(): void {
-  writer.drain()
+export function drainPendingWrites(): Promise<void> {
+  return writer.drain()
 }

@@ -44,7 +44,7 @@ vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState }))
 const sessionClock = vi.hoisted(() => ({ next: Date.UTC(2026, 0, 1) }))
 vi.mock('../../../src/main/session/session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/main/session/session')>()
-  return { ...actual, createSessionDir: () => actual.createSessionDir(new Date(sessionClock.next += 1_000)) }
+  return { ...actual, createSessionDir: async () => (await actual.createSessionDir(new Date(sessionClock.next += 1_000))) }
 })
 
 const recordBackup = vi.hoisted(() => vi.fn())
@@ -211,14 +211,14 @@ describe('starting a new session', () => {
 })
 
 describe('listing sessions', () => {
-  it('reports each readable session, newest first, and marks the open one', () => {
+  it('reports each readable session, newest first, and marks the open one', async () => {
     stageSession('20260102-000000-utc', { updatedAt: '2026-01-02T00:00:00.000Z' })
     stageSession('20260103-000000-utc', {
       updatedAt: '2026-01-03T00:00:00.000Z',
       tasks: withTasks([makeTask('a', 'completed'), makeTask('b', 'kept'), makeTask('c', 'failed')]),
     })
 
-    const summaries = listSessions() as SessionSummary[]
+    const summaries = (await listSessions()) as SessionSummary[]
 
     expect(summaries.map((summary) => summary.sessionId)).toEqual([
       getSessionId(),
@@ -235,7 +235,7 @@ describe('listing sessions', () => {
     const copy = path.join(getSessionsDir(), '20260106-000000-utc copy')
     fs.cpSync(original, copy, { recursive: true })
 
-    const ids = listSessions().map((summary) => summary.sessionId)
+    const ids = (await listSessions()).map((summary) => summary.sessionId)
     expect(ids).toContain('20260106-000000-utc')
     expect(ids).toContain('20260106-000000-utc copy')
 
@@ -244,10 +244,10 @@ describe('listing sessions', () => {
     expect(fs.existsSync(original), 'the original survives deleting its copy').toBe(true)
   })
 
-  it('passes over a folder with no manifest', () => {
+  it('passes over a folder with no manifest', async () => {
     fs.mkdirSync(path.join(getSessionsDir(), 'not-a-session'), { recursive: true })
 
-    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+    expect((await listSessions()).map((summary) => summary.sessionId)).toEqual([getSessionId()])
   })
 
   it('lists a folder whose manifest it cannot open in place, by folder and reason, after the sessions it can open, and leaves its files as they were', async () => {
@@ -259,7 +259,7 @@ describe('listing sessions', () => {
     const snapshot = (dir: string) => Object.fromEntries(fs.readdirSync(dir).map((name) => [name, fs.readFileSync(path.join(dir, name), 'utf-8')]))
     const before = { broken: snapshot(broken), newer: snapshot(newer) }
 
-    expect(listSessions()).toEqual([
+    expect((await listSessions())).toEqual([
       expect.objectContaining({ sessionId: getSessionId(), isCurrent: true }),
       { sessionId: '20260105-000000-utc', unopenable: 'newer' },
       { sessionId: '20260104-000000-utc', unopenable: 'unreadable' },
@@ -363,7 +363,7 @@ describe('a session an earlier version named to the millisecond', () => {
   it('lists, opens and deletes like any other', async () => {
     const id = '20260101-000000-123-utc'
     stageSession(id, { tasks: withTasks([makeTask('a', 'completed')]) })
-    expect(listSessions().some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
+    expect((await listSessions()).some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
     await resumeSession(id)
     expect(getSessionId()).toBe(id)
     await createSession()
@@ -398,7 +398,7 @@ describe('deleting a session', () => {
   })
 
   it('refuses when the folder is already gone', async () => {
-    await expect(deleteSession('20260113-000000-utc')).rejects.toThrow(/no longer exists/)
+    await expect(deleteSession('20260113-000000-utc')).rejects.toThrow(/left unchanged/)
   })
 })
 
@@ -415,6 +415,7 @@ describe('session operations awaiting Trash', () => {
       settle = () => { fs.rmSync(dir, { recursive: true, force: true }); resolve() }
     }))
     const mutation = operation === 'resume' ? resumeSession(targetId) : createSession()
+    await vi.waitFor(() => expect(settle).toBeTypeOf('function'))
     const adoptedDir = getSessionDir()
     try {
       expect(adoptedDir).not.toBe(previousDir)
@@ -442,6 +443,7 @@ describe('session operations awaiting Trash', () => {
       settle = () => { fs.rmSync(dir, { recursive: true, force: true }); resolve() }
     }))
     const deletion = deleteSession(targetId)
+    await vi.waitFor(() => expect(settle).toBeTypeOf('function'))
     try {
       await expect(resumeSession(targetId)).rejects.toThrow(/current session operation/)
       expect(getSessionDir()).toBe(currentDir)
@@ -462,7 +464,7 @@ describe('session operations awaiting Trash', () => {
       baseName: 'A-image', imagePath: path.join(originalDir, 'A-image.png'),
     })]))
     fs.writeFileSync(path.join(originalDir, 'A-image.png'), 'image')
-    persistActiveSession()
+    await persistActiveSession()
     let settle!: () => void
     trashItem.mockImplementationOnce((file) => new Promise<void>((resolve, reject) => {
       settle = () => {
@@ -471,6 +473,7 @@ describe('session operations awaiting Trash', () => {
       }
     }))
     const deletion = handlers.get('queue:deleteWithFiles')!({}, 'openai', 'same')
+    await vi.waitFor(() => expect(settle).toBeTypeOf('function'))
     try {
       await expect(resumeSession(targetId)).rejects.toThrow(/current session operation/)
       expect(getSessionDir()).toBe(originalDir)
@@ -523,18 +526,18 @@ describe('dropping the open session on quit', () => {
 })
 
 describe('the working draft and its elaborated prompts', () => {
-  it('normalizes what the renderer sends and keeps it out of session.json', () => {
+  it('normalizes what the renderer sends and keeps it out of session.json', async () => {
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat', count: -5 })
 
     expect(getActiveSessionDraft().prompt).toBe('a cat')
     expect(getActiveSessionDraft().count, 'a nonsense count is repaired').toBeGreaterThan(0)
-    persistActiveSession()
+    await persistActiveSession()
     expect(readManifest(getSessionDir())).not.toHaveProperty('draft')
   })
 
   it('keeps each session\'s draft while the app runs, so switching back finds it, and its prompts', async () => {
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat on a shelf' })
-    appendActiveSessionElaboratedPrompts([{ text: 'a cat on a sunlit shelf', concepts: [] }])
+    await appendActiveSessionElaboratedPrompts([{ text: 'a cat on a sunlit shelf', concepts: [] }])
     const first = getSessionId()
     await createSession()
     expect(getActiveSessionDraft().prompt, 'a new session starts empty').toBe('')
@@ -543,7 +546,7 @@ describe('the working draft and its elaborated prompts', () => {
 
     await resumeSession(first)
     expect(getActiveSessionDraft().prompt).toBe('a cat on a shelf')
-    expect(getActiveSessionElaboratedPrompts()).toEqual([{ text: 'a cat on a sunlit shelf', concepts: [] }])
+    expect((await getActiveSessionElaboratedPrompts())).toEqual([{ text: 'a cat on a sunlit shelf', concepts: [] }])
 
     await resumeSession(second)
     expect(getActiveSessionDraft().prompt).toBe('a dog')
@@ -551,7 +554,7 @@ describe('the working draft and its elaborated prompts', () => {
 
   it('starts with an empty draft after a restart', async () => {
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
-    persistActiveSession()
+    await persistActiveSession()
     const dir = getSessionDir()
 
     vi.resetModules()
@@ -564,25 +567,25 @@ describe('the working draft and its elaborated prompts', () => {
   it('opens a session whose manifest holds a draft an earlier version stored, and ignores that draft', async () => {
     const id = '20260114-000000-utc'
     stageSession(id, { draft: { ...createEmptySessionDraft(), prompt: 7 } })
-    expect(listSessions().some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
+    expect((await listSessions()).some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
     await resumeSession(id)
     expect(getActiveSessionDraft()).toEqual(createEmptySessionDraft())
   })
 
-  it('persists every change to the elaborated list', () => {
-    appendActiveSessionElaboratedPrompts([
+  it('persists every change to the elaborated list', async () => {
+    ;(await appendActiveSessionElaboratedPrompts([
       { text: 'first', concepts: [] },
       { text: 'second', concepts: [] },
-    ])
+    ]))
     expect(readManifest(getSessionDir()).elaboratedPrompts.map((entry) => entry.text)).toEqual(['first', 'second'])
 
-    expect(deleteActiveSessionElaboratedPromptAt(0).map((entry) => entry.text)).toEqual(['second'])
+    expect((await deleteActiveSessionElaboratedPromptAt(0)).map((entry) => entry.text)).toEqual(['second'])
     expect(readManifest(getSessionDir()).elaboratedPrompts.map((entry) => entry.text)).toEqual(['second'])
 
-    expect(deleteActiveSessionElaboratedPromptAt(7), 'an index that is not there changes nothing').toHaveLength(1)
-    expect(appendActiveSessionElaboratedPrompts([]), 'appending nothing changes nothing').toHaveLength(1)
+    expect((await deleteActiveSessionElaboratedPromptAt(7)), 'an index that is not there changes nothing').toHaveLength(1)
+    expect((await appendActiveSessionElaboratedPrompts([])), 'appending nothing changes nothing').toHaveLength(1)
 
-    expect(clearActiveSessionElaboratedPrompts()).toEqual([])
+    expect((await clearActiveSessionElaboratedPrompts())).toEqual([])
     expect(readManifest(getSessionDir()).elaboratedPrompts).toEqual([])
   })
 })
@@ -591,9 +594,9 @@ describe('the working draft and its elaborated prompts', () => {
 // leaves both on the session they were on, with its work and draft.
 describe('a switch whose save fails', () => {
   const failRename = (call: number): void => {
-    const rename = fs.renameSync
+    const rename = fs.promises.rename
     let calls = 0
-    vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+    vi.spyOn(fs.promises, 'rename').mockImplementation((from, to) => {
       calls += 1
       if (calls === call) throw new Error('simulated full disk')
       return rename(from, to)
@@ -667,14 +670,14 @@ describe('the updated time', () => {
     const manifest = readManifest(getSessionDir())
     expect(manifest.updatedAt).toBe('2026-01-02T00:00:00.000Z')
     expect(manifest.lastResumedAt).toBe('2026-03-01T00:00:00.000Z')
-    const ids = listSessions().map((summary) => summary.sessionId)
+    const ids = (await listSessions()).map((summary) => summary.sessionId)
     expect(ids.indexOf('20260103-000000-utc')).toBeLessThan(ids.indexOf('20260102-000000-utc'))
   })
 
   it('stays on the session left behind when a new one starts', async () => {
     const previous = getSessionDir()
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed')]))
-    persistActiveSession()
+    await persistActiveSession()
     later()
 
     await createSession()
@@ -683,53 +686,53 @@ describe('the updated time', () => {
     expect(updatedAt(), 'a new session is updated when it is made').toBe('2026-03-01T00:00:00.000Z')
   })
 
-  it('stays when a finished task is kept or restored, or when only statuses change', () => {
+  it('stays when a finished task is kept or restored, or when only statuses change', async () => {
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed'), makeTask('b', 'failed')]))
-    persistActiveSession()
+    await persistActiveSession()
     const before = updatedAt()
     later()
 
     queueManager.keepTask('openai', 'a')
-    persistActiveSession()
+    await persistActiveSession()
     expect(updatedAt()).toBe(before)
 
     queueManager.restoreTask('openai', 'a')
     queueManager.retryTask('openai', 'b')
-    persistActiveSession()
+    await persistActiveSession()
     expect(updatedAt()).toBe(before)
   })
 
-  it('moves on an edit to the tasks or the prompts', () => {
+  it('moves on an edit to the tasks or the prompts', async () => {
     const before = updatedAt()
     later()
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'queued')]))
-    expect(persistActiveSession().updatedAt).toBe('2026-03-01T00:00:00.000Z')
+    expect((await persistActiveSession()).updatedAt).toBe('2026-03-01T00:00:00.000Z')
     expect(updatedAt()).not.toBe(before)
 
     vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
-    appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])
+    await appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])
     expect(updatedAt()).toBe('2026-04-01T00:00:00.000Z')
   })
 
-  it('keeps an edit whose save failed at its own time when a later save writes it', () => {
+  it('keeps an edit whose save failed at its own time when a later save writes it', async () => {
     later()
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+    const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(() => {
       throw new Error('simulated full disk')
     })
-    expect(() => appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])).toThrow('simulated full disk')
+    await expect(appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])).rejects.toThrow('simulated full disk')
     rename.mockRestore()
 
     vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
-    expect(persistActiveSession().updatedAt).toBe('2026-03-01T00:00:00.000Z')
+    expect((await persistActiveSession()).updatedAt).toBe('2026-03-01T00:00:00.000Z')
     expect(updatedAt()).toBe('2026-03-01T00:00:00.000Z')
   })
 
-  it('stays when only the draft changes, since the draft is never saved', () => {
+  it('stays when only the draft changes, since the draft is never saved', async () => {
     const before = updatedAt()
     later()
 
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
-    persistActiveSession()
+    await persistActiveSession()
 
     expect(updatedAt()).toBe(before)
   })
@@ -746,7 +749,7 @@ describe('a manifest member that cannot be used', () => {
     stageSession('20260113-000000-utc')
     const bytes = [damaged, authored].map((dir) => fs.readFileSync(path.join(dir, 'session.json')))
 
-    const listed = listSessions()
+    const listed = (await listSessions())
     expect(listed).toContainEqual({ sessionId: '20260111-000000-utc', unopenable: 'unreadable' })
     expect(listed).toContainEqual({ sessionId: '20260112-000000-utc', unopenable: 'unreadable' })
     expect(listed.some((entry) => entry.sessionId === '20260113-000000-utc' && !('unopenable' in entry))).toBe(true)
@@ -769,7 +772,7 @@ describe('manifest identity and consumed task parameters', () => {
     const id = '20260115-000000-utc'
     const dir = stageSession(id, { tasks: tasks as Record<BackendId, Task[]> })
     const bytes = fs.readFileSync(path.join(dir, 'session.json'))
-    expect(listSessions()).toContainEqual({ sessionId: id, unopenable: 'unreadable' })
+    expect((await listSessions())).toContainEqual({ sessionId: id, unopenable: 'unreadable' })
     await expect(resumeSession(id)).rejects.toThrow(/missing a readable session.json/)
     expect(fs.readFileSync(path.join(dir, 'session.json'))).toEqual(bytes)
   })
@@ -799,17 +802,17 @@ describe('governing session manifest mutation admission', () => {
     fs.writeFileSync(image, 'image')
     fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar }))
     queueManager.replaceAllTasks(withTasks([makeTask('partial', 'completed', { baseName: 'partial', imagePath: image })]))
-    persistActiveSession()
+    await persistActiveSession()
     const hostile = new Error('EACCES /private/staging SECRET_SENTINEL')
     if (toTrash) trashItem.mockImplementation(async (file) => {
       if (file === sidecar) throw hostile
       fs.unlinkSync(file)
     })
     else {
-      const unlink = fs.unlinkSync
-      vi.spyOn(fs, 'unlinkSync').mockImplementation((file) => {
+      const unlink = fs.promises.rm
+      vi.spyOn(fs.promises, 'rm').mockImplementation(async (file, options) => {
         if (file === sidecar) throw hostile
-        unlink(file)
+        return unlink(file, options)
       })
     }
     const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'partial')
@@ -824,7 +827,7 @@ describe('governing session manifest mutation admission', () => {
     settings.deleteToTrash = toTrash
     const id = '20260115-000000-utc'
     const dir = stageSession(id)
-    expect(listSessions()).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
+    expect((await listSessions())).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
     stageSession(id, { formatVersion: FORMAT_VERSIONS.session + 1 })
     const bytes = fs.readFileSync(path.join(dir, 'session.json'))
     await expect(deleteSession(id)).rejects.toMatchObject({ name: 'NewerFormatError', path: path.join(dir, 'session.json') })
@@ -852,7 +855,7 @@ describe('governing session manifest mutation admission', () => {
     fs.writeFileSync(image, 'image')
     fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 }))
     queueManager.replaceAllTasks(withTasks([makeTask('later', 'completed', { baseName: 'later', imagePath: image })]))
-    persistActiveSession()
+    await persistActiveSession()
     const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'later')
     expect(result).toEqual({ removed: true, sessionId: getSessionId(), baseName: 'later', ext: 'png' })
     expect(readManifest(dir).tasks.openai).toEqual([])
@@ -866,36 +869,70 @@ describe('the manifest format version', () => {
     const dir = stageSession('20260110-000000-utc', { formatVersion: undefined })
     const before = fs.readFileSync(path.join(dir, 'session.json'))
 
-    expect(listSessions()).toContainEqual({ sessionId: '20260110-000000-utc', unopenable: 'unreadable' })
+    expect((await listSessions())).toContainEqual({ sessionId: '20260110-000000-utc', unopenable: 'unreadable' })
     await expect(resumeSession('20260110-000000-utc')).rejects.toThrow(/missing a readable session.json/)
     expect(fs.readFileSync(path.join(dir, 'session.json')).equals(before)).toBe(true)
   })
 
   // Sessions are transient work, so their manifests keep no backup history.
-  it('records nothing in the backup history when a session is saved', () => {
+  it('records nothing in the backup history when a session is saved', async () => {
     recordBackup.mockClear()
-    persistActiveSession()
+    await persistActiveSession()
     expect(fs.existsSync(path.join(getSessionDir(), 'session.json'))).toBe(true)
     expect(recordBackup).not.toHaveBeenCalled()
   })
 
-  it('reads back the version it writes', () => {
-    persistActiveSession()
+  it('reads back the version it writes', async () => {
+    await persistActiveSession()
 
     expect(readManifest(getSessionDir()).formatVersion).toBe(FORMAT_VERSIONS.session)
-    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId()])
+    expect((await listSessions()).map((summary) => summary.sessionId)).toEqual([getSessionId()])
   })
 
   it('lists a manifest from a newer version as unopenable, refuses to open it, and leaves its bytes as they were', async () => {
     const dir = stageSession('20260111-000000-utc', { formatVersion: FORMAT_VERSIONS.session + 1 })
     const before = fs.readFileSync(path.join(dir, 'session.json'))
 
-    expect(listSessions().map((summary) => summary.sessionId)).toEqual([getSessionId(), '20260111-000000-utc'])
+    expect((await listSessions()).map((summary) => summary.sessionId)).toEqual([getSessionId(), '20260111-000000-utc'])
     expect(log).toHaveBeenCalledWith('warn', 'Ignoring a session manifest from a newer version', expect.objectContaining({
       error: expect.stringContaining(NewerFormatError.name),
     }))
     await expect(resumeSession('20260111-000000-utc')).rejects.toThrow(/missing a readable session.json/)
 
     expect(fs.readFileSync(path.join(dir, 'session.json')).equals(before)).toBe(true)
+  })
+})
+
+
+describe('physical session write ownership', () => {
+  it('orders immutable submissions while unrelated reads continue and keeps the latest bytes', async () => {
+    const dir = getSessionDir()
+    const rename = fs.promises.rename
+    let release!: () => void
+    let entered!: () => void
+    const reached = new Promise<void>((resolve) => { entered = resolve })
+    let first = true
+    vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
+      if (first && to === path.join(dir, 'session.json')) {
+        first = false
+        entered()
+        await new Promise<void>((resolve) => { release = resolve })
+      }
+      return rename(from, to)
+    })
+    queueManager.replaceAllTasks(withTasks([makeTask('first', 'queued')]))
+    const oldSave = persistActiveSession()
+    await reached
+    queueManager.replaceAllTasks(withTasks([makeTask('latest', 'queued')]))
+    const newSave = persistActiveSession()
+    try {
+      expect((await listSessions()).some((entry) => entry.sessionId === getSessionId())).toBe(true)
+      expect(readManifest(dir).tasks.openai).toEqual([])
+    } finally {
+      release()
+      await oldSave
+      await newSave
+    }
+    expect(readManifest(dir).tasks.openai.map((task) => task.id)).toEqual(['latest'])
   })
 })

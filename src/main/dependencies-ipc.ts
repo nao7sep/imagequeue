@@ -56,8 +56,8 @@ export function registerDependenciesIpc(): void {
     })
   )
 
-  handle('dependencies:setCheckAtLaunch', (_event, value: boolean) => {
-    updateConfig((draft) => {
+  handle('dependencies:setCheckAtLaunch', async (_event, value: boolean) => {
+    await updateConfig((draft) => {
       draft.image_backends.drawthings.check_updates_at_launch = value
     })
     return getDependenciesState()

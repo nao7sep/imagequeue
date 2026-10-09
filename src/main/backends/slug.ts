@@ -1,3 +1,4 @@
+import { refreshApiKeys } from '../config/api-keys-store'
 import { nanoid } from 'nanoid'
 import { loadConfig } from '../config'
 import { getLightProvider } from '../text-ai'
@@ -18,6 +19,7 @@ export const SLUG_RESPONSE_SCHEMA = {
 // so it is saved under the random name rather than waiting on the network.
 export async function generateSlug(prompt: string, taskId: string, signal: AbortSignal): Promise<string> {
   const config = loadConfig()
+  await refreshApiKeys()
   const handle = getLightProvider()
   if (!handle || signal.aborted) {
     return nanoid(10)

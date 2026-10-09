@@ -35,9 +35,10 @@ function currentPlatform(): Platform {
 
 export function getVisiblePanesForUi(
   presence: ApiKeyPresence | null,
-  tasks: Record<BackendId, Task[]> | null
+  tasks: Record<BackendId, Task[]> | null,
+  drawThingsReady = false
 ): PaneId[] {
-  return getVisiblePanes(currentPlatform(), keyedCloudBackends(presence), occupiedCloudBackends(tasks))
+  return getVisiblePanes(currentPlatform(), keyedCloudBackends(presence), occupiedCloudBackends(tasks), drawThingsReady)
 }
 
 export function getVisibleBackends(

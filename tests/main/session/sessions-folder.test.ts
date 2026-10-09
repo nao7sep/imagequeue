@@ -28,7 +28,7 @@ describe('the sessions folder', () => {
 
   it('starts a new install with only the sessions folder', async () => {
     const { initSession } = await import('../../../src/main/session/session')
-    const current = initSession()
+    const current = (await initSession())
     expect(path.dirname(current)).toBe(path.join(root, 'sessions'))
     expect(fs.existsSync(path.join(root, 'output'))).toBe(false)
   })
@@ -36,7 +36,7 @@ describe('the sessions folder', () => {
   it('renames an old output folder to sessions at launch, keeping every session in it', async () => {
     const id = stageOldSession()
     const { initSession, getSessionsDir } = await import('../../../src/main/session/session')
-    initSession()
+    await initSession()
     expect(fs.existsSync(path.join(root, 'output'))).toBe(false)
     expect(fs.readFileSync(path.join(getSessionsDir(), id, 'session.json'), 'utf8')).toBe('{"kept":true}')
     expect(fs.readFileSync(path.join(getSessionsDir(), id, 'image.png'), 'utf8')).toBe('image')
@@ -46,15 +46,15 @@ describe('the sessions folder', () => {
     stageOldSession()
     fs.mkdirSync(path.join(root, 'sessions'))
     const { initSession } = await import('../../../src/main/session/session')
-    initSession()
+    await initSession()
     expect(fs.readdirSync(path.join(root, 'output'))).toEqual(['20260101-000000-000-utc'])
   })
 
   it('stops launch, leaving the old folder in place, when the rename fails', async () => {
     stageOldSession()
     const { initSession } = await import('../../../src/main/session/session')
-    vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }) })
-    expect(() => initSession()).toThrow('busy')
+    vi.spyOn(fs.promises, 'rename').mockImplementationOnce(() => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }) })
+    await expect(initSession()).rejects.toThrow('busy')
     expect(fs.existsSync(path.join(root, 'output', '20260101-000000-000-utc', 'session.json'))).toBe(true)
     expect(fs.existsSync(path.join(root, 'sessions'))).toBe(false)
   })

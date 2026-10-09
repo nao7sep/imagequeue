@@ -24,7 +24,7 @@ import { shouldDeleteToTrash, shouldDropEmptySessions } from '../../shared/confi
 import { cloneTask, createEmptyQueues, queueManager } from '../queue/queue-manager'
 import { createSessionDir, getSessionsDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
-import { writeJsonAtomic } from '../utils/atomic-write'
+import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { publishQueueState } from '../queue/publisher'
 import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
 
@@ -63,12 +63,26 @@ let activeSession: ActiveSessionState | null = null
 const drafts = new Map<string, SessionDraft>()
 
 let sessionMutationPending = false
+let sessionMutation: Promise<unknown> = Promise.resolve()
+let writes: Promise<unknown> = Promise.resolve()
+let writeFailure: unknown = null
+
+export function isSessionMutationPending(): boolean { return sessionMutationPending }
+
+/** Quit waits for real settlement, including a caller that stopped waiting. */
+export async function drainSessionWrites(): Promise<void> {
+  await sessionMutation
+  await writes
+  if (writeFailure) throw writeFailure
+}
 
 export async function mutateSession<T>(operation: () => Promise<T>): Promise<T> {
   if (sessionMutationPending) throw new Error('Wait for the current session operation to finish.')
   sessionMutationPending = true
   try {
-    return await operation()
+    const pending = writes.then(operation)
+    sessionMutation = pending.catch(() => undefined)
+    return await pending
   } finally {
     sessionMutationPending = false
   }
@@ -211,12 +225,11 @@ type ManifestRead =
   | { manifest: StoredSessionManifest }
   | { manifest: null; problem: 'missing' | UnopenableSession['unopenable']; error?: unknown }
 
-function readManifestFromDir(sessionDir: string): ManifestRead {
+async function readManifestFromDir(sessionDir: string): Promise<ManifestRead> {
   const filePath = getManifestPath(sessionDir)
-  if (!fs.existsSync(filePath)) return { manifest: null, problem: 'missing' }
 
   try {
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown
+    const raw = JSON.parse(await fs.promises.readFile(filePath, 'utf-8')) as unknown
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid session manifest shape')
     const parsed = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.session, filePath)
     if (!isSessionManifest(parsed)) {
@@ -232,6 +245,7 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
   } catch (error) {
     // An unreadable or newer manifest is listed, never opened, so nothing
     // writes over it.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { manifest: null, problem: 'missing' }
     const newer = error instanceof NewerFormatError
     log('warn', newer ? 'Ignoring a session manifest from a newer version' : 'Ignoring unreadable session manifest', {
       filePath,
@@ -244,8 +258,8 @@ function readManifestFromDir(sessionDir: string): ManifestRead {
 // The open session's manifest was checked when it was loaded, and the
 // single-instance lock keeps every other writer out, so only a session that is
 // not open is checked before it is deleted.
-function admitSessionManifest(sessionDir: string): void {
-  const read = readManifestFromDir(sessionDir)
+async function admitSessionManifest(sessionDir: string): Promise<void> {
+  const read = await readManifestFromDir(sessionDir)
   if (read.manifest) return
   if (read.error instanceof NewerFormatError) throw read.error
   throw new StoreLeftInPlaceError(getManifestPath(sessionDir), {
@@ -296,9 +310,9 @@ function newSessionState(): AdoptedSession {
 
 // Returns the active-session state, loading it from disk on first use. Skipped
 // entirely once create/resume have adopted state directly.
-function ensureActiveSessionLoaded(): ActiveSessionState {
+async function ensureActiveSessionLoaded(): Promise<ActiveSessionState> {
   if (activeSession) return activeSession
-  const { manifest } = readManifestFromDir(getSessionDir())
+  const { manifest } = await readManifestFromDir(getSessionDir())
   activeSession = manifest
     ? sessionState({
         elaboratedPrompts: [...manifest.elaboratedPrompts],
@@ -325,7 +339,7 @@ function buildManifest(
     taskCounts: createTaskCounts(tasksByBackend),
     elaboratedPrompts: [...session.elaboratedPrompts],
     // tasksByBackend is already a fresh clone (getAllStoredTasks maps cloneTask),
-    // and the manifest is serialized synchronously below, so we don't re-clone.
+    // and every save owns this snapshot, so we do not re-clone it here.
     tasks: tasksByBackend,
   }
 }
@@ -378,13 +392,16 @@ export function sessionHasUserValue(tasksByBackend: Record<BackendId, Task[]>): 
 // The log call states the intent before the destructive operation, so the line
 // records what was attempted even if the op then throws.
 async function dropSession(sessionDir: string, sessionId: string, reason: string): Promise<void> {
-  if (!fs.existsSync(sessionDir)) return
+  try { await fs.promises.lstat(sessionDir) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   log('info', 'Dropping empty session', { reason, sessionId, path: sessionDir, toTrash })
   if (toTrash) {
     await shell.trashItem(sessionDir)
   } else {
-    fs.rmSync(sessionDir, { recursive: true, force: true })
+    await fs.promises.rm(sessionDir, { recursive: true, force: true })
   }
 }
 
@@ -424,33 +441,40 @@ export function resolveSessionDir(sessionId: string): string {
 // Writes `session` as the manifest of the session in `sessionDir` and returns
 // the manifest with the session as saved: the content it now holds and when
 // that content last changed.
-function writeSessionManifest(
+async function writeSessionManifest(
   sessionDir: string,
   session: ActiveSessionState,
   tasks: Record<BackendId, Task[]>,
-): { manifest: SessionManifest; saved: ActiveSessionState } {
+): Promise<{ manifest: SessionManifest; saved: ActiveSessionState }> {
   const content = sessionContentKey(session.elaboratedPrompts, tasks)
   const updatedAt = content === session.saved ? session.updatedAt : session.seen.at
-  fs.mkdirSync(sessionDir, { recursive: true })
+  await fs.promises.mkdir(sessionDir, { recursive: true })
   const manifest = buildManifest(path.basename(sessionDir), session, updatedAt, tasks)
   // not recorded: a session, its images and its elaborated prompts are transient
   // work the user exports what they keep from (data-backup-conventions; the
   // developer's classification), so session.json has no backup history.
-  writeJsonAtomic(getManifestPath(sessionDir), manifest, false)
+  await writeFileAtomicAsync(getManifestPath(sessionDir), JSON.stringify(manifest, null, 2), false)
   return { manifest, saved: { ...session, saved: content, updatedAt } }
 }
 
-export function persistActiveSession(): SessionManifest {
-  const session = ensureActiveSessionLoaded()
+export async function persistActiveSession(): Promise<SessionManifest> {
+  const session = activeSession ?? await ensureActiveSessionLoaded()
+  const sessionDir = getSessionDir()
   const tasks = queueManager.getAllStoredTasks()
   const content = sessionContentKey(session.elaboratedPrompts, tasks)
   if (content !== session.seen.content) session.seen = { content, at: new Date().toISOString() }
-  // Only a write that landed moves the baseline, so content a failed write
-  // never saved still counts as an edit on the next one.
-  const { manifest, saved } = writeSessionManifest(getSessionDir(), session, tasks)
-  session.saved = saved.saved
-  session.updatedAt = saved.updatedAt
-  return manifest
+  const snapshot = structuredClone(session)
+  // Ordered physical writes keep an older acknowledgement from replacing newer
+  // work. Each submission captures its session and complete content before I/O.
+  const write = writes.catch(() => undefined).then(async () => {
+    const { manifest, saved } = await writeSessionManifest(sessionDir, snapshot, tasks)
+    session.saved = saved.saved
+    session.updatedAt = saved.updatedAt
+    writeFailure = null
+    return manifest
+  })
+  writes = write.catch((error) => { writeFailure = error })
+  return write
 }
 
 // Switches main to a session whose manifest was just written, so main and the
@@ -476,16 +500,16 @@ async function createSessionOwned(): Promise<void> {
   const previousSessionDir = getSessionDir()
   const previousSessionId = getSessionId()
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
-  if (!dropPrevious) persistActiveSession()
+  if (!dropPrevious) await persistActiveSession()
 
-  const sessionDir = createSessionDir()
+  const sessionDir = await createSessionDir()
   const tasks = createEmptyQueues()
   let session: ActiveSessionState
   try {
-    session = writeSessionManifest(sessionDir, sessionState(newSessionState(), tasks), tasks).saved
+    session = (await writeSessionManifest(sessionDir, sessionState(newSessionState(), tasks), tasks)).saved
   } catch (error) {
     // The new folder holds no session yet; removing it keeps the list clean.
-    try { fs.rmSync(sessionDir, { recursive: true, force: true }) } catch { /* The write failure is the one to report. */ }
+    try { await fs.promises.rm(sessionDir, { recursive: true, force: true }) } catch { /* The write failure is the one to report. */ }
     throw error
   }
   resetOutputTimestampAllocators()
@@ -500,16 +524,16 @@ async function createSessionOwned(): Promise<void> {
 
 // Sessions it can open, most recently updated first, then those it cannot,
 // newest folder first.
-export function listSessions(): SessionListEntry[] {
+export async function listSessions(): Promise<SessionListEntry[]> {
   const sessionsDir = getSessionsDir()
   const currentSessionId = getSessionId()
-  const entries = fs.readdirSync(sessionsDir, { withFileTypes: true })
+  const entries = await fs.promises.readdir(sessionsDir, { withFileTypes: true })
   const summaries: SessionSummary[] = []
   const unopenable: UnopenableSession[] = []
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const read = readManifestFromDir(path.join(sessionsDir, entry.name))
+    const read = await readManifestFromDir(path.join(sessionsDir, entry.name))
     if (!read.manifest) {
       if (read.problem !== 'missing') unopenable.push({ sessionId: entry.name, unopenable: read.problem })
       continue
@@ -557,17 +581,17 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
   const dropPrevious = shouldAutoDropSession(queueManager.getAllStoredTasks())
   // The outgoing session is saved first; a failed write refuses the switch and
   // keeps everything as it is.
-  if (!dropPrevious) persistActiveSession()
+  if (!dropPrevious) await persistActiveSession()
 
   const sessionDir = resolveSessionDir(sessionId)
-  const { manifest } = readManifestFromDir(sessionDir)
+  const { manifest } = await readManifestFromDir(sessionDir)
   if (!manifest) {
     throw new Error('That session is missing a readable session.json file.')
   }
 
   const resumedQueues = normalizeResumedQueues(manifest.tasks)
   // Judged against the resumed queues: lifecycle changes are not content edits.
-  const { saved: session } = writeSessionManifest(sessionDir, sessionState({
+  const { saved: session } = await writeSessionManifest(sessionDir, sessionState({
     elaboratedPrompts: [...manifest.elaboratedPrompts],
     createdAt: manifest.createdAt,
     updatedAt: manifest.updatedAt,
@@ -597,16 +621,13 @@ async function deleteSessionOwned(sessionId: string): Promise<void> {
   }
 
   const sessionDir = resolveSessionDir(sessionId)
-  if (!fs.existsSync(sessionDir)) {
-    throw new Error('That session folder no longer exists.')
-  }
-  admitSessionManifest(sessionDir)
+  await admitSessionManifest(sessionDir)
 
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   if (toTrash) {
     await shell.trashItem(sessionDir)
   } else {
-    fs.rmSync(sessionDir, { recursive: true, force: true })
+    await fs.promises.rm(sessionDir, { recursive: true, force: true })
   }
   drafts.delete(sessionId)
 }
@@ -622,30 +643,36 @@ export function setActiveSessionDraft(draft: SessionDraft): void {
   drafts.set(getSessionId(), normalizeSessionDraft(draft))
 }
 
-export function getActiveSessionElaboratedPrompts(): ElaboratedPromptRecord[] {
-  return [...ensureActiveSessionLoaded().elaboratedPrompts]
+export async function getActiveSessionElaboratedPrompts(): Promise<ElaboratedPromptRecord[]> {
+  return [...(await ensureActiveSessionLoaded()).elaboratedPrompts]
 }
 
-export function appendActiveSessionElaboratedPrompts(
+export async function appendActiveSessionElaboratedPrompts(
   prompts: ElaboratedPromptRecord[]
-): ElaboratedPromptRecord[] {
-  if (prompts.length === 0) return getActiveSessionElaboratedPrompts()
-  const session = ensureActiveSessionLoaded()
-  session.elaboratedPrompts = [...session.elaboratedPrompts, ...prompts]
-  persistActiveSession()
-  return [...session.elaboratedPrompts]
+): Promise<ElaboratedPromptRecord[]> {
+  return mutateSession(async () => {
+    if (prompts.length === 0) return getActiveSessionElaboratedPrompts()
+    const session = await ensureActiveSessionLoaded()
+    session.elaboratedPrompts = [...session.elaboratedPrompts, ...prompts]
+    await persistActiveSession()
+    return [...session.elaboratedPrompts]
+  })
 }
 
-export function deleteActiveSessionElaboratedPromptAt(index: number): ElaboratedPromptRecord[] {
-  const session = ensureActiveSessionLoaded()
-  if (index < 0 || index >= session.elaboratedPrompts.length) return [...session.elaboratedPrompts]
-  session.elaboratedPrompts = session.elaboratedPrompts.filter((_, promptIndex) => promptIndex !== index)
-  persistActiveSession()
-  return [...session.elaboratedPrompts]
+export async function deleteActiveSessionElaboratedPromptAt(index: number): Promise<ElaboratedPromptRecord[]> {
+  return mutateSession(async () => {
+    const session = await ensureActiveSessionLoaded()
+    if (index < 0 || index >= session.elaboratedPrompts.length) return [...session.elaboratedPrompts]
+    session.elaboratedPrompts = session.elaboratedPrompts.filter((_, promptIndex) => promptIndex !== index)
+    await persistActiveSession()
+    return [...session.elaboratedPrompts]
+  })
 }
 
-export function clearActiveSessionElaboratedPrompts(): ElaboratedPromptRecord[] {
-  ensureActiveSessionLoaded().elaboratedPrompts = []
-  persistActiveSession()
-  return []
+export async function clearActiveSessionElaboratedPrompts(): Promise<ElaboratedPromptRecord[]> {
+  return mutateSession(async () => {
+    (await ensureActiveSessionLoaded()).elaboratedPrompts = []
+    await persistActiveSession()
+    return []
+  })
 }

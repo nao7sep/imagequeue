@@ -10,6 +10,7 @@ export default defineConfig({
   define: base.define,
   test: {
     environment: 'node',
+    setupFiles: ['tests/live/setup/built-workers.ts'],
     include: ['tests/live/**/*.test.ts'],
     exclude: configDefaults.exclude,
     fileParallelism: false,

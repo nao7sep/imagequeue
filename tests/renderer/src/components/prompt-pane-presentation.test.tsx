@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../../src/shared/types'
 
@@ -99,17 +99,25 @@ afterEach(cleanup)
 
 describe('PromptPane presentation', () => {
   it('draws a completed task\'s image from the app\'s image scheme once it has decoded, and clears an earlier load failure', async () => {
+    let finishDecode!: () => void
+    decode.mockImplementationOnce(() => new Promise<void>((resolve) => { finishDecode = resolve }))
     const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
-    await waitFor(() => expect(container.querySelector('.preview-image')).not.toBeNull())
+    expect(container.querySelector('.preview-image')).toBeNull()
+    // Settle the boundary this test owns directly: no polling deadline races
+    // a delayed React flush when several renderer files are running together.
+    await act(async () => finishDecode())
+    expect(container.querySelector('.preview-image')).not.toBeNull()
     expect(container.querySelector('.preview-image')?.getAttribute('src')).toBe('iq-image://sessions/current/image')
     expect(selection.clearTaskActionResult).toHaveBeenCalledWith('task-1', 'preview')
     expect(selection.reportTaskActionFailure).not.toHaveBeenCalled()
   })
 
   it('puts the load-failure note on the task when its image cannot load, missing or unreadable alike', async () => {
-    decode.mockRejectedValueOnce(new Error('EncodingError'))
+    let failDecode!: (error: Error) => void
+    decode.mockImplementationOnce(() => new Promise<void>((_, reject) => { failDecode = reject }))
     const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
-    await waitFor(() => expect(selection.reportTaskActionFailure).toHaveBeenCalledOnce())
+    await act(async () => failDecode(new Error('EncodingError')))
+    expect(selection.reportTaskActionFailure).toHaveBeenCalledOnce()
     expect(selection.reportTaskActionFailure).toHaveBeenCalledWith('task-1', 'preview', 'task.previewFailed', 'Failed to load selected image', expect.any(Error))
     expect(container.querySelector('.preview-image')).toBeNull()
     // It says the image did not load, never that nothing is selected.
@@ -280,5 +288,32 @@ describe('PromptPane presentation', () => {
       'export-image',
       'save-image-as',
     ]))
+  })
+})
+
+
+describe('export selection ownership', () => {
+  it.each(['exportImage', 'exportImageAs'] as const)('does not apply a late %s failure after A/B/A selection', async (method) => {
+    let reject!: (error: Error) => void
+    window.electronAPI[method] = vi.fn(() => new Promise<string>((_resolve, rejectPromise) => { reject = rejectPromise }))
+    const change = vi.fn()
+    const { rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    fireEvent.click(screen.getByRole('button', { name: method === 'exportImage' ? 'Export' : 'Save As…' }))
+    rerender(<PromptPane selectedTask={{ ...completedTask, id: 'B' }} prompt="" onPromptChange={change} />)
+    rerender(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    await act(async () => { reject(new Error('late export failure')) })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('does not show late export success after A/B/A selection', async () => {
+    let resolve!: (destination: string) => void
+    window.electronAPI.exportImage = vi.fn(() => new Promise<string>((done) => { resolve = done }))
+    const change = vi.fn()
+    const { rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    rerender(<PromptPane selectedTask={{ ...completedTask, id: 'B' }} prompt="" onPromptChange={change} />)
+    rerender(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    await act(async () => { resolve('/exports/image.png') })
+    expect(screen.getByRole('button', { name: 'Export' })).toBeTruthy()
   })
 })

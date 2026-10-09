@@ -49,18 +49,18 @@ export function getRecommendationsTimesPath(): string {
  * caller verifies the download there and atomically renames it into its kept
  * home (destPath), or deletes it on failure — nothing under temp/ is ever
  * loaded directly. */
-export function allocateTempPath(destPath: string): string {
+export async function allocateTempPath(destPath: string): Promise<string> {
   const dir = getTempDir()
-  fs.mkdirSync(dir, { recursive: true })
+  await fs.promises.mkdir(dir, { recursive: true })
   const stem = path.basename(destPath, path.extname(destPath))
   return path.join(dir, `${stem}-${nanoid()}.tmp`)
 }
 
 /** Best-effort removal of a staging file. Used on the failure path, where the
  * original error is what matters — a cleanup failure must not mask it. */
-export function discardTempPath(tempPath: string): void {
+export async function discardTempPath(tempPath: string): Promise<void> {
   try {
-    fs.rmSync(tempPath, { force: true })
+    await fs.promises.rm(tempPath, { force: true })
   } catch {
     /* ignore — staging lives under the deletable temp/ dir */
   }

@@ -13,7 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import { createHash } from 'crypto'
 import { log, serializeError } from '../logger'
-import { writeJsonAtomic } from '../utils/atomic-write'
+import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { FORMAT_VERSIONS, markFormat } from '../store-format'
 import { getRecommendationsTimesPath } from './paths'
 
@@ -45,10 +45,10 @@ function sha256Of(bytes: Buffer): string {
 let unreadableWarned = false
 
 /** The stored times, empty when the file is absent or unreadable. */
-function readTimes(): RecordedTimes {
+async function readTimes(): Promise<RecordedTimes> {
   const file = getRecommendationsTimesPath()
   try {
-    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const raw: unknown = JSON.parse(await fs.promises.readFile(file, 'utf8'))
     if (!isObject(raw)) throw new Error('must be a JSON object')
     const { files = {} } = raw
     if (!isObject(files) || !Object.values(files).every(isRecordedTime)) {
@@ -56,7 +56,7 @@ function readTimes(): RecordedTimes {
     }
     return files as RecordedTimes
   } catch (err) {
-    if (fs.existsSync(file) && !unreadableWarned) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT' && !unreadableWarned) {
       unreadableWarned = true
       log('warn', 'Ignoring unreadable recommendations-times.json; the next Install or Refresh replaces it', { error: serializeError(err) })
     }
@@ -69,11 +69,11 @@ function keyOf(filePath: string): string {
 }
 
 /** The server time recorded for the file's current bytes, or null when none was. */
-export function recordedServerTime(filePath: string): string | null {
-  const entry = readTimes()[keyOf(filePath)]
+export async function recordedServerTime(filePath: string): Promise<string | null> {
+  const entry = (await readTimes())[keyOf(filePath)]
   if (!entry) return null
   try {
-    return entry.sha256 === sha256Of(fs.readFileSync(filePath)) ? entry.lastModifiedUtc : null
+    return entry.sha256 === sha256Of(await fs.promises.readFile(filePath)) ? entry.lastModifiedUtc : null
   } catch {
     return null
   }
@@ -81,8 +81,8 @@ export function recordedServerTime(filePath: string): string | null {
 
 /** Record the server time for the bytes just published at filePath, or drop the
  * file's record when the server gave no valid time. */
-export function recordServerTime(filePath: string, bytes: Buffer, lastModifiedUtc: string | null): void {
-  const times = readTimes()
+export async function recordServerTime(filePath: string, bytes: Buffer, lastModifiedUtc: string | null): Promise<void> {
+  const times = await readTimes()
   const key = keyOf(filePath)
   if (lastModifiedUtc) {
     times[key] = { lastModifiedUtc, sha256: sha256Of(bytes) }
@@ -93,5 +93,5 @@ export function recordServerTime(filePath: string, bytes: Buffer, lastModifiedUt
   }
   // not recorded: the times describe re-fetchable configs.json files and are rewritten by the
   // next Install/Refresh (data-backup conventions: re-fetchable dependencies are not recorded).
-  writeJsonAtomic(getRecommendationsTimesPath(), markFormat({ files: times }, FORMAT_VERSIONS.recommendationsTimes), false)
+  await writeFileAtomicAsync(getRecommendationsTimesPath(), JSON.stringify(markFormat({ files: times }, FORMAT_VERSIONS.recommendationsTimes), null, 2), false)
 }

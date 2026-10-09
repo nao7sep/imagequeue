@@ -3,7 +3,7 @@ import path from 'path'
 import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
-import { writeJsonAtomic } from '../utils/atomic-write'
+import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { resolveStorageRoot } from './storage-root'
 import { setAsideFile } from '../utils/set-aside'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
@@ -137,11 +137,38 @@ export function loadConfig(): AppConfig {
  * becomes the cached config only once the write succeeded — a failed save
  * leaves the running app on the settings that are on disk.
  */
-export function updateConfig(apply: (draft: AppConfig) => void): AppConfig {
+let saving: Promise<unknown> = Promise.resolve()
+let retrySave: (() => Promise<unknown>) | null = null
+export async function retryConfigSaves(): Promise<void> {
+  await saving.catch(() => undefined)
+  if (retrySave) {
+    const result = retrySave()
+    saving = result
+    await result
+    retrySave = null
+  }
+}
+
+
+export function flushConfigSaves(): Promise<unknown> { return saving }
+
+export function updateConfig(apply: (draft: AppConfig) => void): Promise<AppConfig> {
+  const operation = async (): Promise<AppConfig> => {
   const draft = structuredClone(loadConfig())
   apply(draft)
-  saveConfig(draft)
+  await persistConfig(draft)
   return loadConfig()
+  }
+  const result = saving.catch(() => undefined).then(async () => {
+    if (retrySave) await retrySave()
+    retrySave = operation
+    return operation().then((value) => { retrySave = null; return value }, (error) => {
+      if (error?.name === 'InvalidConfigSetError') retrySave = null
+      throw error
+    })
+  })
+  saving = result
+  return result
 }
 
 // Keys a change has deliberately retired; a save drops them. Every other key the
@@ -170,7 +197,22 @@ function carryUnknownKeys(stored: Record<string, unknown>, next: Record<string, 
  * wrong shape rejects the save. A result equal to the map last loaded or
  * written writes nothing, and so does an empty result while there is no file.
  */
-export function saveConfig(config: AppConfig): void {
+export function saveConfig(config: AppConfig): Promise<void> {
+  const snapshot = structuredClone(config)
+  const operation = () => persistConfig(snapshot)
+  const result = saving.catch(() => undefined).then(async () => {
+    if (retrySave) await retrySave()
+    retrySave = operation
+    return operation().then(() => { retrySave = null }, (error) => {
+      if (error?.name === 'InvalidConfigSetError') retrySave = null
+      throw error
+    })
+  })
+  saving = result
+  return result
+}
+
+async function persistConfig(config: AppConfig): Promise<void> {
   const before = loadConfig()
   const builtIns = configSetDefaults()
   const next: Record<string, unknown> = {}
@@ -181,7 +223,7 @@ export function saveConfig(config: AppConfig): void {
       writePath(next, key, stored)
       continue
     }
-    if (!hasSetShape(value, builtIn, key)) throw new Error(`Cannot save invalid config set: ${key}`)
+    if (!hasSetShape(value, builtIn, key)) throw Object.assign(new Error(`Cannot save invalid config set: ${key}`), { name: 'InvalidConfigSetError' })
     const cleaned = cleanConfigSet(key, value)
     if (!equalsBuiltIn(key, cleaned, builtIn, config)) writePath(next, key, cleaned)
   }
@@ -189,7 +231,7 @@ export function saveConfig(config: AppConfig): void {
   const unchanged = storedMap === null ? Object.keys(next).length === 0 : valuesEqual(next, storedMap)
   if (!unchanged) {
     const file = getConfigPath()
-    writeJsonAtomic(file, markFormat(next, FORMAT_VERSIONS.config), true)
+    await writeFileAtomicAsync(file, JSON.stringify(markFormat(next, FORMAT_VERSIONS.config), null, 2), true)
     storedMap = next
     log('info', 'Config saved', { path: file })
   }

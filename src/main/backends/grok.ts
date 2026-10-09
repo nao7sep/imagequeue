@@ -1,7 +1,7 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { withProviderRetry } from '../provider-retry'
-import { resolveApiKey } from '../config/api-keys-store'
+import { resolveApiKey, refreshApiKeys } from '../config/api-keys-store'
 import { log, serializeError } from '../logger'
 import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
@@ -16,6 +16,7 @@ const BASE_URL = 'https://api.x.ai/v1'
 // selection is available.
 export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string }> {
   const config = loadConfig()
+  await refreshApiKeys()
   const apiKey = resolveApiKey('xai')
 
   if (!apiKey) {

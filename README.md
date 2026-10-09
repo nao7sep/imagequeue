@@ -21,6 +21,7 @@ Each cloud column offers its currently supported model choices and model-specifi
 - **Advanced Prompting** — batch across backends and models with AI-elaborated prompt variations, reusable elaborators, and a persistent **Concept Library** that guarantees the elaborated prompts keep varying instead of collapsing onto the model's favourite ideas
 - **Stays awake during long runs**, with optional toast and sound notifications on completion
 - **Light and dark themes** — follow the OS appearance or pick Light or Dark in Settings › General
+- **Release notices** — check GitHub for a new ImageQueue release from Settings, or at launch when enabled. A notice opens the release page; it does not install an update
 
 ## Requirements
 
@@ -31,7 +32,7 @@ Each cloud column offers its currently supported model choices and model-specifi
   - The **Draw Things CLI** — currently about 170 MB, downloaded directly from the official [Draw Things Community](https://github.com/drawthingsai/draw-things-community) GitHub release (no Homebrew), and verified before use; the backend stays disabled until it's installed.
   - **Recommended per-model parameters** (`configs.json`, fetched from `models.drawthings.ai`) — optional; without them the app falls back to your default parameters.
 - Both are fetched only when you ask. The CLI can check release metadata at launch (on by default, configurable in the Managed tools window) and offer an **Update** without downloading the binary. The versionless recommendations file is fetched only when you choose **Install** or **Refresh** — nothing is ever downloaded, installed, or updated silently.
-- Node.js 22.12+ — only to build or run from source
+- Node.js 22.22.2+, 24.15+, or 26+ (an even-numbered release) — only to build or run from source
 
 ## Download
 
@@ -51,7 +52,7 @@ npm run dev
 
 ## Tests
 
-`npm test` runs the type check and the whole ordinary suite, the same set every time. `npm run test:full` runs that, then the live lane: one image from every supported model of each cloud backend, two of them named by the two text AI providers, and a brainstorm through each provider; on macOS it also acquires the Draw Things CLI, its recommendations, and the locked Stable Diffusion v1.5 model (about 2 GB on the first run) into `node_modules/.cache` and generates with them. Export `OPENAI_IMAGE_API_KEY`, `GEMINI_NANOBANANA_API_KEY`, `XAI_API_KEY`, `BFL_API_KEY`, `GEMINI_TEXT_API_KEY`, and `OPENAI_TEXT_API_KEY` first; the lane makes paid calls, and the full run fails without them.
+`npm test` runs the type check and the whole ordinary suite, the same set every time. `npm run test:full` runs that, builds the app, then runs the live lane: real SQLite worker checks, one image from every supported model of each cloud backend, two of them named by the two text AI providers, and a brainstorm through each provider; on macOS it also acquires the Draw Things CLI, its recommendations, and the locked Stable Diffusion v1.5 model (about 2 GB on the first run) into `node_modules/.cache` and generates with them. Export `OPENAI_IMAGE_API_KEY`, `GEMINI_NANOBANANA_API_KEY`, `XAI_API_KEY`, `BFL_API_KEY`, `GEMINI_TEXT_API_KEY`, and `OPENAI_TEXT_API_KEY` first; the lane makes paid calls, and the full run fails without them.
 
 ## License
 

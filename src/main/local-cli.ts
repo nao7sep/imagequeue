@@ -51,17 +51,15 @@ export function resolveModelsDir(): string {
 }
 
 /** Ensure the models directory exists (creates if needed). */
-export function ensureModelsDir(): string {
+export async function ensureModelsDir(): Promise<string> {
   const dir = resolveModelsDir()
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
+  await fs.promises.mkdir(dir, { recursive: true })
   return dir
 }
 
 /** Build the --models-dir arg pair used by every Draw Things model/generation command. */
-export function modelsDirArgs(): string[] {
-  const dir = ensureModelsDir()
+export async function modelsDirArgs(): Promise<string[]> {
+  const dir = await ensureModelsDir()
   return ['--models-dir', dir]
 }
 
@@ -142,7 +140,7 @@ function parseModelList(output: string): LocalModelInfo[] {
 /** List downloaded models via CLI. */
 export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   const cliPath = resolveCliPath()
-  const args = ['models', 'list', '--downloaded-only', ...modelsDirArgs()]
+  const args = ['models', 'list', '--downloaded-only', ...await modelsDirArgs()]
 
   return new Promise((resolve) => {
     execFile(cliPath, args, { timeout: 15000 }, (error, stdout, stderr) => {
@@ -159,7 +157,7 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
 /** List all available models via CLI. */
 export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   const cliPath = resolveCliPath()
-  const args = ['models', 'list', ...modelsDirArgs()]
+  const args = ['models', 'list', ...await modelsDirArgs()]
 
   return new Promise((resolve) => {
     execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
@@ -188,13 +186,12 @@ export function getDefaultModelsDir(): string {
  * models. The three return states are distinguished so callers can pick the
  * right fallback when the file isn't usable.
  */
-export function readCustomJsonImportedFiles(): CustomJsonStatus {
+export async function readCustomJsonImportedFiles(): Promise<CustomJsonStatus> {
   const dir = resolveModelsDir()
   const customJsonPath = path.join(dir, 'custom.json')
-  if (!fs.existsSync(customJsonPath)) return { kind: 'absent' }
 
   try {
-    const raw = fs.readFileSync(customJsonPath, 'utf-8')
+    const raw = await fs.promises.readFile(customJsonPath, 'utf-8')
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) {
       const reason = 'top-level value is not an array'
@@ -210,6 +207,7 @@ export function readCustomJsonImportedFiles(): CustomJsonStatus {
       .map((entry) => entry.file)
     return { kind: 'present', files }
   } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'absent' }
     log('warn', 'custom.json failed to read or parse', { customJsonPath, error: serializeError(err) })
     return { kind: 'unreadable', category: 'read-failed' }
   }

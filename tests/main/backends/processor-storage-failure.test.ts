@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // the user is told once.
 
 const generate = vi.fn(async () => ({ buffer: Buffer.from([1]) }))
-const persist = vi.hoisted(() => ({ fail: false, calls: 0 }))
+const persist = vi.hoisted(() => ({ fail: false, calls: 0, held: null as Promise<void> | null }))
 const sent = vi.hoisted(() => [] as { channel: string; payload: unknown }[])
 
 vi.mock('electron', () => ({
@@ -25,10 +25,12 @@ vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
 vi.mock('../../../src/main/backends/slug', () => ({ generateSlug: async () => 'slug' }))
 vi.mock('../../../src/main/session', () => ({
+  isSessionMutationPending: () => false,
   allocateOutputTimestamp: () => ({ timestamp: '20260819-000000', utc: '2026-08-19T00:00:00.000Z', ordinal: 1 }),
   persistActiveSession: () => {
     persist.calls++
     if (persist.fail) throw Object.assign(new Error('ENOSPC: no space left on device /secret/path'), { code: 'ENOSPC' })
+    return persist.held
   },
 }))
 vi.mock('../../../src/main/utils/file-output', () => ({
@@ -46,7 +48,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { isQueuePaused, resetCancellationState } = await import('../../../src/main/backends/cancellation')
+const { isQueuePaused, resetCancellationState, cancelAllInFlight } = await import('../../../src/main/backends/cancellation')
 
 function queueOne(): void {
   queueManager.enqueue({ prompt: 'p', backend: 'openai', model: 'm', params: {}, count: 1 } as never)
@@ -64,6 +66,7 @@ beforeEach(() => {
   generate.mockClear()
   persist.fail = false
   persist.calls = 0
+  persist.held = null
   sent.length = 0
   resetCancellationState()
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
@@ -105,4 +108,20 @@ describe('a manifest write failure while the queue runs', () => {
     expect(isQueuePaused()).toBe(true)
     expect(notices()).toHaveLength(1)
   })
+})
+
+
+it('keeps payment behind real manifest settlement and honors Stop while that save is pending', async () => {
+  let release!: () => void
+  persist.held = new Promise<void>((resolve) => { release = resolve })
+  queueOne()
+  processQueues()
+  processQueues()
+  expect(generate).not.toHaveBeenCalled()
+  expect(persist.calls).toBe(1)
+  expect(cancelAllInFlight()).toBe(1)
+  release()
+  await settle()
+  expect(generate).not.toHaveBeenCalled()
+  expect(queueManager.getAllStoredTasks().openai[0].status).toBe('interrupted')
 })

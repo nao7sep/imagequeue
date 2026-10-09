@@ -72,3 +72,9 @@ export function cancelDependencyOperationsOwnedBy(
     if (operation.owner === owner) operation.controller.abort(reason)
   }
 }
+
+/** Quit owns every operation, including the process-owned launch check. */
+export function cancelAllDependencyOperations(): void {
+  for (const operation of new Set(activeOperations.values())) operation.controller.abort(new Error('ImageQueue is quitting'))
+}
+export function hasActiveDependencyOperations(): boolean { return activeOperations.size > 0 }

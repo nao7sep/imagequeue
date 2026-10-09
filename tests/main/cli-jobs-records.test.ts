@@ -33,12 +33,12 @@ function observeJob(jobId: string, matches: (snapshot: CliJobSnapshot) => boolea
 
 const ended = (snapshot: CliJobSnapshot): boolean => snapshot.status === 'exited' || snapshot.status === 'killed'
 
-// The jobs are small shell scripts: a shell starts in a fraction of the time a
-// Node process takes, so a busy machine barely delays them.
-const SHELL = '/bin/sh'
+// Node is present wherever this suite runs; fixtures exercise the same pipe
+// ownership on Windows and POSIX without relying on a shell.
+const CLI = process.execPath
 
-function startShellJob(script: string, cliPath = SHELL): string {
-  return startCliJob({ kind: 'download', cliPath, args: ['-c', script], target: 'model.ckpt', logContext: { test: true } })
+function startFixtureJob(script: string, cliPath = CLI): string {
+  return startCliJob({ kind: 'download', cliPath, args: ['-e', script], target: 'model.ckpt', logContext: { test: true } })
 }
 
 afterEach(async () => {
@@ -49,28 +49,26 @@ afterAll(() => {
   removeRecordsRoots()
 })
 
-// CLI jobs run the Draw Things CLI, which exists only on macOS; the jobs here
-// are POSIX shell scripts.
-describe.skipIf(process.platform === 'win32')('CLI job records', () => {
+describe('CLI job records', () => {
   it('keep a job that exited with its command, times, exit code and both streams as received', async () => {
     const dir = freshRecordsRoot()
-    const script = "printf '10%%\\r100%%\\r\\nDone\\n'; printf 'careful\\n' >&2; exit 3"
-    const jobId = startShellJob(script)
+    const script = "process.stdout.write('10%\\r100%\\r\\nDone\\n'); process.stderr.write('careful\\n'); process.exitCode = 3"
+    const jobId = startFixtureJob(script)
     await observeJob(jobId, ended)
 
     const [row] = readRows(dir, 'cli_jobs')
     expect(row).toMatchObject({
-      job_id: jobId, job_kind: 'download', target: 'model.ckpt', cli_path: SHELL,
+      job_id: jobId, job_kind: 'download', target: 'model.ckpt', cli_path: CLI,
       status: 'exited', exit_code: 3, signal: null, stdout: '10%\r100%\r\nDone\n', stderr: 'careful\n', error: null,
     })
-    expect(JSON.parse(row!.args as string)).toEqual(['-c', script])
+    expect(JSON.parse(row!.args as string)).toEqual(['-e', script])
     const { time, started_at: startedAt, ended_at: endedAt } = row as { time: string; started_at: string; ended_at: string }
     expect(time <= startedAt && startedAt <= endedAt).toBe(true)
   })
 
   it('keep a job the user stopped, with the signal that ended it', async () => {
     const dir = freshRecordsRoot()
-    const jobId = startShellJob('echo ready; exec sleep 60')
+    const jobId = startFixtureJob("process.stdout.write('ready\\n'); setInterval(() => {}, 1000)")
     await observeJob(jobId, (snapshot) => snapshot.chunks.some((chunk) => chunk.text === 'ready'))
     await killAllCliJobsAndWait({ killGraceMs: 2_000, timeoutMs: 4_000 })
 
@@ -80,7 +78,7 @@ describe.skipIf(process.platform === 'win32')('CLI job records', () => {
 
   it('keep a job whose process could not be started, with the error', async () => {
     const dir = freshRecordsRoot()
-    const jobId = startShellJob('', path.join(os.tmpdir(), 'imagequeue-no-such-cli'))
+    const jobId = startFixtureJob('', path.join(os.tmpdir(), 'imagequeue-no-such-cli'))
     await observeJob(jobId, ended)
 
     const [row] = readRows(dir, 'cli_jobs')

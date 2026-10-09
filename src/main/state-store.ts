@@ -5,16 +5,16 @@
 //
 // The file is:
 //   - not recorded in the data-backup store (see writeUiState) — it is volatile
-//     state and nothing else (column width, volume), so no history is kept;
+//     state (column width, volume, release-check attempt), so no history is kept;
 //   - materialized lazily — a missing file reads as defaults and is not written
-//     until the user actually changes something (a splitter drag, a volume drag);
+//     until a view adjustment or release-check attempt needs recording;
 //   - self-healing — a malformed file falls back to defaults rather than failing;
-//   - never written while it is a file a newer build wrote.
+//   - interpreted field by field, irrespective of its format marker.
 
 import fs from 'fs'
 import { log, serializeError } from './logger'
 import path from 'path'
-import { writeJsonAtomic } from './utils/atomic-write'
+import { writeFileAtomicAsync } from './utils/atomic-write'
 import { getDataDir } from './config'
 import type { UiState } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
@@ -28,14 +28,17 @@ export function getUiStatePath(): string {
 // A cache: its format version is written but never checked, since each field is
 // read on its own merits and overwriting a newer build's file loses only
 // presentation state (store-recovery-conventions).
-export function readUiState(): UiState {
+let writes: Promise<unknown> = Promise.resolve()
+
+export async function readUiState(): Promise<UiState> {
   const file = getUiStatePath()
   try {
-    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const raw: unknown = JSON.parse(await fs.promises.readFile(file, 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('state.json must be a JSON object')
     const parsed = raw as Partial<UiState>
     const base = defaultUiState()
     return {
+      ...(typeof parsed.releaseCheckLastAttemptUtc === 'string' ? { releaseCheckLastAttemptUtc: parsed.releaseCheckLastAttemptUtc } : {}),
       columnWidth:
         typeof parsed.columnWidth === 'number' && Number.isFinite(parsed.columnWidth)
           ? parsed.columnWidth
@@ -51,19 +54,16 @@ export function readUiState(): UiState {
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an
     // unexpected failure that silently resetting would leave untraceable.
-    if (fs.existsSync(file)) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       log('warn', 'Ignoring unreadable state.json; resetting to defaults', { error: serializeError(err) })
     }
     return defaultUiState()
   }
 }
 
-function writeUiState(state: UiState): void {
-  fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-  // Not recorded: state.json is volatile state and nothing else (column width,
-  // notification volume, the Records list width), which the data-backup conventions
-  // exclude from history.
-  writeJsonAtomic(getUiStatePath(), { ...state, formatVersion: FORMAT_VERSIONS.uiState }, false)
+async function writeUiState(state: UiState): Promise<void> {
+  await fs.promises.mkdir(path.dirname(getUiStatePath()), { recursive: true })
+  await writeFileAtomicAsync(getUiStatePath(), JSON.stringify({ ...state, formatVersion: FORMAT_VERSIONS.uiState }, null, 2), false)
 }
 
 export function validateUiStatePatch(value: unknown): Partial<UiState> {
@@ -86,10 +86,23 @@ export function validateUiStatePatch(value: unknown): Partial<UiState> {
   return patch
 }
 
-/** Read, apply the patch, and persist in one step. Returns the new full state. */
-export function updateUiState(value: unknown): UiState {
-  const patch = validateUiStatePatch(value)
-  const next: UiState = { ...readUiState(), ...patch }
-  writeUiState(next)
-  return next
+/** Apply each patch to the last successful write, so independent controls and
+ * the release attempt marker cannot overwrite one another's pending changes. */
+function enqueueStatePatch(patch: Partial<UiState>): Promise<UiState> {
+  const operation = writes.then(async () => {
+    const next = { ...await readUiState(), ...patch }
+    await writeUiState(next)
+    return { ...next }
+  })
+  writes = operation.catch(() => undefined)
+  return operation
+}
+
+export function updateUiState(value: unknown): Promise<UiState> {
+  return enqueueStatePatch(validateUiStatePatch(value))
+}
+
+// Internal timestamp writes are separate from renderer-authorable UI patches.
+export function recordReleaseCheckAttempt(utc: string): Promise<UiState> {
+  return enqueueStatePatch({ releaseCheckLastAttemptUtc: utc })
 }

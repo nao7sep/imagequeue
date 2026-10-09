@@ -44,16 +44,16 @@ export function registerElaboratorsIpc(): void {
   handle('elaborators:list', (event) => withRecoveryReport(event.sender, listElaborators))
 
   handle('elaborators:create', (event, input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => {
-    return withRecoveryReport(event.sender, () => {
-      const created = createElaborator(input)
+    return withRecoveryReport(event.sender, async () => {
+      const created = await createElaborator(input)
       log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
       return created
     })
   })
 
   handle('elaborators:update', (event, id: string, patch: { name?: string; description?: string; template?: string }) => {
-    return withRecoveryReport(event.sender, () => {
-      const updated = updateElaborator(id, patch)
+    return withRecoveryReport(event.sender, async () => {
+      const updated = await updateElaborator(id, patch)
       if (updated) {
         log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
       }
@@ -62,16 +62,16 @@ export function registerElaboratorsIpc(): void {
   })
 
   handle('elaborators:delete', (event, id: string) => {
-    return withRecoveryReport(event.sender, () => {
-      const ok = deleteElaborator(id)
+    return withRecoveryReport(event.sender, async () => {
+      const ok = await deleteElaborator(id)
       if (ok) log('info', 'Elaborator deleted', { id })
       return ok
     })
   })
 
   handle('elaborators:reset', (event, kind?: ElaboratorKind) => {
-    return withRecoveryReport(event.sender, () => {
-      const items = resetElaborators(kind)
+    return withRecoveryReport(event.sender, async () => {
+      const items = await resetElaborators(kind)
       log('info', 'Elaborators reset to defaults', { kind: kind ?? 'all', count: items.length })
       return items
     })

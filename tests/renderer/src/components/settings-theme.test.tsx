@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react'
 import { until } from '../../until'
 
 // The theme is one Settings › General choice of System, Light, or Dark, staged
@@ -41,7 +41,7 @@ function baseConfig(theme: unknown): Record<string, unknown> {
   }
 }
 
-function renderWith(theme: unknown): void {
+function renderWith(theme: unknown, onClose: () => void = () => {}): void {
   settingsValue = {
     settings: baseConfig(theme),
     apiKeys: {},
@@ -52,7 +52,7 @@ function renderWith(theme: unknown): void {
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
   }
-  render(<SettingsModal onClose={() => {}} />)
+  render(<SettingsModal onClose={onClose} />)
 }
 
 function themeRadios(): HTMLInputElement[] {
@@ -65,6 +65,68 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Settings theme choice', () => {
+  it('associates each Settings field label with its actual control', () => {
+    renderWith('system')
+    for (const label of document.querySelectorAll<HTMLLabelElement>('label')) {
+      expect(label.control, `label ${label.textContent} has a control`).not.toBeNull()
+    }
+    const autoPreview = screen.getByLabelText('Auto-preview (s)')
+    expect(autoPreview.tagName).toBe('INPUT')
+  })
+  it('freezes edits and dismissal until a submitted save settles', async () => {
+    const close = vi.fn()
+    renderWith('system', close)
+    let resolve!: () => void
+    const save = vi.fn(() => new Promise<void>((done) => { resolve = done }))
+    settingsValue.saveChangedSettings = save
+    fireEvent.click(themeRadios()[1]!)
+    const saveButton = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    fireEvent.click(saveButton)
+    fireEvent.click(saveButton)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(themeRadios().every((radio) => radio.matches(':disabled'))).toBe(true)
+    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(screen.getByRole('dialog'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('dialog').parentElement!)
+    expect(close).not.toHaveBeenCalled()
+    await act(async () => resolve())
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('remains busy through the separate API-key write', async () => {
+    const close = vi.fn()
+    renderWith('system', close)
+    let resolveKeys!: () => void
+    settingsValue.saveApiKeys = vi.fn(() => new Promise<void>((done) => { resolveKeys = done }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Image Backends' }))
+    const keyInput = document.querySelector('input[type="password"]') as HTMLInputElement
+    fireEvent.change(keyInput, { target: { value: 'test-key' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
+    expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1)
+    expect(keyInput.matches(':disabled')).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+    await act(async () => resolveKeys())
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the draft and allows another save after failure', async () => {
+    const close = vi.fn()
+    renderWith('system', close)
+    let reject!: (error: Error) => void
+    const save = vi.fn(() => new Promise<void>((_, fail) => { reject = fail }))
+    settingsValue.saveChangedSettings = save
+    fireEvent.click(themeRadios()[1]!)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await act(async () => reject(new Error('save failed')))
+    expect(close).not.toHaveBeenCalled()
+    expect(themeRadios().find((radio) => radio.checked)?.value).toBe('light')
+    expect(themeRadios().every((radio) => !radio.matches(':disabled'))).toBe(true)
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('alert')).toBeTruthy()
+  })
+
   it('offers System, Light, and Dark as one radio group', () => {
     renderWith('dark')
     const radios = themeRadios()
@@ -88,4 +150,16 @@ describe('Settings theme choice', () => {
     await until(() => expect(save).toHaveBeenCalledTimes(1))
     expect((save.mock.calls[0]![1] as { general: { theme: string } }).general.theme).toBe('light')
   })
+})
+
+it('offers a default-on launch preference and clear manual release outcomes inside Settings', async () => {
+  window.electronAPI.checkAppRelease = vi.fn(async () => ({ kind: 'newer' as const, version: 'v1.2.0' }))
+  window.electronAPI.viewAppRelease = vi.fn(async () => undefined)
+  renderWith('system')
+  expect((screen.getByLabelText('Check GitHub for new releases at launch') as HTMLInputElement).checked).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Check GitHub for a New Release' }))
+  await until(() => expect(screen.getByText('ImageQueue v1.2.0 is available.')).toBeTruthy())
+  expect(window.electronAPI.viewAppRelease).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'View Release on GitHub' }))
+  expect(window.electronAPI.viewAppRelease).toHaveBeenCalledOnce()
 })

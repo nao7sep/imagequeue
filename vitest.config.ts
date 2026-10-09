@@ -24,7 +24,7 @@ export default defineConfig({
     // interface also fails if a catalogue key, not its words, reaches the
     // screen (localization-conventions, Gates); and a file's one-time renderer
     // warm-up is paid before its first test.
-    setupFiles: ['tests/setup/isolated-home.ts', 'tests/setup/backup-thread.ts', 'tests/setup/rendered-keys.ts', 'tests/setup/warm-renderer.ts'],
+    setupFiles: ['tests/setup/isolated-home.ts', 'tests/setup/backup-thread.ts', 'tests/setup/sqlite-threads.ts', 'tests/setup/rendered-keys.ts', 'tests/setup/warm-renderer.ts'],
     // The live lane spends money and downloads the Draw Things CLI and a model;
     // only npm run test:full runs it, through vitest.live.config.ts.
     exclude: [...configDefaults.exclude, 'tests/live/**'],

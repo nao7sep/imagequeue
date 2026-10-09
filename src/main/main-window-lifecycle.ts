@@ -12,8 +12,9 @@ export interface MainWindowLifecycleWindow {
   setSkipTaskbar(skip: boolean): void
   on(event: 'close', listener: (event: MainWindowLifecycleEvent) => void): unknown
   on(event: 'closed', listener: () => void): unknown
+  on(event: 'query-session-end', listener: () => void): unknown
   on(event: 'session-end', listener: () => void): unknown
-  on(event: 'ready-to-show', listener: () => void): unknown
+  on(event: 'ready-to-show' | 'hide' | 'minimize', listener: () => void): unknown
 }
 
 export interface MainWindowDock {
@@ -29,6 +30,7 @@ interface MainWindowControllerOptions<TWindow extends MainWindowLifecycleWindow>
   onHiddenToBackground: () => void
   onRestored: () => void
   onPrimaryWindowClosed: () => void
+  onSessionEnd?: () => void
   dock?: MainWindowDock
   now?: () => number
 }
@@ -78,7 +80,10 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     return true
   }
 
+  cancelShutdown(): void { this.shutdownStarted = false }
+
   restoreOrCreate(): Promise<void> {
+    if (this.shutdownStarted || this.systemSessionEnding) return Promise.resolve()
     this.revealWanted = true
     if (this.restoreInFlight) return this.restoreInFlight
 
@@ -109,8 +114,13 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     this.mainWindow = win
 
     win.on('ready-to-show', () => {
-      if (this.mainWindow === win && this.revealWanted && !this.shutdownStarted && !win.isDestroyed()) win.show()
+      if (this.mainWindow === win && this.revealWanted && !this.shutdownStarted && !this.systemSessionEnding && !win.isDestroyed()) win.show()
     })
+
+    // Native hiding/minimizing is a later user intent too, even without close.
+    const cancelReveal = (): void => { this.revealWanted = false }
+    win.on('hide', cancelReveal)
+    win.on('minimize', cancelReveal)
 
     win.on('close', (event) => {
       this.revealWanted = false
@@ -125,9 +135,12 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     // Windows can deliver session-end before Electron begins its ordinary quit
     // sequence. Never turn an OS logoff/restart close into close-to-background;
     // releasing the primary window lets primary-instance.ts enter graceful shutdown.
-    win.on('session-end', () => {
+    const sessionEnd = (): void => {
       this.systemSessionEnding = true
-    })
+      this.options.onSessionEnd?.()
+    }
+    win.on('query-session-end', sessionEnd)
+    win.on('session-end', sessionEnd)
 
     win.on('closed', () => {
       if (this.mainWindow !== win) return
@@ -154,7 +167,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     }
 
     // The window may have been destroyed while Dock restoration was awaiting.
-    if (this.mainWindow !== win || win.isDestroyed() || this.shutdownStarted || !this.revealWanted) return
+    if (this.mainWindow !== win || win.isDestroyed() || this.shutdownStarted || this.systemSessionEnding || !this.revealWanted) return
     if (this.options.platform === 'win32') win.setSkipTaskbar(false)
     if (win.isMinimized()) win.restore()
     win.show()

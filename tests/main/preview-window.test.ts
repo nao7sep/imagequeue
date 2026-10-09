@@ -118,6 +118,16 @@ describe('preview window options', () => {
 })
 
 describe('the setting', () => {
+  it('a background hide wins over a late ready-to-show, until explicitly restored', () => {
+    preview.syncPreviewWindow(true)
+    const [win] = previews()
+    preview.hidePreviewWindow()
+    win!.emit('ready-to-show')
+    expect(win!.shownInactive).toBe(0)
+    preview.showPreviewWindow()
+    expect(win!.shownInactive).toBe(1)
+  })
+
   it('opens one window on the preview surface when turned on, shown without taking focus', () => {
     preview.syncPreviewWindow(true)
     preview.syncPreviewWindow(true)
@@ -138,17 +148,19 @@ describe('the setting', () => {
     expect(preview.previewWindowContents()).toBeNull()
   })
 
-  it('turns the setting off when the user closes the window, and tells the main window', () => {
+  it('turns the setting off when the user closes the window, and tells the main window', async () => {
     preview.syncPreviewWindow(true)
     previews()[0]!.userClose()
+    await Promise.resolve()
     expect(mocks.saved).toHaveBeenCalledWith({ general: { show_preview_window: false } })
     expect(main.sent).toEqual([SETTINGS_CHANGED_CHANNEL])
   })
 
-  it('leaves the setting on when a Windows logoff or restart closes the window', () => {
+  it('leaves the setting on when a Windows logoff or restart closes the window', async () => {
     preview.syncPreviewWindow(true)
     previews()[0]!.emit('session-end')
     previews()[0]!.userClose()
+    await Promise.resolve()
     expect(mocks.saved).not.toHaveBeenCalled()
   })
 })

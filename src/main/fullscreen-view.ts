@@ -74,8 +74,7 @@ function notifyMain(channel: string): void {
 
 function focusMain(): void {
   const main = getMainWin()
-  if (!main || main.isDestroyed()) return
-  if (main.isMinimized()) main.restore()
+  if (!main || main.isDestroyed() || !main.isVisible() || main.isMinimized()) return
   main.focus()
 }
 
@@ -122,7 +121,6 @@ function createView(bounds: Electron.Rectangle): BrowserWindow {
     forgetView(win)
     if (wasShown) {
       notifyMain(FULLSCREEN_VIEW_CLOSED_CHANNEL)
-      focusMain()
     }
   })
   win.on('closed', () => {

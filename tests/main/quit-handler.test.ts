@@ -1,65 +1,97 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createBeforeQuitHandler } from '../../src/main/quit-handler'
+import { createQuitOwner, type QuitChoice } from '../../src/main/quit-handler'
 
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-function setUp(shutdown: () => Promise<void>) {
-  const exits: number[] = []
-  const onError = vi.fn()
-  const onTimeout = vi.fn()
-  const handler = createBeforeQuitHandler({ shutdown, exit: (code) => exits.push(code), timeoutMs: 30_000, onError, onTimeout })
-  return { handler, exits, onError, onTimeout }
+afterEach(() => vi.useRealTimers())
+function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
+function setup(save: () => Promise<void>, question: (signal: AbortSignal) => Promise<QuitChoice> = async () => 'cancel') {
+  const begin = vi.fn(), cancel = vi.fn(), exit = vi.fn(), onError = vi.fn(), cleanup = vi.fn(async () => undefined)
+  const owner = createQuitOwner({ begin, cancel, exit, onError, cleanup, save, question, timeoutMs: 30_000, systemTimeoutMs: 1_500 })
+  const request = () => owner.beforeQuit({ preventDefault: vi.fn() })
+  return { ...owner, request, begin, cancel, exit, cleanup, onError }
 }
-
-describe('before-quit', () => {
-  it('holds a second quit during a pending shutdown and exits once, only after shutdown settles', async () => {
-    let finish!: () => void
-    const shutdown = vi.fn(() => new Promise<void>((resolve) => { finish = resolve }))
-    const { handler, exits } = setUp(shutdown)
-
-    const first = { preventDefault: vi.fn() }
-    const second = { preventDefault: vi.fn() }
-    handler(first)
-    handler(second)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(first.preventDefault).toHaveBeenCalledOnce()
-    expect(second.preventDefault).toHaveBeenCalledOnce()
-    expect(shutdown).toHaveBeenCalledOnce()
-    expect(exits).toEqual([])
-
-    finish()
-    await vi.waitFor(() => expect(exits).toEqual([0]))
-    handler({ preventDefault: vi.fn() })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(exits).toEqual([0])
+describe('quit ownership', () => {
+  it('seals synchronously and coalesces repeated requests through save settlement', async () => {
+    const pending = deferred<void>(), save = vi.fn(() => pending.promise)
+    const quit = setup(save)
+    quit.request(); quit.request()
+    expect(quit.begin).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce())
+    expect(quit.exit).not.toHaveBeenCalled()
+    pending.resolve()
+    await vi.waitFor(() => expect(quit.exit).toHaveBeenCalledOnce())
+    quit.request()
+    expect(quit.begin).toHaveBeenCalledOnce()
   })
-
-  it('runs the synchronous start of shutdown inside the first quit', () => {
-    const started = vi.fn()
-    const { handler } = setUp(async () => { started() })
-    handler({ preventDefault: vi.fn() })
-    expect(started).toHaveBeenCalledOnce()
+  it('retains a failed save for Retry and never starts cleanup before success', async () => {
+    const choice = deferred<QuitChoice>()
+    const save = vi.fn().mockRejectedValueOnce(new Error('full')).mockResolvedValue(undefined)
+    const question = vi.fn(() => choice.promise), quit = setup(save, question)
+    quit.request()
+    await vi.waitFor(() => expect(question).toHaveBeenCalledOnce())
+    expect(quit.exit).not.toHaveBeenCalled(); expect(quit.cleanup).not.toHaveBeenCalled()
+    choice.resolve('retry')
+    await vi.waitFor(() => expect(quit.exit).toHaveBeenCalledOnce())
+    expect(save).toHaveBeenCalledTimes(2)
   })
-
-  it('exits after a failed shutdown, reporting the failure', async () => {
-    const failure = new Error('step failed')
-    const { handler, exits, onError } = setUp(() => Promise.reject(failure))
-    handler({ preventDefault: vi.fn() })
-    await vi.waitFor(() => expect(exits).toEqual([0]))
-    expect(onError).toHaveBeenCalledWith(failure)
+  it('cancels quit when its question cannot be shown, allowing another quit', async () => {
+    const quit = setup(async () => { throw new Error('disk') }, async () => { throw new Error('window') })
+    quit.request()
+    await vi.waitFor(() => expect(quit.cancel).toHaveBeenCalledOnce())
+    expect(quit.exit).not.toHaveBeenCalled()
+    quit.request()
+    await vi.waitFor(() => expect(quit.cancel).toHaveBeenCalledTimes(2))
   })
-
-  it('exits once the bound passes when shutdown never settles', async () => {
+  it('times out to a question and Retry keeps ownership of a still-running save', async () => {
     vi.useFakeTimers()
-    const { handler, exits, onTimeout } = setUp(() => new Promise<void>(() => undefined))
-    handler({ preventDefault: vi.fn() })
-    await vi.advanceTimersByTimeAsync(29_999)
-    expect(exits).toEqual([])
-    await vi.advanceTimersByTimeAsync(1)
-    expect(exits).toEqual([0])
-    expect(onTimeout).toHaveBeenCalledOnce()
+    const pending = deferred<void>(), choice = deferred<QuitChoice>(), save = vi.fn(() => pending.promise)
+    const question = vi.fn(() => choice.promise), quit = setup(save, question)
+    quit.request()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(question).toHaveBeenCalledOnce(); expect(quit.exit).not.toHaveBeenCalled()
+    choice.resolve('retry')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(save).toHaveBeenCalledOnce()
+    pending.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(quit.exit).toHaveBeenCalledOnce()
+  })
+  it('a new quit after Cancel waits for the old physical save then captures newer edits', async () => {
+    vi.useFakeTimers()
+    const pending = deferred<void>()
+    const save = vi.fn().mockImplementationOnce(() => pending.promise).mockResolvedValue(undefined)
+    const quit = setup(save)
+    quit.request()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(quit.cancel).toHaveBeenCalledOnce()
+    quit.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(save).toHaveBeenCalledOnce()
+    pending.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(quit.exit).toHaveBeenCalledOnce()
+  })
+  it('OS takeover dismisses a question and honors one total deadline despite stalled saving', async () => {
+    vi.useFakeTimers()
+    const question = vi.fn((signal: AbortSignal) => new Promise<QuitChoice>((resolve) => signal.addEventListener('abort', () => resolve('cancel'))))
+    const save = vi.fn().mockRejectedValueOnce(new Error('disk')).mockImplementation(() => new Promise(() => undefined))
+    const quit = setup(save, question)
+    quit.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(question).toHaveBeenCalledOnce()
+    quit.sessionEnd()
+    await vi.advanceTimersByTimeAsync(1_000)
+    quit.sessionEnd()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(quit.exit).toHaveBeenCalledOnce(); expect(quit.cancel).not.toHaveBeenCalled()
+    expect(quit.cleanup).not.toHaveBeenCalled()
+  })
+  it('bounds the whole optional cleanup without extending OS takeover', async () => {
+    vi.useFakeTimers()
+    const quit = setup(async () => undefined)
+    quit.cleanup.mockImplementation(() => new Promise(() => undefined))
+    quit.request()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(quit.exit).toHaveBeenCalledOnce()
   })
 })

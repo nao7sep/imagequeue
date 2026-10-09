@@ -11,6 +11,15 @@ import type { Platform } from '../shared/electron-api'
 // The main window is registered explicitly. BrowserWindow.getAllWindows()[0]
 // is not a main-window identity: the notification window is created first and
 // could receive the minimum-size update instead.
+let drawThingsReady = false
+
+/** Reuse the column's CLI/model observations; no extra readiness probe. */
+export function setDrawThingsReady(ready: boolean): void {
+  if (ready === drawThingsReady) return
+  drawThingsReady = ready
+  refreshMainWindowMinimumSize()
+}
+
 let mainWindow: BrowserWindow | null = null
 let refreshMinimum: (() => void) | null = null
 
@@ -36,7 +45,7 @@ export function getVisiblePaneCount(platform: Platform = process.platform as Pla
   )
   const tasks = queueManager.getAllStoredTasks()
   const occupied = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) => (tasks[backend]?.length ?? 0) > 0)
-  return getVisiblePanes(platform, keyed, occupied).length
+  return getVisiblePanes(platform, keyed, occupied, drawThingsReady).length
 }
 
 /** Re-apply the minimum after a key, queue, or session transition changes panes. */

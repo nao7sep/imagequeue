@@ -7,7 +7,7 @@ import type { Task } from '../../../src/shared/types'
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { grok: { timeout_ms: 180000 } } }),
 }))
-vi.mock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'xai-test' }))
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => undefined, resolveApiKey: () => 'xai-test' }))
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../../src/main/records', () => ({
   fetchRecorded: async (_call: unknown, url: string, init: RequestInit) => {

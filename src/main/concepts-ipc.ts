@@ -17,9 +17,9 @@ import {
 export function registerConceptsIpc(): void {
   // The first request to open the ledger may set aside an unreadable one; the
   // window that made it names the preserved copy.
-  const withLedgerRecovery = <T>(event: IpcMainInvokeEvent, operation: () => T): T => {
+  const withLedgerRecovery = async <T>(event: IpcMainInvokeEvent, operation: () => Promise<T>): Promise<T> => {
     try {
-      return operation()
+      return await operation()
     } finally {
       for (const movedTo of drainSetAsideConceptStorePaths()) {
         event.sender.send('app:notice', conceptLibraryResetPresentation(movedTo))
@@ -31,12 +31,12 @@ export function registerConceptsIpc(): void {
   handle('concepts:listConcepts', (event, facetId: number) => withLedgerRecovery(event, () => listConceptRows(facetId)))
   handle('concepts:listProbes', (event, facetId: number) => withLedgerRecovery(event, () => listProbesWithStats(facetId)))
   handle('concepts:deleteProbe', (event, probeId: number) => {
-    withLedgerRecovery(event, () => deleteProbe(probeId))
+    return withLedgerRecovery(event, () => deleteProbe(probeId))
   })
   handle('concepts:deleteConcept', (event, conceptId: number) => {
-    withLedgerRecovery(event, () => deleteConcept(conceptId))
+    return withLedgerRecovery(event, () => deleteConcept(conceptId))
   })
   handle('concepts:deleteFacet', (event, facetId: number) => {
-    withLedgerRecovery(event, () => deleteFacet(facetId))
+    return withLedgerRecovery(event, () => deleteFacet(facetId))
   })
 }

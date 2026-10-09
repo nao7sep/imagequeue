@@ -7,8 +7,8 @@ import { BackendId, OutputFileState } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log, serializeError } from '../logger'
 import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
-import { claimFinalName, stageBeside, stagingPathFor } from './atomic-write'
-import { syncDirectory, syncFile } from './fsync'
+import { claimFinalNameAsync, stageBesideAsync, stagingPathFor } from './atomic-write'
+import { syncDirectoryAsync } from './fsync'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
 
@@ -79,20 +79,23 @@ export function exportPathForFormat(filePath: string, ext: ImageExt): string {
 // conventions); a volume that cannot hold the mode keeps the rest without a
 // warning. Node has no portable call that carries birth time, extended
 // attributes or Finder tags, so those are not copied.
-export function stageExportCopy(src: string, destination: string): string {
+export async function stageExportCopy(src: string, destination: string): Promise<string> {
   const staging = stagingPathFor(destination)
+  let owned = false
   try {
-    fs.copyFileSync(src, staging)
-    const source = fs.statSync(src)
+    await fs.promises.copyFile(src, staging, fs.constants.COPYFILE_EXCL)
+    owned = true
+    const source = await fs.promises.stat(src)
     try {
-      fs.chmodSync(staging, source.mode & 0o7777)
+      await fs.promises.chmod(staging, source.mode & 0o7777)
     } catch {
       // The destination volume has no POSIX modes; the copy keeps what it can.
     }
-    fs.utimesSync(staging, source.atime, source.mtime)
-    syncFile(staging)
+    await fs.promises.utimes(staging, source.atime, source.mtime)
+    const handle = await fs.promises.open(staging, 'r')
+    try { await handle.sync() } finally { await handle.close() }
   } catch (error) {
-    fs.rmSync(staging, { force: true })
+    if (owned) await fs.promises.rm(staging, { force: true }).catch(() => undefined)
     throw error
   }
   return staging
@@ -116,11 +119,11 @@ export function outputBaseName(
 
 // Publishes staged bytes under `destination` without replacing a file already
 // there; false when the name is taken. The staging file is always removed.
-function publishStaged(staging: string, destination: string): boolean {
+async function publishStaged(staging: string, destination: string): Promise<boolean> {
   try {
-    return claimFinalName(staging, destination)
+    return await claimFinalNameAsync(staging, destination)
   } finally {
-    try { fs.rmSync(staging, { force: true }) } catch (error) {
+    try { await fs.promises.rm(staging, { force: true }) } catch (error) {
       log('warn', 'Could not remove generated-output staging', { tempPath: staging, error: serializeError(error) })
     }
   }
@@ -128,7 +131,7 @@ function publishStaged(staging: string, destination: string): boolean {
 
 // Writes the image file and its JSON sidecar to the session directory.
 // Returns the base filename (without extension).
-export function writeImageOutput(
+export async function writeImageOutput(
   timestamp: string,
   ordinal: number,
   slug: string,
@@ -136,9 +139,9 @@ export function writeImageOutput(
   imageBuffer: Buffer,
   metadata: ImageMetadata,
   ext: ImageExt
-): string {
+): Promise<string> {
   const dir = getSessionDir()
-  fs.mkdirSync(dir, { recursive: true })
+  await fs.promises.mkdir(dir, { recursive: true })
 
   // The allocator already hands out a unique ordinal, so a collision here means
   // a file the allocator didn't know about exists on disk. Rather than throw —
@@ -148,11 +151,11 @@ export function writeImageOutput(
   let attempt = ordinal
   let baseName = outputBaseName(timestamp, attempt, slug, backend)
   // Case-insensitive sibling check (storage-path conventions: a hard
-  // invariant): fs.existsSync is case-sensitive on a case-sensitive volume,
+  // invariant): a direct existence probe is case-sensitive on some volumes,
   // and the nanoid fallback slug is mixed-case, so an exists() probe alone
   // could admit a name differing only by case.
   const lowerSiblings = new Set(
-    (fs.existsSync(dir) ? fs.readdirSync(dir) : []).map((name) => name.toLowerCase())
+    (await fs.promises.readdir(dir)).map((name) => name.toLowerCase())
   )
   const collides = (base: string): boolean =>
     lowerSiblings.has(`${base}.${ext}`.toLowerCase()) || lowerSiblings.has(`${base}.json`.toLowerCase())
@@ -179,8 +182,8 @@ export function writeImageOutput(
   // (developer decision): the sidecar follows best effort, and nothing in the
   // app reads it back.
   for (;;) {
-    const staged = stageBeside(path.join(dir, `${baseName}.${ext}`), imageBuffer)
-    if (publishStaged(staged, path.join(dir, `${baseName}.${ext}`))) break
+    const staged = await stageBesideAsync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
+    if (await publishStaged(staged, path.join(dir, `${baseName}.${ext}`))) break
     // Only an occupied final name advances the ordinal; I/O failures escape.
     attempt++
     baseName = outputBaseName(timestamp, attempt, slug, backend)
@@ -190,8 +193,8 @@ export function writeImageOutput(
   const sidecarPath = path.join(dir, `${baseName}.json`)
   const sidecar = markFormat(metadata, FORMAT_VERSIONS.imageSidecar, SNAKE_FORMAT_VERSION_KEY)
   try {
-    const staged = stageBeside(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8'))
-    if (!publishStaged(staged, sidecarPath)) {
+    const staged = await stageBesideAsync(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8'))
+    if (!await publishStaged(staged, sidecarPath)) {
       log('warn', 'Generated image was saved but its metadata sidecar name was taken; the sidecar was not written', { baseName })
     }
   } catch (error) {
@@ -199,7 +202,7 @@ export function writeImageOutput(
   }
 
   try {
-    syncDirectory(dir)
+    await syncDirectoryAsync(dir)
   } catch (error) {
     // The image is already published. A secondary durability warning must not
     // mark the paid output failed and invite another generation.
@@ -210,30 +213,30 @@ export function writeImageOutput(
 }
 
 /** Inspect settled cleanup without treating an inaccessible path as removed. */
-export function imageOutputFileStates(baseName: string, ext: ImageExt): { image: OutputFileState; metadata: OutputFileState } {
+export async function imageOutputFileStates(baseName: string, ext: ImageExt): Promise<{ image: OutputFileState; metadata: OutputFileState }> {
   try { assertSafeBaseName(baseName) } catch {
     return { image: 'unknown', metadata: 'unknown' }
   }
   assertImageExt(ext)
   const dir = getSessionDir()
-  const state = (file: string): OutputFileState => {
-    try { fs.lstatSync(file); return 'remaining' } catch (error) {
+  const state = async (file: string): Promise<OutputFileState> => {
+    try { await fs.promises.lstat(file); return 'remaining' } catch (error) {
       return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'removed' : 'unknown'
     }
   }
-  return { image: state(path.join(dir, `${baseName}.${ext}`)), metadata: state(path.join(dir, `${baseName}.json`)) }
+  return { image: await state(path.join(dir, `${baseName}.${ext}`)), metadata: await state(path.join(dir, `${baseName}.json`)) }
 }
 
 // Deletes both the image and metadata files for a given base filename.
-export function deleteImageOutput(baseName: string, ext: ImageExt): void {
+export async function deleteImageOutput(baseName: string, ext: ImageExt): Promise<void> {
   const dir = getSessionDir()
   assertSafeBaseName(baseName)
   assertImageExt(ext)
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
-  if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath)
-  if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath)
+  await fs.promises.rm(imagePath, { force: true })
+  await fs.promises.rm(metaPath, { force: true })
 }
 
 // Moves the image and metadata files for a given base filename to the OS trash.
@@ -244,6 +247,6 @@ export async function trashImageOutput(baseName: string, ext: ImageExt): Promise
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
-  if (fs.existsSync(imagePath)) await shell.trashItem(imagePath)
-  if (fs.existsSync(metaPath)) await shell.trashItem(metaPath)
+  if (await fs.promises.stat(imagePath).then(() => true, (error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return false; throw error })) await shell.trashItem(imagePath)
+  if (await fs.promises.stat(metaPath).then(() => true, (error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return false; throw error })) await shell.trashItem(metaPath)
 }

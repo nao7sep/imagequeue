@@ -14,6 +14,7 @@ vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
 vi.mock('../../../src/main/backends/slug', () => ({ generateSlug: async () => 'slug' }))
 vi.mock('../../../src/main/session', () => ({
+  isSessionMutationPending: () => false,
   allocateOutputTimestamp: () => ({ timestamp: '20260819-000000', utc: '2026-08-19T00:00:00.000Z', ordinal: 1 }),
   persistActiveSession: () => undefined,
 }))

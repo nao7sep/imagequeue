@@ -39,26 +39,26 @@ describe('api key presence vs stored value', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('reports absent when neither a stored nor an environment key exists', () => {
+  it('reports absent when neither a stored nor an environment key exists', async () => {
     expect(hasApiKey('openai.image')).toBe(false)
     expect(getStoredApiKey('openai.image')).toBe('')
   })
 
   // The bug, at its origin: presence must see the environment even though the
   // stored value the UI is handed stays empty.
-  it('reports PRESENT for an environment-only key, while the stored value stays empty', () => {
+  it('reports PRESENT for an environment-only key, while the stored value stays empty', async () => {
     process.env[KEY_ENV] = 'env-supplied-key'
     expect(hasApiKey('openai.image')).toBe(true)
     expect(getStoredApiKey('openai.image')).toBe('')
   })
 
-  it('reports present for a stored key with no environment value', () => {
-    setStoredApiKey('openai.image', 'stored-key')
+  it('reports present for a stored key with no environment value', async () => {
+    await setStoredApiKey('openai.image', 'stored-key')
     expect(hasApiKey('openai.image')).toBe(true)
     expect(getStoredApiKey('openai.image')).toBe('stored-key')
   })
 
-  it('keeps ids independent, so one backend’s key never implies another’s', () => {
+  it('keeps ids independent, so one backend’s key never implies another’s', async () => {
     process.env[KEY_ENV] = 'env-supplied-key'
     expect(hasApiKey('openai.image')).toBe(true)
     expect(hasApiKey('bfl')).toBe(false)

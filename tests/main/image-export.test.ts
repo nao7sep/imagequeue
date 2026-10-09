@@ -120,7 +120,7 @@ describe('exporting an image', () => {
   })
 
   it('leaves nothing under a final name when the copy fails', async () => {
-    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+    const copy = vi.spyOn(fs.promises, 'copyFile').mockImplementationOnce(() => {
       throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
     })
     await expect(invoke('shell:exportImage', BASE, 'png')).rejects.toThrow('simulated full disk')
@@ -190,7 +190,7 @@ describe('exporting an image to a chosen place', () => {
     fs.writeFileSync(chosen, 'earlier export')
     mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath: chosen })
 
-    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+    const copy = vi.spyOn(fs.promises, 'copyFile').mockImplementationOnce(() => {
       throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
     })
     await expect(invoke('shell:exportImageAs', BASE, 'png')).rejects.toThrow('simulated full disk')
@@ -253,14 +253,14 @@ describe('exporting an image to a chosen place', () => {
 })
 
 describe('revealing an image', () => {
-  it('points the file manager at the image in the session folder', () => {
-    invoke('shell:revealFile', BASE, 'png')
+  it('points the file manager at the image in the session folder', async () => {
+    await invoke('shell:revealFile', BASE, 'png')
 
     expect(mocks.showItemInFolder).toHaveBeenCalledExactlyOnceWith(path.join(mocks.sessionDir, `${BASE}.png`))
   })
 
-  it('refuses a name that is not a plain image basename', () => {
-    expect(() => invoke('shell:revealFile', '../secret', 'png')).toThrow()
+  it('refuses a name that is not a plain image basename', async () => {
+    await expect(invoke('shell:revealFile', '../secret', 'png')).rejects.toThrow()
     expect(mocks.showItemInFolder).not.toHaveBeenCalled()
   })
 })

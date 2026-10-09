@@ -33,34 +33,34 @@ describe('state:update admission', () => {
     JSON.parse('{"__proto__":{"notificationVolume":0}}'),
     { columnWidth: 240, notificationVolume: 'invalid' },
     { columnWidth: 240, unexpected: true },
-  ])('rejects malformed patch %j atomically', (patch) => {
+  ])('rejects malformed patch %j atomically', async (patch) => {
     expect(() => invoke(patch)).toThrow(/Invalid UI state patch/)
     expect(fs.existsSync(getUiStatePath())).toBe(false)
-    invoke({ columnWidth: 250, notificationVolume: 0.25 })
+    await invoke({ columnWidth: 250, notificationVolume: 0.25 })
     const before = fs.readFileSync(getUiStatePath(), 'utf8')
     expect(() => invoke(patch)).toThrow(/Invalid UI state patch/)
     expect(fs.readFileSync(getUiStatePath(), 'utf8')).toBe(before)
-    expect(readUiState()).toEqual({ ...defaultUiState(), columnWidth: 250, notificationVolume: 0.25 })
+    expect(await readUiState()).toEqual({ ...defaultUiState(), columnWidth: 250, notificationVolume: 0.25 })
   })
 
-  it('ignores inherited fields and writes only owned allowed fields with the owned marker', () => {
+  it('ignores inherited fields and writes only owned allowed fields with the owned marker', async () => {
     const patch = Object.create({ notificationVolume: 0, recordsListWidth: 600, formatVersion: 999 })
     patch.columnWidth = 280
-    expect(invoke(patch)).toEqual({ ...defaultUiState(), columnWidth: 280 })
+    expect(await invoke(patch)).toEqual({ ...defaultUiState(), columnWidth: 280 })
     expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toEqual({
       ...defaultUiState(), columnWidth: 280, formatVersion: 1,
     })
-    expect(invoke({ notificationVolume: 0.5 })).toEqual({ ...defaultUiState(), columnWidth: 280, notificationVolume: 0.5 })
+    expect(await invoke({ notificationVolume: 0.5 })).toEqual({ ...defaultUiState(), columnWidth: 280, notificationVolume: 0.5 })
   })
 
-  it('keeps omitted fields, nullable finite column intent, and existing volume and Records bounds', () => {
-    expect(invoke({ columnWidth: 9999, notificationVolume: 4, recordsListWidth: 9999 })).toEqual({
+  it('keeps omitted fields, nullable finite column intent, and existing volume and Records bounds', async () => {
+    expect(await invoke({ columnWidth: 9999, notificationVolume: 4, recordsListWidth: 9999 })).toEqual({
       columnWidth: 9999, notificationVolume: 1, recordsListWidth: RECORDS_LIST_WIDTH.max,
     })
-    expect(invoke({ columnWidth: null, notificationVolume: -2, recordsListWidth: 1 })).toEqual({
+    expect(await invoke({ columnWidth: null, notificationVolume: -2, recordsListWidth: 1 })).toEqual({
       columnWidth: null, notificationVolume: 0, recordsListWidth: RECORDS_LIST_WIDTH.min,
     })
-    expect(invoke({ recordsListWidth: 400.6 })).toEqual({ columnWidth: null, notificationVolume: 0, recordsListWidth: 401 })
-    expect(invoke({})).toEqual({ columnWidth: null, notificationVolume: 0, recordsListWidth: 401 })
+    expect(await invoke({ recordsListWidth: 400.6 })).toEqual({ columnWidth: null, notificationVolume: 0, recordsListWidth: 401 })
+    expect(await invoke({})).toEqual({ columnWidth: null, notificationVolume: 0, recordsListWidth: 401 })
   })
 })

@@ -34,7 +34,7 @@ export function TextProviderSettings({ config, onChange, keyField }: {
             onChange={(event) => updateProvider(provider, 'endpoint', event.target.value)} />
           <p className="settings-hint">{t('settings.endpointHelp', { provider: PROVIDER_NAMES[provider] })}</p>
         </div>
-        <div className="settings-field"><label>{t('settings.apiKey')}</label>{keyField(`${provider}.text`)}</div>
+        <div className="settings-field"><label htmlFor={`settings-key-${provider}.text`}>{t('settings.apiKey')}</label>{keyField(`${provider}.text`)}</div>
         {AI_ROLES.map((role) => {
           const value = section[role.id] as string
           const thinking = section.thinking as Record<string, string>

@@ -63,15 +63,15 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
       fs.writeFileSync(staged, 'verified fixture')
       return cliBinary.publishCliBinary(staged, tag)
     })
-    const sync = fsync.syncDirectory
-    vi.spyOn(fsync, 'syncDirectory').mockImplementation((directory) => {
+    const sync = fsync.syncDirectoryAsync
+    vi.spyOn(fsync, 'syncDirectoryAsync').mockImplementation(async (directory) => {
       if (directory === home) throw new Error('check-cache sync failed')
-      sync(directory)
+      await sync(directory)
     })
     const result = await installOrUpdateCli()
     expect(result.warnings).toEqual(['sync-incomplete'])
     expect(result.state.cli).toMatchObject({ state: 'up-to-date', installedLabel: tag, latestLabel: tag })
-    expect(readDependenciesCache().cli.lastKnownLatest).toBe(tag)
+    expect((await readDependenciesCache()).cli.lastKnownLatest).toBe(tag)
   })
 
   it('returns the physically installed CLI with a warning when secondary check-cache persistence fails', async () => {
@@ -83,7 +83,7 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
       return cliBinary.publishCliBinary(staged, tag)
     })
     const rename = fs.renameSync
-    vi.spyOn(fs, 'renameSync').mockImplementation((source, target) => {
+    vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, target) => {
       if (String(target) === path.join(home, 'dependencies.json')) throw new Error('EACCES /private SECRET_SENTINEL')
       rename(source, target)
     })
@@ -97,7 +97,7 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
   it('writes NO persisted CLI fact when the latest-release lookup fails', async () => {
     resolveMock.mockResolvedValue(null) // offline / rate-limited / non-200
     await expect(checkAllDependencies()).rejects.toThrow('Could not reach')
-    const cli = readDependenciesCache().cli
+    const cli = (await readDependenciesCache()).cli
     expect(cli.lastCheckedAtUtc).toBeNull()
     expect(cli.lastKnownLatest).toBeNull()
   })
@@ -109,7 +109,7 @@ describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
       sha256: 'abc',
     })
     await checkAllDependencies()
-    const cli = readDependenciesCache().cli
+    const cli = (await readDependenciesCache()).cli
     expect(cli.lastKnownLatest).toBe('v1.20260501.0')
     expect(cli.lastCheckedAtUtc).not.toBeNull()
   })
@@ -173,25 +173,25 @@ describe('recommendations lifecycle', () => {
   const server = '2026-09-11T20:46:05.000Z'
 
   // A file as Install/Refresh leaves it: the bytes, and their server time recorded for them.
-  function writeFile(modifiedUtc: string | null): void {
+  async function writeFile(modifiedUtc: string | null): Promise<void> {
     const models = path.join(home, 'models')
     fs.mkdirSync(models, { recursive: true })
     const file = path.join(models, 'configs.json')
     const bytes = Buffer.from(JSON.stringify([{ name: 'current', configuration: { model: 'm' } }]))
     fs.writeFileSync(file, bytes)
-    recordServerTime(file, bytes, modifiedUtc)
+    await recordServerTime(file, bytes, modifiedUtc)
   }
 
-  it('keeps a present file installed-unchecked with no synthetic latest/check facts before any check', () => {
-    writeFile(server)
-    const info = getDependenciesState().recommendations
+  it('keeps a present file installed-unchecked with no synthetic latest/check facts before any check', async () => {
+    await writeFile(server)
+    const info = await (await getDependenciesState()).recommendations
     expect(info.state).toBe('installed-unchecked')
     expect(info.latestLabel).toBeNull()
     expect(info.lastCheckedAtUtc).toBeNull()
   })
 
   it('reads up to date once a check finds the server time the file carries', async () => {
-    writeFile(server)
+    await writeFile(server)
     resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
     const state = await checkAllDependencies()
     expect(state.recommendations.state).toBe('up-to-date')
@@ -199,14 +199,14 @@ describe('recommendations lifecycle', () => {
   })
 
   it('reads update available when the server changed the file after this copy', async () => {
-    writeFile('2026-08-22T20:13:13.000Z')
+    await writeFile('2026-08-22T20:13:13.000Z')
     resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
     const state = await checkAllDependencies()
     expect(state.recommendations.state).toBe('update-available')
   })
 
   it('stays unchecked with no date for a file no install recorded, whatever its modification time', async () => {
-    writeFile(null)
+    await writeFile(null)
     fs.utimesSync(path.join(home, 'models', 'configs.json'), new Date(), new Date(server))
     resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
     const state = await checkAllDependencies()
@@ -215,14 +215,14 @@ describe('recommendations lifecycle', () => {
   })
 
   it('records the CLI result and no file facts when only the file check fails', async () => {
-    writeFile(server)
+    await writeFile(server)
     resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
     serverTimeMock.mockRejectedValue(new Error('offline'))
     await expect(checkAllDependencies()).rejects.toThrow('offline')
-    const cache = readDependenciesCache()
+    const cache = (await readDependenciesCache())
     expect(cache.cli.lastKnownLatest).toBe('v26.0910.1')
     expect(cache.recommendations).toEqual({ lastKnownModifiedUtc: null, lastCheckedAtUtc: null })
-    expect(getDependenciesState().recommendations.state).toBe('installed-unchecked')
+    expect(await (await getDependenciesState()).recommendations.state).toBe('installed-unchecked')
   })
 })
 
@@ -238,8 +238,8 @@ describe('the launch check, throttled by the last attempt', () => {
     if (originalPlatform) Object.defineProperty(process, 'platform', originalPlatform)
   })
 
-  function setLastAttempt(value: string): void {
-    updateDependenciesCache((cache) => {
+  async function setLastAttempt(value: string): Promise<void> {
+    await updateDependenciesCache((cache) => {
       cache.lastAttemptAtUtc = value
     })
   }
@@ -248,8 +248,8 @@ describe('the launch check, throttled by the last attempt', () => {
     resolveMock.mockResolvedValue(null)
     await checkDependenciesAtLaunch()
     expect(resolveMock).toHaveBeenCalledTimes(1)
-    expect(readDependenciesCache().lastAttemptAtUtc).not.toBeNull()
-    expect(readDependenciesCache().cli.lastCheckedAtUtc).toBeNull()
+    expect((await readDependenciesCache()).lastAttemptAtUtc).not.toBeNull()
+    expect((await readDependenciesCache()).cli.lastCheckedAtUtc).toBeNull()
 
     await checkDependenciesAtLaunch()
     expect(resolveMock).toHaveBeenCalledTimes(1)
@@ -258,7 +258,7 @@ describe('the launch check, throttled by the last attempt', () => {
   it('waits after a manual check attempt too, even a failed one', async () => {
     resolveMock.mockResolvedValue(null)
     await expect(checkAllDependencies()).rejects.toThrow('Could not reach')
-    expect(readDependenciesCache().lastAttemptAtUtc).not.toBeNull()
+    expect((await readDependenciesCache()).lastAttemptAtUtc).not.toBeNull()
 
     await checkDependenciesAtLaunch()
     expect(resolveMock).toHaveBeenCalledTimes(1)
@@ -269,10 +269,10 @@ describe('the launch check, throttled by the last attempt', () => {
     ['in the future', () => new Date(Date.now() + day).toISOString()],
     ['invalid', () => 'not a date'],
   ])('runs when the last attempt is %s', async (_label, lastAttempt) => {
-    setLastAttempt(lastAttempt())
+    await setLastAttempt(lastAttempt())
     resolveMock.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://x', sha256: 'a' })
     await checkDependenciesAtLaunch()
     expect(resolveMock).toHaveBeenCalledTimes(1)
-    expect(Date.parse(readDependenciesCache().lastAttemptAtUtc!)).toBeLessThanOrEqual(Date.now())
+    expect(Date.parse((await readDependenciesCache()).lastAttemptAtUtc!)).toBeLessThanOrEqual(Date.now())
   })
 })

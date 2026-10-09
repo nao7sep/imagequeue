@@ -13,8 +13,8 @@ import fs from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { log, serializeError } from '../logger'
-import { writeJsonAtomic } from '../utils/atomic-write'
-import { syncDirectory, syncFile } from '../utils/fsync'
+import { writeFileAtomicAsync } from '../utils/atomic-write'
+import { syncDirectoryAsync, syncFileAsync } from '../utils/fsync'
 import { getBinDir, getCliBinaryPath, getCliMetaPath, allocateTempPath, discardTempPath } from './paths'
 import { downloadToFile, sha256File, type DownloadProgress } from './download'
 import type { CliRelease } from './cli-release'
@@ -39,17 +39,17 @@ interface CliMeta {
 // the file stays the same, which left every installed version unreadable. An
 // install renames a fresh file into place, so a new binary always has a new
 // inode.
-function cliBinaryId(): string {
-  return String(fs.statSync(getCliBinaryPath(), { bigint: true }).ino)
+async function cliBinaryId(): Promise<string> {
+  return String((await fs.promises.stat(getCliBinaryPath(), { bigint: true })).ino)
 }
 
 // A cache of the installed binary's identity: its format version is written but
 // never checked, and any field that does not fit reads as an unknown version.
 // Install and Update replace it whatever build wrote it, since the binary it
 // describes is re-fetchable (store-recovery-conventions).
-function readCliMeta(): CliMeta | null {
+async function readCliMeta(): Promise<CliMeta | null> {
   try {
-    const raw: unknown = JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))
+    const raw: unknown = JSON.parse(await fs.promises.readFile(getCliMetaPath(), 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
     const { [FORMAT_VERSION_KEY]: _formatVersion, ...meta } = raw as Partial<CliMeta> & Record<string, unknown>
     if (typeof meta.tag !== 'string' || !isCliReleaseTag(meta.tag)) return null
@@ -60,22 +60,14 @@ function readCliMeta(): CliMeta | null {
   }
 }
 
-export function isCliInstalled(): boolean {
-  try {
-    return fs.statSync(getCliBinaryPath()).isFile()
-  } catch {
-    return false
-  }
-}
-
 /** The release tag recorded when the binary was installed, or null if the binary
  * or its sidecar is absent/unreadable. This is the installed version. */
-export function readInstalledCliTag(): string | null {
-  if (!isCliInstalled()) return null
+export async function readInstalledCliTag(): Promise<string | null> {
+  if (!await isCliInstalledAsync()) return null
   try {
-    const meta = readCliMeta()
+    const meta = await readCliMeta()
     if (!meta) return null
-    return meta.binaryId === cliBinaryId() ? meta.tag : null
+    return meta.binaryId === await cliBinaryId() ? meta.tag : null
   } catch {
     return null
   }
@@ -98,30 +90,30 @@ export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Pro
 /** Publish verified CLI bytes and their release identity. A prior sidecar names
  * the binary it describes, so a failure after the binary commit can only leave
  * the installed version unknown, never falsely identified as an older release. */
-export function publishCliBinary(tempPath: string, tag: string): CliInstallWarning[] {
-  fs.mkdirSync(getBinDir(), { recursive: true })
-  if (!isCliInstalled()) {
+export async function publishCliBinary(tempPath: string, tag: string): Promise<CliInstallWarning[]> {
+  await fs.promises.mkdir(getBinDir(), { recursive: true })
+  if (!await isCliInstalledAsync()) {
     // An orphan sidecar has no artifact to preserve and must not label the first
     // binary published into this location.
-    fs.rmSync(getCliMetaPath(), { force: true })
-    syncDirectory(getBinDir())
+    await fs.promises.rm(getCliMetaPath(), { force: true })
+    await syncDirectoryAsync(getBinDir())
   }
-  fs.renameSync(tempPath, getCliBinaryPath())
+  await fs.promises.rename(tempPath, getCliBinaryPath())
   const warnings: CliInstallWarning[] = []
-  try { syncDirectory(getBinDir()) } catch (error) {
+  try { await syncDirectoryAsync(getBinDir()) } catch (error) {
     warnings.push('sync-incomplete')
     log('warn', 'Draw Things CLI was published but directory sync failed', { error: serializeError(error) })
   }
   try {
-    const meta: CliMeta = { tag, binaryId: cliBinaryId() }
+    const meta: CliMeta = { tag, binaryId: await cliBinaryId() }
     // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
     // describing the re-fetchable CLI binary it sits beside — it is meaningless without that binary
     // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
     // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
     // colocated in a binary-bearing directory").
-    writeJsonAtomic(getCliMetaPath(), markFormat(meta, FORMAT_VERSIONS.cliSidecar), false)
+    await writeFileAtomicAsync(getCliMetaPath(), JSON.stringify(markFormat(meta, FORMAT_VERSIONS.cliSidecar), null, 2), false)
   } catch (error) {
-    const warning = readInstalledCliTag() === tag ? 'sync-incomplete' : 'identity-unavailable'
+    const warning = await readInstalledCliTag() === tag ? 'sync-incomplete' : 'identity-unavailable'
     if (!warnings.includes(warning)) warnings.push(warning)
     log('warn', 'Draw Things CLI was published but identity persistence failed', { error: serializeError(error) })
   }
@@ -143,7 +135,7 @@ export async function installCliRelease(
     throw new Error('Release asset has no published checksum; refusing to install unverified binary')
   }
 
-  const tempPath = allocateTempPath(getCliBinaryPath())
+  const tempPath = await allocateTempPath(getCliBinaryPath())
   try {
     await downloadToFile(
       release.assetUrl,
@@ -165,7 +157,7 @@ export async function installCliRelease(
 
     onProgress?.({ phase: 'installing', downloadedBytes: 0, totalBytes: null })
     signal?.throwIfAborted()
-    fs.chmodSync(tempPath, 0o755)
+    await fs.promises.chmod(tempPath, 0o755)
     // The file was written by us, not a browser, so it usually carries no
     // quarantine xattr — strip it defensively so Gatekeeper never blocks the
     // ad-hoc-signed binary on first run. A missing attribute is not an error.
@@ -173,18 +165,18 @@ export async function installCliRelease(
     signal?.throwIfAborted()
     // downloadToFile synced the bytes; sync once more after chmod/xattr so the
     // executable metadata is durable before publication.
-    syncFile(tempPath)
+    await syncFileAsync(tempPath)
 
     // Invalidate the prior artifact's identity immediately before publication.
     // From this point until the new sidecar lands, either binary reads as
     // version-unknown and remains re-acquirable; the new binary can never inherit
     // the old binary's release tag after a sync or sidecar-write failure.
     signal?.throwIfAborted()
-    const warnings = publishCliBinary(tempPath, release.tag)
+    const warnings = await publishCliBinary(tempPath, release.tag)
     log('info', 'draw-things-cli installed', { tag: release.tag })
     return warnings
   } catch (err) {
-    discardTempPath(tempPath)
+    await discardTempPath(tempPath)
     throw err
   }
 }
@@ -196,4 +188,8 @@ async function stripQuarantine(filePath: string, signal?: AbortSignal): Promise<
     if (signal?.aborted) throw signal.reason
     /* attribute absent (the normal case) — nothing to strip */
   }
+}
+
+export async function isCliInstalledAsync(): Promise<boolean> {
+  return fs.promises.stat(getCliBinaryPath()).then((stat) => stat.isFile(), () => false)
 }

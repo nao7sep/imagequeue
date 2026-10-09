@@ -2,15 +2,17 @@ import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard, nativeImag
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
+import { ownExportDestination, waitForStorage } from './utils/storage-wait'
 import { handle } from './ipc-boundary'
+import { saveImageBackendDefaults } from './backend-defaults'
 import { loadConfig, updateConfig } from './config'
-import { getStoredApiKey, setStoredApiKey, hasApiKey } from './config/api-keys-store'
+import { getStoredApiKey, setStoredApiKey, hasApiKey, refreshApiKeys } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
-import { refreshMainWindowMinimumSize } from './main-window-layout'
+import { refreshMainWindowMinimumSize, setDrawThingsReady } from './main-window-layout'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter, stageExportCopy } from './utils/file-output'
-import { claimFinalName } from './utils/atomic-write'
-import { syncDirectory } from './utils/fsync'
+import { claimFinalNameAsync } from './utils/atomic-write'
+import { syncDirectoryAsync } from './utils/fsync'
 import { AppConfig } from './config/types'
 import { openSessionsFolder } from './session/open-sessions-folder'
 import { log, serializeError } from './logger'
@@ -75,7 +77,7 @@ export function registerSettingsIpc(
   })
 
   handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig) => {
-    const config = updateConfig((draft) => {
+    const config = await updateConfig((draft) => {
       applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
     })
     if (onConfigSaved) {
@@ -94,13 +96,14 @@ export function registerSettingsIpc(
   // the config payload. The STORED value is surfaced, not the resolved one: an
   // environment-supplied key must stay invisible to the form so that saving a
   // field the user never touched cannot overwrite it.
-  handle('settings:getApiKeys', () => {
+  handle('settings:getApiKeys', async () => {
+    await refreshApiKeys()
     const keys = {} as Record<SecretId, string>
     for (const id of SECRET_IDS) keys[id] = getStoredApiKey(id)
     return keys
   })
 
-  handle('settings:saveApiKeys', (_event, changes: Record<string, string>) => {
+  handle('settings:saveApiKeys', async (_event, changes: Record<string, string>) => {
     // Trust boundary: ids come from the renderer's payload, so each is checked
     // against the known set before it reaches the store.
     const entries = Object.entries(changes ?? {})
@@ -108,7 +111,7 @@ export function registerSettingsIpc(
       if (!secretIds.has(id)) throw new Error(`Cannot save unsupported api key: ${id}`)
     }
     for (const [id, value] of entries) {
-      setStoredApiKey(id as SecretId, String(value ?? ''))
+      await setStoredApiKey(id as SecretId, String(value ?? ''))
     }
     // Storing or clearing a key can add or remove a column, which moves the
     // window's derived minimum.
@@ -122,7 +125,8 @@ export function registerSettingsIpc(
   // env-supplied one — which means a backend configured purely by environment
   // variable looks unconfigured to every UI check that reads that string. This
   // handler is the presence signal those checks need; it never carries a value.
-  handle('settings:getApiKeyPresence', () => {
+  handle('settings:getApiKeyPresence', async () => {
+    await refreshApiKeys()
     const image = {} as Record<CloudBackendId, boolean>
     for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
       image[backend] = hasApiKey(IMAGE_BACKEND_SECRET[backend])
@@ -130,8 +134,8 @@ export function registerSettingsIpc(
     return { image, geminiText: hasApiKey('gemini.text'), openaiText: hasApiKey('openai.text') }
   })
 
-  handle('settings:saveBrainstorm', (_event, brainstorm: AppConfig['brainstorm']) => {
-    updateConfig((draft) => {
+  handle('settings:saveBrainstorm', async (_event, brainstorm: AppConfig['brainstorm']) => {
+    await updateConfig((draft) => {
       draft.brainstorm = brainstorm
     })
     return { success: true }
@@ -139,33 +143,21 @@ export function registerSettingsIpc(
 
   handle(
     'settings:saveImageBackendDefaults',
-    (_event, backend: CloudBackendId, model: string, params: Record<string, unknown>) => {
+    async (_event, backend: CloudBackendId, model: string, params: Record<string, unknown>) => {
       if (!cloudBackendIds.has(backend)) {
         throw new Error(`Cannot save image backend defaults for unsupported backend: ${backend}`)
       }
-
-      updateConfig((draft) => {
-        const backends = draft.image_backends as unknown as Record<
-          CloudBackendId,
-          { model: string; default_params: Record<string, unknown> } & Record<string, unknown>
-        >
-        const current = backends[backend]
-        backends[backend] = {
-          ...current,
-          model,
-          default_params: params,
-        }
-      })
+      await saveImageBackendDefaults(backend, model, params)
       return { success: true }
     }
   )
 
-  handle('settings:saveNotificationField', (_event, field: string, value: unknown) => {
+  handle('settings:saveNotificationField', async (_event, field: string, value: unknown) => {
     if (!notificationFields.has(field)) {
       throw new Error(`Cannot save unsupported notification setting: ${field}`)
     }
 
-    updateConfig((draft) => {
+    await updateConfig((draft) => {
       const notifications = draft.notifications as unknown as Record<string, unknown>
       notifications[field] = value
     })
@@ -175,11 +167,15 @@ export function registerSettingsIpc(
   // --- Draw Things CLI integration ---
 
   handle('local:checkCli', async () => {
-    return checkCli()
+    const status = await checkCli()
+    if (!status.installed) setDrawThingsReady(false)
+    return status
   })
 
   handle('local:listDownloadedModels', async () => {
-    return listDownloadedModels()
+    const models = await listDownloadedModels()
+    setDrawThingsReady(models.length > 0)
+    return models
   })
 
   handle('local:listAvailableModels', async () => {
@@ -190,9 +186,9 @@ export function registerSettingsIpc(
     return readCustomJsonImportedFiles()
   })
 
-  handle('cli-job:startImport', (event, artifactPath: string) => {
+  handle('cli-job:startImport', async (event, artifactPath: string) => {
     const cliPath = resolveCliPath()
-    const dir = ensureModelsDir()
+    const dir = await ensureModelsDir()
     const jobId = startCliJob({
       kind: 'import',
       cliPath,
@@ -204,9 +200,9 @@ export function registerSettingsIpc(
     return jobId
   })
 
-  handle('cli-job:startDownload', (event, modelFile: string) => {
+  handle('cli-job:startDownload', async (event, modelFile: string) => {
     const cliPath = resolveCliPath()
-    const dir = ensureModelsDir()
+    const dir = await ensureModelsDir()
     const jobId = startCliJob({
       kind: 'download',
       cliPath,
@@ -252,11 +248,11 @@ export function registerSettingsIpc(
 
   handle('shell:openSessionsFolder', openSessionsFolder)
 
-  handle('shell:revealFile', (_event, baseName: string, ext: string) => {
+  handle('shell:revealFile', async (_event, baseName: string, ext: string) => {
     const safeBase = assertSafeBaseName(baseName)
     const safeExt = assertImageExt(ext)
     const filePath = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
-    if (!fs.existsSync(filePath)) {
+    if (!await fs.promises.stat(filePath).then(() => true, () => false)) {
       throw new Error(`Cannot reveal missing image: ${filePath}`)
     }
     shell.showItemInFolder(filePath)
@@ -266,20 +262,23 @@ export function registerSettingsIpc(
     const safeBase = assertSafeBaseName(baseName)
     const safeExt = assertImageExt(ext)
     const exportDir = configuredExportDir()
-    fs.mkdirSync(exportDir, { recursive: true })
     const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
-    let destPath = path.join(exportDir, `${safeBase}.${safeExt}`)
-    const staging = stageExportCopy(src, destPath)
-    try {
-      // An earlier export of the same image keeps its name; this one takes the next free one.
-      for (let n = 2; !claimFinalName(staging, destPath); n++) {
-        destPath = path.join(exportDir, `${safeBase}-${n}.${safeExt}`)
+    const requestedDestination = path.join(exportDir, `${safeBase}.${safeExt}`)
+    return ownExportDestination(requestedDestination, async () => {
+      await fs.promises.mkdir(exportDir, { recursive: true })
+      let destPath = requestedDestination
+      const staging = await stageExportCopy(src, destPath)
+      try {
+        // An earlier export of the same image keeps its name; this one takes the next free one.
+        for (let n = 2; !await claimFinalNameAsync(staging, destPath); n++) {
+          destPath = path.join(exportDir, `${safeBase}-${n}.${safeExt}`)
+        }
+        await syncDirectoryAsync(exportDir)
+      } finally {
+        await fs.promises.rm(staging, { force: true }).catch(() => undefined)
       }
-      syncDirectory(exportDir)
-    } finally {
-      fs.rmSync(staging, { force: true })
-    }
-    return destPath
+      return destPath
+    })
   })
 
   handle('shell:exportImageAs', async (event, baseName: string, ext: string) => {
@@ -295,17 +294,19 @@ export function registerSettingsIpc(
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
     const destPath = exportPathForFormat(result.filePath, safeExt)
-    fs.mkdirSync(path.dirname(destPath), { recursive: true })
-    // The user chose this name, replacing any file there; it is replaced only
-    // once the complete copy is in place beside it.
-    const staging = stageExportCopy(src, destPath)
-    try {
-      fs.renameSync(staging, destPath)
-      syncDirectory(path.dirname(destPath))
-    } finally {
-      fs.rmSync(staging, { force: true })
-    }
-    return destPath
+    return waitForStorage(ownExportDestination(destPath, async () => {
+      await fs.promises.mkdir(path.dirname(destPath), { recursive: true })
+      // The user chose this name, replacing any file there; it is replaced only
+      // once the complete copy is in place beside it.
+      const staging = await stageExportCopy(src, destPath)
+      try {
+        await fs.promises.rename(staging, destPath)
+        await syncDirectoryAsync(path.dirname(destPath))
+      } finally {
+        await fs.promises.rm(staging, { force: true }).catch(() => undefined)
+      }
+      return destPath
+    }))
   })
 
   handle('clipboard:readText', () => {
@@ -318,7 +319,7 @@ export function registerSettingsIpc(
 
   handle('clipboard:copyImage', async (_event, baseName: string, ext: string) => {
     const filePath = path.join(getSessionDir(), `${assertSafeBaseName(baseName)}.${assertImageExt(ext)}`)
-    const buffer = fs.readFileSync(filePath)
+    const buffer = await fs.promises.readFile(filePath)
     const image = nativeImage.createFromBuffer(buffer)
     if (image.isEmpty()) throw new Error(`Cannot copy unreadable image: ${filePath}`)
     const png = new Uint8Array(image.toPNG())

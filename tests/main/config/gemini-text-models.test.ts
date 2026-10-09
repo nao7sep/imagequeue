@@ -30,7 +30,7 @@ afterEach(async () => {
 describe('open text model sets', () => {
   it('preserves arbitrary role ids and writes only the changed role', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
-    const config = updateConfig((draft) => { draft.gemini.elaboration = 'unknown-future-id' })
+    const config = await updateConfig((draft) => { draft.gemini.elaboration = 'unknown-future-id' })
     expect(config.gemini.elaboration).toBe('unknown-future-id')
     expect(storedSets()).toEqual({ gemini: { elaboration: 'unknown-future-id' } })
   })
@@ -46,7 +46,7 @@ describe('open text model sets', () => {
     expect(loadConfig().gemini.elaboration).toBe('gemini-3.8-flash')
     expect(loadConfig().gemini.slug).toBe('my-slug')
     expect(loadConfig().gemini.timeout_ms).toBe(30000)
-    updateConfig((draft) => { draft.provider = 'openai' })
+    await updateConfig((draft) => { draft.provider = 'openai' })
     expect(storedSets()).toEqual({
       text_ai: { backend: 'openai', gemini: { main_model: 'old', light_model: 'old', timeout_ms: 40000 },
         openai: { endpoint: 'https://old.example' } },
@@ -55,22 +55,22 @@ describe('open text model sets', () => {
   })
   it('stores a provider timeout as its own set beside the provider\'s other sets', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
-    updateConfig((draft) => { draft.openai.timeout_ms = 90000 })
+    await updateConfig((draft) => { draft.openai.timeout_ms = 90000 })
     expect(storedSets()).toEqual({ openai: { timeout_ms: 90000 } })
   })
   it('stores a role\'s thinking only while it differs from the selected model\'s default', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
     const file = storedSets
-    updateConfig((draft) => { draft.openai.thinking.slug = 'none' })
+    await updateConfig((draft) => { draft.openai.thinking.slug = 'none' })
     expect(fs.existsSync(path.join(root, 'config.json'))).toBe(false)
-    updateConfig((draft) => { draft.openai.thinking.slug = 'high' })
+    await updateConfig((draft) => { draft.openai.thinking.slug = 'high' })
     expect(file()).toEqual({ openai: { thinking: { slug: 'high' } } })
     // The default is the model's tier's, medium on the smart Sol, not the fast role's.
-    updateConfig((draft) => { draft.openai.slug = 'gpt-6.1-sol'; draft.openai.thinking.slug = 'medium' })
+    await updateConfig((draft) => { draft.openai.slug = 'gpt-6.1-sol'; draft.openai.thinking.slug = 'medium' })
     expect(file()).toEqual({ openai: { slug: 'gpt-6.1-sol' } })
-    updateConfig((draft) => { draft.openai.thinking.slug = 'max' })
+    await updateConfig((draft) => { draft.openai.thinking.slug = 'max' })
     // Under a model with no row the choice is kept, unsent, for when a listed row returns.
-    updateConfig((draft) => { draft.openai.slug = 'local-model' })
+    await updateConfig((draft) => { draft.openai.slug = 'local-model' })
     expect(file()).toEqual({ openai: { slug: 'local-model', thinking: { slug: 'max' } } })
   })
   it('reads and sends a thinking the file does not hold as the selected model\'s own default after a relaunch', async () => {
@@ -78,7 +78,7 @@ describe('open text model sets', () => {
     const { textRowFor, thinkingFor } = await import('../../../src/shared/ai-models')
     // Each role selects the other tier and leaves its thinking at that model's default:
     // Flash Lite's minimal under the balanced elaboration, Flash's medium under the fast slug.
-    updateConfig((draft) => {
+    await updateConfig((draft) => {
       draft.gemini.elaboration = 'gemini-3.5-flash-lite'
       draft.gemini.thinking.elaboration = 'minimal'
       draft.gemini.slug = 'gemini-3.8-flash'

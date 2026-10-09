@@ -41,10 +41,10 @@ describe('summarizeConfig', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('includes every cloud backend with its key presence', () => {
+  it('includes every cloud backend with its key presence', async () => {
     const config = createDefaultConfig()
     // Keys live in the separate secrets store, not config.json.
-    setStoredApiKey('openai.image', 'sk-super-secret')
+    await setStoredApiKey('openai.image', 'sk-super-secret')
 
     const summary = summarizeConfig(config) as {
       imageBackends: Record<string, { apiKeyPresent: boolean }>
@@ -57,21 +57,21 @@ describe('summarizeConfig', () => {
     expect(summary.imageBackends.openai.apiKeyPresent).toBe(true)
   })
 
-  it('reports an endpoint override only when it differs from the official endpoint', () => {
+  it('reports an endpoint override only when it differs from the official endpoint', async () => {
     const config = createDefaultConfig()
     expect(summarizeConfig(config).textAi).toMatchObject({ openaiEndpointOverride: false })
     config.openai.endpoint = 'https://proxy.example/v1'
     expect(summarizeConfig(config).textAi).toMatchObject({ openaiEndpointOverride: true })
   })
 
-  it('names each text model by its role', () => {
+  it('names each text model by its role', async () => {
     expect(summarizeConfig(createDefaultConfig()).textAi).toMatchObject({
       geminiElaborationModel: 'gemini-3.8-flash', geminiSlugModel: 'gemini-3.5-flash-lite',
       openaiElaborationModel: 'gpt-5.6-terra', openaiSlugModel: 'gpt-6-luna',
     })
   })
 
-  it('reports no key present when none is stored or in the environment', () => {
+  it('reports no key present when none is stored or in the environment', async () => {
     const summary = summarizeConfig(createDefaultConfig()) as {
       imageBackends: Record<string, { apiKeyPresent: boolean }>
     }

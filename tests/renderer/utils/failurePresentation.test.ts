@@ -26,3 +26,9 @@ describe('presentFailure', () => {
     expect(error.cause).toBeInstanceOf(Error)
   })
 })
+
+it('describes a timed-out storage wait as still pending rather than a failed effect', () => {
+  const message = t(presentFailure('session-resume', new Error("Error invoking remote method 'session:resume': Error: IMAGEQUEUE_STORAGE_STILL_PENDING")))
+  expect(message).toContain('may still complete')
+  expect(message).not.toContain('IMAGEQUEUE_STORAGE')
+})

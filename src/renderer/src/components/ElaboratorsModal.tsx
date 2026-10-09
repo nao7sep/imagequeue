@@ -257,6 +257,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         title: t('elabSettings.discardTitle'),
         message: t('elaborators.discardMessage'),
         confirmLabel: t('settings.discard'),
+        cancelLabel: t('settings.keepEditing'),
         danger: true,
       })
       if (!ok) return

@@ -16,7 +16,7 @@ vi.mock('../../../src/main/config', () => ({
     },
   }),
 }))
-vi.mock('../../../src/main/config/api-keys-store', () => ({
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => undefined,
   resolveApiKey: () => 'test-key',
 }))
 

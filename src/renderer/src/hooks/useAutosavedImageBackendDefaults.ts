@@ -33,9 +33,10 @@ export function useAutosavedImageBackendDefaults({
   applySaved,
   saveDefaults,
 }: UseAutosavedImageBackendDefaultsOptions): ImageBackendDefaultsPersistence {
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistedSnapshotRef = useRef('')
+  const submittedSnapshotRef = useRef('')
   const loadedRef = useRef(false)
+  const applyingSavedRef = useRef(false)
   const saveAttemptRef = useRef(0)
   const [saveFailure, setSaveFailure] = useState<MessageKey | null>(null)
   const currentSnapshot = currentModel
@@ -51,38 +52,37 @@ export function useAutosavedImageBackendDefaults({
     // what the column holds beyond what is saved (another model's fields).
     if (loadedRef.current && (currentSnapshot !== persistedSnapshotRef.current || savedSnapshot === currentSnapshot)) return
 
+    applyingSavedRef.current = true
     applySaved(saved)
     persistedSnapshotRef.current = savedSnapshot
+    submittedSnapshotRef.current = savedSnapshot
     loadedRef.current = true
   }, [backend, saved, currentSnapshot, applySaved])
 
   useEffect(() => {
+    // applySaved schedules React state for the next render. Do not submit this
+    // render's pre-hydration defaults while that update is still being applied.
+    if (applyingSavedRef.current) { applyingSavedRef.current = false; return }
     if (!backend || !settingsLoaded || !currentModel) return
     if (!loadedRef.current) return
-    if (currentSnapshot === persistedSnapshotRef.current) return
+    if (currentSnapshot === submittedSnapshotRef.current) return
+    submittedSnapshotRef.current = currentSnapshot
 
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      saveTimerRef.current = null
-      const attempt = ++saveAttemptRef.current
-      void saveDefaults(backend, currentModel, currentParams).then(() => {
-        if (saveAttemptRef.current !== attempt) return
-        persistedSnapshotRef.current = currentSnapshot
-        setSaveFailure(null)
-      }).catch((error) => {
-        recordOperationalDiagnostic('Failed to persist image backend defaults', error, { backend })
-        if (saveAttemptRef.current === attempt) setSaveFailure(SAVE_FAILURE)
-      })
-    }, 800)
+    // Hand the edit to main immediately; its owner coalesces and survives window loss.
+    const attempt = ++saveAttemptRef.current
+    void saveDefaults(backend, currentModel, currentParams).then(() => {
+      if (saveAttemptRef.current !== attempt) return
+      persistedSnapshotRef.current = currentSnapshot
+      setSaveFailure(null)
+    }).catch((error) => {
+      recordOperationalDiagnostic('Failed to persist image backend defaults', error, { backend })
+      if (saveAttemptRef.current === attempt) setSaveFailure(SAVE_FAILURE)
+    })
 
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    }
   }, [backend, settingsLoaded, currentModel, currentParams, currentSnapshot, saveDefaults])
 
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveAttemptRef.current += 1
     }
   }, [])

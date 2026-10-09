@@ -1,3 +1,4 @@
+import { isStorageStillPending } from '../../../shared/storage-wait'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
@@ -133,6 +134,15 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
     }
   }, [detailsOpen])
 
+  // Identity alone is insufficient when selection goes A -> B -> A while an
+  // export is pending. Every selection visit owns its own feedback generation.
+  const exportSelection = useRef({ id: selectedTask?.id, generation: 0 })
+  if (exportSelection.current.id !== selectedTask?.id) {
+    exportSelection.current = { id: selectedTask?.id, generation: exportSelection.current.generation + 1 }
+  }
+  const exportAttempts = useRef({ export: 0, saveAs: 0 })
+  useEffect(() => () => { exportSelection.current.generation += 1 }, [])
+
   // Reset feedback states when selection changes
   useEffect(() => {
     setPromptCopied(false)
@@ -151,7 +161,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
     error: unknown,
   ): void => {
     logActionFailure(action, error)
-    setActionFailures((current) => ({ ...current, [action]: message }))
+    setActionFailures((current) => ({ ...current, [action]: isStorageStillPending(error) ? 'storage.stillPending' : message }))
   }, [])
 
   const clearActionFailure = useCallback((action: PromptPaneAction): void => {
@@ -224,30 +234,37 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
 
   const handleExport = useCallback((): void => {
     if (!selectedTask?.baseName) return
+    const generation = exportSelection.current.generation
+    const attempt = ++exportAttempts.current.export
+    const current = (): boolean => exportSelection.current.generation === generation && exportAttempts.current.export === attempt
     void window.electronAPI.exportImage(selectedTask.baseName, getExt())
       .then(() => {
+        if (!current()) return
         clearActionFailure('export-image')
         setExported(true)
-        setTimeout(() => setExported(false), 1500)
+        setTimeout(() => { if (current()) setExported(false) }, 1500)
       })
-      .catch((error) => reportActionFailure(
+      .catch((error) => current() ? reportActionFailure(
         'export-image',
         'task.exportFailed',
         error,
-      ))
+      ) : logActionFailure('export-image', error))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
 
   const handleSaveAs = useCallback((): void => {
     if (!selectedTask?.baseName) return
+    const generation = exportSelection.current.generation
+    const attempt = ++exportAttempts.current.saveAs
+    const current = (): boolean => exportSelection.current.generation === generation && exportAttempts.current.saveAs === attempt
     void window.electronAPI.exportImageAs(selectedTask.baseName, getExt())
       .then((destination) => {
-        if (destination !== null) clearActionFailure('save-image-as')
+        if (current() && destination !== null) clearActionFailure('save-image-as')
       })
-      .catch((error) => reportActionFailure(
+      .catch((error) => current() ? reportActionFailure(
         'save-image-as',
         'prompt.saveAsFailed',
         error,
-      ))
+      ) : logActionFailure('save-image-as', error))
   }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
 
   const refreshClipboardTextAvailable = useCallback((): void => {

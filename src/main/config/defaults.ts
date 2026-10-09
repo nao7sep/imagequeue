@@ -19,6 +19,7 @@ export function createDefaultConfig(): AppConfig {
       timeout_ms: 60000,
     },
     general: {
+      check_github_releases_at_launch: true,
       theme: 'system',
       language: 'system',
       ui_font_family: '',

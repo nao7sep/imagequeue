@@ -7,7 +7,7 @@
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
 import { fetchLatestRecommendationsModified, getRecommendationsStatus } from '../recommendations'
-import { isCliInstalled, readInstalledCliTag, installCliRelease } from './cli-binary'
+import { isCliInstalledAsync, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
 import { compareCliVersions } from './cli-version'
 import { CLI_DOWNLOAD_LIMITS, withWholeOperationTimeout } from './download'
@@ -30,10 +30,10 @@ function checkUpdatesAtLaunch(): boolean {
   return loadConfig().image_backends.drawthings.check_updates_at_launch
 }
 
-function cliInfo(): DependencyInfo {
-  const cache = readDependenciesCache()
-  const present = isCliInstalled()
-  const installedTag = readInstalledCliTag()
+async function cliInfo(): Promise<DependencyInfo> {
+  const cache = await readDependenciesCache()
+  const present = await isCliInstalledAsync()
+  const installedTag = await readInstalledCliTag()
   const latest = cache.cli.lastKnownLatest
   const comparison: DependencyComparison = present
     ? compareCliVersions(installedTag, latest)
@@ -49,9 +49,9 @@ function cliInfo(): DependencyInfo {
   }
 }
 
-function recommendationsInfo(): DependencyInfo {
-  const cache = readDependenciesCache()
-  const status = getRecommendationsStatus()
+async function recommendationsInfo(): Promise<DependencyInfo> {
+  const cache = await readDependenciesCache()
+  const status = await getRecommendationsStatus()
   const present = status.exists
   // configs.json has no version; its identity is when the server last changed
   // it, recorded with the hash of its bytes (see recommendations-times).
@@ -69,10 +69,10 @@ function recommendationsInfo(): DependencyInfo {
   }
 }
 
-export function getDependenciesState(): DependenciesState {
+export async function getDependenciesState(): Promise<DependenciesState> {
   return {
-    cli: cliInfo(),
-    recommendations: recommendationsInfo(),
+    cli: await cliInfo(),
+    recommendations: await recommendationsInfo(),
     checkUpdatesAtLaunch: checkUpdatesAtLaunch(),
     platformSupported: process.platform === 'darwin',
   }
@@ -86,7 +86,7 @@ async function checkCliForUpdate(force: boolean, signal?: AbortSignal): Promise<
   // NO persisted fact (invariant I3): advancing the timestamp here would read as
   // "checked just now" having learned nothing.
   if (!release) throw new Error('Could not reach the Draw Things release server')
-  updateDependenciesCache((cache) => {
+  await updateDependenciesCache((cache) => {
     cache.cli.lastCheckedAtUtc = new Date().toISOString()
     cache.cli.lastKnownLatest = release.tag
   })
@@ -96,14 +96,14 @@ async function checkCliForUpdate(force: boolean, signal?: AbortSignal): Promise<
  * check time. A failed request records nothing (invariant I3). */
 async function checkRecommendationsForUpdate(signal?: AbortSignal): Promise<void> {
   const modified = await fetchLatestRecommendationsModified(signal)
-  updateDependenciesCache((cache) => {
+  await updateDependenciesCache((cache) => {
     cache.recommendations.lastCheckedAtUtc = new Date().toISOString()
     cache.recommendations.lastKnownModifiedUtc = modified
   })
 }
 
-function recordCheckAttempt(): void {
-  updateDependenciesCache((cache) => {
+async function recordCheckAttempt(): Promise<void> {
+  await updateDependenciesCache((cache) => {
     cache.lastAttemptAtUtc = new Date().toISOString()
   })
 }
@@ -111,7 +111,7 @@ function recordCheckAttempt(): void {
 /** Check every managed tool now, without installing anything. Each success is
  * recorded even when the other check fails; any failure is then reported. */
 export async function checkAllDependencies(signal?: AbortSignal): Promise<DependenciesState> {
-  recordCheckAttempt()
+  await recordCheckAttempt()
   const results = await Promise.allSettled([
     checkCliForUpdate(true, signal),
     checkRecommendationsForUpdate(signal),
@@ -151,9 +151,9 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
   // available" nobody can act on.
   if (process.platform !== 'darwin') return
   if (!checkUpdatesAtLaunch()) return
-  if (!isLaunchCheckDue(readDependenciesCache().lastAttemptAtUtc, Date.now())) return
+  if (!isLaunchCheckDue((await readDependenciesCache()).lastAttemptAtUtc, Date.now())) return
   try {
-    recordCheckAttempt()
+    await recordCheckAttempt()
   } catch (error) {
     // A check whose attempt cannot be recorded could not record its result either.
     log('warn', 'Launch dependency check skipped; the check attempt could not be recorded', {
@@ -163,7 +163,7 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
   }
   const checks = [checkAtLaunch('cli', 'Draw Things CLI', (signal) => checkCliForUpdate(false, signal))]
   // An absent optional file reads "Not installed" whatever the server holds.
-  if (getRecommendationsStatus().exists) {
+  if ((await getRecommendationsStatus()).exists) {
     checks.push(checkAtLaunch('recommendations', 'Recommended parameters', checkRecommendationsForUpdate))
   }
   await Promise.all(checks)
@@ -190,17 +190,17 @@ export async function installOrUpdateCli(
       }
       const warnings = await installCliRelease(release, onProgress, boundedSignal)
       const checkedAt = new Date().toISOString()
-      try { updateDependenciesCache((cache) => {
+      try { await updateDependenciesCache((cache) => {
         cache.cli.lastKnownLatest = release.tag
         cache.cli.lastCheckedAtUtc = checkedAt
       }) } catch (error) {
-        const saved = readDependenciesCache().cli
+        const saved = await (await readDependenciesCache()).cli
         const warning = saved.lastKnownLatest === release.tag && saved.lastCheckedAtUtc === checkedAt
           ? 'sync-incomplete' : 'check-not-saved'
         if (!warnings.includes(warning)) warnings.push(warning)
         log('warn', 'Draw Things CLI was installed but update-check information was not saved', { error: serializeError(error) })
       }
-      return { state: getDependenciesState(), warnings }
+      return { state: await getDependenciesState(), warnings }
     }
   )
 }

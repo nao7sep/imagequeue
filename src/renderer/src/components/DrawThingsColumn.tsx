@@ -1,3 +1,4 @@
+import { setDrawThingsReady } from '../hooks/useVisiblePanes'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-api'
@@ -190,11 +191,13 @@ export function useDrawThingsColumn({
       const status = await window.electronAPI.localCheckCli()
       setCliStatus(status)
       if (!status.installed) {
+        setDrawThingsReady(false)
         setDownloadedModels([])
         setModelsLoadState('ready')
         return
       }
       const list = await window.electronAPI.localListDownloadedModels()
+      setDrawThingsReady(list.length > 0)
       const sortedList = sortLocalModels(list)
       setDownloadedModels((prev) => {
         const prevFiles = prev.map((m) => m.file).join(',')

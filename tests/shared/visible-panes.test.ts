@@ -30,10 +30,10 @@ describe('getVisiblePanes', () => {
     expect(getVisiblePanes('linux', NONE_KEYED)).toEqual([WELCOME_PANE])
   })
 
-  it('never shows the welcome pane on macOS, where Draw Things always fills the group', () => {
-    // The pane is unreachable on macOS by construction — which is why it says
-    // nothing about a backend only macOS can run.
-    expect(getVisiblePanes('darwin', NONE_KEYED)).toEqual(['drawthings'])
+  it('offers setup beside Draw Things until local generation is ready', () => {
+    expect(getVisiblePanes('darwin', NONE_KEYED)).toEqual(['drawthings', WELCOME_PANE])
+    expect(getVisiblePanes('darwin', NONE_KEYED, [], true)).toEqual(['drawthings'])
+    expect(getVisiblePanes('darwin', NONE_KEYED, ['flux'])).toEqual(['flux', 'drawthings', WELCOME_PANE])
   })
 
   it('does not show the welcome pane once any cloud backend is keyed', () => {

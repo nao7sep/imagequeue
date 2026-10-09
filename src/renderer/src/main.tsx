@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { QuitFailureApp } from './components/QuitFailureApp'
 import { StartupFailureApp } from './components/StartupFailureApp'
 import { RendererErrorBoundary } from './components/RendererErrorBoundary'
 import { MainProcessLanguage } from './i18n/I18nContext'
@@ -13,7 +14,9 @@ const surface = query.get('surface')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {surface === 'startup-failure' ? (
+    {surface === 'quit-failure' ? (
+      <MainProcessLanguage><QuitFailureApp /></MainProcessLanguage>
+    ) : surface === 'startup-failure' ? (
       <MainProcessLanguage><StartupFailureApp /></MainProcessLanguage>
     ) : surface === 'records' ? (
       <RendererErrorBoundary><MainProcessLanguage><RecordsApp /></MainProcessLanguage></RendererErrorBoundary>

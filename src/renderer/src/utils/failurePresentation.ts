@@ -1,3 +1,4 @@
+import { isStorageStillPending } from '../../../shared/storage-wait'
 import { serializeError } from '../../../shared/serialize-error'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
@@ -55,5 +56,5 @@ export function presentFailure(operation: FailureOperation, error: unknown): Mes
   } catch (logError) {
     console.error('Failed to record a renderer operation diagnostic', logError)
   }
-  return COPY[operation]
+  return isStorageStillPending(error) ? 'storage.stillPending' : COPY[operation]
 }

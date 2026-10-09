@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '../i18n/I18nContext'
 
 interface Props {
+  id?: string
   value: number
   onCommit: (value: number) => void
   className?: string
@@ -13,7 +14,7 @@ const COMMIT_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 
 /** A range input that previews continuously but persists only at a completed
  * pointer/keyboard/blur interaction. Shared by the two volume surfaces so they
  * cannot drift into different commit semantics. */
-export function NotificationVolumeSlider({ value, onCommit, className, ariaLabel }: Props): React.JSX.Element {
+export function NotificationVolumeSlider({ id, value, onCommit, className, ariaLabel }: Props): React.JSX.Element {
   const { t } = useI18n()
   const [draft, setDraft] = useState(value)
   const lastCommittedRef = useRef(value)
@@ -31,6 +32,7 @@ export function NotificationVolumeSlider({ value, onCommit, className, ariaLabel
 
   return (
     <input
+      id={id}
       type="range"
       className={className}
       aria-label={ariaLabel ?? t('volume.label')}

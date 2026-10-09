@@ -7,7 +7,7 @@ import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import type { AppNotice } from '../../shared/app-notice'
 import { FORMAT_VERSION_KEY, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
-import { holdsBytes } from '../utils/holds-bytes'
+import { holdsBytesAsync } from '../utils/holds-bytes'
 import { raiseAppNotice } from '../app-notices'
 import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
 
@@ -128,12 +128,30 @@ function unusableNotice(filePath: string, unusable: Unusable): AppNotice {
   return unusable.kind === 'newer' ? newerFilePresentation(filePath) : apiKeysUnavailablePresentation(filePath)
 }
 
+let cachedPath = ''
+let cachedRead: ReturnType<typeof readSecretsFile> | null = null
+let saving: Promise<unknown> = Promise.resolve()
+let retrySave: (() => Promise<unknown>) | null = null
+export async function retryApiKeySaves(): Promise<void> {
+  await saving.catch(() => undefined)
+  if (retrySave) {
+    const result = retrySave()
+    saving = result
+    await result
+    retrySave = null
+  }
+}
+
+export function flushApiKeySaves(): Promise<unknown> { return saving }
+
 let unusableReported = false
 
 // A file that cannot be used reads as holding no keys. The first time in a
 // launch, that is logged and the user is told which file it is.
 function readableKeys(): Record<string, unknown> {
-  const read = readSecretsFile()
+  const filePath = getSecretsPath()
+  if (cachedPath !== filePath) { cachedRead = null; cachedPath = filePath }
+  const read = cachedRead ??= readSecretsFile()
   if (read.file) return read.file.keys
   if (!unusableReported) {
     unusableReported = true
@@ -164,34 +182,34 @@ function storedEntry(keys: Record<string, unknown>, id: SecretId): unknown {
   return match === undefined ? undefined : keys[match]
 }
 
-function writeSecretsFile(file: SecretsFile): void {
+async function writeSecretsFile(file: SecretsFile): Promise<void> {
   const filePath = getSecretsPath()
   const dir = path.dirname(filePath)
-  fs.mkdirSync(dir, { recursive: true })
+  await fs.promises.mkdir(dir, { recursive: true })
   // not recorded: api-keys.json is a SECRET and is never written through the managed-text hook. Secrets
   // are never recorded (data-backup conventions): a history containing a credential would become
   // sensitive-at-rest in its entirety and would have to be guarded as the secret is; keeping it out is
   // what keeps backups.sqlite3 no more sensitive than ordinary user text. A key lost to a wipe is
   // re-entered by the user. This write deliberately does its own 0600 temp+rename rather than routing
-  // through writeFileAtomic — the separate path is itself the exclusion, by construction.
+  // through writeFileAtomicAsync — the separate path is itself the exclusion, by construction.
   const content = Buffer.from(`${JSON.stringify(markFormat({ ...file.others, keys: file.keys }, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, 'utf-8')
-  if (holdsBytes(filePath, content)) return
+  if (await holdsBytesAsync(filePath, content)) return
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
   let owned = false
   try {
-    const descriptor = fs.openSync(tempPath, 'wx', SECRETS_FILE_MODE)
+    const descriptor = await fs.promises.open(tempPath, 'wx', SECRETS_FILE_MODE)
     owned = true
     try {
-      fs.writeFileSync(descriptor, content)
-      fs.fsyncSync(descriptor)
+      await descriptor.writeFile(content)
+      await descriptor.sync()
     } finally {
-      fs.closeSync(descriptor)
+      await descriptor.close()
     }
-    fs.renameSync(tempPath, filePath)
+    await fs.promises.rename(tempPath, filePath)
   } finally {
     if (owned) {
-      try { fs.rmSync(tempPath, { force: true }) } catch { /* Preserve the save's cause. */ }
+      try { await fs.promises.rm(tempPath, { force: true }) } catch { /* Preserve the save's cause. */ }
     }
   }
 }
@@ -253,8 +271,38 @@ export function getStoredApiKey(id: SecretId): string {
 // Persist (or clear, when value is blank) the stored key for a secret id. Every
 // other entry is written back as it was. A file that cannot be used refuses the
 // save, tells the user which file it is, and stays exactly as it is.
-export function setStoredApiKey(id: SecretId, value: string): void {
-  const read = readSecretsFile()
+export function setStoredApiKey(id: SecretId, value: string): Promise<void> {
+  const operation = () => saveStoredApiKey(id, value)
+  const result = saving.catch(() => undefined).then(async () => {
+    if (retrySave) await retrySave()
+    retrySave = operation
+    return operation().then(() => { retrySave = null })
+  })
+  saving = result
+  return result
+}
+
+async function readSecretsFileAsync(): Promise<ReturnType<typeof readSecretsFile>> {
+  const filePath = getSecretsPath()
+  let text: string
+  try { text = await fs.promises.readFile(filePath, 'utf-8') } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { file: { keys: {}, others: {} } }
+    return { file: null, unusable: { kind: 'unreadable', error } }
+  }
+  try {
+    const file = parseSecrets(JSON.parse(text), filePath)
+    if (ENFORCE_FILE_MODE) {
+      const mode = await fs.promises.stat(filePath).then((stat) => stat.mode, () => 0)
+      if (mode & 0o077) await fs.promises.chmod(filePath, SECRETS_FILE_MODE).catch(() => undefined)
+    }
+    return { file }
+  } catch (error) {
+    return { file: null, unusable: { kind: error instanceof NewerFormatError ? 'newer' : 'malformed', error } }
+  }
+}
+
+async function saveStoredApiKey(id: SecretId, value: string): Promise<void> {
+  const read = await readSecretsFileAsync()
   if (!read.file) {
     const filePath = getSecretsPath()
     raiseAppNotice(unusableNotice(filePath, read.unusable))
@@ -270,5 +318,22 @@ export function setStoredApiKey(id: SecretId, value: string): void {
   } else {
     delete file.keys[id]
   }
-  writeSecretsFile(file)
+  await writeSecretsFile(file)
+  cachedRead = { file }
+  cachedPath = getSecretsPath()
+}
+
+/** Refresh at settings and request boundaries so repaired/externally changed
+ * credentials take effect without blocking the main event loop. Layout reads
+ * only the latest presence snapshot. */
+export function refreshApiKeys(): Promise<void> {
+  // Reads share the save chain: a slow refresh must never replace a newer
+  // successfully published key snapshot with the bytes it read earlier.
+  const result = saving.catch(() => undefined).then(async () => {
+    cachedRead = await readSecretsFileAsync()
+    cachedPath = getSecretsPath()
+    readableKeys()
+  })
+  saving = result
+  return result
 }

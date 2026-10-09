@@ -180,8 +180,8 @@ describe('brainstormPrompts (concept-driven)', () => {
     )
   })
 
-  afterEach(() => {
-    closeConceptStore()
+  afterEach(async () => {
+    await closeConceptStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })
@@ -229,8 +229,8 @@ describe('brainstormPrompts (concept-driven)', () => {
     // recorded uses cannot, because uses land after the prose call.
     installScriptedProvider({ probesPerGeneration: 1 })
     await brainstormPrompts(request({ requestId: 'rc', count: 2 }))
-    for (const facet of listFacetsWithStats()) {
-      const used = listConceptRows(facet.id).filter((r) => r.useCount > 0)
+    for (const facet of (await listFacetsWithStats())) {
+      const used = (await listConceptRows(facet.id)).filter((r) => r.useCount > 0)
       expect(used).toHaveLength(2)
       expect(new Set(used.map((r) => r.probe)).size).toBe(2)
     }
@@ -302,7 +302,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     })
     // batch_size 2 → count 4 = two waves; wave 1 succeeds, wave 2 throws.
     await expect(brainstormPrompts(request({ requestId: 'burn1', count: 4 }))).rejects.toThrow('second wave dies')
-    const used = listFacetsWithStats().reduce((n, f) => n + (f.conceptCount - f.unusedCount), 0)
+    const used = (await listFacetsWithStats()).reduce((n, f) => n + (f.conceptCount - f.unusedCount), 0)
     expect(used).toBe(0)
   })
 
@@ -322,8 +322,8 @@ describe('brainstormPrompts (concept-driven)', () => {
     // The discriminating corpse: burning would leave probes marked expanded
     // with zero concepts. The fix retries the same batch instead, so every
     // expanded probe carries the concepts its (retried) call returned.
-    for (const facet of listFacetsWithStats()) {
-      const burnt = listProbesWithStats(facet.id).filter((probe) => probe.expanded && probe.conceptCount === 0)
+    for (const facet of (await listFacetsWithStats())) {
+      const burnt = (await listProbesWithStats(facet.id)).filter((probe) => probe.expanded && probe.conceptCount === 0)
       expect(burnt).toEqual([])
     }
     expect(expansions).toBeGreaterThanOrEqual(2)
@@ -333,7 +333,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     installScriptedProvider({ promptsPerCall: (asked, call) => (call === 1 ? asked - 1 : asked) })
     const result = await brainstormPrompts(request({ requestId: 'r6', count: 2 }))
     expect(result.prompts).toHaveLength(2)
-    const stats = listFacetsWithStats()
+    const stats = (await listFacetsWithStats())
     const used = stats.reduce((n, f) => n + (f.conceptCount - f.unusedCount), 0)
     // 2 prompts x 2 facets — the assignment whose prompt never came back is NOT used.
     expect(used).toBe(4)
@@ -357,7 +357,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     })
 
     const pending = brainstormPrompts(request({ requestId: 'backoff-cancel', count: 1 }))
-    while (logged('Brainstorm call failed, retrying').length === 0) await Promise.resolve()
+    await vi.waitFor(() => expect(logged('Brainstorm call failed, retrying')).not.toHaveLength(0))
     cancelBrainstorm('backoff-cancel')
 
     await expect(pending).resolves.toEqual({ prompts: [] })
@@ -555,6 +555,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     try {
       expect(hasActiveBrainstorms()).toBe(true)
     } finally {
+      await vi.waitFor(() => expect(hung).toHaveBeenCalled())
       cancelBrainstorm('busy')
       release()
       await pending

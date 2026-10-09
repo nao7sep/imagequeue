@@ -15,6 +15,7 @@ vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
 vi.mock('../../../src/main/backends/slug', () => ({ generateSlug: async () => 'slug' }))
 vi.mock('../../../src/main/session', () => ({
+  isSessionMutationPending: () => false,
   allocateOutputTimestamp: () => ({ timestamp: '20260819-000000', utc: '2026-08-19T00:00:00.000Z', ordinal: 1 }),
   persistActiveSession: () => undefined,
 }))
@@ -44,7 +45,10 @@ beforeEach(() => {
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
 })
 
-afterEach(() => resetCancellationState())
+afterEach(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  resetCancellationState()
+})
 
 function queueOne(): void {
   queueManager.enqueue({
@@ -53,27 +57,31 @@ function queueOne(): void {
 }
 
 describe('processor pause', () => {
-  it('starts a queued task when running', () => {
+  it('starts a queued task when running', async () => {
     queueOne()
     processQueues()
+    await Promise.resolve()
     expect(generate).toHaveBeenCalledOnce()
   })
 
-  it('starts NOTHING while paused', () => {
+  it('starts NOTHING while paused', async () => {
     queueOne()
     setQueuePaused(true)
     processQueues()
+    await Promise.resolve()
     expect(generate).not.toHaveBeenCalled()
     // The task is untouched — still waiting, not failed or dropped.
     expect(queueManager.getAllStoredTasks().openai[0].status).toBe('queued')
   })
 
-  it('resumes picking up work when unpaused', () => {
+  it('resumes picking up work when unpaused', async () => {
     queueOne()
     setQueuePaused(true)
     processQueues()
+    await Promise.resolve()
     setQueuePaused(false)
     processQueues()
+    await Promise.resolve()
     expect(generate).toHaveBeenCalledOnce()
   })
 })

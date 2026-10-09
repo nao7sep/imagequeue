@@ -1,7 +1,7 @@
 import { Task } from '../../shared/types'
 import { loadConfig } from '../config'
 import { withProviderRetry } from '../provider-retry'
-import { resolveApiKey } from '../config/api-keys-store'
+import { resolveApiKey, refreshApiKeys } from '../config/api-keys-store'
 import { log } from '../logger'
 import { fetchRecorded } from '../records'
 import { CANCELLED_MESSAGE } from './cancellation'
@@ -22,6 +22,7 @@ const ENDED_WITHOUT_IMAGE = new Set(['Request Moderated', 'Content Moderated', '
 // the Content-Type reported by the signed-URL download, and the seed it sent.
 export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string; seed?: number }> {
   const config = loadConfig()
+  await refreshApiKeys()
   const apiKey = resolveApiKey('bfl')
 
   if (!apiKey) {

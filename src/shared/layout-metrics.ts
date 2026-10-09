@@ -96,16 +96,14 @@ export const WELCOME_PANE = 'welcome' as const
  * key, so on macOS its column is always present, installed or not; the column
  * carries its own route to the installer.
  *
- * The welcome pane stands in when that leaves the group empty, which keeps a
- * fresh install from being a preview pane beside a strip of nothing. Because
- * macOS always has the Draw Things column, an empty group is only reachable off
- * macOS — so the welcome pane is in practice a Windows one, and says nothing
- * about a backend that platform cannot run.
+ * Getting started remains beside Draw Things on macOS until a cloud key or
+ * the local CLI with a downloaded model can generate. Occupied columns stay.
  */
 export function getVisiblePanes(
   platform: Platform,
   keyedCloudBackends: readonly CloudBackendId[],
-  occupiedCloudBackends: readonly CloudBackendId[] = []
+  occupiedCloudBackends: readonly CloudBackendId[] = [],
+  drawThingsReady = false
 ): PaneId[] {
   const columns = getVisibleBackendsForPlatform(platform).filter(
     (id) =>
@@ -113,6 +111,9 @@ export function getVisiblePanes(
       keyedCloudBackends.includes(id as CloudBackendId) ||
       occupiedCloudBackends.includes(id as CloudBackendId)
   )
+  if (platform === 'darwin' && keyedCloudBackends.length === 0 && !drawThingsReady) {
+    return [...columns, WELCOME_PANE]
+  }
   return columns.length > 0 ? columns : [WELCOME_PANE]
 }
 

@@ -1,3 +1,4 @@
+import type { AppReleaseResult } from '../../../shared/app-release'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useCliJobs } from '../context/CliJobsContext'
@@ -7,6 +8,7 @@ import { useI18n } from '../i18n/I18nContext'
 import type { Message } from '../../../shared/i18n/translate'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import {
+  recordOperationalDiagnostic,
   OPERATIONAL_FAILURE_EVENT,
   OPERATIONAL_RESOLVED_EVENT,
   type OperationalFailureDetail,
@@ -57,6 +59,14 @@ export function ToastStack(): React.JSX.Element {
   const seqRef = useRef(0)
   const nextSeq = (): number => ++seqRef.current
 
+  const [releaseOpenFailed, setReleaseOpenFailed] = useState(false)
+  const [release, setRelease] = useState<AppReleaseResult | null>(null)
+  useEffect(() => {
+    const stop = window.electronAPI.onAppReleaseResult((result) => { setRelease(result); setReleaseOpenFailed(false) })
+    void window.electronAPI.appReleaseReady().catch((error) => recordOperationalDiagnostic('Release-check readiness failed', error))
+    return stop
+  }, [])
+
   const [failures, setFailures] = useState<Record<string, FailureEntry>>({})
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
 
@@ -90,7 +100,7 @@ export function ToastStack(): React.JSX.Element {
     })
   }
   toasts.sort((a, b) => a.seq - b.seq)
-  const hasContent = toasts.length > 0 || jobs.size > 0
+  const hasContent = release !== null || toasts.length > 0 || jobs.size > 0
 
   // The newest toast sits lowest. When the stack has run out of room and
   // scrolls, a new or updated toast brings the bottom into view.
@@ -111,6 +121,16 @@ export function ToastStack(): React.JSX.Element {
       </div>
       {hasContent && (
         <section className="toast-stack" aria-label={t('toasts.region')} ref={stackRef}>
+          {release && (
+            <div className="toast" data-toast-id="app-release">
+              <div className="toast-copy" role="status">
+                <span>{release.kind === 'newer' ? t('appRelease.newer', { version: release.version }) : t(release.kind === 'current' ? 'appRelease.current' : 'appRelease.failed')}</span>
+                {release.kind === 'newer' && <button type="button" onClick={() => { void window.electronAPI.viewAppRelease().then(() => setReleaseOpenFailed(false)).catch((error) => { setReleaseOpenFailed(true); recordOperationalDiagnostic('Opening GitHub release failed', error) }) }}>{t('appRelease.view')}</button>}
+                {releaseOpenFailed && <span>{t('appRelease.openFailed')}</span>}
+              </div>
+              <button className="toast-close" type="button" aria-label={t('statusNotices.closeOperationResult')} onClick={() => setRelease(null)}><Icon name="close" /></button>
+            </div>
+          )}
           {toasts.map((toast) => (
             <div key={toast.id} className="toast" data-toast-id={toast.id}>
               <div className="toast-copy">
