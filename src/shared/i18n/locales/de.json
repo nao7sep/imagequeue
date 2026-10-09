@@ -90,6 +90,8 @@
   "notice.newerFileMessage": "Die Datei unter {path} wurde von einer neueren Version von ImageQueue geschrieben. Diese Version kann ihren Inhalt nicht verwenden und hat sie unverändert gelassen. Verwenden Sie die neuere Version oder verschieben Sie die Datei an einen anderen Ort und versuchen Sie es erneut.",
   "notice.fileLeftInPlaceTitle": "Datei unverändert gelassen",
   "notice.fileLeftInPlaceMessage": "ImageQueue konnte die Datei unter {path} weder lesen noch beiseitelegen, hat sie daher unverändert gelassen und den Vorgang nicht fortgesetzt. Prüfen Sie, ob die Datei gelesen und verschoben werden kann, oder verschieben Sie sie selbst an einen anderen Ort, und versuchen Sie es dann erneut.",
+  "notice.apiKeysUnavailableTitle": "API-Schlüssel nicht verfügbar",
+  "notice.apiKeysUnavailableMessage": "ImageQueue konnte die API-Schlüsseldatei unter {path} nicht verwenden und hat sie daher unverändert gelassen. Die darin gespeicherten Schlüssel können nicht verwendet werden, und neue Schlüssel lassen sich erst speichern, wenn Sie die Datei reparieren oder entfernen.",
   "notice.drawThingsParamsResetTitle": "Die Draw-Things-Parameter wurden zurückgesetzt",
   "notice.drawThingsParamsResetMessage": "ImageQueue konnte Ihre gespeicherten Draw-Things-Parameter nicht lesen und hat die Datei daher unter {path} beiseitegelegt. Jedes Modell verwendet jetzt seine empfohlenen oder Standardparameter. Ihre bisherigen Parameter sind in der beiseitegelegten Kopie erhalten.",
   "notice.conceptLibraryResetTitle": "Die Konzeptbibliothek wurde zurückgesetzt",

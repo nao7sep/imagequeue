@@ -5,15 +5,19 @@ import { getDataDir } from './config-store'
 import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
-import { utcStampForFilename } from '../../shared/utc-stamp'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import type { AppNotice } from '../../shared/app-notice'
+import { FORMAT_VERSION_KEY, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 import { holdsBytes } from '../utils/holds-bytes'
+import { raiseAppNotice } from '../app-notices'
+import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
 
 // The secret store, realized per the fleet api-key-storage-conventions. Secrets
 // live in their own file under the storage root (`~/.imagequeue/api-keys.json`),
 // separate from config.json. The file is 0600 on POSIX, an environment value
-// takes precedence over the stored value, and a corrupt/group-readable file is
-// handled defensively on read.
+// takes precedence over the stored value, and reading it never moves or rewrites
+// it: a file that cannot be used makes its keys unavailable and refuses saves
+// until the user repairs or removes it (api-key-storage-conventions, Recovery
+// and replacement).
 //
 // A key id is a dotted path of `[a-z0-9]` segments. Segment 0 is the conventional
 // vendor/env name, so the environment variable derives from the segments with no
@@ -25,14 +29,17 @@ import { holdsBytes } from '../utils/holds-bytes'
 
 const SECRETS_FILE_MODE = 0o600
 const ENFORCE_FILE_MODE = process.platform !== 'win32'
-const KEY_ID_RE = /^[a-z0-9]+(\.[a-z0-9]+)*$/
 
 // The key-id vocabulary (SecretId, SECRET_IDS, IMAGE_BACKEND_SECRET) lives in
 // shared/types: the Settings form edits keys BY ID over their own IPC, so both
 // sides of the boundary need it. This module owns the store mechanics only.
 
+// The file as it was read: `keys` holds every entry, whatever it holds, so an
+// entry this build cannot use is written back as it is; `others` holds every
+// other key the file carries beside its format version.
 interface SecretsFile {
-  keys: Record<string, string>
+  keys: Record<string, unknown>
+  others: Record<string, unknown>
 }
 
 function getSecretsPath(): string {
@@ -81,111 +88,80 @@ function warnIfInsecureMode(filePath: string): void {
   }
 }
 
+// Why the file cannot be used.
+type Unusable = { kind: 'unreadable' | 'malformed' | 'newer'; error: unknown }
 
-// Move the unreadable file aside to a timestamped neighbour (handled once, not
-// re-flagged on every read), returning the new path or null on failure. The
-// discriminator is hyphen-joined into the target's stem — `<stem>-<stamp>.invalid`
-// — never a dot-appended `<file>.<stamp>.invalid`.
-function moveAsideInvalid(filePath: string): string | null {
-  const dir = path.dirname(filePath)
-  const stem = path.basename(filePath, path.extname(filePath))
-  const movedTo = path.join(dir, `${stem}-${utcStampForFilename()}.invalid`)
-  try {
-    fs.renameSync(filePath, movedTo)
-    return movedTo
-  } catch {
-    return null
+// The outer shape `{ keys: { id: value } }`, its format version optional: a
+// file written before the version was added is current.
+function parseSecrets(raw: unknown, filePath: string): SecretsFile {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('api-keys.json must be a JSON object')
+  const { [FORMAT_VERSION_KEY]: version, keys, ...others } = raw as Record<string, unknown>
+  if (version !== undefined) {
+    if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
+      throw new Error(`${FORMAT_VERSION_KEY} is not a positive integer`)
+    }
+    if (version > FORMAT_VERSIONS.apiKeys) throw new NewerFormatError(filePath, version, FORMAT_VERSIONS.apiKeys)
   }
+  if (!keys || typeof keys !== 'object' || Array.isArray(keys)) throw new Error('api-keys.json must hold a keys map')
+  return { keys: { ...(keys as Record<string, unknown>) }, others }
 }
 
-// Validate the outer on-disk shape `{ keys: { id: value } }`, then canonicalize
-// its entries: ids lowercased and matched against the id grammar, values kept
-// only when strings. A wrong outer container is not the same thing as an empty
-// valid store: returning null lets the reader preserve those original bytes
-// before a later key edit writes a clean file.
-function normalize(raw: unknown, filePath: string): SecretsFile | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  let unmarked: Record<string, unknown>
-  try {
-    unmarked = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.apiKeys, filePath)
-  } catch (err) {
-    if (err instanceof NewerFormatError) throw err
-    return null
-  }
-  const rawKeys = unmarked.keys
-  if (!rawKeys || typeof rawKeys !== 'object' || Array.isArray(rawKeys)) return null
-  const keys: Record<string, string> = {}
-  for (const [id, value] of Object.entries(rawKeys as Record<string, unknown>)) {
-    const canonical = id.toLowerCase()
-    if (typeof value === 'string' && KEY_ID_RE.test(canonical)) keys[canonical] = value
-  }
-  return { keys }
-}
-
-let newerWarned = false
-
-function readSecretsFile(forMutation = false): SecretsFile {
+function readSecretsFile(): { file: SecretsFile } | { file: null; unusable: Unusable } {
   const filePath = getSecretsPath()
   let text: string
   try {
     text = fs.readFileSync(filePath, 'utf-8')
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { keys: {} }
-    const movedTo = moveAsideInvalid(filePath)
-    log('warn', 'API keys file was unreadable; set aside and treating as empty', {
-      path: filePath,
-      movedTo,
-      error: serializeError(err)
-    })
-    if (forMutation && !movedTo) {
-      throw new Error('API keys file was unreadable and could not be preserved; it was left unchanged')
-    }
-    return { keys: {} }
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { file: { keys: {}, others: {} } }
+    return { file: null, unusable: { kind: 'unreadable', error: err } }
   }
-  let raw: unknown
   try {
-    raw = JSON.parse(text)
-  } catch (err) {
-    const movedTo = moveAsideInvalid(filePath)
-    log('warn', 'API keys file is not valid JSON; set aside and treating as empty', {
-      path: filePath,
-      movedTo,
-      error: serializeError(err)
-    })
-    if (forMutation && !movedTo) {
-      throw new Error('API keys file was invalid and could not be preserved; it was left unchanged')
-    }
-    return { keys: {} }
-  }
-  let normalized: SecretsFile | null
-  try {
-    normalized = normalize(raw, filePath)
-  } catch (err) {
-    // A newer file is intact: it is never moved aside or written. Reads treat
-    // it as absent, warned once, and a change to a key is refused.
-    if (forMutation) throw err
-    if (!newerWarned) {
-      newerWarned = true
-      log('warn', 'API keys file is from a newer version; treating it as empty and leaving it unchanged', {
-        path: filePath,
-        error: serializeError(err)
-      })
-    }
-    return { keys: {} }
-  }
-  if (normalized) {
+    const file = parseSecrets(JSON.parse(text), filePath)
     warnIfInsecureMode(filePath)
-    return normalized
+    return { file }
+  } catch (err) {
+    return { file: null, unusable: { kind: err instanceof NewerFormatError ? 'newer' : 'malformed', error: err } }
   }
-  const movedTo = moveAsideInvalid(filePath)
-  log('warn', 'API keys file had the wrong shape; set aside and treating as empty', {
-    path: filePath,
-    movedTo,
-  })
-  if (forMutation && !movedTo) {
-    throw new Error('API keys file had the wrong shape and could not be preserved; it was left unchanged')
+}
+
+function unusableNotice(filePath: string, unusable: Unusable): AppNotice {
+  return unusable.kind === 'newer' ? newerFilePresentation(filePath) : apiKeysUnavailablePresentation(filePath)
+}
+
+let unusableReported = false
+
+// A file that cannot be used reads as holding no keys. The first time in a
+// launch, that is logged and the user is told which file it is.
+function readableKeys(): Record<string, unknown> {
+  const read = readSecretsFile()
+  if (read.file) return read.file.keys
+  if (!unusableReported) {
+    unusableReported = true
+    const filePath = getSecretsPath()
+    log('warn', 'API keys file cannot be used; its keys are unavailable and it was left unchanged', {
+      path: filePath,
+      problem: read.unusable.kind,
+      error: serializeError(read.unusable.error),
+    })
+    raiseAppNotice(unusableNotice(filePath, read.unusable))
   }
-  return { keys: {} }
+  return {}
+}
+
+/** A key save refused because api-keys.json cannot be used; the file is unchanged. */
+export class ApiKeysUnavailableError extends Error {
+  constructor(readonly path: string, options: { cause: unknown }) {
+    super(`The API keys file could not be used, so the key was not saved and the file was left unchanged: ${path}`, options)
+    this.name = 'ApiKeysUnavailableError'
+  }
+}
+
+// The stored entry for an id: an exact match first, then one whose id differs
+// only in case, as the file may have been edited by hand.
+function storedEntry(keys: Record<string, unknown>, id: SecretId): unknown {
+  if (Object.hasOwn(keys, id)) return keys[id]
+  const match = Object.keys(keys).find((stored) => stored.toLowerCase() === id)
+  return match === undefined ? undefined : keys[match]
 }
 
 function writeSecretsFile(file: SecretsFile): void {
@@ -198,7 +174,7 @@ function writeSecretsFile(file: SecretsFile): void {
   // what keeps backups.sqlite3 no more sensitive than ordinary user text. A key lost to a wipe is
   // re-entered by the user. This write deliberately does its own 0600 temp+rename rather than routing
   // through writeFileAtomic — the separate path is itself the exclusion, by construction.
-  const content = Buffer.from(`${JSON.stringify(markFormat(file, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, 'utf-8')
+  const content = Buffer.from(`${JSON.stringify(markFormat({ ...file.others, keys: file.keys }, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, 'utf-8')
   if (holdsBytes(filePath, content)) return
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
@@ -247,7 +223,7 @@ function warnMalformedStoredKey(keyId: string): void {
 export function resolveApiKey(id: SecretId): string {
   const fromEnv = envValue(id.split('.'))
   if (fromEnv) return fromEnv
-  const stored = readSecretsFile().keys[id]
+  const stored = storedEntry(readableKeys(), id)
   if (typeof stored !== 'string' || !stored) return ''
   if (!isValidStoredApiKey(stored)) {
     warnMalformedStoredKey(id)
@@ -265,8 +241,8 @@ export function hasApiKey(id: SecretId): boolean {
 // UI to display/edit. The environment override is deliberately NOT surfaced here,
 // and there is no fallback — editing is per exact id.
 export function getStoredApiKey(id: SecretId): string {
-  const stored = readSecretsFile().keys[id]
-  if (!stored) return ''
+  const stored = storedEntry(readableKeys(), id)
+  if (typeof stored !== 'string' || !stored) return ''
   if (!isValidStoredApiKey(stored)) {
     warnMalformedStoredKey(id)
     return ''
@@ -274,9 +250,20 @@ export function getStoredApiKey(id: SecretId): string {
   return decodeApiKey(stored).trim()
 }
 
-// Persist (or clear, when value is blank) the stored key for a secret id.
+// Persist (or clear, when value is blank) the stored key for a secret id. Every
+// other entry is written back as it was. A file that cannot be used refuses the
+// save, tells the user which file it is, and stays exactly as it is.
 export function setStoredApiKey(id: SecretId, value: string): void {
-  const file = readSecretsFile(true)
+  const read = readSecretsFile()
+  if (!read.file) {
+    const filePath = getSecretsPath()
+    raiseAppNotice(unusableNotice(filePath, read.unusable))
+    throw new ApiKeysUnavailableError(filePath, { cause: read.unusable.error })
+  }
+  const { file } = read
+  for (const stored of Object.keys(file.keys)) {
+    if (stored !== id && stored.toLowerCase() === id) delete file.keys[stored]
+  }
   const trimmed = value.trim()
   if (trimmed.length > 0) {
     file.keys[id] = encodeApiKey(trimmed)

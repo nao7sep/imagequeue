@@ -90,6 +90,8 @@
   "notice.newerFileMessage": "{path} にあるファイルは新しいバージョンの ImageQueue で書き込まれたため、このバージョンでは内容を使用できず、変更せずにそのまま残しました。新しいバージョンを使用するか、ファイルを別の場所へ移動してからもう一度お試しください。",
   "notice.fileLeftInPlaceTitle": "ファイルを変更せずに残しました",
   "notice.fileLeftInPlaceMessage": "ImageQueue は {path} にあるファイルを読み取ることも退避することもできなかったため、変更せずにそのまま残し、処理を中止しました。ファイルを読み取りと移動ができる状態にするか、ご自身で別の場所へ移動してから、もう一度お試しください。",
+  "notice.apiKeysUnavailableTitle": "API キーを使用できません",
+  "notice.apiKeysUnavailableMessage": "ImageQueue は {path} にある API キーのファイルを使用できなかったため、変更せずにそのまま残しました。このファイル内のキーは使用できず、ファイルを修復または削除するまで新しいキーを保存できません。",
   "notice.drawThingsParamsResetTitle": "Draw Things のパラメータをリセットしました",
   "notice.drawThingsParamsResetMessage": "保存済みの Draw Things のパラメータを読み取れなかったため、ImageQueue はそのファイルを {path} に退避しました。各モデルでは推奨パラメータまたは初期設定のパラメータを使用します。以前のパラメータは退避したファイルに残っています。",
   "notice.conceptLibraryResetTitle": "コンセプトライブラリをリセットしました",

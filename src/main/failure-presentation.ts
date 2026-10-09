@@ -116,6 +116,14 @@ export function storeLeftInPlacePresentation(path: string): AppNotice {
   }
 }
 
+/** api-keys.json at `path` cannot be used: it was left unchanged, its keys are unavailable, and key saves are refused. */
+export function apiKeysUnavailablePresentation(path: string): AppNotice {
+  return {
+    title: message('notice.apiKeysUnavailableTitle'),
+    message: message('notice.apiKeysUnavailableMessage', { path }),
+  }
+}
+
 /** params.json was unreadable and set aside at `path`; each model uses its recommended or default parameters. */
 export function modelParamsResetPresentation(path: string): AppNotice {
   return {

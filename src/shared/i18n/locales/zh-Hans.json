@@ -90,6 +90,8 @@
   "notice.newerFileMessage": "位于 {path} 的文件由更新版本的 ImageQueue 写入，因此此版本无法使用其中的内容，并已保持其原样。请使用更新的版本，或将该文件移到别处后重试。",
   "notice.fileLeftInPlaceTitle": "文件保持原样",
   "notice.fileLeftInPlaceMessage": "ImageQueue 无法读取位于 {path} 的文件，也无法将其移开，因此保持其原样并停止了操作。请确认该文件可以读取和移动，或自行将其移到别处，然后重试。",
+  "notice.apiKeysUnavailableTitle": "API 密钥不可用",
+  "notice.apiKeysUnavailableMessage": "ImageQueue 无法使用位于 {path} 的 API 密钥文件，因此保持其原样。其中的密钥无法使用，在修复或移除该文件之前，也无法保存新的密钥。",
   "notice.drawThingsParamsResetTitle": "Draw Things 参数已重置",
   "notice.drawThingsParamsResetMessage": "ImageQueue 无法读取你保存的 Draw Things 参数，因此已将该文件移至 {path}。现在每个模型都使用其推荐参数或默认参数。你之前的参数仍保留在该文件中。",
   "notice.conceptLibraryResetTitle": "概念库已重置",

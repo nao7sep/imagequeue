@@ -90,6 +90,8 @@
   "notice.newerFileMessage": "A newer version of ImageQueue wrote the file at {path}, so this version can’t use what it holds and left it unchanged. Use the newer version, or move the file aside and try again.",
   "notice.fileLeftInPlaceTitle": "File left unchanged",
   "notice.fileLeftInPlaceMessage": "ImageQueue couldn’t read the file at {path} or set it aside, so it left it unchanged and didn’t continue. Check that the file can be read and moved, or move it aside yourself, then try again.",
+  "notice.apiKeysUnavailableTitle": "API keys unavailable",
+  "notice.apiKeysUnavailableMessage": "ImageQueue couldn’t use the API keys file at {path}, so it left it unchanged. The keys in it can’t be used, and new keys can’t be saved until you repair or remove the file.",
   "notice.drawThingsParamsResetTitle": "Draw Things parameters were reset",
   "notice.drawThingsParamsResetMessage": "ImageQueue couldn’t read your saved Draw Things parameters, so it set the file aside at {path}. Each model now uses its recommended or default parameters. Your earlier parameters remain in the set-aside copy.",
   "notice.conceptLibraryResetTitle": "Concept Library was reset",

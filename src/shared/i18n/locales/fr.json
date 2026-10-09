@@ -90,6 +90,8 @@
   "notice.newerFileMessage": "Une version plus récente d’ImageQueue a écrit le fichier situé à l’emplacement {path}. Cette version ne peut pas utiliser son contenu et l’a laissé tel quel. Utilisez la version plus récente, ou déplacez le fichier ailleurs et réessayez.",
   "notice.fileLeftInPlaceTitle": "Fichier laissé tel quel",
   "notice.fileLeftInPlaceMessage": "ImageQueue n’a pas pu lire le fichier situé à l’emplacement {path} ni le mettre de côté\u00a0; il l’a laissé tel quel et n’a pas poursuivi. Vérifiez que le fichier peut être lu et déplacé, ou déplacez-le vous-même ailleurs, puis réessayez.",
+  "notice.apiKeysUnavailableTitle": "Clés d’API indisponibles",
+  "notice.apiKeysUnavailableMessage": "ImageQueue n’a pas pu utiliser le fichier de clés d’API situé à l’emplacement {path} et l’a donc laissé tel quel. Les clés qu’il contient ne peuvent pas être utilisées, et aucune nouvelle clé ne peut être enregistrée tant que vous n’avez pas réparé ou supprimé le fichier.",
   "notice.drawThingsParamsResetTitle": "Les paramètres Draw Things ont été réinitialisés",
   "notice.drawThingsParamsResetMessage": "ImageQueue n’a pas pu lire vos paramètres Draw Things enregistrés\u00a0; il a mis le fichier de côté à l’emplacement {path}. Chaque modèle utilise désormais ses paramètres recommandés ou par défaut. Vos anciens paramètres se trouvent dans la copie mise de côté.",
   "notice.conceptLibraryResetTitle": "La bibliothèque de concepts a été réinitialisée",

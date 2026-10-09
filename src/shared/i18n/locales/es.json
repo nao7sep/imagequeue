@@ -90,6 +90,8 @@
   "notice.newerFileMessage": "Una versión más reciente de ImageQueue escribió el archivo en {path}, así que esta versión no puede usar su contenido y lo dejó sin cambios. Usa la versión más reciente o mueve el archivo a otra ubicación y vuelve a intentarlo.",
   "notice.fileLeftInPlaceTitle": "Archivo sin cambios",
   "notice.fileLeftInPlaceMessage": "ImageQueue no pudo leer el archivo en {path} ni guardarlo aparte, así que lo dejó sin cambios y no continuó. Comprueba que el archivo se pueda leer y mover, o muévelo tú a otra ubicación, y vuelve a intentarlo.",
+  "notice.apiKeysUnavailableTitle": "Claves de API no disponibles",
+  "notice.apiKeysUnavailableMessage": "ImageQueue no pudo usar el archivo de claves de API en {path}, así que lo dejó sin cambios. Las claves que contiene no se pueden usar y no se pueden guardar claves nuevas hasta que repares o elimines el archivo.",
   "notice.drawThingsParamsResetTitle": "Se restablecieron los parámetros de Draw Things",
   "notice.drawThingsParamsResetMessage": "ImageQueue no pudo leer tus parámetros guardados de Draw Things, así que guardó el archivo aparte en {path}. Ahora cada modelo usa sus parámetros recomendados o predeterminados. Tus parámetros anteriores siguen en la copia guardada aparte.",
   "notice.conceptLibraryResetTitle": "Se restableció la biblioteca de conceptos",

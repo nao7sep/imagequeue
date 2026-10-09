@@ -6,9 +6,15 @@ import {
   resolveApiKey,
   hasApiKey,
   getStoredApiKey,
-  setStoredApiKey
+  setStoredApiKey,
+  ApiKeysUnavailableError
 } from '../../../src/main/config/api-keys-store'
-import { FORMAT_VERSIONS, NewerFormatError } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+
+const notices = vi.hoisted(() => ({ raised: [] as unknown[] }))
+vi.mock('../../../src/main/app-notices', () => ({
+  raiseAppNotice: (notice: unknown) => { notices.raised.push(notice) },
+}))
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 const isPosix = process.platform !== 'win32'
@@ -33,6 +39,7 @@ describe('api-keys-store', () => {
   const savedEnv = new Map<string, string | undefined>()
 
   beforeEach(() => {
+    notices.raised.length = 0
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-keys-'))
     process.env[ENV_VAR] = tmpRoot
     for (const name of PROVIDER_ENV) {
@@ -157,65 +164,60 @@ describe('api-keys-store', () => {
     expect(resolveApiKey('xai')).toBe('sk-round-trip-value')
   })
 
-  it('moves a corrupt secrets file aside and resolves to empty instead of throwing', () => {
+  // Reading never moves or rewrites the file: whatever is wrong with it, its
+  // keys are unavailable, a save is refused, and its bytes stay as they were.
+  it.each([
+    ['not JSON', 'not json at all'],
+    ['the wrong root', JSON.stringify({ formatVersion: 1, xai: 'do-not-overwrite-these-bytes' })],
+    ['a keys container of the wrong shape', JSON.stringify({ formatVersion: 1, keys: ['xai', 'not-an-object-container'] })],
+    ['a format version that is not a positive integer', JSON.stringify({ formatVersion: 'one', keys: { xai: 'sk-kept' } })],
+  ])('leaves a file holding %s in place, reads no keys, and refuses a save', (_state, original) => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    fs.mkdirSync(tmpRoot, { recursive: true })
-    fs.writeFileSync(secretsPath, 'not json at all')
+    fs.writeFileSync(secretsPath, original)
 
     expect(resolveApiKey('xai')).toBe('')
-    const entries = fs.readdirSync(tmpRoot)
-    // Quarantine name is `<stem>-<stamp>.invalid` (hyphen-joined into the target's stem, never a
-    // dot-appended `api-keys.json.<stamp>.invalid`), stamped at millisecond precision.
-    const quarantined = entries.filter((e) => e.startsWith('api-keys-') && e.endsWith('.invalid'))
-    expect(quarantined).toHaveLength(1)
-    expect(quarantined[0]).toMatch(/^api-keys-\d{8}-\d{6}-\d{3}-utc\.invalid$/)
-    expect(entries).not.toContain('api-keys.json')
-  })
+    expect(getStoredApiKey('xai')).toBe('')
+    expect(() => setStoredApiKey('openai.image', 'must-not-land')).toThrow(ApiKeysUnavailableError)
 
-  it('preserves a valid-JSON secret store with the wrong root before a later edit', () => {
-    const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    const original = JSON.stringify({ formatVersion: 1, xai: 'do-not-overwrite-these-bytes' })
-    fs.writeFileSync(secretsPath, original)
-
-    setStoredApiKey('openai.image', 'new-key')
-
-    const entries = fs.readdirSync(tmpRoot)
-    const quarantined = entries.filter((e) => e.startsWith('api-keys-') && e.endsWith('.invalid'))
-    expect(quarantined).toHaveLength(1)
-    expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf8')).toBe(original)
-    expect(getStoredApiKey('openai.image')).toBe('new-key')
-  })
-
-  it('preserves a valid-JSON secret store whose keys container has the wrong shape', () => {
-    const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    const original = JSON.stringify({ formatVersion: 1, keys: ['xai', 'not-an-object-container'] })
-    fs.writeFileSync(secretsPath, original)
-
-    setStoredApiKey('xai', 'new-key')
-
-    const entries = fs.readdirSync(tmpRoot)
-    const quarantined = entries.filter((e) => e.startsWith('api-keys-') && e.endsWith('.invalid'))
-    expect(quarantined).toHaveLength(1)
-    expect(fs.readFileSync(path.join(tmpRoot, quarantined[0]), 'utf8')).toBe(original)
-    expect(getStoredApiKey('xai')).toBe('new-key')
-  })
-
-  it('fails a mutation closed when a wrong-shaped store cannot be quarantined', () => {
-    const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    const original = JSON.stringify({ formatVersion: 1, xai: 'must-remain-byte-identical' })
-    fs.writeFileSync(secretsPath, original)
-    const realRename = fs.renameSync.bind(fs)
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      if (from === secretsPath && String(to).endsWith('.invalid')) {
-        throw new Error('quarantine unavailable')
-      }
-      return realRename(from, to)
-    })
-
-    expect(() => setStoredApiKey('openai.image', 'must-not-land')).toThrow(/left unchanged/)
     expect(fs.readFileSync(secretsPath, 'utf8')).toBe(original)
-    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
-    rename.mockRestore()
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.invalid') || name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it.runIf(isPosix && process.getuid?.() !== 0)('leaves a file it cannot read in place, reads no keys, and refuses a save', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    setStoredApiKey('xai', 'sk-stored')
+    const original = fs.readFileSync(secretsPath)
+    fs.chmodSync(secretsPath, 0o000)
+    try {
+      expect(resolveApiKey('xai')).toBe('')
+      expect(hasApiKey('xai')).toBe(false)
+      expect(() => setStoredApiKey('xai', 'sk-other')).toThrow(ApiKeysUnavailableError)
+    } finally {
+      fs.chmodSync(secretsPath, 0o600)
+    }
+    expect(fs.readFileSync(secretsPath)).toEqual(original)
+    expect(fs.readdirSync(tmpRoot).filter((name) => name !== 'api-keys.json')).toEqual([])
+  })
+
+  it('writes back an entry it cannot use, and every other key the file holds, when saving another key', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, later: { kept: true }, keys: { xai: 42, 'Bad Id': 'sk-odd' } }))
+
+    setStoredApiKey('openai.image', 'sk-new')
+
+    const onDisk = JSON.parse(fs.readFileSync(secretsPath, 'utf8'))
+    expect(onDisk.later).toEqual({ kept: true })
+    expect(onDisk.keys.xai).toBe(42)
+    expect(onDisk.keys['Bad Id']).toBe('sk-odd')
+    expect(getStoredApiKey('openai.image')).toBe('sk-new')
+  })
+
+  it('resolves a key stored under an id differing only in case, and saves it under the exact id', () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, keys: { 'OPENAI.IMAGE': 'sk-hand-edited' } }))
+    expect(resolveApiKey('openai.image')).toBe('sk-hand-edited')
+    setStoredApiKey('openai.image', 'sk-new')
+    expect(Object.keys(JSON.parse(fs.readFileSync(secretsPath, 'utf8')).keys)).toEqual(['openai.image'])
   })
 
   it.runIf(isPosix)('writes api-keys.json with 0600 permissions on POSIX', () => {
@@ -290,14 +292,13 @@ describe('api-keys-store', () => {
   describe('format version', () => {
     const secretsPath = () => path.join(tmpRoot, 'api-keys.json')
 
-    it('sets aside a file with no format version and reads no keys', () => {
-      const bytes = JSON.stringify({ keys: { xai: 'sk-pasted-raw' } })
-      fs.writeFileSync(secretsPath(), bytes)
-      expect(getStoredApiKey('xai')).toBe('')
-      expect(fs.existsSync(secretsPath())).toBe(false)
-      const invalid = fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.invalid'))
-      expect(invalid).toHaveLength(1)
-      expect(fs.readFileSync(path.join(tmpRoot, invalid[0]), 'utf8')).toBe(bytes)
+    it('reads a file with no format version as current, and marks it at the next save', () => {
+      fs.writeFileSync(secretsPath(), JSON.stringify({ keys: { xai: 'sk-pasted-raw' } }))
+      expect(getStoredApiKey('xai')).toBe('sk-pasted-raw')
+      setStoredApiKey('openai.image', 'sk-stored')
+      const onDisk = JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))
+      expect(onDisk.formatVersion).toBe(FORMAT_VERSIONS.apiKeys)
+      expect(onDisk.keys.xai).toBe('sk-pasted-raw')
     })
 
     it('writes its format version first and reads it back', () => {
@@ -314,9 +315,50 @@ describe('api-keys-store', () => {
 
       expect(resolveApiKey('openai.image')).toBe('')
       expect(getStoredApiKey('openai.image')).toBe('')
-      expect(() => setStoredApiKey('openai.image', 'sk-other')).toThrow(NewerFormatError)
+      expect(() => setStoredApiKey('openai.image', 'sk-other')).toThrow(ApiKeysUnavailableError)
       expect(fs.readFileSync(secretsPath(), 'utf8')).toBe(bytes)
       expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.invalid'))).toEqual([])
     })
+  })
+})
+
+describe('api-keys-store notices', () => {
+  let tmpRoot: string
+  beforeEach(() => {
+    notices.raised.length = 0
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-keys-notice-'))
+    vi.stubEnv(ENV_VAR, tmpRoot)
+    vi.resetModules()
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    fs.rmSync(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('names a file it cannot use once per launch, however often its keys are looked up', async () => {
+    const secretsPath = path.join(tmpRoot, 'api-keys.json')
+    fs.writeFileSync(secretsPath, 'not json at all')
+    const store = await import('../../../src/main/config/api-keys-store')
+    store.resolveApiKey('xai')
+    store.hasApiKey('openai.image')
+    store.getStoredApiKey('gemini.text')
+    expect(notices.raised).toHaveLength(1)
+    expect(JSON.stringify(notices.raised[0])).toContain(secretsPath)
+  })
+
+  it('names the file again with each refused save', async () => {
+    fs.writeFileSync(path.join(tmpRoot, 'api-keys.json'), 'not json at all')
+    const store = await import('../../../src/main/config/api-keys-store')
+    store.resolveApiKey('xai')
+    expect(() => store.setStoredApiKey('xai', 'sk-new')).toThrow(store.ApiKeysUnavailableError)
+    expect(notices.raised).toHaveLength(2)
+  })
+
+  it('raises nothing for a file that is absent or usable', async () => {
+    const store = await import('../../../src/main/config/api-keys-store')
+    store.resolveApiKey('xai')
+    store.setStoredApiKey('xai', 'sk-new')
+    store.resolveApiKey('xai')
+    expect(notices.raised).toEqual([])
   })
 })
