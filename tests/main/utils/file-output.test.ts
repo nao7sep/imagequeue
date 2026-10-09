@@ -13,7 +13,7 @@ import {
   imageOutputFileStates
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
-import { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 import * as fsync from '../../../src/main/utils/fsync'
 
 // writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
@@ -107,15 +107,10 @@ describe('writeImageOutput', () => {
     expect(fs.existsSync(path.join(sessionDir, `${second}.png`))).toBe(true)
   })
 
-  // A full disk while staging the sidecar must not publish the image alone,
-  // nor leave a truncated file under either final name.
-  it('publishes neither file when the pair cannot be staged complete', () => {
-    const write = fs.writeFileSync
-    let calls = 0
-    vi.spyOn(fs, 'writeFileSync').mockImplementation(((...args: Parameters<typeof fs.writeFileSync>) => {
-      if (++calls === 2) throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
-      return write(...args)
-    }) as typeof fs.writeFileSync)
+  // The image is staged complete before it gets its name, so a full disk
+  // leaves nothing under a final name.
+  it('publishes nothing when the image cannot be staged complete', () => {
+    vi.spyOn(fs, 'writeFileSync').mockImplementationOnce(() => { throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' }) })
     expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow('simulated full disk')
     expect(fs.readdirSync(sessionDir)).toEqual([])
   })
@@ -135,96 +130,62 @@ describe('writeImageOutput', () => {
     ])
   })
 
-  it('rolls back its image if exclusive sidecar publication fails, preserving the cause', () => {
+  // A generated, possibly paid, image is never given up for its sidecar.
+  it('keeps the image under its final name when the sidecar cannot be published, and logs it', () => {
     const link = fs.linkSync
-    const failure = new Error('sidecar I/O failure')
     vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
-      if (String(target).endsWith('.json')) throw failure
+      if (String(target).endsWith('.json')) throw new Error('sidecar I/O failure')
       link(source, target)
     })
-    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
-    expect(fs.readdirSync(sessionDir)).toEqual([])
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(base).toBe('20260604-093015-utc-cat-openai')
+    expect(fs.readdirSync(sessionDir)).toEqual([`${base}.png`])
+    expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
   })
 
-  it('preserves a foreign sidecar and saves the pair at the next occupied-name ordinal', () => {
+  it('keeps the image when the sidecar cannot be staged', () => {
+    const write = fs.writeFileSync
+    let calls = 0
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(((...args: Parameters<typeof fs.writeFileSync>) => {
+      if (++calls === 2) throw Object.assign(new Error('simulated full disk'), { code: 'ENOSPC' })
+      return write(...args)
+    }) as typeof fs.writeFileSync)
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(fs.readdirSync(sessionDir)).toEqual([`${base}.png`])
+  })
+
+  it('never replaces a sidecar that takes its name first, and keeps the image', () => {
+    const link = fs.linkSync
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
+      if (String(target).endsWith('.json')) fs.writeFileSync(target, 'foreign sidecar')
+      link(source, target)
+    })
+    const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(fs.readFileSync(path.join(sessionDir, `${base}.json`), 'utf8')).toBe('foreign sidecar')
+    expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
+  })
+
+  it('takes the next free ordinal when an image takes its name first, never replacing it', () => {
     const link = fs.linkSync
     let conflict = true
     vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
-      if (String(target).endsWith('.json') && conflict) {
+      if (String(target).endsWith('.png') && conflict) {
         conflict = false
-        fs.writeFileSync(target, 'foreign sidecar')
+        fs.writeFileSync(target, 'foreign image')
       }
       link(source, target)
     })
     const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
     expect(base).toBe('20260604-093015-utc-cat-openai-2')
-    expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.json'), 'utf8')).toBe('foreign sidecar')
-    expect(fs.existsSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'))).toBe(false)
-    expect(fs.readdirSync(sessionDir).sort()).toEqual([`${base}.json`, `${base}.png`, '20260604-093015-utc-cat-openai.json'].sort())
-  })
-
-  it('never rolls back a replaced image when sidecar publication fails', () => {
-    const link = fs.linkSync
-    const failure = new Error('sidecar I/O failure')
-    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
-      if (String(target).endsWith('.json')) {
-        const image = String(target).replace(/\.json$/, '.png')
-        fs.unlinkSync(image)
-        fs.writeFileSync(image, 'foreign image')
-        throw failure
-      }
-      link(source, target)
-    })
-    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
     expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'), 'utf8')).toBe('foreign image')
+    expect(fs.readdirSync(sessionDir).sort()).toEqual([`${base}.json`, `${base}.png`, '20260604-093015-utc-cat-openai.png'].sort())
   })
 
-  it.each(['file', 'symlink'] as const)('never adopts a foreign %s identity returned after image claim', (replacement) => {
-    const link = fs.linkSync
-    const failure = new Error('sidecar publication failed')
-    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
-      if (String(target).endsWith('.json')) throw failure
-      link(source, target)
-      fs.unlinkSync(target)
-      if (replacement === 'symlink') fs.symlinkSync(source, target)
-      else fs.writeFileSync(target, 'foreign image')
-    })
-    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
-    const image = path.join(sessionDir, '20260604-093015-utc-cat-openai.png')
-    if (replacement === 'symlink') expect(fs.lstatSync(image).isSymbolicLink()).toBe(true)
-    else expect(fs.readFileSync(image, 'utf8')).toBe('foreign image')
-  })
-
-  it('publishes through exclusive handles on a volume without hard links', () => {
+  it('publishes through exclusive copies on a volume without hard links', () => {
     vi.spyOn(fs, 'linkSync').mockImplementation(() => { throw Object.assign(new Error('unsupported'), { code: 'ENOTSUP' }) })
     const base = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
     expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
     expect(fs.readdirSync(sessionDir)).toHaveLength(2)
-  })
-
-  it('rolls back both owned copies when the sidecar copy fails', () => {
-    vi.spyOn(fs, 'linkSync').mockImplementation(() => { throw Object.assign(new Error('unsupported'), { code: 'ENOTSUP' }) })
-    const write = fs.writeFileSync
-    const failure = new Error('sidecar copy failed')
-    let calls = 0
-    vi.spyOn(fs, 'writeFileSync').mockImplementation(((...args: Parameters<typeof fs.writeFileSync>) => {
-      if (++calls === 4) throw failure
-      return write(...args)
-    }) as typeof fs.writeFileSync)
-    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
-    expect(fs.readdirSync(sessionDir)).toEqual([])
-  })
-
-  it('preserves the original publish cause when owned rollback and staging cleanup also fail', () => {
-    const link = fs.linkSync
-    const failure = new Error('primary sidecar failure')
-    vi.spyOn(fs, 'linkSync').mockImplementation((source, target) => {
-      if (String(target).endsWith('.json')) throw failure
-      link(source, target)
-    })
-    vi.spyOn(fs, 'unlinkSync').mockImplementation(() => { throw new Error('secondary rollback failure') })
-    vi.spyOn(fs, 'rmSync').mockImplementation(() => { throw new Error('secondary staging cleanup failure') })
-    expect(() => writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).toThrow(failure)
   })
 
   it('returns the complete paid output after secondary directory sync failure', () => {
@@ -264,7 +225,7 @@ describe('assertImageExt', () => {
 })
 
 
-describe('governing image-sidecar deletion admission', () => {
+describe('deleting an output', () => {
   it('keeps inaccessible and unsafe cleanup outcomes unknown rather than claiming removal', () => {
     vi.spyOn(fs, 'lstatSync').mockImplementation(() => { throw Object.assign(new Error('access denied'), { code: 'EACCES' }) })
     expect(imageOutputFileStates('image', 'png')).toEqual({ image: 'unknown', metadata: 'unknown' })
@@ -272,49 +233,16 @@ describe('governing image-sidecar deletion admission', () => {
     expect(imageOutputFileStates('../outside', 'png')).toEqual({ image: 'unknown', metadata: 'unknown' })
     expect(fs.lstatSync).not.toHaveBeenCalled()
   })
-  it.each(['permanent', 'Trash'] as const)('preserves both outputs with a future sidecar during %s deletion', async (operation) => {
-    const image = path.join(sessionDir, 'image.png')
-    const sidecar = path.join(sessionDir, 'image.json')
-    fs.writeFileSync(image, 'image')
-    const bytes = JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })
-    fs.writeFileSync(sidecar, bytes)
-    if (operation === 'Trash') await expect(trashImageOutput('image', 'png')).rejects.toMatchObject({ name: 'NewerFormatError', path: sidecar })
-    else expect(() => deleteImageOutput('image', 'png')).toThrow(NewerFormatError)
-    expect(fs.readFileSync(image, 'utf8')).toBe('image')
-    expect(fs.readFileSync(sidecar, 'utf8')).toBe(bytes)
-    expect(trashItem).not.toHaveBeenCalled()
-  })
-
-  it.each(['{ invalid', '{}', '[]'])('preserves both outputs when sidecar is unreadable: %s', async (bytes) => {
-    fs.writeFileSync(path.join(sessionDir, 'image.png'), 'image')
-    fs.writeFileSync(path.join(sessionDir, 'image.json'), bytes)
-    expect(() => deleteImageOutput('image', 'png')).toThrow(StoreLeftInPlaceError)
-    await expect(trashImageOutput('image', 'png')).rejects.toBeInstanceOf(StoreLeftInPlaceError)
-    expect(fs.readFileSync(path.join(sessionDir, 'image.png'), 'utf8')).toBe('image')
-    expect(fs.readFileSync(path.join(sessionDir, 'image.json'), 'utf8')).toBe(bytes)
-    expect(trashItem).not.toHaveBeenCalled()
-  })
-
-  it('checks the sidecar again after awaited image Trash before its own handoff', async () => {
-    const image = path.join(sessionDir, 'image.png')
-    const sidecar = path.join(sessionDir, 'image.json')
-    fs.writeFileSync(image, 'image')
-    fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar }))
-    let settle!: () => void
-    trashItem.mockImplementationOnce((file) => new Promise<void>((resolve) => {
-      settle = () => { fs.unlinkSync(file); resolve() }
-    }))
-    const deletion = trashImageOutput('image', 'png')
-    const newer = JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })
-    try {
-      fs.writeFileSync(sidecar, newer)
-    } finally {
-      settle()
+  // Nothing in the app reads a sidecar, so deleting an output removes whatever
+  // sidecar sits beside it.
+  it.each([false, true])('deletes an output whose sidecar is from a newer version, unreadable or unmarked (Trash: %s)', async (toTrash) => {
+    for (const [name, bytes] of [['newer', JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })], ['unreadable', '{ invalid'], ['unmarked', '{}']]) {
+      fs.writeFileSync(path.join(sessionDir, `${name}.png`), 'image')
+      fs.writeFileSync(path.join(sessionDir, `${name}.json`), bytes)
+      if (toTrash) await trashImageOutput(name, 'png')
+      else deleteImageOutput(name, 'png')
     }
-    await expect(deletion).rejects.toMatchObject({ name: 'NewerFormatError', path: sidecar })
-    expect(fs.existsSync(image)).toBe(false)
-    expect(fs.readFileSync(sidecar, 'utf8')).toBe(newer)
-    expect(trashItem).toHaveBeenCalledExactlyOnceWith(image)
+    expect(fs.readdirSync(sessionDir)).toEqual([])
   })
 
   it.each([false, true])('cleans up an orphan image without a sidecar (Trash: %s)', async (toTrash) => {

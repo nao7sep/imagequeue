@@ -6,8 +6,8 @@ import { getSessionDir } from '../session'
 import { BackendId, OutputFileState } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log, serializeError } from '../logger'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
-import { stageBeside, stagingPathFor } from './atomic-write'
+import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
+import { claimFinalName, stageBeside, stagingPathFor } from './atomic-write'
 import { syncDirectory, syncFile } from './fsync'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
@@ -114,52 +114,20 @@ export function outputBaseName(
   return `${timestamp}-utc-${slug}-${backend}${suffix}`
 }
 
-// Writes the image file and its JSON sidecar to the session directory.
-// Returns the base filename (without extension).
-function removeOwnedOutput(file: string, owned: fs.Stats): void {
+// Publishes staged bytes under `destination` without replacing a file already
+// there; false when the name is taken. The staging file is always removed.
+function publishStaged(staging: string, destination: string): boolean {
   try {
-    const current = fs.lstatSync(file, { throwIfNoEntry: false })
-    if (current?.ino === owned.ino && current.dev === owned.dev && !current.isSymbolicLink()) fs.unlinkSync(file)
-  } catch (error) {
-    log('warn', 'Could not remove an unpaired generated output', { file, error: serializeError(error) })
-  }
-}
-
-// The identity comes from our stage for links, or our exclusively opened
-// target handle for copies. Looking up the final path after claiming it could
-// instead capture a replacement file and incorrectly authorize its rollback.
-function claimOutputFile(staging: string, destination: string): fs.Stats | null {
-  const staged = fs.lstatSync(staging)
-  try {
-    fs.linkSync(staging, destination)
-    return staged
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'EEXIST') return null
-    if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code ?? '')) throw error
-  }
-  let fd: number
-  try { fd = fs.openSync(destination, 'wx') } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null
-    throw error
-  }
-  let owned: fs.Stats | undefined
-  try {
-    owned = fs.fstatSync(fd)
-    fs.writeFileSync(fd, fs.readFileSync(staging))
-    fs.futimesSync(fd, staged.atime, staged.mtime)
-    fs.fsyncSync(fd)
-    return owned
-  } catch (error) {
-    if (owned) removeOwnedOutput(destination, owned)
-    throw error
+    return claimFinalName(staging, destination)
   } finally {
-    try { fs.closeSync(fd) } catch (error) {
-      log('warn', 'Could not close generated-output publication handle', { destination, error: serializeError(error) })
+    try { fs.rmSync(staging, { force: true }) } catch (error) {
+      log('warn', 'Could not remove generated-output staging', { tempPath: staging, error: serializeError(error) })
     }
   }
 }
 
+// Writes the image file and its JSON sidecar to the session directory.
+// Returns the base filename (without extension).
 export function writeImageOutput(
   timestamp: string,
   ordinal: number,
@@ -205,64 +173,40 @@ export function writeImageOutput(
   // sessions/<session>/, transient work the user exports what they keep from (data-backup-conventions;
   // the developer's classification). Written directly, not through the managed-text hook.
   //
-  // Both files are staged complete before either is published, so a failed
-  // write (a full disk, an I/O error) leaves neither a truncated file nor an
-  // image without its sidecar under a final name.
-  const imagePath = path.join(dir, `${baseName}.${ext}`)
+  // The image is staged complete and claimed under a name nothing holds, so a
+  // failed write leaves no truncated file and nothing is ever replaced. A
+  // generated (and possibly paid) image is never given up for its sidecar
+  // (developer decision): the sidecar follows best effort, and nothing in the
+  // app reads it back.
+  for (;;) {
+    const staged = stageBeside(path.join(dir, `${baseName}.${ext}`), imageBuffer)
+    if (publishStaged(staged, path.join(dir, `${baseName}.${ext}`))) break
+    // Only an occupied final name advances the ordinal; I/O failures escape.
+    attempt++
+    baseName = outputBaseName(timestamp, attempt, slug, backend)
+    while (collides(baseName)) baseName = outputBaseName(timestamp, ++attempt, slug, backend)
+  }
+
   const sidecarPath = path.join(dir, `${baseName}.json`)
   const sidecar = markFormat(metadata, FORMAT_VERSIONS.imageSidecar, SNAKE_FORMAT_VERSION_KEY)
-  const staged: string[] = []
   try {
-    staged.push(stageBeside(imagePath, imageBuffer))
-    staged.push(stageBeside(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8')))
-    for (;;) {
-      const image = path.join(dir, `${baseName}.${ext}`)
-      const sidecarFile = path.join(dir, `${baseName}.json`)
-      const owned = claimOutputFile(staged[0], image)
-      if (owned) {
-        let paired = false
-        try {
-          paired = claimOutputFile(staged[1], sidecarFile) !== null
-        } finally {
-          if (!paired) {
-            removeOwnedOutput(image, owned)
-          }
-        }
-        if (paired) break
-      }
-      // Only an occupied final name advances the ordinal; I/O failures escape.
-      attempt++
-      baseName = outputBaseName(timestamp, attempt, slug, backend)
-      while (collides(baseName)) baseName = outputBaseName(timestamp, ++attempt, slug, backend)
+    const staged = stageBeside(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8'))
+    if (!publishStaged(staged, sidecarPath)) {
+      log('warn', 'Generated image was saved but its metadata sidecar name was taken; the sidecar was not written', { baseName })
     }
-    try {
-      syncDirectory(dir)
-    } catch (error) {
-      // The complete pair is already published. A secondary durability warning
-      // must not mark the paid output failed and invite another generation.
-      log('warn', 'Generated image and metadata were saved but directory sync failed', { baseName, error: serializeError(error) })
-    }
-  } finally {
-    for (const tempPath of staged) {
-      try { fs.rmSync(tempPath, { force: true }) } catch (error) {
-        log('warn', 'Could not remove generated-output staging', { tempPath, error: serializeError(error) })
-      }
-    }
+  } catch (error) {
+    log('warn', 'Generated image was saved but its metadata sidecar could not be written', { baseName, error: serializeError(error) })
+  }
+
+  try {
+    syncDirectory(dir)
+  } catch (error) {
+    // The image is already published. A secondary durability warning must not
+    // mark the paid output failed and invite another generation.
+    log('warn', 'Generated image was saved but directory sync failed', { baseName, error: serializeError(error) })
   }
 
   return baseName
-}
-
-function admitImageSidecar(file: string): void {
-  if (!fs.existsSync(file)) return
-  try {
-    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid image sidecar shape')
-    checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.imageSidecar, file, SNAKE_FORMAT_VERSION_KEY)
-  } catch (error) {
-    if (error instanceof NewerFormatError) throw error
-    throw new StoreLeftInPlaceError(file, { cause: error })
-  }
 }
 
 /** Inspect settled cleanup without treating an inaccessible path as removed. */
@@ -288,7 +232,6 @@ export function deleteImageOutput(baseName: string, ext: ImageExt): void {
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
-  admitImageSidecar(metaPath)
   if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath)
   if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath)
 }
@@ -301,10 +244,6 @@ export async function trashImageOutput(baseName: string, ext: ImageExt): Promise
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
-  admitImageSidecar(metaPath)
   if (fs.existsSync(imagePath)) await shell.trashItem(imagePath)
-  if (fs.existsSync(metaPath)) {
-    admitImageSidecar(metaPath)
-    await shell.trashItem(metaPath)
-  }
+  if (fs.existsSync(metaPath)) await shell.trashItem(metaPath)
 }
