@@ -26,7 +26,7 @@ export async function generateOpenAI(task: Task, signal: AbortSignal): Promise<{
 
   const response = await withProviderRetry((attemptSignal) => {
     // Each attempt's record keeps the HTTP request the SDK sends.
-    const call: AiCall = { backend: 'openai', model: task.model, purpose: 'image', taskId: task.id, request }
+    const call: AiCall = { backend: 'openai', model: task.model, purpose: 'image', taskId: task.id, request, credentials: [apiKey] }
     // The app owns retries; the SDK performs exactly one attempt.
     const client = new OpenAI({ apiKey, timeout: config.image_backends.openai.timeout_ms, maxRetries: 0, fetch: recordingFetch(call) })
     return recordAiCall(

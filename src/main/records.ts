@@ -238,11 +238,53 @@ export interface AiCall {
   taskId?: string
   requestId?: string
   request: unknown
+  /** The key values the call sends. Never recorded: each occurrence in the
+   *  record is masked, including one a provider echoes back. */
+  credentials?: readonly string[]
 }
 
 export interface AiCallRecord {
   finish(response: unknown): void
   fail(error: unknown, response?: unknown): void
+}
+
+const MASK = '[REDACTED]'
+// Header names that carry a key, compared case-insensitively.
+const CREDENTIAL_HEADERS = new Set(['x-key', 'authorization', 'x-goog-api-key', 'api-key'])
+// A signed download URL's signature, such as the one FLUX hands back.
+const URL_SIGNATURE = /([?&]sig=)[^&#\s"]+/g
+
+/**
+ * A copy of a recorded value with every credential masked and its structure
+ * kept (logging-conventions): known key headers become `[REDACTED]`, keeping an
+ * authorization scheme as `Bearer [REDACTED]`; every occurrence of a key value
+ * the call sent, and a signed URL's signature, become `[REDACTED]`. The value
+ * itself is never changed, since live request headers are shared with the
+ * request being sent.
+ */
+export function maskCredentials(value: unknown, credentials: readonly string[] = []): unknown {
+  const keys = credentials.filter((key) => key.length > 0)
+  const maskText = (text: string): string =>
+    keys.reduce((masked, key) => masked.split(key).join(MASK), text).replace(URL_SIGNATURE, `$1${MASK}`)
+  const visit = (current: unknown, header: string | null): unknown => {
+    if (typeof current === 'string') {
+      if (header === 'authorization') {
+        const scheme = /^(\S+)\s+\S/.exec(current)
+        return scheme ? `${scheme[1]} ${MASK}` : MASK
+      }
+      if (header !== null) return MASK
+      return maskText(current)
+    }
+    if (Array.isArray(current)) return current.map((item) => visit(item, null))
+    if (current && typeof current === 'object') {
+      return Object.fromEntries(Object.entries(current).map(([name, item]) => {
+        const lower = name.toLowerCase()
+        return [maskText(name), visit(item, CREDENTIAL_HEADERS.has(lower) ? lower : null)]
+      }))
+    }
+    return current
+  }
+  return visit(value, null)
 }
 
 /** Starts one call's record at the moment its request is sent; the record is written
@@ -259,10 +301,14 @@ export function startAiCall(call: AiCall): AiCallRecord {
   const end = (response: unknown, error: unknown): void => {
     if (written) return
     written = true
+    // Masked before the row exists, so the database, the fallback file and the
+    // console all receive the same masked copy. The JSON form is masked, so a
+    // value records exactly as it serializes.
+    const masked = (value: unknown): string => json(maskCredentials(JSON.parse(json(value)), call.credentials))
     write('ai_calls', {
-      ...base, request: json(call.request), duration_ms: Date.now() - started,
-      response: response === undefined ? null : json(response),
-      error: error === undefined ? null : json(serializeError(error)),
+      ...base, request: masked(call.request), duration_ms: Date.now() - started,
+      response: response === undefined ? null : masked(response),
+      error: error === undefined ? null : masked(serializeError(error)),
     })
   }
   return {

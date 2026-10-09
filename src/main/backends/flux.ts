@@ -47,7 +47,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
   signal.addEventListener('abort', onAbort, { once: true })
 
   try {
-    const call = { backend: 'flux', model: task.model, purpose: 'image', taskId: task.id }
+    const call = { backend: 'flux', model: task.model, purpose: 'image', taskId: task.id, credentials: [apiKey] }
     const submitUrl = `${BASE_URL}/${task.model}`
     const submitHeaders = { 'Content-Type': 'application/json', 'x-key': apiKey }
     const submitData = await withProviderRetry(async (attemptSignal) => {

@@ -32,7 +32,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   // The record keeps the request body the app built, not the HTTP request:
   // @google/genai takes no fetch or request hook to capture what it sends.
   const response = await withProviderRetry((attemptSignal) => recordAiCall(
-    { backend: 'nanobanana', model: task.model, purpose: 'image', taskId: task.id, request },
+    { backend: 'nanobanana', model: task.model, purpose: 'image', taskId: task.id, request, credentials: [apiKey] },
     // No cast: GenerateContentConfig declares every field here, so the
     // compiler proves the abort signal reaches this backend. Aborting is
     // client-side only, per the SDK: it stops us waiting, it does not stop the

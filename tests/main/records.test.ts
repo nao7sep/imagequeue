@@ -63,15 +63,55 @@ describe('log records', () => {
 })
 
 describe('AI call records', () => {
-  // Nothing is cut (data-lifecycle-conventions): the request is kept as it was
-  // sent, its headers and the key they carry included.
-  it('keep a request whole, its headers included', async () => {
+  // A record keeps a request's structure, never a key it carries
+  // (logging-conventions): key headers and every occurrence of a key value the
+  // call sent are masked, and so is a signed URL's signature.
+  it('mask the key in headers and wherever it appears, keeping everything else as sent', async () => {
     const dir = freshRecordsRoot()
-    const request = { url: 'https://api.example/flux', headers: { 'x-key': 'test-key', Authorization: 'Bearer test-token' }, body: { prompt: 'a fox' } }
-    await recordAiCall({ backend: 'flux', model: 'flux-2-pro', purpose: 'image', request }, async () => ({ ok: true }))
+    const headers = { 'x-key': 'test-key', Authorization: 'Bearer test-token', 'X-Goog-Api-Key': 'test-key', 'api-key': 'other' }
+    const request = { url: 'https://api.example/flux?key=test-key', headers, body: { prompt: 'a fox', note: 'sent test-key' } }
+    await recordAiCall({ backend: 'flux', model: 'flux-2-pro', purpose: 'image', request, credentials: ['test-key', 'test-token'] },
+      async () => ({ status: 'Ready', result: { sample: 'https://delivery.example/a.png?se=2026&sig=SECRETSIG%3D&sp=r' } }))
 
     const [row] = readRows(dir, 'ai_calls')
-    expect(JSON.parse(row!.request as string)).toEqual(request)
+    expect(JSON.parse(row!.request as string)).toEqual({
+      url: 'https://api.example/flux?key=[REDACTED]',
+      headers: { 'x-key': '[REDACTED]', Authorization: 'Bearer [REDACTED]', 'X-Goog-Api-Key': '[REDACTED]', 'api-key': '[REDACTED]' },
+      body: { prompt: 'a fox', note: 'sent [REDACTED]' },
+    })
+    expect(JSON.parse(row!.response as string)).toEqual({ status: 'Ready', result: { sample: 'https://delivery.example/a.png?se=2026&sig=[REDACTED]&sp=r' } })
+    expect(headers, 'the headers sent are never changed').toEqual({ 'x-key': 'test-key', Authorization: 'Bearer test-token', 'X-Goog-Api-Key': 'test-key', 'api-key': 'other' })
+  })
+
+  it('mask a key a provider echoes in its error', async () => {
+    const dir = freshRecordsRoot()
+    await expect(recordAiCall({ backend: 'grok', model: 'm', purpose: 'image', request: {}, credentials: ['xai-secret'] },
+      async () => { throw new Error('Incorrect API key provided: xai-secret') })).rejects.toThrow('xai-secret')
+    const [row] = readRows(dir, 'ai_calls')
+    expect(row!.error).not.toContain('xai-secret')
+    expect(JSON.parse(row!.error as string).message).toBe('Incorrect API key provided: [REDACTED]')
+  })
+
+  it('mask the key in the fallback file and on the console too', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-masked-'))
+    fs.mkdirSync(path.join(dir, 'records.sqlite3'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      openRecords(dir)
+      const call = { backend: 'flux', model: 'm', purpose: 'image', request: { headers: { 'x-key': 'fallback-key' } }, credentials: ['fallback-key'] }
+      await recordAiCall(call, async () => ({ echoed: 'fallback-key' }))
+      expect(fs.readFileSync(path.join(dir, 'logs', fs.readdirSync(path.join(dir, 'logs'))[0]!), 'utf8')).not.toContain('fallback-key')
+      closeRecords()
+      await recordAiCall(call, async () => ({ echoed: 'fallback-key' }))
+      const printed = [...consoleLog.mock.calls, ...consoleError.mock.calls].map((args) => args.join(' ')).join('\n')
+      expect(printed).toContain('[REDACTED]')
+      expect(printed).not.toContain('fallback-key')
+    } finally {
+      consoleError.mockRestore()
+      consoleLog.mockRestore()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('hold the request, the kept response and the session, and an error when the call fails', async () => {

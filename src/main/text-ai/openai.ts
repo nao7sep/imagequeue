@@ -17,7 +17,7 @@ export class OpenAIProvider implements TextAIProvider {
       ...openaiTextParams(this.model, this.thinking, opts.schema),
     }
     // The record keeps the HTTP request the SDK sends.
-    const call: AiCall = { backend: 'openai', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request } }
+    const call: AiCall = { backend: 'openai', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request }, credentials: [this.apiKey] }
     const client = new OpenAI({
       apiKey: this.apiKey, baseURL: this.endpoint,
       timeout: opts.timeoutMs, maxRetries: 0, fetch: recordingFetch(call),
