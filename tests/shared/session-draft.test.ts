@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   createEmptySessionDraft,
-  isStoredSessionDraft,
   MAX_DRAFT_ITERATIONS,
   normalizeCount,
   normalizeSessionDraft,
@@ -197,29 +196,6 @@ describe('normalizeSessionDraft', () => {
     result.selectedDtFiles.push('mutated')
     expect(input.selectedProprietary.openai).toBe(true)
     expect(input.selectedDtFiles).toEqual(['model-a.ckpt', 'model-b.ckpt'])
-  })
-})
-
-// A stored draft is read as it is or not at all: a field it holds that the
-// draft cannot hold makes the session unreadable instead of being replaced.
-describe('isStoredSessionDraft', () => {
-  it('accepts a whole draft, and one missing fields that take their empty values', () => {
-    expect(isStoredSessionDraft(fullDraft())).toBe(true)
-    expect(isStoredSessionDraft(createEmptySessionDraft())).toBe(true)
-    expect(isStoredSessionDraft({ prompt: 'a cat' })).toBe(true)
-  })
-
-  it('rejects a draft holding a field it cannot hold', () => {
-    expect(isStoredSessionDraft(null)).toBe(false)
-    expect(isStoredSessionDraft(['a'])).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), prompt: 7 })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), selectedStyleElaboratorId: 3 })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), selectedProprietary: { openai: 'yes' } })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), selectedDtFiles: ['a.ckpt', 2] })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), promptMode: 'wat' })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), count: 2.5 })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), count: 0 })).toBe(false)
-    expect(isStoredSessionDraft({ ...fullDraft(), promptLength: null })).toBe(false)
   })
 })
 

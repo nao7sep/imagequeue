@@ -1,6 +1,5 @@
 // Shared types between main and renderer processes.
 
-import type { SessionDraft } from './session-draft'
 import type { Message } from './i18n/translate'
 import type { MessageKey } from './i18n/catalogues'
 
@@ -241,9 +240,6 @@ export interface SessionManifest {
   lastResumedAt: string | null
   taskCounts: SessionTaskCounts
   elaboratedPrompts: ElaboratedPromptRecord[]
-  // The renderer's working state for this session (prompt + Advanced Prompting
-  // selections); an absent field reads as its empty value (normalizeSessionDraft).
-  draft: SessionDraft
   tasks: Record<BackendId, Task[]>
 }
 

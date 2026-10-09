@@ -2,16 +2,15 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { ElaboratedPromptRecord } from '../../../shared/types'
 import { createEmptySessionDraft, type SessionDraft } from '../../../shared/session-draft'
 import { serializeError } from '../../../shared/serialize-error'
-import type { SessionDraftPersistenceState } from '../../../shared/electron-api'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 // The renderer's working state for the active session: the SessionDraft fields
 // (main prompt + Advanced Prompting selections) plus the elaborated-prompts
-// history. The two persist on different cadences — the draft fields write
-// through as the user types (coalesced by the main process), while
-// elaboratedPrompts are committed results written immediately on each
-// append/delete/clear. Both live in session.json and re-hydrate on session
-// change, so resuming a session restores the full working context.
+// history. The draft fields go to the main process as the user types, which
+// keeps each session's draft for the running app only, so switching sessions
+// restores it and a restart starts empty. elaboratedPrompts are committed
+// results, written to session.json immediately on each append/delete/clear.
+// Both re-hydrate on session change.
 export interface SessionDraftState extends SessionDraft {
   elaboratedPrompts: ElaboratedPromptRecord[]
 }
@@ -27,9 +26,7 @@ function extractDraft(state: SessionDraftState): SessionDraft {
 
 interface SessionDraftContextValue {
   state: SessionDraftState
-  // Catalogue keys, rendered where they are shown.
-  draftIssue: { title: MessageKey; message: MessageKey } | null
-  dismissDraftIssue: () => void
+  // A catalogue key, rendered where it is shown.
   draftUnavailable: MessageKey | null
   retryDraftHydration: () => void
   // Partial updates to one or more fields. Use the function form when the next
@@ -43,9 +40,10 @@ interface SessionDraftContextValue {
 
 const SessionDraftContext = createContext<SessionDraftContextValue | null>(null)
 
-interface DraftPersistenceFailure {
+// The draft could not be loaded, or an elaborated-prompt change could not be
+// saved; either way the working state no longer matches main until a retry.
+interface DraftFailure {
   message: MessageKey
-  source: 'disk' | 'ipc' | 'hydrate' | 'mutation'
 }
 
 function logDraftFailure(message: string, error: unknown): void {
@@ -55,21 +53,12 @@ function logDraftFailure(message: string, error: unknown): void {
 
 export function SessionDraftProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, setState] = useState<SessionDraftState>(emptyState)
-  const [draftPersistenceFailureState, setDraftPersistenceFailureState] =
-    useState<DraftPersistenceFailure | null>(null)
+  const [draftFailure, setDraftFailure] = useState<DraftFailure | null>(null)
   const [hydrateRetry, setHydrateRetry] = useState(0)
-  const draftUnavailable = draftPersistenceFailureState?.source === 'hydrate' || draftPersistenceFailureState?.source === 'mutation'
-    ? draftPersistenceFailureState.message
-    : null
-  const draftIssue = draftPersistenceFailureState && draftPersistenceFailureState.source !== 'hydrate' && draftPersistenceFailureState.source !== 'mutation'
-    ? {
-        title: 'draft.issueTitle' as const,
-        message: draftPersistenceFailureState.message,
-      }
-    : null
-  // Guards the write-through effect: stays false until the first hydrate
-  // completes, and tracks the last draft we persisted so re-applying a hydrated
-  // draft doesn't immediately echo back a redundant save.
+  const draftUnavailable = draftFailure?.message ?? null
+  // Guards the send effect: stays false until the first hydrate completes, and
+  // tracks the last draft sent so re-applying a hydrated draft doesn't
+  // immediately echo it back.
   const loadedRef = useRef(false)
   const lastPersistedDraftRef = useRef('')
 
@@ -77,31 +66,16 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     let cancelled = false
     let hydrateRevision = 0
 
-    const applyPersistenceState = (next: SessionDraftPersistenceState): void => {
-      if (cancelled) return
-      setDraftPersistenceFailureState(
-        (current) => current?.source === 'hydrate' || current?.source === 'mutation'
-          ? current
-          : next.status === 'failed' ? { message: 'draft.persistenceFailed', source: 'disk' } : null,
-      )
-    }
-
-    const unsubscribePersistence = window.electronAPI.onSessionDraftPersistenceState(
-      applyPersistenceState,
-    )
-
     const hydrate = async (): Promise<void> => {
       const revision = ++hydrateRevision
       loadedRef.current = false
       try {
-        const [draft, elaboratedPrompts, persistenceState] = await Promise.all([
+        const [draft, elaboratedPrompts] = await Promise.all([
           window.electronAPI.getSessionDraft(),
           window.electronAPI.getSessionElaboratedPrompts(),
-          window.electronAPI.getSessionDraftPersistenceState(),
         ])
         if (cancelled || revision !== hydrateRevision) return
-        setDraftPersistenceFailureState(null)
-        applyPersistenceState(persistenceState)
+        setDraftFailure(null)
         lastPersistedDraftRef.current = JSON.stringify(draft)
         loadedRef.current = true
         setState({ ...draft, elaboratedPrompts })
@@ -109,10 +83,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
         if (cancelled || revision !== hydrateRevision) return
         setState(emptyState())
         lastPersistedDraftRef.current = ''
-        setDraftPersistenceFailureState({
-          message: 'draft.hydrationFailed',
-          source: 'hydrate',
-        })
+        setDraftFailure({ message: 'draft.hydrationFailed' })
         logDraftFailure('Failed to hydrate the active session draft', error)
       }
     }
@@ -128,49 +99,28 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     return () => {
       cancelled = true
       unsubscribe()
-      unsubscribePersistence()
     }
   }, [hydrateRetry])
 
-  // Write-through for the draft fields. The main process coalesces rapid writes
-  // and flushes on quit, so we send on every change without debouncing here.
-  // elaboratedPrompts are excluded — they persist through their own immediate
-  // path below.
+  // The draft fields go to main on every change; main only keeps them in
+  // memory, so there is nothing to debounce. elaboratedPrompts are excluded —
+  // they persist through their own immediate path below. A send that fails
+  // leaves main with an earlier draft, which only matters if the user switches
+  // sessions before the next change; it is logged, not announced.
   const draftSnapshot = JSON.stringify(extractDraft(state))
   useEffect(() => {
     if (!loadedRef.current) return
     if (draftSnapshot === lastPersistedDraftRef.current) return
     lastPersistedDraftRef.current = draftSnapshot
     void window.electronAPI.saveSessionDraft(JSON.parse(draftSnapshot) as SessionDraft)
-      .then(() => {
-        // A transport failure means main never received the prior draft. Once a
-        // later IPC succeeds, main owns the write again; disk failures arrive
-        // through the persistence-state event and must not be cleared here.
-        setDraftPersistenceFailureState((current) =>
-          current?.source === 'ipc' ? null : current
-        )
-      })
-      .catch((error) => {
-        setDraftPersistenceFailureState({
-          message: 'draft.persistenceFailed',
-          source: 'ipc',
-        })
-        logDraftFailure('Failed to send session draft for persistence', error)
-      })
+      .catch((error) => logDraftFailure('Failed to send the session draft to the main process', error))
   }, [draftSnapshot])
-
-  const dismissDraftIssue = useCallback((): void => {
-    setDraftPersistenceFailureState(null)
-  }, [])
 
   const retryDraftHydration = useCallback((): void => setHydrateRetry((value) => value + 1), [])
 
   const handleDraftMutationFailure = useCallback((operation: string, error: unknown): void => {
     loadedRef.current = false
-    setDraftPersistenceFailureState({
-      source: 'mutation',
-      message: 'draft.mutationFailed',
-    })
+    setDraftFailure({ message: 'draft.mutationFailed' })
     logDraftFailure(operation, error)
   }, [])
 
@@ -210,8 +160,6 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     <SessionDraftContext.Provider
       value={{
         state,
-        draftIssue,
-        dismissDraftIssue,
         draftUnavailable,
         retryDraftHydration,
         update,

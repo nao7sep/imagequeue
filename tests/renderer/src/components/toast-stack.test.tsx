@@ -4,16 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliJobKind } from '../../../../src/shared/cli-jobs'
 
 const context = vi.hoisted(() => ({
-  draftFailure: null as string | null,
-  dismiss: vi.fn(),
   jobs: new Map<string, { kind: CliJobKind; target: string }>(),
-}))
-
-vi.mock('../../../../src/renderer/src/context/SessionDraftContext', () => ({
-  useSessionDraft: () => ({
-    draftIssue: context.draftFailure ? { title: 'draft.issueTitle', message: context.draftFailure } : null,
-    dismissDraftIssue: context.dismiss,
-  }),
 }))
 
 vi.mock('../../../../src/renderer/src/context/CliJobsContext', () => ({
@@ -34,8 +25,6 @@ function toastTexts(): string[] {
 }
 
 beforeEach(() => {
-  context.draftFailure = null
-  context.dismiss.mockReset()
   context.jobs = new Map()
   window.electronAPI = {
     appLog: vi.fn(async () => undefined),
@@ -53,16 +42,6 @@ describe('ToastStack', () => {
     render(<ToastStack />)
     expect(screen.queryByRole('region', { name: 'Notifications' })).toBeNull()
     expect(screen.getByRole('alert').textContent).toBe('')
-  })
-
-  it('keeps a dismissible draft-save error until the user closes it, and announces it', () => {
-    context.draftFailure = 'draft.persistenceFailed'
-    render(<ToastStack />)
-
-    expect(toastTexts()[0]).toContain('Session draft isn’t being saved')
-    expect(screen.getByRole('alert').textContent).toContain('Recent session changes could not be saved.')
-    fireEvent.click(screen.getByRole('button', { name: 'Close session draft result' }))
-    expect(context.dismiss).toHaveBeenCalledOnce()
   })
 
   it('presents operation failures without hostile diagnostics and without taking focus', () => {

@@ -54,10 +54,6 @@ export type Platform =
   | 'netbsd'
 
 // The renderer words each failed state itself, in the interface language.
-export type SessionDraftPersistenceState =
-  | { status: 'saved' }
-  | { status: 'failed' }
-
 export type DrawThingsParamsPersistenceState =
   | { status: 'saved' }
   | { status: 'failed' }
@@ -103,10 +99,6 @@ export interface ElectronAPI {
   openSessionFolder: (sessionId: string) => Promise<void>
   getSessionDraft: () => Promise<SessionDraft>
   saveSessionDraft: (draft: SessionDraft) => Promise<void>
-  getSessionDraftPersistenceState: () => Promise<SessionDraftPersistenceState>
-  onSessionDraftPersistenceState: (
-    callback: (state: SessionDraftPersistenceState) => void
-  ) => (() => void)
   getSessionElaboratedPrompts: () => Promise<ElaboratedPromptRecord[]>
   appendSessionElaboratedPrompts: (prompts: ElaboratedPromptRecord[]) => Promise<ElaboratedPromptRecord[]>
   deleteSessionElaboratedPromptAt: (index: number) => Promise<ElaboratedPromptRecord[]>

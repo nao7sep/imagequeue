@@ -1,10 +1,10 @@
 // The per-session "draft": the renderer's working state for one session — the
-// prompt currently being composed plus the Advanced Prompting selections. It is
-// persisted inside session.json (see SessionManifest.draft) so resuming a
-// session restores the full working context, not just its task history.
+// prompt currently being composed plus the Advanced Prompting selections. The
+// main process keeps each session's draft for the running app, so switching
+// sessions restores it; it is never written to disk (session/state.ts).
 //
 // This lives in shared/ because both sides need it: the renderer owns and edits
-// the draft, while the main process persists it and normalizes it on read.
+// the draft, while the main process keeps it and normalizes what it receives.
 
 import type { MessageKey } from './i18n/catalogues'
 import { BACKEND_IDS_IN_UI_ORDER, type BackendId } from './types'
@@ -130,37 +130,9 @@ function normalizeStringArray(value: unknown): string[] {
 const isString = (value: unknown): boolean => typeof value === 'string'
 const isNullableString = (value: unknown): boolean => value === null || typeof value === 'string'
 
-// Whether a stored draft can be used as it is: every field it holds is one the
-// draft can hold. An absent field takes its empty-draft value through
-// normalizeSessionDraft; a malformed one makes the session unreadable rather
-// than being replaced and saved over (store-recovery conventions).
-export function isStoredSessionDraft(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const v = value as Record<string, unknown>
-  const fieldChecks: Record<keyof SessionDraft, (field: unknown) => boolean> = {
-    prompt: isString,
-    seed: isString,
-    elaborated: isString,
-    selectedCompositionElaboratorId: isNullableString,
-    selectedStyleElaboratorId: isNullableString,
-    selectedProprietary: (field) =>
-      !!field && typeof field === 'object' && !Array.isArray(field) &&
-      Object.values(field).every((selected) => typeof selected === 'boolean'),
-    selectedDtFiles: (field) => Array.isArray(field) && field.every(isString),
-    promptMode: (field) => PROMPT_MODES.includes(field as PromptMode),
-    targetScope: (field) => TARGET_SCOPES.includes(field as TargetScope),
-    count: (field) => normalizeCount(field) === field,
-    promptFormat: (field) => PROMPT_FORMATS.includes(field as PromptFormat),
-    promptLength: (field) => PROMPT_LENGTHS.includes(field as PromptLength),
-  }
-  return Object.entries(fieldChecks).every(([key, check]) => v[key] === undefined || check(v[key]))
-}
-
-// Rebuilds a complete, valid SessionDraft from a draft the renderer sends or a
-// session stores. A malformed field falls back to its empty-draft value rather
-// than the whole object being rejected, so a corrupted draft degrades to a
-// clean one without taking the session's task history down with it. Also
-// serves as a deep clone for trusted input.
+// Rebuilds a complete, valid SessionDraft from a draft the renderer sends. A
+// malformed field falls back to its empty-draft value rather than the whole
+// object being rejected. Also serves as a deep clone for trusted input.
 export function normalizeSessionDraft(value: unknown): SessionDraft {
   const base = createEmptySessionDraft()
   if (!value || typeof value !== 'object' || Array.isArray(value)) return base

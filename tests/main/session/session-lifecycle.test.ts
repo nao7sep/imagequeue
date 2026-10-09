@@ -45,7 +45,6 @@ const {
   createSession,
   deleteSession,
   dropCurrentSessionIfEmpty,
-  drainPendingDraftWrites,
   getActiveSessionDraft,
   appendActiveSessionElaboratedPrompts,
   clearActiveSessionElaboratedPrompts,
@@ -94,7 +93,7 @@ function readManifest(sessionDir: string): SessionManifest {
 }
 
 /** A session folder on disk that this process never opened. */
-function stageSession(sessionId: string, manifest: Partial<SessionManifest> = {}): string {
+function stageSession(sessionId: string, manifest: Partial<SessionManifest> & Record<string, unknown> = {}): string {
   const dir = path.join(getSessionsDir(), sessionId)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(
@@ -107,7 +106,6 @@ function stageSession(sessionId: string, manifest: Partial<SessionManifest> = {}
       lastResumedAt: null,
       taskCounts: { total: 0, queued: 0, generating: 0, completed: 0, failed: 0, interrupted: 0, kept: 0 },
       elaboratedPrompts: [],
-      draft: createEmptySessionDraft(),
       tasks: createEmptyQueues(),
       ...manifest,
     }),
@@ -503,28 +501,50 @@ describe('dropping the open session on quit', () => {
 })
 
 describe('the working draft and its elaborated prompts', () => {
-  it('normalizes what the renderer sends and writes it through on a drain', () => {
+  it('normalizes what the renderer sends and keeps it out of session.json', () => {
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat', count: -5 })
 
     expect(getActiveSessionDraft().prompt).toBe('a cat')
     expect(getActiveSessionDraft().count, 'a nonsense count is repaired').toBeGreaterThan(0)
-    expect(readManifest(getSessionDir()).draft.prompt, 'not yet, the write is coalesced').toBe('')
-
-    drainPendingDraftWrites()
-
-    expect(readManifest(getSessionDir()).draft.prompt).toBe('a cat')
+    persistActiveSession()
+    expect(readManifest(getSessionDir())).not.toHaveProperty('draft')
   })
 
-  it('restores the draft and the prompts when the session is opened again', async () => {
+  it('keeps each session\'s draft while the app runs, so switching back finds it, and its prompts', async () => {
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat on a shelf' })
     appendActiveSessionElaboratedPrompts([{ text: 'a cat on a sunlit shelf', concepts: [] }])
-    const sessionId = getSessionId()
+    const first = getSessionId()
     await createSession()
+    expect(getActiveSessionDraft().prompt, 'a new session starts empty').toBe('')
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a dog' })
+    const second = getSessionId()
 
-    await resumeSession(sessionId)
-
+    await resumeSession(first)
     expect(getActiveSessionDraft().prompt).toBe('a cat on a shelf')
     expect(getActiveSessionElaboratedPrompts()).toEqual([{ text: 'a cat on a sunlit shelf', concepts: [] }])
+
+    await resumeSession(second)
+    expect(getActiveSessionDraft().prompt).toBe('a dog')
+  })
+
+  it('starts with an empty draft after a restart', async () => {
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
+    persistActiveSession()
+    const dir = getSessionDir()
+
+    vi.resetModules()
+    const restarted = await import('../../../src/main/session/state')
+    const { setSessionDir: setRestartedSessionDir } = await import('../../../src/main/session/session')
+    setRestartedSessionDir(dir)
+    expect(restarted.getActiveSessionDraft()).toEqual(createEmptySessionDraft())
+  })
+
+  it('opens a session whose manifest holds a draft an earlier version stored, and ignores that draft', async () => {
+    const id = '20260114-000000-utc'
+    stageSession(id, { draft: { ...createEmptySessionDraft(), prompt: 7 } })
+    expect(listSessions().some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
+    await resumeSession(id)
+    expect(getActiveSessionDraft()).toEqual(createEmptySessionDraft())
   })
 
   it('persists every change to the elaborated list', () => {
@@ -543,11 +563,64 @@ describe('the working draft and its elaborated prompts', () => {
     expect(clearActiveSessionElaboratedPrompts()).toEqual([])
     expect(readManifest(getSessionDir()).elaboratedPrompts).toEqual([])
   })
+})
 
+// main and the window always show the same session: a switch whose writes fail
+// leaves both on the session they were on, with its work and draft.
+describe('a switch whose save fails', () => {
+  const failRename = (call: number): void => {
+    const rename = fs.renameSync
+    let calls = 0
+    vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      calls += 1
+      if (calls === call) throw new Error('simulated full disk')
+      return rename(from, to)
+    })
+  }
+  const holdWork = (): void => {
+    queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed')]))
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
+  }
+  const expectUnchanged = (sessionId: string): void => {
+    expect(getSessionId()).toBe(sessionId)
+    expect(queueManager.getTask('openai', 'a')).toBeDefined()
+    expect(getActiveSessionDraft().prompt).toBe('a cat')
+    expect(sent('session:changed')).toEqual([])
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it('refuses Resume when the session being left cannot be saved', async () => {
+    holdWork()
+    const current = getSessionId()
+    stageSession('20260116-000000-utc')
+    failRename(1)
+    await expect(resumeSession('20260116-000000-utc')).rejects.toThrow('simulated full disk')
+    expectUnchanged(current)
+  })
+
+  it('refuses Resume when the session being opened cannot be written, leaving its manifest as it was', async () => {
+    holdWork()
+    const current = getSessionId()
+    const target = stageSession('20260116-000000-utc')
+    const bytes = fs.readFileSync(path.join(target, 'session.json'))
+    failRename(2)
+    await expect(resumeSession('20260116-000000-utc')).rejects.toThrow('simulated full disk')
+    expectUnchanged(current)
+    expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(bytes)
+  })
+
+  it('refuses New Session when the new session cannot be written, leaving no folder behind', async () => {
+    holdWork()
+    const current = getSessionId()
+    const folders = fs.readdirSync(getSessionsDir())
+    failRename(2)
+    await expect(createSession()).rejects.toThrow('simulated full disk')
+    expectUnchanged(current)
+    expect(fs.readdirSync(getSessionsDir())).toEqual(folders)
+  })
 })
 
 describe('the updated time', () => {
-  // Only Date is faked: the coalesced draft writer keeps its real timer.
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-02-01T00:00:00.000Z'))
@@ -604,7 +677,7 @@ describe('the updated time', () => {
     expect(updatedAt()).toBe(before)
   })
 
-  it('moves on an edit to the tasks, the prompts or the draft', () => {
+  it('moves on an edit to the tasks or the prompts', () => {
     const before = updatedAt()
     later()
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'queued')]))
@@ -614,19 +687,6 @@ describe('the updated time', () => {
     vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
     appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])
     expect(updatedAt()).toBe('2026-04-01T00:00:00.000Z')
-
-    vi.setSystemTime(new Date('2026-05-01T00:00:00.000Z'))
-    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
-    drainPendingDraftWrites()
-    expect(updatedAt()).toBe('2026-05-01T00:00:00.000Z')
-  })
-
-  it('records a draft edit at the moment it was typed, not when the pause ends', () => {
-    later()
-    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
-    vi.setSystemTime(new Date('2026-03-02T00:00:00.000Z'))
-    drainPendingDraftWrites()
-    expect(updatedAt()).toBe('2026-03-01T00:00:00.000Z')
   })
 
   it('keeps an edit whose save failed at its own time when a later save writes it', () => {
@@ -642,13 +702,12 @@ describe('the updated time', () => {
     expect(updatedAt()).toBe('2026-03-01T00:00:00.000Z')
   })
 
-  it('stays when the draft saved is the content already saved', () => {
+  it('stays when only the draft changes, since the draft is never saved', () => {
     const before = updatedAt()
     later()
 
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
-    setActiveSessionDraft(createEmptySessionDraft())
-    drainPendingDraftWrites()
+    persistActiveSession()
 
     expect(updatedAt()).toBe(before)
   })
@@ -660,7 +719,7 @@ describe('a manifest member that cannot be used', () => {
       tasks: { ...createEmptyQueues(), openai: [null] } as unknown as SessionManifest['tasks'],
     })
     const authored = stageSession('20260112-000000-utc', {
-      draft: { ...createEmptySessionDraft(), prompt: 7 } as unknown as SessionManifest['draft'],
+      elaboratedPrompts: [{ text: 7, concepts: [] }] as unknown as SessionManifest['elaboratedPrompts'],
     })
     stageSession('20260113-000000-utc')
     const bytes = [damaged, authored].map((dir) => fs.readFileSync(path.join(dir, 'session.json')))
@@ -703,10 +762,9 @@ describe('manifest identity and consumed task parameters', () => {
     delete task.error
     delete task.providerMessage
     const id = '20260115-000000-utc'
-    stageSession(id, { tasks: withTasks([task as Task]), draft: { prompt: 'draft' } as SessionManifest['draft'] })
+    stageSession(id, { tasks: withTasks([task as Task]) })
     await resumeSession(id)
     expect(queueManager.getTask('openai', 'failed')).toMatchObject({ id: 'failed', status: 'failed', params: task.params })
-    expect(getActiveSessionDraft().prompt).toBe('draft')
   })
 })
 

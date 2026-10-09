@@ -56,23 +56,13 @@
   font-size: var(--text-sm);
 }
 
-.toast-titled {
-  --toast-first-line: calc(var(--text-sm) * var(--toast-line-height));
-}
-
 .toast-copy {
   min-width: 0;
   display: grid;
   gap: 2px;
 }
 
-.toast-copy strong {
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  line-height: var(--toast-line-height);
-}
-
-/* The message takes the error colour; the title stays neutral. */
+/* The message takes the error colour. */
 .toast-copy span {
   color: inherit;
   font-size: var(--text-xs);

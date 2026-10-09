@@ -17,7 +17,7 @@ Each cloud column offers its currently supported model choices and model-specifi
 ## Features
 
 - **Side-by-side queue** — one prompt to one backend or all; review queued, running, completed, failed, interrupted, and kept tasks per column
-- **Sessions** — each launch is a saved session you can resume; interrupted work returns ready to retry
+- **Sessions** — each launch is a saved session you can resume; interrupted work returns ready to retry. The prompt you are typing stays with its session while ImageQueue runs and is not kept after you quit
 - **Advanced Prompting** — batch across backends and models with AI-elaborated prompt variations, reusable elaborators, and a persistent **Concept Library** that guarantees the elaborated prompts keep varying instead of collapsing onto the model's favourite ideas
 - **Stays awake during long runs**, with optional toast and sound notifications on completion
 - **Light and dark themes** — follow the OS appearance or pick Light or Dark in Settings › General

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config'
-import { dropCurrentSessionIfEmpty, drainPendingDraftWrites, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
+import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
 import { registerImageProtocol, registerImageSchemeAsPrivileged } from './image-protocol'
@@ -156,12 +156,11 @@ function installLastResortHooks(): void {
     log('error', 'Uncaught exception', { error: serializeError(err) })
     console.error('Uncaught exception:', err)
     // app.exit() skips the before-quit graceful shutdown that normally drains the
-    // debounced session-draft and model-param writes, so flush them here first —
-    // the writers are synchronous and route their own errors to onError, so this
-    // best-effort flush cannot itself throw. OS resources (CLI jobs, wake lock)
-    // are reclaimed by the OS on exit and need no cleanup on a crash.
+    // debounced model-param writes, so flush them here first — the writer is
+    // synchronous and routes its own errors to onError, so this best-effort
+    // flush cannot itself throw. OS resources (CLI jobs, wake lock) are
+    // reclaimed by the OS on exit and need no cleanup on a crash.
     drainPendingModelParamsWrites()
-    drainPendingDraftWrites()
     app.exit(1)
   })
   process.on('unhandledRejection', (reason) => {
@@ -342,7 +341,6 @@ async function gracefulShutdown(reason: string): Promise<void> {
   // can promote another queued task between the cancellation snapshot and exit.
   await guarded('stopProcessor', () => stopProcessor())
   await guarded('drainPendingModelParamsWrites', () => drainPendingModelParamsWrites())
-  await guarded('drainPendingDraftWrites', () => drainPendingDraftWrites())
 
   // Signal both external-work families before awaiting either one. Each barrier
   // is bounded and includes its TERM→KILL escalation, so quit cannot strand a

@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useCliJobs } from '../context/CliJobsContext'
-import { useSessionDraft } from '../context/SessionDraftContext'
 import { CliJobRow } from './CliJobsPanel'
 import { Icon } from './Icon'
 import { useI18n } from '../i18n/I18nContext'
@@ -16,8 +15,8 @@ import {
 import './ToastStack.css'
 
 // The app's one in-window toast host. It holds only app-level operation
-// failures that have no other home (the draft-save warning, enqueue, the
-// fullscreen view, the output folder, window preferences, queue controls) above the
+// failures that have no other home (enqueue, the
+// fullscreen view, the sessions folder, window preferences, queue controls) above the
 // download and import cards, which stay nearest the corner. Generation
 // failures never come here: each task card and its preview own them.
 //
@@ -36,7 +35,6 @@ interface FailureEntry { message: MessageKey | Message; seq: number }
 interface ToastView {
   id: string
   seq: number
-  title?: MessageKey
   body: MessageKey | Message
   closeLabel: MessageKey
   onClose: () => void
@@ -55,7 +53,6 @@ export function ToastStack(): React.JSX.Element {
   const { t, text } = useI18n()
   const renderMessage = (value: MessageKey | Message): string => typeof value === 'string' ? t(value) : text(value)
   const { jobs, removeJob } = useCliJobs()
-  const { draftIssue, dismissDraftIssue } = useSessionDraft()
 
   const seqRef = useRef(0)
   const nextSeq = (): number => ++seqRef.current
@@ -82,31 +79,7 @@ export function ToastStack(): React.JSX.Element {
     }
   }, [])
 
-  // The draft warning is derived state: it takes a position when it first
-  // appears or changes, computed during render so the order never flickers.
-  const draftSignature = draftIssue ? `${draftIssue.title}|${draftIssue.message}` : null
-  const draftSeqRef = useRef<{ signature: string | null; seq: number }>({ signature: null, seq: 0 })
-  if (draftSeqRef.current.signature !== draftSignature) {
-    draftSeqRef.current = { signature: draftSignature, seq: draftSignature ? nextSeq() : 0 }
-  }
-
-  useEffect(() => {
-    if (!draftIssue) return
-    setAnnouncement({ seq: nextSeq(), parts: [draftIssue.title, draftIssue.message] })
-    // Only a new or changed warning is a transition worth announcing.
-  }, [draftSignature])
-
   const toasts: ToastView[] = []
-  if (draftIssue) {
-    toasts.push({
-      id: 'draft',
-      seq: draftSeqRef.current.seq,
-      title: draftIssue.title,
-      body: draftIssue.message,
-      closeLabel: 'statusNotices.closeDraftResult',
-      onClose: dismissDraftIssue,
-    })
-  }
   for (const [key, entry] of Object.entries(failures)) {
     toasts.push({
       id: `failure:${key}`,
@@ -139,9 +112,8 @@ export function ToastStack(): React.JSX.Element {
       {hasContent && (
         <section className="toast-stack" aria-label={t('toasts.region')} ref={stackRef}>
           {toasts.map((toast) => (
-            <div key={toast.id} className={`toast${toast.title ? ' toast-titled' : ''}`} data-toast-id={toast.id}>
+            <div key={toast.id} className="toast" data-toast-id={toast.id}>
               <div className="toast-copy">
-                {toast.title && <strong>{t(toast.title)}</strong>}
                 <span>{renderMessage(toast.body)}</span>
               </div>
               <button className="toast-close" type="button" aria-label={t(toast.closeLabel)} onClick={toast.onClose}>

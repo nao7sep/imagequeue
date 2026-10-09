@@ -9,7 +9,6 @@ import {
 } from '../../../src/main/session/state'
 import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
 import { BackendId, Task, TaskStatus } from '../../../src/shared/types'
-import { createEmptySessionDraft } from '../../../src/shared/session-draft'
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
   return {
@@ -107,8 +106,7 @@ describe('normalizeResumedQueues', () => {
 })
 
 describe('sessionContentKey', () => {
-  const draft = createEmptySessionDraft()
-  const key = (tasks: Task[]): string => sessionContentKey(draft, [], queuesWith(tasks))
+  const key = (tasks: Task[]): string => sessionContentKey([], queuesWith(tasks))
 
   it('ignores what is lifecycle: status, timing and failure', () => {
     const base = key([makeTask('a', 'completed')])
@@ -117,14 +115,13 @@ describe('sessionContentKey', () => {
     expect(key([makeTask('a', 'completed', { error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } }, providerMessage: 'x' })])).toBe(base)
   })
 
-  it('changes with the request, the saved image, the task list, the draft and the prompts', () => {
+  it('changes with the request, the saved image, the task list and the prompts', () => {
     const base = key([makeTask('a', 'completed')])
     expect(key([makeTask('a', 'completed', { prompt: 'q' })])).not.toBe(base)
     expect(key([makeTask('a', 'completed', { params: { quality: 'high' } })])).not.toBe(base)
     expect(key([makeTask('a', 'completed', { baseName: 'other' })])).not.toBe(base)
     expect(key([makeTask('a', 'completed'), makeTask('b', 'queued')])).not.toBe(base)
-    expect(sessionContentKey({ ...draft, prompt: 'a cat' }, [], queuesWith([makeTask('a', 'completed')]))).not.toBe(base)
-    expect(sessionContentKey(draft, [{ text: 't', concepts: [] }], queuesWith([makeTask('a', 'completed')]))).not.toBe(base)
+    expect(sessionContentKey([{ text: 't', concepts: [] }], queuesWith([makeTask('a', 'completed')]))).not.toBe(base)
   })
 })
 
@@ -155,7 +152,6 @@ describe('isSessionManifest', () => {
     lastResumedAt: null,
     taskCounts: {},
     elaboratedPrompts: [{ text: 'a prompt', concepts: [{ facet: 'place', concept: 'cargo quay' }] }],
-    draft: createEmptySessionDraft(),
     tasks: createEmptyQueues()
   }
 
@@ -186,13 +182,11 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest({ ...valid, tasks: { openai: 'not-an-array' } })).toBe(false)
   })
 
-  it('rejects a manifest without its draft or with a malformed draft field, and accepts one missing a field', () => {
-    const { draft: _draft, ...withoutDraft } = valid
-    expect(isSessionManifest(withoutDraft)).toBe(false)
-    expect(isSessionManifest({ ...valid, draft: 'garbage' })).toBe(false)
-    expect(isSessionManifest({ ...valid, draft: null })).toBe(false)
-    expect(isSessionManifest({ ...valid, draft: { prompt: 7 } })).toBe(false)
-    expect(isSessionManifest({ ...valid, draft: { prompt: 'a cat' } })).toBe(true)
+  // Drafts are kept for the running app only; one an earlier version stored is
+  // ignored whatever it holds.
+  it('accepts a manifest with or without a stored draft', () => {
+    expect(isSessionManifest({ ...valid, draft: { prompt: 7 } })).toBe(true)
+    expect(isSessionManifest({ ...valid, draft: 'garbage' })).toBe(true)
   })
 
   // A session written before the Imagen backend was removed still carries an

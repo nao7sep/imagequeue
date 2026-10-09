@@ -4,7 +4,7 @@ import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult } from 
 import { deleteImageOutput, trashImageOutput, imageExtFromPath, imageOutputFileStates } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
-import { getSessionDir, getSessionId, mutateSession, persistActiveSession } from '../session'
+import { getSessionId, mutateSession, persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
 import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
@@ -77,12 +77,12 @@ export function registerQueueIpc(): void {
     }
     if (!task) return
     return mutateSession(async () => {
-      const sessionDir = getSessionDir()
       const result: TaskDeletionResult = { removed: false, sessionId: getSessionId() }
       const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
       log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
-      // File cleanup is best-effort. Settlement below applies only to the
-      // captured session and task, following PLAYBOOK's Own the work in flight.
+      // File cleanup is best-effort. Session switches take the same guard, so
+      // the session cannot change while the files go; the task is rechecked
+      // below because the queue may have replaced it meanwhile.
       if (task.baseName) {
         result.baseName = task.baseName
         const ext = imageExtFromPath(task.imagePath)
@@ -105,7 +105,7 @@ export function registerQueueIpc(): void {
       } else {
         log('warn', 'Task has no baseName; nothing to remove on disk', { taskId, backend })
       }
-      if (getSessionDir() !== sessionDir || queueManager.getTask(backend, taskId) !== task) return result
+      if (queueManager.getTask(backend, taskId) !== task) return result
       queueManager.removeTask(backend, taskId)
       persistActiveSession()
       publishQueueState()

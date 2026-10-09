@@ -72,7 +72,6 @@ export async function startApp(home: string) {
     }
     await clean(stopProcessor)
     await clean(drainPendingWrites)
-    await clean(() => session.drainPendingDraftWrites())
     await Promise.all([
       clean(() => cancelAllInFlightAndWait(5_000)),
       clean(() => killAllCliJobsAndWait({ timeoutMs: 5_000 })),
