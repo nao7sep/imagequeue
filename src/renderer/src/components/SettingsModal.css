@@ -34,7 +34,7 @@
   padding: 3px;
   border-radius: var(--radius-md);
   background: var(--bg-primary);
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--control-border-on-surface);
 }
 
 .app-tab {
@@ -75,7 +75,7 @@
   column-gap: var(--space-3);
   row-gap: var(--space-3);
   margin-bottom: var(--space-5);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-on-surface);
   border-radius: var(--radius-md);
   padding: var(--space-4);
   background: var(--bg-secondary);
@@ -101,7 +101,7 @@
   grid-template-columns: subgrid;
   row-gap: var(--space-3);
   padding-top: var(--space-3);
-  border-top: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border);
 }
 
 .settings-subsection h4 {
@@ -180,7 +180,7 @@
 .settings-browse-btn {
   height: var(--control-md);
   padding: var(--control-pad-md);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border-on-surface);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);

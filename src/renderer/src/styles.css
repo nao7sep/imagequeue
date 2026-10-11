@@ -35,18 +35,13 @@
   --scrollbar-thumb: var(--text-muted);
   --scrollbar-thumb-active: var(--text-secondary);
   --text-on-accent: #ffffff;
-  /* The quiet line keeps one step from the surface it is drawn on: one value
-     for the page-like fills (white in light, navy in dark) and one for the
-     tinted --bg-surface, which sits close to --border-on-page. --border is the
-     line a component draws; the rule after this block re-scopes it by the
-     surface each container paints. */
-  --border-on-page: #cdd5e6;
+  /* Neutral lines keep their blue hue. Bands and section boundaries are
+     quieter than control edges; containers select the surface they paint. */
+  --border-on-page: #c6cede;
   --border-on-surface: #bfc7d7;
   --border: var(--border-on-page);
-  --border-strong: #a8b3cd;
-  /* A text field or select sits on a fill close to its surroundings, so its
-     outline alone identifies it and stays at 3:1 against both. */
-  --field-border: #6f7b99;
+  --field-border: #9ba7c0;
+  --control-border-on-surface: #9ba7c0;
   --accent: #0369a1;
   --accent-hover: #075985;
   /* How strongly a pane header takes its accent (the prompt pane's, or a
@@ -146,10 +141,10 @@
     --text-secondary: #b2bacb;
     --text-muted: #a1adc3;
     --text-on-accent: #06121f;
-    --border-on-page: #3a4470;
+    --border-on-page: #343d62;
     --border-on-surface: #46517e;
-    --border-strong: #454f80;
-    --field-border: #8390bd;
+    --field-border: #4b5680;
+    --control-border-on-surface: #5a6790;
     --accent: #38bdf8;
     --accent-hover: #7dd3fc;
     --header-tint: 18%;
@@ -213,7 +208,9 @@
 .elaborator-row,
 .session-card,
 .app-tabs,
-.settings-option-panel {
+.settings-option-panel,
+.settings-section,
+.dependency-row {
   --border: var(--border-on-page);
 }
 

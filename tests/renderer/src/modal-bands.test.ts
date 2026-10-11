@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// Dialog band lines take the control-edge colour (modal-dialog conventions).
+// Dialog band lines take the quieter band-edge colour (modal-dialog conventions).
 
 const sheets = {
   modal: readFileSync(resolve('src/renderer/src/components/Modal.css'), 'utf8'),
@@ -24,8 +24,8 @@ describe('dialog band lines', () => {
     ['modal', '.modal-footer', 'border-top'],
     ['startupFailure', '.startup-failure-app h1', 'border-bottom'],
     ['startupFailure', '.startup-failure-app footer', 'border-top'],
-  ] as const)('%s %s draws its %s in the control-edge colour', (sheet, selector, side) => {
-    expect(declarations(sheets[sheet], selector)).toMatch(new RegExp(`${side}:\\s*1px solid var\\(--field-border\\)`))
+  ] as const)('%s %s draws its %s in the band-edge colour', (sheet, selector, side) => {
+    expect(declarations(sheets[sheet], selector)).toMatch(new RegExp(`${side}:\\s*1px solid var\\(--border\\)`))
   })
 })
 

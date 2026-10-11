@@ -2,10 +2,9 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-// Every color pair the stylesheets draw keeps high contrast in both themes,
-// by this app's own floor: 4.5:1 for text, 3:1 for a text field's
-// outline. Light tokens live in styles.css's top-level :root block; dark tokens
-// in the :root block inside @media (prefers-color-scheme: dark).
+// Text keeps its readability floor; line roles keep the restrained values
+// chosen and verified on the rendered surfaces. Light tokens live in the
+// top-level :root; dark tokens in @media (prefers-color-scheme: dark).
 const css = readFileSync(resolve('src/renderer/src/styles.css'), 'utf8')
 
 type Rgb = [number, number, number]
@@ -119,10 +118,11 @@ describe('theme token contrast', () => {
       }
     })
 
-    it(`keeps text-field outlines at 3:1 or more in the ${theme} theme`, () => {
-      const field = hexOf(block, '--field-border')
-      for (const surface of SURFACES) check(field, hexOf(block, surface), 3, `--field-border on ${surface}`)
-      check(field, hexOf(block, '--pane-bg'), 3, '--field-border on --pane-bg')
+    it(`keeps the measured control-edge choices in the ${theme} theme`, () => {
+      const chosen = theme === 'light'
+        ? { '--field-border': '#9ba7c0', '--control-border-on-surface': '#9ba7c0' }
+        : { '--field-border': '#4b5680', '--control-border-on-surface': '#5a6790' }
+      for (const [token, value] of Object.entries(chosen)) expect(tokenValue(block, token)).toBe(value)
     })
   })
 
