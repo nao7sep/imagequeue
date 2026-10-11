@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   logEnqueue: vi.fn(),
   persistActiveSession: vi.fn(),
   publishQueueState: vi.fn(),
+  publishAppNotice: vi.fn(),
+  setQueuePaused: vi.fn(),
   setQueuePausedAndPublish: vi.fn(),
   buildControlState: vi.fn(() => ({ canPause: true })),
   cancelAllInFlight: vi.fn(() => 2),
@@ -46,7 +48,7 @@ vi.mock('../../../src/main/session', () => ({
   getSessionId: () => 'A',
   getSessionDir: () => mocks.sessionDir,
 }))
-vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState }))
+vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState, publishAppNotice: mocks.publishAppNotice }))
 vi.mock('../../../src/main/queue/control-actions', () => ({
   setQueuePausedAndPublish: mocks.setQueuePausedAndPublish,
 }))
@@ -54,6 +56,7 @@ vi.mock('../../../src/main/queue/control-state', () => ({ buildControlState: moc
 vi.mock('../../../src/main/backends/cancellation', () => ({
   cancelAllInFlight: mocks.cancelAllInFlight,
   isQueuePaused: mocks.isQueuePaused,
+  setQueuePaused: mocks.setQueuePaused,
 }))
 // imageExtFromPath stays real: which extension a task's file has is derived
 // from the task itself, and the deletion paths turn on it.
@@ -64,6 +67,7 @@ vi.mock('../../../src/main/utils/file-output', async (importOriginal) => {
 
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 const { createEmptyQueues, queueManager } = await import('../../../src/main/queue/queue-manager')
+const { resetStorageFailureNotice } = await import('../../../src/main/queue/storage-failure')
 
 function invoke(channel: string, ...args: unknown[]): unknown {
   const handler = mocks.handlers.get(channel)
@@ -103,6 +107,7 @@ function statuses(backend: BackendId = 'openai'): [string, TaskStatus][] {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetStorageFailureNotice()
   mocks.deleteToTrash = false
   mocks.sessionDir = '/sessions/A'
   mocks.handlers.clear()
@@ -145,6 +150,30 @@ describe('queueing work', () => {
     seed([makeTask('a', 'queued')])
 
     expect((await invoke('queue:getAllStoredTasks'))).toEqual(queueManager.getAllStoredTasks())
+  })
+})
+
+describe('applied changes whose required save fails', () => {
+  it.each([
+    { channel: 'queue:removeTask', status: 'queued', remaining: [] },
+    { channel: 'queue:removeTask', status: 'completed', remaining: [['task', 'kept']] },
+    { channel: 'queue:restoreTask', status: 'kept', remaining: [['task', 'completed']] },
+    { channel: 'queue:retryTask', status: 'failed', remaining: [['task', 'queued']] },
+    { channel: 'queue:resumeInterrupted', status: 'interrupted', remaining: [['task', 'queued']] },
+    { channel: 'queue:clearPending', status: 'queued', remaining: [] },
+    { channel: 'queue:stopAll', status: 'queued', remaining: [['task', 'interrupted']] },
+  ] as const)('acknowledges and publishes $channel ($status), retaining the save warning instead of a false rejection', async ({ channel, status, remaining }) => {
+    seed([makeTask('task', status)])
+    mocks.persistActiveSession.mockRejectedValueOnce(new Error('session unavailable'))
+    const result = await invoke(channel, 'openai', 'task')
+    expect(statuses()).toEqual(remaining)
+    if (channel === 'queue:resumeInterrupted' || channel === 'queue:clearPending') expect(result).toBe(1)
+    if (channel === 'queue:stopAll') expect(result).toEqual({ cancelled: 2, queued: 1 })
+    expect(mocks.setQueuePaused).toHaveBeenCalledExactlyOnceWith(true)
+    expect(mocks.publishQueueState).toHaveBeenCalledOnce()
+    expect(mocks.publishAppNotice).toHaveBeenCalledExactlyOnceWith({
+      title: { key: 'notice.queuePausedTitle' }, message: { key: 'notice.queuePausedMessage' },
+    })
   })
 })
 

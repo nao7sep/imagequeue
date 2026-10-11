@@ -7,15 +7,16 @@ import { detectImageExt } from '../utils/detect-image-type'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
-import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, setQueuePaused, shutdownSignal } from './cancellation'
-import { publishAppNotice, publishQueueState } from '../queue/publisher'
+import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, shutdownSignal } from './cancellation'
+import { publishQueueState } from '../queue/publisher'
+import { pauseForStorageFailure, resetStorageFailureNotice } from '../queue/storage-failure'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
 import { generateGrok } from './grok'
 import { generateFlux } from './flux'
 import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
-import { generationFailurePresentation, queueStorageFailurePresentation } from '../failure-presentation'
+import { generationFailurePresentation } from '../failure-presentation'
 import { providerMessage } from '../provider-errors'
 
 // Every generator takes the queue's cancellation signal. It is a parameter
@@ -48,7 +49,6 @@ const activeCounts: Record<BackendId, number> = {
 const drainTracker = new DrainTracker()
 let processorTimer: NodeJS.Timeout | null = null
 let processorStopping = false
-let storageFailureReported = false
 
 function totalActive(): number {
   return Object.values(activeCounts).reduce((sum, count) => sum + count, 0)
@@ -105,7 +105,7 @@ export function processQueues(): void {
   // it finishes and saves normally, which is the whole point of pausing rather
   // than stopping. Cancelling in-flight work is a separate, explicit action.
   if (isQueuePaused()) return
-  storageFailureReported = false
+  resetStorageFailureNotice()
 
   const config = loadConfig()
   const backends: BackendId[] = BACKEND_IDS_IN_UI_ORDER
@@ -278,22 +278,4 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     // merely the backend request/child exiting.
     resolveSettled()
   }
-}
-
-// The session manifest could not be written (a full or unavailable disk). The
-// processor owns this failure: it pauses the queue so nothing further starts
-// and gets billed while progress cannot be recorded. User Pause is independent
-// of the storage warning, which is reported once before scheduling resumes.
-// The failure never reaches the process-level crash handler.
-function pauseForStorageFailure(phase: 'start' | 'finish', err: unknown): void {
-  log('error', 'Session manifest could not be saved; queue paused', {
-    phase,
-    error: serializeError(err),
-  })
-  setQueuePaused(true)
-  if (!storageFailureReported) {
-    storageFailureReported = true
-    publishAppNotice(queueStorageFailurePresentation())
-  }
-  publishQueueState()
 }

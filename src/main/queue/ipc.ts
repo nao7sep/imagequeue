@@ -10,6 +10,19 @@ import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
 import { publishQueueState } from './publisher'
 import { setQueuePausedAndPublish } from './control-actions'
+import { pauseForStorageFailure } from './storage-failure'
+
+// These commands acknowledge an applied memory change, not a saved-state
+// claim. Once applied, a failed save must expose the retained intent rather
+// than invite a second enqueue/retry. The session owner retains the failure;
+// the shared storage warning pauses the queue and owns its recovery.
+async function persistQueueChange(): Promise<void> {
+  try { await persistActiveSession() } catch (error) {
+    pauseForStorageFailure('change', error)
+    return
+  }
+  publishQueueState()
+}
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
@@ -18,8 +31,7 @@ export function registerQueueIpc(): void {
     for (const task of tasks) {
       logEnqueue(task.id, request.backend, request.model, request.prompt, request.params, request.count)
     }
-    await persistActiveSession()
-    publishQueueState()
+    await persistQueueChange()
     return tasks
   }))
 
@@ -29,8 +41,7 @@ export function registerQueueIpc(): void {
       const unit = units[index]
       logEnqueue(task.id, unit.backend, unit.model, unit.prompt, unit.params, 1)
     })
-    await persistActiveSession()
-    publishQueueState()
+    await persistQueueChange()
     return tasks
   }))
 
@@ -53,8 +64,7 @@ export function registerQueueIpc(): void {
       log('info', 'Task removed from queue', { taskId, backend })
       queueManager.removeTask(backend, taskId)
     }
-    await persistActiveSession()
-    publishQueueState()
+    await persistQueueChange()
   }))
 
   handle('queue:restoreTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
@@ -62,8 +72,7 @@ export function registerQueueIpc(): void {
     if (!task) return
 
     log('info', 'Task restored from kept list', { taskId, backend, baseName: task.baseName ?? null })
-    await persistActiveSession()
-    publishQueueState()
+    await persistQueueChange()
   }))
 
   handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
@@ -125,8 +134,7 @@ export function registerQueueIpc(): void {
     const task = queueManager.retryTask(backend, taskId)
     if (task) {
       log('info', 'Task retry requested', { taskId, backend })
-      await persistActiveSession()
-      publishQueueState()
+      await persistQueueChange()
     }
   }))
 
@@ -134,8 +142,7 @@ export function registerQueueIpc(): void {
     const count = queueManager.retryAllInterrupted()
     if (count > 0) {
       log('info', 'Resuming interrupted tasks', { count })
-      await persistActiveSession()
-      publishQueueState()
+      await persistQueueChange()
     }
     return count
   }))
@@ -163,16 +170,14 @@ export function registerQueueIpc(): void {
     const queued = queueManager.interruptQueuedTasks()
     const cancelled = cancelAllInFlight()
     log('info', 'Stopped all queue work', { cancelled, queued, paused: isQueuePaused() })
-    await persistActiveSession()
-    publishQueueState()
+    await persistQueueChange()
     return { cancelled, queued }
   })
 
   handle('queue:clearPending', () => mutateSession(async () => {
     const removed = queueManager.removePendingTasks()
     log('info', 'Cleared pending tasks', { removed })
-    await persistActiveSession()
-    publishQueueState()
+    await persistQueueChange()
     return removed
   }))
 

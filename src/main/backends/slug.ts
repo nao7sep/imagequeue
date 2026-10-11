@@ -19,13 +19,20 @@ export const SLUG_RESPONSE_SCHEMA = {
 // so it is saved under the random name rather than waiting on the network.
 export async function generateSlug(prompt: string, taskId: string, signal: AbortSignal): Promise<string> {
   const config = loadConfig()
-  await refreshApiKeys()
-  const handle = getLightProvider()
-  if (!handle || signal.aborted) {
-    return nanoid(10)
-  }
-
+  if (signal.aborted) return nanoid(10)
   try {
+    // Naming is optional, but credential refresh retains its physical owner
+    // in the key store. Shutdown abandons only this caller's wait, so a held
+    // key replacement cannot strand an already delivered image.
+    let onAbort!: () => void
+    const aborted = new Promise<void>((resolve) => { onAbort = resolve })
+    signal.addEventListener('abort', onAbort, { once: true })
+    try { await Promise.race([refreshApiKeys(), aborted]) }
+    finally { signal.removeEventListener('abort', onAbort) }
+    if (signal.aborted) return nanoid(10)
+    const handle = getLightProvider()
+    if (!handle) return nanoid(10)
+
     const systemPrompt = config.prompts.slug.replace(/\{\{PROMPT\}\}/i, prompt)
     const result = await withProviderRetry((attemptSignal) => handle.provider.ask({
       messages: [{ role: 'user', text: systemPrompt }],
