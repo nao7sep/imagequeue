@@ -283,6 +283,7 @@
   "settings.previewWindow": "Also show in a separate window",
   "settings.previewWindowHint": "The preview window follows the selection beside the main window. Closing it turns this off.",
   "previewWindow.title": "Preview",
+  "previewWindow.closeSaveFailed": "The preview window closed, but its setting could not be saved. It may reopen when you return to the main window. You can turn it off again in Settings.",
   "settings.exportFolder": "Export folder",
   "settings.exportFolderPlaceholder": "Leave empty to use Desktop",
   "settings.browse": "Browse",

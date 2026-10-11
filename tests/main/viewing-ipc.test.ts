@@ -95,14 +95,22 @@ describe('opening and closing the fullscreen view', () => {
 })
 
 describe('list keys from a view', () => {
+  it('rejects destructive commands without image identity', async () => {
+    const fullscreen = contents()
+    mocks.fullscreenContents = fullscreen
+    await call('list:key', fullscreen, 'delete')
+    await call('list:key', fullscreen, 'remove', null)
+    expect(main.sent).toEqual([])
+  })
+
   it('hands the fullscreen view\'s keys to the main window, named with the view', async () => {
     const fullscreen = contents()
     mocks.fullscreenContents = fullscreen
     await call('list:key', fullscreen, 'left')
-    await call('list:key', fullscreen, 'delete')
+    await call('list:key', fullscreen, 'delete', 'a')
     expect(main.sent).toEqual([
-      ['list:key', { key: 'left', surface: 'fullscreen-view' }],
-      ['list:key', { key: 'delete', surface: 'fullscreen-view' }],
+      ['list:key', { key: 'left', surface: 'fullscreen-view', taskId: null }],
+      ['list:key', { key: 'delete', surface: 'fullscreen-view', taskId: 'a' }],
     ])
   })
 
@@ -111,10 +119,10 @@ describe('list keys from a view', () => {
     mocks.previewContents = previewWindow
     await call('list:key', previewWindow, 'right')
     await call('list:key', previewWindow, 'space')
-    await call('list:key', previewWindow, 'remove')
+    await call('list:key', previewWindow, 'remove', 'a')
     expect(main.sent).toEqual([
-      ['list:key', { key: 'right', surface: 'preview-window' }],
-      ['list:key', { key: 'remove', surface: 'preview-window' }],
+      ['list:key', { key: 'right', surface: 'preview-window', taskId: null }],
+      ['list:key', { key: 'remove', surface: 'preview-window', taskId: 'a' }],
     ])
   })
 

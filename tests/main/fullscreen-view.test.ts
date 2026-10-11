@@ -16,6 +16,7 @@ const mocks = await vi.hoisted(async () => {
     level: unknown[] = []
     bounds: unknown = null
     focused = 0
+    active = true
     sent: Array<[string, unknown]> = []
     loaded: unknown[] = []
     webContents = Object.assign(new EventEmitter(), {
@@ -31,6 +32,7 @@ const mocks = await vi.hoisted(async () => {
     isDestroyed(): boolean { return this.destroyed }
     isMinimized(): boolean { return this.minimized }
     isVisible(): boolean { return this.visible }
+    isFocused(): boolean { return this.active }
     getBounds(): unknown { return { x: 1500, y: 100, width: 800, height: 600 } }
     setBounds(bounds: unknown): void { this.bounds = bounds }
     setAlwaysOnTop(...args: unknown[]): void { this.level = args }
@@ -76,6 +78,7 @@ beforeEach(async () => {
   view = await import('../../src/main/fullscreen-view')
   snapshots = await import('../../src/main/selection-snapshot')
   main = new mocks.FakeWindow({})
+  main.visible = true
   view.initFullscreenView(() => main as unknown as Electron.BrowserWindow)
 })
 
@@ -127,6 +130,49 @@ describe('fullscreen view window', () => {
 })
 
 describe('opening and closing', () => {
+  it.each(['blur', 'hide', 'minimize', 'closed'])('cancels an opening on main %s and ignores late paint', async (event) => {
+    const { version } = snapshots.publishSelection(image('a'))
+    const opened = view.openFullscreenView()
+    const [win] = views()
+    main!.emit(event)
+    await opened
+    view.fullscreenViewPainted(version, true)
+    expect(win!.visible).toBe(false)
+    expect(win!.focused).toBe(0)
+    expect(main!.listenerCount('blur')).toBe(0)
+    expect(mainSent()).toEqual([])
+  })
+
+  it('checks activation both at request time and at paint time', async () => {
+    const { version } = snapshots.publishSelection(image('a'))
+    main!.active = false
+    await view.openFullscreenView()
+    expect(views()).toHaveLength(0)
+    main!.active = true
+    const opened = view.openFullscreenView()
+    main!.active = false
+    view.fullscreenViewPainted(version, true)
+    await opened
+    expect(views()[0]!.visible).toBe(false)
+    await view.openFullscreenView()
+    expect(views()[0]!.visible).toBe(false)
+  })
+
+  it('allows the successful focus handoff to blur Main', async () => {
+    const { version } = snapshots.publishSelection(image('a'))
+    const opened = view.openFullscreenView()
+    const [win] = views()
+    vi.spyOn(win!, 'show').mockImplementation(() => {
+      win!.visible = true
+      main!.active = false
+      main!.emit('blur')
+    })
+    view.fullscreenViewPainted(version, true)
+    await opened
+    expect(win!.visible).toBe(true)
+    expect(mainSent()).toEqual([view.FULLSCREEN_VIEW_OPENED_CHANNEL])
+  })
+
   it('appears only once its page has painted the selected image, then follows the selection', async () => {
     const { version } = snapshots.publishSelection(image('a'))
     const opened = view.openFullscreenView()

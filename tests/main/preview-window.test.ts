@@ -10,6 +10,7 @@ const mocks = await vi.hoisted(async () => {
     recovered: vi.fn(),
     minimum: vi.fn(),
     saved: vi.fn(),
+    notice: vi.fn(),
   }
   class FakeWindow extends EventEmitter {
     options: Record<string, unknown>
@@ -57,6 +58,7 @@ const mocks = await vi.hoisted(async () => {
 
 type FakeWindow = InstanceType<typeof mocks.FakeWindow>
 
+vi.mock('../../src/main/app-notices', () => ({ raiseAppNotice: mocks.notice }))
 vi.mock('electron', () => ({ BrowserWindow: mocks.FakeWindow, Menu: { buildFromTemplate: vi.fn() } }))
 vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string) => (key === 'previewWindow.title' ? 'Preview' : key) }) }))
 vi.mock('../../src/main/theme', () => ({ trackThemedWindow: vi.fn(), windowBackground: () => '#e9eef7' }))
@@ -66,8 +68,10 @@ vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: 
 vi.mock('../../src/main/config', () => ({
   loadConfig: () => mocks.config,
   updateConfig: (apply: (draft: typeof mocks.config) => void) => {
-    apply(mocks.config)
-    mocks.saved(structuredClone(mocks.config))
+    const draft = structuredClone(mocks.config)
+    apply(draft)
+    mocks.saved(draft)
+    mocks.config = draft
     return mocks.config
   },
 }))
@@ -89,7 +93,8 @@ beforeEach(async () => {
   mocks.windows.length = 0
   mocks.config.general.show_preview_window = true
   mocks.recovered.mockClear()
-  mocks.saved.mockClear()
+  mocks.saved.mockReset()
+  mocks.notice.mockClear()
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined)
   preview = await import('../../src/main/preview-window')
   snapshots = await import('../../src/main/selection-snapshot')
@@ -129,6 +134,20 @@ describe('preview window options', () => {
 })
 
 describe('the setting', () => {
+  it('reports a failed close-setting save without exposing diagnostic details', async () => {
+    mocks.saved.mockImplementationOnce(() => { throw new Error('EACCES /private/settings SECRET_SENTINEL') })
+    preview.syncPreviewWindow(true)
+    previews()[0]!.userClose()
+    await Promise.resolve()
+    expect(mocks.config.general.show_preview_window).toBe(true)
+    expect(mocks.notice).toHaveBeenCalledWith({
+      title: { key: 'previewWindow.title' },
+      message: { key: 'previewWindow.closeSaveFailed' },
+    })
+    expect(JSON.stringify(mocks.notice.mock.calls)).not.toContain('SECRET_SENTINEL')
+    expect(main.sent).toEqual([])
+  })
+
   it('a background hide wins over a late ready-to-show, until explicitly restored', () => {
     preview.syncPreviewWindow(true)
     const [win] = previews()

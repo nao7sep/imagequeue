@@ -17,7 +17,7 @@ import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { nearestInAdjacentColumn, nextSelectionAfterRemoval } from '../utils/selection-recovery'
 import { OPERATIONAL_FAILURE_EVENT, recordOperationalDiagnostic } from '../utils/operationalFailure'
 import { useI18n } from '../i18n/I18nContext'
-import type { ViewingSurface } from '../../../shared/viewing'
+import type { ViewingSurface, SurfaceListKey } from '../../../shared/viewing'
 import { message } from '../../../shared/i18n/translate'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
@@ -38,6 +38,7 @@ interface SelectionContextValue {
   selectedTask: Task | null
   select: (backend: BackendId, taskId: string) => void
   clear: () => void
+  handleSurfaceListKey: (event: SurfaceListKey) => void
   navigate: (dir: NavDirection, step?: number) => void
   selectEdge: (backend: BackendId, edge: 'first' | 'last') => void
   // `surface` names the view a forwarded key came from, so a confirmation shows there.
@@ -125,6 +126,8 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   const setSelectionInternal = useCallback(
     (next: Selection | null, opts: { userInitiated: boolean }): void => {
       if (opts.userInitiated) lastActionRef.current = Date.now()
+      // A second IPC key can arrive before React renders the first navigation.
+      selectionRef.current = next
       setSelection(next)
     },
     []
@@ -395,6 +398,20 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     if (next) commit(next.backend, next.taskId)
   }, [visibleBackends, setSelectionInternal])
 
+  const handleSurfaceListKey = useCallback(({ key, surface, taskId }: SurfaceListKey): void => {
+    if (key !== 'remove' && key !== 'delete') {
+      navigate(key)
+      return
+    }
+    const sel = selectionRef.current
+    // Ignore a gesture from a view that has not received the current selection.
+    if (!sel || sel.taskId !== taskId) return
+    if (key === 'delete') void deleteTask(sel.backend, sel.taskId, surface)
+    else if (tasksRef.current[sel.backend]?.find((task) => task.id === sel.taskId)?.status === 'kept') {
+      void restoreTask(sel.backend, sel.taskId)
+    } else void removeTask(sel.backend, sel.taskId, surface)
+  }, [navigate, deleteTask, restoreTask, removeTask])
+
   // Home/End within a column: select the first/last task of that column and
   // follow focus to it. Local to the queue board (the views have no equivalent).
   const selectEdge = useCallback((backend: BackendId, edge: 'first' | 'last'): void => {
@@ -502,6 +519,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       select,
       clear,
       navigate,
+      handleSurfaceListKey,
       selectEdge,
       removeTask,
       restoreTask,

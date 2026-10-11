@@ -292,6 +292,7 @@
   "settings.previewWindow": "Mostrar também em uma janela separada",
   "settings.previewWindowHint": "A janela de pré-visualização acompanha a seleção ao lado da janela principal. Fechá-la desativa esta opção.",
   "previewWindow.title": "Pré-visualização",
+  "previewWindow.closeSaveFailed": "A janela de pré-visualização foi fechada, mas não foi possível salvar a configuração. Ela pode reabrir quando você voltar à janela principal. Você pode desativá-la novamente nas configurações.",
   "settings.exportFolder": "Pasta de exportação",
   "settings.exportFolderPlaceholder": "Deixe vazio para usar a Mesa",
   "settings.browse": "Procurar",

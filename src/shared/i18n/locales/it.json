@@ -292,6 +292,7 @@
   "settings.previewWindow": "Mostra anche in una finestra separata",
   "settings.previewWindowHint": "La finestra di anteprima segue la selezione accanto alla finestra principale. Chiuderla disattiva questa opzione.",
   "previewWindow.title": "Anteprima",
+  "previewWindow.closeSaveFailed": "La finestra di anteprima è stata chiusa, ma non è stato possibile salvare l’impostazione. Potrebbe riaprirsi quando torni alla finestra principale. Puoi disattivarla di nuovo nelle impostazioni.",
   "settings.exportFolder": "Cartella di esportazione",
   "settings.exportFolderPlaceholder": "Lascia vuoto per usare la Scrivania",
   "settings.browse": "Sfoglia",

@@ -18,7 +18,7 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
     focus: vi.fn(),
     hide: vi.fn(),
     setSkipTaskbar: vi.fn(),
-    on: vi.fn((event: 'close' | 'closed' | 'session-end' | 'query-session-end' | 'ready-to-show' | 'hide' | 'minimize', listener: ((event: MainWindowLifecycleEvent) => void) | (() => void)) => {
+    on: vi.fn((event: 'close' | 'closed' | 'session-end' | 'query-session-end' | 'ready-to-show' | 'hide' | 'minimize' | 'show' | 'restore', listener: ((event: MainWindowLifecycleEvent) => void) | (() => void)) => {
       if (event === 'close') closeListener = listener as (event: MainWindowLifecycleEvent) => void
       else if (event === 'closed') closedListener = listener as () => void
       else if (event === 'session-end') sessionEndListener = listener as () => void
@@ -66,6 +66,37 @@ afterEach(() => {
 })
 
 describe('MainWindowController', () => {
+  it('reconciles secondary windows once when explicit restore emits native show', async () => {
+    const { controller, win, onRestored } = makeController()
+    controller.createInitialWindow()
+    win.emitNative('hide')
+    win.show.mockImplementation(() => { win.emitNative('show') })
+    await controller.restoreOrCreate()
+    expect(onRestored).toHaveBeenCalledOnce()
+  })
+
+  it.each([['hide', 'show'], ['minimize', 'restore']])('hides secondary windows on %s and returns them on %s', (hide, show) => {
+    const { controller, win, onHiddenToBackground, onRestored } = makeController()
+    controller.createInitialWindow()
+    win.emitNative(hide!)
+    expect(onHiddenToBackground).toHaveBeenCalledOnce()
+    win.emitReady()
+    expect(win.show).not.toHaveBeenCalled()
+    win.emitNative(show!)
+    expect(onRestored).toHaveBeenCalledOnce()
+    win.emitNative(show!)
+    expect(onRestored).toHaveBeenCalledOnce()
+  })
+
+  it('does not return secondary windows on late native restore during shutdown', () => {
+    const { controller, win, onRestored } = makeController()
+    controller.createInitialWindow()
+    win.emitNative('hide')
+    controller.beginShutdown()
+    win.emitNative('show')
+    expect(onRestored).not.toHaveBeenCalled()
+  })
+
   it.each(['hide', 'minimize', 'query-session-end'])('does not show after a later %s event', async (event) => {
     const { controller, win } = makeController()
     controller.createInitialWindow()

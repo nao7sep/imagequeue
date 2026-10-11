@@ -46,13 +46,15 @@ export function FullscreenViewApp(): React.JSX.Element {
       const key = listKeyFor(e)
       if (!key) return
       e.preventDefault()
-      void window.electronAPI.sendListKey(key).catch((error) => {
+      // Keep navigation live, but never delete the next image before it is visible.
+      if ((key === 'remove' || key === 'delete') && (!task || !url || image.settled !== url || image.failed)) return
+      void window.electronAPI.sendListKey(key, task?.taskId ?? null).catch((error) => {
         recordOperationalDiagnostic('Failed to hand a key to the main window', error, { key })
       })
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [])
+  }, [task, url, image])
 
   return (
     <div className="fullscreen-view">

@@ -7,6 +7,8 @@ import { mainTranslator } from './i18n'
 import { log, serializeError } from './logger'
 import { loadRendererSurface } from './renderer-surface'
 import { onSelectionPublished, SELECTION_SNAPSHOT_CHANNEL } from './selection-snapshot'
+import { raiseAppNotice } from './app-notices'
+import { message } from '../shared/i18n/translate'
 import { notifySettingsChanged } from './settings-changed'
 import { dismissSurfaceConfirms } from './surface-confirm'
 import { trackThemedWindow, windowBackground } from './theme'
@@ -57,6 +59,7 @@ async function turnSettingOff(): Promise<void> {
     await updateConfig((draft) => { draft.general.show_preview_window = false })
   } catch (error) {
     log('error', 'The preview window setting could not be turned off', { error: serializeError(error) })
+    raiseAppNotice({ title: message('previewWindow.title'), message: message('previewWindow.closeSaveFailed') })
     return
   }
   notifySettingsChanged(getMainWin())

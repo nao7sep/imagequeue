@@ -10,11 +10,13 @@ interface Props {
   task: SelectedImage | null
   /** Told whether the task's image loaded, each time a load settles. */
   onImageLoad?: (taskId: string, loaded: boolean) => void
+  /** The task whose image or placeholder has finished replacing the previous one. */
+  onReadyToAct?: (task: SelectedImage | null) => void
 }
 
 /** The selected task's image and, when it failed, why: the preview in the main
  *  window and the whole of the preview window. */
-export function Preview({ task, onImageLoad }: Props): React.JSX.Element {
+export function Preview({ task, onImageLoad, onReadyToAct }: Props): React.JSX.Element {
   const i18n = useI18n()
   const { t } = i18n
   const url = task && canShowImage(task) ? currentSessionImageUrl(task.baseName!) : null
@@ -27,6 +29,10 @@ export function Preview({ task, onImageLoad }: Props): React.JSX.Element {
   useEffect(() => {
     if (taskId && url && image.settled === url) onImageLoadRef.current?.(taskId, !image.failed)
   }, [image, url, taskId])
+
+  useEffect(() => {
+    onReadyToAct?.(!url || image.settled === url ? task : null)
+  }, [task, url, image, onReadyToAct])
 
   return (
     <>

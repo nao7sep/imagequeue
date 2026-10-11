@@ -287,3 +287,23 @@ describe('task action attempt ownership', () => {
     )
   })
 })
+
+
+describe('secondary view identity', () => {
+  it.each(['delete', 'remove'] as const)('rejects stale %s even before the next navigation render', async (key) => {
+    settingsValue = { settings: { general: { confirm_delete: true, confirm_remove: true } } }
+    const { ctx } = mountSelection()
+    act(() => ctx().select('openai', 't-failed'))
+    await act(async () => {
+      ctx().handleSurfaceListKey({ key: 'down', surface: 'fullscreen-view', taskId: 't-failed' })
+      ctx().handleSurfaceListKey({ key, surface: 'fullscreen-view', taskId: 't-failed' })
+    })
+    expect(ctx().selection?.taskId).toBe('t-done')
+    expect(confirmCalls).toHaveLength(0)
+    expect(api.deleteWithFiles).not.toHaveBeenCalled()
+    expect(api.removeTask).not.toHaveBeenCalled()
+    await act(async () => ctx().handleSurfaceListKey({ key, surface: 'fullscreen-view', taskId: 't-done' }))
+    expect(confirmCalls).toHaveLength(1)
+    expect(key === 'delete' ? api.deleteWithFiles : api.removeTask).toHaveBeenCalledWith('openai', 't-done')
+  })
+})

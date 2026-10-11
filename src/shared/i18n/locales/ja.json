@@ -274,6 +274,7 @@
   "settings.previewWindow": "別のウインドウにも表示",
   "settings.previewWindowHint": "プレビューウインドウはメインウインドウの横で選択に追従します。閉じるとこの設定はオフになります。",
   "previewWindow.title": "プレビュー",
+  "previewWindow.closeSaveFailed": "プレビューウインドウは閉じましたが、設定を保存できませんでした。メインウインドウに戻ると再び開くことがあります。設定で再度オフにできます。",
   "settings.exportFolder": "書き出し先フォルダ",
   "settings.exportFolderPlaceholder": "空欄にするとデスクトップを使います",
   "settings.browse": "選択",

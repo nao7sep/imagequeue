@@ -58,11 +58,12 @@ export function registerViewingIpc(getMain: () => BrowserWindow | null): void {
 
   // A view hands list keys to the main window, named with the view they came
   // from so a confirmation they lead to is shown there.
-  handle('list:key', (event, key: string) => {
+  handle('list:key', (event, key: string, taskId: unknown) => {
     const surface = surfaceOf(event.sender)
     const main = getMain()
     if (!surface || !LIST_KEYS.has(key) || !main || main.isDestroyed()) return
-    main.webContents.send(LIST_KEY_CHANNEL, { key, surface })
+    if ((key === 'remove' || key === 'delete') && typeof taskId !== 'string') return
+    main.webContents.send(LIST_KEY_CHANNEL, { key, surface, taskId: typeof taskId === 'string' ? taskId : null })
   })
 
   // Null when the view is no longer there to ask; the main window then asks itself.

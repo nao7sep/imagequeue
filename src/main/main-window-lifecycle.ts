@@ -14,7 +14,7 @@ export interface MainWindowLifecycleWindow {
   on(event: 'closed', listener: () => void): unknown
   on(event: 'query-session-end', listener: () => void): unknown
   on(event: 'session-end', listener: () => void): unknown
-  on(event: 'ready-to-show' | 'hide' | 'minimize', listener: () => void): unknown
+  on(event: 'ready-to-show' | 'hide' | 'minimize' | 'show' | 'restore', listener: () => void): unknown
 }
 
 export interface MainWindowDock {
@@ -118,7 +118,26 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     })
 
     // Native hiding/minimizing is a later user intent too, even without close.
-    const cancelReveal = (): void => { this.revealWanted = false }
+    let secondaryHidden = false
+    const cancelReveal = (): void => {
+      if (this.mainWindow !== win) return
+      this.revealWanted = false
+      if (!secondaryHidden) {
+        secondaryHidden = true
+        this.options.onHiddenToBackground()
+      }
+    }
+    const restoreSecondary = (): void => {
+      if (this.mainWindow !== win || !secondaryHidden || this.shutdownStarted || this.systemSessionEnding || win.isMinimized()) return
+      // Explicit Open/Show reconciles secondary windows after its own handoff.
+      // Native restoration must do it here; do not reveal a new preview twice.
+      const explicitRestore = this.revealWanted
+      secondaryHidden = false
+      this.revealWanted = true
+      if (!explicitRestore) this.options.onRestored()
+    }
+    win.on('show', restoreSecondary)
+    win.on('restore', restoreSecondary)
     win.on('hide', cancelReveal)
     win.on('minimize', cancelReveal)
 
@@ -126,7 +145,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
       this.revealWanted = false
       if (this.shutdownStarted || this.systemSessionEnding || !this.options.isStatusIconAvailable()) return
       event.preventDefault()
-      this.options.onHiddenToBackground()
+      cancelReveal()
       if (this.options.platform === 'win32') win.setSkipTaskbar(true)
       win.hide()
       if (this.options.platform === 'darwin') this.scheduleDockHide()

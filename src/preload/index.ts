@@ -50,7 +50,7 @@ import {
 } from '../shared/startup-failure'
 import type { Message } from '../shared/i18n/translate'
 import type { ConfirmOptions } from '../shared/confirm'
-import type { ListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface } from '../shared/viewing'
+import type { ListKey, SurfaceListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface } from '../shared/viewing'
 
 export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalModelInfo, SessionSummary }
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
@@ -439,11 +439,11 @@ const api = {
     }
   },
 
-  sendListKey: (key: ListKey): Promise<void> =>
-    ipcRenderer.invoke('list:key', key),
+  sendListKey: (key: ListKey, taskId: string | null): Promise<void> =>
+    ipcRenderer.invoke('list:key', key, taskId),
 
-  onListKey: (callback: (event: { key: ListKey; surface: ViewingSurface }) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: { key: ListKey; surface: ViewingSurface }): void => {
+  onListKey: (callback: (event: SurfaceListKey) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: SurfaceListKey): void => {
       callback(payload)
     }
     ipcRenderer.on('list:key', handler)

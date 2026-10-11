@@ -292,6 +292,7 @@
   "settings.previewWindow": "Afficher aussi dans une fenêtre séparée",
   "settings.previewWindowHint": "La fenêtre d’aperçu suit la sélection à côté de la fenêtre principale. La fermer désactive cette option.",
   "previewWindow.title": "Aperçu",
+  "previewWindow.closeSaveFailed": "La fenêtre d’aperçu a été fermée, mais son réglage n’a pas pu être enregistré. Elle peut se rouvrir lorsque vous revenez à la fenêtre principale. Vous pouvez la désactiver à nouveau dans les paramètres.",
   "settings.exportFolder": "Dossier d’exportation",
   "settings.exportFolderPlaceholder": "Laisser vide pour utiliser le Bureau",
   "settings.browse": "Parcourir",

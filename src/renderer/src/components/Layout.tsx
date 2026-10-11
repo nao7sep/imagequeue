@@ -44,10 +44,7 @@ export function Layout(): React.JSX.Element {
   const {
     selectedTask,
     clear,
-    navigate,
-    removeSelected,
-    restoreSelected,
-    deleteSelected,
+    handleSurfaceListKey,
   } = useSelection()
   const { showKeptImages, toggleShowKeptImages } = useQueue()
   // The right-hand group's panes, reactive to key presence and task counts.
@@ -232,23 +229,8 @@ export function Layout(): React.JSX.Element {
   // as they do here. Arrows move the selection and scroll without taking focus
   // (navigate), and a confirmation shows in the view the key came from.
   useEffect(() => {
-    return window.electronAPI.onListKey(({ key, surface }) => {
-      switch (key) {
-        case 'up':
-        case 'down':
-        case 'left':
-        case 'right':
-          navigate(key)
-          return
-        case 'remove':
-          if (selectedImageRef.current?.status === 'kept') void restoreSelected()
-          else void removeSelected(surface)
-          return
-        case 'delete':
-          void deleteSelected(surface)
-      }
-    })
-  }, [navigate, removeSelected, restoreSelected, deleteSelected])
+    return window.electronAPI.onListKey(handleSurfaceListKey)
+  }, [handleSurfaceListKey])
 
   return (
     <div className="layout-viewport">

@@ -37,6 +37,22 @@ afterEach(cleanup)
 const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(document, { key, ...init })
 
 describe('fullscreen view page', () => {
+  it('ignores destructive keys while B is loading over A, then identifies B', async () => {
+    render(<FullscreenViewApp />)
+    await waitFor(() => expect(document.querySelector('img')?.getAttribute('src')).toBe('iq-image://sessions/current/a'))
+    let finish!: () => void
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+    act(() => pushSnapshot({ version: 8, task: image('b') }))
+    fireEvent.keyDown(document, { key: 'Delete' })
+    fireEvent.keyDown(document, { key: 'Backspace' })
+    expect(api.sendListKey).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'ArrowDown', repeat: true })
+    expect(api.sendListKey).toHaveBeenLastCalledWith('down', 'b')
+    await act(async () => finish())
+    fireEvent.keyDown(document, { key: 'Delete' })
+    expect(api.sendListKey).toHaveBeenLastCalledWith('delete', 'b')
+  })
+
   it('draws the selected image once decoded and reports that snapshot painted', async () => {
     const { container } = render(<FullscreenViewApp />)
     await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
@@ -67,6 +83,7 @@ describe('fullscreen view page', () => {
 
   it('closes on Space or Escape and hands list keys to the main window', async () => {
     render(<FullscreenViewApp />)
+    await waitFor(() => expect(document.querySelector('img')).not.toBeNull())
     press(' ')
     press('Escape')
     expect(api.closeFullscreenView).toHaveBeenCalledTimes(2)

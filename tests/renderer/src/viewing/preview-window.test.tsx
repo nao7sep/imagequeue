@@ -32,6 +32,30 @@ afterEach(cleanup)
 const src = (container: HTMLElement) => container.querySelector('.preview-image')?.getAttribute('src')
 
 describe('preview window page', () => {
+  it.each(['failed', 'queued', 'kept'] as const)('allows removal of a displayed %s placeholder', async (status) => {
+    latest = Promise.resolve({ version: 1, task: { taskId: 'no-image', status, baseName: null, error: null, providerMessage: null } })
+    render(<PreviewWindowApp />)
+    await act(async () => {})
+    fireEvent.keyDown(document, { key: 'Backspace' })
+    expect(api.sendListKey).toHaveBeenLastCalledWith('remove', 'no-image')
+  })
+
+  it('ignores destructive keys while B is loading over A, then identifies B', async () => {
+    render(<PreviewWindowApp />)
+    await waitFor(() => expect(document.querySelector('img')?.getAttribute('src')).toBe('iq-image://sessions/current/a'))
+    let finish!: () => void
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+    act(() => pushSnapshot({ version: 8, task: image('b') }))
+    fireEvent.keyDown(document, { key: 'Delete' })
+    fireEvent.keyDown(document, { key: 'Backspace' })
+    expect(api.sendListKey).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'ArrowDown', repeat: true })
+    expect(api.sendListKey).toHaveBeenLastCalledWith('down', 'b')
+    await act(async () => finish())
+    fireEvent.keyDown(document, { key: 'Delete' })
+    expect(api.sendListKey).toHaveBeenLastCalledWith('delete', 'b')
+  })
+
   it('shows the selected image and follows the selection', async () => {
     const { container } = render(<PreviewWindowApp />)
     await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/a'))
@@ -58,6 +82,7 @@ describe('preview window page', () => {
 
   it('hands arrows, Backspace and Delete to the main window, and not Space', async () => {
     render(<PreviewWindowApp />)
+    await waitFor(() => expect(document.querySelector('img')).not.toBeNull())
     for (const key of ['ArrowUp', 'ArrowRight', ' ', 'Backspace', 'Delete']) fireEvent.keyDown(document, { key })
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(api.sendListKey.mock.calls.map(([key]) => key)).toEqual(['up', 'right', 'remove', 'delete'])

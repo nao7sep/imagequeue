@@ -24,6 +24,7 @@ export const FULLSCREEN_VIEW_LEVEL = 'pop-up-menu'
 const PAINT_TIMEOUT_MS = 5_000
 
 interface Opening {
+  stopWatchingOrigin: () => void
   version: number
   resolve: () => void
   reject: (error: Error) => void
@@ -83,6 +84,7 @@ function settleOpening(error?: Error): void {
   if (!pending) return
   opening = null
   clearTimeout(pending.timer)
+  pending.stopWatchingOrigin()
   if (error) pending.reject(error)
   else pending.resolve()
 }
@@ -135,13 +137,22 @@ function createView(bounds: Electron.Rectangle): BrowserWindow {
   return win
 }
 
+function canOpenFrom(main: BrowserWindow | null): main is BrowserWindow {
+  return !!main && !main.isDestroyed() && main.isVisible() && !main.isMinimized() && main.isFocused()
+}
+
 function showView(): void {
   const win = view
   if (!win || win.isDestroyed()) return
+  if (!canOpenFrom(getMainWin())) {
+    settleOpening()
+    return
+  }
+  // Showing this window blurs Main; detach cancellation before that handoff.
+  settleOpening()
+  shown = true
   win.show()
   win.focus()
-  shown = true
-  settleOpening()
   notifyMain(FULLSCREEN_VIEW_OPENED_CHANNEL)
 }
 
@@ -149,7 +160,9 @@ function showView(): void {
 export function openFullscreenView(): Promise<void> {
   if (shown) return Promise.resolve()
   settleOpening()
-  const { bounds } = fullscreenViewDisplay(getMainWin())
+  const origin = getMainWin()
+  if (!canOpenFrom(origin)) return Promise.resolve()
+  const { bounds } = fullscreenViewDisplay(origin)
   const snapshot = latestSelection()
   if (!view || view.isDestroyed()) {
     // A fresh page asks for the latest snapshot itself once it has loaded.
@@ -167,7 +180,20 @@ export function openFullscreenView(): Promise<void> {
       if (opening?.timer !== timer) return
       settleOpening(new Error('The fullscreen view did not paint its image in time'))
     }, PAINT_TIMEOUT_MS)
-    opening = { version: snapshot.version, resolve, reject, timer }
+    const cancel = (): void => { settleOpening() }
+    origin.on('blur', cancel)
+    origin.on('hide', cancel)
+    origin.on('minimize', cancel)
+    origin.on('closed', cancel)
+    opening = {
+      version: snapshot.version, resolve, reject, timer,
+      stopWatchingOrigin: () => {
+        origin.removeListener('blur', cancel)
+        origin.removeListener('hide', cancel)
+        origin.removeListener('minimize', cancel)
+        origin.removeListener('closed', cancel)
+      },
+    }
   })
 }
 

@@ -55,6 +55,12 @@ export function canShowImage(task: Pick<SelectedImage, 'status' | 'baseName'> | 
  *  fullscreen view opens only from the lists, and closes itself on Space. */
 export type ListKey = 'up' | 'down' | 'left' | 'right' | 'remove' | 'delete'
 
+export interface SurfaceListKey {
+  key: ListKey
+  surface: ViewingSurface
+  taskId: string | null
+}
+
 interface KeyLike {
   key: string
   metaKey: boolean
