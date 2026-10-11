@@ -23,6 +23,7 @@ function storeFile(): string {
 let worker: Worker | null = null
 // A thread that failed stays failed for the launch; recording does not retry.
 let stopped = false
+let closing: Promise<void> | null = null
 
 function report(value: BackupWorkerReport): void {
   if (value.type === 'open-failed') {
@@ -33,6 +34,7 @@ function report(value: BackupWorkerReport): void {
 }
 
 function startWorker(): Worker | null {
+  if (closing) return null
   if (worker || stopped) return worker
   try {
     const data: BackupWorkerData = { file: storeFile(), sessionId: currentRecordsContext().launch }
@@ -66,23 +68,21 @@ export function record(absolutePath: string, bytes: Uint8Array): void {
 }
 
 /**
- * Lets the backup thread apply what it was handed and close the store, for at
- * most `drainMs`; versions still pending after that are dropped. The next record
- * starts a new thread against the current storage root.
+ * Represents physical worker exit after the ordered close request. The quit
+ * owner bounds the whole optional cleanup phase; this owner does not add a
+ * second deadline or infer that pending versions have been discarded.
  */
-export async function closeBackupStore(drainMs = 500): Promise<void> {
+export function closeBackupStore(): Promise<void> {
+  if (closing) return closing
   const current = worker
-  worker = null
-  stopped = false
-  if (!current) return
-  const exited = new Promise<boolean>((resolve) => current.once('exit', () => resolve(true)))
-  let timer: NodeJS.Timeout | undefined
-  const deadline = new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), drainMs) })
+  if (!current) { stopped = false; return Promise.resolve() }
+  const exited = new Promise<void>((resolve) => current.once('exit', () => {
+    if (worker === current) worker = null
+    closing = null
+    stopped = false
+    resolve()
+  }))
+  closing = exited
   current.postMessage({ type: 'close' } satisfies BackupWorkerMessage)
-  const drained = await Promise.race([exited, deadline])
-  clearTimeout(timer)
-  if (!drained) {
-    log('warn', 'Backup history did not finish in time; its pending versions were dropped', { drainMs })
-    await current.terminate()
-  }
+  return exited
 }

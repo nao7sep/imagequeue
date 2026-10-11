@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
-import { ensureDataDir, getDataDir } from './config'
+import { getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { createCoalescedWriter } from './utils/coalesced-writer'
@@ -13,7 +13,6 @@ import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError }
 import { setAsideFile } from './utils/set-aside'
 
 function getParamsFilePath(): string {
-  ensureDataDir()
   return path.join(getDataDir(), 'params.json')
 }
 

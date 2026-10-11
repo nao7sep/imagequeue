@@ -74,10 +74,15 @@ export async function startApp(home: string) {
     await clean(stopProcessor)
     await clean(drainPendingWrites)
     await Promise.all([
-      clean(() => cancelAllInFlightAndWait(5_000)),
-      clean(() => killAllCliJobsAndWait({ timeoutMs: 5_000 })),
+      clean(async () => {
+        const result = await cancelAllInFlightAndWait(5_000)
+        if (!result.settled) throw new Error('Live generations did not settle during cleanup')
+      }),
+      clean(async () => {
+        const result = await killAllCliJobsAndWait({ timeoutMs: 5_000 })
+        if (!result.settled) throw new Error('Live CLI jobs did not settle during cleanup')
+      }),
     ])
-    await clean(async () => { if (queueManager.interruptGeneratingTasks() > 0) (await session.persistActiveSession()) })
     await clean(() => session.dropCurrentSessionIfEmpty('quit'))
     await clean(() => contents.destroy())
     await clean(closeConceptStore)

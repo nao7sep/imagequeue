@@ -175,8 +175,8 @@ export class QueueManager {
 
   // Flips any in-flight 'generating' tasks to 'interrupted', clearing the
   // per-attempt fields the same way a resumed session does (toResumedTask).
-  // Called at shutdown so the persisted manifest reflects that the process
-  // stopped mid-generation instead of freezing a task as 'generating' forever.
+  // This bulk transition assumes execution has already stopped. Production
+  // shutdown instead waits for the processor to persist each actual outcome.
   // Returns how many were affected.
   interruptGeneratingTasks(): number {
     let count = 0

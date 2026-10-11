@@ -4,7 +4,7 @@ import { AppConfig } from './types'
 import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
-import { resolveStorageRoot } from './storage-root'
+import { resolveStorageRoot, ensureStorageRoot } from './storage-root'
 import { setAsideFile } from '../utils/set-aside'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
@@ -16,9 +16,8 @@ let cachedConfig: AppConfig | null = null
 // re-reads the file, so config.json is read only at load.
 let storedMap: Record<string, unknown> | null = null
 
-// The storage root is resolved lazily (honoring IMAGEQUEUE_DATA_DIR) rather than
-// frozen into a module-level constant at import time, so the override is read
-// once the environment is fully known. resolveStorageRoot mkdir -p's the root.
+// Resolve after the environment is known, without filesystem work. Directory
+// setup belongs to startup rather than cached-key reads or runtime save paths.
 export function getDataDir(): string {
   return resolveStorageRoot()
 }
@@ -28,10 +27,7 @@ export function getConfigPath(): string {
 }
 
 export function ensureDataDir(): void {
-  // resolveStorageRoot already creates the root (and throws on an unusable
-  // override); calling it here keeps ensureDataDir an idempotent startup
-  // checkpoint that fails loudly on an unusable IMAGEQUEUE_DATA_DIR.
-  resolveStorageRoot()
+  ensureStorageRoot()
 }
 
 // Where each set-aside file went, until the window takes them to tell the user.

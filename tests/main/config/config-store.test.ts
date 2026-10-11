@@ -54,6 +54,26 @@ describe('settings by set', () => {
     expect(loadConfig()).toEqual(createDefaultConfig())
     expect(fs.existsSync(file())).toBe(false)
   })
+  it('uses the established root without synchronous filesystem work during runtime', async () => {
+    const { loadConfig, getDataDir, getConfigPath, updateConfig } = await import('../../../src/main/config/config-store')
+    loadConfig()
+    const { hasApiKey, refreshApiKeys } = await import('../../../src/main/config/api-keys-store')
+    vi.stubEnv('OPENAI_IMAGE_API_KEY', '')
+    await refreshApiKeys()
+    const { listElaborators, createElaborator } = await import('../../../src/main/elaborators')
+    listElaborators()
+    const forbidden = (): never => { throw new Error('synchronous root I/O during runtime') }
+    const mkdir = vi.spyOn(fs, 'mkdirSync').mockImplementation(forbidden)
+    const stat = vi.spyOn(fs, 'statSync').mockImplementation(forbidden)
+    try {
+      expect(getDataDir()).toBe(root)
+      expect(getConfigPath()).toBe(file())
+      expect(hasApiKey('openai.image')).toBe(false)
+      await updateConfig((draft) => { draft.general.language = 'ja' })
+      await createElaborator({ kind: 'style', name: 'Runtime root probe', template: 'plain background' })
+      expect(loadConfig().general.language).toBe('ja')
+    } finally { mkdir.mockRestore(); stat.mockRestore() }
+  })
   it('keeps a later edit behind physical publication and applies both changes', async () => {
     const { updateConfig, loadConfig } = await import('../../../src/main/config/config-store')
     loadConfig()

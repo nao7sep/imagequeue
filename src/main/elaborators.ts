@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 import type { Elaborator, ElaboratorKind } from '../shared/types'
-import { ensureDataDir, getDataDir } from './config'
+import { getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
@@ -11,7 +11,6 @@ import { multiline, singleLine } from '../shared/textCleanup'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 
 function getElaboratorsFilePath(): string {
-  ensureDataDir()
   return path.join(getDataDir(), 'elaborators.json')
 }
 

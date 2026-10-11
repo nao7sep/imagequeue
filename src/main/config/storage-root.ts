@@ -31,18 +31,14 @@ function expandEnvReferences(value: string): string {
 
 // Resolve the storage root, honoring IMAGEQUEUE_DATA_DIR. A relative override is
 // made absolute against the HOME directory (never process.cwd()); the default
-// root is `<homeDir>/.imagequeue`. The chosen root is created (mkdir -p); if it
-// cannot be created or is not a usable directory, this throws a clear startup
-// error and does not fall back.
+// root is `<homeDir>/.imagequeue`. Path resolution itself performs no I/O.
 export function resolveStorageRoot(): string {
   const homeDir = os.homedir()
   const override = process.env[DATA_DIR_ENV_VAR]
   const trimmed = typeof override === 'string' ? override.trim() : ''
 
   let root: string
-  let fromOverride = false
   if (trimmed.length > 0) {
-    fromOverride = true
     let expanded = expandEnvReferences(trimmed).trim()
 
     // An override that is set but expands to nothing — an unset $VAR/%VAR%, or
@@ -69,6 +65,16 @@ export function resolveStorageRoot(): string {
   } else {
     root = path.join(homeDir, DEFAULT_DIR_NAME)
   }
+
+  return root
+}
+
+// Startup owns directory creation, validation and permission tightening. Cached
+// settings/key reads and runtime save paths only need the pure resolved path.
+export function ensureStorageRoot(): string {
+  const root = resolveStorageRoot()
+  const override = process.env[DATA_DIR_ENV_VAR]
+  const fromOverride = typeof override === 'string' && override.trim().length > 0
 
   try {
     fs.mkdirSync(root, { recursive: true, mode: 0o700 })

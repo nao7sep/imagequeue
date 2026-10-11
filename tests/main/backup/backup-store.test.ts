@@ -5,6 +5,7 @@ import { EventEmitter } from 'node:events'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { inProcessBackupThread } from '../../setup/backup-thread'
+import { createQuitOwner } from '../../../src/main/quit-handler'
 
 // The main-process side of the backup history: a save hands its bytes over and
 // returns, whatever the history does. The backup thread runs in-process here
@@ -66,27 +67,46 @@ describe('backup store', () => {
   })
 
   // A history that never answers stands for a stalled disk or a locked store.
-  it('hands a save over without waiting, and drops what a stuck history still holds at quit within its bound', async () => {
+  it('hands a save over without waiting and keeps close pending until physical worker exit', async () => {
+    vi.useFakeTimers()
     const posted: unknown[] = []
     const terminate = vi.fn(async () => 1)
+    const thread = Object.assign(new EventEmitter(), {
+      postMessage: (message: unknown) => { posted.push(message) },
+      unref: () => undefined,
+      terminate,
+    })
     vi.doMock('../../../src/main/backup/backup-worker?nodeWorker', () => ({
-      default: () => Object.assign(new EventEmitter(), {
-        postMessage: (message: unknown) => { posted.push(message) },
-        unref: () => undefined,
-        terminate,
-      }),
+      default: () => thread,
     }))
-    const logger = await import('../../../src/main/logger')
-    const log = vi.spyOn(logger, 'log')
     const { record, closeBackupStore } = await import('../../../src/main/backup/backup-store')
     record(path.join(root, 'config.json'), Buffer.from('{}'))
     expect(posted).toHaveLength(1)
-
-    const started = Date.now()
-    await closeBackupStore(50)
-    expect(Date.now() - started).toBeLessThan(1_000)
-    expect(terminate).toHaveBeenCalledOnce()
-    expect(log).toHaveBeenCalledWith('warn', 'Backup history did not finish in time; its pending versions were dropped', { drainMs: 50 })
+    let settled = false
+    const closing = closeBackupStore().then(() => { settled = true })
+    try {
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(settled).toBe(false)
+      expect(terminate).not.toHaveBeenCalled()
+      expect(posted).toEqual([expect.objectContaining({ type: 'record' }), { type: 'close' }])
+      const exit = vi.fn()
+      const quit = createQuitOwner({
+        begin: vi.fn(), cancel: vi.fn(), exit, onError: vi.fn(),
+        save: async () => undefined, cleanup: closeBackupStore, question: async () => 'cancel',
+        timeoutMs: 30_000, systemTimeoutMs: 1_500,
+      })
+      quit.beforeQuit({ preventDefault: vi.fn() })
+      await vi.advanceTimersByTimeAsync(499)
+      expect(exit).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(exit).toHaveBeenCalledOnce()
+      expect(settled).toBe(false)
+    } finally {
+      thread.emit('exit', 0)
+      await closing
+      vi.useRealTimers()
+    }
+    expect(settled).toBe(true)
   })
 
   it('stops recording for the launch when the thread fails', async () => {

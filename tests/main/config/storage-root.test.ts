@@ -2,11 +2,11 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveStorageRoot } from '../../../src/main/config/storage-root'
+import { resolveStorageRoot, ensureStorageRoot } from '../../../src/main/config/storage-root'
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
-describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
+describe('storage root (IMAGEQUEUE_DATA_DIR)', () => {
   let tmpBase: string
   const original = process.env[ENV_VAR]
 
@@ -27,6 +27,14 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
     expect(resolveStorageRoot()).toBe(path.join(os.homedir(), '.imagequeue'))
   })
 
+  it('resolves paths without touching a disk that becomes unavailable after startup', () => {
+    const root = ensureStorageRoot()
+    const forbidden = (): never => { throw new Error('disk unavailable') }
+    vi.spyOn(fs, 'mkdirSync').mockImplementation(forbidden)
+    vi.spyOn(fs, 'statSync').mockImplementation(forbidden)
+    expect(resolveStorageRoot()).toBe(root)
+  })
+
   it('treats an empty/whitespace override as unset', () => {
     process.env[ENV_VAR] = '   '
     expect(resolveStorageRoot()).toBe(path.join(os.homedir(), '.imagequeue'))
@@ -35,21 +43,21 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
   it('relocates the whole root to an absolute override and creates it', () => {
     const target = path.join(tmpBase, 'relocated')
     process.env[ENV_VAR] = target
-    const root = resolveStorageRoot()
+    const root = ensureStorageRoot()
     expect(root).toBe(path.resolve(target))
     expect(fs.statSync(root).isDirectory()).toBe(true)
   })
 
   it('expands a leading ~ against the home directory', () => {
     process.env[ENV_VAR] = '~/.imagequeue-test-home-expand'
-    const root = resolveStorageRoot()
+    const root = ensureStorageRoot()
     expect(root).toBe(path.join(os.homedir(), '.imagequeue-test-home-expand'))
     fs.rmSync(root, { recursive: true, force: true })
   })
 
   it('resolves a relative override against HOME, never the working directory', () => {
     process.env[ENV_VAR] = 'relative-imagequeue-root-xyz'
-    const root = resolveStorageRoot()
+    const root = ensureStorageRoot()
     expect(root).toBe(path.resolve(os.homedir(), 'relative-imagequeue-root-xyz'))
     expect(root).not.toBe(path.resolve(process.cwd(), 'relative-imagequeue-root-xyz'))
     fs.rmSync(root, { recursive: true, force: true })
@@ -59,7 +67,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
     const filePath = path.join(tmpBase, 'not-a-dir')
     fs.writeFileSync(filePath, 'x')
     process.env[ENV_VAR] = filePath
-    expect(() => resolveStorageRoot()).toThrow(/IMAGEQUEUE_DATA_DIR/)
+    expect(() => ensureStorageRoot()).toThrow(/IMAGEQUEUE_DATA_DIR/)
   })
 
   // The override value is run through env-reference expansion before it is made
@@ -81,7 +89,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
         const target = path.join(tmpBase, 'env-ref')
         process.env[REF_VAR] = target
         process.env[ENV_VAR] = form
-        const root = resolveStorageRoot()
+        const root = ensureStorageRoot()
         expect(root).toBe(path.resolve(target))
         expect(fs.statSync(root).isDirectory()).toBe(true)
       }
@@ -93,7 +101,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
       // than trip the empty-expansion guard below.
       delete process.env[REF_VAR]
       process.env[ENV_VAR] = 'imagequeue-root-prefix-$' + REF_VAR + '-suffix'
-      const root = resolveStorageRoot()
+      const root = ensureStorageRoot()
       expect(root).toBe(path.resolve(os.homedir(), 'imagequeue-root-prefix--suffix'))
       fs.rmSync(root, { recursive: true, force: true })
     })
@@ -139,7 +147,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
     it('creates a fresh root as owner-only (0700)', () => {
       const target = path.join(tmpBase, 'fresh-root')
       process.env[ENV_VAR] = target
-      const root = resolveStorageRoot()
+      const root = ensureStorageRoot()
       expect(fs.statSync(root).mode & 0o777).toBe(0o700)
     })
 
@@ -148,7 +156,7 @@ describe('resolveStorageRoot (IMAGEQUEUE_DATA_DIR)', () => {
       fs.mkdirSync(target, { mode: 0o755 })
       expect(fs.statSync(target).mode & 0o777).toBe(0o755)
       process.env[ENV_VAR] = target
-      const root = resolveStorageRoot()
+      const root = ensureStorageRoot()
       expect(fs.statSync(root).mode & 0o777).toBe(0o700)
     })
   })
