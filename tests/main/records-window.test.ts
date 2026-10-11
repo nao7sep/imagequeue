@@ -163,3 +163,13 @@ describe('notifyRecordsChanged', () => {
     expect(opened()[0]!.sent).toEqual([RECORDS_CHANGED_CHANNEL])
   })
 })
+
+it.each(['win32', 'darwin'] as const)('preserves display mode only on Windows (%s)', (platform) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    expect(buildRecordsWindowOptions('Records').windowStatePersistence).toEqual({ bounds: true, displayMode: platform === 'win32' })
+  } finally {
+    Object.defineProperty(process, 'platform', originalPlatform)
+  }
+})

@@ -276,3 +276,24 @@ describe('the launch check, throttled by the last attempt', () => {
     expect(Date.parse((await readDependenciesCache()).lastAttemptAtUtc!)).toBeLessThanOrEqual(Date.now())
   })
 })
+
+describe('Windows launch dependency check', () => {
+  it('makes no release or recommendation request and records no attempt', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      // Only the platform guard may prevent this otherwise-due check.
+      const config = createDefaultConfig()
+      config.image_backends.drawthings.check_updates_at_launch = true
+      fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(config))
+      const before = await readDependenciesCache()
+      await checkDependenciesAtLaunch()
+      expect(resolveMock).not.toHaveBeenCalled()
+      expect(serverTimeMock).not.toHaveBeenCalled()
+      expect(await readDependenciesCache()).toEqual(before)
+      expect((await getDependenciesState()).platformSupported).toBe(false)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+})

@@ -117,3 +117,13 @@ describe('buildMainWindowOptions', () => {
     )
   })
 })
+
+it.each(['win32', 'darwin'] as const)('preserves display mode only on Windows (%s)', (platform) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    expect(buildMainWindowOptions(1).windowStatePersistence).toEqual({ bounds: true, displayMode: platform === 'win32' })
+  } finally {
+    Object.defineProperty(process, 'platform', originalPlatform)
+  }
+})
