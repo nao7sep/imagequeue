@@ -85,6 +85,7 @@ export interface CliInstallResult {
 export type OutputFileState = 'removed' | 'remaining' | 'unknown'
 export interface TaskDeletionResult {
   removed: boolean
+  sessionSaved?: false
   sessionId?: string
   baseName?: string
   ext?: 'png' | 'jpg' | 'webp'

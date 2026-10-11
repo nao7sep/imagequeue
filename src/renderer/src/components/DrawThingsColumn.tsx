@@ -49,6 +49,7 @@ function buildDrawThingsParams(
 export interface DrawThingsColumn {
   /** The DT branch of the column's enqueue params (memo-stable). */
   enqueueParams: Record<string, unknown>
+  paramsReady: boolean
   cliInstalled: boolean
   downloadedModelCount: number
   showModelsModal: boolean
@@ -60,6 +61,8 @@ export interface DrawThingsColumn {
     modelsLoadState: 'loading' | 'ready' | 'failed'
     modelsLoadError: MessageKey | null
     paramsSaveError: MessageKey | null
+    paramsLoadError: MessageKey | null
+    retryParamsLoad: () => void
     sizeValue: string
     width: number
     height: number
@@ -106,15 +109,18 @@ export function useDrawThingsColumn({
   const [modelsLoadState, setModelsLoadState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [modelsLoadError, setModelsLoadError] = useState<MessageKey | null>(null)
   const [paramsSaveError, setParamsSaveError] = useState<MessageKey | null>(null)
+  const [paramsLoadError, setParamsLoadError] = useState<MessageKey | null>(null)
   const [showModelsModal, setShowModelsModal] = useState(false)
   const [recommendationRevision, setRecommendationRevision] = useState(0)
   const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendedParams | null>(null)
   const [allModelParams, setAllModelParams] = useState<Record<string, DrawThingsModelParams>>({})
-  // Tracks which model's saved params are currently reflected in local state.
-  // The autosave effect uses this to skip writes between a model switch and
-  // the new model's load completing, so we never persist model A's params
-  // under model B's key.
-  const [loadedModel, setLoadedModel] = useState('')
+  // Controls, saves and generation share the same resolved parameter owner.
+  // Model/default/recommendation changes invalidate it in the very first render.
+  const [loadedParams, setLoadedParams] = useState<{
+    model: string
+    fallbacks: DrawThingsModelParams
+    recommendationRevision: number
+  } | null>(null)
   const persistenceRevision = useRef(0)
 
   useEffect(() => {
@@ -149,6 +155,9 @@ export function useDrawThingsColumn({
       fallbacksRaw.guidance, fallbacksRaw.seed, fallbacksRaw.negativePrompt,
     ],
   )
+  const paramsReady = active && loadedParams?.model === model
+    && loadedParams.fallbacks === fallbacks
+    && loadedParams.recommendationRevision === recommendationRevision
   const currentDrawThingsParams = useMemo(
     () => buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt),
     [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt]
@@ -289,12 +298,14 @@ export function useDrawThingsColumn({
     setNegativePrompt(fallbacks.negativePrompt)
     // Block autosave while these transient fallback values sit in local state;
     // the load effect re-opens the gate after the model's saved params land.
-    setLoadedModel('')
+    setLoadedParams(null)
   }, [active, fallbacks])
 
   useEffect(() => {
     if (!active || !model) return
     let cancelled = false
+    setLoadedParams(null)
+    setParamsLoadError(null)
 
     Promise.all([
       window.electronAPI.dtGetModelParams(model),
@@ -309,12 +320,12 @@ export function useDrawThingsColumn({
       setLocalGuidance(resolved.guidance)
       setLocalSeed(resolved.seed)
       setNegativePrompt(resolved.negativePrompt)
-      setLoadedModel(model)
-      setParamsSaveError(null)
+      setLoadedParams({ model, fallbacks, recommendationRevision })
+      setParamsLoadError(null)
     }).catch((error) => {
       if (cancelled) return
-      setLoadedModel('')
-      setParamsSaveError('drawThings.paramsLoadFailed')
+      setLoadedParams(null)
+      setParamsLoadError('drawThings.paramsLoadFailed')
       logSaveError('load Draw Things model parameters and recommendation', error, { model })
     })
 
@@ -364,18 +375,16 @@ export function useDrawThingsColumn({
 
   // Autosave Draw Things params on every change. The main process coalesces
   // rapid writes and drains pending writes on `before-quit`, so we don't
-  // debounce here. The `loadedModel === model` gate prevents writing model A's
-  // params under model B's key during the brief window between a model switch
-  // and the new model's load completing.
+  // debounce here. The resolved-owner gate also covers recommendation/default
+  // reloads, so stale values cannot be written or used for generation.
   useEffect(() => {
-    if (!active || !model) return
-    if (loadedModel !== model) return
+    if (!paramsReady) return
     window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
       .catch((err) => {
         logSaveError('autosave Draw Things model parameters', err, { model })
         setParamsSaveError('drawThings.paramsSaveFailed')
       })
-  }, [active, model, loadedModel, currentDrawThingsParams])
+  }, [paramsReady, model, currentDrawThingsParams])
 
   const enqueueParams = useMemo<Record<string, unknown>>(() => {
     // Seed/negative gating shared with Advanced Prompting (drawThingsParams.ts).
@@ -388,6 +397,7 @@ export function useDrawThingsColumn({
 
   return {
     enqueueParams,
+    paramsReady,
     cliInstalled: !!cliStatus?.installed,
     downloadedModelCount: downloadedModels.length,
     showModelsModal,
@@ -398,6 +408,8 @@ export function useDrawThingsColumn({
       modelsLoadState,
       modelsLoadError,
       paramsSaveError,
+      paramsLoadError,
+      retryParamsLoad: () => setRecommendationRevision((value) => value + 1),
       sizeValue,
       width: localWidth,
       height: localHeight,
@@ -435,6 +447,12 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
       {c.paramsSaveError && (
         <div className="drawthings-save-error" role="alert">{t(c.paramsSaveError)}</div>
       )}
+      {c.paramsLoadError && (
+        <div className="drawthings-save-error" role="alert">
+          {t(c.paramsLoadError)}
+          <button type="button" onClick={c.retryParamsLoad}>{t('common.retry')}</button>
+        </div>
+      )}
       {c.modelsLoadState === 'loading' && !c.cliStatus && (
         <div className="setting-row model-status">{t('drawThings.checking')}</div>
       )}
@@ -461,7 +479,7 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           ) : null}
           <div className="setting-row">
             <label>{t('backend.size')}</label>
-            <select value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
+            <select disabled={!column.paramsReady} value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
               {DRAWTHINGS_SIZE_PRESETS.map((s) => (
                 <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>{sizePresetLabel(t, s)}</option>
               ))}
@@ -470,24 +488,25 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           </div>
           <div className="setting-row">
             <label>{t('backend.width')}</label>
-            <input type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+            <input disabled={!column.paramsReady} type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
             <label>{t('backend.height')}</label>
-            <input type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+            <input disabled={!column.paramsReady} type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
             <label>{t('backend.steps')}</label>
-            <input type="number" value={c.steps} onChange={(e) => c.setSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
+            <input disabled={!column.paramsReady} type="number" value={c.steps} onChange={(e) => c.setSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
           </div>
           <div className="setting-row">
             <label>{t('backend.guidance')}</label>
-            <input type="number" value={c.guidance} onChange={(e) => c.setGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
+            <input disabled={!column.paramsReady} type="number" value={c.guidance} onChange={(e) => c.setGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
           </div>
           {c.canApplyToAllModels && (
             <button
               type="button"
               className="open-models-btn drawthings-recommendation-btn"
+              disabled={!column.paramsReady}
               title={t('drawThings.applyToAllHint')}
               onClick={() => { void c.onApplyToAllModels() }}
             >
@@ -496,16 +515,17 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           )}
           <div className="setting-row">
             <label>{t('backend.seed')}</label>
-            <input type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
+            <input disabled={!column.paramsReady} type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
           </div>
           <div className="setting-row">
             <label>{t('drawThings.negative')}</label>
-            <input type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder={t('drawThings.negativePlaceholder')} />
+            <input disabled={!column.paramsReady} type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder={t('drawThings.negativePlaceholder')} />
           </div>
           {c.canRestoreRecommended && c.effectiveRecommendation && (
             <button
               type="button"
               className="open-models-btn drawthings-recommendation-btn"
+              disabled={!column.paramsReady}
               title={t('drawThings.useRecommendedHint', { model: c.selectedRecommendation?.matchName ?? model })}
               onClick={c.onRestoreRecommended}
             >

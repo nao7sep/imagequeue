@@ -25,7 +25,7 @@ interface EnqueueConfigContextValue {
 const EnqueueConfigContext = createContext<EnqueueConfigContextValue | null>(null)
 
 export function EnqueueConfigProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const { enqueue } = useQueue()
+  const { enqueue, enqueueBatch } = useQueue()
   const [snapshots, setSnapshots] = useState<Partial<Record<BackendId, EnqueueConfigSnapshot>>>({})
 
   const setSnapshot = useCallback((backend: BackendId, snapshot: EnqueueConfigSnapshot | null): void => {
@@ -45,10 +45,9 @@ export function EnqueueConfigProvider({ children }: { children: ReactNode }): Re
 
   const { backends: visibleBackends } = useVisiblePanes()
   const enqueueToAll = useCallback((prompt: string): void => {
-    for (const request of buildEnqueueRequestsForAll(prompt, snapshots, visibleBackends)) {
-      void enqueue(request)
-    }
-  }, [snapshots, enqueue, visibleBackends])
+    const requests = buildEnqueueRequestsForAll(prompt, snapshots, visibleBackends)
+    if (requests.length > 0) void enqueueBatch(requests)
+  }, [snapshots, enqueueBatch, visibleBackends])
 
   const value = useMemo(
     () => ({ snapshots, setSnapshot, enqueueToBackend, enqueueToAll }),

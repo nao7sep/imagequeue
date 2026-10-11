@@ -265,9 +265,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // Deletes any task that is not mid-generation, whether or not it ever produced
   // an image: an unprocessed task has nothing on disk, and the main process
   // already handles that case by removing the queue entry alone. `generating` is
-  // refused here as it is in removeTask, and this is the only place that refuses
-  // it — queue:deleteWithFiles, unlike queue:removeTask, has no guard of its own,
-  // so dropping this one would let a task vanish while its image is being written.
+  // refused here for immediate feedback and checked again by the main owner.
   const deleteTask = useCallback(async (backend: BackendId, taskId: string, surface?: ViewingSurface): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task) return
@@ -300,6 +298,12 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       diagnosticMessage: 'Failed to delete selected task',
       invoke: async () => {
         const result = await window.electronAPI.deleteWithFiles(backend, taskId)
+        if (result?.removed && result.sessionSaved === false) {
+          window.dispatchEvent(new CustomEvent(OPERATIONAL_FAILURE_EVENT, { detail: {
+            key: `task-delete-save:${result.sessionId}`,
+            message: message('task.deleteNotSaved'),
+          } }))
+        }
         if (!result?.removed || !result.files || !result.baseName) return
         const { image, metadata } = result.files
         const key = image === 'unknown' || metadata === 'unknown' ? 'task.deleteFilesUnknown'

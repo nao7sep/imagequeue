@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
-import type { BackendId, Task, EnqueueRequest } from '../../../shared/types'
+import type { BackendId, Task, EnqueueRequest, EnqueueBatchUnit } from '../../../shared/types'
 import { reportOperationalFailure } from '../utils/operationalFailure'
 import { serializeError } from '../../../shared/serialize-error'
 
@@ -9,6 +9,7 @@ interface QueueContextValue {
   showKeptImages: boolean
   toggleShowKeptImages: () => void
   enqueue: (request: EnqueueRequest) => Promise<void>
+  enqueueBatch: (units: EnqueueBatchUnit[]) => Promise<void>
 }
 
 const QueueContext = createContext<QueueContextValue | null>(null)
@@ -87,8 +88,14 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [])
 
+  const enqueueBatch = useCallback(async (units: EnqueueBatchUnit[]) => {
+    try { await window.electronAPI.enqueueBatch(units) } catch (error) {
+      reportOperationalFailure('queue-enqueue', 'operation.enqueueFailed', 'Failed to enqueue tasks', error)
+    }
+  }, [])
+
   return (
-    <QueueContext.Provider value={{ tasks, loadState, showKeptImages, toggleShowKeptImages, enqueue }}>
+    <QueueContext.Provider value={{ tasks, loadState, showKeptImages, toggleShowKeptImages, enqueue, enqueueBatch }}>
       {children}
     </QueueContext.Provider>
   )

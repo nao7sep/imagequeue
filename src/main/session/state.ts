@@ -517,8 +517,18 @@ async function createSessionOwned(): Promise<void> {
   log('info', 'Session started', { sessionDir })
 
   if (dropPrevious) {
-    drafts.delete(previousSessionId)
-    await dropSession(previousSessionDir, previousSessionId, 'new-session')
+    await dropPreviousSessionAfterSwitch(previousSessionDir, previousSessionId, 'new-session')
+  }
+}
+
+// Adoption has committed. Optional cleanup cannot turn the successful switch
+// into a failed command; a folder left behind keeps its running-app draft too.
+async function dropPreviousSessionAfterSwitch(sessionDir: string, sessionId: string, reason: string): Promise<void> {
+  try {
+    await dropSession(sessionDir, sessionId, reason)
+    drafts.delete(sessionId)
+  } catch (error) {
+    log('warn', 'Session switched, but its empty predecessor could not be removed', { sessionId, reason, error: serializeError(error) })
   }
 }
 
@@ -606,8 +616,7 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
   if (interruptedCount > 0) broadcastInterruptedOnResume(interruptedCount)
 
   if (dropPrevious) {
-    drafts.delete(previousSessionId)
-    await dropSession(previousSessionDir, previousSessionId, 'resume')
+    await dropPreviousSessionAfterSwitch(previousSessionDir, previousSessionId, 'resume')
   }
 }
 

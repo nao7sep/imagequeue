@@ -81,8 +81,11 @@ describe('preview window page', () => {
   })
 
   it('hands arrows, Backspace and Delete to the main window, and not Space', async () => {
+    let finish!: () => void
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     render(<PreviewWindowApp />)
-    await waitFor(() => expect(document.querySelector('img')).not.toBeNull())
+    await act(async () => {})
+    await act(async () => finish())
     for (const key of ['ArrowUp', 'ArrowRight', ' ', 'Backspace', 'Delete']) fireEvent.keyDown(document, { key })
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(api.sendListKey.mock.calls.map(([key]) => key)).toEqual(['up', 'right', 'remove', 'delete'])

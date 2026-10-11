@@ -82,8 +82,11 @@ describe('fullscreen view page', () => {
   })
 
   it('closes on Space or Escape and hands list keys to the main window', async () => {
+    let finish!: () => void
+    decode.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     render(<FullscreenViewApp />)
-    await waitFor(() => expect(document.querySelector('img')).not.toBeNull())
+    await act(async () => {})
+    await act(async () => finish())
     press(' ')
     press('Escape')
     expect(api.closeFullscreenView).toHaveBeenCalledTimes(2)

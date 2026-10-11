@@ -148,7 +148,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // Backend-config readiness only (no prompt check — the prompt is validated by
   // the enqueue action). Mirrored into the snapshot so Send-to-All / Cmd+N can
   // skip not-ready backends, and reused for the "+ Queue" button's disabled state.
-  const readyToEnqueue = isBackendReadyToEnqueue({
+  const readyToEnqueue = (backendId !== 'drawthings' || drawThings.paramsReady) && isBackendReadyToEnqueue({
     backendId,
     apiKeyMissing,
     cliInstalled: drawThings.cliInstalled,

@@ -107,9 +107,16 @@ export function registerQueueIpc(): void {
       }
       if (queueManager.getTask(backend, taskId) !== task) return result
       queueManager.removeTask(backend, taskId)
-      await persistActiveSession()
-      publishQueueState()
       result.removed = true
+      try {
+        await persistActiveSession()
+      } catch (error) {
+        // Files and memory already changed. Keep the required save pending for
+        // quit/retry, and return that consequence instead of claiming rollback.
+        result.sessionSaved = false
+        log('error', 'Task removed, but the session change could not be saved', { taskId, backend, error: serializeError(error) })
+      }
+      publishQueueState()
       return result
     })
   })

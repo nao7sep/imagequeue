@@ -112,6 +112,23 @@ async function deleteById(taskId: string): Promise<void> {
 }
 
 describe('deleteTask', () => {
+  it('keeps actual removal and reports an unsaved session independently of file cleanup', async () => {
+    const notices: unknown[] = []
+    const listener = (event: Event): void => { notices.push((event as CustomEvent).detail) }
+    window.addEventListener(OPERATIONAL_FAILURE_EVENT, listener)
+    try {
+      api.deleteWithFiles.mockResolvedValueOnce({ removed: true, sessionSaved: false, sessionId: 'A', baseName: 'img-1', ext: 'png', files: { image: 'remaining', metadata: 'removed' } })
+      const { ctx } = mountSelection()
+      act(() => ctx().select('openai', 't-done'))
+      await act(async () => { await ctx().deleteTask('openai', 't-done') })
+      expect(ctx().selection?.taskId).not.toBe('t-done')
+      expect(ctx().taskActionResults['t-done']).toBeUndefined()
+      expect(notices).toEqual([
+        { key: 'task-delete-save:A', message: { key: 'task.deleteNotSaved' } },
+        { key: 'task-delete:A:img-1', message: { key: 'task.deleteImageRemains', values: { name: 'img-1.png' } } },
+      ])
+    } finally { window.removeEventListener(OPERATIONAL_FAILURE_EVENT, listener) }
+  })
   it.each([
     ['remaining', 'remaining', 'task.deleteFilesRemain', 'img-1'],
     ['removed', 'remaining', 'task.deleteMetadataRemains', 'img-1.json'],
@@ -148,9 +165,7 @@ describe('deleteTask', () => {
     expect(api.deleteWithFiles).toHaveBeenCalledWith('openai', 't-done')
   })
 
-  // The safety invariant. queue:deleteWithFiles has no status guard of its own —
-  // unlike queue:removeTask — so this refusal is the only thing standing between
-  // a keystroke and a task disappearing while its image is being written.
+  // Immediate renderer refusal complements the authoritative main guard.
   it('refuses a task that is generating, and asks nothing first', async () => {
     await deleteById('t-generating')
     expect(api.deleteWithFiles).not.toHaveBeenCalled()

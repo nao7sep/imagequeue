@@ -33,7 +33,7 @@ vi.mock('../../../src/main/config', () => ({
 }))
 
 const log = vi.hoisted(() => vi.fn())
-vi.mock('../../../src/main/logger', () => ({ log, serializeError: (error: unknown) => String(error) }))
+vi.mock('../../../src/main/logger', () => ({ log, logEnqueue: vi.fn(), serializeError: (error: unknown) => String(error) }))
 
 const publishQueueState = vi.hoisted(() => vi.fn())
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState }))
@@ -54,6 +54,7 @@ const {
   createSession,
   deleteSession,
   dropCurrentSessionIfEmpty,
+  drainSessionWrites,
   getActiveSessionDraft,
   appendActiveSessionElaboratedPrompts,
   clearActiveSessionElaboratedPrompts,
@@ -149,6 +150,42 @@ afterEach(() => {
 })
 
 describe('starting a new session', () => {
+  it('admits and saves a multi-backend batch under one held session operation', async () => {
+    const renameOriginal = fs.promises.rename.bind(fs.promises)
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    let saved = 0
+    const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(async (...args) => {
+      entered()
+      await held
+      await renameOriginal(...args)
+    })
+    const units = [
+      { backend: 'openai', model: 'first', prompt: 'a cat', params: { quality: 'low' } },
+      { backend: 'flux', model: 'second', prompt: 'a cat', params: { aspectRatio: '1:1' } },
+    ]
+    const submission = handlers.get('queue:enqueueBatch')!({}, units)
+    await started
+    try {
+      expect(queueManager.getAllStoredTasks().openai).toHaveLength(1)
+      expect(queueManager.getAllStoredTasks().flux).toHaveLength(1)
+      expect(publishQueueState).not.toHaveBeenCalled()
+      await expect(createSession()).rejects.toThrow(/current session operation/)
+    } finally {
+      release()
+      await submission
+      saved = rename.mock.calls.length
+      rename.mockRestore()
+    }
+    expect(readManifest(getSessionDir()).tasks).toMatchObject({
+      openai: [expect.objectContaining({ model: 'first' })],
+      flux: [expect.objectContaining({ model: 'second' })],
+    })
+    expect(publishQueueState).toHaveBeenCalledOnce()
+    expect(saved).toBe(1)
+  })
   it('opens a fresh folder with an empty manifest and tells the window', async () => {
     const previous = getSessionDir()
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed')]))
@@ -488,17 +525,47 @@ describe('session operations awaiting Trash', () => {
     expect(queueManager.getAllStoredTasks().openai).toEqual([])
   })
 
-  it('releases the claim after failed Trash without undoing adoption', async () => {
+  it.each(['new', 'resume'])('keeps the committed %s switch successful when optional Trash fails', async (action) => {
     settings.dropEmptySessions = true
     settings.deleteToTrash = true
     const previousDir = getSessionDir()
+    const previousId = getSessionId()
+    setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'retained draft' })
     const targetId = '20260114-000000-utc'
     const targetDir = stageSession(targetId, { tasks: withTasks([makeTask('B', 'completed')]) })
     trashItem.mockRejectedValueOnce(new Error('Trash failed'))
-    await expect(resumeSession(targetId)).rejects.toThrow('Trash failed')
-    expect(getSessionDir()).toBe(targetDir)
+    await expect(action === 'resume' ? resumeSession(targetId) : createSession()).resolves.toBeUndefined()
+    if (action === 'resume') expect(getSessionDir()).toBe(targetDir)
+    else expect(getSessionDir()).not.toBe(previousDir)
     expect(fs.existsSync(previousDir)).toBe(true)
-    await createSession()
+    expect(log).toHaveBeenCalledWith('warn', 'Session switched, but its empty predecessor could not be removed', expect.objectContaining({ sessionId: previousId }))
+    settings.dropEmptySessions = false
+    await resumeSession(previousId)
+    expect(getActiveSessionDraft().prompt).toBe('retained draft')
+  })
+
+  it('reports the actual deletion when the final manifest save fails, then saves it on retry', async () => {
+    const dir = getSessionDir()
+    queueManager.replaceAllTasks(withTasks([makeTask('deleted', 'completed', {
+      baseName: 'image', imagePath: 'image.png',
+    })]))
+    fs.writeFileSync(path.join(dir, 'image.png'), 'image')
+    fs.writeFileSync(path.join(dir, 'image.json'), '{}')
+    await persistActiveSession()
+    publishQueueState.mockClear()
+    vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(new Error('manifest unavailable'))
+    try {
+      await expect(handlers.get('queue:deleteWithFiles')!({}, 'openai', 'deleted')).resolves.toMatchObject({ removed: true, sessionSaved: false })
+      expect(fs.existsSync(path.join(dir, 'image.png'))).toBe(false)
+      expect(fs.existsSync(path.join(dir, 'image.json'))).toBe(false)
+      expect(queueManager.getTask('openai', 'deleted')).toBeUndefined()
+      expect(publishQueueState).toHaveBeenCalledOnce()
+      expect(readManifest(dir).tasks.openai).toHaveLength(1)
+      await expect(drainSessionWrites()).rejects.toThrow('manifest unavailable')
+      await persistActiveSession()
+      expect(readManifest(dir).tasks.openai).toEqual([])
+      await expect(drainSessionWrites()).resolves.toBeUndefined()
+    } finally { vi.restoreAllMocks() }
   })
 })
 
