@@ -70,6 +70,33 @@ describe('concept store', () => {
     expect(c.id).toBe(a.id)
     expect(listFacetsWithStats()).toHaveLength(1)
   })
+  it('adds the domain statistics index to existing stores without changing counts', () => {
+    const facet = ensureFacet('places')
+    addProbes(facet.id, ['ports'])
+    const [probe] = unexpandedProbes(facet.id, 1)
+    addConcepts(facet.id, probe.id, ['dock', 'wharf'])
+    recordUse(draw(facet.id)!.id, 'earlier')
+    const expected = listProbesWithStats(facet.id)
+    closeConceptStore()
+    const file = path.join(tmpRoot, 'concepts.sqlite3')
+    const previous = new DatabaseSync(file)
+    previous.exec('DROP INDEX IF EXISTS idx_concepts_probe')
+    previous.close()
+
+    expect(listProbesWithStats(facet.id)).toEqual(expected)
+    const reopened = new DatabaseSync(file, { readOnly: true })
+    try {
+      expect(reopened.prepare("PRAGMA index_info('idx_concepts_probe')").all().map((row) => row.name)).toEqual(['probe_id', 'use_count'])
+      const plan = reopened.prepare(`EXPLAIN QUERY PLAN
+        SELECT p.id,
+          (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id),
+          (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0)
+        FROM probes p WHERE p.facet_id = ? ORDER BY p.id`).all(facet.id)
+      const searches = plan.map((row) => String(row.detail)).filter((detail) => detail.startsWith('SEARCH c'))
+      expect(searches).toHaveLength(2)
+      expect(searches.every((detail) => detail.includes('idx_concepts_probe'))).toBe(true)
+    } finally { reopened.close() }
+  })
 
   it('addConcepts dedups by key within a facet but not across facets', () => {
     const places = ensureFacet('place')

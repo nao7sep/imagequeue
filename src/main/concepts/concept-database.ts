@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS uses (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_concepts_facet ON concepts (facet_id, use_count);
+CREATE INDEX IF NOT EXISTS idx_concepts_probe ON concepts (probe_id, use_count);
 CREATE INDEX IF NOT EXISTS idx_uses_session ON uses (session_id);
 `
 
