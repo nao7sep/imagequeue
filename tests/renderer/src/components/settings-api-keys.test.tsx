@@ -14,7 +14,6 @@ let settingsValue: {
   apiKeys: Record<string, string> | null
   apiKeyPresence: unknown
   saveChangedSettings: ReturnType<typeof vi.fn>
-  saveApiKeys: ReturnType<typeof vi.fn>
   saveBrainstormSettings: ReturnType<typeof vi.fn>
   saveImageBackendDefaults: ReturnType<typeof vi.fn>
   saveNotificationField: ReturnType<typeof vi.fn>
@@ -79,7 +78,6 @@ beforeEach(() => {
     apiKeys: storedKeys(),
     apiKeyPresence: null,
     saveChangedSettings: vi.fn().mockResolvedValue({}),
-    saveApiKeys: vi.fn().mockResolvedValue({}),
     saveBrainstormSettings: vi.fn().mockResolvedValue({}),
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
@@ -113,10 +111,10 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     fireEvent.change(gemini, { target: { value: 'gemini-text-EDITED' } })
     fireEvent.click(saveButton())
 
-    await until(() => expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledTimes(1))
     // Exactly one id — an untouched key must never be rewritten, least of all
     // one whose stored value is empty because it comes from the environment.
-    expect(settingsValue.saveApiKeys.mock.calls[0][0]).toEqual({
+    expect(settingsValue.saveChangedSettings.mock.calls[0][2]).toEqual({
       'gemini.text': 'gemini-text-EDITED',
     })
   })
@@ -127,10 +125,10 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     fireEvent.change(xai, { target: { value: '' } })
     fireEvent.click(saveButton())
 
-    await until(() => expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledTimes(1))
     // Blank is a real instruction ("delete this key"), so it must reach the
     // store. Omitting it would silently leave the old key in place.
-    expect(settingsValue.saveApiKeys.mock.calls[0][0]).toEqual({ xai: '' })
+    expect(settingsValue.saveChangedSettings.mock.calls[0][2]).toEqual({ xai: '' })
   })
 
   it('does not touch the key store when only an ordinary setting changed', async () => {
@@ -140,7 +138,6 @@ describe('Settings edits API keys by key id, not through the config payload', ()
     fireEvent.click(saveButton())
 
     await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledTimes(1))
-    expect(settingsValue.saveApiKeys).not.toHaveBeenCalled()
   })
 
   it('enables Save on a key edit alone', () => {

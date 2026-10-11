@@ -35,6 +35,17 @@ describe('elaborator sets', () => {
     vi.unstubAllEnvs()
     fs.rmSync(root, { recursive: true, force: true })
   })
+  it('retries a failed creation and its revised draft as one identity, including after quit retry', async () => {
+    const input = { id: 'elab-retry-draft', kind: 'style' as const, name: 'First', template: 'First template' }
+    vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(new Error('locked'))
+    await expect(createElaborator(input)).rejects.toThrow('locked')
+    await elaborators.retryElaboratorSaves()
+    await createElaborator({ ...input, name: 'Revised', template: 'Revised template' })
+    expect(listElaborators().filter((item) => item.id === input.id)).toEqual([
+      { ...input, name: 'Revised', template: 'Revised template', description: undefined },
+    ])
+    expect(listElaborators().filter((item) => item.name === 'First')).toEqual([])
+  })
   it('reads shipped templates without creating a file', async () => {
     expect(listElaborators().length).toBeGreaterThan(0)
     expect(fs.existsSync(file())).toBe(false)

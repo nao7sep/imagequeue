@@ -164,7 +164,7 @@ const api = {
   listElaborators: (): Promise<Elaborator[]> =>
     ipcRenderer.invoke('elaborators:list'),
 
-  createElaborator: (input: { kind: ElaboratorKind; name: string; description?: string; template: string }): Promise<Elaborator> =>
+  createElaborator: (input: { id?: string; kind: ElaboratorKind; name: string; description?: string; template: string }): Promise<Elaborator> =>
     ipcRenderer.invoke('elaborators:create', input),
 
   updateElaborator: (id: string, patch: { name?: string; description?: string; template?: string }): Promise<Elaborator | null> =>
@@ -244,9 +244,10 @@ const api = {
 
   saveChangedSettings: (
     base: Record<string, unknown>,
-    next: Record<string, unknown>
+    next: Record<string, unknown>,
+    keys?: Partial<Record<SecretId, string>>
   ): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveChangedFields', base, next),
+    ipcRenderer.invoke('settings:saveChangedFields', base, next, keys),
 
   saveBrainstormSettings: (brainstorm: Record<string, unknown>): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
@@ -255,9 +256,6 @@ const api = {
 
   getApiKeys: (): Promise<Record<SecretId, string>> =>
     ipcRenderer.invoke('settings:getApiKeys'),
-
-  saveApiKeys: (changes: Partial<Record<SecretId, string>>): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveApiKeys', changes),
 
   saveImageBackendDefaults: (
     backend: CloudBackendId,

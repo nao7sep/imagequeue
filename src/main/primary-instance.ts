@@ -1,3 +1,4 @@
+import { drainExports } from './utils/storage-wait'
 import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config'
@@ -117,7 +118,7 @@ const quitOwner = createQuitOwner({
   save: async () => {
     await startupWork
     if (!sessionStarted) return
-    await retrySettingsWrites()
+    await Promise.all([retrySettingsWrites(), drainExports()])
     await Promise.all([drainBackendDefaults(), drainPendingModelParamsWrites()])
     if (!backgroundWork) {
       backgroundWork = Promise.all([

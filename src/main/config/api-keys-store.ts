@@ -272,7 +272,13 @@ export function getStoredApiKey(id: SecretId): string {
 // other entry is written back as it was. A file that cannot be used refuses the
 // save, tells the user which file it is, and stays exactly as it is.
 export function setStoredApiKey(id: SecretId, value: string): Promise<void> {
-  const operation = () => saveStoredApiKey(id, value)
+  return setStoredApiKeys({ [id]: value })
+}
+
+/** Capture every changed key as one retained publication before any wait. */
+export function setStoredApiKeys(changes: Partial<Record<SecretId, string>>): Promise<void> {
+  const captured = { ...changes }
+  const operation = () => saveStoredApiKeys(captured)
   const result = saving.catch(() => undefined).then(async () => {
     if (retrySave) await retrySave()
     retrySave = operation
@@ -301,7 +307,7 @@ async function readSecretsFileAsync(): Promise<ReturnType<typeof readSecretsFile
   }
 }
 
-async function saveStoredApiKey(id: SecretId, value: string): Promise<void> {
+async function saveStoredApiKeys(changes: Partial<Record<SecretId, string>>): Promise<void> {
   const read = await readSecretsFileAsync()
   if (!read.file) {
     const filePath = getSecretsPath()
@@ -309,14 +315,16 @@ async function saveStoredApiKey(id: SecretId, value: string): Promise<void> {
     throw new ApiKeysUnavailableError(filePath, { cause: read.unusable.error })
   }
   const { file } = read
-  for (const stored of Object.keys(file.keys)) {
-    if (stored !== id && stored.toLowerCase() === id) delete file.keys[stored]
-  }
-  const trimmed = value.trim()
-  if (trimmed.length > 0) {
-    file.keys[id] = encodeApiKey(trimmed)
-  } else {
-    delete file.keys[id]
+  for (const [id, value] of Object.entries(changes)) {
+    for (const stored of Object.keys(file.keys)) {
+      if (stored !== id && stored.toLowerCase() === id) delete file.keys[stored]
+    }
+    const trimmed = value.trim()
+    if (trimmed.length > 0) {
+      file.keys[id] = encodeApiKey(trimmed)
+    } else {
+      delete file.keys[id]
+    }
   }
   await writeSecretsFile(file)
   cachedRead = { file }

@@ -17,6 +17,9 @@ const MAX_QUEUED_BYTES = 16 * 1024 * 1024
 let queuedBytes = 0
 let droppedNotice = false
 const queued = new Map<number, number>()
+// Calls may fail long after a key rotates; retain masking knowledge for this
+// process so downstream diagnostic and fallback sinks mask the same values.
+const diagnosticCredentials = new Set<string>()
 const pending = new Map<number, { worker: Worker; resolve: () => void }>()
 
 /** Diagnostics are ordered by the writer's mailbox; paid evidence belongs to session.json. */
@@ -114,7 +117,9 @@ export function writeLogRecord(time: string, level: string, message: string, fie
   if (taskId !== null) delete rest.taskId
   if (requestId !== null) delete rest.requestId
   write('log_records', {
-    time, launch, session_id: activeSessionId, task_id: taskId, request_id: requestId, level, message, fields: json(rest),
+    time, launch, session_id: activeSessionId, task_id: taskId, request_id: requestId, level,
+    message: maskCredentials(message, [...diagnosticCredentials]) as string,
+    fields: json(maskCredentials(JSON.parse(json(rest)), [...diagnosticCredentials])),
   })
 }
 
@@ -179,6 +184,7 @@ export function maskCredentials(value: unknown, credentials: readonly string[] =
  *  once, when the call first finishes or fails, with the request the call then holds
  *  (an SDK's recordingFetch puts the HTTP request it sent there). */
 export function startAiCall(call: AiCall): AiCallRecord {
+  for (const key of call.credentials ?? []) if (key) diagnosticCredentials.add(key)
   const started = Date.now()
   const base = {
     time: new Date(started).toISOString(), launch, session_id: activeSessionId,

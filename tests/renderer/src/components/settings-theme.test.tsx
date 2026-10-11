@@ -47,7 +47,6 @@ function renderWith(theme: unknown, onClose: () => void = () => {}): void {
     apiKeys: {},
     apiKeyPresence: null,
     saveChangedSettings: vi.fn().mockResolvedValue({}),
-    saveApiKeys: vi.fn().mockResolvedValue({}),
     saveBrainstormSettings: vi.fn().mockResolvedValue({}),
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
@@ -95,16 +94,16 @@ describe('Settings theme choice', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('remains busy through the separate API-key write', async () => {
+  it('submits key edits with the form and remains busy until it settles', async () => {
     const close = vi.fn()
     renderWith('system', close)
     let resolveKeys!: () => void
-    settingsValue.saveApiKeys = vi.fn(() => new Promise<void>((done) => { resolveKeys = done }))
+    settingsValue.saveChangedSettings = vi.fn(() => new Promise<void>((done) => { resolveKeys = done }))
     fireEvent.click(screen.getByRole('tab', { name: 'Image Backends' }))
     const keyInput = document.querySelector('input[type="password"]') as HTMLInputElement
     fireEvent.change(keyInput, { target: { value: 'test-key' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
-    expect(settingsValue.saveApiKeys).toHaveBeenCalledTimes(1)
+    expect(settingsValue.saveChangedSettings).toHaveBeenCalledTimes(1)
     expect(keyInput.matches(':disabled')).toBe(true)
     expect(close).not.toHaveBeenCalled()
     await act(async () => resolveKeys())

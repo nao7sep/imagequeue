@@ -78,6 +78,17 @@ describe('api-keys-store', () => {
     expect(getStoredApiKey('openai.image')).toBe('sk-stored')
   })
 
+  it('retains a complete multi-key submission for quit retry after failed publication', async () => {
+    const { setStoredApiKeys, retryApiKeySaves } = await import('../../../src/main/config/api-keys-store')
+    const rename = vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(new Error('locked'))
+    try {
+      await expect(setStoredApiKeys({ 'openai.image': 'first', 'gemini.text': 'second' })).rejects.toThrow('locked')
+      await retryApiKeySaves()
+      expect(getStoredApiKey('openai.image')).toBe('first')
+      expect(getStoredApiKey('gemini.text')).toBe('second')
+    } finally { rename.mockRestore() }
+  })
+
   it('resolves the environment value first, over any stored value', async () => {
     await setStoredApiKey('gemini.text', 'stored-gemini')
     process.env['GEMINI_TEXT_API_KEY'] = 'env-gemini'

@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
@@ -130,7 +131,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
 
   const startNew = (kind: ElaboratorKind): void => {
     if (busy || draftTarget) return
-    setDraftTarget({ kind, mode: 'new' })
+    setDraftTarget({ kind, mode: 'new', id: `elab-${nanoid(10)}` })
     setDraft({ ...EMPTY_DRAFT })
     setMessage(null)
   }
@@ -187,6 +188,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
         savedId = updated?.id ?? draftTarget.id
       } else {
         const created = await window.electronAPI.createElaborator({
+          id: draftTarget.id,
           kind: draftTarget.kind,
           name,
           description: description || undefined,

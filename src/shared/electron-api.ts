@@ -113,7 +113,7 @@ export interface ElectronAPI {
 
   // Elaborators
   listElaborators: () => Promise<Elaborator[]>
-  createElaborator: (input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => Promise<Elaborator>
+  createElaborator: (input: { id?: string; kind: ElaboratorKind; name: string; description?: string; template: string }) => Promise<Elaborator>
   updateElaborator: (id: string, patch: { name?: string; description?: string; template?: string }) => Promise<Elaborator | null>
   deleteElaborator: (id: string) => Promise<boolean>
   resetElaborators: (kind?: ElaboratorKind) => Promise<Elaborator[]>
@@ -154,13 +154,12 @@ export interface ElectronAPI {
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>) => Promise<{ success: boolean }>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<{ success: boolean }>
   getApiKeyPresence: () => Promise<ApiKeyPresence>
-  // Stored key values, by key id — their own channels, never part of the config
-  // payload. saveApiKeys takes only the ids the user actually changed.
+  // Stored values are read separately and submitted as a separate changed-key
+  // map with the form; config.json never receives keys.
   getApiKeys: () => Promise<Record<SecretId, string>>
-  saveApiKeys: (changes: Partial<Record<SecretId, string>>) => Promise<{ success: boolean }>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
 

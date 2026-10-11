@@ -3,10 +3,11 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs'
 import { ownExportDestination, waitForStorage } from './utils/storage-wait'
+import { assertNotQuitting } from './quit-state'
 import { handle } from './ipc-boundary'
 import { saveImageBackendDefaults } from './backend-defaults'
 import { loadConfig, updateConfig } from './config'
-import { getStoredApiKey, setStoredApiKey, hasApiKey, refreshApiKeys } from './config/api-keys-store'
+import { getStoredApiKey, setStoredApiKeys, hasApiKey, refreshApiKeys } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
 import { refreshMainWindowMinimumSize, setDrawThingsReady } from './main-window-layout'
 import { getSessionDir } from './session'
@@ -66,6 +67,12 @@ const notificationFields = new Set<string>([
   'failure_file',
 ])
 
+function validateKeyChanges(changes: Record<string, string>): void {
+  for (const [id, value] of Object.entries(changes ?? {})) {
+    if (!secretIds.has(id) || typeof value !== 'string') throw new Error(`Cannot save unsupported api key: ${id}`)
+  }
+}
+
 // IPC handlers for reading/writing settings.
 export function registerSettingsIpc(
   onConfigSaved?: (config: AppConfig) => Promise<void> | void,
@@ -76,10 +83,20 @@ export function registerSettingsIpc(
     return loadConfig()
   })
 
-  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig) => {
-    const config = await updateConfig((draft) => {
-      applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
-    })
+  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}) => {
+    validateKeyChanges(keys)
+    // Both store owners capture the complete form before the first wait. Quit
+    // can now drain/retry it even if the renderer's later refresh is refused.
+    const results = await Promise.allSettled([
+      updateConfig((draft) => {
+        applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
+      }),
+      Object.keys(keys).length ? setStoredApiKeys(keys) : Promise.resolve(),
+    ])
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') throw failure.reason
+    const config = loadConfig()
+    if (Object.keys(keys).length) refreshMainWindowMinimumSize()
     if (onConfigSaved) {
       try {
         await onConfigSaved(config)
@@ -92,7 +109,7 @@ export function registerSettingsIpc(
     return { success: true }
   })
 
-  // Keys are read and written by key id, on their own channels, never as part of
+  // Keys are read and written by key id, separately from
   // the config payload. The STORED value is surfaced, not the resolved one: an
   // environment-supplied key must stay invisible to the form so that saving a
   // field the user never touched cannot overwrite it.
@@ -101,22 +118,6 @@ export function registerSettingsIpc(
     const keys = {} as Record<SecretId, string>
     for (const id of SECRET_IDS) keys[id] = getStoredApiKey(id)
     return keys
-  })
-
-  handle('settings:saveApiKeys', async (_event, changes: Record<string, string>) => {
-    // Trust boundary: ids come from the renderer's payload, so each is checked
-    // against the known set before it reaches the store.
-    const entries = Object.entries(changes ?? {})
-    for (const [id] of entries) {
-      if (!secretIds.has(id)) throw new Error(`Cannot save unsupported api key: ${id}`)
-    }
-    for (const [id, value] of entries) {
-      await setStoredApiKey(id as SecretId, String(value ?? ''))
-    }
-    // Storing or clearing a key can add or remove a column, which moves the
-    // window's derived minimum.
-    if (entries.length > 0) refreshMainWindowMinimumSize()
-    return { success: true }
   })
 
   // Which secrets are actually resolvable, environment value included. The
@@ -189,6 +190,7 @@ export function registerSettingsIpc(
   handle('cli-job:startImport', async (event, artifactPath: string) => {
     const cliPath = resolveCliPath()
     const dir = await ensureModelsDir()
+    assertNotQuitting()
     const jobId = startCliJob({
       kind: 'import',
       cliPath,
@@ -203,6 +205,7 @@ export function registerSettingsIpc(
   handle('cli-job:startDownload', async (event, modelFile: string) => {
     const cliPath = resolveCliPath()
     const dir = await ensureModelsDir()
+    assertNotQuitting()
     const jobId = startCliJob({
       kind: 'download',
       cliPath,
@@ -293,6 +296,7 @@ export function registerSettingsIpc(
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
+    assertNotQuitting()
     const destPath = exportPathForFormat(result.filePath, safeExt)
     return waitForStorage(ownExportDestination(destPath, async () => {
       await fs.promises.mkdir(path.dirname(destPath), { recursive: true })

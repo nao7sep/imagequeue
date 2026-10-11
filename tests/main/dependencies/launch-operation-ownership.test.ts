@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   downloadLatestRecommendations: vi.fn(),
   fetchLatestRecommendationsModified: vi.fn(),
   recommendationsPresent: false,
+  heldStatus: null as Promise<{ exists: boolean }> | null,
 }))
 
 vi.mock('../../../src/main/ipc-boundary', () => ({
@@ -34,7 +35,7 @@ vi.mock('../../../src/main/dependencies/cli-release', () => ({
 vi.mock('../../../src/main/recommendations', () => ({
   downloadLatestRecommendations: mocks.downloadLatestRecommendations,
   fetchLatestRecommendationsModified: mocks.fetchLatestRecommendationsModified,
-  getRecommendationsStatus: () => ({
+  getRecommendationsStatus: () => mocks.heldStatus ?? ({
     exists: mocks.recommendationsPresent,
     valid: mocks.recommendationsPresent,
     entryCount: mocks.recommendationsPresent ? 1 : 0,
@@ -76,6 +77,7 @@ beforeEach(() => {
   mocks.downloadLatestRecommendations.mockReset()
   mocks.fetchLatestRecommendationsModified.mockReset()
   mocks.recommendationsPresent = false
+  mocks.heldStatus = null
 })
 
 afterEach(() => {
@@ -166,4 +168,21 @@ describe('launch and manual dependency operation ownership', () => {
     finishCliCheck()
     await launchCheck
   })
+})
+
+it('does not acquire new launch work after quit while recommendations status is held', async () => {
+  const { setQuitting } = await import('../../../src/main/quit-state')
+  const { cancelAllDependencyOperations } = await import('../../../src/main/dependencies/operations')
+  let release!: (value: { exists: boolean }) => void
+  mocks.heldStatus = new Promise((resolve) => { release = resolve })
+  mocks.resolveLatestCliRelease.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://example.com/cli', sha256: 'abc' })
+  const launched = checkDependenciesAtLaunch()
+  await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalledOnce())
+  setQuitting(true)
+  cancelAllDependencyOperations()
+  release({ exists: true })
+  try {
+    await launched
+    expect(mocks.fetchLatestRecommendationsModified).not.toHaveBeenCalled()
+  } finally { setQuitting(false) }
 })

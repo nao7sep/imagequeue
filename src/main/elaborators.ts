@@ -412,16 +412,20 @@ async function writeKind(kind: ElaboratorKind, items: Elaborator[]): Promise<voi
 }
 
 async function createElaboratorNow(input: {
+  id?: string
   kind: ElaboratorKind
   name: string
   description?: string
   template: string
 }): Promise<Elaborator> {
   const items = listElaborators()
+  if (input.id && items.some((item) => item.id === input.id)) {
+    return (await updateElaboratorNow(input.id, { ...input, description: input.description ?? '' }))!
+  }
   // The renderer commit path (ElaboratorsModal.saveDraft) already cleans these
   // via textCleanup; here we only guard the no-content edge cases.
   const created: Elaborator = {
-    id: `elab-${nanoid(10)}`,
+    id: input.id ?? `elab-${nanoid(10)}`,
     kind: input.kind,
     name: input.name || 'Untitled',
     description: input.description || undefined,
@@ -502,7 +506,10 @@ function ordered<T>(operation: () => Promise<T>): Promise<T> {
   return result
 }
 export function createElaborator(input: Parameters<typeof createElaboratorNow>[0]): Promise<Elaborator> {
-  return ordered(() => createElaboratorNow(input))
+  // The form keeps this ID across failed saves and revised drafts; quit also
+  // retries the captured identity, never a fresh anonymous creation.
+  const captured = { ...input, id: input.id ?? `elab-${nanoid(10)}` }
+  return ordered(() => createElaboratorNow(captured))
 }
 export function updateElaborator(id: string, patch: Parameters<typeof updateElaboratorNow>[1]): Promise<Elaborator | null> {
   return ordered(() => updateElaboratorNow(id, patch))

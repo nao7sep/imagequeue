@@ -54,7 +54,6 @@ function renderWith(language: unknown, interfaceLanguage: Language = 'en'): void
     apiKeys: {},
     apiKeyPresence: null,
     saveChangedSettings: vi.fn().mockResolvedValue({}),
-    saveApiKeys: vi.fn().mockResolvedValue({}),
     saveBrainstormSettings: vi.fn().mockResolvedValue({}),
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),

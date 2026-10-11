@@ -43,7 +43,7 @@ export function registerElaboratorsIpc(): void {
 
   handle('elaborators:list', (event) => withRecoveryReport(event.sender, listElaborators))
 
-  handle('elaborators:create', (event, input: { kind: ElaboratorKind; name: string; description?: string; template: string }) => {
+  handle('elaborators:create', (event, input: { id?: string; kind: ElaboratorKind; name: string; description?: string; template: string }) => {
     return withRecoveryReport(event.sender, async () => {
       const created = await createElaborator(input)
       log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })

@@ -12,10 +12,18 @@ export async function waitForStorage<T>(operation: Promise<T>, timeoutMs = 30_00
 
 // A timed-out Save As must not release its destination to a second copy which
 // the older copy could later replace. Different destinations remain independent.
-const exporting = new Set<string>()
+const exporting = new Map<string, Promise<unknown>>()
 export async function ownExportDestination<T>(destination: string, operation: () => Promise<T>): Promise<T> {
   if (exporting.has(destination)) throw new Error(STORAGE_PENDING_MARKER)
-  exporting.add(destination)
-  try { return await operation() }
+  const physical = Promise.resolve().then(operation)
+  exporting.set(destination, physical)
+  try { return await physical }
   finally { exporting.delete(destination) }
+}
+
+/** Ordinary quit joins physical copies, including callers that timed out. */
+export async function drainExports(): Promise<void> {
+  const results = await Promise.allSettled(exporting.values())
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') throw failure.reason
 }

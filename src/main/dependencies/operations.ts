@@ -1,3 +1,5 @@
+import { assertNotQuitting } from '../quit-state'
+
 export type MutableDependency = 'cli' | 'recommendations'
 
 export type DependencyOperationOwner = object
@@ -40,6 +42,7 @@ export async function runDependencyOperation<T>(
   run: (signal: AbortSignal) => Promise<T>,
   watchOwner?: WatchDependencyOperationOwner
 ): Promise<T> {
+  assertNotQuitting()
   const busyDependency = dependencies.find((dependency) => activeOperations.has(dependency))
   if (busyDependency) throw new DependencyOperationBusyError(busyDependency)
 

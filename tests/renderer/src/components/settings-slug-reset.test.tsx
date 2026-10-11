@@ -48,7 +48,6 @@ function renderWith(theme: unknown, onClose = vi.fn()): void {
     apiKeys: {},
     apiKeyPresence: null,
     saveChangedSettings: vi.fn().mockResolvedValue({}),
-    saveApiKeys: vi.fn().mockResolvedValue({}),
     saveBrainstormSettings: vi.fn().mockResolvedValue({}),
     saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
@@ -76,7 +75,7 @@ describe('Reset slug template', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
     await until(() => expect(save).toHaveBeenCalledTimes(1))
-    expect(save.mock.calls[0]).toHaveLength(2)
+    expect(save.mock.calls[0]![2]).toEqual({})
     expect((save.mock.calls[0]![1] as { prompts: { slug: string } }).prompts.slug).toBe('shipped slug')
   })
 

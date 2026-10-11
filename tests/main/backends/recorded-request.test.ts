@@ -11,7 +11,6 @@ vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { flux: { timeout_ms: 180000 }, grok: { timeout_ms: 180000 } } }),
 }))
 vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => {}, resolveApiKey: () => 'test-key' }))
-vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 
 const { generateFlux } = await import('../../../src/main/backends/flux')
@@ -70,4 +69,26 @@ describe('recorded image requests', () => {
     expect(call!.raw).not.toContain('test-key')
     expect(sent.mock.calls[0]![1]!.headers).toMatchObject({ Authorization: 'Bearer test-key' })
   })
+})
+
+it('masks an echoed credential in backend logs, later failure logs and console fallback without changing error classification', async () => {
+  const { logGenerationFailed } = await import('../../../src/main/logger')
+  const { closeRecords } = await import('../../../src/main/records')
+  const { ProviderHttpError } = await import('../../../src/main/provider-errors')
+  const dir = freshRecordsRoot()
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('provider echoed test-key', { status: 400 })))
+  const failure = await generateFlux(task('flux', 'flux-2-pro'), new AbortController().signal).catch((error) => error)
+  expect(failure).toBeInstanceOf(ProviderHttpError)
+  logGenerationFailed('t1', failure)
+  const rows = [...readRows(dir, 'ai_calls'), ...readRows(dir, 'log_records')]
+  expect(rows.length).toBeGreaterThanOrEqual(3)
+  expect(JSON.stringify(rows)).not.toContain('test-key')
+  expect(JSON.stringify(rows)).toContain('[REDACTED]')
+  await closeRecords()
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    logGenerationFailed('t1', failure)
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('test-key')
+    expect(JSON.stringify(consoleError.mock.calls)).toContain('[REDACTED]')
+  } finally { consoleError.mockRestore() }
 })

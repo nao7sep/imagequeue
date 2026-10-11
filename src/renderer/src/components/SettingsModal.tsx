@@ -55,7 +55,7 @@ function withNotificationField(config: Record<string, unknown> | null, key: stri
 }
 
 export function SettingsModal({ onClose }: Props): React.JSX.Element {
-  const { settings, apiKeys, saveChangedSettings, saveApiKeys, saveNotificationField } = useSettings()
+  const { settings, apiKeys, saveChangedSettings, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   const { t } = useI18n()
   const [releaseOpenFailed, setReleaseOpenFailed] = useState(false)
@@ -142,13 +142,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         typeof prompts?.slug === 'string'
           ? { ...config, prompts: { ...prompts, slug: multiline(prompts.slug) } }
           : config
-      await saveChangedSettings(baseConfig, cleaned)
-      // Keys second, and only when changed: this write can add or remove a
-      // column, so it is the one that resizes the window.
-      if (Object.keys(changedKeys).length > 0) {
-        await saveApiKeys(changedKeys)
-        setBaseKeys({ ...keys })
-      }
+      await saveChangedSettings(baseConfig, cleaned, changedKeys)
+      setBaseKeys({ ...keys })
       onClose()
     } catch (e) {
       setErrorMessage(presentFailure('settings-save', e))
@@ -283,20 +278,21 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
         ))}
       </div>
       </div>
-      <fieldset className="settings-overlay settings-edit-fields" disabled={saving} aria-busy={saving}>
+      <div className="settings-overlay">
+      <fieldset className="settings-edit-fields" disabled={saving} aria-busy={saving}>
       {errorMessage && <div className="settings-error" role="alert">{t(errorMessage)}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>
         <div className="settings-section">
-          <label><input type="checkbox" checked={(general.check_github_releases_at_launch as boolean) ?? true} onChange={(event) => updateGeneral('check_github_releases_at_launch', event.target.checked)} /> {t('appRelease.atLaunch')}</label>
-          <button type="button" disabled={checkingRelease} onClick={() => {
+          <label className="settings-panel-check"><input type="checkbox" checked={(general.check_github_releases_at_launch as boolean) ?? true} onChange={(event) => updateGeneral('check_github_releases_at_launch', event.target.checked)} /> {t('appRelease.atLaunch')}</label>
+          <button className="modal-btn" type="button" disabled={checkingRelease} onClick={() => {
             setReleaseOpenFailed(false)
             setReleaseResult(undefined)
             setCheckingRelease(true)
             void window.electronAPI.checkAppRelease().then(setReleaseResult).catch((error) => reportOperationalFailure('app-release', 'appRelease.failed', 'Release check failed', error)).finally(() => setCheckingRelease(false))
           }}>{t(checkingRelease ? 'appRelease.checking' : 'appRelease.check')}</button>
-          {releaseResult && <div role="status">
+          {releaseResult && <div className="settings-release-result" role="status">
             {releaseResult.kind === 'newer' ? t('appRelease.newer', { version: releaseResult.version }) : t(releaseResult.kind === 'current' ? 'appRelease.current' : 'appRelease.failed')}
-            {releaseResult.kind === 'newer' && <button type="button" onClick={() => { void window.electronAPI.viewAppRelease().then(() => setReleaseOpenFailed(false)).catch((error) => { setReleaseOpenFailed(true); recordOperationalDiagnostic('Opening GitHub release failed', error) }) }}>{t('appRelease.view')}</button>}
+            {releaseResult.kind === 'newer' && <button className="modal-btn" type="button" onClick={() => { void window.electronAPI.viewAppRelease().then(() => setReleaseOpenFailed(false)).catch((error) => { setReleaseOpenFailed(true); recordOperationalDiagnostic('Opening GitHub release failed', error) }) }}>{t('appRelease.view')}</button>}
             {releaseOpenFailed && <div>{t('appRelease.openFailed')}</div>}
           </div>}
         </div>
@@ -703,6 +699,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       </div>
 
       </fieldset>
+      </div>
     </Modal>
   )
 }

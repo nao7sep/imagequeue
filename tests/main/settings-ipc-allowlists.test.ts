@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   saveConfig: vi.fn(),
   storedKeys: new Map<string, string>(),
   resolvableKeys: new Set<string>(),
-  setStoredApiKey: vi.fn((id: string, value: string) => mocks.storedKeys.set(id, value)),
+  setStoredApiKeys: vi.fn(async (changes: Record<string, string>) => {
+    for (const [id, value] of Object.entries(changes)) mocks.storedKeys.set(id, value)
+  }),
   refreshMainWindowMinimumSize: vi.fn(),
   startCliJob: vi.fn(() => 'job-1'),
   subscribeCliJob: vi.fn(),
@@ -42,14 +44,13 @@ vi.mock('../../src/main/config', () => ({
   loadConfig: () => mocks.config,
   updateConfig: (apply: (draft: AppConfig) => void) => {
     apply(mocks.config)
-    mocks.saveConfig(mocks.config)
-    return mocks.config
+    return Promise.resolve(mocks.saveConfig(mocks.config)).then(() => mocks.config)
   },
 }))
 vi.mock('../../src/main/config/api-keys-store', () => ({
   refreshApiKeys: async () => {},
   getStoredApiKey: (id: string) => mocks.storedKeys.get(id) ?? '',
-  setStoredApiKey: mocks.setStoredApiKey,
+  setStoredApiKeys: mocks.setStoredApiKeys,
   hasApiKey: (id: string) => mocks.resolvableKeys.has(id),
 }))
 vi.mock('../../src/main/settings-changes', () => ({ applyChangedFields: vi.fn() }))
@@ -134,23 +135,22 @@ describe('API keys', () => {
   })
 
   it('stores the keys it was given and re-measures the window, since a key can add a column', async () => {
-    await invoke('settings:saveApiKeys', { 'openai.image': 'sk-new', 'gemini.text': '' })
+    await invoke('settings:saveChangedFields', {}, {}, { 'openai.image': 'sk-new', 'gemini.text': '' })
 
-    expect(mocks.setStoredApiKey).toHaveBeenCalledWith('openai.image', 'sk-new')
-    expect(mocks.setStoredApiKey, 'clearing one is a save too').toHaveBeenCalledWith('gemini.text', '')
+    expect(mocks.setStoredApiKeys).toHaveBeenCalledWith({ 'openai.image': 'sk-new', 'gemini.text': '' })
     expect(mocks.refreshMainWindowMinimumSize).toHaveBeenCalledOnce()
   })
 
   it('refuses an id outside the known set, before anything is written', async () => {
-    await expect(invoke('settings:saveApiKeys', { 'openai.image': 'sk-new', 'evil.key': 'x' })).rejects.toThrow(
+    await expect(invoke('settings:saveChangedFields', {}, {}, { 'openai.image': 'sk-new', 'evil.key': 'x' })).rejects.toThrow(
       /unsupported api key: evil.key/,
     )
-    expect(mocks.setStoredApiKey).not.toHaveBeenCalled()
+    expect(mocks.setStoredApiKeys).not.toHaveBeenCalled()
   })
 
   it('leaves the window alone when there was nothing to save', async () => {
-    expect(await invoke('settings:saveApiKeys', {})).toEqual({ success: true })
-    expect(await invoke('settings:saveApiKeys', undefined)).toEqual({ success: true })
+    expect(await invoke('settings:saveChangedFields', {}, {}, {})).toEqual({ success: true })
+    expect(await invoke('settings:saveChangedFields', {}, {}, undefined)).toEqual({ success: true })
     expect(mocks.refreshMainWindowMinimumSize).not.toHaveBeenCalled()
   })
 })
@@ -243,4 +243,28 @@ describe('Draw Things CLI jobs', () => {
     expect(mocks.unsubscribeCliJob).toHaveBeenCalledWith('job-7', expect.anything())
     expect(mocks.killCliJob).toHaveBeenCalledExactlyOnceWith('job-7')
   })
+})
+
+it('captures all key edits while the config publication is still held', async () => {
+  let release!: () => void
+  mocks.saveConfig.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve }))
+  const submitted = invoke('settings:saveChangedFields', {}, {}, { 'openai.image': 'new-one', 'gemini.text': 'new-two' })
+  expect(mocks.setStoredApiKeys).toHaveBeenCalledWith({ 'openai.image': 'new-one', 'gemini.text': 'new-two' })
+  release()
+  await submitted
+})
+
+it.each(['cli-job:startImport', 'cli-job:startDownload'])('refuses %s if quit starts during directory preparation, then allows a fresh request after Cancel', async (channel) => {
+  const { setQuitting } = await import('../../src/main/quit-state')
+  let release!: (value: string) => void
+  mocks.ensureModelsDir.mockImplementationOnce(() => new Promise<string>((resolve) => { release = resolve }) as unknown as string)
+  const submitted = invoke(channel, 'model')
+  setQuitting(true)
+  release('/models')
+  try {
+    await expect(submitted).rejects.toThrow('quitting')
+    expect(mocks.startCliJob).not.toHaveBeenCalled()
+  } finally { setQuitting(false) }
+  await invoke(channel, 'model')
+  expect(mocks.startCliJob).toHaveBeenCalledOnce()
 })

@@ -2,7 +2,7 @@
 // Electron IPC shell so it can be tested against plain objects. It mutates the
 // config object in place and touches no Electron, fs, or store. API keys never
 // reach it: they are not part of the config type or its payload, and the Settings
-// form saves them by key id over settings:saveApiKeys.
+// form submits its changed-key map separately from the config fields.
 
 const settingsRootFields = new Set<string>([
   'provider',
