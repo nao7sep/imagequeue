@@ -118,8 +118,8 @@ export function writeLogRecord(time: string, level: string, message: string, fie
   if (requestId !== null) delete rest.requestId
   write('log_records', {
     time, launch, session_id: activeSessionId, task_id: taskId, request_id: requestId, level,
-    message: maskCredentials(message, [...diagnosticCredentials]) as string,
-    fields: json(maskCredentials(JSON.parse(json(rest)), [...diagnosticCredentials])),
+    message: maskDiagnostic(message) as string,
+    fields: json(maskDiagnostic(JSON.parse(json(rest)))),
   })
 }
 
@@ -157,6 +157,7 @@ const URL_SIGNATURE = /([?&]sig=)[^&#\s"]+/g
  */
 export function maskCredentials(value: unknown, credentials: readonly string[] = []): unknown {
   const keys = credentials.filter((key) => key.length > 0)
+  const ancestors = new Set<object>()
   const maskText = (text: string): string =>
     keys.reduce((masked, key) => masked.split(key).join(MASK), text).replace(URL_SIGNATURE, `$1${MASK}`)
   const visit = (current: unknown, header: string | null): unknown => {
@@ -168,16 +169,28 @@ export function maskCredentials(value: unknown, credentials: readonly string[] =
       if (header !== null) return MASK
       return maskText(current)
     }
-    if (Array.isArray(current)) return current.map((item) => visit(item, null))
     if (current && typeof current === 'object') {
-      return Object.fromEntries(Object.entries(current).map(([name, item]) => {
-        const lower = name.toLowerCase()
-        return [maskText(name), visit(item, CREDENTIAL_HEADERS.has(lower) ? lower : null)]
-      }))
+      // SDK errors may contain cyclic request/response objects. Mask a copy
+      // without losing useful siblings or mistaking shared values for cycles.
+      if (ancestors.has(current)) return '[Circular]'
+      ancestors.add(current)
+      try {
+        if (Array.isArray(current)) return current.map((item) => visit(item, null))
+        return Object.fromEntries(Object.entries(current).map(([name, item]) => {
+          const lower = name.toLowerCase()
+          return [maskText(name), visit(item, CREDENTIAL_HEADERS.has(lower) ? lower : null)]
+        }))
+      } finally { ancestors.delete(current) }
     }
     return current
   }
   return visit(value, null)
+}
+
+/** Records and last-resort console sinks share the credentials captured by
+ * earlier requests, including keys replaced before a late failure arrives. */
+export function maskDiagnostic(value: unknown): unknown {
+  return maskCredentials(value, [...diagnosticCredentials])
 }
 
 /** Starts one call's record at the moment its request is sent; the record is written

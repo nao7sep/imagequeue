@@ -53,6 +53,7 @@ import { retrySettingsWrites } from './settings-writes'
 import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
 import { cancelAllDependencyOperations, hasActiveDependencyOperations } from './dependencies/operations'
 import { startAppReleaseCheck } from './app-release-check'
+import { installLastResortHooks } from './last-resort-hooks'
 import { startupFailurePresentation } from './failure-presentation'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
@@ -200,25 +201,6 @@ export function runPrimaryInstance(): void {
 
   app.on('before-quit', quitOwner.beforeQuit)
 
-}
-
-function installLastResortHooks(): void {
-  // Global last-resort hooks: log with full error fidelity before the process
-  // dies, and also surface to the console as a backstop for the brief window
-  // before the records are open. An uncaught exception leaves the process
-  // in an undefined state, so we exit after logging; an unhandled rejection is
-  // logged but allowed to continue.
-  process.on('uncaughtException', (err) => {
-    log('error', 'Uncaught exception', { error: serializeError(err) })
-    console.error('Uncaught exception:', err)
-    // Crash handling cannot safely resume application writes. Normal edits
-    // have already reached their main-process owners; the OS reclaims resources.
-    app.exit(1)
-  })
-  process.on('unhandledRejection', (reason) => {
-    log('error', 'Unhandled rejection', { error: serializeError(reason) })
-    console.error('Unhandled rejection:', reason)
-  })
 }
 
 function createWindow(): BrowserWindow {
