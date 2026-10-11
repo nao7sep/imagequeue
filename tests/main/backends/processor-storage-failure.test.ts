@@ -48,7 +48,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { isQueuePaused, resetCancellationState, cancelAllInFlight } = await import('../../../src/main/backends/cancellation')
+const { isQueuePaused, setQueuePaused, resetCancellationState, cancelAllInFlight } = await import('../../../src/main/backends/cancellation')
 
 function queueOne(): void {
   queueManager.enqueue({ prompt: 'p', backend: 'openai', model: 'm', params: {}, count: 1 } as never)
@@ -96,6 +96,20 @@ describe('a manifest write failure while the queue runs', () => {
     processQueues()
     expect(persist.calls).toBe(1)
     expect(notices()).toHaveLength(1)
+  })
+
+  it('reports a fresh failure when resumed scheduling still cannot save', async () => {
+    persist.fail = true
+    queueOne()
+    processQueues()
+    // The failed start settled synchronously; flush its concurrency release.
+    await Promise.resolve()
+    expect(notices()).toHaveLength(1)
+    setQueuePaused(false)
+    processQueues()
+    expect(notices()).toHaveLength(2)
+    expect(isQueuePaused()).toBe(true)
+    expect(generate).not.toHaveBeenCalled()
   })
 
   it('at task finish: the result stays in memory, the queue pauses, nothing is thrown', async () => {

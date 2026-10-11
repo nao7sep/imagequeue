@@ -48,6 +48,7 @@ const activeCounts: Record<BackendId, number> = {
 const drainTracker = new DrainTracker()
 let processorTimer: NodeJS.Timeout | null = null
 let processorStopping = false
+let storageFailureReported = false
 
 function totalActive(): number {
   return Object.values(activeCounts).reduce((sum, count) => sum + count, 0)
@@ -104,6 +105,7 @@ export function processQueues(): void {
   // it finishes and saves normally, which is the whole point of pausing rather
   // than stopping. Cancelling in-flight work is a separate, explicit action.
   if (isQueuePaused()) return
+  storageFailureReported = false
 
   const config = loadConfig()
   const backends: BackendId[] = BACKEND_IDS_IN_UI_ORDER
@@ -280,15 +282,17 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
 // The session manifest could not be written (a full or unavailable disk). The
 // processor owns this failure: it pauses the queue so nothing further starts
-// and gets billed while progress cannot be recorded, and tells the user once,
-// when the pause begins. It never reaches the process-level crash handler.
+// and gets billed while progress cannot be recorded. User Pause is independent
+// of the storage warning, which is reported once before scheduling resumes.
+// The failure never reaches the process-level crash handler.
 function pauseForStorageFailure(phase: 'start' | 'finish', err: unknown): void {
   log('error', 'Session manifest could not be saved; queue paused', {
     phase,
     error: serializeError(err),
   })
-  if (!isQueuePaused()) {
-    setQueuePaused(true)
+  setQueuePaused(true)
+  if (!storageFailureReported) {
+    storageFailureReported = true
     publishAppNotice(queueStorageFailurePresentation())
   }
   publishQueueState()
