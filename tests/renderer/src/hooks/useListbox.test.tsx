@@ -93,4 +93,42 @@ describe('useListbox with prompt-style ids (spaces + punctuation)', () => {
     expect(onSelect).toHaveBeenCalledWith(PROMPT_IDS[2])
     expect(rows[2].getAttribute('aria-selected')).toBe('true')
   })
+
+  // composite-control-conventions: the pointer marks a row without moving the
+  // keyboard target, so Enter and the next arrow act on what the keys reached.
+  it('keeps the keyboard target when the pointer hovers an earlier row', () => {
+    const onSelect = vi.fn()
+    const { container } = render(<Harness ids={PROMPT_IDS} onSelect={onSelect} />)
+    const list = container.querySelector('[role="listbox"]')!
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('[data-listbox-option]'))
+    act(() => rows[0].focus())
+    fireEvent.keyDown(list, { key: 'ArrowDown' })
+    fireEvent.keyDown(list, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rows[2])
+
+    fireEvent.pointerMove(rows[0])
+    fireEvent.mouseEnter(rows[0])
+    onSelect.mockClear()
+    fireEvent.keyDown(list, { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(PROMPT_IDS[2])
+    fireEvent.keyDown(list, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(rows[1])
+  })
+
+  it('keeps the highlighted row through a live reorder', () => {
+    const onSelect = vi.fn()
+    const { container, rerender } = render(<Harness ids={PROMPT_IDS} onSelect={onSelect} />)
+    const list = container.querySelector('[role="listbox"]')!
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('[data-listbox-option]'))
+    act(() => rows[0].focus())
+    fireEvent.keyDown(list, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rows[1])
+
+    rerender(<Harness ids={['3 a newer prompt', ...[...PROMPT_IDS].reverse()]} onSelect={onSelect} />)
+    expect(document.activeElement?.getAttribute('data-listbox-option')).toBe(PROMPT_IDS[1])
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('0')
+    onSelect.mockClear()
+    fireEvent.keyDown(list, { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(PROMPT_IDS[1])
+  })
 })

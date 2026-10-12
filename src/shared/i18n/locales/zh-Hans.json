@@ -670,7 +670,7 @@
   "conceptLibrary.loading": "正在载入概念…",
   "conceptLibrary.unavailable": "概念不可用。",
   "conceptLibrary.empty": "还没有概念。它们会随着“高级提示词”扩写提示词而积累；AI 找到的每个值都会连同使用频率和最近使用时间记录在这里。",
-  "conceptLibrary.filterPlaceholder": "筛选概念和领域…",
+  "conceptLibrary.filterPlaceholder": "筛选概念和领域",
   "conceptLibrary.filterLabel": "筛选概念和领域",
   "conceptLibrary.show": "显示",
   "conceptLibrary.showAll": "全部概念",

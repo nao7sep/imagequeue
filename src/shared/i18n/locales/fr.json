@@ -702,7 +702,7 @@
   "conceptLibrary.loading": "Chargement des concepts…",
   "conceptLibrary.unavailable": "Concepts indisponibles.",
   "conceptLibrary.empty": "Aucun concept pour l’instant. Ils s’accumulent à mesure que Prompts avancés enrichit des prompts\u00a0; chaque valeur trouvée par l’IA est consignée ici avec la fréquence et la date de sa dernière utilisation.",
-  "conceptLibrary.filterPlaceholder": "Filtrer les concepts et domaines…",
+  "conceptLibrary.filterPlaceholder": "Filtrer les concepts et domaines",
   "conceptLibrary.filterLabel": "Filtrer les concepts et domaines",
   "conceptLibrary.show": "Afficher",
   "conceptLibrary.showAll": "Tous les concepts",

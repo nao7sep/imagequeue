@@ -136,6 +136,28 @@ describe("catalogues", () => {
     expect(source, "escaped ellipsis").not.toMatch(/\\u2026|&hellip;|&#8230;|&#x2026;/i);
   });
 
+  // A control that swaps its command for a running status must read
+  // differently in each state, or a press looks ignored (localization-
+  // conventions, Ellipsis). Compared without the ellipsis and spacing, which
+  // alone would not tell the two apart. Reword the command, not the status.
+  const COMMAND_STATUS_PAIRS: ReadonlyArray<readonly [string, string]> = [
+    ["advanced.elaborate", "advanced.elaborating"],
+    ["advanced.queueTasks", "advanced.queueing"],
+    ["dependencies.checkForUpdates", "dependencies.checking"],
+    ["dependencies.install", "dependencies.working"],
+    ["dependencies.update", "dependencies.working"],
+    ["dependencies.refresh", "dependencies.working"],
+    ["appRelease.check", "appRelease.checking"],
+  ];
+  const bareWords = (text: string): string => text.replace(/[…\s]/gu, "").toLocaleLowerCase();
+  it.each(LANGUAGES)("%s tells each command apart from the status that replaces it", (language) => {
+    for (const [command, status] of COMMAND_STATUS_PAIRS) {
+      const pair = [catalogues[language][command], catalogues[language][status]];
+      expect(pair.every((entry) => typeof entry === "string"), `${command} / ${status}`).toBe(true);
+      expect(bareWords(pair[0] as string), `${command} / ${status}`).not.toBe(bareWords(pair[1] as string));
+    }
+  });
+
   it.each(translations)("%s translates everything not listed as the same word", (language) => {
     const allowed = SAME_AS_ENGLISH[language] ?? [];
     const copied = Object.keys(english).filter((key) => {

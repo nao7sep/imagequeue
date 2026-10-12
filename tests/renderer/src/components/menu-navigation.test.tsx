@@ -67,6 +67,23 @@ describe('menu navigation targets', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  // Enter activates the focused command natively, so the keyboard target is
+  // the focused one; hovering after several arrows must not move it.
+  it('keeps the keyboard target after several arrows and a hover over an earlier command', async () => {
+    mountMenu()
+    fireEvent.click(screen.getByText('Open'))
+    await nextFrame()
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByText('Third'))
+    const first = screen.getByText('First')
+    fireEvent.pointerMove(first)
+    fireEvent.mouseEnter(first)
+    expect(document.activeElement).toBe(screen.getByText('Third'))
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(screen.getByText('Second'))
+  })
+
   it('a submenu skips its disabled first command without changing the parent target', async () => {
     render(
       <Menu label="Commands" trigger={(props) => <button {...props}>Open</button>}>

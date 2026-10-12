@@ -718,7 +718,7 @@
   "conceptLibrary.loading": "Загрузка концепций…",
   "conceptLibrary.unavailable": "Концепции недоступны.",
   "conceptLibrary.empty": "Концепций пока нет. Они накапливаются по мере того, как «Расширенные промпты» детализируют промпты; каждое найденное ИИ значение записывается здесь с частотой и временем последнего использования.",
-  "conceptLibrary.filterPlaceholder": "Фильтр концепций и областей…",
+  "conceptLibrary.filterPlaceholder": "Фильтр концепций и областей",
   "conceptLibrary.filterLabel": "Фильтр концепций и областей",
   "conceptLibrary.show": "Показать",
   "conceptLibrary.showAll": "Все концепции",

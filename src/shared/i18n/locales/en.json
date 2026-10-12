@@ -686,7 +686,7 @@
   "conceptLibrary.loading": "Loading concepts…",
   "conceptLibrary.unavailable": "Concepts unavailable.",
   "conceptLibrary.empty": "No concepts yet. They accumulate as Advanced Prompting elaborates prompts; every value the AI finds is recorded here with how often and how recently it was used.",
-  "conceptLibrary.filterPlaceholder": "Filter concepts and domains…",
+  "conceptLibrary.filterPlaceholder": "Filter concepts and domains",
   "conceptLibrary.filterLabel": "Filter concepts and domains",
   "conceptLibrary.show": "Show",
   "conceptLibrary.showAll": "All concepts",

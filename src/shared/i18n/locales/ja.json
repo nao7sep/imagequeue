@@ -670,7 +670,7 @@
   "conceptLibrary.loading": "コンセプトを読み込み中…",
   "conceptLibrary.unavailable": "コンセプトを利用できません。",
   "conceptLibrary.empty": "コンセプトはまだありません。高度なプロンプト作成でプロンプトを詳細化するたびに蓄積され、AI が見つけた値はすべて、使用回数と最後に使った時期とともにここに記録されます。",
-  "conceptLibrary.filterPlaceholder": "コンセプトとドメインを絞り込む…",
+  "conceptLibrary.filterPlaceholder": "コンセプトとドメインを絞り込む",
   "conceptLibrary.filterLabel": "コンセプトとドメインを絞り込む",
   "conceptLibrary.show": "表示",
   "conceptLibrary.showAll": "すべてのコンセプト",

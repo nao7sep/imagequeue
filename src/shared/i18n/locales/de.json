@@ -686,7 +686,7 @@
   "conceptLibrary.loading": "Konzepte werden geladen\u00a0…",
   "conceptLibrary.unavailable": "Konzepte nicht verfügbar.",
   "conceptLibrary.empty": "Noch keine Konzepte. Sie sammeln sich an, während „Erweitertes Prompting“ Prompts ausarbeitet; jeder Wert, den die KI findet, wird hier mit Häufigkeit und letzter Nutzung erfasst.",
-  "conceptLibrary.filterPlaceholder": "Konzepte und Bereiche filtern\u00a0…",
+  "conceptLibrary.filterPlaceholder": "Konzepte und Bereiche filtern",
   "conceptLibrary.filterLabel": "Konzepte und Bereiche filtern",
   "conceptLibrary.show": "Anzeigen",
   "conceptLibrary.showAll": "Alle Konzepte",

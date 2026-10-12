@@ -670,7 +670,7 @@
   "conceptLibrary.loading": "콘셉트를 불러오는 중…",
   "conceptLibrary.unavailable": "콘셉트를 사용할 수 없습니다.",
   "conceptLibrary.empty": "아직 콘셉트가 없습니다. 고급 프롬프트 작성에서 프롬프트를 구체화할 때마다 쌓이며, AI가 찾은 모든 값이 사용 횟수와 마지막 사용 시점과 함께 여기에 기록됩니다.",
-  "conceptLibrary.filterPlaceholder": "콘셉트와 도메인 필터링…",
+  "conceptLibrary.filterPlaceholder": "콘셉트와 도메인 필터링",
   "conceptLibrary.filterLabel": "콘셉트와 도메인 필터링",
   "conceptLibrary.show": "표시",
   "conceptLibrary.showAll": "모든 콘셉트",
