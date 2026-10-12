@@ -36,7 +36,6 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: transpar
   color: #1c1c1e;
   user-select: none;
   cursor: default;
-  white-space: nowrap;
   overflow: hidden;
   background: #f6f6f8;
   border: 1px solid rgba(0,0,0,0.1);
@@ -50,6 +49,7 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: transpar
 }
 .toast-message {
   min-width: 0;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }

@@ -73,6 +73,9 @@
 }
 
 .dropdown-menu {
+  /* Sized by the longest label, not by the room left of its position, so a
+     menu opened near an edge wraps only a label wider than the viewport. */
+  width: max-content;
   min-width: 160px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
@@ -101,9 +104,7 @@
   color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .menu-item:hover {
@@ -124,16 +125,13 @@
   gap: 6px;
 }
 
-/* The flex layouts (checkbox item, submenu parent) put the label in its own
-   child span, so the ellipsis has to live on that span rather than on the
-   flex container: `min-width: 0` lets it shrink below its text's natural
-   width instead of forcing the row wider or wrapping. */
+/* A command's label has no other place to read it, so a label wider than the
+   viewport wraps rather than being cut (composite-control-conventions). The
+   flex layouts (checkbox item, submenu parent) put the label in its own child
+   span; `min-width: 0` lets that span wrap inside the row. */
 .menu-checkbox-item > span:last-child,
 .menu-submenu-parent > span:first-child {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .menu-check-mark {
@@ -178,6 +176,7 @@
 }
 
 .menu-submenu {
+  width: max-content;
   min-width: 200px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
