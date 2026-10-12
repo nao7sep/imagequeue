@@ -162,7 +162,7 @@ export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.J
         {icon && (
           <span className="cli-job-row-icon" aria-hidden="true"><Icon name={icon} /></span>
         )}
-        <span className={titleClass} title={title}>{title}</span>
+        <span className={titleClass}>{title}</span>
         {isActive ? (
           <button className="cli-job-stop" onClick={handleStop}>{t('queueControls.stop')}</button>
         ) : (

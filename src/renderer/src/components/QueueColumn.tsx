@@ -564,10 +564,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             </div>
           </div>
           <div className="task-status" id={statusId} style={{ color: STATUS_COLORS[task.status] }}>
-            <span
-              className={task.status === 'failed' ? 'task-error' : undefined}
-              title={failureMessage ?? undefined}
-            >
+            <span className={task.status === 'failed' ? 'task-error' : undefined}>
               {failureMessage ?? statusLabel}
             </span>
           </div>

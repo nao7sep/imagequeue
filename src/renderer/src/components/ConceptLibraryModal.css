@@ -148,9 +148,8 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .concept-library-section-meta {
@@ -186,11 +185,10 @@
 .concept-library-row-name {
   font-size: var(--text-sm);
   color: var(--text-primary);
-  /* Content-sized, so nothing to ellipsize in the normal case; the guard only
-     bites when a single chip hits the container width. */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Content-sized; a value wider than the pane wraps inside its chip rather
+     than being cut. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .concept-library-row-stats {

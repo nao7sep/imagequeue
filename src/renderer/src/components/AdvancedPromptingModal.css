@@ -181,19 +181,14 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .advanced-elab-desc {
   margin-top: var(--space-1);
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .advanced-row {
@@ -253,9 +248,8 @@
 }
 
 .advanced-target-row span:first-of-type {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .advanced-target-hint {

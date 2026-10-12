@@ -633,7 +633,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
                     </div>
                   ) : (
                     downloadedDtModels.map((m) => (
-                      <label key={m.file} className="advanced-target-row" title={localModelName(m)}>
+                      <label key={m.file} className="advanced-target-row">
                         <input
                           type="checkbox"
                           checked={selectedDtFiles.includes(m.file)}

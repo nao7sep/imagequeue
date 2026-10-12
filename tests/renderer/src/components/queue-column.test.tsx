@@ -304,19 +304,23 @@ describe('task status presentation', () => {
 
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
 
-    expect(screen.getByText(refused).getAttribute('title')).toBe(refused)
+    expect(screen.getByText(refused).className).toBe('task-error')
     expect(screen.queryByText(`Failed: ${refused}`)).toBeNull()
     expect(container.querySelector('.task-prompt')?.getAttribute('title')).toBe('a cat')
     expect(queueValue.tasks.openai[0].status).toBe('failed')
   })
 
-  it('keeps the full generic failure available when its compact row text ellipsizes', () => {
+  // The row wraps the whole failure rather than cutting it behind a hover-only
+  // tooltip (responsive-interface-conventions, truncation).
+  it('shows the full generic failure in its row', () => {
     const genericFailure = 'This image could not be generated. Retry it; if the problem continues, Records in the main menu shows why.'
     queueValue.tasks.openai = [task('failed')]
 
     render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
 
-    expect(screen.getByText(genericFailure).getAttribute('title')).toBe(genericFailure)
+    const failure = screen.getByText(genericFailure)
+    expect(failure.className).toBe('task-error')
+    expect(failure.hasAttribute('title')).toBe(false)
   })
 
   it('renders independent task-action results only inside their affected rows', () => {

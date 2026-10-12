@@ -294,7 +294,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                       {sections.map(({ probe, rows: sectionRows }) => (
                         <section key={probe.id} className="concept-library-section">
                           <div className="concept-library-section-header">
-                            <div className="concept-library-section-title" title={probe.display}>
+                            <div className="concept-library-section-title">
                               {probe.display}
                             </div>
                             <div className="concept-library-section-meta">

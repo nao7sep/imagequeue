@@ -118,6 +118,24 @@ describe("catalogues", () => {
     }
   });
 
+  // An ellipsis carries meaning (a command that asks for input next, a running
+  // operation, text cut short), so a translation has one exactly when English
+  // does. It is always the literal U+2026, never three periods or an escape,
+  // and never follows an ordinary space; German's no-break space is the only
+  // spacing (localization-conventions, Ellipsis).
+  it.each(LANGUAGES)("%s uses an ellipsis exactly where English does", (language) => {
+    for (const [key, englishEntry] of Object.entries(english)) {
+      const expected = forms(englishEntry).some((text) => text.includes("…"));
+      for (const text of forms(catalogues[language][key] ?? "")) {
+        expect(text, `${key}: three periods`).not.toContain("...");
+        expect(text, `${key}: space before the ellipsis`).not.toMatch(/ …/);
+        expect(text.includes("…"), `${key}: ${text}`).toBe(expected);
+      }
+    }
+    const source = readFileSync(join(process.cwd(), `src/shared/i18n/locales/${language}.json`), "utf8");
+    expect(source, "escaped ellipsis").not.toMatch(/\\u2026|&hellip;|&#8230;|&#x2026;/i);
+  });
+
   it.each(translations)("%s translates everything not listed as the same word", (language) => {
     const allowed = SAME_AS_ENGLISH[language] ?? [];
     const copied = Object.keys(english).filter((key) => {

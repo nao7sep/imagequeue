@@ -269,9 +269,8 @@
 .task-error {
   font-size: 11px;
   color: var(--error);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
   opacity: 0.85;
 }
 

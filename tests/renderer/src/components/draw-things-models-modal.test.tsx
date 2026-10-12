@@ -61,7 +61,7 @@ describe('DrawThingsModelsModal empty states', () => {
     render(<DrawThingsModelsModal onClose={vi.fn()} />)
     await until(() => screen.getByText('Alpha'))
 
-    fireEvent.change(screen.getByPlaceholderText('Search official models...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search official models'), {
       target: { value: 'does-not-match' },
     })
 
