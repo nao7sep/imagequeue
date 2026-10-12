@@ -177,6 +177,11 @@ export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.J
         </div>
       )}
       {rowError && <div className="cli-job-summary cli-job-summary-error" role="alert">{t(rowError)}</div>}
+      {/* Main keeps the last CLI_JOB_BUFFER_MAX_LINES chunks, numbered from 0, so a
+          first chunk past 0 means this view starts partway through the output.
+          Say so rather than imply it is the whole log; Records keeps every line
+          (localization-conventions, Ellipsis: a partly loaded body). */}
+      {(chunks[0]?.seq ?? 0) > 0 && <div className="cli-job-tail-note">{t('cliJob.earlierOutputHidden')}</div>}
       <div
         className="cli-job-log-tail"
         ref={tailRef}

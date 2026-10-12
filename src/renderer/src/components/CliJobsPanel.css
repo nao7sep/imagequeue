@@ -102,6 +102,12 @@
   color: var(--text-secondary);
 }
 
+.cli-job-tail-note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
 /* ─── Log tail (scrollable, fixed ~3-line height) ────────────────────────── */
 
 .cli-job-log-tail {

@@ -834,6 +834,7 @@
   "cliJob.logLabel": "Registro: {title}",
   "cliJob.noOutput": "Ancora nessun output",
   "cliJob.noNewOutput": "Ancora nessun nuovo output",
+  "cliJob.earlierOutputHidden": "L’output precedente non è mostrato qui. Log nel menu principale lo contiene per intero.",
   "cliJob.converting": "Conversione in corso…",
   "cliJob.starting": "Avvio…",
   "records.title": "Log",

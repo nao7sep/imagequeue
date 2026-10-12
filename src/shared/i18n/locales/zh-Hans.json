@@ -790,6 +790,7 @@
   "cliJob.logLabel": "{title}日志",
   "cliJob.noOutput": "尚无输出",
   "cliJob.noNewOutput": "尚无新输出",
+  "cliJob.earlierOutputHidden": "此处不显示较早的输出。主菜单的“日志”中保留了全部内容。",
   "cliJob.converting": "正在转换…",
   "cliJob.starting": "正在启动…",
   "records.title": "日志",

@@ -812,6 +812,7 @@
   "cliJob.logLabel": "Protokoll: {title}",
   "cliJob.noOutput": "Noch keine Ausgabe",
   "cliJob.noNewOutput": "Noch keine neue Ausgabe",
+  "cliJob.earlierOutputHidden": "Frühere Ausgaben werden hier nicht angezeigt. „Protokoll“ im Hauptmenü enthält alle.",
   "cliJob.converting": "Konvertierung läuft\u00a0…",
   "cliJob.starting": "Wird gestartet\u00a0…",
   "records.title": "Protokoll",

@@ -856,6 +856,7 @@
   "cliJob.logLabel": "Журнал: {title}",
   "cliJob.noOutput": "Вывода пока нет",
   "cliJob.noNewOutput": "Нового вывода пока нет",
+  "cliJob.earlierOutputHidden": "Более ранний вывод здесь не показан. Полностью он есть в «Журнале» в главном меню.",
   "cliJob.converting": "Идёт преобразование…",
   "cliJob.starting": "Запуск…",
   "records.title": "Журнал",

@@ -834,6 +834,7 @@
   "cliJob.logLabel": "Journal\u00a0: {title}",
   "cliJob.noOutput": "Pas encore de sortie",
   "cliJob.noNewOutput": "Pas encore de nouvelle sortie",
+  "cliJob.earlierOutputHidden": "La sortie précédente n’est pas affichée ici. Journal, dans le menu principal, la contient en entier.",
   "cliJob.converting": "Conversion en cours…",
   "cliJob.starting": "Démarrage…",
   "records.title": "Journal",

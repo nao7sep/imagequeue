@@ -790,6 +790,7 @@
   "cliJob.logLabel": "{title} 로그",
   "cliJob.noOutput": "아직 출력이 없습니다",
   "cliJob.noNewOutput": "아직 새 출력이 없습니다",
+  "cliJob.earlierOutputHidden": "이전 출력은 여기에 표시되지 않습니다. 기본 메뉴의 로그에 모두 있습니다.",
   "cliJob.converting": "변환 중…",
   "cliJob.starting": "시작하는 중…",
   "records.title": "로그",

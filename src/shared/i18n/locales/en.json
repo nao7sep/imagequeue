@@ -812,6 +812,7 @@
   "cliJob.logLabel": "{title} log",
   "cliJob.noOutput": "No output yet",
   "cliJob.noNewOutput": "No new output yet",
+  "cliJob.earlierOutputHidden": "Earlier output is not shown here. Records in the main menu has all of it.",
   "cliJob.converting": "Conversion in progress…",
   "cliJob.starting": "Starting…",
   "records.title": "Records",

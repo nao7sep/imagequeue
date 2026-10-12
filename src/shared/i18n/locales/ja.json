@@ -790,6 +790,7 @@
   "cliJob.logLabel": "{title} のログ",
   "cliJob.noOutput": "まだ出力はありません",
   "cliJob.noNewOutput": "まだ新しい出力はありません",
+  "cliJob.earlierOutputHidden": "以前の出力はここには表示されません。メインメニューの「ログ」にすべて残っています。",
   "cliJob.converting": "変換中…",
   "cliJob.starting": "開始中…",
   "records.title": "ログ",

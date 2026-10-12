@@ -834,6 +834,7 @@
   "cliJob.logLabel": "Registro: {title}",
   "cliJob.noOutput": "Ainda não há saída",
   "cliJob.noNewOutput": "Ainda não há saída nova",
+  "cliJob.earlierOutputHidden": "A saída anterior não aparece aqui. Registros, no menu principal, tem tudo.",
   "cliJob.converting": "Conversão em andamento…",
   "cliJob.starting": "Iniciando…",
   "records.title": "Registros",
