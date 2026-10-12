@@ -277,7 +277,7 @@ describe('PromptPane presentation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy Prompt' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save As…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save As' }))
 
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(3))
     expect(screen.getByText(/The prompt could not be copied/)).toBeTruthy()
@@ -298,7 +298,7 @@ describe('export selection ownership', () => {
     window.electronAPI[method] = vi.fn(() => new Promise<string>((_resolve, rejectPromise) => { reject = rejectPromise }))
     const change = vi.fn()
     const { rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
-    fireEvent.click(screen.getByRole('button', { name: method === 'exportImage' ? 'Export' : 'Save As…' }))
+    fireEvent.click(screen.getByRole('button', { name: method === 'exportImage' ? 'Export' : 'Save As' }))
     rerender(<PromptPane selectedTask={{ ...completedTask, id: 'B' }} prompt="" onPromptChange={change} />)
     rerender(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
     await act(async () => { reject(new Error('late export failure')) })
