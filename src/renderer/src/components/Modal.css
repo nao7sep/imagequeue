@@ -175,32 +175,16 @@
 
 /* Shared footer action row, owned by the Modal shell (passed via its `footer`
    prop). Stays fixed at the bottom; right-aligned so the dismiss button sits
-   next to the primary action with minimal cursor travel. Buttons keep their
-   width: a content-sized dialog widens to its cap first, and only then does a
-   button move to a new row (modal-dialog-conventions). */
+   next to the primary action with minimal cursor travel. */
 .modal-footer {
   flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border);
   font-size: var(--text-sm);
-}
-
-/* A label stays on one line whenever it fits a row; only a label wider than
-   the whole row wraps, inside a button that grows taller instead of spilling
-   past the dialog's edge (modal-dialog-conventions). */
-.modal-footer > .modal-btn {
-  flex-shrink: 0;
-  max-width: 100%;
-  height: auto;
-  min-height: var(--control-md);
-  padding-block: var(--space-1);
-  white-space: normal;
-  text-align: center;
 }
 
 /* A leading footer item — a status message or a destructive action — pushed to

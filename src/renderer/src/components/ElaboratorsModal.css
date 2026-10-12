@@ -83,20 +83,9 @@
 }
 
 .elaborators-pane-footer {
-  flex-wrap: wrap;
   justify-content: flex-end;
   border-top: 1px solid var(--border);
   margin-top: auto;
-}
-
-.elaborators-pane-footer > .modal-btn {
-  flex-shrink: 0;
-  max-width: 100%;
-  height: auto;
-  min-height: var(--control-md);
-  padding-block: var(--space-1);
-  white-space: normal;
-  text-align: center;
 }
 
 .elaborators-pane-title {
