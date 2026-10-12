@@ -371,9 +371,13 @@ button:active:not(:disabled) {
   outline-offset: 2px;
 }
 
-/* Every select draws its own chevron; the list it opens stays native. */
+/* Every select draws its own chevron; the list it opens stays native. A
+   closed select too narrow for its choice (a long Draw Things model file)
+   marks the cut; opening it shows every choice whole by keyboard or touch
+   (text-cleanup-conventions, rule 4). Chromium otherwise clips unmarked. */
 select:not([multiple]) {
   appearance: none;
+  text-overflow: ellipsis;
   padding-right: 28px;
   background-image: var(--select-chevron);
   background-repeat: no-repeat;
