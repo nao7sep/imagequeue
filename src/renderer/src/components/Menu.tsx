@@ -18,7 +18,8 @@ import { useImeGuard } from '../utils/imeGuard'
 // The app's in-app menu layer (hamburger menu): a trigger plus a popup list of
 // commands that behaves like a real menu per the composite-control conventions.
 // The trigger is the single tab stop (aria-haspopup / aria-expanded); opening
-// moves focus into the menu (first item) and closing returns it to the trigger;
+// moves focus into the menu (first eligible item, last for ArrowUp opening)
+// and closing returns it to the trigger;
 // Up/Down move between items (stopping at the ends), Home/End jump, type-ahead
 // jumps by label (IME-guarded), Enter/Space activate and close, and Escape / Tab
 // / outside click close. Items are `menuitem`s navigated by the arrows, never by
@@ -33,6 +34,7 @@ type TriggerProps = {
   'aria-haspopup': 'menu'
   'aria-expanded': boolean
   onClick: () => void
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
 }
 
 type Props = {
@@ -139,7 +141,7 @@ function usePopupPosition(
 function ownMenuItems(container: HTMLElement | null): HTMLElement[] {
   if (!container) return []
   return Array.from(container.querySelectorAll<HTMLElement>('[role^="menuitem"]')).filter(
-    (el) => el.closest('[role="menu"]') === container,
+    (el) => el.closest('[role="menu"]') === container && !el.matches(':disabled, [aria-disabled="true"]'),
   )
 }
 
@@ -182,6 +184,7 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const openingEdge = useRef<'first' | 'last'>('first')
   const overlayOwner = useId()
   const position = usePopupPosition(open, triggerRef, contentRef, rootMenuPosition)
 
@@ -191,10 +194,15 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
     if (focusTrigger) triggerRef.current?.focus()
   }, [])
 
-  // On open, move focus into the menu (first item).
+  // Native :focus-visible keeps pointer opening quiet and keyboard opening
+  // visible. Focus still starts on an eligible command so the first arrow moves.
   useEffect(() => {
     if (!open) return
-    const id = requestAnimationFrame(() => ownMenuItems(contentRef.current)[0]?.focus())
+    const id = requestAnimationFrame(() => {
+      const items = ownMenuItems(contentRef.current)
+      const target = openingEdge.current === 'last' ? items.at(-1) : items[0]
+      target?.focus()
+    })
     return () => cancelAnimationFrame(id)
   }, [open])
 
@@ -258,7 +266,17 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
         },
         'aria-haspopup': 'menu',
         'aria-expanded': open,
-        onClick: () => setOpen((v) => !v),
+        onClick: () => {
+          openingEdge.current = 'first'
+          setOpen((v) => !v)
+        },
+        onKeyDown: (event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+          if (isComposing(event.nativeEvent)) return
+          event.preventDefault()
+          openingEdge.current = event.key === 'ArrowUp' ? 'last' : 'first'
+          setOpen(true)
+        },
       })}
       {open && createPortal(
         <div

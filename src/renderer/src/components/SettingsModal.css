@@ -65,6 +65,11 @@
   color: var(--accent);
 }
 
+.app-tab--active:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-hover);
+}
+
 /* Each section is the grid its fields share: the label column fits the longest
    label up to a cap, past which labels wrap, and every field is a subgrid row,
    so labels align without a fixed width (localization conventions). Everything
