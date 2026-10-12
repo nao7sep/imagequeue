@@ -13,6 +13,10 @@ const REVIEWED_ELLIPSIS: Record<string, string> = {
   '.metadata-toggle-prompt': 'the toggle itself expands to the full prompt',
   '.toast-message': 'a one-word status in a window sized to it; the queue row shows the same outcome',
   'select:not([multiple])': 'opening the select shows every choice whole',
+  // A guard only: the longest menu label in any language (about 290 px) fits
+  // the narrowest supported menu (at least 344 px).
+  '.menu-item': 'a guard no current label reaches at supported window widths',
+  '.menu-checkbox-item > span:last-child, .menu-submenu-parent > span:first-child': 'the same guard for labels in flex rows',
 }
 
 const REVIEWED_LINE_CLAMP: Record<string, string> = {
