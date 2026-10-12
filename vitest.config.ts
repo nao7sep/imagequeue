@@ -28,6 +28,11 @@ export default defineConfig({
     // The live lane spends money and downloads the Draw Things CLI and a model;
     // only npm run test:full runs it, through vitest.live.config.ts.
     exclude: [...configDefaults.exclude, 'tests/live/**'],
+    // Electron's npm entry downloads its binary (about 130 MB) the first time
+    // anything loads it without one, as after npm ci, where its install script
+    // is not allowed to run. Unit tests never launch Electron, so point the
+    // entry at a placeholder instead of racing a download.
+    env: { ELECTRON_OVERRIDE_DIST_PATH: 'electron-binary-not-used-by-unit-tests' },
     coverage: {
       // V8's native coverage; `include` spans all source so the report flags
       // logic no test reaches, not just a score for what is reached.
