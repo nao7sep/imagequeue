@@ -518,16 +518,15 @@ describe('brainstormPrompts (concept-driven)', () => {
       expect(retries[0].requestId).toBe('log7')
     })
 
-    it('keeps a bounded preview of an unusable reply, never the whole thing', async () => {
+    it('points at the recorded reply instead of logging a cut copy of it', async () => {
       const long = 'Sure! Here you go:\n\n'.repeat(200)
       installScriptedProvider({ proseReplacement: () => ({ text: long, parsed: { nope: true } }) })
       await brainstormPrompts(request({ requestId: 'log8', count: 1 })).catch(() => undefined)
       const [rejected] = logged('Brainstorm call returned no usable payload')
       expect(rejected.call).toBe('prose')
       expect(rejected.replyChars).toBe(long.length)
-      // Bounded, and far short of the reply itself.
-      expect(String(rejected.replyPreview).length).toBeLessThan(300)
-      expect(rejected.previewTruncated).toBe(true)
+      expect(rejected.requestId).toBe('log8')
+      expect(rejected).not.toHaveProperty('replyPreview')
       expect(rejected).not.toHaveProperty('rawText')
     })
 

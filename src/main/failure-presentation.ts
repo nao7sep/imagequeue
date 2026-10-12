@@ -21,9 +21,10 @@ function structuredString(error: unknown, field: 'code' | 'name'): string | null
   return typeof value === 'string' ? value : null
 }
 
-/** A provider's own code or status, reduced to a short plain label safe to show. */
+/** A provider's own code or status, reduced to plain characters safe to show.
+ *  The task keeps it whole; the row wraps it rather than cutting it. */
 function plainLabel(value: string): string | null {
-  const label = value.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 40)
+  const label = value.replace(/[^\p{L}\p{N} _-]/gu, '').trim()
   return label || null
 }
 

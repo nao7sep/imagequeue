@@ -1,9 +1,6 @@
 import type { ConversationMessage, TextAIProvider } from './types'
 import { log, serializeError } from '../logger'
-import { truncate } from '../../shared/textCleanup'
 import { withProviderRetry } from '../provider-retry'
-
-const REJECTED_PAYLOAD_PREVIEW_GRAPHEMES = 200
 
 /** Which boundary a retry belongs to, for useful diagnostics. */
 export type JsonCallLabel = 'aspects' | 'domains' | 'clusters' | 'prose'
@@ -35,13 +32,13 @@ export async function askJsonWithRetry<T>(options: {
     const result = await provider.ask({ messages, schema, timeoutMs, signal: attemptSignal, record: { purpose: label, requestId } })
     const value = validate(result.parsed, result.text)
     if (value === null) {
-      const preview = truncate(result.text ?? '', REJECTED_PAYLOAD_PREVIEW_GRAPHEMES)
+      // The whole reply is already in this call's AI-call record (same
+      // requestId); the warning points at it rather than keeping a cut copy
+      // (text-cleanup-conventions: truncation is display-only).
       log('warn', 'Brainstorm call returned no usable payload', {
         requestId,
         call: label,
         replyChars: (result.text ?? '').length,
-        replyPreview: preview.text,
-        previewTruncated: preview.truncated,
       })
       throw new Error('Text AI returned no usable payload.')
     }
