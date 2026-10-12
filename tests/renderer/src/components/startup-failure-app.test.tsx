@@ -58,6 +58,11 @@ describe('StartupFailureApp measurement handshake', () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
     render(<StartupFailureApp />)
     await screen.findByText(/stopped before opening its main window/)
+    // The text can commit before its passive measurement effect runs. In the
+    // browser a load in that gap leaves readyState 'complete', which the effect
+    // handles; here readyState stays mocked as 'loading', so let the effect
+    // attach its load listener before dispatching.
+    await act(async () => {})
     expect(reportMeasurement).not.toHaveBeenCalled()
 
     act(() => window.dispatchEvent(new Event('load')))
