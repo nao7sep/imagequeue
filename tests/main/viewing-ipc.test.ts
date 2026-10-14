@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   fullscreenContents: null as unknown,
   fullscreenPage: null as unknown,
   previewContents: null as unknown,
+  previewWindow: null as unknown,
   open: vi.fn(),
   close: vi.fn(),
   painted: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('../../src/main/fullscreen-view', () => ({
 vi.mock('../../src/main/preview-window', () => ({
   initPreviewWindow: vi.fn(),
   previewWindowContents: () => mocks.previewContents,
+  previewWindowOf: (sender: unknown) => (sender === mocks.previewContents ? mocks.previewWindow : null),
 }))
 
 function contents() {
@@ -34,6 +36,7 @@ function contents() {
 }
 
 let main: ReturnType<typeof contents>
+let mainWindow: { webContents: ReturnType<typeof contents>; isDestroyed: () => boolean; isVisible: () => boolean; isMinimized: () => boolean; focus: ReturnType<typeof vi.fn> }
 let snapshots: typeof import('../../src/main/selection-snapshot')
 let confirms: typeof import('../../src/main/surface-confirm')
 
@@ -45,6 +48,7 @@ beforeEach(async () => {
   mocks.fullscreenContents = null
   mocks.fullscreenPage = null
   mocks.previewContents = null
+  mocks.previewWindow = null
   mocks.open.mockClear()
   mocks.close.mockClear()
   mocks.painted.mockClear()
@@ -52,7 +56,8 @@ beforeEach(async () => {
   const { registerViewingIpc } = await import('../../src/main/viewing-ipc')
   snapshots = await import('../../src/main/selection-snapshot')
   confirms = await import('../../src/main/surface-confirm')
-  registerViewingIpc(() => ({ webContents: main, isDestroyed: () => false }) as unknown as Electron.BrowserWindow)
+  mainWindow = { webContents: main, isDestroyed: () => false, isVisible: () => true, isMinimized: () => false, focus: vi.fn() }
+  registerViewingIpc(() => mainWindow as unknown as Electron.BrowserWindow)
 })
 
 describe('selection', () => {
@@ -67,11 +72,17 @@ describe('selection', () => {
 })
 
 describe('opening and closing the fullscreen view', () => {
-  it('opens from the main window alone', async () => {
+  it('opens from the main window or the shown preview window, and closes back to it', async () => {
     await call('fullscreenView:open', contents())
     expect(mocks.open).not.toHaveBeenCalled()
     await call('fullscreenView:open', main)
-    expect(mocks.open).toHaveBeenCalledTimes(1)
+    expect(mocks.open).toHaveBeenLastCalledWith(mainWindow)
+    const preview = contents()
+    mocks.previewContents = preview
+    mocks.previewWindow = { name: 'preview' }
+    await call('fullscreenView:open', preview)
+    expect(mocks.open).toHaveBeenLastCalledWith(mocks.previewWindow)
+    expect(mocks.open).toHaveBeenCalledTimes(2)
   })
 
   it('closes from the main window or the view\'s own page alone', async () => {
@@ -173,3 +184,29 @@ describe('confirmations in a view', () => {
     expect(await call('surface:confirm', main, 'toString', { message: 'Delete?' })).toBeNull()
   })
 })
+
+// The preview window opens with the main window as one set and answers its
+// shortcuts the same way (window-conventions).
+describe('shortcuts from the preview window', () => {
+  it('hands each shortcut to the main window, bringing it forward only for a dialog', async () => {
+    const preview = contents()
+    mocks.previewContents = preview
+    await call('window:command', preview, 'sendAll')
+    expect(main.sent).toEqual([['window:command', 'sendAll']])
+    expect(mainWindow.focus).not.toHaveBeenCalled()
+    await call('window:command', preview, 'settings')
+    expect(main.sent.at(-1)).toEqual(['window:command', 'settings'])
+    expect(mainWindow.focus).toHaveBeenCalledOnce()
+  })
+
+  it('ignores an unknown command and any sender but the preview window', async () => {
+    const preview = contents()
+    mocks.previewContents = preview
+    mocks.fullscreenContents = contents()
+    await call('window:command', preview, 'quit')
+    await call('window:command', mocks.fullscreenContents, 'sendAll')
+    await call('window:command', main, 'sendAll')
+    expect(main.sent).toEqual([])
+  })
+})
+

@@ -38,6 +38,9 @@ let opening: Opening | null = null
 // shows the window at once instead of waiting for a paint that will not come.
 let paintedVersion = 0
 let getMainWin: () => BrowserWindow | null = () => null
+// The window the view was opened from (the main or preview window), which
+// takes focus back when the view closes.
+let openedFrom: BrowserWindow | null = null
 
 export function buildFullscreenViewOptions(bounds: Electron.Rectangle): Electron.BrowserWindowConstructorOptions {
   return {
@@ -62,9 +65,9 @@ export function buildFullscreenViewOptions(bounds: Electron.Rectangle): Electron
   }
 }
 
-/** The display the view covers: the one the main window is on. */
-export function fullscreenViewDisplay(main: BrowserWindow | null): Electron.Display {
-  if (main && !main.isDestroyed()) return screen.getDisplayMatching(main.getBounds())
+/** The display the view covers: the one the window it opens from is on. */
+export function fullscreenViewDisplay(origin: BrowserWindow | null): Electron.Display {
+  if (origin && !origin.isDestroyed()) return screen.getDisplayMatching(origin.getBounds())
   return screen.getPrimaryDisplay()
 }
 
@@ -73,10 +76,11 @@ function notifyMain(channel: string): void {
   if (main && !main.isDestroyed()) main.webContents.send(channel)
 }
 
-function focusMain(): void {
-  const main = getMainWin()
-  if (!main || main.isDestroyed() || !main.isVisible() || main.isMinimized()) return
-  main.focus()
+function focusOrigin(): void {
+  const usable = (win: BrowserWindow | null): win is BrowserWindow =>
+    !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()
+  const target = usable(openedFrom) ? openedFrom : getMainWin()
+  if (usable(target)) target.focus()
 }
 
 function settleOpening(error?: Error): void {
@@ -104,12 +108,12 @@ function createView(bounds: Electron.Rectangle): BrowserWindow {
   // The window has no frame; a close from the system closes the view.
   win.on('close', (event) => {
     event.preventDefault()
-    closeFullscreenView({ refocusMain: true })
+    closeFullscreenView({ refocusOrigin: true })
   })
   // Switching to another app closes the view; the selection has followed its
   // navigation, so one Space reopens the same image.
   win.on('blur', () => {
-    if (view === win && shown) closeFullscreenView({ refocusMain: false })
+    if (view === win && shown) closeFullscreenView({ refocusOrigin: false })
   })
   // A failed renderer never leaves a black window: the view closes and the next
   // open creates a fresh one.
@@ -137,18 +141,18 @@ function createView(bounds: Electron.Rectangle): BrowserWindow {
   return win
 }
 
-function canOpenFrom(main: BrowserWindow | null): main is BrowserWindow {
-  return !!main && !main.isDestroyed() && main.isVisible() && !main.isMinimized() && main.isFocused()
+function canOpenFrom(origin: BrowserWindow | null): origin is BrowserWindow {
+  return !!origin && !origin.isDestroyed() && origin.isVisible() && !origin.isMinimized() && origin.isFocused()
 }
 
 function showView(): void {
   const win = view
   if (!win || win.isDestroyed()) return
-  if (!canOpenFrom(getMainWin())) {
+  if (!canOpenFrom(openedFrom)) {
     settleOpening()
     return
   }
-  // Showing this window blurs Main; detach cancellation before that handoff.
+  // Showing this window blurs its origin; detach cancellation before that handoff.
   settleOpening()
   shown = true
   win.show()
@@ -156,12 +160,14 @@ function showView(): void {
   notifyMain(FULLSCREEN_VIEW_OPENED_CHANNEL)
 }
 
-/** Opens the view on the selected image, settling once it is on screen. */
-export function openFullscreenView(): Promise<void> {
+/** Opens the view on the selected image from the focused main or preview
+ *  window, settling once it is on screen. */
+export function openFullscreenView(from: BrowserWindow | null = getMainWin()): Promise<void> {
   if (shown) return Promise.resolve()
   settleOpening()
-  const origin = getMainWin()
+  const origin = from
   if (!canOpenFrom(origin)) return Promise.resolve()
+  openedFrom = origin
   const { bounds } = fullscreenViewDisplay(origin)
   const snapshot = latestSelection()
   if (!view || view.isDestroyed()) {
@@ -204,25 +210,25 @@ export function fullscreenViewPainted(version: number, painted: boolean): void {
   if (painted) paintedVersion = Math.max(paintedVersion, version)
   if (version < latestSelection().version) return
   if (!painted) {
-    closeFullscreenView({ refocusMain: false })
+    closeFullscreenView({ refocusOrigin: false })
     return
   }
   if (opening && version >= opening.version) showView()
 }
 
-export function closeFullscreenView({ refocusMain }: { refocusMain: boolean }): void {
+export function closeFullscreenView({ refocusOrigin }: { refocusOrigin: boolean }): void {
   settleOpening()
   if (!shown) return
   shown = false
   if (view && !view.isDestroyed()) view.hide()
   dismissSurfaceConfirms('fullscreen-view')
   notifyMain(FULLSCREEN_VIEW_CLOSED_CHANNEL)
-  if (refocusMain) focusMain()
+  if (refocusOrigin) focusOrigin()
 }
 
 /** Destroys the view, on quit and when the main window is gone. */
 export function destroyFullscreenView(): void {
-  closeFullscreenView({ refocusMain: false })
+  closeFullscreenView({ refocusOrigin: false })
   const win = view
   if (win) forgetView(win)
 }

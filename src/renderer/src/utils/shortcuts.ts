@@ -1,3 +1,5 @@
+import type { WindowCommand } from '../../../shared/viewing'
+
 // navigator.platform is deprecated but still reliable in Electron's renderer.
 const isApplePlatform = /Mac|iPhone|iPad|iPod/.test(
   typeof navigator === 'undefined' ? '' : navigator.platform || navigator.userAgent
@@ -36,3 +38,20 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   }
   return false
 }
+
+/** The window-level shortcut a keystroke stands for, read the same way in the
+ *  main window and in the preview window that hands it on. Escape clears the
+ *  selection whatever modifiers are held, as it always has. */
+export function windowCommandFor(e: KeyboardEvent): WindowCommand | null {
+  if (e.key === 'Escape') return 'clear'
+  if (!hasMod(e)) return null
+  if (e.key === 'Enter') return 'sendAll'
+  if (e.key === ',') return 'settings'
+  if (e.key === '/') return 'shortcuts'
+  const key = e.key.toLowerCase()
+  if (e.shiftKey && key === 'k') return 'toggleKept'
+  if (key === 'p') return 'paste'
+  if (e.key >= '1' && e.key <= '9') return `send:${e.key}` as WindowCommand
+  return null
+}
+

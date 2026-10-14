@@ -21,8 +21,10 @@ import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 // "Also show in a separate window" setting is on; closing it with its own
 // button turns the setting off. A durable secondary window with its own
 // placement (window-conventions, Placement). Like Quick Look, it takes focus
-// when it opens or returns; its page hands the selection keys to the main
-// window, whose selection it follows, and Cmd/Ctrl+W closes only it.
+// when the user opens it on its own; when it opens or returns together with
+// the main window, the main window is the one that takes focus. Its page
+// answers the main window's keys and shortcuts the same way (window-conventions,
+// Background visibility and activation), and Cmd/Ctrl+W closes only it.
 
 let previewWindow: BrowserWindow | null = null
 let revealWanted = true
@@ -66,7 +68,7 @@ async function turnSettingOff(): Promise<void> {
   notifySettingsChanged(getMainWin())
 }
 
-function openPreviewWindow(): void {
+function openPreviewWindow(focus: boolean): void {
   const options = buildPreviewWindowOptions(mainTranslator().t('previewWindow.title'))
   const win = createWindowWithUsablePersistedBounds('preview', () => new BrowserWindow({
     ...options,
@@ -93,7 +95,9 @@ function openPreviewWindow(): void {
     if (template) Menu.buildFromTemplate(template).popup({ window: win })
   })
   win.once('ready-to-show', () => {
-    if (revealWanted && !win.isDestroyed()) win.show()
+    if (!revealWanted || win.isDestroyed()) return
+    if (focus) win.show()
+    else win.showInactive()
   })
   // Close Window belongs to the window being looked at. Handled here, before
   // any menu shortcut, so it never reaches the main window on any platform.
@@ -115,7 +119,7 @@ function openPreviewWindow(): void {
     const reopen = loaded && win.isVisible()
     dismissSurfaceConfirms('preview-window')
     destroy(win)
-    if (reopen) syncPreviewWindow(loadConfig().general.show_preview_window)
+    if (reopen) syncPreviewWindow(loadConfig().general.show_preview_window, { focus: false })
   })
   void loadRendererSurface(win, 'preview-window').then(() => { loaded = true }, (error) => {
     log('error', 'The preview window could not load', { error: serializeError(error) })
@@ -128,9 +132,11 @@ function destroy(win: BrowserWindow): void {
   if (!win.isDestroyed()) win.destroy()
 }
 
-/** Opens or closes the window to match the setting, as Settings saves it. */
-export function syncPreviewWindow(enabled: boolean): void {
-  if (enabled && !previewWindow) openPreviewWindow()
+/** Opens or closes the window to match the setting. `focus` is true when the
+ *  user opens it on its own, as turning the setting on in Settings does; at
+ *  launch and on return it opens beside the main window, which keeps focus. */
+export function syncPreviewWindow(enabled: boolean, { focus }: { focus: boolean }): void {
+  if (enabled && !previewWindow) openPreviewWindow(focus)
   else if (!enabled) closePreviewWindow()
 }
 
@@ -144,11 +150,11 @@ export function hidePreviewWindow(): void {
 }
 
 /** Shows the window again beside the main window, or opens it if the setting
- *  is on and it is not there. */
+ *  is on and it is not there. The main window returned with it and keeps focus. */
 export function showPreviewWindow(): void {
   revealWanted = true
-  if (previewWindow && !previewWindow.isDestroyed()) previewWindow.show()
-  else syncPreviewWindow(loadConfig().general.show_preview_window)
+  if (previewWindow && !previewWindow.isDestroyed()) previewWindow.showInactive()
+  else syncPreviewWindow(loadConfig().general.show_preview_window, { focus: false })
 }
 
 /** Closes the window without touching the setting: on quit, when the main
@@ -156,6 +162,12 @@ export function showPreviewWindow(): void {
 export function closePreviewWindow(): void {
   const win = previewWindow
   if (win) destroy(win)
+}
+
+/** The window whose page this is, while it is shown. */
+export function previewWindowOf(contents: Electron.WebContents): BrowserWindow | null {
+  const win = previewWindow
+  return win && !win.isDestroyed() && win.isVisible() && win.webContents === contents ? win : null
 }
 
 /** The window's page while it is shown, for routing keys and confirmations. */

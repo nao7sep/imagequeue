@@ -52,7 +52,8 @@ export function canShowImage(task: Pick<SelectedImage, 'status' | 'baseName'> | 
 
 /** A key a view hands back to the main window's lists: arrows navigate,
  *  Backspace removes or restores, Delete deletes. Space is not among them: the
- *  fullscreen view opens only from the lists, and closes itself on Space. */
+ *  preview window opens the fullscreen view itself, and the view closes itself
+ *  on Space. */
 export type ListKey = 'up' | 'down' | 'left' | 'right' | 'remove' | 'delete'
 
 export interface SurfaceListKey {
@@ -110,3 +111,17 @@ export const PREVIEW_WINDOW_MIN_WIDTH = 320
 // Derived — do not hand-edit.
 export const PREVIEW_WINDOW_MIN_HEIGHT =
   PREVIEW_WINDOW_PADDING * 2 + PREVIEW_IMAGE_MIN_HEIGHT + PREVIEW_WINDOW_GAP + PREVIEW_FAILURE_MAX_HEIGHT
+
+/** The main window's window-level shortcuts. The preview window opens with the
+ *  main window as one set, so it hands each of these to the main window, which
+ *  answers them as if pressed there (window-conventions, Background visibility
+ *  and activation). */
+export const WINDOW_COMMANDS = [
+  'clear', 'settings', 'shortcuts', 'toggleKept', 'sendAll', 'paste',
+  'send:1', 'send:2', 'send:3', 'send:4', 'send:5', 'send:6', 'send:7', 'send:8', 'send:9',
+] as const
+export type WindowCommand = (typeof WINDOW_COMMANDS)[number]
+
+/** Commands that open a dialog in the main window, which therefore takes focus. */
+export const MAIN_DIALOG_COMMANDS: ReadonlySet<WindowCommand> = new Set(['settings', 'shortcuts'])
+

@@ -275,7 +275,7 @@ async function startUp(): Promise<void> {
     createWindow,
     isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
     onHiddenToBackground: () => {
-      closeFullscreenView({ refocusMain: false })
+      closeFullscreenView({ refocusOrigin: false })
       hidePreviewWindow()
     },
     onRestored: showPreviewWindow,
@@ -329,7 +329,8 @@ async function startUp(): Promise<void> {
     applyThemePreference(config.general.theme)
     await applyLanguagePreference(config.general.language)
     await statusIconController?.reconcile(config.general.show_status_icon)
-    syncPreviewWindow(config.general.show_preview_window)
+    // Turning the setting on is a request for this window alone.
+    syncPreviewWindow(config.general.show_preview_window, { focus: true })
   })
   registerStateIpc()
   registerDependenciesIpc()
@@ -353,7 +354,7 @@ async function startUp(): Promise<void> {
   if (!isQuitting()) {
     void statusIconController.reconcile(loadConfig().general.show_status_icon)
     mainWindowController.createInitialWindow()
-    syncPreviewWindow(loadConfig().general.show_preview_window)
+    syncPreviewWindow(loadConfig().general.show_preview_window, { focus: false })
   }
   mainWindowController.markStartupComplete()
 

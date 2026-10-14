@@ -97,7 +97,7 @@ describe('fullscreen view window', () => {
     main!.visible = state !== 'hidden'
     main!.minimized = state === 'minimized'
     if (state === 'crashed') views()[0]!.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
-    else view.closeFullscreenView({ refocusMain: true })
+    else view.closeFullscreenView({ refocusOrigin: true })
     expect(main!.focused).toBe(0)
     expect(main!.minimized).toBe(state === 'minimized')
   })
@@ -194,7 +194,7 @@ describe('opening and closing', () => {
     const first = view.openFullscreenView()
     view.fullscreenViewPainted(version, true)
     await first
-    view.closeFullscreenView({ refocusMain: true })
+    view.closeFullscreenView({ refocusOrigin: true })
     const [win] = views()
     expect(win!.visible).toBe(false)
 
@@ -208,7 +208,7 @@ describe('opening and closing', () => {
     const first = view.openFullscreenView()
     view.fullscreenViewPainted(a.version, true)
     await first
-    view.closeFullscreenView({ refocusMain: true })
+    view.closeFullscreenView({ refocusOrigin: true })
     const [win] = views()
     win!.sent.length = 0
     const b = snapshots.publishSelection(image('b'))
@@ -258,6 +258,31 @@ describe('opening and closing', () => {
     expect(views()[0]!.visible).toBe(false)
     expect(mainSent().at(-1)).toBe(view.FULLSCREEN_VIEW_CLOSED_CHANNEL)
     expect(main!.focused).toBe(focusedBefore)
+  })
+
+  // Focus returns to the window the view was opened from (window-conventions).
+  it('opened from the preview window, opens on its display and closes back to it', async () => {
+    const preview = new mocks.FakeWindow({})
+    preview.visible = true
+    const { version } = snapshots.publishSelection(image('a'))
+    const opened = view.openFullscreenView(preview as unknown as Electron.BrowserWindow)
+    const win = views().find((candidate) => candidate !== preview)!
+    expect(mocks.matching).toHaveBeenCalledWith(preview.getBounds())
+    view.fullscreenViewPainted(version, true)
+    await opened
+    expect(win.visible).toBe(true)
+    view.closeFullscreenView({ refocusOrigin: true })
+    expect(preview.focused).toBe(1)
+    expect(main!.focused).toBe(0)
+  })
+
+  it('does not open from a preview window that is not in front', async () => {
+    const preview = new mocks.FakeWindow({})
+    preview.visible = true
+    preview.active = false
+    snapshots.publishSelection(image('a'))
+    await view.openFullscreenView(preview as unknown as Electron.BrowserWindow)
+    expect(views().filter((candidate) => candidate !== preview)).toHaveLength(0)
   })
 
   it('turns a close from the system into closing the view', async () => {

@@ -36,7 +36,7 @@ import type { Message } from './i18n/translate'
 import type { LanguageEnvironment } from './i18n/languages'
 import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery } from './records'
 import type { ConfirmOptions } from './confirm'
-import type { ListKey, SurfaceListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface } from './viewing'
+import type { ListKey, SurfaceListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface, WindowCommand } from './viewing'
 
 // The Node platform string (member set of NodeJS.Platform), spelled out as a
 // portable union so this shared contract carries no @types/node dependency — it
@@ -228,6 +228,8 @@ export interface ElectronAPI {
   onFullscreenViewStateChanged: (callback: (open: boolean) => void) => (() => void)
   sendListKey: (key: ListKey, taskId: string | null) => Promise<void>
   onListKey: (callback: (event: SurfaceListKey) => void) => (() => void)
+  sendWindowCommand: (command: WindowCommand) => Promise<void>
+  onWindowCommand: (callback: (command: WindowCommand) => void) => (() => void)
   // Null when the view is gone; the caller then asks in its own window.
   confirmInSurface: (surface: ViewingSurface, options: ConfirmOptions) => Promise<boolean | null>
   answerSurfaceConfirm: (id: number, ok: boolean) => Promise<void>

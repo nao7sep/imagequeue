@@ -85,6 +85,7 @@ beforeEach(() => {
     value: { writeText: clipboardWriteText },
   })
   window.electronAPI = {
+    onWindowCommand: vi.fn(() => () => undefined),
     hasClipboardText: vi.fn(async () => false),
     readClipboardText: vi.fn(async () => 'clipboard prompt'),
     revealFile: vi.fn(async () => undefined),

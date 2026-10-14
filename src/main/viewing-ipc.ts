@@ -10,11 +10,12 @@ import {
   isFullscreenViewPage,
   openFullscreenView,
 } from './fullscreen-view'
-import { initPreviewWindow, previewWindowContents } from './preview-window'
+import { initPreviewWindow, previewWindowContents, previewWindowOf } from './preview-window'
 import type { ConfirmOptions } from '../shared/confirm'
-import type { ListKey, SelectedImage, ViewingSurface } from '../shared/viewing'
+import { MAIN_DIALOG_COMMANDS, WINDOW_COMMANDS, type ListKey, type SelectedImage, type ViewingSurface, type WindowCommand } from '../shared/viewing'
 
 export const LIST_KEY_CHANNEL = 'list:key'
+export const WINDOW_COMMAND_CHANNEL = 'window:command'
 
 const LIST_KEYS = new Set<string>(['up', 'down', 'left', 'right', 'remove', 'delete'] satisfies ListKey[])
 
@@ -46,11 +47,16 @@ export function registerViewingIpc(getMain: () => BrowserWindow | null): void {
 
   // The lists open the view; it closes from the lists or from itself, and only
   // its own page reports what it painted.
+  // The lists or the preview window open the view; it closes back to whichever did.
   handle('fullscreenView:open', async (event) => {
-    if (isMain(event.sender)) await openFullscreenView()
+    if (isMain(event.sender)) await openFullscreenView(getMain())
+    else {
+      const preview = previewWindowOf(event.sender)
+      if (preview) await openFullscreenView(preview)
+    }
   })
   handle('fullscreenView:close', (event) => {
-    if (isMain(event.sender) || isFullscreenViewPage(event.sender)) closeFullscreenView({ refocusMain: true })
+    if (isMain(event.sender) || isFullscreenViewPage(event.sender)) closeFullscreenView({ refocusOrigin: true })
   })
   handle('fullscreenView:painted', (event, version: number, painted: boolean) => {
     if (isFullscreenViewPage(event.sender)) fullscreenViewPainted(Number(version), painted === true)
@@ -64,6 +70,16 @@ export function registerViewingIpc(getMain: () => BrowserWindow | null): void {
     if (!surface || !LIST_KEYS.has(key) || !main || main.isDestroyed()) return
     if ((key === 'remove' || key === 'delete') && typeof taskId !== 'string') return
     main.webContents.send(LIST_KEY_CHANNEL, { key, surface, taskId: typeof taskId === 'string' ? taskId : null })
+  })
+
+  // The preview window hands the main window's shortcuts back to it. One that
+  // opens a dialog brings the main window forward, where the dialog is.
+  handle('window:command', (event, command: unknown) => {
+    const main = getMain()
+    if (surfaceOf(event.sender) !== 'preview-window' || !main || main.isDestroyed()) return
+    if (!(WINDOW_COMMANDS as readonly unknown[]).includes(command)) return
+    if (MAIN_DIALOG_COMMANDS.has(command as WindowCommand) && main.isVisible() && !main.isMinimized()) main.focus()
+    main.webContents.send(WINDOW_COMMAND_CHANNEL, command)
   })
 
   // Null when the view is no longer there to ask; the main window then asks itself.

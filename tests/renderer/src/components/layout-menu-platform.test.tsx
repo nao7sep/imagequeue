@@ -37,6 +37,7 @@ vi.mock('../../../../src/renderer/src/context/UiStateContext', () => ({
 }))
 
 const { Layout } = await import('../../../../src/renderer/src/components/Layout')
+let forwarded: (command: string) => void = () => {}
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe(): void {} disconnect(): void {} unobserve(): void {} })
@@ -53,6 +54,7 @@ function openMainMenu(platform: string): void {
       publishSelection: vi.fn().mockResolvedValue(undefined),
       onFullscreenViewStateChanged: () => () => {},
       onListKey: () => () => {},
+      onWindowCommand: (callback: (command: string) => void) => { forwarded = callback; return () => {} },
     },
   })
   render(<Layout />)
@@ -87,3 +89,14 @@ describe('main menu on Windows', () => {
     expect(screen.queryByRole('menuitem', { name: 'Draw Things Models' })).toBeNull()
   })
 })
+
+// A shortcut the preview window hands on is answered as if pressed here.
+describe('shortcuts handed on by the preview window', () => {
+  it('opens the shortcut reference', () => {
+    openMainMenu('darwin')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    act(() => forwarded('shortcuts'))
+    expect(screen.getByRole('dialog', { name: 'Keyboard Shortcuts' })).not.toBeNull()
+  })
+})
+

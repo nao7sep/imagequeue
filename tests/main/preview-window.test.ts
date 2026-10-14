@@ -139,7 +139,7 @@ describe('preview window options', () => {
 describe('the setting', () => {
   it('reports a failed close-setting save without exposing diagnostic details', async () => {
     mocks.saved.mockImplementationOnce(() => { throw new Error('EACCES /private/settings SECRET_SENTINEL') })
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     previews()[0]!.userClose()
     await Promise.resolve()
     expect(mocks.config.general.show_preview_window).toBe(true)
@@ -152,7 +152,7 @@ describe('the setting', () => {
   })
 
   it('a background hide wins over a late ready-to-show, until explicitly restored', () => {
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     const [win] = previews()
     preview.hidePreviewWindow()
     win!.emit('ready-to-show')
@@ -162,8 +162,8 @@ describe('the setting', () => {
   })
 
   it('opens one window on the preview surface when turned on, taking focus like Quick Look', () => {
-    preview.syncPreviewWindow(true)
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: true })
+    preview.syncPreviewWindow(true, { focus: true })
     const [win] = previews()
     expect(previews()).toHaveLength(1)
     expect(mocks.recovered).toHaveBeenCalledWith('preview')
@@ -174,16 +174,26 @@ describe('the setting', () => {
     expect(win!.shownInactive).toBe(0)
   })
 
+  // At launch it opens with the main window as one set; the main window,
+  // the primary one, takes focus (window-conventions).
+  it('opens beside the main window without taking its focus at launch', () => {
+    preview.syncPreviewWindow(true, { focus: false })
+    const [win] = previews()
+    win!.emit('ready-to-show')
+    expect(win!.visible).toBe(true)
+    expect(win!.focused).toBe(0)
+  })
+
   it('closes the window when turned off, leaving the setting as saved', () => {
-    preview.syncPreviewWindow(true)
-    preview.syncPreviewWindow(false)
+    preview.syncPreviewWindow(true, { focus: false })
+    preview.syncPreviewWindow(false, { focus: false })
     expect(previews()[0]!.destroyed).toBe(true)
     expect(mocks.saved).not.toHaveBeenCalled()
     expect(preview.previewWindowContents()).toBeNull()
   })
 
   it('turns the setting off when the user closes the window, and tells the main window', async () => {
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     previews()[0]!.userClose()
     await Promise.resolve()
     expect(mocks.saved).toHaveBeenCalledWith({ general: { show_preview_window: false } })
@@ -191,7 +201,7 @@ describe('the setting', () => {
   })
 
   it('leaves the setting on when a Windows logoff or restart closes the window', async () => {
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     previews()[0]!.emit('session-end')
     previews()[0]!.userClose()
     await Promise.resolve()
@@ -202,7 +212,7 @@ describe('the setting', () => {
 describe('following the selection', () => {
   it('sends each published selection to the window\'s page, hidden too', () => {
     snapshots.publishSelection(null)
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     const [win] = previews()
     win!.emit('ready-to-show')
     const task = { taskId: 'a', status: 'completed', baseName: 'a', error: null, providerMessage: null } as const
@@ -222,7 +232,7 @@ describe('a lost renderer', () => {
 
   it('answers no for its confirmation and opens the window again, leaving the setting on', async () => {
     const confirms = await import('../../src/main/surface-confirm')
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     const [win] = previews()
     win!.emit('ready-to-show')
     await settle()
@@ -237,7 +247,7 @@ describe('a lost renderer', () => {
   })
 
   it('waits for the main window to return when the window was hidden or its page had not loaded', async () => {
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     previews()[0]!.emit('ready-to-show')
     gone(previews()[0]!)
     expect(previews()).toHaveLength(1)
@@ -256,8 +266,8 @@ describe('a lost renderer', () => {
 })
 
 describe('following the main window', () => {
-  it('hides with the main window and returns with it, taking focus', () => {
-    preview.syncPreviewWindow(true)
+  it('hides with the main window and returns with it, leaving focus on the main window', () => {
+    preview.syncPreviewWindow(true, { focus: false })
     const [win] = previews()
     win!.emit('ready-to-show')
     preview.hidePreviewWindow()
@@ -265,13 +275,13 @@ describe('following the main window', () => {
     expect(preview.previewWindowContents()).toBeNull()
     preview.showPreviewWindow()
     expect(win!.visible).toBe(true)
-    expect(win!.focused).toBe(2)
-    expect(win!.shownInactive).toBe(0)
+    expect(win!.focused).toBe(0)
+    expect(win!.shownInactive).toBe(2)
     expect(preview.previewWindowContents()).toBe(win!.webContents)
   })
 
   it('opens again with a new main window when the setting is on, and not when it is off', () => {
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     preview.closePreviewWindow()
     expect(mocks.saved).not.toHaveBeenCalled()
     preview.showPreviewWindow()
@@ -296,7 +306,7 @@ describe('Close Window in the preview', () => {
 
   it.each([['darwin', { meta: true }], ['win32', { control: true }]] as const)('on %s closes only the preview and turns its setting off', async (value, modifier) => {
     Object.defineProperty(process, 'platform', { configurable: true, value })
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     const [win] = previews()
     win!.emit('ready-to-show')
     const event = press(win!, modifier)
@@ -314,7 +324,7 @@ describe('Close Window in the preview', () => {
     ['a key release', { meta: true, type: 'keyUp' as const }],
   ])('ignores %s', (_name, input) => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-    preview.syncPreviewWindow(true)
+    preview.syncPreviewWindow(true, { focus: false })
     const [win] = previews()
     const event = press(win!, input)
     expect(event.preventDefault).not.toHaveBeenCalled()

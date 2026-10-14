@@ -46,3 +46,26 @@ describe('Mac text-field stand-down', () => {
     expect(shadowsMacTextBinding(ctrlChord)).toBe(true)
   })
 })
+
+// One reading of the main window's shortcuts, shared by the main window and
+// the preview window that hands them on.
+describe('windowCommandFor', () => {
+  it.each([
+    [{ key: 'Escape' }, 'clear'],
+    [{ key: 'Escape', metaKey: true }, 'clear'],
+    [{ key: ',', metaKey: true }, 'settings'],
+    [{ key: '/', ctrlKey: true }, 'shortcuts'],
+    [{ key: 'K', metaKey: true, shiftKey: true }, 'toggleKept'],
+    [{ key: 'Enter', metaKey: true }, 'sendAll'],
+    [{ key: 'p', ctrlKey: true }, 'paste'],
+    [{ key: '3', metaKey: true }, 'send:3'],
+    [{ key: ',' }, null],
+    [{ key: 'k', metaKey: true }, null],
+    [{ key: 'Enter', ctrlKey: true, altKey: true }, null],
+    [{ key: '0', metaKey: true }, null],
+  ])('%o is %s', async (init, command) => {
+    const { windowCommandFor } = await shortcutsOn('MacIntel')
+    expect(windowCommandFor(new KeyboardEvent('keydown', init))).toBe(command)
+  })
+})
+

@@ -19,6 +19,8 @@ beforeEach(() => {
     getLatestSelection: vi.fn(() => latest),
     onSelectionSnapshot: vi.fn((callback) => { pushSnapshot = callback; return () => {} }),
     sendListKey: vi.fn(async () => undefined),
+    sendWindowCommand: vi.fn(async () => undefined),
+    openFullscreenView: vi.fn(async () => undefined),
     onSurfaceConfirm: vi.fn((callback) => { askConfirm = callback; return () => {} }),
     onSurfaceConfirmDismissed: vi.fn(() => () => {}),
     answerSurfaceConfirm: vi.fn(async () => undefined),
@@ -80,15 +82,44 @@ describe('preview window page', () => {
     expect(container.querySelector('.preview-placeholder')).not.toBeNull()
   })
 
-  it('hands arrows, Backspace and Delete to the main window, and not Space', async () => {
+  // The preview window opens with the main window as one set and answers its
+  // keys and shortcuts the same way (window-conventions).
+  it('hands arrows, Backspace and Delete to the main window as list keys', async () => {
     let finish!: () => void
     vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     render(<PreviewWindowApp />)
     await act(async () => {})
     await act(async () => finish())
-    for (const key of ['ArrowUp', 'ArrowRight', ' ', 'Backspace', 'Delete']) fireEvent.keyDown(document, { key })
-    fireEvent.keyDown(document, { key: 'Escape' })
+    for (const key of ['ArrowUp', 'ArrowRight', 'Backspace', 'Delete']) fireEvent.keyDown(document, { key })
     expect(api.sendListKey.mock.calls.map(([key]) => key)).toEqual(['up', 'right', 'remove', 'delete'])
+  })
+
+  it('opens the fullscreen view on Space once its image is on screen, as the lists do', async () => {
+    let finish!: () => void
+    vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+    render(<PreviewWindowApp />)
+    await act(async () => {})
+    fireEvent.keyDown(document, { key: ' ' })
+    expect(api.openFullscreenView).not.toHaveBeenCalled()
+    await act(async () => finish())
+    fireEvent.keyDown(document, { key: ' ', repeat: true })
+    expect(api.openFullscreenView).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: ' ' })
+    expect(api.openFullscreenView).toHaveBeenCalledOnce()
+    expect(api.sendListKey).not.toHaveBeenCalled()
+  })
+
+  it('hands the main window\'s shortcuts to it', async () => {
+    render(<PreviewWindowApp />)
+    await act(async () => {})
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: ',', metaKey: true })
+    fireEvent.keyDown(document, { key: 'Enter', ctrlKey: true })
+    fireEvent.keyDown(document, { key: '2', metaKey: true })
+    fireEvent.keyDown(document, { key: 'K', metaKey: true, shiftKey: true })
+    fireEvent.keyDown(document, { key: 'K', metaKey: true, shiftKey: true, repeat: true })
+    expect(api.sendWindowCommand.mock.calls.map(([command]) => command)).toEqual(['clear', 'settings', 'sendAll', 'send:2', 'toggleKept'])
+    expect(api.sendListKey).not.toHaveBeenCalled()
   })
 
   it('shows a confirmation asked of it and keeps keys from the lists while it is open', async () => {

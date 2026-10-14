@@ -8,10 +8,10 @@ import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { Icon } from './Icon'
 import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
-import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
+import { isEditableTarget, shadowsMacTextBinding, windowCommandFor } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
 import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
-import { selectedImageOf } from '../../../shared/viewing'
+import { selectedImageOf, type WindowCommand } from '../../../shared/viewing'
 import { useSelection } from '../context/SelectionContext'
 import { Preview } from './Preview'
 import { serializeError } from '../../../shared/serialize-error'
@@ -291,43 +291,45 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
       ))
   }, [onPromptChange, clearActionFailure, reportActionFailure])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts that queue work or mutate the prompt, pressed here or
+  // handed on by the preview window. Returns whether the command was this
+  // pane's to answer.
+  const runCommand = useCallback((command: WindowCommand): boolean => {
+    // A modal owns the keyboard while it is open, so stay out of its way.
+    if (isAnyModalOpen()) return false
+    if (command === 'sendAll') {
+      handleSendToAll()
+      return true
+    }
+    if (command === 'paste') {
+      if (clipboardTextAvailable) handlePasteClipboardText()
+      return true
+    }
+    if (command.startsWith('send:')) {
+      const backend = visibleBackends[Number(command.slice('send:'.length)) - 1]
+      if (!backend) return false
+      enqueueToBackend(backend, prompt)
+      return true
+    }
+    return false
+  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText, enqueueToBackend, visibleBackends])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      // These are window-level shortcuts that queue work or mutate the prompt;
-      // a modal owns the keyboard while it is open, so stay out of its way.
-      if (isAnyModalOpen()) return
       // No prompt action (send, paste, enqueue) should fire while an IME
       // candidate is being composed — that key belongs to the composition.
       if (isImeComposing(e)) return
-
       if (isEditableTarget(e.target) && shadowsMacTextBinding(e)) return
-
-      const mod = hasMod(e)
-
-      if (mod && e.key === 'Enter') {
-        e.preventDefault()
-        handleSendToAll()
-        return
-      }
-      if (mod && e.key.toLowerCase() === 'p') {
-        e.preventDefault()
-        if (clipboardTextAvailable) {
-          handlePasteClipboardText()
-        }
-        return
-      }
-      if (mod && e.key >= '1' && e.key <= '9') {
-        const backend = visibleBackends[parseInt(e.key) - 1]
-        if (!backend) return
-        e.preventDefault()
-        enqueueToBackend(backend, prompt)
-        return
-      }
+      const command = windowCommandFor(e)
+      if (command && runCommand(command)) e.preventDefault()
     }
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [prompt, clipboardTextAvailable, handleSendToAll, handlePasteClipboardText, enqueueToBackend, isImeComposing])
+    const stop = window.electronAPI.onWindowCommand((command) => { runCommand(command) })
+    return () => {
+      window.removeEventListener('keydown', handler)
+      stop()
+    }
+  }, [runCommand, isImeComposing])
 
   useEffect(() => {
     refreshClipboardTextAvailable()

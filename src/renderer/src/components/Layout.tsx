@@ -29,9 +29,9 @@ import { useUiState } from '../context/UiStateContext'
 import { useNotifications } from '../hooks/useNotifications'
 import { useImeGuard } from '../utils/imeGuard'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
-import { hasMod, isEditableTarget, shadowsMacTextBinding } from '../utils/shortcuts'
+import { isEditableTarget, shadowsMacTextBinding, windowCommandFor } from '../utils/shortcuts'
 import { clearOperationalFailure, recordOperationalDiagnostic, reportOperationalFailure } from '../utils/operationalFailure'
-import { canShowImage, selectedImageOf } from '../../../shared/viewing'
+import { canShowImage, selectedImageOf, type WindowCommand } from '../../../shared/viewing'
 import { FULLSCREEN_VIEW_TOGGLE_EVENT } from '../utils/fullscreenView'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -146,40 +146,47 @@ export function Layout(): React.JSX.Element {
   // handled here. Modals own their own Escape handling (see Modal.tsx) and stop
   // the event in the capture phase; the isAnyModalOpen guard keeps these
   // shortcuts from stacking a second modal or firing under an open one.
+  // The preview window hands the same commands here, read by windowCommandFor.
+  // Returns whether the command was this handler's.
+  const runCommand = useCallback((command: WindowCommand): boolean => {
+    if (command === 'clear') {
+      if (!overlay) clear()
+      return true
+    }
+    if (isAnyModalOpen()) return false
+    if (command === 'settings' || command === 'shortcuts') {
+      setOverlay(command)
+      return true
+    }
+    if (command === 'toggleKept') {
+      toggleShowKeptImages()
+      return true
+    }
+    return false
+  }, [overlay, clear, toggleShowKeptImages])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       // While an IME candidate is pending, the keystroke belongs to the composition: Escape cancels
       // the candidate, and the mod-chords below must not fire on it either (text-input-and-IME).
       if (isImeComposing(e)) return
-
-      if (e.key === 'Escape') {
-        if (!overlay) clear()
+      const command = windowCommandFor(e)
+      if (command === 'clear') {
+        runCommand(command)
         return
       }
-      if (isAnyModalOpen()) return
-
+      if (!command || isAnyModalOpen()) return
       if (isEditableTarget(e.target) && shadowsMacTextBinding(e)) return
-
-      const mod = hasMod(e)
-      if (mod && e.key === ',') {
-        e.preventDefault()
-        setOverlay('settings')
-        return
-      }
-      if (mod && e.key === '/') {
-        e.preventDefault()
-        setOverlay('shortcuts')
-        return
-      }
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'k') {
-        if (e.repeat) return
-        e.preventDefault()
-        toggleShowKeptImages()
-      }
+      if (command === 'toggleKept' && e.repeat) return
+      if (runCommand(command)) e.preventDefault()
     }
     document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [overlay, clear, toggleShowKeptImages, isImeComposing])
+    const stop = window.electronAPI.onWindowCommand((command) => { runCommand(command) })
+    return () => {
+      document.removeEventListener('keydown', handler)
+      stop()
+    }
+  }, [runCommand, isImeComposing])
 
   // The Draw Things pane pointer leads here by dispatching this event, so the
   // single management surface (this modal) opens from the pane as well as the menu.
