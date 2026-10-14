@@ -118,11 +118,11 @@ describe("catalogues", () => {
     }
   });
 
-  // An ellipsis carries meaning (a command that asks for input next, a running
-  // operation, text cut short), so a translation has one exactly when English
-  // does. It is always the literal U+2026, never three periods or an escape,
-  // and never follows an ordinary space; German's no-break space is the only
-  // spacing (localization-conventions, Ellipsis).
+  // An ellipsis carries meaning (a running operation, text cut short), so a
+  // translation has one exactly when English does. It is always the literal
+  // U+2026, never three periods or an escape, and never follows an ordinary
+  // space; German's no-break space is the only spacing (localization-conventions,
+  // Ellipsis).
   it.each(LANGUAGES)("%s uses an ellipsis exactly where English does", (language) => {
     for (const [key, englishEntry] of Object.entries(english)) {
       const expected = forms(englishEntry).some((text) => text.includes("…"));

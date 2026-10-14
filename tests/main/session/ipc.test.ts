@@ -14,7 +14,6 @@ vi.mock('../../../src/main/ipc-boundary', () => ({
 vi.mock('../../../src/main/session/state', () => ({
   resolveSessionDir: (sessionId: string) => `/imagequeue/sessions/${sessionId}`,
 }))
-vi.mock('../../../src/main/session/draft-persistence', () => ({ getDraftPersistenceState: vi.fn() }))
 
 const { registerSessionIpc } = await import('../../../src/main/session/ipc')
 registerSessionIpc()
