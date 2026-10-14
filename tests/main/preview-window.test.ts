@@ -38,6 +38,9 @@ const mocks = await vi.hoisted(async () => {
     isDestroyed(): boolean { return this.destroyed }
     isVisible(): boolean { return this.visible }
     showInactive(): void { this.visible = true; this.shownInactive++ }
+    show(): void { this.visible = true; this.focused++ }
+    // A close by command: Electron emits close, then closed.
+    close(): void { this.userClose() }
     hide(): void { this.visible = false }
     focus(): void { this.focused++ }
     destroy(): void {
@@ -153,12 +156,12 @@ describe('the setting', () => {
     const [win] = previews()
     preview.hidePreviewWindow()
     win!.emit('ready-to-show')
-    expect(win!.shownInactive).toBe(0)
+    expect(win!.visible).toBe(false)
     preview.showPreviewWindow()
-    expect(win!.shownInactive).toBe(1)
+    expect(win!.visible).toBe(true)
   })
 
-  it('opens one window on the preview surface when turned on, shown without taking focus', () => {
+  it('opens one window on the preview surface when turned on, taking focus like Quick Look', () => {
     preview.syncPreviewWindow(true)
     preview.syncPreviewWindow(true)
     const [win] = previews()
@@ -166,8 +169,9 @@ describe('the setting', () => {
     expect(mocks.recovered).toHaveBeenCalledWith('preview')
     expect(win!.loaded).toEqual([[expect.stringMatching(/renderer[/\\]index\.html$/), { query: { surface: 'preview-window' } }]])
     win!.emit('ready-to-show')
-    expect(win!.shownInactive).toBe(1)
-    expect(win!.focused).toBe(0)
+    expect(win!.visible).toBe(true)
+    expect(win!.focused).toBe(1)
+    expect(win!.shownInactive).toBe(0)
   })
 
   it('closes the window when turned off, leaving the setting as saved', () => {
@@ -252,7 +256,7 @@ describe('a lost renderer', () => {
 })
 
 describe('following the main window', () => {
-  it('hides with the main window and returns with it, without taking focus', () => {
+  it('hides with the main window and returns with it, taking focus', () => {
     preview.syncPreviewWindow(true)
     const [win] = previews()
     win!.emit('ready-to-show')
@@ -261,7 +265,8 @@ describe('following the main window', () => {
     expect(preview.previewWindowContents()).toBeNull()
     preview.showPreviewWindow()
     expect(win!.visible).toBe(true)
-    expect(win!.focused).toBe(0)
+    expect(win!.focused).toBe(2)
+    expect(win!.shownInactive).toBe(0)
     expect(preview.previewWindowContents()).toBe(win!.webContents)
   })
 
@@ -278,3 +283,42 @@ describe('following the main window', () => {
     expect(previews().filter((win) => !win.destroyed)).toHaveLength(0)
   })
 })
+
+describe('Close Window in the preview', () => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  afterEach(() => { Object.defineProperty(process, 'platform', platform) })
+
+  const press = (win: FakeWindow, input: Partial<Electron.Input>) => {
+    const event = { preventDefault: vi.fn() }
+    win.webContents.emit('before-input-event', event, { type: 'keyDown', key: 'w', meta: false, control: false, alt: false, shift: false, ...input })
+    return event
+  }
+
+  it.each([['darwin', { meta: true }], ['win32', { control: true }]] as const)('on %s closes only the preview and turns its setting off', async (value, modifier) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value })
+    preview.syncPreviewWindow(true)
+    const [win] = previews()
+    win!.emit('ready-to-show')
+    const event = press(win!, modifier)
+    // The menu never sees it, so it cannot close the main window next.
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(win!.destroyed).toBe(true)
+    expect(main.destroyed).toBe(false)
+    await vi.waitFor(() => expect(mocks.saved).toHaveBeenCalledWith(expect.objectContaining({ general: expect.objectContaining({ show_preview_window: false }) })))
+  })
+
+  it.each([
+    ['a plain W', {}],
+    ['Shift with the shortcut', { meta: true, shift: true }],
+    ['the other platform\'s modifier', { control: true }],
+    ['a key release', { meta: true, type: 'keyUp' as const }],
+  ])('ignores %s', (_name, input) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    preview.syncPreviewWindow(true)
+    const [win] = previews()
+    const event = press(win!, input)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(win!.destroyed).toBe(false)
+  })
+})
+

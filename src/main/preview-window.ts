@@ -20,8 +20,9 @@ import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 // selection while the lists stay in the main window. It exists while the
 // "Also show in a separate window" setting is on; closing it with its own
 // button turns the setting off. A durable secondary window with its own
-// placement (window-conventions, Placement). It never takes focus when it
-// appears, so the keyboard stays in the main window.
+// placement (window-conventions, Placement). Like Quick Look, it takes focus
+// when it opens or returns; its page hands the selection keys to the main
+// window, whose selection it follows, and Cmd/Ctrl+W closes only it.
 
 let previewWindow: BrowserWindow | null = null
 let revealWanted = true
@@ -92,7 +93,15 @@ function openPreviewWindow(): void {
     if (template) Menu.buildFromTemplate(template).popup({ window: win })
   })
   win.once('ready-to-show', () => {
-    if (revealWanted && !win.isDestroyed()) win.showInactive()
+    if (revealWanted && !win.isDestroyed()) win.show()
+  })
+  // Close Window belongs to the window being looked at. Handled here, before
+  // any menu shortcut, so it never reaches the main window on any platform.
+  win.webContents.on('before-input-event', (event, input) => {
+    const command = process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+    if (input.type !== 'keyDown' || !command || input.alt || input.shift || input.key.toLowerCase() !== 'w') return
+    event.preventDefault()
+    if (!win.isDestroyed()) win.close()
   })
   // A lost renderer never leaves a blank window or a confirmation no one can
   // answer: the window goes, its confirmations are answered no, and a window
@@ -138,7 +147,7 @@ export function hidePreviewWindow(): void {
  *  is on and it is not there. */
 export function showPreviewWindow(): void {
   revealWanted = true
-  if (previewWindow && !previewWindow.isDestroyed()) previewWindow.showInactive()
+  if (previewWindow && !previewWindow.isDestroyed()) previewWindow.show()
   else syncPreviewWindow(loadConfig().general.show_preview_window)
 }
 
