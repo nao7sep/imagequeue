@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { expandUserPath, getDefaultModelsDir, resolveModelsDir } from '../../src/main/local-cli'
+import { checkCli, expandUserPath, getDefaultModelsDir, resolveModelsDir } from '../../src/main/local-cli'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 import { updateConfig } from '../../src/main/config'
 
@@ -69,6 +69,10 @@ describe('expandUserPath', () => {
     expect(expandUserPath('~/models', base)).toBe(path.join(os.homedir(), 'models'))
   })
 
+  it('expands a Windows-style ~\\ to the home directory', async () => {
+    expect(expandUserPath('~\\models', base)).toBe(path.join(os.homedir(), 'models'))
+  })
+
   it('does not corrupt ~user into <home>user', async () => {
     const dir = expandUserPath('~someuser/models', base)
     expect(dir).not.toContain(os.homedir() + 'someuser')
@@ -82,5 +86,35 @@ describe('expandUserPath', () => {
     } finally {
       delete process.env['IQ_TEST_PATH_VAR']
     }
+  })
+})
+
+// Draw Things is macOS-only; the platform decides before any binary is run.
+describe('checkCli platform gate', () => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  const originalHome = process.env[ENV_VAR]
+  let tmpRoot: string
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-cli-'))
+    process.env[ENV_VAR] = tmpRoot
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', platform)
+    closeBackupStore()
+    if (originalHome === undefined) delete process.env[ENV_VAR]
+    else process.env[ENV_VAR] = originalHome
+    fs.rmSync(tmpRoot, { recursive: true, force: true })
+  })
+
+  it.each(['win32', 'linux'])('reports %s as unsupported without running a CLI', async (value) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value })
+    await expect(checkCli()).resolves.toEqual({ installed: false, version: null, path: null, platform: 'unsupported' })
+  })
+
+  it('reports a missing CLI on macOS as not installed', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    await expect(checkCli()).resolves.toEqual({ installed: false, version: null, path: null, platform: 'darwin' })
   })
 })

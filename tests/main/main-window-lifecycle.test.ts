@@ -153,6 +153,16 @@ describe('MainWindowController', () => {
     expect(win.show).not.toHaveBeenCalled()
     expect(win.focus).not.toHaveBeenCalled()
   })
+  it('returns a hidden Windows app to the taskbar without revealing it', async () => {
+    const { controller, win } = makeController({ platform: 'win32' })
+    controller.createInitialWindow()
+    win.emitClose()
+    expect(win.setSkipTaskbar).toHaveBeenLastCalledWith(true)
+    await controller.retainActivationSurface()
+    expect(win.setSkipTaskbar).toHaveBeenLastCalledWith(false)
+    expect(win.show).not.toHaveBeenCalled()
+  })
+
   it('does not create a competing window while startup is incomplete', async () => {
     const { controller, createWindow } = makeController()
     await controller.restoreOrCreate()

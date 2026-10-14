@@ -257,6 +257,7 @@ describe('StatusIconController', () => {
     })
     expect(await mac.reconcile(true)).toBe(true)
     expect(mocks.FakeTray.instances[0].image.template).toBe(true)
+    expect(mocks.FakeTray.instances[0].menu.map((item) => item.label).filter(Boolean)).toContain('Quit ImageQueue')
     mac.dispose()
 
     mocks.imageEmpty = true

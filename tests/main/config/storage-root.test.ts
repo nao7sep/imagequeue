@@ -55,6 +55,11 @@ describe('storage root (IMAGEQUEUE_DATA_DIR)', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
+  it('expands a Windows-style ~\\ against the home directory', () => {
+    process.env[ENV_VAR] = '~\\.imagequeue-test-home-expand'
+    expect(resolveStorageRoot()).toBe(path.join(os.homedir(), '.imagequeue-test-home-expand'))
+  })
+
   it('resolves a relative override against HOME, never the working directory', () => {
     process.env[ENV_VAR] = 'relative-imagequeue-root-xyz'
     const root = ensureStorageRoot()
@@ -141,6 +146,22 @@ describe('storage root (IMAGEQUEUE_DATA_DIR)', () => {
 
       expect(() => resolveStorageRoot()).toThrow(/expands to an empty path/)
     })
+  })
+
+  // Windows has its own permission model; the decision is tested on any host.
+  it('leaves an existing root\'s mode alone on Windows', () => {
+    const target = path.join(tmpBase, 'windows-root')
+    fs.mkdirSync(target, { mode: 0o755 })
+    const before = fs.statSync(target).mode
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      process.env[ENV_VAR] = target
+      ensureStorageRoot()
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+    expect(fs.statSync(target).mode).toBe(before)
   })
 
   describe.skipIf(process.platform === 'win32')('owner-only permissions (POSIX)', () => {

@@ -292,6 +292,25 @@ describe('api-keys-store', () => {
     expect(fs.statSync(secretsPath).mode & 0o777).toBe(0o600)
   })
 
+  // Windows has its own permission model; the mode decision is tested on any host.
+  it('reads keys without touching file permissions on Windows', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      vi.resetModules()
+      const store = await import('../../../src/main/config/api-keys-store')
+      await store.setStoredApiKey('openai.image', 'sk-stored')
+      const secretsPath = path.join(tmpRoot, 'api-keys.json')
+      fs.chmodSync(secretsPath, 0o644)
+      const before = fs.statSync(secretsPath).mode
+      await store.refreshApiKeys()
+      expect(store.hasApiKey('openai.image')).toBe(true)
+      expect(fs.statSync(secretsPath).mode).toBe(before)
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
   it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', async () => {
     const spy = vi.spyOn(fs.promises, 'open')
     await setStoredApiKey('openai.image', 'sk-stored')

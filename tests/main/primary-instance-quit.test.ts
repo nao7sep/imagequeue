@@ -241,4 +241,16 @@ describe('primary instance quit routes', () => {
     expect(showQuitFailure).not.toHaveBeenCalled()
     expect(session.persistActiveSession).not.toHaveBeenCalled()
   })
+
+  it.each([['win32', 1], ['linux', 1], ['darwin', 0]] as const)('closing the primary window on %s requests quit %i times', async (value, quits) => {
+    await launch()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value })
+    try {
+      ;(h.controllers[0]!.options['onPrimaryWindowClosed'] as () => void)()
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+    expect(h.app.quit).toHaveBeenCalledTimes(quits)
+  })
 })

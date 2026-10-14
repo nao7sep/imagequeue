@@ -128,19 +128,17 @@ describe('exporting an image', () => {
     expect(fs.readdirSync(mocks.desktop)).toEqual([])
   })
 
-  it('keeps the source image\'s modified time and permission mode', async () => {
+  it('keeps the source image\'s modified time', async () => {
     const source = path.join(mocks.sessionDir, `${BASE}.png`)
     const modified = new Date('2001-02-03T04:05:06.000Z')
-    fs.chmodSync(source, 0o640)
     fs.utimesSync(source, modified, modified)
 
     const destination = (await invoke('shell:exportImage', BASE, 'png')) as string
     expect(fs.statSync(destination).mtimeMs).toBe(modified.getTime())
-    if (process.platform !== 'win32') expect(fs.statSync(destination).mode & 0o7777).toBe(0o640)
 
-    const link = vi.spyOn(fs, 'linkSync').mockImplementation(() => {
-      throw Object.assign(new Error('simulated exFAT'), { code: 'EPERM' })
-    })
+    const link = vi.spyOn(fs.promises, 'link').mockRejectedValue(
+      Object.assign(new Error('simulated exFAT'), { code: 'EPERM' }),
+    )
     const copied = (await invoke('shell:exportImage', BASE, 'png')) as string
     link.mockRestore()
     expect(fs.statSync(copied).mtimeMs, 'a volume without hard links').toBe(modified.getTime())
@@ -149,14 +147,26 @@ describe('exporting an image', () => {
     mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath: chosen })
     await invoke('shell:exportImageAs', BASE, 'png')
     expect(fs.statSync(chosen).mtimeMs, 'Export As').toBe(modified.getTime())
-    if (process.platform !== 'win32') expect(fs.statSync(chosen).mode & 0o7777).toBe(0o640)
+  })
+
+  // Windows has no POSIX permission bits to carry over.
+  it.skipIf(process.platform === 'win32')('keeps the source image\'s permission mode', async () => {
+    const source = path.join(mocks.sessionDir, `${BASE}.png`)
+    fs.chmodSync(source, 0o640)
+    const destination = (await invoke('shell:exportImage', BASE, 'png')) as string
+    expect(fs.statSync(destination).mode & 0o7777).toBe(0o640)
+
+    const chosen = path.join(root, 'Chosen', 'cat.png')
+    mocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath: chosen })
+    await invoke('shell:exportImageAs', BASE, 'png')
+    expect(fs.statSync(chosen).mode & 0o7777, 'Export As').toBe(0o640)
   })
 
   it('still numbers exports on a volume without hard links', async () => {
     const first = (await invoke('shell:exportImage', BASE, 'png')) as string
-    const link = vi.spyOn(fs, 'linkSync').mockImplementation(() => {
-      throw Object.assign(new Error('simulated exFAT'), { code: 'EPERM' })
-    })
+    const link = vi.spyOn(fs.promises, 'link').mockRejectedValue(
+      Object.assign(new Error('simulated exFAT'), { code: 'EPERM' }),
+    )
     const second = (await invoke('shell:exportImage', BASE, 'png')) as string
     link.mockRestore()
     expect(path.basename(second)).toBe(`${BASE}-2.png`)

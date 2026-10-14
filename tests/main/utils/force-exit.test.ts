@@ -2,7 +2,9 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 
-it('the deadline exit terminates a process with a worker still executing an uninterruptible native call', async () => {
+type Ended = { code: number | null; signal: NodeJS.Signals | null }
+
+async function endWithBusyWorker(): Promise<Ended> {
   const module = new URL('../../../src/main/utils/force-exit.ts', import.meta.url)
   // A synchronous native crypto call cannot observe Worker.terminate until it
   // returns. The child is killed within milliseconds; the expensive call is
@@ -38,6 +40,16 @@ it('the deadline exit terminates a process with a worker still executing an unin
   expect(errors).not.toContain('Error')
   expect(result.timedOut).toBe(false)
   expect(output).toContain('native-still-running')
-  if (process.platform !== 'win32') expect(result.signal).toBe('SIGKILL')
-  else expect(result.code).not.toBe(0)
+  return result
+}
+
+const isWindows = process.platform === 'win32'
+
+it.skipIf(isWindows)('the deadline exit kills a process whose worker is in an uninterruptible native call (POSIX)', async () => {
+  expect((await endWithBusyWorker()).signal).toBe('SIGKILL')
+})
+
+// Node maps SIGKILL to TerminateProcess; only a Windows host shows its exit.
+it.runIf(isWindows)('the deadline exit terminates a process whose worker is in an uninterruptible native call (Windows)', async () => {
+  expect((await endWithBusyWorker()).code).not.toBe(0)
 })
