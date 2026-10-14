@@ -117,7 +117,9 @@ const quitOwner = createQuitOwner({
     ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
   },
   save: async () => {
-    await startupWork
+    // A failed startup is reported by its own window; quitting from it has
+    // nothing of this launch to save, so its error is not a save failure.
+    await startupWork?.catch(() => undefined)
     if (!sessionStarted) return
     await Promise.all([retrySettingsWrites(), drainExports()])
     await Promise.all([drainBackendDefaults(), drainPendingModelParamsWrites()])
