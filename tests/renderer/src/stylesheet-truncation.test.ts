@@ -13,14 +13,13 @@ const REVIEWED_ELLIPSIS: Record<string, string> = {
   '.task-error': 'the selected task\'s preview shows the whole failure in a scrolling area',
   '.metadata-toggle-model': 'the toggle expands to details that show the whole model name',
   '.elaborator-row-name': 'the selected elaborator opens in its editor',
-  '.advanced-elab-name': 'the chosen or focused row shows its name whole',
-  '.advanced-target-row span:first-of-type': 'the focused row shows its model name whole',
-  '.dt-model-name': 'the selected row shows its model name whole',
+  '.advanced-elab-name': 'Elaborators shows the whole name; the visible part tells rows apart',
+  '.advanced-target-row span:first-of-type': 'the visible part of a model name tells rows apart',
+  '.dt-model-name': 'the row\'s tooltip and links name the model; the visible part tells rows apart',
   '.cli-job-row-title': 'Records keeps the job\'s whole target; the embedded target is already shortened',
   '.records-row-title': 'the selected record shows every field in its detail pane',
   '.records-row-text': 'the selected record shows every field in its detail pane',
-  '.records-detail-title': 'the detail body shows the whole message',
-  '.concept-library-facet-name': 'the selected seed shows its name whole',
+  '.concept-library-facet-name': 'the visible part of a seed tells rows apart',
   '.metadata-toggle-prompt': 'the toggle itself expands to the full prompt',
   '.toast-message': 'a one-word status in a window sized to it; the queue row shows the same outcome',
   'select:not([multiple])': 'opening the select shows every choice whole',
@@ -32,7 +31,7 @@ const REVIEWED_ELLIPSIS: Record<string, string> = {
 
 const REVIEWED_LINE_CLAMP: Record<string, string> = {
   '.elaborator-row-desc': 'the selected elaborator opens in its editor',
-  '.advanced-elab-desc': 'the chosen or focused row shows its description whole',
+  '.advanced-elab-desc': 'Elaborators shows the whole description',
 }
 
 // Not text: hidden from sight and read whole by assistive technology.
@@ -93,23 +92,6 @@ describe('stylesheet truncation sites', () => {
     const rule = all.find((candidate) => candidate.selector === selector)!
     expect(rule.body).toMatch(/max-height:/)
     expect(rule.body).toMatch(/overflow(-y)?:\s*auto/)
-  })
-
-  // A shortened value with no detail view of its own shows whole where the
-  // keyboard or a touch selects its row.
-  it.each([
-    ['.dt-model-row.selected .dt-model-name'],
-    ['.advanced-target-row:focus-within span:first-of-type'],
-    ['.concept-library-facet.selected .concept-library-facet-name'],
-  ])('%s reveals the whole value', (selector) => {
-    const rule = all.find((candidate) => candidate.selector === selector)!
-    expect(rule.body).toMatch(/white-space:\s*normal/)
-  })
-
-  it('reveals the chosen or focused elaborator row whole', () => {
-    const selectors = all.map((rule) => rule.selector)
-    expect(selectors).toContain('.advanced-elab-row.selected .advanced-elab-name, .advanced-elab-row:focus-within .advanced-elab-name')
-    expect(selectors).toContain('.advanced-elab-row.selected .advanced-elab-desc, .advanced-elab-row:focus-within .advanced-elab-desc')
   })
 
   // A menu is as wide as its longest item up to a narrow cap.

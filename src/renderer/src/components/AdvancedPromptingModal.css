@@ -177,8 +177,7 @@
   min-width: 0;
 }
 
-/* Rows show an identifying summary. The chosen or focused row shows its
-   name and description whole, so keyboard and touch reach every value. */
+/* Rows show an identifying summary; Elaborators shows each one whole. */
 .advanced-elab-name {
   font-size: var(--text-sm);
   font-weight: 600;
@@ -199,17 +198,6 @@
   -webkit-line-clamp: 2;
 }
 
-.advanced-elab-row.selected .advanced-elab-name,
-.advanced-elab-row:focus-within .advanced-elab-name {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.advanced-elab-row.selected .advanced-elab-desc,
-.advanced-elab-row:focus-within .advanced-elab-desc {
-  display: block;
-  overflow-wrap: anywhere;
-}
 
 .advanced-row {
   display: flex;
@@ -267,17 +255,11 @@
   cursor: default;
 }
 
-/* A model name is one line; the focused row shows it whole. */
 .advanced-target-row span:first-of-type {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.advanced-target-row:focus-within span:first-of-type {
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 
 .advanced-target-hint {

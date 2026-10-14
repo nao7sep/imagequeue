@@ -851,7 +851,6 @@
   "records.task": "Task",
   "records.elaboration": "Elaboration",
   "records.details": "Details",
-  "records.message": "Message",
   "records.request": "Request",
   "records.response": "Response",
   "records.error": "Error",
