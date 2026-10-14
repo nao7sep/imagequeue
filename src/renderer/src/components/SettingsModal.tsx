@@ -15,7 +15,8 @@ import { presentFailure } from '../utils/failurePresentation'
 import { rebaseSettingsDraft } from '../utils/settingsDraft'
 import { serializeError } from '../../../shared/serialize-error'
 import { normalizeThemePreference, type ThemePreference } from '../../../shared/theme'
-import { LANGUAGE_NAMES, LANGUAGES, normalizeLanguagePreference } from '../../../shared/i18n/languages'
+import { LANGUAGE_NAMES, LANGUAGES, normalizeLanguagePreference, type Language } from '../../../shared/i18n/languages'
+import { normalizeTimeZonePreference, timeZoneChoices } from '../../../shared/time-zone'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { useI18n } from '../i18n/I18nContext'
 import './SettingsModal.css'
@@ -61,6 +62,23 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const [releaseOpenFailed, setReleaseOpenFailed] = useState(false)
   const [releaseResult, setReleaseResult] = useState<AppReleaseResult | undefined>()
   const [checkingRelease, setCheckingRelease] = useState(false)
+  // What each System choice resolves to now, shown beside it
+  // (app-chrome-conventions, Theme; timestamp-conventions, Time zones).
+  const [system, setSystem] = useState<{ language: Language; timeZone: string } | null>(null)
+  const [systemAppearance, setSystemAppearance] = useState<'light' | 'dark' | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void window.electronAPI.getLanguageEnvironment().then((environment) => {
+      if (!cancelled) setSystem({ language: environment.systemLanguage, timeZone: environment.systemTimeZone })
+    }).catch((error) => recordOperationalDiagnostic('Reading the language environment for Settings failed', error))
+    void window.electronAPI.getSystemAppearance().then((appearance) => {
+      if (!cancelled) setSystemAppearance(appearance)
+    }).catch((error) => recordOperationalDiagnostic('Reading the system appearance failed', error))
+    return () => { cancelled = true }
+  }, [])
+  const zoneChoices = useMemo(() => timeZoneChoices(), [])
+  const systemLabel = (system: MessageKey, value: string | null | undefined): string =>
+    value ? t('settings.systemResolved', { system: t(system), value }) : t(system)
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
@@ -307,7 +325,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               value={normalizeLanguagePreference(general.language)}
               onChange={(e) => updateGeneral('language', normalizeLanguagePreference(e.target.value))}
             >
-              <option value="system">{t('settings.languageSystem')}</option>
+              <option value="system">{systemLabel('settings.languageSystem', system && LANGUAGE_NAMES[system.language])}</option>
               {LANGUAGES.map((language) => (
                 <option key={language} value={language} lang={language}>
                   {LANGUAGE_NAMES[language]}
@@ -315,6 +333,22 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               ))}
             </select>
             <p className="settings-hint">{t('settings.languageHint')}</p>
+          </div>
+          {/* Every time ImageQueue shows, Records included, is in this zone.
+              Chosen from the platform's IANA list, System first. */}
+          <div className="settings-field">
+            <label htmlFor="settings-timeZone">{t('settings.timeZone')}</label>
+            <select
+              id="settings-timeZone"
+              value={normalizeTimeZonePreference(general.time_zone)}
+              onChange={(e) => updateGeneral('time_zone', normalizeTimeZonePreference(e.target.value))}
+            >
+              <option value="system">{systemLabel('settings.timeZoneSystem', system?.timeZone)}</option>
+              {[...new Set([...zoneChoices, normalizeTimeZonePreference(general.time_zone)])]
+                .filter((zone) => zone !== 'system')
+                .map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+            </select>
+            <p className="settings-hint">{t('settings.timeZoneHint')}</p>
           </div>
           {/* A native radio group: one tab stop, arrow keys move and select.
               Applied on Save with the rest of Settings, never on its own. */}
@@ -330,7 +364,9 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                     checked={normalizeThemePreference(general.theme) === value}
                     onChange={() => updateGeneral('theme', value)}
                   />
-                  {t(label)}
+                  {value === 'system'
+                    ? systemLabel(label, systemAppearance && t(systemAppearance === 'dark' ? 'settings.themeDark' : 'settings.themeLight'))
+                    : t(label)}
                 </label>
               ))}
             </div>

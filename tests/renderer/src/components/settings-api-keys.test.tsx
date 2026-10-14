@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import type { SecretId } from '../../../../src/shared/types'
 import { until } from '../../until'
+import { settingsEnvironment } from './settings-environment'
 
 // API keys are stored outside config.json, so they are outside the settings
 // payload too: the form stages them separately and saves them on their own
@@ -72,7 +73,7 @@ function baseConfig(): Record<string, unknown> {
 beforeEach(() => {
   // The form reads the platform to decide whether to draw the Draw Things
   // section; nothing else here touches the bridge.
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
   settingsValue = {
     settings: baseConfig(),
     apiKeys: storedKeys(),
@@ -176,7 +177,7 @@ describe('Settings status icon preference', () => {
   })
 
   it('uses the Windows notification-area label', () => {
-    ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'win32' }
+    ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'win32', ...settingsEnvironment }
     render(<SettingsModal onClose={() => {}} />)
     expect(screen.getByText('Show in notification area')).toBeTruthy()
   })

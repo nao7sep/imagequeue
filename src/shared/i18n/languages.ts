@@ -89,4 +89,9 @@ export function formattingLocale(language: Language, systemLocale: string | null
 export interface LanguageEnvironment {
   language: Language
   locale: string
+  // The display zone (shared/time-zone), resolved by main.
+  timeZone: string
+  // What each System choice resolves to now, for the Settings labels.
+  systemLanguage: Language
+  systemTimeZone: string
 }

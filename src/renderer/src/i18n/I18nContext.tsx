@@ -3,6 +3,7 @@ import type { LanguageEnvironment } from '../../../shared/i18n/languages'
 import { createTranslator, loadTranslator, type Translator as BaseTranslator } from '../../../shared/i18n/translate'
 import { ENGLISH, type MessageKey } from '../../../shared/i18n/catalogues'
 import { serializeError } from '../../../shared/serialize-error'
+import { resolveDisplayZone, systemTimeZone } from '../../../shared/time-zone'
 
 export type Translator = BaseTranslator & {
   // Like t, but a placeholder may be filled with markup (a <code> path, say).
@@ -52,9 +53,9 @@ export function I18nProvider({
 }
 
 /**
- * The language the main process settled on, followed live: main resolves the
- * saved choice and the computer's language, and tells every window when a
- * saved change moves it. Nothing renders until the language and its catalogue
+ * The language and display zone the main process settled on, followed live:
+ * main resolves the saved choices against the computer's, and tells every
+ * window when a saved change moves either. Nothing renders until the language and its catalogue
  * are loaded, so the first words on screen are already in it.
  */
 export function MainProcessLanguage({ children }: { children: ReactNode }): React.JSX.Element | null {
@@ -70,7 +71,7 @@ export function MainProcessLanguage({ children }: { children: ReactNode }): Reac
       if (!fromChange && changed) return
       if (fromChange) changed = true
       const request = ++latest
-      void loadTranslator(environment.language, environment.locale).then((next) => {
+      void loadTranslator(environment.language, environment.locale, environment.timeZone).then((next) => {
         if (!cancelled && request === latest) setTranslator(next)
       }).catch((error: unknown) => {
         // A missing catalogue must not strand a window at its blank launch
@@ -89,7 +90,10 @@ export function MainProcessLanguage({ children }: { children: ReactNode }): Reac
     void window.electronAPI.getLanguageEnvironment()
       .then((next) => apply(next, false))
       // A failed read leaves English in its own format rather than no window.
-      .catch(() => apply({ language: 'en', locale: 'en' }, false))
+      .catch(() => {
+        const zone = resolveDisplayZone('system', systemTimeZone())
+        apply({ language: 'en', locale: 'en', timeZone: zone, systemLanguage: 'en', systemTimeZone: zone }, false)
+      })
     return () => {
       cancelled = true
       unsubscribe()

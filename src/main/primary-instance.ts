@@ -60,7 +60,7 @@ import { StatusIconController } from './status-icon'
 import { openSessionsFolder } from './session/open-sessions-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
 import { ownMainWindowContentLoad } from './main-window-content'
-import { applyLanguagePreference, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
+import { applyLocalePreferences, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
 import { buildAppMenuTemplate, buildTextContextMenuTemplate } from './app-menu'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
@@ -327,7 +327,7 @@ async function startUp(): Promise<void> {
     // Settings apply on Save, the theme and language included (app-chrome
     // conventions, Theme; localization conventions).
     applyThemePreference(config.general.theme)
-    await applyLanguagePreference(config.general.language)
+    await applyLocalePreferences(config.general.language, config.general.time_zone)
     await statusIconController?.reconcile(config.general.show_status_icon)
     // Turning the setting on is a request for this window alone.
     syncPreviewWindow(config.general.show_preview_window, { focus: true })

@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
 import { until } from '../../until'
+import { settingsEnvironment } from './settings-environment'
 
 // "Also show in a separate window" is one Settings › General choice beside
 // Auto-preview, off by default, staged with the rest of the form and applied by
@@ -62,7 +63,7 @@ function checkbox(): HTMLInputElement {
 }
 
 beforeEach(() => {
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
 })
 afterEach(cleanup)
 

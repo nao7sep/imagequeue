@@ -21,6 +21,7 @@ Each cloud column offers its currently supported model choices and model-specifi
 - **Advanced Prompting** — batch across backends and models with AI-elaborated prompt variations, reusable elaborators, and a persistent **Concept Library** that guarantees the elaborated prompts keep varying instead of collapsing onto the model's favourite ideas
 - **Stays awake during long runs**, with optional toast and sound notifications on completion
 - **Light and dark themes** — follow the OS appearance or pick Light or Dark in Settings › General
+- **Your time zone** — every time ImageQueue shows, Records included, is in the computer's zone or one you pick in Settings › General
 - **Release notices** — check GitHub for a new ImageQueue release from Settings, or at launch when enabled. A notice opens the release page; it does not install an update
 
 ## Requirements

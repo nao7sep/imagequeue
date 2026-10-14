@@ -5,6 +5,7 @@ import { I18nProvider } from '../../../../src/renderer/src/i18n/I18nContext'
 import type { Language } from '../../../../src/shared/i18n/languages'
 import { loadTranslator, type Translator } from '../../../../src/shared/i18n/translate'
 import { until } from '../../until'
+import { settingsEnvironment } from './settings-environment'
 
 // The interface language is one Settings › General choice: System first, then
 // each language by its own name, staged with the rest of the form and applied
@@ -70,17 +71,18 @@ function languageSelect(): HTMLSelectElement {
 }
 
 beforeEach(() => {
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
 })
 afterEach(cleanup)
 
 describe('Settings language choice', () => {
-  it('lists System, then each language in its own name and script', () => {
+  it('lists System, showing the language it resolves to, then each language in its own name and script', async () => {
     renderWith('system')
+    await until(() => expect(within(languageSelect()).getAllByRole('option')[0]!.textContent).toBe('System (English)'))
     const options = within(languageSelect()).getAllByRole('option') as HTMLOptionElement[]
     expect(options.map((option) => option.value)).toEqual(['system', 'en', 'de', 'es', 'fr', 'it', 'pt-BR', 'ru', 'ja', 'ko', 'zh-Hans'])
     expect(options.map((option) => option.textContent)).toEqual([
-      'System', 'English', 'Deutsch', 'Español', 'Français', 'Italiano', 'Português', 'Русский', '日本語', '한국어', '中文',
+      'System (English)', 'English', 'Deutsch', 'Español', 'Français', 'Italiano', 'Português', 'Русский', '日本語', '한국어', '中文',
     ])
     expect(options.slice(1).map((option) => option.lang)).toEqual(['en', 'de', 'es', 'fr', 'it', 'pt-BR', 'ru', 'ja', 'ko', 'zh-Hans'])
   })
@@ -109,3 +111,28 @@ describe('Settings language choice', () => {
     expect((save.mock.calls[0]![1] as { general: { language: string } }).general.language).toBe('ru')
   })
 })
+
+// The display zone (timestamp-conventions, Time zones).
+describe('Settings time zone choice', () => {
+  const zoneSelect = (): HTMLSelectElement => screen.getByRole('combobox', { name: 'Time zone' }) as HTMLSelectElement
+
+  it('lists System first, showing the zone it resolves to, then the platform\'s zones', async () => {
+    renderWith('system')
+    await until(() => expect(within(zoneSelect()).getAllByRole('option')[0]!.textContent).toBe('System (Asia/Tokyo)'))
+    const values = (within(zoneSelect()).getAllByRole('option') as HTMLOptionElement[]).map((option) => option.value)
+    expect(values[0]).toBe('system')
+    expect(values.slice(1)).toEqual(Intl.supportedValuesOf('timeZone'))
+    expect(zoneSelect().value).toBe('system')
+  })
+
+  it('stages a zone and saves it only on Save', async () => {
+    renderWith('system')
+    fireEvent.change(zoneSelect(), { target: { value: 'Europe/Berlin' } })
+    expect(settingsValue.saveChangedSettings).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const save = settingsValue.saveChangedSettings as ReturnType<typeof vi.fn>
+    await until(() => expect(save).toHaveBeenCalledTimes(1))
+    expect((save.mock.calls[0]![1] as { general: { time_zone: string } }).general.time_zone).toBe('Europe/Berlin')
+  })
+})
+

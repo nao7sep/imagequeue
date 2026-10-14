@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { until } from '../../until'
+import { settingsEnvironment } from './settings-environment'
 
 // Reset slug template fills the draft with the shipped template and stores
 // nothing of its own: Save sends the draft like any other edit, and main removes
@@ -57,6 +58,7 @@ function renderWith(theme: unknown, onClose = vi.fn()): void {
 
 beforeEach(() => {
   ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
+    ...settingsEnvironment,
     platform: 'darwin', promptsGetDefaultSlug: vi.fn().mockResolvedValue('shipped slug'),
   }
 })

@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
+import { settingsEnvironment } from './settings-environment'
 
 // The Models Directory is an app-owned location the user may move for disk
 // space, so its field says that changing it moves nothing already downloaded
@@ -57,7 +58,7 @@ function renderWith(previewWindow: boolean | undefined): RenderResult {
 }
 
 beforeEach(() => {
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
 })
 afterEach(cleanup)
 

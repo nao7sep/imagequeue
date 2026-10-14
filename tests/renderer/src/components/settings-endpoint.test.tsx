@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { until } from '../../until'
+import { settingsEnvironment } from './settings-environment'
 
 // An endpoint is the provider's address and has no empty default: Save refuses
 // an empty one and stores nothing.
@@ -55,7 +56,7 @@ function renderWith(theme: unknown, onClose = vi.fn()): void {
 }
 
 beforeEach(() => {
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
 })
 afterEach(cleanup)
 

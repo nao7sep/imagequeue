@@ -96,7 +96,7 @@ function atTop(scroll: HTMLElement): boolean {
 }
 
 export function RecordsWindow({ initialListWidth }: { initialListWidth: number }): React.JSX.Element {
-  const { t, locale } = useI18n()
+  const { t, locale, timeZone } = useI18n()
   const [sources, setSources] = useState<RecordSources | null>(null)
   const [sourceReads, setSourceReads] = useState(0)
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
@@ -135,7 +135,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const intent = dragWidth ?? listWidth
   const shownListWidth = available === null ? clampRecordsListWidth(intent) : displayedRecordsListWidth(intent, available)
 
-  const timeFormat = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }), [locale])
+  // Every time here is shown in the display zone (timestamp-conventions).
+  const timeFormat = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium', timeZone }), [locale, timeZone])
 
   useEffect(() => {
     document.title = t('records.title')
@@ -392,7 +393,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   }
 
   const sessionLabel = (session: string): string => {
-    const name = sessionDisplayName(session)
+    const name = sessionDisplayName(session, (time) => timeFormat.format(time))
     return session === sources?.currentSession ? t('records.thisSession', { name }) : name
   }
 
@@ -558,7 +559,7 @@ function RecordDetailView({
   launchLabel: (launch: string) => string
   sessionLabel: (session: string) => string
 }): React.JSX.Element {
-  const { t, locale } = useI18n()
+  const { t, locale, timeZone } = useI18n()
   const timeFormat = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -569,8 +570,9 @@ function RecordDetailView({
         minute: '2-digit',
         second: '2-digit',
         fractionalSecondDigits: 3,
+        timeZone,
       }),
-    [locale],
+    [locale, timeZone],
   )
   const seconds = useMemo(
     () => new Intl.NumberFormat(locale, { style: 'unit', unit: 'second', minimumFractionDigits: 3, maximumFractionDigits: 3 }),

@@ -147,6 +147,10 @@ export interface GeneralConfig {
   // launch; otherwise a supported language tag. A `string` for the same reason
   // as theme: normalizeLanguagePreference (shared/i18n) resolves it at use.
   language: string
+  // The display zone: 'system' follows the computer's zone on every launch;
+  // otherwise an IANA zone. A `string` for the same reason as theme:
+  // normalizeTimeZonePreference (shared/time-zone) resolves it at use.
+  time_zone: string
   // The app's UI (chrome) font family. Family only; blank means the built-in default stack (the
   // renderer's `--font-ui` variable). Applied app-wide via that variable.
   ui_font_family: string

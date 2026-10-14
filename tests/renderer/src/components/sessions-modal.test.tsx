@@ -105,7 +105,9 @@ describe('SessionsModal', () => {
     await act(async () => { fireEvent.keyDown(newer, { key: 'Enter' }) })
     expect(resumeSession).not.toHaveBeenCalled()
     // Enter on a session it can open does resume it.
-    const readable = screen.getByText('20261003-120000').closest('[role="option"]') as HTMLElement
+    // Named by its start in the display zone (the test translator's default).
+    const start = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date('2026-10-03T12:00:00Z'))
+    const readable = screen.getByText(start).closest('[role="option"]') as HTMLElement
     act(() => readable.focus())
     await act(async () => { fireEvent.keyDown(readable, { key: 'Enter' }) })
     expect(resumeSession).toHaveBeenCalledExactlyOnceWith('20261003-120000-000-utc')

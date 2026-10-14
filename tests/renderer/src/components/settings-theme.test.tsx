@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react'
 import { until } from '../../until'
+import { settingsEnvironment } from './settings-environment'
 
 // The theme is one Settings › General choice of System, Light, or Dark, staged
 // with the rest of the form and applied only by Save (app-chrome conventions).
@@ -59,7 +60,7 @@ function themeRadios(): HTMLInputElement[] {
 }
 
 beforeEach(() => {
-  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin' }
+  ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
 })
 afterEach(cleanup)
 
@@ -126,10 +127,11 @@ describe('Settings theme choice', () => {
     expect(screen.getByRole('alert')).toBeTruthy()
   })
 
-  it('offers System, Light, and Dark as one radio group', () => {
+  it('offers System, showing what it resolves to now, Light, and Dark as one radio group', async () => {
     renderWith('dark')
     const radios = themeRadios()
-    expect(radios.map((radio) => radio.closest('label')?.textContent)).toEqual(['System', 'Light', 'Dark'])
+    // While Dark is chosen, System still names the OS appearance it would follow.
+    await until(() => expect(radios.map((radio) => radio.closest('label')?.textContent)).toEqual(['System (Dark)', 'Light', 'Dark']))
     expect(new Set(radios.map((radio) => radio.name)).size).toBe(1)
     expect(radios.find((radio) => radio.checked)?.value).toBe('dark')
   })

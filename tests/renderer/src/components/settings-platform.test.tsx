@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { settingsEnvironment } from './settings-environment'
 
 // Settings offers only what the platform has: the status icon lives in the
 // menu bar on macOS and the notification area on Windows, and exists nowhere
@@ -42,7 +43,7 @@ function baseConfig(): Record<string, unknown> {
 }
 
 function renderOn(platform: string): void {
-  Object.assign(window, { electronAPI: { platform } })
+  Object.assign(window, { electronAPI: { platform, ...settingsEnvironment } })
   settingsValue = {
     settings: baseConfig(),
     apiKeys: {},

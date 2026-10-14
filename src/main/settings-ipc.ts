@@ -18,6 +18,7 @@ import { AppConfig } from './config/types'
 import { openSessionsFolder } from './session/open-sessions-folder'
 import { log, serializeError } from './logger'
 import { mainTranslator } from './i18n'
+import { systemAppearance } from './theme'
 import {
   checkCli,
   listDownloadedModels,
@@ -77,6 +78,8 @@ function validateKeyChanges(changes: Record<string, string>): void {
 export function registerSettingsIpc(
   onConfigSaved?: (config: AppConfig) => Promise<void> | void,
 ): void {
+  handle('theme:systemAppearance', () => systemAppearance())
+
   handle('settings:get', () => {
     // The config carries no keys — they are neither in the type nor in this
     // payload — so the cached object is returned as-is (IPC serializes it).

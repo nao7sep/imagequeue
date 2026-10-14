@@ -7,6 +7,9 @@ import { RecordsApp, RecordsWindow } from '../../../../src/renderer/src/records/
 import type { ElectronAPI } from '../../../../src/shared/electron-api'
 import { RECORDS_LIST_WIDTH, RECORDS_WINDOW_MIN_WIDTH } from '../../../../src/shared/records-layout'
 import type { RecordDetail, RecordsPage, RecordsQuery, RecordSummary } from '../../../../src/shared/records'
+import { I18nProvider } from '../../../../src/renderer/src/i18n/I18nContext'
+import { createTranslator } from '../../../../src/shared/i18n/translate'
+import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -84,6 +87,7 @@ class TestResizeObserver {
 const isScroll = (element: HTMLElement) => element.classList.contains('records-list-scroll')
 
 beforeEach(() => {
+  zone = 'UTC'
   readRecordsPage.mockReset()
   readRecordsPage.mockResolvedValue({ records: [call, line], more: false } satisfies RecordsPage)
   readRecordDetail.mockReset()
@@ -138,8 +142,13 @@ async function mount(element: React.ReactElement = React.createElement(RecordsWi
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => root?.render(element))
+  // Times show in the display zone; these tests pin it.
+  await act(async () => root?.render(React.createElement(I18nProvider, { translator: createTranslator('en', ENGLISH, 'en', zone), children: element })))
 }
+
+let zone = 'UTC'
+const shown = (iso: string): string =>
+  new Intl.DateTimeFormat('en', { dateStyle: 'short', timeStyle: 'medium', timeZone: zone }).format(new Date(iso))
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
   let resolve!: (value: T) => void
@@ -199,7 +208,7 @@ describe('RecordsWindow', () => {
       ['Error', JSON.stringify({ name: 'Error', message: 'quota' }, null, 2)],
     ])
     const body = document.querySelector('.records-detail-body')!.textContent!
-    for (const text of ['gemini-x', 'brainstorm', 'req-1', '2.5', '20261002-080000 (current session)', '(this launch)']) {
+    for (const text of ['gemini-x', 'brainstorm', 'req-1', '2.5', `${shown('2026-10-02T08:00:00Z')} (current session)`, '(this launch)']) {
       expect(body).toContain(text)
     }
     expect(document.querySelector('.records-detail-title')?.textContent).toBe('gemini brainstorm')
@@ -251,7 +260,7 @@ describe('RecordsWindow', () => {
     ]))
     expect(fields).toMatchObject({
       Target: 'flux.ckpt', Command: '/Users/someone/.imagequeue/bin/draw-things-cli', Status: 'Stopped', Signal: 'SIGTERM',
-      Job: 'job-abc', Session: '20261002-080000 (current session)',
+      Job: 'job-abc', Session: `${shown('2026-10-02T08:00:00Z')} (current session)`,
     })
     expect(fields['Duration']).toContain('4.5')
     expect(Object.keys(fields)).toEqual(expect.arrayContaining(['Requested', 'Started', 'Finished']))
@@ -277,6 +286,15 @@ describe('RecordsWindow', () => {
     expect(options()[1]!.getAttribute('aria-selected')).toBe('true')
   })
 
+  it('shows every time in the display zone', async () => {
+    zone = 'Asia/Tokyo'
+    await mount()
+    const sessions = Array.from(document.querySelectorAll('select')[1]!.options).map((option) => option.textContent)
+    expect(sessions[1]).toBe(`${shown('2026-10-02T08:00:00Z')} (current session)`)
+    expect(sessions[1]).toContain('5:00:00')
+    expect(document.body.textContent).toContain(shown('2026-10-02T08:01:00.000Z'))
+  })
+
   it('reads again with each filter, and searches once typing pauses', async () => {
     await mount()
     const selects = Array.from(document.querySelectorAll('select'))
@@ -286,7 +304,7 @@ describe('RecordsWindow', () => {
       expect.not.stringContaining('(this launch)'),
     ])
     expect(Array.from(selects[1]!.options).map((option) => option.textContent)).toEqual([
-      'All sessions', '20261002-080000 (current session)', '20261001-080000',
+      'All sessions', `${shown('2026-10-02T08:00:00Z')} (current session)`, shown('2026-10-01T08:00:00Z'),
     ])
     expect(Array.from(selects[2]!.options).map((option) => option.textContent)).toEqual(['All kinds', 'Log line', 'AI call', 'CLI job'])
 

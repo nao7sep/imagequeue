@@ -2,6 +2,7 @@ import type { AppConfig, BrainstormConfig } from './types'
 import type { TextAIBackendId } from '../../shared/types'
 import { createDefaultConfig } from './defaults'
 import { isLanguage } from '../../shared/i18n/languages'
+import { isTimeZone } from '../../shared/time-zone'
 import { AI_ROLES, TEXT_PROVIDERS, textRowFor } from '../../shared/ai-models'
 import { multiline, singleLine } from '../../shared/textCleanup'
 import { valuesEqual } from '../settings-changes'
@@ -88,6 +89,7 @@ function meetsAppMinimum(key: string, value: number): boolean {
 export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean {
   if (key === 'general.theme') return ['system', 'light', 'dark'].includes(String(value))
   if (key === 'general.language') return value === 'system' || isLanguage(value)
+  if (key === 'general.time_zone') return value === 'system' || isTimeZone(value)
   if (key === 'provider') return value === 'gemini' || value === 'openai'
   // An image column's model and its parameters. Which parameters a model takes,
   // and their values, are the column's to judge per row, so a record saved for a

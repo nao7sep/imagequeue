@@ -1,4 +1,5 @@
-import { BrowserWindow, nativeTheme } from 'electron'
+import { execFile } from 'child_process'
+import { BrowserWindow, nativeTheme, systemPreferences } from 'electron'
 import { normalizeThemePreference } from '../shared/theme'
 import { mainWindowBackground } from './window-options'
 
@@ -40,3 +41,32 @@ export function applyThemePreference(value: unknown): void {
 export function followOsThemeChanges(): void {
   nativeTheme.on('updated', syncWindowBackgrounds)
 }
+
+export type Appearance = 'light' | 'dark'
+
+// While Light or Dark is chosen, nativeTheme reports the choice, not the OS, so
+// what System would resolve to is read from the OS itself: macOS keeps it in the
+// global AppleInterfaceStyle default, Windows in the AppsUseLightTheme value.
+const WINDOWS_PERSONALIZE = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'
+
+/** Windows reports dark apps as AppsUseLightTheme 0; anything else is light. */
+export function appearanceFromRegistry(output: string): Appearance {
+  return /AppsUseLightTheme\s+REG_DWORD\s+0x0+\b/i.test(output) ? 'dark' : 'light'
+}
+
+/** What the System theme resolves to now, for its Settings label
+ *  (app-chrome-conventions, Theme). */
+export async function systemAppearance(platform: NodeJS.Platform = process.platform): Promise<Appearance> {
+  if (nativeTheme.themeSource === 'system') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+  if (platform === 'darwin') {
+    return systemPreferences.getUserDefault('AppleInterfaceStyle', 'string') === 'Dark' ? 'dark' : 'light'
+  }
+  if (platform === 'win32') {
+    return new Promise((resolve) => {
+      execFile('reg', ['query', WINDOWS_PERSONALIZE, '/v', 'AppsUseLightTheme'], { timeout: 2_000, windowsHide: true },
+        (error, stdout) => resolve(error ? 'light' : appearanceFromRegistry(stdout)))
+    })
+  }
+  return 'light'
+}
+

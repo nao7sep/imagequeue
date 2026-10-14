@@ -5,7 +5,9 @@
 // on, so both processes always agree.
 //
 // The computer's languages are read once, at launch; System resolves against
-// that reading for the whole session.
+// that reading for the whole session. The display zone (shared/time-zone)
+// travels with the language: the same environment hands every window both, so
+// every time on screen is formatted in one zone.
 
 import fs from 'fs'
 import { app, BrowserWindow, systemPreferences } from 'electron'
@@ -19,6 +21,12 @@ import {
   type LanguagePreference,
 } from '../shared/i18n/languages'
 import { createTranslator, loadTranslator, type Translator } from '../shared/i18n/translate'
+import {
+  normalizeTimeZonePreference,
+  resolveDisplayZone,
+  systemTimeZone,
+  type TimeZonePreference,
+} from '../shared/time-zone'
 import { ENGLISH } from '../shared/i18n/catalogues'
 import { getConfigPath } from './config'
 import { handle } from './ipc-boundary'
@@ -30,7 +38,9 @@ export const LANGUAGE_CHANGED_CHANNEL = 'language:changed'
 interface LanguageState {
   systemLanguage: Language
   systemLocale: string | null
+  systemZone: string | undefined
   preference: LanguagePreference
+  zonePreference: TimeZonePreference
   translator: Translator
 }
 
@@ -46,18 +56,27 @@ const listeners = new Set<(translator: Translator) => void>()
  * build's format version is one the load path sets aside or refuses, so its
  * language is never used either.
  */
-export function readSavedPreference(configText: string | null): LanguagePreference {
-  if (configText === null) return 'system'
+function savedGeneral(configText: string | null): { language?: unknown; time_zone?: unknown } | undefined {
+  if (configText === null) return undefined
   try {
     const parsed: unknown = JSON.parse(configText)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'system'
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
     const stored = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.config, 'config.json') as {
-      general?: { language?: unknown }
+      general?: { language?: unknown; time_zone?: unknown }
     }
-    return normalizeLanguagePreference(stored.general?.language)
+    return stored.general
   } catch {
-    return 'system'
+    return undefined
   }
+}
+
+export function readSavedPreference(configText: string | null): LanguagePreference {
+  return normalizeLanguagePreference(savedGeneral(configText)?.language)
+}
+
+/** The saved display zone, read the same way as the language. */
+export function readSavedTimeZonePreference(configText: string | null): TimeZonePreference {
+  return normalizeTimeZonePreference(savedGeneral(configText)?.time_zone)
 }
 
 function readConfigText(): string | null {
@@ -105,21 +124,29 @@ function alignAppKit(preference: LanguagePreference): void {
   }
 }
 
-async function build(systemLanguage: Language, systemLocale: string | null, preference: LanguagePreference): Promise<LanguageState> {
-  const language = effectiveLanguage(preference, systemLanguage)
+type Computer = Pick<LanguageState, 'systemLanguage' | 'systemLocale' | 'systemZone'>
+
+async function build(computer: Computer, preference: LanguagePreference, zonePreference: TimeZonePreference): Promise<LanguageState> {
+  const language = effectiveLanguage(preference, computer.systemLanguage)
+  const zone = resolveDisplayZone(zonePreference, computer.systemZone)
   return {
-    systemLanguage,
-    systemLocale,
+    ...computer,
     preference,
-    translator: await loadTranslator(language, formattingLocale(language, systemLocale)),
+    zonePreference,
+    translator: await loadTranslator(language, formattingLocale(language, computer.systemLocale), zone),
   }
 }
 
-/** Settles the language once the app is ready, before any window or native menu exists. */
+/** Settles the language and display zone once the app is ready, before any
+ *  window or native menu exists. The computer's zone is read on every launch. */
 export async function settleLanguage(): Promise<void> {
-  const systemLanguage = resolveSystemLanguage(computerLanguages())
-  const preference = readSavedPreference(readConfigText())
-  state = await build(systemLanguage, app.getSystemLocale() || null, preference)
+  const text = readConfigText()
+  const preference = readSavedPreference(text)
+  state = await build({
+    systemLanguage: resolveSystemLanguage(computerLanguages()),
+    systemLocale: app.getSystemLocale() || null,
+    systemZone: systemTimeZone(),
+  }, preference, readSavedTimeZonePreference(text))
   alignAppKit(preference)
 }
 
@@ -130,7 +157,14 @@ export function mainTranslator(): Translator {
 
 export function languageEnvironment(): LanguageEnvironment {
   const translator = mainTranslator()
-  return { language: translator.language, locale: translator.locale }
+  const systemZone = state?.systemZone
+  return {
+    language: translator.language,
+    locale: translator.locale,
+    timeZone: translator.timeZone ?? resolveDisplayZone('system', systemZone),
+    systemLanguage: state?.systemLanguage ?? 'en',
+    systemTimeZone: resolveDisplayZone('system', systemZone),
+  }
 }
 
 /** Native surfaces that hold words register here and redraw on a change. */
@@ -139,20 +173,31 @@ export function onLanguageChanged(listener: (translator: Translator) => void): (
   return () => { listeners.delete(listener) }
 }
 
-/** Applies a saved choice: every window and native surface follows at once. */
+/** Applies a saved language: every window and native surface follows at once. */
 export async function applyLanguagePreference(value: unknown): Promise<void> {
+  if (!state) return
+  await applyPreferences(normalizeLanguagePreference(value), state.zonePreference)
+}
+
+/** Applies a saved language and display zone together, as Settings saves
+ *  them: every window and native surface follows at once. */
+export async function applyLocalePreferences(language: unknown, timeZone: unknown): Promise<void> {
+  await applyPreferences(normalizeLanguagePreference(language), normalizeTimeZonePreference(timeZone))
+}
+
+async function applyPreferences(preference: LanguagePreference, zonePreference: TimeZonePreference): Promise<void> {
   const applying = ++latestApply
   if (!state) return
-  const preference = normalizeLanguagePreference(value)
-  if (preference === state.preference) return
-  const next = await build(state.systemLanguage, state.systemLocale, preference)
+  if (preference === state.preference && zonePreference === state.zonePreference) return
+  const next = await build(state, preference, zonePreference)
   if (applying !== latestApply) return
-  const previous = state.translator.language
+  const previous = state.translator
   state = next
   alignAppKit(preference)
-  if (state.translator.language === previous) return
+  if (state.translator.language === previous.language && state.translator.timeZone === previous.timeZone) return
   const translator = state.translator
-  for (const listener of listeners) {
+  // Native surfaces hold words, not times; they redraw only for a new language.
+  for (const listener of state.translator.language === previous.language ? [] : listeners) {
     try {
       listener(translator)
     } catch (err) {

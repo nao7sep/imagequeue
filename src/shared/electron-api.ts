@@ -75,6 +75,7 @@ export interface ElectronAPI {
   platform: Platform
   // The interface language main settled on, and each saved change to it.
   getLanguageEnvironment: () => Promise<LanguageEnvironment>
+  getSystemAppearance: () => Promise<'light' | 'dark'>
   onLanguageChanged: (callback: (environment: LanguageEnvironment) => void) => (() => void)
   onAppNotice: (callback: (notice: AppNotice) => void) => (() => void)
   // Notices main raised before this window subscribed; each is handed out once.

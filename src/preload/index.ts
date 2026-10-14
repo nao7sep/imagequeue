@@ -67,6 +67,8 @@ const api = {
     ipcRenderer.invoke(STARTUP_FAILURE_MESSAGE_CHANNEL),
   getLanguageEnvironment: (): Promise<LanguageEnvironment> =>
     ipcRenderer.invoke('language:environment'),
+  getSystemAppearance: (): Promise<'light' | 'dark'> =>
+    ipcRenderer.invoke('theme:systemAppearance'),
   onLanguageChanged: (callback: (environment: LanguageEnvironment) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, environment: LanguageEnvironment): void => callback(environment)
     ipcRenderer.on('language:changed', handler)

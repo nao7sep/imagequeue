@@ -347,6 +347,16 @@ describe('settings by set', () => {
     }
     expect(log.mock.calls.filter(([level]) => level === 'warn')).toEqual([['warn', 'Invalid config set; using built-in', { key: 'general.theme' }]])
   })
+  it('keeps a chosen display zone and carries an unknown one through unchanged as System', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { time_zone: 'Europe/Berlin' } }))
+    const store = await import('../../../src/main/config/config-store')
+    expect(store.loadConfig().general.time_zone).toBe('Europe/Berlin')
+    vi.resetModules()
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { time_zone: 'Mars/Olympus' } }))
+    const reloaded = await import('../../../src/main/config/config-store')
+    expect(reloaded.loadConfig().general.time_zone).toBe('system')
+    expect(stored()).toEqual({ general: { time_zone: 'Mars/Olympus' } })
+  })
   it('keeps every built-in text in its cleaned form', async () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')
     for (const [key, builtIn] of Object.entries(configSetDefaults())) expect(cleanConfigSet(key, builtIn), key).toEqual(builtIn)

@@ -94,6 +94,12 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   const i18n = useI18n()
   const { t } = i18n
   const date = (iso: string): string => i18n.dateTime(iso)
+  // A session is named by its start, to the second so two never read alike.
+  const sessionTimeFormat = useMemo(
+    () => new Intl.DateTimeFormat(i18n.locale, { dateStyle: 'medium', timeStyle: 'medium', timeZone: i18n.timeZone }),
+    [i18n.locale, i18n.timeZone],
+  )
+  const sessionTime = (time: Date): string => sessionTimeFormat.format(time)
   const { settings } = useSettings()
   const [sessions, setSessions] = useState<SessionListEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -313,7 +319,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
                 >
                   <div className="session-card-header">
                     <div className="session-card-title-row">
-                      <div className="session-card-title">{sessionDisplayName(session.sessionId)}</div>
+                      <div className="session-card-title">{sessionDisplayName(session.sessionId, sessionTime)}</div>
                       {session.isCurrent && <span className="session-card-badge">{t('sessions.current')}</span>}
                     </div>
                     <div className="session-card-summary">{summarizeSession(session, i18n)}</div>

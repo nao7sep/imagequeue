@@ -35,13 +35,15 @@ export type Translator = {
   // placeholder names at odd ones, for a surface that fills them with markup.
   parts: (key: MessageKey) => string[]
   number: (value: number) => string
+  // The display zone every time is shown in (shared/time-zone).
+  timeZone: string | undefined
   // An instant as a date and time; stored text that is not one shows as it is.
   dateTime: (value: Date | string) => string
 }
 
-export function createTranslator(language: Language, catalogue: Catalogue, locale: string = language): Translator {
+export function createTranslator(language: Language, catalogue: Catalogue, locale: string = language, timeZone?: string): Translator {
   const numberFormat = new Intl.NumberFormat(locale)
-  const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
+  const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone })
   const pluralRules = new Intl.PluralRules(language)
 
   function template(key: MessageKey, values: MessageValues | undefined): string {
@@ -83,6 +85,7 @@ export function createTranslator(language: Language, catalogue: Catalogue, local
     text: (message) => t(message.key, message.values),
     parts: (key) => template(key, undefined).split(PLACEHOLDER),
     number: (value) => numberFormat.format(value),
+    timeZone,
     dateTime: (value) => {
       const date = typeof value === 'string' ? new Date(value) : value
       return Number.isNaN(date.getTime()) ? String(value) : dateTimeFormat.format(date)
@@ -90,6 +93,6 @@ export function createTranslator(language: Language, catalogue: Catalogue, local
   }
 }
 
-export async function loadTranslator(language: Language, locale: string = language): Promise<Translator> {
-  return createTranslator(language, await loadCatalogue(language), locale)
+export async function loadTranslator(language: Language, locale: string = language, timeZone?: string): Promise<Translator> {
+  return createTranslator(language, await loadCatalogue(language), locale, timeZone)
 }

@@ -9,12 +9,20 @@ const electron = vi.hoisted(() => {
       listeners[event] = listener
     }),
   }
-  return { listeners, nativeTheme }
+  return { listeners, nativeTheme, interfaceStyle: '' as string, registry: '' as string }
 })
 
-vi.mock('electron', () => ({ BrowserWindow: class {}, nativeTheme: electron.nativeTheme }))
+vi.mock('electron', () => ({
+  BrowserWindow: class {},
+  nativeTheme: electron.nativeTheme,
+  systemPreferences: { getUserDefault: (key: string) => (key === 'AppleInterfaceStyle' ? electron.interfaceStyle : undefined) },
+}))
+vi.mock('child_process', () => ({
+  execFile: (_file: string, _args: string[], _options: unknown, callback: (error: Error | null, stdout: string) => void) =>
+    callback(null, electron.registry),
+}))
 
-import { applyThemePreference, followOsThemeChanges, trackThemedWindow, windowBackground } from '../../src/main/theme'
+import { appearanceFromRegistry, applyThemePreference, followOsThemeChanges, systemAppearance, trackThemedWindow, windowBackground } from '../../src/main/theme'
 import { normalizeThemePreference } from '../../src/shared/theme'
 
 function fakeWindow() {
@@ -65,3 +73,35 @@ describe('theme', () => {
     expect(window.setBackgroundColor).not.toHaveBeenCalled()
   })
 })
+
+// The System choice's label shows the OS appearance even while Light or Dark
+// is chosen (app-chrome-conventions, Theme).
+describe('what System resolves to', () => {
+  it('follows nativeTheme while System is chosen', async () => {
+    electron.nativeTheme.shouldUseDarkColors = true
+    await expect(systemAppearance('darwin')).resolves.toBe('dark')
+  })
+
+  it('reads macOS\'s own appearance while Light or Dark is chosen', async () => {
+    electron.nativeTheme.themeSource = 'light'
+    electron.interfaceStyle = 'Dark'
+    await expect(systemAppearance('darwin')).resolves.toBe('dark')
+    electron.interfaceStyle = ''
+    await expect(systemAppearance('darwin')).resolves.toBe('light')
+  })
+
+  it('reads Windows\' app appearance while Light or Dark is chosen', async () => {
+    electron.nativeTheme.themeSource = 'dark'
+    electron.registry = '    AppsUseLightTheme    REG_DWORD    0x1\r\n'
+    await expect(systemAppearance('win32')).resolves.toBe('light')
+    electron.registry = '    AppsUseLightTheme    REG_DWORD    0x0\r\n'
+    await expect(systemAppearance('win32')).resolves.toBe('dark')
+  })
+
+  it('parses the Windows value, reading a missing one as light', () => {
+    expect(appearanceFromRegistry('HKEY_CURRENT_USER\\...\r\n    AppsUseLightTheme    REG_DWORD    0x0\r\n')).toBe('dark')
+    expect(appearanceFromRegistry('    AppsUseLightTheme    REG_DWORD    0x1')).toBe('light')
+    expect(appearanceFromRegistry('')).toBe('light')
+  })
+})
+

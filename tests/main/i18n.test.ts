@@ -9,6 +9,7 @@ const electron = vi.hoisted(() => ({
   calls: [] as string[],
   preferred: ['ja-JP', 'en-US'],
   isPackaged: true,
+  sent: [] as Array<[string, unknown]>,
 }))
 
 vi.mock('electron', () => ({
@@ -32,11 +33,13 @@ vi.mock('electron', () => ({
       electron.defaults.delete(key)
     },
   },
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: {
+    getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: (channel: string, payload: unknown) => electron.sent.push([channel, payload]) } }],
+  },
 }))
 vi.mock('../../src/main/config', () => ({ getConfigPath: () => '/tmp/imagequeue-test/config.json' }))
 
-import { readSavedPreference } from '../../src/main/i18n'
+import { readSavedPreference, readSavedTimeZonePreference } from '../../src/main/i18n'
 import { FORMAT_VERSIONS } from '../../src/main/store-format'
 
 // Main reads the saved language straight from config.json before anything is
@@ -142,3 +145,33 @@ describe('the interface language\'s catalogue', () => {
     expect(i18n.mainTranslator().language).toBe('ja')
   })
 })
+
+// The display zone travels with the language to every window.
+describe('the display zone', () => {
+  const marked = (general: Record<string, unknown>): string => JSON.stringify({ formatVersion: FORMAT_VERSIONS.config, general })
+
+  it('reads the saved zone the way it reads the language', () => {
+    expect(readSavedTimeZonePreference(marked({ time_zone: 'Europe/Berlin' }))).toBe('Europe/Berlin')
+    expect(readSavedTimeZonePreference(marked({ time_zone: 'Mars/Olympus' }))).toBe('system')
+    expect(readSavedTimeZonePreference(null)).toBe('system')
+  })
+
+  it('hands every window a saved zone with what System resolves to, redrawing no native surface', async () => {
+    vi.resetModules()
+    electron.sent.splice(0)
+    const i18n = await import('../../src/main/i18n')
+    await i18n.settleLanguage()
+    const native = vi.fn()
+    i18n.onLanguageChanged(native)
+    const language = i18n.mainTranslator().language
+    await i18n.applyLocalePreferences(language, 'Europe/Berlin')
+    expect(i18n.mainTranslator().timeZone).toBe('Europe/Berlin')
+    expect(electron.sent).toEqual([['language:changed', expect.objectContaining({
+      language, timeZone: 'Europe/Berlin', systemTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })]])
+    expect(native).not.toHaveBeenCalled()
+    await i18n.applyLocalePreferences(language, 'Europe/Berlin')
+    expect(electron.sent).toHaveLength(1)
+  })
+})
+

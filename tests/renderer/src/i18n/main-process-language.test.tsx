@@ -23,7 +23,7 @@ describe('MainProcessLanguage', () => {
     const appLog = vi.fn().mockResolvedValue(undefined)
     ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
       onLanguageChanged: () => () => {},
-      getLanguageEnvironment: async () => ({ language: 'ja', locale: 'ja' }),
+      getLanguageEnvironment: async () => ({ language: 'ja', locale: 'ja', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }),
       appLog,
     }
     render(<MainProcessLanguage><Probe /></MainProcessLanguage>)
@@ -37,14 +37,14 @@ describe('MainProcessLanguage', () => {
     let change!: (environment: LanguageEnvironment) => void
     ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
       onLanguageChanged: (listener: typeof change) => { change = listener; return () => {} },
-      getLanguageEnvironment: async () => ({ language: 'ja', locale: 'ja' }),
+      getLanguageEnvironment: async () => ({ language: 'ja', locale: 'ja', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }),
       appLog: vi.fn().mockResolvedValue(undefined),
     }
     const expected = (await loadTranslator('ja')).t('settings.language')
     render(<MainProcessLanguage><Probe /></MainProcessLanguage>)
     expect(await screen.findByText(expected)).toBeTruthy()
     vi.mocked(loadTranslator).mockRejectedValueOnce(new Error('missing German'))
-    await act(async () => change({ language: 'de', locale: 'de' }))
+    await act(async () => change({ language: 'de', locale: 'de', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }))
     expect(screen.getByText(expected)).toBeTruthy()
   })
 
@@ -54,12 +54,12 @@ describe('MainProcessLanguage', () => {
     vi.mocked(loadTranslator).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
     ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
       onLanguageChanged: (listener: typeof change) => { change = listener; return () => {} },
-      getLanguageEnvironment: async () => ({ language: 'de', locale: 'de' }),
+      getLanguageEnvironment: async () => ({ language: 'de', locale: 'de', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }),
       appLog: vi.fn().mockResolvedValue(undefined),
     }
     render(<MainProcessLanguage><Probe /></MainProcessLanguage>)
     await act(async () => {})
-    await act(async () => change({ language: 'ja', locale: 'ja' }))
+    await act(async () => change({ language: 'ja', locale: 'ja', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }))
     const expected = (await loadTranslator('ja')).t('settings.language')
     expect(await screen.findByText(expected)).toBeTruthy()
     await act(async () => reject(new Error('older catalogue failed')))
@@ -75,7 +75,7 @@ describe('MainProcessLanguage', () => {
     const { container } = render(<MainProcessLanguage><Probe /></MainProcessLanguage>)
     expect(container.textContent).toBe('')
 
-    await act(async () => resolve({ language: 'ja', locale: 'ja' }))
+    await act(async () => resolve({ language: 'ja', locale: 'ja', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }))
     const expected = (await loadTranslator('ja')).t('settings.language')
     expect(await screen.findByText(expected)).toBeTruthy()
   })

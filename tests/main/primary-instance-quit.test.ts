@@ -144,7 +144,7 @@ vi.mock('../../src/main/session/open-sessions-folder', () => ({ openSessionsFold
 vi.mock('../../src/main/queue/control-actions', () => ({ setQueuePausedAndPublish: vi.fn() }))
 vi.mock('../../src/main/main-window-content', () => ({ ownMainWindowContentLoad: vi.fn() }))
 vi.mock('../../src/main/i18n', () => ({
-  applyLanguagePreference: vi.fn(async () => undefined),
+  applyLocalePreferences: vi.fn(async () => undefined),
   mainTranslator: vi.fn(() => ({ t: (key: string) => key })),
   onLanguageChanged: vi.fn(),
   registerLanguageIpc: vi.fn(),
