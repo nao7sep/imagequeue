@@ -3,6 +3,8 @@ import {
   singleLine,
   multiline,
   truncate,
+  shortenName,
+  shortenPath,
   PROMPT_PREVIEW_MIN_GRAPHEMES,
 } from '../../../../src/shared/textCleanup'
 
@@ -129,3 +131,36 @@ describe('truncate', () => {
     expect(result.truncated).toBe(false)
   })
 })
+
+// Identifying values embedded in a sentence (interface-styling-conventions,
+// Labels): a name keeps its beginning, a path its final segment.
+describe('shortenName', () => {
+  it('leaves a short name alone and marks a cut once', () => {
+    expect(shortenName('alpha.ckpt')).toBe('alpha.ckpt')
+    expect(shortenName('abcdefghij', 4)).toBe('abcd…')
+  })
+
+  it('never splits a grapheme', () => {
+    expect(shortenName('👍🏽👍🏽👍🏽', 2)).toBe('👍🏽👍🏽…')
+  })
+})
+
+describe('shortenPath', () => {
+  it('leaves a path that fits alone', () => {
+    expect(shortenPath('/a/b/model.ckpt')).toBe('/a/b/model.ckpt')
+  })
+
+  it('keeps the final segment and the start, losing the middle', () => {
+    expect(shortenPath('/Users/me/very/long/middle/part/model.ckpt', 20)).toBe('/Users/m…/model.ckpt')
+    expect(shortenPath('C:\\Users\\me\\very\\long\\middle\\model.ckpt', 20)).toBe('C:\\Users…\\model.ckpt')
+  })
+
+  it('keeps a final segment longer than the budget whole', () => {
+    expect(shortenPath('/a/b/c/an_extremely_long_model_file_name.ckpt', 10)).toBe('…/an_extremely_long_model_file_name.ckpt')
+  })
+
+  it('shortens a bare file name as a name', () => {
+    expect(shortenPath('abcdefghij', 4)).toBe('abcd…')
+  })
+})
+

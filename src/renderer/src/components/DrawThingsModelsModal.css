@@ -202,9 +202,18 @@
   color: var(--text-primary);
 }
 
+/* A model name is one line; the selected row shows it whole. */
 .dt-model-name {
-  min-width: 0;
+  display: block;
   font-size: var(--text-sm);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dt-model-row.selected .dt-model-name {
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 

@@ -107,20 +107,24 @@ html:has(.records-shell) body {
   color: var(--text-muted);
 }
 
+/* Rows identify a record in one line each; the selected record's detail
+   pane shows every value whole. */
 .records-row-title {
   font-size: var(--text-sm);
   font-weight: 600;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .records-row-text {
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  min-width: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .records-code {
@@ -167,11 +171,15 @@ html:has(.records-shell) body {
   background: var(--bg-secondary);
 }
 
+/* The header names the record; its body shows the whole message. */
 .records-detail-title {
   font-size: var(--text-md);
   font-weight: 600;
   line-height: 1.4;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .records-detail-pills {

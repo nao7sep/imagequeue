@@ -10,6 +10,17 @@ import { describe, expect, it } from 'vitest'
 
 const REVIEWED_ELLIPSIS: Record<string, string> = {
   '.task-prompt': 'the selected task shows its full prompt in the prompt pane details',
+  '.task-error': 'the selected task\'s preview shows the whole failure in a scrolling area',
+  '.metadata-toggle-model': 'the toggle expands to details that show the whole model name',
+  '.elaborator-row-name': 'the selected elaborator opens in its editor',
+  '.advanced-elab-name': 'the chosen or focused row shows its name whole',
+  '.advanced-target-row span:first-of-type': 'the focused row shows its model name whole',
+  '.dt-model-name': 'the selected row shows its model name whole',
+  '.cli-job-row-title': 'Records keeps the job\'s whole target; the embedded target is already shortened',
+  '.records-row-title': 'the selected record shows every field in its detail pane',
+  '.records-row-text': 'the selected record shows every field in its detail pane',
+  '.records-detail-title': 'the detail body shows the whole message',
+  '.concept-library-facet-name': 'the selected seed shows its name whole',
   '.metadata-toggle-prompt': 'the toggle itself expands to the full prompt',
   '.toast-message': 'a one-word status in a window sized to it; the queue row shows the same outcome',
   'select:not([multiple])': 'opening the select shows every choice whole',
@@ -21,7 +32,7 @@ const REVIEWED_ELLIPSIS: Record<string, string> = {
 
 const REVIEWED_LINE_CLAMP: Record<string, string> = {
   '.elaborator-row-desc': 'the selected elaborator opens in its editor',
-  '.records-row-text': 'the selected record shows every field in its detail pane',
+  '.advanced-elab-desc': 'the chosen or focused row shows its description whole',
 }
 
 // Not text: hidden from sight and read whole by assistive technology.
@@ -76,4 +87,34 @@ describe('stylesheet truncation sites', () => {
       && !NOT_TEXT.has(rule.selector))
     expect(unmarked.map((rule) => `${rule.file} ${rule.selector}`)).toEqual([])
   })
+
+  // Text to be read wraps whole inside a height limit that scrolls.
+  it.each(['.preview-metadata', '.preview-failure', '.cli-job-log-tail'])('%s is a height-limited scrolling area', (selector) => {
+    const rule = all.find((candidate) => candidate.selector === selector)!
+    expect(rule.body).toMatch(/max-height:/)
+    expect(rule.body).toMatch(/overflow(-y)?:\s*auto/)
+  })
+
+  // A shortened value with no detail view of its own shows whole where the
+  // keyboard or a touch selects its row.
+  it.each([
+    ['.dt-model-row.selected .dt-model-name'],
+    ['.advanced-target-row:focus-within span:first-of-type'],
+    ['.concept-library-facet.selected .concept-library-facet-name'],
+  ])('%s reveals the whole value', (selector) => {
+    const rule = all.find((candidate) => candidate.selector === selector)!
+    expect(rule.body).toMatch(/white-space:\s*normal/)
+  })
+
+  it('reveals the chosen or focused elaborator row whole', () => {
+    const selectors = all.map((rule) => rule.selector)
+    expect(selectors).toContain('.advanced-elab-row.selected .advanced-elab-name, .advanced-elab-row:focus-within .advanced-elab-name')
+    expect(selectors).toContain('.advanced-elab-row.selected .advanced-elab-desc, .advanced-elab-row:focus-within .advanced-elab-desc')
+  })
+
+  // A menu is as wide as its longest item up to a narrow cap.
+  it.each(['.dropdown-menu', '.menu-submenu'])('%s has a narrow width cap', (selector) => {
+    expect(all.find((candidate) => candidate.selector === selector)!.body).toMatch(/max-width:\s*min\(360px/)
+  })
 })
+

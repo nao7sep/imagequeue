@@ -43,3 +43,24 @@ describe('CLI job output view', () => {
     expect(screen.queryByText(NOTE)).toBeNull()
   })
 })
+
+// The job title is one line; the target inside it is shortened before it is
+// embedded, so the sentence around it stays whole in every language.
+describe('CLI job title', () => {
+  it('keeps the final segment of a long import path', async () => {
+    installApi([])
+    const target = '/Users/someone/Library/Containers/Some Very Long Folder Name/Models/checkpoints/flux_1_dev_q8p.ckpt'
+    render(<CliJobRow jobId="job-1" kind="import" target={target} onDismiss={vi.fn()} />)
+    const title = await until(() => document.querySelector('.cli-job-row-title')!)
+    expect(title.textContent).toMatch(/^Importing \/Users\/someone.*…\/flux_1_dev_q8p\.ckpt$/)
+    expect(title.textContent).not.toContain('Some Very Long Folder Name')
+  })
+
+  it('keeps the beginning of a long model file name', async () => {
+    installApi([])
+    const target = 'a_model_file_with_an_unusually_long_descriptive_name_and_more_words.ckpt'
+    render(<CliJobRow jobId="job-1" kind="download" target={target} onDismiss={vi.fn()} />)
+    const title = await until(() => document.querySelector('.cli-job-row-title')!)
+    expect(title.textContent).toMatch(/^Downloading a_model_file_with_.*…$/)
+  })
+})

@@ -441,7 +441,8 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
               </span>
             </button>
           ) : (
-            <div className="preview-metadata" onClick={() => setDetailsOpen(false)}>
+            // Focusable so the keyboard can scroll a long prompt.
+            <div className="preview-metadata" role="region" tabIndex={0} aria-label={t('details.region')} onClick={() => setDetailsOpen(false)}>
               <div>{detailRow(t('details.model'), selectedTask.model)}</div>
               <div>{detailRow(t('details.status'), taskStatusLabel(t, selectedTask.status))}</div>
               <div>{detailRow(t('details.prompt'), selectedTask.prompt)}</div>

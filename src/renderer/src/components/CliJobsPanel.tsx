@@ -6,6 +6,7 @@ import './CliJobsPanel.css'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { message, type Message } from '../../../shared/i18n/translate'
+import { shortenName, shortenPath } from '../../../shared/textCleanup'
 
 function jobTitle(
   kind: CliJobKind,
@@ -13,7 +14,9 @@ function jobTitle(
   status: CliJobStatus,
   exitCode: number | null
 ): Message {
-  const title = (key: MessageKey): Message => message(key, { target })
+  // An import names the file the user chose, a download the model file.
+  const shown = kind === 'import' ? shortenPath(target) : shortenName(target)
+  const title = (key: MessageKey): Message => message(key, { target: shown })
   if (status === 'queued') {
     return title(kind === 'import' ? 'cliJob.queuedImport' : 'cliJob.queuedDownload')
   }

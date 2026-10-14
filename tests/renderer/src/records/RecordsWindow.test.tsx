@@ -210,8 +210,10 @@ describe('RecordsWindow', () => {
     await mount()
     await act(async () => options()[1]!.click())
 
+    // The header names it on one line; the body holds the whole message.
     expect(document.querySelector('.records-detail-title')?.textContent).toBe('Generation failed')
-    expect(document.querySelector('.records-block pre')?.textContent).toBe(JSON.stringify({ backend: 'flux', status: 429 }, null, 2))
+    const blocks = Array.from(document.querySelectorAll('.records-block')).map((block) => [block.querySelector('h3')?.textContent, block.querySelector('pre')?.textContent])
+    expect(blocks).toEqual([['Message', 'Generation failed'], ['Details', JSON.stringify({ backend: 'flux', status: 429 }, null, 2)]])
     expect(document.querySelector('.records-detail-body')!.textContent).toContain('task-7')
   })
 
@@ -224,7 +226,7 @@ describe('RecordsWindow', () => {
 
     await act(async () => options()[1]!.click())
     expect(document.querySelector('.records-detail-title')?.textContent).toBe('Generation failed')
-    expect(blockLabels()).toEqual([])
+    expect(blockLabels()).toEqual(['Message'])
     expect(document.querySelector('.records-detail-body')!.textContent).toContain('task-7')
 
     await act(async () => options()[0]!.click())

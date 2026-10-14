@@ -29,10 +29,13 @@
   flex-shrink: 0;
 }
 
+/* One line naming the job; Records keeps its whole target. */
 .cli-job-row-title {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);

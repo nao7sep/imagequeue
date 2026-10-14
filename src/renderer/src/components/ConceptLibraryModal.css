@@ -84,10 +84,20 @@
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-primary));
 }
 
+/* A seed name is one line in the rail; the selected seed shows it whole. */
 .concept-library-facet-name {
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.concept-library-facet.selected .concept-library-facet-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .concept-library-facet-meta {

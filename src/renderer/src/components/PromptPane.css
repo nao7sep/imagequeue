@@ -213,10 +213,17 @@
   color: var(--text-muted);
 }
 
+/* The model name and the prompt preview share the row; neither can squeeze
+   the other away. Expanding the details shows both whole. */
 .metadata-toggle-model {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  max-width: 45%;
   color: var(--accent);
   font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .metadata-toggle-sep {
@@ -224,6 +231,7 @@
 }
 
 .metadata-toggle-prompt {
+  flex: 1 1 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -231,7 +239,12 @@
   min-width: 0;
 }
 
+/* The whole prompt and parameters wrap here, inside a height limit that
+   scrolls, so a long prompt never pushes the preview out of the pane. */
 .preview-metadata {
+  max-height: 40vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   padding: 8px 12px 10px;
   font-size: 12px;
   line-height: 1.45;

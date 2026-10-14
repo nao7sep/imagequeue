@@ -74,7 +74,9 @@
 
 .dropdown-menu {
   min-width: 160px;
-  max-width: calc(100vw - 16px);
+  /* As wide as its longest item up to a narrow cap that every command fits
+     in the longest language (composite-control-conventions, Menu). */
+  max-width: min(360px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   background: var(--bg-surface);
@@ -179,7 +181,9 @@
 
 .menu-submenu {
   min-width: 200px;
-  max-width: calc(100vw - 16px);
+  /* As wide as its longest item up to a narrow cap that every command fits
+     in the longest language (composite-control-conventions, Menu). */
+  max-width: min(360px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   background: var(--bg-surface);

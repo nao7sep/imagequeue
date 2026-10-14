@@ -266,11 +266,15 @@
   justify-content: space-between;
 }
 
+/* A summary of the failure; the selected task's preview shows it whole. */
 .task-error {
+  flex: 1;
   font-size: 11px;
   color: var(--error);
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   opacity: 0.85;
 }
 

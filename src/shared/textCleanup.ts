@@ -111,3 +111,28 @@ export function truncate(text: string, n: number): TruncateResult {
 // of those panes show — CSS still does the visual clamp; this only bounds how
 // much text we flatten and carry, with the full text kept in title/tooltip.
 export const PROMPT_PREVIEW_MIN_GRAPHEMES = 200
+
+// ---- identifying values embedded in a sentence ----
+// A sentence keeps its own words whole, so a name or path inside it is
+// shortened before it is embedded (interface-styling-conventions, Labels): a
+// name keeps its beginning, a path keeps its final segment and loses its
+// middle. Each marks a cut with one "…"; the caller keeps the original.
+export const EMBEDDED_VALUE_GRAPHEMES = 48
+
+const graphemes = (text: string): string[] =>
+  [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(({ segment }) => segment)
+
+export function shortenName(name: string, n = EMBEDDED_VALUE_GRAPHEMES): string {
+  const { text, truncated } = truncate(name, n)
+  return truncated ? `${text}…` : text
+}
+
+export function shortenPath(path: string, n = EMBEDDED_VALUE_GRAPHEMES): string {
+  const whole = graphemes(path)
+  if (whole.length <= n) return path
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  if (cut < 0) return shortenName(path, n)
+  const tail = path.slice(cut)
+  const room = n - graphemes(tail).length - 1
+  return room > 0 ? `${graphemes(path.slice(0, cut)).slice(0, room).join('')}…${tail}` : `…${tail}`
+}

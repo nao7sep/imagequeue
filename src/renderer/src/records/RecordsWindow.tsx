@@ -621,6 +621,8 @@ function RecordDetailView({
     if (text !== null) blocks.push({ label, text })
   }
   if (record.kind === 'log') {
+    // The header shows the message on one line; here it is whole.
+    addBlock(t('records.message'), record.message)
     addBlock(t('records.details'), jsonBlockText(record.fields))
   } else if (record.kind === 'ai-call') {
     addBlock(t('records.request'), jsonBlockText(record.request))

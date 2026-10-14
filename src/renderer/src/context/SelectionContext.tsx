@@ -19,6 +19,7 @@ import { OPERATIONAL_FAILURE_EVENT, recordOperationalDiagnostic } from '../utils
 import { useI18n } from '../i18n/I18nContext'
 import type { ViewingSurface, SurfaceListKey } from '../../../shared/viewing'
 import { message } from '../../../shared/i18n/translate'
+import { shortenName } from '../../../shared/textCleanup'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export interface Selection {
@@ -315,7 +316,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
           : key === 'task.deleteMetadataRemains' ? `${result.baseName}.json` : result.baseName
         window.dispatchEvent(new CustomEvent(OPERATIONAL_FAILURE_EVENT, { detail: {
           key: `task-delete:${result.sessionId}:${result.baseName}`,
-          message: message(key, { name }),
+          message: message(key, { name: shortenName(name) }),
         } }))
       },
     })
