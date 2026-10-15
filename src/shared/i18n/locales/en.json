@@ -137,6 +137,7 @@
   "statusIcon.openSessionsFolder": "Open Sessions Folder",
   "statusIcon.pause": "Pause",
   "statusIcon.resume": "Resume",
+  "statusIcon.notifications": "Notifications",
   "statusIcon.quit": "Quit {app}",
   "statusIcon.exit": "Exit {app}",
   "toast.complete": "Complete",

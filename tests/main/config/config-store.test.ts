@@ -357,6 +357,16 @@ describe('settings by set', () => {
     expect(reloaded.loadConfig().general.time_zone).toBe('system')
     expect(stored()).toEqual({ general: { time_zone: 'Mars/Olympus' } })
   })
+  it('tells its listeners after each save, whichever surface made it', async () => {
+    const { onConfigSaved, updateConfig } = await import('../../../src/main/config/config-store')
+    const listener = vi.fn()
+    const stop = onConfigSaved(listener)
+    await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
+    expect(listener).toHaveBeenCalledOnce()
+    stop()
+    await updateConfig((draft) => { draft.notifications.notifications_enabled = true })
+    expect(listener).toHaveBeenCalledOnce()
+  })
   it('keeps every built-in text in its cleaned form', async () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')
     for (const [key, builtIn] of Object.entries(configSetDefaults())) expect(cleanConfigSet(key, builtIn), key).toEqual(builtIn)

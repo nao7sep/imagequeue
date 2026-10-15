@@ -133,6 +133,7 @@
   "statusIcon.openSessionsFolder": "セッションフォルダを開く",
   "statusIcon.pause": "一時停止",
   "statusIcon.resume": "再開",
+  "statusIcon.notifications": "通知",
   "statusIcon.quit": "{app} を終了",
   "statusIcon.exit": "{app} を終了",
   "toast.complete": "完了",

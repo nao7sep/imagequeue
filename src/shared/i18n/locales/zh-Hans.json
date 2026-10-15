@@ -133,6 +133,7 @@
   "statusIcon.openSessionsFolder": "打开会话文件夹",
   "statusIcon.pause": "暂停",
   "statusIcon.resume": "继续",
+  "statusIcon.notifications": "通知",
   "statusIcon.quit": "退出 {app}",
   "statusIcon.exit": "退出 {app}",
   "toast.complete": "完成",

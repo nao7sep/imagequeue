@@ -49,6 +49,8 @@ vi.mock('../../src/main/config', () => ({
   ensureDataDir: vi.fn(),
   getDataDir: vi.fn(() => '/data'),
   summarizeConfig: vi.fn(),
+  updateConfig: vi.fn(async () => undefined),
+  onConfigSaved: vi.fn(() => () => undefined),
 }))
 vi.mock('../../src/main/session', () => ({
   dropCurrentSessionIfEmpty: vi.fn(async () => undefined),
@@ -63,6 +65,7 @@ vi.mock('../../src/main/queue', () => ({ registerQueueIpc: vi.fn(), queueManager
 vi.mock('../../src/main/backends', () => ({ startProcessor: vi.fn(), stopProcessor: vi.fn() }))
 vi.mock('../../src/main/image-protocol', () => ({ registerImageProtocol: vi.fn(), registerImageSchemeAsPrivileged: vi.fn() }))
 vi.mock('../../src/main/settings-ipc', () => ({ registerSettingsIpc: vi.fn() }))
+vi.mock('../../src/main/settings-changed', () => ({ notifySettingsChanged: vi.fn() }))
 vi.mock('../../src/main/state-ipc', () => ({ registerStateIpc: vi.fn() }))
 vi.mock('../../src/main/dependencies-ipc', () => ({ registerDependenciesIpc: vi.fn() }))
 vi.mock('../../src/main/dependencies/service', () => ({ checkDependenciesAtLaunch: vi.fn(async () => undefined) }))

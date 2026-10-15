@@ -277,3 +277,33 @@ describe('StatusIconController', () => {
     )
   })
 })
+
+// Notices can be turned on and off from the icon as from the main window
+// (window-conventions, Background mode).
+describe('notices from the icon', () => {
+  it('shows the notices setting as a checkbox, toggles it, and follows changes made elsewhere', async () => {
+    let enabled = true
+    let changed: () => void = () => {}
+    const setEnabled = vi.fn((next: boolean) => { enabled = next; changed() })
+    const controller = new StatusIconController({
+      platform: 'darwin',
+      restoreMainWindow: vi.fn(),
+      requestQuit: vi.fn(),
+      openSessionsFolder: vi.fn(),
+      setQueuePaused: vi.fn(),
+      notices: { enabled: () => enabled, setEnabled, onChanged: (listener) => { changed = listener; return () => { changed = () => {} } } },
+    })
+    expect(await controller.reconcile(true)).toBe(true)
+    const tray = mocks.FakeTray.instances.at(-1)!
+    const item = () => tray.menu.find((entry) => entry.label === 'Notifications')!
+    expect(item()).toMatchObject({ type: 'checkbox', checked: true })
+    ;(item().click as () => void)()
+    await vi.waitFor(() => expect(setEnabled).toHaveBeenCalledWith(false))
+    expect(item().checked).toBe(false)
+    enabled = true
+    changed()
+    expect(item().checked).toBe(true)
+    controller.dispose()
+  })
+})
+

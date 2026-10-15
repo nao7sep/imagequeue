@@ -141,6 +141,7 @@
   "statusIcon.openSessionsFolder": "Ouvrir le dossier des sessions",
   "statusIcon.pause": "Mettre en pause",
   "statusIcon.resume": "Reprendre",
+  "statusIcon.notifications": "Notifications",
   "statusIcon.quit": "Quitter {app}",
   "statusIcon.exit": "Quitter {app}",
   "toast.complete": "Terminé",

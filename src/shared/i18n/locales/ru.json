@@ -145,6 +145,7 @@
   "statusIcon.openSessionsFolder": "Открыть папку сеансов",
   "statusIcon.pause": "Приостановить",
   "statusIcon.resume": "Возобновить",
+  "statusIcon.notifications": "Уведомления",
   "statusIcon.quit": "Завершить {app}",
   "statusIcon.exit": "Выйти из {app}",
   "toast.complete": "Готово",

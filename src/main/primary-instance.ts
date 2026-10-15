@@ -1,7 +1,8 @@
 import { drainExports } from './utils/storage-wait'
 import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
-import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config'
+import { loadConfig, ensureDataDir, getDataDir, onConfigSaved, summarizeConfig, updateConfig } from './config'
+import { notifySettingsChanged } from './settings-changed'
 import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, drainSessionWrites, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { queueManager, registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
@@ -358,6 +359,14 @@ async function startUp(): Promise<void> {
     requestQuit: () => app.quit(),
     openSessionsFolder,
     setQueuePaused: setQueuePausedAndPublish,
+    notices: {
+      enabled: () => loadConfig().notifications.notifications_enabled,
+      setEnabled: async (enabled) => {
+        await updateConfig((draft) => { draft.notifications.notifications_enabled = enabled })
+        notifySettingsChanged(mainWindowController?.getWindow() ?? null)
+      },
+      onChanged: onConfigSaved,
+    },
   })
   registerSessionIpc()
   registerQueueIpc()

@@ -133,6 +133,7 @@
   "statusIcon.openSessionsFolder": "세션 폴더 열기",
   "statusIcon.pause": "일시 정지",
   "statusIcon.resume": "재개",
+  "statusIcon.notifications": "알림",
   "statusIcon.quit": "{app} 종료",
   "statusIcon.exit": "{app} 종료",
   "toast.complete": "완료",

@@ -141,6 +141,7 @@
   "statusIcon.openSessionsFolder": "Abrir pasta de sessões",
   "statusIcon.pause": "Pausar",
   "statusIcon.resume": "Retomar",
+  "statusIcon.notifications": "Notificações",
   "statusIcon.quit": "Encerrar {app}",
   "statusIcon.exit": "Sair do {app}",
   "toast.complete": "Concluído",

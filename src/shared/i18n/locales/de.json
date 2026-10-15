@@ -137,6 +137,7 @@
   "statusIcon.openSessionsFolder": "Sitzungsordner öffnen",
   "statusIcon.pause": "Anhalten",
   "statusIcon.resume": "Fortsetzen",
+  "statusIcon.notifications": "Mitteilungen",
   "statusIcon.quit": "{app} beenden",
   "statusIcon.exit": "{app} beenden",
   "toast.complete": "Fertig",

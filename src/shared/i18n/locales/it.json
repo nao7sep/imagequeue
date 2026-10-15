@@ -141,6 +141,7 @@
   "statusIcon.openSessionsFolder": "Apri la cartella delle sessioni",
   "statusIcon.pause": "Metti in pausa",
   "statusIcon.resume": "Riprendi",
+  "statusIcon.notifications": "Notifiche",
   "statusIcon.quit": "Esci da {app}",
   "statusIcon.exit": "Esci da {app}",
   "toast.complete": "Completato",

@@ -37,6 +37,14 @@ interface StatusIconControllerOptions {
   requestQuit: () => void
   openSessionsFolder: () => Promise<void> | void
   setQueuePaused: (paused: boolean) => Promise<void> | void
+  // Notices can be turned on and off from the icon as from the main window
+  // (window-conventions, Background mode). They carry only summaries, so the
+  // choice is on or off, with no level.
+  notices?: {
+    enabled: () => boolean
+    setEnabled: (enabled: boolean) => Promise<void> | void
+    onChanged: (listener: () => void) => () => void
+  }
 }
 
 const EMPTY_CONTROL_STATE: QueueControlState = {
@@ -52,6 +60,7 @@ export class StatusIconController {
   private tray: Tray | null = null
   private unsubscribeQueue: (() => void) | null = null
   private unsubscribeLanguage: (() => void) | null = null
+  private unsubscribeNotices: (() => void) | null = null
   private controlState = EMPTY_CONTROL_STATE
   private reconcileGeneration = 0
 
@@ -113,6 +122,7 @@ export class StatusIconController {
         this.rebuildPresentation()
       })
       this.unsubscribeLanguage = onLanguageChanged(() => this.rebuildPresentation())
+      this.unsubscribeNotices = this.options.notices?.onChanged(() => this.rebuildPresentation()) ?? null
       log('info', 'Status icon enabled', { platform: this.platform, asset: assetName })
       return true
     } catch (err) {
@@ -122,6 +132,8 @@ export class StatusIconController {
       this.unsubscribeQueue = null
       this.unsubscribeLanguage?.()
       this.unsubscribeLanguage = null
+      this.unsubscribeNotices?.()
+      this.unsubscribeNotices = null
       nativeTheme.off('updated', this.handleThemeUpdated)
       log('error', 'Status icon could not be initialized; using ordinary window lifecycle', {
         platform: this.platform,
@@ -135,6 +147,8 @@ export class StatusIconController {
   private destroyIcon(): void {
     this.unsubscribeQueue?.()
     this.unsubscribeQueue = null
+    this.unsubscribeNotices?.()
+    this.unsubscribeNotices = null
     this.unsubscribeLanguage?.()
     this.unsubscribeLanguage = null
     nativeTheme.off('updated', this.handleThemeUpdated)
@@ -166,6 +180,7 @@ export class StatusIconController {
             this.options.setQueuePaused(!state.paused))
         },
       },
+      ...this.noticesItem(t),
       { type: 'separator' },
       {
         label: t(this.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: 'ImageQueue' }),
@@ -174,6 +189,18 @@ export class StatusIconController {
     ]
     tray.setToolTip(buildStatusIconTooltip(state, translator))
     tray.setContextMenu(Menu.buildFromTemplate(template))
+  }
+
+  private noticesItem(t: (key: 'statusIcon.notifications') => string): MenuItemConstructorOptions[] {
+    const notices = this.options.notices
+    if (!notices) return []
+    const enabled = notices.enabled()
+    return [{
+      type: 'checkbox',
+      label: t('statusIcon.notifications'),
+      checked: enabled,
+      click: () => { this.runAction(enabled ? 'turn notices off' : 'turn notices on', () => notices.setEnabled(!enabled)) },
+    }]
   }
 
   private readonly handleThemeUpdated = (): void => {

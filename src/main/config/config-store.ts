@@ -232,4 +232,15 @@ async function persistConfig(config: AppConfig): Promise<void> {
     log('info', 'Config saved', { path: file })
   }
   cachedConfig = effectiveConfig(next)
+  for (const listener of savedListeners) {
+    try { listener() } catch (error) { log('error', 'A config listener failed', { error: serializeError(error) }) }
+  }
+}
+
+// Native surfaces that show a setting (the status icon's Notifications item)
+// follow every save, whichever window or menu made it.
+const savedListeners = new Set<() => void>()
+export function onConfigSaved(listener: () => void): () => void {
+  savedListeners.add(listener)
+  return () => { savedListeners.delete(listener) }
 }
