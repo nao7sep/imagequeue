@@ -198,7 +198,7 @@
   "about.reportIssue": "문제 신고",
   "about.closeGithubResult": "GitHub 링크 결과 닫기",
   "about.closeIssuesResult": "문제 신고 링크 결과 닫기",
-  "about.copyright": "© {year} {author} — {license} 이상",
+  "about.copyright": "© {year} {author} · {license} 이상",
   "statusNotices.closeOperationResult": "작업 결과 닫기",
   "toasts.region": "알림",
   "operation.sessionsFolderFailed": "세션 폴더를 열 수 없습니다. 폴더가 아직 있는지 확인하십시오.",

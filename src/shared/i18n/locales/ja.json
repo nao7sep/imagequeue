@@ -198,7 +198,7 @@
   "about.reportIssue": "問題を報告",
   "about.closeGithubResult": "GitHub リンクの結果を閉じる",
   "about.closeIssuesResult": "問題報告リンクの結果を閉じる",
-  "about.copyright": "© {year} {author} — {license} 以降",
+  "about.copyright": "© {year} {author} · {license} 以降",
   "statusNotices.closeOperationResult": "操作の結果を閉じる",
   "toasts.region": "通知",
   "operation.sessionsFolderFailed": "セッションフォルダを開けませんでした。フォルダがまだ存在するか確認してください。",

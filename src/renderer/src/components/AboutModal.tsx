@@ -72,7 +72,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
           />
         ) : null)}
         <p className="about-copyright">
-          {t('about.copyright', { year: '2026', author: 'Yoshinao Inoguchi', license: 'GNU GPL v3 or later' })}
+          {t('about.copyright', { year: '2026', author: 'Yoshinao Inoguchi', license: 'GNU GPL v3' })}
         </p>
       </div>
     </Modal>

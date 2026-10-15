@@ -198,7 +198,7 @@
   "about.reportIssue": "报告问题",
   "about.closeGithubResult": "关闭 GitHub 链接结果",
   "about.closeIssuesResult": "关闭问题反馈链接结果",
-  "about.copyright": "© {year} {author} — {license} 或更高版本",
+  "about.copyright": "© {year} {author} · {license} 或更高版本",
   "statusNotices.closeOperationResult": "关闭操作结果",
   "toasts.region": "通知",
   "operation.sessionsFolderFailed": "无法打开会话文件夹。请检查它是否仍然存在。",

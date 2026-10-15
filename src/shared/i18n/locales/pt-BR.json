@@ -208,7 +208,7 @@
   "about.reportIssue": "Relatar problema",
   "about.closeGithubResult": "Fechar o resultado do link do GitHub",
   "about.closeIssuesResult": "Fechar o resultado do link de problemas",
-  "about.copyright": "© {year} {author} — {license} ou posterior",
+  "about.copyright": "© {year} {author} · {license} ou posterior",
   "statusNotices.closeOperationResult": "Fechar o resultado da operação",
   "toasts.region": "Notificações",
   "operation.sessionsFolderFailed": "Não foi possível abrir a pasta de sessões. Verifique se ela ainda está disponível.",

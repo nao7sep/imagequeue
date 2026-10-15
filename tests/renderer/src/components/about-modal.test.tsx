@@ -43,3 +43,11 @@ describe('AboutModal external links', () => {
     expect(screen.getByText(/issue page could not be opened/)).toBeTruthy()
   })
 })
+
+// The fleet copyright line: one line, a middle dot, "or later" said once.
+describe('AboutModal copyright', () => {
+  it('reads "© 2026 Yoshinao Inoguchi · GNU GPL v3 or later"', () => {
+    render(<AboutModal onClose={vi.fn()} />)
+    expect(document.querySelector('.about-copyright')?.textContent).toBe('© 2026 Yoshinao Inoguchi · GNU GPL v3 or later')
+  })
+})

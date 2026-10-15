@@ -203,7 +203,7 @@
   "about.reportIssue": "Report Issue",
   "about.closeGithubResult": "Close GitHub link result",
   "about.closeIssuesResult": "Close issue link result",
-  "about.copyright": "© {year} {author} — {license} or later",
+  "about.copyright": "© {year} {author} · {license} or later",
   "statusNotices.closeOperationResult": "Close operation result",
   "toasts.region": "Notifications",
   "operation.sessionsFolderFailed": "The sessions folder could not be opened. Check that it is still available.",

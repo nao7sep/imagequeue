@@ -208,7 +208,7 @@
   "about.reportIssue": "Informar de un problema",
   "about.closeGithubResult": "Cerrar el resultado del enlace de GitHub",
   "about.closeIssuesResult": "Cerrar el resultado del enlace para informar de problemas",
-  "about.copyright": "© {year} {author} — {license} o posterior",
+  "about.copyright": "© {year} {author} · {license} o posterior",
   "statusNotices.closeOperationResult": "Cerrar el resultado de la operación",
   "toasts.region": "Notificaciones",
   "operation.sessionsFolderFailed": "No se pudo abrir la carpeta de sesiones. Comprueba que siga disponible.",

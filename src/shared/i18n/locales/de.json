@@ -203,7 +203,7 @@
   "about.reportIssue": "Problem melden",
   "about.closeGithubResult": "Ergebnis des GitHub-Links schließen",
   "about.closeIssuesResult": "Ergebnis des Problemmelde-Links schließen",
-  "about.copyright": "© {year} {author} — {license} oder neuer",
+  "about.copyright": "© {year} {author} · {license} oder neuer",
   "statusNotices.closeOperationResult": "Ergebnis des Vorgangs schließen",
   "toasts.region": "Benachrichtigungen",
   "operation.sessionsFolderFailed": "Der Sitzungsordner konnte nicht geöffnet werden. Prüfen Sie, ob er noch vorhanden ist.",

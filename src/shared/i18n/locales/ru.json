@@ -213,7 +213,7 @@
   "about.reportIssue": "Сообщить о проблеме",
   "about.closeGithubResult": "Закрыть результат ссылки на GitHub",
   "about.closeIssuesResult": "Закрыть результат ссылки для сообщений о проблемах",
-  "about.copyright": "© {year} {author} — {license} или новее",
+  "about.copyright": "© {year} {author} · {license} или новее",
   "statusNotices.closeOperationResult": "Закрыть результат операции",
   "toasts.region": "Уведомления",
   "operation.sessionsFolderFailed": "Не удалось открыть папку сеансов. Проверьте, что она всё ещё доступна.",
