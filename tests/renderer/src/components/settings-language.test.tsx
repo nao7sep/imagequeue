@@ -76,15 +76,23 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Settings language choice', () => {
-  it('lists System, showing the language it resolves to, then each language in its own name and script', async () => {
+  it('lists System, naming the language it resolves to in the interface language, then each language in its own name and script', async () => {
     renderWith('system')
-    await until(() => expect(within(languageSelect()).getAllByRole('option')[0]!.textContent).toBe('System (English)'))
+    await until(() => expect(within(languageSelect()).getAllByRole('option')[0]!.textContent).toBe('System (Japanese)'))
     const options = within(languageSelect()).getAllByRole('option') as HTMLOptionElement[]
     expect(options.map((option) => option.value)).toEqual(['system', 'en', 'de', 'es', 'fr', 'it', 'pt-BR', 'ru', 'ja', 'ko', 'zh-Hans'])
     expect(options.map((option) => option.textContent)).toEqual([
-      'System (English)', 'English', 'Deutsch', 'Español', 'Français', 'Italiano', 'Português', 'Русский', '日本語', '한국어', '中文',
+      'System (Japanese)', 'English', 'Deutsch', 'Español', 'Français', 'Italiano', 'Português', 'Русский', '日本語', '한국어', '中文',
     ])
     expect(options.slice(1).map((option) => option.lang)).toEqual(['en', 'de', 'es', 'fr', 'it', 'pt-BR', 'ru', 'ja', 'ko', 'zh-Hans'])
+  })
+
+  it('names System and its value in the interface language', async () => {
+    renderWith('system', 'ja')
+    await until(() => expect(within(languageSelect()).getAllByRole('option')[0]!.textContent).toBe('システム（日本語）'))
+    const zone = screen.getByRole('combobox', { name: 'タイムゾーン' })
+    expect(within(zone).getAllByRole('option')[0]!.textContent).toBe('システム（Asia/Tokyo）')
+    expect(screen.getByRole('radio', { name: 'システム（ダーク）' })).toBeTruthy()
   })
 
   it('keeps each language in its own name whatever language is showing', () => {

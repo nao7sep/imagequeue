@@ -58,7 +58,7 @@ function withNotificationField(config: Record<string, unknown> | null, key: stri
 export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const { settings, apiKeys, saveChangedSettings, saveNotificationField } = useSettings()
   const confirm = useConfirm()
-  const { t } = useI18n()
+  const { t, language: interfaceLanguage } = useI18n()
   const [releaseOpenFailed, setReleaseOpenFailed] = useState(false)
   const [releaseResult, setReleaseResult] = useState<AppReleaseResult | undefined>()
   const [checkingRelease, setCheckingRelease] = useState(false)
@@ -77,8 +77,17 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     return () => { cancelled = true }
   }, [])
   const zoneChoices = useMemo(() => timeZoneChoices(), [])
+  // The word and the value are both in the interface language
+  // (localization-conventions, Translation); a zone name appears as is.
   const systemLabel = (system: MessageKey, value: string | null | undefined): string =>
     value ? t('settings.systemResolved', { system: t(system), value }) : t(system)
+  const languageName = (language: Language): string => {
+    try {
+      return new Intl.DisplayNames([interfaceLanguage], { type: 'language' }).of(language) ?? LANGUAGE_NAMES[language]
+    } catch {
+      return LANGUAGE_NAMES[language]
+    }
+  }
   // Local copy — user edits freely; changes commit to context only on Save
   const [config, setConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
   const [baseConfig, setBaseConfig] = useState<Record<string, unknown> | null>(() => cloneSettings(settings))
@@ -325,7 +334,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               value={normalizeLanguagePreference(general.language)}
               onChange={(e) => updateGeneral('language', normalizeLanguagePreference(e.target.value))}
             >
-              <option value="system">{systemLabel('settings.languageSystem', system && LANGUAGE_NAMES[system.language])}</option>
+              <option value="system">{systemLabel('settings.languageSystem', system && languageName(system.language))}</option>
               {LANGUAGES.map((language) => (
                 <option key={language} value={language} lang={language}>
                   {LANGUAGE_NAMES[language]}
