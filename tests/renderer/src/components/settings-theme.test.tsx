@@ -165,15 +165,3 @@ it('reports unsaved edits while they exist, and none once it closes', async () =
   cleanup()
   expect(report).toHaveBeenLastCalledWith('settings', false)
 })
-
-it('offers a default-on launch preference and clear manual release outcomes inside Settings', async () => {
-  window.electronAPI.checkAppRelease = vi.fn(async () => ({ kind: 'newer' as const, version: 'v1.2.0' }))
-  window.electronAPI.viewAppRelease = vi.fn(async () => undefined)
-  renderWith('system')
-  expect((screen.getByLabelText('Check GitHub for new releases at launch') as HTMLInputElement).checked).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: 'Check GitHub for a New Release' }))
-  await until(() => expect(screen.getByText('ImageQueue v1.2.0 is available.')).toBeTruthy())
-  expect(window.electronAPI.viewAppRelease).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'View Release on GitHub' }))
-  expect(window.electronAPI.viewAppRelease).toHaveBeenCalledOnce()
-})

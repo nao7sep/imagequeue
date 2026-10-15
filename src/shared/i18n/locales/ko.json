@@ -854,13 +854,5 @@
   "records.job": "작업",
   "records.arguments": "인수",
   "records.output": "출력",
-  "records.errorOutput": "오류 출력",
-  "appRelease.check": "GitHub에서 새 릴리스 확인",
-  "appRelease.atLaunch": "시작 시 GitHub에서 새 릴리스 확인",
-  "appRelease.checking": "GitHub 확인 중…",
-  "appRelease.newer": "ImageQueue {version} 버전을 사용할 수 있습니다.",
-  "appRelease.current": "ImageQueue가 최신 버전입니다.",
-  "appRelease.failed": "GitHub에서 새 릴리스를 확인하지 못했습니다.",
-  "appRelease.view": "GitHub에서 릴리스 보기",
-  "appRelease.openFailed": "GitHub의 릴리스 페이지를 열지 못했습니다."
+  "records.errorOutput": "오류 출력"
 }

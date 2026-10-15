@@ -854,13 +854,5 @@
   "records.job": "作业",
   "records.arguments": "参数",
   "records.output": "输出",
-  "records.errorOutput": "错误输出",
-  "appRelease.check": "在GitHub上检查新版本",
-  "appRelease.atLaunch": "启动时在GitHub上检查新版本",
-  "appRelease.checking": "正在检查GitHub…",
-  "appRelease.newer": "ImageQueue {version}已可用。",
-  "appRelease.current": "ImageQueue已是最新版本。",
-  "appRelease.failed": "无法在GitHub上检查新版本。",
-  "appRelease.view": "在GitHub上查看版本",
-  "appRelease.openFailed": "无法打开GitHub上的版本页面。"
+  "records.errorOutput": "错误输出"
 }

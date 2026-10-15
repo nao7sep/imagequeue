@@ -900,13 +900,5 @@
   "records.job": "Trabajo",
   "records.arguments": "Argumentos",
   "records.output": "Salida",
-  "records.errorOutput": "Salida de error",
-  "appRelease.check": "Buscar nueva versión en GitHub",
-  "appRelease.atLaunch": "Buscar nuevas versiones en GitHub al iniciar",
-  "appRelease.checking": "Buscando en GitHub…",
-  "appRelease.newer": "ImageQueue {version} está disponible.",
-  "appRelease.current": "ImageQueue está actualizado.",
-  "appRelease.failed": "No se pudo buscar una nueva versión en GitHub.",
-  "appRelease.view": "Ver versión en GitHub",
-  "appRelease.openFailed": "No se pudo abrir la página de la versión en GitHub."
+  "records.errorOutput": "Salida de error"
 }

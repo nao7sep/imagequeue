@@ -1,5 +1,4 @@
 import type { DraftSurface, QuitQuestion } from './quit'
-import type { AppReleaseResult } from './app-release'
 import {
   ElaboratedPromptRecord,
   BackendId,
@@ -67,10 +66,6 @@ export type DrawThingsParamsPersistenceState =
 // program and defeat its Node isolation. The preload implements this interface
 // via `satisfies ElectronAPI`, so the two can never drift.
 export interface ElectronAPI {
-  appReleaseReady: () => Promise<void>
-  checkAppRelease: () => Promise<AppReleaseResult | undefined>
-  viewAppRelease: () => Promise<void>
-  onAppReleaseResult: (callback: (result: AppReleaseResult) => void) => (() => void)
   chooseQuit(choice: 'retry' | 'quit' | 'cancel'): void
   getQuitQuestion(): Promise<QuitQuestion | null>
   reportUnsavedDraft(surface: DraftSurface, dirty: boolean): Promise<void>

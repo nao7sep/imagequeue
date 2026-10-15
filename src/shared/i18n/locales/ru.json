@@ -923,13 +923,5 @@
   "records.job": "Задание",
   "records.arguments": "Аргументы",
   "records.output": "Вывод",
-  "records.errorOutput": "Вывод ошибок",
-  "appRelease.check": "Проверить наличие новой версии на GitHub",
-  "appRelease.atLaunch": "Проверять наличие новых версий на GitHub при запуске",
-  "appRelease.checking": "Проверка GitHub…",
-  "appRelease.newer": "Доступна версия ImageQueue {version}.",
-  "appRelease.current": "Установлена актуальная версия ImageQueue.",
-  "appRelease.failed": "Не удалось проверить наличие новой версии на GitHub.",
-  "appRelease.view": "Посмотреть версию на GitHub",
-  "appRelease.openFailed": "Не удалось открыть страницу версии на GitHub."
+  "records.errorOutput": "Вывод ошибок"
 }

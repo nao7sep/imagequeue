@@ -367,6 +367,14 @@ describe('settings by set', () => {
     await updateConfig((draft) => { draft.notifications.notifications_enabled = true })
     expect(listener).toHaveBeenCalledOnce()
   })
+  // ImageQueue no longer checks for its own releases; the next save drops the
+  // retired at-launch preference while keeping every other stored value.
+  it('drops the retired GitHub release preference on the next save', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { check_github_releases_at_launch: false, language: 'ja' } }))
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    await updateConfig((draft) => { draft.general.theme = 'dark' })
+    expect(stored()).toEqual({ general: { language: 'ja', theme: 'dark' } })
+  })
   it('keeps every built-in text in its cleaned form', async () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')
     for (const [key, builtIn] of Object.entries(configSetDefaults())) expect(cleanConfigSet(key, builtIn), key).toEqual(builtIn)

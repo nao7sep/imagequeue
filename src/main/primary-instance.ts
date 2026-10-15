@@ -55,7 +55,6 @@ import { resumeAfterCancelledShutdown } from './backends/cancellation'
 import { retrySettingsWrites } from './settings-writes'
 import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
 import { cancelAllDependencyOperations, hasActiveDependencyOperations, hasUserDependencyOperations } from './dependencies/operations'
-import { startAppReleaseCheck } from './app-release-check'
 import { installLastResortHooks } from './last-resort-hooks'
 import { startupFailurePresentation } from './failure-presentation'
 import { MainWindowController } from './main-window-lifecycle'
@@ -389,7 +388,6 @@ async function startUp(): Promise<void> {
   registerViewingIpc(() => mainWindowController?.getWindow() ?? null)
   registerUnsavedDraftsIpc(() => mainWindowController?.getWindow()?.webContents ?? null)
   registerNotificationIpc()
-  startAppReleaseCheck()
   initNotificationWindow()
   if (!isQuitting()) startProcessor()
   startWakeLockMonitor()

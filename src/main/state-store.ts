@@ -5,9 +5,9 @@
 //
 // The file is:
 //   - not recorded in the data-backup store (see writeUiState) — it is volatile
-//     state (column width, volume, release-check attempt), so no history is kept;
+//     state (column width, volume), so no history is kept;
 //   - materialized lazily — a missing file reads as defaults and is not written
-//     until a view adjustment or release-check attempt needs recording;
+//     until a view adjustment needs recording;
 //   - self-healing — a malformed file falls back to defaults rather than failing;
 //   - interpreted field by field, irrespective of its format marker.
 
@@ -38,7 +38,6 @@ export async function readUiState(): Promise<UiState> {
     const parsed = raw as Partial<UiState>
     const base = defaultUiState()
     return {
-      ...(typeof parsed.releaseCheckLastAttemptUtc === 'string' ? { releaseCheckLastAttemptUtc: parsed.releaseCheckLastAttemptUtc } : {}),
       columnWidth:
         typeof parsed.columnWidth === 'number' && Number.isFinite(parsed.columnWidth)
           ? parsed.columnWidth
@@ -86,8 +85,8 @@ export function validateUiStatePatch(value: unknown): Partial<UiState> {
   return patch
 }
 
-/** Apply each patch to the last successful write, so independent controls and
- * the release attempt marker cannot overwrite one another's pending changes. */
+/** Apply each patch to the last successful write, so independent controls
+ * cannot overwrite one another's pending changes. */
 function enqueueStatePatch(patch: Partial<UiState>): Promise<UiState> {
   const operation = writes.then(async () => {
     const next = { ...await readUiState(), ...patch }
@@ -102,7 +101,3 @@ export function updateUiState(value: unknown): Promise<UiState> {
   return enqueueStatePatch(validateUiStatePatch(value))
 }
 
-// Internal timestamp writes are separate from renderer-authorable UI patches.
-export function recordReleaseCheckAttempt(utc: string): Promise<UiState> {
-  return enqueueStatePatch({ releaseCheckLastAttemptUtc: utc })
-}

@@ -170,7 +170,10 @@ export function updateConfig(apply: (draft: AppConfig) => void): Promise<AppConf
 // Keys a change has deliberately retired; a save drops them. Every other key the
 // file holds that this build does not know is written back as it is
 // (config-sets conventions: an unknown key is not automatically disposable).
-const RETIRED_KEYS: ReadonlySet<string> = new Set()
+const RETIRED_KEYS: ReadonlySet<string> = new Set([
+  // The GitHub release check was removed: no app checks for its own versions.
+  'general.check_github_releases_at_launch',
+])
 
 // Writes each key `stored` holds outside the known sets into `next`, unchanged.
 // A container of known sets is walked into; anything else is kept whole, unless

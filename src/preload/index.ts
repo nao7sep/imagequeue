@@ -1,4 +1,3 @@
-import type { AppReleaseResult } from '../shared/app-release'
 import type { DraftSurface, QuitQuestion } from '../shared/quit'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
@@ -76,14 +75,6 @@ const api = {
     const handler = (_event: Electron.IpcRendererEvent, environment: LanguageEnvironment): void => callback(environment)
     ipcRenderer.on('language:changed', handler)
     return () => { ipcRenderer.removeListener('language:changed', handler) }
-  },
-  appReleaseReady: (): Promise<void> => ipcRenderer.invoke('appRelease:ready'),
-  checkAppRelease: (): Promise<AppReleaseResult | undefined> => ipcRenderer.invoke('appRelease:check'),
-  viewAppRelease: (): Promise<void> => ipcRenderer.invoke('appRelease:view'),
-  onAppReleaseResult: (callback: (result: AppReleaseResult) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, result: AppReleaseResult): void => callback(result)
-    ipcRenderer.on('appRelease:result', handler)
-    return () => { ipcRenderer.removeListener('appRelease:result', handler) }
   },
   onAppNotice: (callback: (notice: AppNotice) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, notice: AppNotice): void => callback(notice)

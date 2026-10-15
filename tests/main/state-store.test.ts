@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { readUiState, updateUiState, getUiStatePath, recordReleaseCheckAttempt } from '../../src/main/state-store'
+import { readUiState, updateUiState, getUiStatePath } from '../../src/main/state-store'
 import { defaultUiState, NOTIFICATION_VOLUME_DEFAULT } from '../../src/shared/ui-state'
 import { RECORDS_LIST_WIDTH } from '../../src/shared/records-layout'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
@@ -108,12 +108,10 @@ describe('ui state format version', async () => {
   })
 })
 
-it('serializes independent view adjustments and release attempt markers without lost fields', async () => {
+it('serializes independent view adjustments without lost fields', async () => {
   await Promise.all([
     updateUiState({ columnWidth: 270 }),
-    recordReleaseCheckAttempt('2026-10-09T00:00:00.000Z'),
     updateUiState({ notificationVolume: 0.3 }),
   ])
-  expect(await readUiState()).toMatchObject({ columnWidth: 270, notificationVolume: 0.3, releaseCheckLastAttemptUtc: '2026-10-09T00:00:00.000Z' })
-  expect(() => updateUiState({ releaseCheckLastAttemptUtc: 'bad' })).toThrow('Invalid UI state patch field')
+  expect(await readUiState()).toMatchObject({ columnWidth: 270, notificationVolume: 0.3 })
 })

@@ -1,4 +1,3 @@
-import type { AppReleaseResult } from '../../../shared/app-release'
 import { reportOperationalFailure, recordOperationalDiagnostic } from '../utils/operationalFailure'
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSettings } from '../context/SettingsContext'
@@ -60,9 +59,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const { settings, apiKeys, saveChangedSettings, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   const { t, language: interfaceLanguage } = useI18n()
-  const [releaseOpenFailed, setReleaseOpenFailed] = useState(false)
-  const [releaseResult, setReleaseResult] = useState<AppReleaseResult | undefined>()
-  const [checkingRelease, setCheckingRelease] = useState(false)
   // What each System choice resolves to now, shown beside it
   // (app-chrome-conventions, Theme; timestamp-conventions, Time zones).
   const [system, setSystem] = useState<{ language: Language; timeZone: string } | null>(null)
@@ -311,20 +307,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       <fieldset className="settings-edit-fields" disabled={saving} aria-busy={saving}>
       {errorMessage && <div className="settings-error" role="alert">{t(errorMessage)}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>
-        <div className="settings-section">
-          <label className="settings-panel-check"><input type="checkbox" checked={(general.check_github_releases_at_launch as boolean) ?? true} onChange={(event) => updateGeneral('check_github_releases_at_launch', event.target.checked)} /> {t('appRelease.atLaunch')}</label>
-          <button className="modal-btn" type="button" disabled={checkingRelease} onClick={() => {
-            setReleaseOpenFailed(false)
-            setReleaseResult(undefined)
-            setCheckingRelease(true)
-            void window.electronAPI.checkAppRelease().then(setReleaseResult).catch((error) => reportOperationalFailure('app-release', 'appRelease.failed', 'Release check failed', error)).finally(() => setCheckingRelease(false))
-          }}>{t(checkingRelease ? 'appRelease.checking' : 'appRelease.check')}</button>
-          {releaseResult && <div className="settings-release-result" role="status">
-            {releaseResult.kind === 'newer' ? t('appRelease.newer', { version: releaseResult.version }) : t(releaseResult.kind === 'current' ? 'appRelease.current' : 'appRelease.failed')}
-            {releaseResult.kind === 'newer' && <button className="modal-btn" type="button" onClick={() => { void window.electronAPI.viewAppRelease().then(() => setReleaseOpenFailed(false)).catch((error) => { setReleaseOpenFailed(true); recordOperationalDiagnostic('Opening GitHub release failed', error) }) }}>{t('appRelease.view')}</button>}
-            {releaseOpenFailed && <div>{t('appRelease.openFailed')}</div>}
-          </div>}
-        </div>
         <div className="settings-section">
           {/* Each language is listed by its own name, in its own script, so a
               reader of any of them can find it whatever language is showing.

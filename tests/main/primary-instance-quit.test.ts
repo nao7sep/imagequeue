@@ -122,7 +122,6 @@ vi.mock('../../src/main/dependencies/operations', () => ({
   cancelAllDependencyOperations: vi.fn(), hasActiveDependencyOperations: vi.fn(() => false), hasUserDependencyOperations: vi.fn(() => false),
 }))
 vi.mock('../../src/main/unsaved-drafts', () => ({ unsavedDrafts: vi.fn(() => []), registerUnsavedDraftsIpc: vi.fn() }))
-vi.mock('../../src/main/app-release-check', () => ({ startAppReleaseCheck: vi.fn() }))
 vi.mock('../../src/main/last-resort-hooks', () => ({ installLastResortHooks: vi.fn() }))
 vi.mock('../../src/main/failure-presentation', () => ({ startupFailurePresentation: vi.fn(() => ({ key: 'startup' })) }))
 vi.mock('../../src/main/main-window-lifecycle', () => ({

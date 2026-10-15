@@ -877,13 +877,5 @@
   "records.job": "Job",
   "records.arguments": "Arguments",
   "records.output": "Output",
-  "records.errorOutput": "Error output",
-  "appRelease.check": "Check GitHub for a New Release",
-  "appRelease.atLaunch": "Check GitHub for new releases at launch",
-  "appRelease.checking": "Checking GitHub…",
-  "appRelease.newer": "ImageQueue {version} is available.",
-  "appRelease.current": "ImageQueue is up to date.",
-  "appRelease.failed": "Could not check GitHub for a new release.",
-  "appRelease.view": "View Release on GitHub",
-  "appRelease.openFailed": "Could not open the release page on GitHub."
+  "records.errorOutput": "Error output"
 }
