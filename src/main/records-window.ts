@@ -14,8 +14,24 @@ export const RECORDS_CHANGED_CHANNEL = 'records:changed'
 
 // The Records window shows records.sqlite3. It is a durable secondary window
 // with its own placement (window-conventions, Placement), and there is only
-// ever one: opening it again brings it forward.
+// ever one: opening it again brings it forward. It hides with the main window
+// in background mode and returns only with it (window-conventions).
 let recordsWindow: BrowserWindow | null = null
+let inBackground = false
+
+/** Hides the window with the main window when the app goes to its icon. */
+export function hideRecordsWindow(): void {
+  inBackground = true
+  if (recordsWindow && !recordsWindow.isDestroyed()) recordsWindow.hide()
+}
+
+/** Shows the window again beside the main window the user brought back, which
+ *  keeps focus as the primary window. */
+export function showRecordsWindow(): void {
+  if (!inBackground) return
+  inBackground = false
+  if (recordsWindow && !recordsWindow.isDestroyed()) recordsWindow.showInactive()
+}
 
 export function buildRecordsWindowOptions(title: string): Electron.BrowserWindowConstructorOptions {
   return {
@@ -50,6 +66,7 @@ export function notifyRecordsChanged(): void {
 }
 
 export async function openRecordsWindow(): Promise<void> {
+  inBackground = false
   if (recordsWindow && !recordsWindow.isDestroyed()) {
     if (recordsWindow.isMinimized()) recordsWindow.restore()
     recordsWindow.show()
@@ -75,7 +92,8 @@ export async function openRecordsWindow(): Promise<void> {
     if (template) Menu.buildFromTemplate(template).popup({ window: win })
   })
   win.once('ready-to-show', () => {
-    win.show()
+    // A page that finishes loading after the app went to its icon waits there.
+    if (!inBackground) win.show()
   })
 
   try {

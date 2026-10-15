@@ -11,6 +11,7 @@ import { presentFailure } from '../utils/failurePresentation'
 import './ElaboratorsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
+import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
 
 interface Props {
   onClose: () => void
@@ -128,6 +129,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       || draft.description !== (original.description ?? '')
       || draft.template !== original.template
   }, [draft, draftTarget, items])
+  useUnsavedDraftReport('elaborators', dirty)
 
   const startNew = (kind: ElaboratorKind): void => {
     if (busy || draftTarget) return

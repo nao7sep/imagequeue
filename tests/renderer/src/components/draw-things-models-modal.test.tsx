@@ -30,6 +30,7 @@ const OFFICIAL_MODEL: LocalModelInfo = {
 
 function installApi(availableModels: LocalModelInfo[], availableError?: Error): void {
   window.electronAPI = {
+    reportUnsavedDraft: vi.fn(async () => undefined),
     localCheckCli: vi.fn(async () => CLI_OK),
     localListDownloadedModels: vi.fn(async () => []),
     localReadCustomJsonImportedFiles: vi.fn(async () => ({ kind: 'absent' as const })),

@@ -1,3 +1,4 @@
+import type { DraftSurface, QuitQuestion } from './quit'
 import type { AppReleaseResult } from './app-release'
 import {
   ElaboratedPromptRecord,
@@ -71,6 +72,8 @@ export interface ElectronAPI {
   viewAppRelease: () => Promise<void>
   onAppReleaseResult: (callback: (result: AppReleaseResult) => void) => (() => void)
   chooseQuit(choice: 'retry' | 'quit' | 'cancel'): void
+  getQuitQuestion(): Promise<QuitQuestion | null>
+  reportUnsavedDraft(surface: DraftSurface, dirty: boolean): Promise<void>
   reportQuitHeight(height: number): void
   platform: Platform
   // The interface language main settled on, and each saved change to it.

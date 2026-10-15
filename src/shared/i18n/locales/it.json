@@ -3,6 +3,13 @@
   "quit.title": "Impossibile salvare prima di uscire",
   "quit.message": "Non è stato possibile salvare alcune modifiche. Riprova, esci senza salvarle oppure annulla la chiusura.",
   "quit.quitAnyway": "Esci comunque",
+  "quit.generating": {
+    "one": "{count} immagine è ancora in generazione e verrà interrotta.",
+    "many": "{count} immagini sono ancora in generazione e verranno interrotte.",
+    "other": "{count} immagini sono ancora in generazione e verranno interrotte."
+  },
+  "quit.tools": "Un download, un’importazione o una verifica di Draw Things è in corso e verrà interrotto.",
+  "quit.drafts": "Le modifiche non salvate in {dialogs} andranno perse.",
   "common.close": "Chiudi",
   "common.cancel": "Annulla",
   "common.save": "Salva",

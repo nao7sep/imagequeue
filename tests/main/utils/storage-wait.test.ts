@@ -39,7 +39,7 @@ it('quit waits for a timed-out export while OS takeover retains its single deadl
   await vi.advanceTimersByTimeAsync(30_000)
   await caller
   const exit = vi.fn(), question = vi.fn(async () => 'cancel' as const)
-  const owner = createQuitOwner({ begin: () => {}, save: drainExports, cleanup: async () => {}, cancel: () => {}, exit, question, onError: () => {}, timeoutMs: 30_000, systemTimeoutMs: 1_500 })
+  const owner = createQuitOwner({ confirm: () => true, declined: () => {}, begin: () => {}, save: drainExports, cleanup: async () => {}, cancel: () => {}, exit, question, onError: () => {}, timeoutMs: 30_000, systemTimeoutMs: 1_500 })
   owner.beforeQuit({ preventDefault: () => {} })
   await vi.advanceTimersByTimeAsync(1_000)
   expect(exit).not.toHaveBeenCalled()

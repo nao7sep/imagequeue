@@ -15,7 +15,7 @@ const h = vi.hoisted(() => {
   const on = (map: Map<string, Listener[]>) => vi.fn((event: string, listener: Listener) => {
     map.set(event, [...(map.get(event) ?? []), listener])
   })
-  const controllers: Array<{ options: Record<string, unknown>; markStartupComplete: ReturnType<typeof vi.fn>; beginShutdown: ReturnType<typeof vi.fn> }> = []
+  const controllers: Array<{ options: Record<string, unknown>; markStartupComplete: ReturnType<typeof vi.fn>; beginShutdown: ReturnType<typeof vi.fn>; restoreOrCreate: ReturnType<typeof vi.fn> }> = []
   return {
     appListeners,
     powerListeners,
@@ -30,6 +30,7 @@ const h = vi.hoisted(() => {
     powerMonitor: { on: on(powerListeners) },
     controllers,
     startUpFails: { value: false },
+    iconAvailable: { value: true },
     emit(map: Map<string, Listener[]>, event: string, ...args: unknown[]): void {
       for (const listener of map.get(event) ?? []) listener(...args)
     },
@@ -58,7 +59,7 @@ vi.mock('../../src/main/session', () => ({
   registerSessionIpc: vi.fn(),
   resetOutputTimestampAllocators: vi.fn(),
 }))
-vi.mock('../../src/main/queue', () => ({ registerQueueIpc: vi.fn() }))
+vi.mock('../../src/main/queue', () => ({ registerQueueIpc: vi.fn(), queueManager: { generatingCount: vi.fn(() => 0) } }))
 vi.mock('../../src/main/backends', () => ({ startProcessor: vi.fn(), stopProcessor: vi.fn() }))
 vi.mock('../../src/main/image-protocol', () => ({ registerImageProtocol: vi.fn(), registerImageSchemeAsPrivileged: vi.fn() }))
 vi.mock('../../src/main/settings-ipc', () => ({ registerSettingsIpc: vi.fn() }))
@@ -88,8 +89,8 @@ vi.mock('../../src/main/logger', () => ({
 vi.mock('../../src/main/records', () => ({ onRecordStored: vi.fn(), openRecords: vi.fn(), closeRecords: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/records-ipc', () => ({ registerRecordsIpc: vi.fn() }))
 vi.mock('../../src/main/records-reader', () => ({ closeRecordsReader: vi.fn(async () => undefined) }))
-vi.mock('../../src/main/records-window', () => ({ closeRecordsWindow: vi.fn(), notifyRecordsChanged: vi.fn() }))
-vi.mock('../../src/main/cli-jobs', () => ({ killAllCliJobsAndWait: vi.fn(async () => ({ signalled: 0, settled: true })) }))
+vi.mock('../../src/main/records-window', () => ({ closeRecordsWindow: vi.fn(), notifyRecordsChanged: vi.fn(), hideRecordsWindow: vi.fn(), showRecordsWindow: vi.fn() }))
+vi.mock('../../src/main/cli-jobs', () => ({ killAllCliJobsAndWait: vi.fn(async () => ({ signalled: 0, settled: true })), hasRunningCliJobs: vi.fn(() => false) }))
 vi.mock('../../src/main/backends/cancellation', () => ({
   cancelAllInFlightAndWait: vi.fn(async () => ({ settled: true })),
   resumeAfterCancelledShutdown: vi.fn(),
@@ -110,13 +111,14 @@ vi.mock('../../src/main/main-window-layout', () => ({
 }))
 vi.mock('../../src/main/startup-failure-window', () => ({ createStartupFailureWindow: vi.fn(() => ({ on: vi.fn(), isDestroyed: () => false })) }))
 vi.mock('../../src/main/utils/force-exit', () => ({ forceExit: vi.fn() }))
-vi.mock('../../src/main/quit-failure-window', () => ({ showQuitFailure: vi.fn(async () => 'cancel') }))
+vi.mock('../../src/main/quit-failure-window', () => ({ showQuitQuestion: vi.fn(async () => 'cancel') }))
 vi.mock('../../src/main/backend-defaults', () => ({ drainBackendDefaults: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/settings-writes', () => ({ retrySettingsWrites: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/brainstorm', () => ({ cancelAllBrainstorms: vi.fn(), hasActiveBrainstorms: vi.fn(() => false) }))
 vi.mock('../../src/main/dependencies/operations', () => ({
-  cancelAllDependencyOperations: vi.fn(), hasActiveDependencyOperations: vi.fn(() => false),
+  cancelAllDependencyOperations: vi.fn(), hasActiveDependencyOperations: vi.fn(() => false), hasUserDependencyOperations: vi.fn(() => false),
 }))
+vi.mock('../../src/main/unsaved-drafts', () => ({ unsavedDrafts: vi.fn(() => []), registerUnsavedDraftsIpc: vi.fn() }))
 vi.mock('../../src/main/app-release-check', () => ({ startAppReleaseCheck: vi.fn() }))
 vi.mock('../../src/main/last-resort-hooks', () => ({ installLastResortHooks: vi.fn() }))
 vi.mock('../../src/main/failure-presentation', () => ({ startupFailurePresentation: vi.fn(() => ({ key: 'startup' })) }))
@@ -138,7 +140,7 @@ vi.mock('../../src/main/main-window-lifecycle', () => ({
   }),
 }))
 vi.mock('../../src/main/status-icon', () => ({
-  StatusIconController: vi.fn(function () { return { reconcile: vi.fn(async () => undefined), dispose: vi.fn() } }),
+  StatusIconController: vi.fn(function () { return { reconcile: vi.fn(async () => undefined), dispose: vi.fn(), isAvailable: () => h.iconAvailable.value } }),
 }))
 vi.mock('../../src/main/session/open-sessions-folder', () => ({ openSessionsFolder: vi.fn() }))
 vi.mock('../../src/main/queue/control-actions', () => ({ setQueuePausedAndPublish: vi.fn() }))
@@ -154,7 +156,10 @@ vi.mock('../../src/main/app-menu', () => ({ buildAppMenuTemplate: vi.fn(() => []
 
 const session = await import('../../src/main/session')
 const records = await import('../../src/main/records')
-const { showQuitFailure } = await import('../../src/main/quit-failure-window')
+const { showQuitQuestion: showQuitFailure } = await import('../../src/main/quit-failure-window')
+const { queueManager } = await import('../../src/main/queue')
+const { hideRecordsWindow, showRecordsWindow } = await import('../../src/main/records-window')
+const { hidePreviewWindow, showPreviewWindow } = await import('../../src/main/preview-window')
 const { forceExit } = await import('../../src/main/utils/force-exit')
 const { createStartupFailureWindow } = await import('../../src/main/startup-failure-window')
 
@@ -165,6 +170,9 @@ beforeEach(() => {
   h.powerListeners.clear()
   h.controllers.length = 0
   h.startUpFails.value = false
+  h.iconAvailable.value = true
+  vi.mocked(queueManager.generatingCount).mockReturnValue(0)
+  vi.mocked(showQuitFailure).mockImplementation(async () => 'cancel')
   vi.mocked(session.persistActiveSession).mockResolvedValue(undefined as never)
 })
 
@@ -242,15 +250,81 @@ describe('primary instance quit routes', () => {
     expect(session.persistActiveSession).not.toHaveBeenCalled()
   })
 
-  it.each([['win32', 1], ['linux', 1], ['darwin', 0]] as const)('closing the primary window on %s requests quit %i times', async (value, quits) => {
+  it.each([['win32', true, 0], ['darwin', true, 0], ['win32', false, 1], ['darwin', false, 1]] as const)(
+    'losing the primary window on %s with the icon %s requests quit %i times', async (value, icon, quits) => {
+      await launch()
+      h.iconAvailable.value = icon
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { configurable: true, value })
+      try {
+        ;(h.controllers[0]!.options['onPrimaryWindowClosed'] as () => void)()
+      } finally {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      expect(h.app.quit).toHaveBeenCalledTimes(quits)
+    })
+
+  // Quit asks before stopping images that are generating (unsaved-edits-conventions).
+  it('asks before stopping generating images, standalone while no window shows, and stops nothing on Cancel', async () => {
     await launch()
+    // No icon and no window showing: Cancel brings the main window back.
+    h.iconAvailable.value = false
+    vi.mocked(queueManager.generatingCount).mockReturnValue(2)
+    const quit = beforeQuit()
+    await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
+    expect(quit.preventDefault).toHaveBeenCalledOnce()
+    const [question, , , owner] = vi.mocked(showQuitFailure).mock.calls[0]!
+    expect(question).toEqual({ kind: 'confirm', work: { generating: 2, tools: false, drafts: [] }, platform: process.platform })
+    // The controller stand-in has no window; the question stands alone.
+    expect(owner).toBeUndefined()
+    await vi.waitFor(() => expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalled())
+    expect(h.controllers[0]!.beginShutdown).not.toHaveBeenCalled()
+    expect(h.app.exit).not.toHaveBeenCalled()
+  })
+
+  it('quits once the user confirms', async () => {
+    await launch()
+    vi.mocked(queueManager.generatingCount).mockReturnValue(1)
+    vi.mocked(showQuitFailure).mockImplementation(async () => 'quit')
+    beforeQuit()
+    await vi.waitFor(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
+    expect(h.controllers[0]!.beginShutdown).toHaveBeenCalledOnce()
+  })
+
+  it('a cancelled quit with the icon showing leaves the app where it was', async () => {
+    await launch()
+    vi.mocked(queueManager.generatingCount).mockReturnValue(1)
+    beforeQuit()
+    await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(h.controllers[0]!.restoreOrCreate).not.toHaveBeenCalled()
+  })
+
+  // Background mode (window-conventions): every window goes and returns with main.
+  it('hides Records and the preview with the main window and returns them with it', async () => {
+    await launch()
+    const options = h.controllers[0]!.options as { onHiddenToBackground: () => void; onRestored: () => void }
+    options.onHiddenToBackground()
+    expect(hideRecordsWindow).toHaveBeenCalledOnce()
+    expect(hidePreviewWindow).toHaveBeenCalledOnce()
+    options.onRestored()
+    expect(showRecordsWindow).toHaveBeenCalledOnce()
+    expect(showPreviewWindow).toHaveBeenCalledOnce()
+  })
+
+  it('closing the main window without an icon quits through the quit flow on every platform', async () => {
+    await launch()
+    ;(h.controllers[0]!.options['requestQuit'] as () => void)()
+    expect(h.app.quit).toHaveBeenCalledOnce()
+    h.iconAvailable.value = false
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { configurable: true, value })
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     try {
       ;(h.controllers[0]!.options['onPrimaryWindowClosed'] as () => void)()
     } finally {
       Object.defineProperty(process, 'platform', platform)
     }
-    expect(h.app.quit).toHaveBeenCalledTimes(quits)
+    expect(h.app.quit).toHaveBeenCalledTimes(2)
   })
 })
+

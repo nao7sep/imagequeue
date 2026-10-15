@@ -91,7 +91,7 @@ describe('backup store', () => {
       expect(posted).toEqual([expect.objectContaining({ type: 'record' }), { type: 'close' }])
       const exit = vi.fn()
       const quit = createQuitOwner({
-        begin: vi.fn(), cancel: vi.fn(), exit, onError: vi.fn(),
+        confirm: () => true, declined: vi.fn(), begin: vi.fn(), cancel: vi.fn(), exit, onError: vi.fn(),
         save: async () => undefined, cleanup: closeBackupStore, question: async () => 'cancel',
         timeoutMs: 30_000, systemTimeoutMs: 1_500,
       })

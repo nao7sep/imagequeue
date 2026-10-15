@@ -3,6 +3,13 @@
   "quit.title": "Não foi possível salvar antes de sair",
   "quit.message": "Algumas alterações não puderam ser salvas. Tente novamente, saia sem salvar essas alterações ou cancele a saída.",
   "quit.quitAnyway": "Sair mesmo assim",
+  "quit.generating": {
+    "one": "{count} imagem ainda está sendo gerada e será interrompida.",
+    "many": "{count} imagens ainda estão sendo geradas e serão interrompidas.",
+    "other": "{count} imagens ainda estão sendo geradas e serão interrompidas."
+  },
+  "quit.tools": "Um download, importação ou verificação do Draw Things está em andamento e será interrompido.",
+  "quit.drafts": "As alterações não salvas em {dialogs} serão descartadas.",
   "common.close": "Fechar",
   "common.cancel": "Cancelar",
   "common.save": "Salvar",

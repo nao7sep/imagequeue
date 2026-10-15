@@ -3,6 +3,12 @@
   "quit.title": "Unable to save before quitting",
   "quit.message": "Some changes could not be saved. Retry saving, quit without saving those changes, or cancel quitting.",
   "quit.quitAnyway": "Quit anyway",
+  "quit.generating": {
+    "one": "{count} image is still generating and will be stopped.",
+    "other": "{count} images are still generating and will be stopped."
+  },
+  "quit.tools": "A Draw Things download, import or check is running and will be stopped.",
+  "quit.drafts": "Unsaved changes in {dialogs} will be discarded.",
   "common.close": "Close",
   "common.cancel": "Cancel",
   "common.save": "Save",

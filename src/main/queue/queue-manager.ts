@@ -170,7 +170,11 @@ export class QueueManager {
   }
 
   hasGeneratingTasks(): boolean {
-    return Object.values(this.queues).some((tasks) => tasks.some((task) => task.status === 'generating'))
+    return this.generatingCount() > 0
+  }
+
+  generatingCount(): number {
+    return Object.values(this.queues).reduce((count, tasks) => count + tasks.filter((task) => task.status === 'generating').length, 0)
   }
 
   // Flips any in-flight 'generating' tasks to 'interrupted', clearing the

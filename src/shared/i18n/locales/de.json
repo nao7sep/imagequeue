@@ -3,6 +3,12 @@
   "quit.title": "Speichern vor dem Beenden fehlgeschlagen",
   "quit.message": "Einige Änderungen konnten nicht gespeichert werden. Versuchen Sie es erneut, beenden Sie, ohne diese Änderungen zu speichern, oder brechen Sie das Beenden ab.",
   "quit.quitAnyway": "Trotzdem beenden",
+  "quit.generating": {
+    "one": "{count} Bild wird noch erzeugt und wird abgebrochen.",
+    "other": "{count} Bilder werden noch erzeugt und werden abgebrochen."
+  },
+  "quit.tools": "Ein Download, ein Import oder eine Prüfung für Draw Things läuft und wird abgebrochen.",
+  "quit.drafts": "Nicht gespeicherte Änderungen in {dialogs} werden verworfen.",
   "common.close": "Schließen",
   "common.cancel": "Abbrechen",
   "common.save": "Speichern",

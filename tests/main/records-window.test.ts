@@ -32,6 +32,10 @@ const mocks = await vi.hoisted(async () => {
     isMinimized(): boolean { return this.minimized }
     restore(): void { this.restored++ }
     show(): void { this.shown++ }
+    hidden = 0
+    shownInactive = 0
+    hide(): void { this.hidden++ }
+    showInactive(): void { this.shownInactive++ }
     focus(): void { this.focused++ }
     destroy(): void {
       this.destroyed = true
@@ -67,8 +71,10 @@ import {
   RECORDS_CHANGED_CHANNEL,
   buildRecordsWindowOptions,
   closeRecordsWindow,
+  hideRecordsWindow,
   notifyRecordsChanged,
   openRecordsWindow,
+  showRecordsWindow,
 } from '../../src/main/records-window'
 
 const opened = (): FakeWindow[] => mocks.windows as FakeWindow[]
@@ -173,3 +179,30 @@ it.each(['win32', 'darwin'] as const)('preserves display mode only on Windows (%
     Object.defineProperty(process, 'platform', originalPlatform)
   }
 })
+
+// Background mode (window-conventions): Records goes to the icon with the main
+// window and returns only with it, leaving focus on the main window.
+describe('background mode', () => {
+  it('hides with the main window and returns with it without taking focus', async () => {
+    await openRecordsWindow()
+    const [win] = opened()
+    hideRecordsWindow()
+    expect(win!.hidden).toBe(1)
+    showRecordsWindow()
+    expect(win!.shownInactive).toBe(1)
+    showRecordsWindow()
+    expect(win!.shownInactive).toBe(1)
+    expect(win!.focused).toBe(0)
+  })
+
+  it('a page that finishes loading in the background waits for the main window', async () => {
+    await openRecordsWindow()
+    const [win] = opened()
+    hideRecordsWindow()
+    win!.emit('ready-to-show')
+    expect(win!.shown).toBe(0)
+    showRecordsWindow()
+    expect(win!.shownInactive).toBe(1)
+  })
+})
+

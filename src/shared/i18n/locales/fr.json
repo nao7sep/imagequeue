@@ -3,6 +3,13 @@
   "quit.title": "Impossible d’enregistrer avant de quitter",
   "quit.message": "Certaines modifications n’ont pas pu être enregistrées. Réessayez, quittez sans enregistrer ces modifications ou annulez la fermeture.",
   "quit.quitAnyway": "Quitter quand même",
+  "quit.generating": {
+    "one": "{count} image est encore en génération et sera arrêtée.",
+    "many": "{count} images sont encore en génération et seront arrêtées.",
+    "other": "{count} images sont encore en génération et seront arrêtées."
+  },
+  "quit.tools": "Un téléchargement, une importation ou une vérification de Draw Things est en cours et sera arrêté.",
+  "quit.drafts": "Les modifications non enregistrées dans {dialogs} seront perdues.",
   "common.close": "Fermer",
   "common.cancel": "Annuler",
   "common.save": "Enregistrer",

@@ -16,6 +16,7 @@ import {
 import './ElaborationSettingsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
+import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
 
 interface Props {
   onClose: () => void
@@ -151,6 +152,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     if (!form || !baseForm) return false
     return JSON.stringify(form) !== JSON.stringify(baseForm)
   }, [form, baseForm])
+  useUnsavedDraftReport('elaborationSettings', dirty)
 
   const handleReset = useCallback(async (): Promise<void> => {
     const ok = await confirm({

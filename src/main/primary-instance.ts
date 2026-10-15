@@ -3,7 +3,7 @@ import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, summarizeConfig } from './config'
 import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, drainSessionWrites, registerSessionIpc, resetOutputTimestampAllocators } from './session'
-import { registerQueueIpc } from './queue'
+import { queueManager, registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
 import { registerImageProtocol, registerImageSchemeAsPrivileged } from './image-protocol'
 import { registerSettingsIpc } from './settings-ipc'
@@ -27,8 +27,8 @@ import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from '.
 import { onRecordStored, openRecords, closeRecords } from './records'
 import { registerRecordsIpc } from './records-ipc'
 import { closeRecordsReader } from './records-reader'
-import { closeRecordsWindow, notifyRecordsChanged } from './records-window'
-import { killAllCliJobsAndWait } from './cli-jobs'
+import { closeRecordsWindow, hideRecordsWindow, notifyRecordsChanged, showRecordsWindow } from './records-window'
+import { hasRunningCliJobs, killAllCliJobsAndWait } from './cli-jobs'
 import { cancelAllInFlightAndWait } from './backends/cancellation'
 import { getAllModelParams, drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
@@ -45,13 +45,15 @@ import {
 import { createStartupFailureWindow } from './startup-failure-window'
 import { createQuitOwner } from './quit-handler'
 import { forceExit } from './utils/force-exit'
-import { showQuitFailure } from './quit-failure-window'
+import { showQuitQuestion } from './quit-failure-window'
+import { unsavedDrafts, registerUnsavedDraftsIpc } from './unsaved-drafts'
+import { hasQuitWork, type QuitWork } from '../shared/quit'
 import { isQuitting, setQuitting } from './quit-state'
 import { drainBackendDefaults } from './backend-defaults'
 import { resumeAfterCancelledShutdown } from './backends/cancellation'
 import { retrySettingsWrites } from './settings-writes'
 import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
-import { cancelAllDependencyOperations, hasActiveDependencyOperations } from './dependencies/operations'
+import { cancelAllDependencyOperations, hasActiveDependencyOperations, hasUserDependencyOperations } from './dependencies/operations'
 import { startAppReleaseCheck } from './app-release-check'
 import { installLastResortHooks } from './last-resort-hooks'
 import { startupFailurePresentation } from './failure-presentation'
@@ -101,7 +103,34 @@ let sessionStarted = false
 let backgroundWork: Promise<void> | null = null
 let cleanExit = false
 let backgroundSettled = false
+// What an ordinary quit would end: images generating, Draw Things tool work
+// the user started, and main-window dialogs holding unsaved edits.
+function quitWork(): QuitWork {
+  return {
+    generating: queueManager.generatingCount(),
+    tools: hasRunningCliJobs() || hasUserDependencyOperations(),
+    drafts: unsavedDrafts(),
+  }
+}
+
+// A cancelled quit never leaves the app with no window showing and no icon to
+// bring one back (window-conventions, Background mode).
+function keepReachable(): void {
+  if (statusIconController?.isAvailable()) return
+  const main = mainWindowController?.getWindow()
+  if (main && main.isVisible() && !main.isMinimized()) return
+  void mainWindowController?.restoreOrCreate()
+}
+
 const quitOwner = createQuitOwner({
+  confirm: (signal) => {
+    if (!sessionStarted) return true
+    const work = quitWork()
+    if (!hasQuitWork(work)) return true
+    return showQuitQuestion({ kind: 'confirm', work, platform: process.platform }, signal, () => quitOwner.sessionEnd(),
+      mainWindowController?.getWindow() ?? undefined).then((choice) => choice === 'quit')
+  },
+  declined: keepReachable,
   begin: () => {
     cleanExit = false
     backgroundSettled = false
@@ -147,8 +176,9 @@ const quitOwner = createQuitOwner({
     mainWindowController?.cancelShutdown()
     resumeAfterCancelledShutdown()
     startProcessor()
+    keepReachable()
   },
-  question: (signal) => showQuitFailure(signal, () => quitOwner.sessionEnd(), mainWindowController?.getWindow() ?? undefined),
+  question: (signal) => showQuitQuestion({ kind: 'saveFailed' }, signal, () => quitOwner.sessionEnd(), mainWindowController?.getWindow() ?? undefined),
   exit: () => {
     if (cleanExit) app.exit(0)
     else {
@@ -274,17 +304,25 @@ async function startUp(): Promise<void> {
     platform: process.platform,
     createWindow,
     isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
+    // Background mode: every window goes with the main window to the icon and
+    // returns only with it (window-conventions, Background mode).
     onHiddenToBackground: () => {
       closeFullscreenView({ refocusOrigin: false })
       hidePreviewWindow()
+      hideRecordsWindow()
     },
-    onRestored: showPreviewWindow,
+    onRestored: () => {
+      showPreviewWindow()
+      showRecordsWindow()
+    },
     onPrimaryWindowClosed: () => {
       destroyFullscreenView()
       closePreviewWindow()
       if (startupFailureWindow) return
-      if (process.platform !== 'darwin') app.quit()
+      // Without an icon to return through, the app ends on every platform.
+      if (!statusIconController?.isAvailable()) app.quit()
     },
+    requestQuit: () => app.quit(),
     dock: app.dock,
     onSessionEnd: quitOwner.sessionEnd,
   })
@@ -340,6 +378,7 @@ async function startUp(): Promise<void> {
   registerRecordsIpc()
   registerAppNoticeIpc()
   registerViewingIpc(() => mainWindowController?.getWindow() ?? null)
+  registerUnsavedDraftsIpc(() => mainWindowController?.getWindow()?.webContents ?? null)
   registerNotificationIpc()
   startAppReleaseCheck()
   initNotificationWindow()

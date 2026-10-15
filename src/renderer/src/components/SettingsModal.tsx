@@ -20,6 +20,7 @@ import { normalizeTimeZonePreference, timeZoneChoices } from '../../../shared/ti
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { useI18n } from '../i18n/I18nContext'
 import './SettingsModal.css'
+import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
 
 interface Props {
   onClose: () => void
@@ -149,6 +150,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       (config && baseConfig ? JSON.stringify(config) !== JSON.stringify(baseConfig) : false),
     [config, baseConfig, changedKeys]
   )
+  useUnsavedDraftReport('settings', dirty)
 
   const handleSave = async (): Promise<void> => {
     if (!config || !baseConfig || saveInFlight.current) return

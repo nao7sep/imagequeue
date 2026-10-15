@@ -81,3 +81,9 @@ export function cancelAllDependencyOperations(): void {
   for (const operation of new Set(activeOperations.values())) operation.controller.abort(new Error('ImageQueue is quitting'))
 }
 export function hasActiveDependencyOperations(): boolean { return activeOperations.size > 0 }
+
+/** An install, update or check the user started, which quit asks before
+ *  stopping; the app's own launch check stops without asking. */
+export function hasUserDependencyOperations(): boolean {
+  return [...activeOperations.values()].some((operation) => operation.owner !== APP_DEPENDENCY_OPERATION_OWNER)
+}

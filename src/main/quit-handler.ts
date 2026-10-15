@@ -2,6 +2,10 @@ export interface QuitEvent { preventDefault(): void }
 export type QuitChoice = 'retry' | 'quit' | 'cancel'
 
 interface QuitOptions {
+  // Ordinary quit asks before ending live work; true without asking when
+  // nothing would be lost. OS takeover never asks.
+  confirm: (signal: AbortSignal) => boolean | Promise<boolean>
+  declined: () => void
   begin: () => void
   save: () => Promise<void>
   cleanup: () => Promise<void>
@@ -13,9 +17,10 @@ interface QuitOptions {
   onError: (error: unknown) => void
 }
 
-/** One attempt owns saves and the decision; OS takeover owns a single deadline.
- * A timed-out save remains owned until physical settlement, so Retry never
- * races a second writer against it. Ordinary timeout is a failure, not consent. */
+/** One attempt owns the confirmation, saves and the decision; OS takeover owns
+ * a single deadline. Nothing is stopped before the user confirms. A timed-out
+ * save remains owned until physical settlement, so Retry never races a second
+ * writer against it. Ordinary timeout is a failure, not consent. */
 export function createQuitOwner(options: QuitOptions) {
   let active: Promise<void> | null = null
   let system = false
@@ -53,6 +58,21 @@ export function createQuitOwner(options: QuitOptions) {
     } finally { clearTimeout(timer) }
   }
   const run = async (): Promise<void> => {
+    // A quit with nothing to lose seals at once; otherwise the user decides
+    // first, unless the OS takes over meanwhile.
+    if (!system) {
+      question = new AbortController()
+      let proceed: boolean
+      try {
+        const answer = options.confirm(question.signal)
+        proceed = answer === true || (answer !== false && await answer)
+      } catch (error) {
+        options.onError(error)
+        proceed = false
+      } finally { question = null }
+      if (exited) return
+      if (!proceed && !system) { options.declined(); return }
+    }
     attempt++
     options.begin()
     while (!exited) {

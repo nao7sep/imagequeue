@@ -5,9 +5,10 @@ afterEach(() => vi.useRealTimers())
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 function setup(save: () => Promise<void>, question: (signal: AbortSignal) => Promise<QuitChoice> = async () => 'cancel') {
   const begin = vi.fn(), cancel = vi.fn(), exit = vi.fn(), onError = vi.fn(), cleanup = vi.fn(async () => undefined)
-  const owner = createQuitOwner({ begin, cancel, exit, onError, cleanup, save, question, timeoutMs: 30_000, systemTimeoutMs: 1_500 })
+  const confirm = vi.fn((_signal: AbortSignal): boolean | Promise<boolean> => true), declined = vi.fn()
+  const owner = createQuitOwner({ confirm, declined, begin, cancel, exit, onError, cleanup, save, question, timeoutMs: 30_000, systemTimeoutMs: 1_500 })
   const request = () => owner.beforeQuit({ preventDefault: vi.fn() })
-  return { ...owner, request, begin, cancel, exit, cleanup, onError }
+  return { ...owner, request, begin, cancel, exit, cleanup, onError, confirm, declined }
 }
 describe('quit ownership', () => {
   it('seals synchronously and coalesces repeated requests through save settlement', async () => {
@@ -94,4 +95,36 @@ describe('quit ownership', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(quit.exit).toHaveBeenCalledOnce()
   })
+
+  // Quit asks before ending live work; nothing stops before the answer.
+  it('stops nothing until the user confirms, and declining leaves everything running', async () => {
+    const answer = deferred<boolean>()
+    const quit = setup(async () => undefined)
+    quit.confirm.mockImplementation(() => answer.promise)
+    quit.request()
+    expect(quit.begin).not.toHaveBeenCalled()
+    answer.resolve(false)
+    await vi.waitFor(() => expect(quit.declined).toHaveBeenCalledOnce())
+    expect(quit.begin).not.toHaveBeenCalled()
+    expect(quit.exit).not.toHaveBeenCalled()
+    quit.confirm.mockImplementation(() => Promise.resolve(true))
+    quit.request()
+    await vi.waitFor(() => expect(quit.exit).toHaveBeenCalledOnce())
+    expect(quit.begin).toHaveBeenCalledOnce()
+  })
+
+  it('OS takeover dismisses the confirmation and ends without asking again', async () => {
+    vi.useFakeTimers()
+    const quit = setup(async () => undefined)
+    quit.confirm.mockImplementation((signal) => new Promise<boolean>((resolve) => signal.addEventListener('abort', () => resolve(false))))
+    quit.request()
+    await vi.advanceTimersByTimeAsync(0)
+    quit.sessionEnd()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(quit.declined).not.toHaveBeenCalled()
+    expect(quit.begin).toHaveBeenCalledOnce()
+    expect(quit.exit).toHaveBeenCalledOnce()
+    expect(quit.confirm).toHaveBeenCalledOnce()
+  })
 })
+

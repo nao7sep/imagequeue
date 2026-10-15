@@ -30,6 +30,9 @@ interface MainWindowControllerOptions<TWindow extends MainWindowLifecycleWindow>
   onHiddenToBackground: () => void
   onRestored: () => void
   onPrimaryWindowClosed: () => void
+  // Closing the main window without a status icon to close to ends the app
+  // through its quit flow, which may ask first and keep the window.
+  requestQuit: () => void
   onSessionEnd?: () => void
   dock?: MainWindowDock
   now?: () => number
@@ -142,9 +145,16 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     win.on('minimize', cancelReveal)
 
     win.on('close', (event) => {
-      this.revealWanted = false
-      if (this.shutdownStarted || this.systemSessionEnding || !this.options.isStatusIconAvailable()) return
+      if (this.shutdownStarted || this.systemSessionEnding) {
+        this.revealWanted = false
+        return
+      }
       event.preventDefault()
+      if (!this.options.isStatusIconAvailable()) {
+        this.options.requestQuit()
+        return
+      }
+      this.revealWanted = false
       cancelReveal()
       if (this.options.platform === 'win32') win.setSkipTaskbar(true)
       win.hide()

@@ -153,6 +153,19 @@ describe('Settings theme choice', () => {
   })
 })
 
+// A close or quit asks once before discarding Settings' unsaved edits
+// (unsaved-edits-conventions), so the form reports them while it is open.
+it('reports unsaved edits while they exist, and none once it closes', async () => {
+  const report = vi.fn(async () => undefined)
+  window.electronAPI.reportUnsavedDraft = report
+  renderWith('system')
+  await until(() => expect(report).toHaveBeenLastCalledWith('settings', false))
+  fireEvent.click(themeRadios()[2]!)
+  await until(() => expect(report).toHaveBeenLastCalledWith('settings', true))
+  cleanup()
+  expect(report).toHaveBeenLastCalledWith('settings', false)
+})
+
 it('offers a default-on launch preference and clear manual release outcomes inside Settings', async () => {
   window.electronAPI.checkAppRelease = vi.fn(async () => ({ kind: 'newer' as const, version: 'v1.2.0' }))
   window.electronAPI.viewAppRelease = vi.fn(async () => undefined)

@@ -12,6 +12,7 @@ import { useExternalLinkResults } from '../hooks/useExternalLinkResults'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import type { Translator } from '../../../shared/i18n/translate'
+import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
 
 interface Props {
   onClose: () => void
@@ -116,6 +117,8 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const [cliInstalled, setCliInstalled] = useState<boolean | null>(null)
   const [cliError, setCliError] = useState<MessageKey | null>(null)
   const externalLinks = useExternalLinkResults()
+  // A typed but not imported path is the only edit this dialog holds.
+  useUnsavedDraftReport('drawThingsModels', importPath.trim() !== '')
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
     if (importPath.trim() === '') {

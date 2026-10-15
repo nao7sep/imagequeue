@@ -3,6 +3,13 @@
   "quit.title": "No se pudo guardar antes de salir",
   "quit.message": "No se pudieron guardar algunos cambios. Inténtalo de nuevo, sal sin guardar esos cambios o cancela la salida.",
   "quit.quitAnyway": "Salir de todos modos",
+  "quit.generating": {
+    "one": "{count} imagen todavía se está generando y se detendrá.",
+    "many": "{count} imágenes todavía se están generando y se detendrán.",
+    "other": "{count} imágenes todavía se están generando y se detendrán."
+  },
+  "quit.tools": "Hay una descarga, importación o comprobación de Draw Things en curso que se detendrá.",
+  "quit.drafts": "Se descartarán los cambios sin guardar en {dialogs}.",
   "common.close": "Cerrar",
   "common.cancel": "Cancelar",
   "common.save": "Guardar",

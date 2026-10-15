@@ -49,6 +49,7 @@ function makeController(options: {
   const onHiddenToBackground = vi.fn()
   const onRestored = vi.fn()
   const onPrimaryWindowClosed = vi.fn()
+  const requestQuit = vi.fn()
   const controller = new MainWindowController({
     platform: options.platform ?? 'win32',
     createWindow,
@@ -56,9 +57,10 @@ function makeController(options: {
     onHiddenToBackground,
     onRestored,
     onPrimaryWindowClosed,
+    requestQuit,
     dock: options.dock,
   })
-  return { controller, win, createWindow, onHiddenToBackground, onRestored, onPrimaryWindowClosed }
+  return { controller, win, createWindow, onHiddenToBackground, onRestored, onPrimaryWindowClosed, requestQuit }
 }
 
 afterEach(() => {
@@ -183,9 +185,9 @@ describe('MainWindowController', () => {
     expect(win.focus).toHaveBeenCalledOnce()
   })
 
-  it('hides instead of destroying on Windows only while a recovery icon exists', async () => {
+  it('hides to the icon while one exists, and otherwise asks the quit flow instead of closing', async () => {
     let available = true
-    const { controller, win, onHiddenToBackground, onRestored } = makeController({
+    const { controller, win, onHiddenToBackground, onRestored, requestQuit } = makeController({
       statusAvailable: () => available,
     })
     controller.createInitialWindow()
@@ -203,10 +205,26 @@ describe('MainWindowController', () => {
     expect(win.show).toHaveBeenCalledOnce()
     expect(onRestored).toHaveBeenCalledOnce()
 
+    // Closing the main window ends the app through its quit flow, which may
+    // ask and keep the window (window-conventions).
     available = false
-    const ordinaryClose = win.emitClose()
-    expect(ordinaryClose.preventDefault).not.toHaveBeenCalled()
+    const quitClose = win.emitClose()
+    expect(quitClose.preventDefault).toHaveBeenCalledOnce()
+    expect(requestQuit).toHaveBeenCalledOnce()
     expect(win.hide).toHaveBeenCalledOnce()
+
+    // Once quit has begun, the close goes through.
+    controller.beginShutdown()
+    const shutdownClose = win.emitClose()
+    expect(shutdownClose.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it.each(['darwin', 'win32'] as const)('quits on close without an icon on %s too', (platform) => {
+    const { controller, win, requestQuit, onHiddenToBackground } = makeController({ platform, statusAvailable: () => false })
+    controller.createInitialWindow()
+    expect(win.emitClose().preventDefault).toHaveBeenCalledOnce()
+    expect(requestQuit).toHaveBeenCalledOnce()
+    expect(onHiddenToBackground).not.toHaveBeenCalled()
   })
 
   it('releases the primary window only after an ordinary close', () => {
@@ -232,6 +250,7 @@ describe('MainWindowController', () => {
       platform: 'win32',
       createWindow,
       isStatusIconAvailable: () => false,
+      requestQuit: vi.fn(),
       onHiddenToBackground: vi.fn(),
       onRestored: vi.fn(),
       onPrimaryWindowClosed,

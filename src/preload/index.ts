@@ -1,4 +1,5 @@
 import type { AppReleaseResult } from '../shared/app-release'
+import type { DraftSurface, QuitQuestion } from '../shared/quit'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   ElaboratedPromptRecord,
@@ -59,6 +60,8 @@ export type { ElectronAPI } from '../shared/electron-api'
 const api = {
   platform: process.platform,
   chooseQuit: (choice: 'retry' | 'quit' | 'cancel'): void => { ipcRenderer.send('quit:choice', choice) },
+  getQuitQuestion: (): Promise<QuitQuestion | null> => ipcRenderer.invoke('quit:question'),
+  reportUnsavedDraft: (surface: DraftSurface, dirty: boolean): Promise<void> => ipcRenderer.invoke('drafts:report', surface, dirty),
   reportQuitHeight: (height: number): void => { ipcRenderer.send('quit:height', height) },
   reportStartupFailureMeasurement: (measurement: StartupFailureMeasurement): void => {
     ipcRenderer.send(STARTUP_FAILURE_MEASUREMENT_CHANNEL, measurement)
