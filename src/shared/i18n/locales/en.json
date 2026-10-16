@@ -112,6 +112,8 @@
   "taskFailure.credentials": "{name} rejected the configured credentials. Check the API key in Settings, then retry.",
   "taskFailure.rateLimited": "{name} is rate-limiting requests. Wait a moment, then retry.",
   "taskFailure.timedOut": "{name} did not respond in time. Check the connection, then retry.",
+  "taskFailure.outOfMemory": "Draw Things ran out of memory at {size}. Try a smaller size or close other apps.",
+  "taskFailure.outOfMemoryNoSize": "Draw Things ran out of memory. Try a smaller size or close other apps.",
   "taskFailure.fileAccess": "ImageQueue could not access a required local file. Check the app’s file permissions, then retry.",
   "taskFailure.generic": "{name} could not generate this image. Retry it; if the problem continues, Records in the main menu shows why.",
   "taskFailure.unknown": "This image could not be generated. Retry it; if the problem continues, Records in the main menu shows why.",

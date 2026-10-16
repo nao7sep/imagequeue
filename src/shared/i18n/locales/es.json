@@ -113,6 +113,8 @@
   "taskFailure.credentials": "{name} rechazó las credenciales configuradas. Revisa la clave de API en Configuración y luego vuelve a intentarlo.",
   "taskFailure.rateLimited": "{name} está limitando las solicitudes. Espera un momento y luego vuelve a intentarlo.",
   "taskFailure.timedOut": "{name} no respondió a tiempo. Revisa la conexión y luego vuelve a intentarlo.",
+  "taskFailure.outOfMemory": "Draw Things se quedó sin memoria con {size}. Prueba un tamaño menor o cierra otras apps.",
+  "taskFailure.outOfMemoryNoSize": "Draw Things se quedó sin memoria. Prueba un tamaño menor o cierra otras apps.",
   "taskFailure.fileAccess": "ImageQueue no pudo acceder a un archivo local necesario. Revisa los permisos de archivos de la app y luego vuelve a intentarlo.",
   "taskFailure.generic": "{name} no pudo generar esta imagen. Vuelve a intentarlo; si el problema continúa, consulta el motivo en Registros, en el menú principal.",
   "taskFailure.unknown": "No se pudo generar esta imagen. Vuelve a intentarlo; si el problema continúa, consulta el motivo en Registros, en el menú principal.",

@@ -14,6 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const spawnCalls: { args: string[] }[] = []
 const killSignals: string[] = []
 let hangUntilKilled = false
+// How the fake CLI ends after writing its (possibly partial) output.
+let exit: { code: number | null; signal: string | null; stderr: string } = { code: 0, signal: null, stderr: '' }
 
 vi.mock('node:child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
 vi.mock('child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
@@ -59,7 +61,8 @@ function makeProc(args: string[]): EventEmitter & { stdout: EventEmitter; stderr
     setTimeout(() => {
       if (proc.stdout.listenerCount('data') === 0) return
       proc.stdout.emit('data', Buffer.from('step 1/4\n'.repeat(20_000)))
-      proc.emit('close', 0)
+      if (exit.stderr) proc.stderr.emit('data', Buffer.from(exit.stderr))
+      proc.emit('close', exit.code, exit.signal)
     }, 0)
   }
   return proc
@@ -81,6 +84,7 @@ describe('Draw Things output staging', () => {
     spawnCalls.length = 0
     killSignals.length = 0
     hangUntilKilled = false
+    exit = { code: 0, signal: null, stderr: '' }
     configKnobs.timeoutMs = 60_000
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-dt-'))
     process.env[ENV_VAR] = tmpRoot
@@ -153,4 +157,43 @@ describe('Draw Things output staging', () => {
     expect(fs.existsSync(outPath)).toBe(false)
     expect(fs.readdirSync(sessionDir)).toEqual([])
   })
+
+  const task = (params: Record<string, unknown> = {}) => ({
+    id: 'tm', prompt: 'a cat', backend: 'drawthings', model: 'm.ckpt',
+    params, status: 'generating', enqueuedAt: '', startedAt: '', completedAt: null,
+    durationMs: null, imagePath: null, baseName: null, error: null,
+  }) as never
+
+  // Volume handling: sizes the CLI accepts, tiled decoding, and no silent download.
+  it('asks for a size the CLI accepts, tiled decoding, and no download of a missing model', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    await generateDrawThings(task({ width: 3840, height: 2160 }), new AbortController().signal)
+    const args = spawnCalls[0].args
+    expect(args[args.indexOf('--width') + 1]).toBe('3840')
+    expect(args[args.indexOf('--height') + 1]).toBe('2176')
+    expect(args).toContain('--no-download-missing')
+    expect(JSON.parse(args[args.indexOf('--config-json') + 1])).toEqual({ tiledDecoding: true })
+  })
+
+  it.each([
+    ['the OS killing it', { code: null, signal: 'SIGKILL', stderr: '' }],
+    ['a failed Metal allocation', { code: 1, signal: null, stderr: 'Error: Failed to allocate buffer (out of memory)' }],
+  ])('reports running out of memory after %s, at the size it was asked for, and removes the partial image', async (_name, ended) => {
+    const { generateDrawThings, DrawThingsOutOfMemoryError } = await import('../../../src/main/backends/drawthings')
+    exit = ended
+    const failure = await generateDrawThings(task({ width: 3840, height: 2160 }), new AbortController().signal).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(DrawThingsOutOfMemoryError)
+    expect(failure).toMatchObject({ width: 3840, height: 2176 })
+    const outPath = spawnCalls[0].args[spawnCalls[0].args.indexOf('--output') + 1]
+    expect(fs.existsSync(outPath)).toBe(false)
+  })
+
+  it('keeps an ordinary CLI error as it is', async () => {
+    const { generateDrawThings, DrawThingsOutOfMemoryError } = await import('../../../src/main/backends/drawthings')
+    exit = { code: 1, signal: null, stderr: 'Error: model not found' }
+    const failure = await generateDrawThings(task(), new AbortController().signal).catch((error: unknown) => error)
+    expect(failure).not.toBeInstanceOf(DrawThingsOutOfMemoryError)
+    expect(String(failure)).toContain('model not found')
+  })
 })
+

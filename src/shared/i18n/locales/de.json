@@ -112,6 +112,8 @@
   "taskFailure.credentials": "{name} hat die konfigurierten Zugangsdaten abgelehnt. Prüfen Sie den API-Schlüssel in den Einstellungen und versuchen Sie es dann erneut.",
   "taskFailure.rateLimited": "{name} begrenzt die Anzahl der Anfragen. Warten Sie einen Moment und versuchen Sie es dann erneut.",
   "taskFailure.timedOut": "{name} hat nicht rechtzeitig geantwortet. Prüfen Sie die Verbindung und versuchen Sie es dann erneut.",
+  "taskFailure.outOfMemory": "Draw Things hatte bei {size} nicht genug Arbeitsspeicher. Wählen Sie eine kleinere Größe oder schließen Sie andere Apps.",
+  "taskFailure.outOfMemoryNoSize": "Draw Things hatte nicht genug Arbeitsspeicher. Wählen Sie eine kleinere Größe oder schließen Sie andere Apps.",
   "taskFailure.fileAccess": "ImageQueue konnte auf eine benötigte lokale Datei nicht zugreifen. Prüfen Sie die Dateiberechtigungen der App und versuchen Sie es dann erneut.",
   "taskFailure.generic": "{name} konnte dieses Bild nicht erzeugen. Versuchen Sie es erneut; besteht das Problem weiter, zeigt „Protokoll“ im Hauptmenü den Grund.",
   "taskFailure.unknown": "Dieses Bild konnte nicht erzeugt werden. Versuchen Sie es erneut; besteht das Problem weiter, zeigt „Protokoll“ im Hauptmenü den Grund.",

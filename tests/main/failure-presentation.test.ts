@@ -14,6 +14,7 @@ import { ConfigFileHaltError } from '../../src/main/config/config-store'
 import { NewerFormatError } from '../../src/main/store-format'
 import { ProviderHttpError, ProviderStatusError } from '../../src/main/provider-errors'
 import { loadTranslator } from '../../src/shared/i18n/translate'
+import { DrawThingsOutOfMemoryError } from '../../src/main/provider-errors'
 
 // Presentations are messages; these read them as English would show them.
 const { text } = await loadTranslator('en')
@@ -30,6 +31,13 @@ describe('generationFailurePresentation', () => {
     expect(message).toContain('OpenAI')
     expect(message).not.toContain(hostile)
     expect(error.cause).toBeInstanceOf(Error)
+  })
+
+  it('tells the user what to change when Draw Things runs out of memory', () => {
+    expect(presented('drawthings', new DrawThingsOutOfMemoryError(3840, 2176, 'killed by SIGKILL'), false))
+      .toBe('Draw Things ran out of memory at 3840×2176. Try a smaller size or close other apps.')
+    expect(presented('drawthings', new DrawThingsOutOfMemoryError(undefined, undefined, 'killed by SIGKILL'), false))
+      .toBe('Draw Things ran out of memory. Try a smaller size or close other apps.')
   })
 
   it('points an unclassified failure to the Records window', () => {

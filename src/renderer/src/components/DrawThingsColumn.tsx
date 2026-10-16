@@ -2,7 +2,7 @@ import { setDrawThingsReady } from '../hooks/useVisiblePanes'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-api'
-import { STANDARD_SIZE_PRESETS, type SizePreset } from '../../../shared/models'
+import { DRAWTHINGS_SIZE_PRESETS } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
 import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
@@ -20,7 +20,6 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 // lifecycle; QueueColumn only mounts the hook and renders the controls.
 
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
-const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = STANDARD_SIZE_PRESETS
 
 // Retains full diagnostic detail for renderer-side persistence failures. The
 // column separately owns the concise recovery result; neither surface replaces

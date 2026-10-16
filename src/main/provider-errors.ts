@@ -98,3 +98,12 @@ export function httpStatus(error: unknown): number | null {
   const value = record.status ?? record.statusCode
   return typeof value === 'number' ? value : null
 }
+
+/** The Draw Things CLI ran out of memory at the size it was asked for. */
+export class DrawThingsOutOfMemoryError extends Error {
+  constructor(readonly width: number | undefined, readonly height: number | undefined, detail: string) {
+    super(`Draw Things ran out of memory: ${detail}`)
+    this.name = 'DrawThingsOutOfMemoryError'
+  }
+}
+

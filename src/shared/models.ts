@@ -67,6 +67,21 @@ export const STANDARD_SIZE_PRESETS: SizePreset[] = [
   { shape: 'uhdTall', width: 2160, height: 3840 }
 ]
 
+// Draw Things takes only multiples of 64: its CLI refuses anything else
+// ("Image dimensions must be multiples of 64"), so its sizes are the standard
+// ladder snapped to the nearest multiple, shown as what is generated.
+export const DRAWTHINGS_SIZE_STEP = 64
+
+export function drawThingsDimension(value: number): number {
+  return Math.max(DRAWTHINGS_SIZE_STEP, Math.round(value / DRAWTHINGS_SIZE_STEP) * DRAWTHINGS_SIZE_STEP)
+}
+
+export const DRAWTHINGS_SIZE_PRESETS: SizePreset[] = STANDARD_SIZE_PRESETS.map((preset) => ({
+  ...preset,
+  width: drawThingsDimension(preset.width),
+  height: drawThingsDimension(preset.height),
+}))
+
 // FLUX.2's dimension limits, named here beside the OpenAI equivalents above and
 // exported for the FLUX backend to validate against — the ladder below and that
 // check must agree, so they read the same constants.

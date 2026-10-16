@@ -111,6 +111,8 @@
   "taskFailure.credentials": "{name} が設定済みの認証情報を拒否しました。設定で API キーを確認してから、再試行してください。",
   "taskFailure.rateLimited": "{name} がリクエストの回数を制限しています。少し待ってから、再試行してください。",
   "taskFailure.timedOut": "{name} が時間内に応答しませんでした。接続を確認してから、再試行してください。",
+  "taskFailure.outOfMemory": "Draw Things は {size} でメモリが不足しました。サイズを小さくするか、ほかのアプリを終了してください。",
+  "taskFailure.outOfMemoryNoSize": "Draw Things でメモリが不足しました。サイズを小さくするか、ほかのアプリを終了してください。",
   "taskFailure.fileAccess": "ImageQueue が必要なローカルファイルにアクセスできませんでした。アプリのファイルアクセス権を確認してから、再試行してください。",
   "taskFailure.generic": "{name} はこの画像を生成できませんでした。再試行し、問題が続く場合はメインメニューの「ログ」で原因を確認してください。",
   "taskFailure.unknown": "この画像を生成できませんでした。再試行し、問題が続く場合はメインメニューの「ログ」で原因を確認してください。",

@@ -3,7 +3,7 @@ import type { AppNotice } from '../shared/app-notice'
 import type { ElaboratorRecoveryNotice } from './elaborators'
 import { message, type Message } from '../shared/i18n/translate'
 import { mainTranslator } from './i18n'
-import { httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
+import { DrawThingsOutOfMemoryError, httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
 import { ConfigFileHaltError } from './config/config-store'
 import { NewerFormatError } from './store-format'
 
@@ -43,6 +43,11 @@ export function generationFailurePresentation(backend: BackendId, error: unknown
   const code = structuredString(error, 'code')
   const errorName = structuredString(error, 'name')
 
+  if (error instanceof DrawThingsOutOfMemoryError) {
+    return error.width && error.height
+      ? message('taskFailure.outOfMemory', { size: `${error.width}×${error.height}` })
+      : message('taskFailure.outOfMemoryNoSize')
+  }
   if (error instanceof MissingApiKeyError) {
     return message('taskFailure.missingKey', { name })
   }

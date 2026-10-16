@@ -111,6 +111,8 @@
   "taskFailure.credentials": "{name} 拒绝了已配置的凭据。请在设置中检查 API 密钥后重试。",
   "taskFailure.rateLimited": "{name} 正在限制请求频率。请稍等片刻后重试。",
   "taskFailure.timedOut": "{name} 未能及时响应。请检查网络连接后重试。",
+  "taskFailure.outOfMemory": "Draw Things 在 {size} 尺寸下内存不足。请选择更小的尺寸或关闭其他应用。",
+  "taskFailure.outOfMemoryNoSize": "Draw Things 内存不足。请选择更小的尺寸或关闭其他应用。",
   "taskFailure.fileAccess": "ImageQueue 无法访问所需的本地文件。请检查本应用的文件权限后重试。",
   "taskFailure.generic": "{name} 无法生成此图像。请重试；如果问题仍然存在，请在主菜单的“日志”中查看原因。",
   "taskFailure.unknown": "无法生成此图像。请重试；如果问题仍然存在，请在主菜单的“日志”中查看原因。",
