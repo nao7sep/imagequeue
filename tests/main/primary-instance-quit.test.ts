@@ -31,6 +31,7 @@ const h = vi.hoisted(() => {
     controllers,
     startUpFails: { value: false },
     iconAvailable: { value: true },
+    mainWindow: { value: null as null | { isDestroyed: () => boolean; webContents: { send: ReturnType<typeof vi.fn> } } },
     emit(map: Map<string, Listener[]>, event: string, ...args: unknown[]): void {
       for (const listener of map.get(event) ?? []) listener(...args)
     },
@@ -81,6 +82,7 @@ vi.mock('../../src/main/app-notice-ipc', () => ({ registerAppNoticeIpc: vi.fn() 
 vi.mock('../../src/main/fullscreen-view', () => ({ closeFullscreenView: vi.fn(), destroyFullscreenView: vi.fn() }))
 vi.mock('../../src/main/viewing-ipc', () => ({ registerViewingIpc: vi.fn(), WINDOW_COMMAND_CHANNEL: 'window:command' }))
 vi.mock('../../src/main/ipc-boundary', () => ({ handle: vi.fn() }))
+const { handle } = await import('../../src/main/ipc-boundary')
 vi.mock('../../src/main/preview-window', () => ({
   closePreviewWindow: vi.fn(), hidePreviewWindow: vi.fn(), showPreviewWindow: vi.fn(), syncPreviewWindow: vi.fn(),
 }))
@@ -134,7 +136,7 @@ vi.mock('../../src/main/main-window-lifecycle', () => ({
       beginShutdown: vi.fn(),
       cancelShutdown: vi.fn(),
       dispose: vi.fn(),
-      getWindow: vi.fn(() => null),
+      getWindow: vi.fn(() => h.mainWindow.value),
       restoreOrCreate: vi.fn(async () => undefined),
       retainActivationSurface: vi.fn(async () => undefined),
     }
@@ -174,6 +176,7 @@ beforeEach(() => {
   h.controllers.length = 0
   h.startUpFails.value = false
   h.iconAvailable.value = true
+  h.mainWindow.value = null
   vi.mocked(queueManager.generatingCount).mockReturnValue(0)
   vi.mocked(showQuitFailure).mockImplementation(async () => 'cancel')
   vi.mocked(session.persistActiveSession).mockResolvedValue(undefined as never)
@@ -330,13 +333,37 @@ describe('primary instance quit routes', () => {
     expect(h.app.quit).toHaveBeenCalledTimes(2)
   })
 
-  it('opens Settings from the app menu by bringing the main window forward first', async () => {
+  it('opens Settings from the app menu in the main window, brought forward first', async () => {
     const { buildAppMenuTemplate } = await import('../../src/main/app-menu')
     await launch()
+    const send = vi.fn()
+    h.mainWindow.value = { isDestroyed: () => false, webContents: { send } }
     const state = vi.mocked(buildAppMenuTemplate).mock.calls.at(-1)![2]!
     expect(state.dialogOpen).toBe(false)
     state.openSettings()
     expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith('window:command', 'settings'))
+  })
+
+  // About and Settings wait while a dialog is in front (app-chrome-conventions).
+  it('disables About and Settings while the main window reports a dialog, and only the main window may report', async () => {
+    const { buildAppMenuTemplate } = await import('../../src/main/app-menu')
+    await launch()
+    const page = { send: vi.fn() }
+    h.mainWindow.value = { isDestroyed: () => false, webContents: page as never }
+    const report = vi.mocked(handle).mock.calls.find(([channel]) => channel === 'menu:dialogOpen')![1] as (event: { sender: unknown }, open: unknown) => void
+    const builds = () => vi.mocked(buildAppMenuTemplate).mock.calls.length
+    const lastState = () => vi.mocked(buildAppMenuTemplate).mock.calls.at(-1)![2]!
+    const before = builds()
+    report({ sender: {} }, true)
+    report({ sender: page }, 'yes')
+    expect(builds()).toBe(before)
+    report({ sender: page }, true)
+    expect(lastState().dialogOpen).toBe(true)
+    report({ sender: page }, true)
+    expect(builds()).toBe(before + 1)
+    report({ sender: page }, false)
+    expect(lastState().dialogOpen).toBe(false)
   })
 })
 

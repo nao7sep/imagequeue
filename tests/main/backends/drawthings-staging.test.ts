@@ -46,10 +46,20 @@ function makeProc(args: string[]): EventEmitter & { stdout: EventEmitter; stderr
     stderr: new EventEmitter(),
     kill: (sig?: string) => {
       killSignals.push(sig ?? 'SIGTERM')
-      // The first signal is enough for the fake: report a killed close.
-      setTimeout(() => proc.emit('close', null), 0)
+      // The first signal is enough for the fake: report a close by that signal.
+      setTimeout(() => proc.emit('close', null, sig ?? 'SIGTERM'), 0)
     },
   })
+  if (spawnFails) {
+    setTimeout(() => proc.emit('error', Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })), 0)
+    return proc
+  }
+  if (hangUntilKilled) {
+    // A run that has started writing its image when it is stopped.
+    const outPath = args[args.indexOf('--output') + 1]
+    fs.mkdirSync(path.dirname(outPath), { recursive: true })
+    fs.writeFileSync(outPath, Buffer.from([0x89, 0x50]))
+  }
   if (!hangUntilKilled) {
     // Write the file the CLI would produce, then report success.
     const outIndex = args.indexOf('--output')
@@ -68,6 +78,18 @@ function makeProc(args: string[]): EventEmitter & { stdout: EventEmitter; stderr
   return proc
 }
 
+// What the AI-call record receives, so Records' copy of a failure can be checked.
+const recorded = vi.hoisted(() => ({ failures: [] as Array<{ error: unknown; answer: unknown }>, finished: [] as unknown[] }))
+vi.mock('../../../src/main/records', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  startAiCall: () => ({
+    fail: (error: unknown, answer?: unknown) => { recorded.failures.push({ error, answer }) },
+    finish: (answer: unknown) => { recorded.finished.push(answer) },
+  }),
+}))
+// A spawn the OS refuses, as when the CLI binary is missing.
+let spawnFails = false
+
 vi.mock('../../../src/main/local-cli', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveCliPath: () => '/fake/draw-things-cli',
@@ -85,6 +107,9 @@ describe('Draw Things output staging', () => {
     killSignals.length = 0
     hangUntilKilled = false
     exit = { code: 0, signal: null, stderr: '' }
+    spawnFails = false
+    recorded.failures.length = 0
+    recorded.finished.length = 0
     configKnobs.timeoutMs = 60_000
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-dt-'))
     process.env[ENV_VAR] = tmpRoot
@@ -194,6 +219,69 @@ describe('Draw Things output staging', () => {
     const failure = await generateDrawThings(task(), new AbortController().signal).catch((error: unknown) => error)
     expect(failure).not.toBeInstanceOf(DrawThingsOutOfMemoryError)
     expect(String(failure)).toContain('model not found')
+  })
+
+  it('snaps a custom size to the nearest multiple of 64 the CLI accepts', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    await generateDrawThings(task({ width: 1000, height: 700 }), new AbortController().signal)
+    const args = spawnCalls[0].args
+    expect([args[args.indexOf('--width') + 1], args[args.indexOf('--height') + 1]]).toEqual(['1024', '704'])
+  })
+
+  // The app's own kills are a timeout or a Stop, never "out of memory".
+  it('reports a timeout, not running out of memory, when it kills a wedged run, and removes its partial image', async () => {
+    const { generateDrawThings, DrawThingsOutOfMemoryError } = await import('../../../src/main/backends/drawthings')
+    hangUntilKilled = true
+    configKnobs.timeoutMs = 50
+    const failure = await generateDrawThings(task({ width: 512, height: 512 }), new AbortController().signal).catch((error: unknown) => error)
+    expect(failure).not.toBeInstanceOf(DrawThingsOutOfMemoryError)
+    expect(String(failure)).toMatch(/timed out after/)
+    const outPath = spawnCalls[0].args[spawnCalls[0].args.indexOf('--output') + 1]
+    expect(fs.existsSync(outPath)).toBe(false)
+  })
+
+  it('reports a Stop as stopped, not as running out of memory, and removes its partial image', async () => {
+    const { generateDrawThings, DrawThingsOutOfMemoryError } = await import('../../../src/main/backends/drawthings')
+    hangUntilKilled = true
+    const controller = new AbortController()
+    const running = generateDrawThings(task(), controller.signal).catch((error: unknown) => error)
+    await vi.waitFor(() => expect(spawnCalls).toHaveLength(1))
+    controller.abort()
+    const failure = await running
+    expect(failure).not.toBeInstanceOf(DrawThingsOutOfMemoryError)
+    expect(String(failure)).toContain('Generation stopped.')
+    const outPath = spawnCalls[0].args[spawnCalls[0].args.indexOf('--output') + 1]
+    expect(fs.existsSync(outPath)).toBe(false)
+  })
+
+  it('keeps the whole CLI output and the ending signal in the record of a run that ran out of memory', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    exit = { code: null, signal: 'SIGKILL', stderr: 'loading model\nsampling step 3/4\n' }
+    await generateDrawThings(task({ width: 3840, height: 2160 }), new AbortController().signal).catch(() => undefined)
+    expect(recorded.failures).toHaveLength(1)
+    expect(recorded.failures[0]!.answer).toMatchObject({ exitCode: null, signal: 'SIGKILL', stderr: 'loading model\nsampling step 3/4\n' })
+  })
+
+  it('explains a CLI that cannot start', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    spawnFails = true
+    await expect(generateDrawThings(task(), new AbortController().signal)).rejects.toThrow('Failed to spawn draw-things-cli: spawn ENOENT')
+  })
+})
+
+// The decision on its own: an OS kill with no exit code, or an allocation
+// failure the CLI reports, and nothing else.
+describe('isOutOfMemoryExit', () => {
+  it.each([
+    [null, 'SIGKILL', '', true],
+    [1, null, 'MTLAllocation failed to allocate 2.1 GB', true],
+    [134, null, 'Fatal error: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)', true],
+    [1, null, 'Error: Model not found: x.ckpt', false],
+    [1, null, '', false],
+    [0, null, '', false],
+  ] as const)('code %s, signal %s, stderr %j is %s', async (code, signal, stderr, expected) => {
+    const { isOutOfMemoryExit } = await import('../../../src/main/backends/drawthings')
+    expect(isOutOfMemoryExit(code, signal, stderr)).toBe(expected)
   })
 })
 

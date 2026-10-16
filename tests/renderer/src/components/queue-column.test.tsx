@@ -718,6 +718,29 @@ describe('drawthings column', () => {
     expect((container.querySelector('.enqueue-btn') as HTMLButtonElement).disabled).toBe(false)
     expect(enqueueValue.setSnapshot.mock.lastCall?.[1]).toMatchObject({ model: MODEL_B.file, ready: true, params: { width: 1024 } })
   })
+  // Draw Things' CLI refuses sizes that are not multiples of 64, so the column
+  // offers and shows only sizes it can generate.
+  it('offers only sizes Draw Things can generate, shown as generated', async () => {
+    electronAPI.localCheckCli.mockResolvedValue(CLI_OK)
+    electronAPI.localListDownloadedModels.mockResolvedValue([MODEL_A])
+    electronAPI.dtGetModelParams.mockResolvedValue(SAVED_DT_PARAMS)
+    const { container } = render(<QueueColumn backendId="drawthings" label="Draw Things" prompt="a cat" />)
+    await flush()
+    const size = rowControl(container, 'Size') as unknown as HTMLSelectElement
+    const presets = Array.from(size.options).filter((option) => option.value !== 'custom')
+    for (const option of presets) {
+      const [width, height] = option.value.split('x').map(Number)
+      expect(width! % 64, option.value).toBe(0)
+      expect(height! % 64, option.value).toBe(0)
+    }
+    const uhd = presets.find((option) => option.value === '3840x2176')!
+    expect(uhd.textContent).toContain('3840')
+    expect(uhd.textContent).toContain('2176')
+    fireEvent.change(size, { target: { value: '3840x2176' } })
+    await flush()
+    expect([rowControl(container, 'Width').value, rowControl(container, 'Height').value]).toEqual(['3840', '2176'])
+  })
+
   it('is not ready with the CLI missing', async () => {
     const { container } = render(<QueueColumn backendId="drawthings" label="Draw Things" prompt="a cat" />)
     await flush()

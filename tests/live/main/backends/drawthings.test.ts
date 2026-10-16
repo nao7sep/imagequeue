@@ -130,6 +130,30 @@ describe.runIf(process.platform === 'darwin')('the live Draw Things backend', ()
       await rm(home, { recursive: true, force: true })
     }
   })
+
+  // The real CLI refuses sizes that are not multiples of 64; the app snaps the
+  // size, asks for tiled decoding and never downloads a missing model, and the
+  // CLI accepts all of it (volume-handling-conventions). No text AI is needed:
+  // a failed naming request falls back to a random name.
+  it('generates an uneven size at the nearest size the CLI accepts, with tiled decoding', async () => {
+    const home = await mkdtemp(join(CACHE, 'drawthings-size-'))
+    try {
+      await linkTree(join(TOOL_HOME, 'bin'), join(home, 'bin'))
+      await linkTree(join(TOOL_HOME, 'models'), join(home, 'models'))
+      await withApp(home, async (app) => {
+        const task = await app.generate({
+          prompt: PROMPT, backend: 'drawthings', model: LOCKED_MODEL,
+          params: { width: 1000, height: 700, steps: 4, guidance: 7 },
+        })
+        expect(task.status).toBe('completed')
+        const { bytes } = await readOutput(app, task)
+        // A PNG's IHDR holds the width and height at bytes 16 to 23.
+        expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([1024, 704])
+      })
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
 })
 
 describe.runIf(process.platform !== 'darwin')('Draw Things off macOS', () => {

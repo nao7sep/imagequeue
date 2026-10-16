@@ -264,6 +264,21 @@ describe('a failed task keeps what the provider said', () => {
     expect(task.providerMessage).toBe(said)
   })
 
+  // A local run that ran out of memory reaches the task as advice with the size
+  // it was asked for; the CLI's own output stays in Records, not on the task.
+  it('tells the user to try a smaller size when Draw Things runs out of memory', async () => {
+    const { DrawThingsOutOfMemoryError } = await import('../../../src/main/provider-errors')
+    queueOne('drawthings')
+    processQueues()
+    await Promise.resolve()
+    captured!.reject(new DrawThingsOutOfMemoryError(3840, 2176, 'killed by SIGKILL'))
+    await settle()
+    const task = queueManager.getAllStoredTasks().drawthings[0]
+    expect(task.status).toBe('failed')
+    expect(task.error).toEqual({ key: 'taskFailure.outOfMemory', values: { size: '3840×2176' } })
+    expect(task.providerMessage).toBeNull()
+  })
+
   it('records none for a failure that is not a provider answer', async () => {
     queueOne('openai')
     processQueues()
