@@ -24,6 +24,7 @@
   "rendererFailure.message": "Перезагрузите окно, чтобы восстановить его. Сохранённые сеансы и созданные изображения не изменены.",
   "rendererFailure.reload": "Перезагрузить окно",
   "nativeMenu.about": "О программе {app}",
+  "nativeMenu.settings": "Настройки",
   "nativeMenu.services": "Службы",
   "nativeMenu.hide": "Скрыть {app}",
   "nativeMenu.hideOthers": "Скрыть остальные",

@@ -59,3 +59,20 @@ describe('modalStack', () => {
     expect(isAnyModalOpen()).toBe(false)
   })
 })
+
+// The native menu follows whether any dialog is open (About and Settings wait).
+describe('modal open changes', () => {
+  it('tells listeners only when the first dialog opens and the last one closes', async () => {
+    const { pushModal, popModal, onModalOpenChange } = await import('../../../../src/renderer/src/components/modalStack')
+    const seen: boolean[] = []
+    const stop = onModalOpenChange((open) => seen.push(open))
+    pushModal('a')
+    pushModal('b')
+    popModal('b')
+    popModal('a')
+    stop()
+    pushModal('c')
+    popModal('c')
+    expect(seen).toEqual([true, false])
+  })
+})

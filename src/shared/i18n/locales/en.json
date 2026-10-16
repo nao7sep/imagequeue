@@ -22,6 +22,7 @@
   "rendererFailure.message": "Reload the window to recover. Your saved sessions and generated images are unchanged.",
   "rendererFailure.reload": "Reload window",
   "nativeMenu.about": "About {app}",
+  "nativeMenu.settings": "Settings",
   "nativeMenu.services": "Services",
   "nativeMenu.hide": "Hide {app}",
   "nativeMenu.hideOthers": "Hide Others",

@@ -21,6 +21,7 @@
   "rendererFailure.message": "重新加载窗口即可恢复。你保存的会话和生成的图像均未改变。",
   "rendererFailure.reload": "重新加载窗口",
   "nativeMenu.about": "关于 {app}",
+  "nativeMenu.settings": "设置",
   "nativeMenu.services": "服务",
   "nativeMenu.hide": "隐藏 {app}",
   "nativeMenu.hideOthers": "隐藏其他",

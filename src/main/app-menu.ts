@@ -4,13 +4,25 @@ import type { Translator } from '../shared/i18n/translate'
 const APP_NAME = 'ImageQueue'
 
 /**
- * The application menu: Electron's default menu, item for item, with every
- * label taken from the interface language. Each item keeps its role, so Edit
+ * The application menu: Electron's default menu, item for item, plus Settings
+ * (Cmd+,) under About on macOS, with every label taken from the interface
+ * language. Each item keeps its role, so Edit
  * and Window send the system's standard actions to whatever has focus, and
  * macOS still adds its own Edit items (Emoji & Symbols, Start Dictation) and
  * the list of open windows whatever the menus are titled.
  */
-export function buildAppMenuTemplate(t: Translator, platform: NodeJS.Platform): MenuItemConstructorOptions[] {
+export interface AppMenuState {
+  // A dialog is in front of the main window: About and Settings wait for it
+  // (app-chrome-conventions, macOS menu bar).
+  dialogOpen: boolean
+  openSettings: () => void
+}
+
+export function buildAppMenuTemplate(
+  t: Translator,
+  platform: NodeJS.Platform,
+  state: AppMenuState = { dialogOpen: false, openSettings: () => {} },
+): MenuItemConstructorOptions[] {
   const mac = platform === 'darwin'
   const l = t.t
   return [
@@ -18,7 +30,8 @@ export function buildAppMenuTemplate(t: Translator, platform: NodeJS.Platform): 
       ? [{
           label: APP_NAME,
           submenu: [
-            { role: 'about', label: l('nativeMenu.about', { app: APP_NAME }) },
+            { role: 'about', label: l('nativeMenu.about', { app: APP_NAME }), enabled: !state.dialogOpen },
+            { label: l('nativeMenu.settings'), accelerator: 'Cmd+,', enabled: !state.dialogOpen, click: () => state.openSettings() },
             { type: 'separator' },
             { role: 'services', label: l('nativeMenu.services') },
             { type: 'separator' },

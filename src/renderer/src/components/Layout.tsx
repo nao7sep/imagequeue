@@ -15,7 +15,7 @@ import { Menu, MenuItem, MenuCheckboxItem, Submenu } from './Menu'
 import { Icon } from './Icon'
 import { QueueControlSubmenu, QueuePausedBadge } from './QueueControls'
 import { Modal } from './Modal'
-import { isAnyModalOpen } from './modalStack'
+import { isAnyModalOpen, onModalOpenChange } from './modalStack'
 import { BACKEND_LABELS } from '../../../shared/types'
 import { WELCOME_PANE } from '../../../shared/layout-metrics'
 import { WelcomePane } from './WelcomePane'
@@ -187,6 +187,15 @@ export function Layout(): React.JSX.Element {
       stop()
     }
   }, [runCommand, isImeComposing])
+
+  // The native menu disables About and Settings while a dialog is in front.
+  useEffect(() => {
+    const report = (open: boolean): void => {
+      void window.electronAPI.reportDialogOpen(open).catch((error) => recordOperationalDiagnostic('Reporting dialog state to the menu failed', error))
+    }
+    report(isAnyModalOpen())
+    return onModalOpenChange(report)
+  }, [])
 
   // The Draw Things pane pointer leads here by dispatching this event, so the
   // single management surface (this modal) opens from the pane as well as the menu.

@@ -69,6 +69,7 @@ export interface ElectronAPI {
   chooseQuit(choice: 'retry' | 'quit' | 'cancel'): void
   getQuitQuestion(): Promise<QuitQuestion | null>
   reportUnsavedDraft(surface: DraftSurface, dirty: boolean): Promise<void>
+  reportDialogOpen(open: boolean): Promise<void>
   reportQuitHeight(height: number): void
   platform: Platform
   // The interface language main settled on, and each saved change to it.

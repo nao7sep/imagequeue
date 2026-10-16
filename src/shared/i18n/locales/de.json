@@ -22,6 +22,7 @@
   "rendererFailure.message": "Laden Sie das Fenster neu, um es wiederherzustellen. Ihre gespeicherten Sitzungen und erzeugten Bilder sind unverändert.",
   "rendererFailure.reload": "Fenster neu laden",
   "nativeMenu.about": "Über {app}",
+  "nativeMenu.settings": "Einstellungen",
   "nativeMenu.services": "Dienste",
   "nativeMenu.hide": "{app} ausblenden",
   "nativeMenu.hideOthers": "Andere ausblenden",

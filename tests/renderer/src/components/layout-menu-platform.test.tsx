@@ -55,6 +55,7 @@ function openMainMenu(platform: string): void {
       onFullscreenViewStateChanged: () => () => {},
       onListKey: () => () => {},
       onWindowCommand: (callback: (command: string) => void) => { forwarded = callback; return () => {} },
+      reportDialogOpen: vi.fn(async () => undefined),
     },
   })
   render(<Layout />)
@@ -97,6 +98,14 @@ describe('shortcuts handed on by the preview window', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     act(() => forwarded('shortcuts'))
     expect(screen.getByRole('dialog', { name: 'Keyboard Shortcuts' })).not.toBeNull()
+  })
+
+  it('tells the native menu while a dialog is in front', () => {
+    openMainMenu('darwin')
+    const report = window.electronAPI.reportDialogOpen as ReturnType<typeof vi.fn>
+    expect(report).toHaveBeenLastCalledWith(false)
+    act(() => forwarded('shortcuts'))
+    expect(report).toHaveBeenLastCalledWith(true)
   })
 })
 

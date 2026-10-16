@@ -79,7 +79,8 @@ vi.mock('../../src/main/concepts-ipc', () => ({ registerConceptsIpc: vi.fn() }))
 vi.mock('../../src/main/app-log-ipc', () => ({ registerAppLogIpc: vi.fn() }))
 vi.mock('../../src/main/app-notice-ipc', () => ({ registerAppNoticeIpc: vi.fn() }))
 vi.mock('../../src/main/fullscreen-view', () => ({ closeFullscreenView: vi.fn(), destroyFullscreenView: vi.fn() }))
-vi.mock('../../src/main/viewing-ipc', () => ({ registerViewingIpc: vi.fn() }))
+vi.mock('../../src/main/viewing-ipc', () => ({ registerViewingIpc: vi.fn(), WINDOW_COMMAND_CHANNEL: 'window:command' }))
+vi.mock('../../src/main/ipc-boundary', () => ({ handle: vi.fn() }))
 vi.mock('../../src/main/preview-window', () => ({
   closePreviewWindow: vi.fn(), hidePreviewWindow: vi.fn(), showPreviewWindow: vi.fn(), syncPreviewWindow: vi.fn(),
 }))
@@ -327,6 +328,15 @@ describe('primary instance quit routes', () => {
       Object.defineProperty(process, 'platform', platform)
     }
     expect(h.app.quit).toHaveBeenCalledTimes(2)
+  })
+
+  it('opens Settings from the app menu by bringing the main window forward first', async () => {
+    const { buildAppMenuTemplate } = await import('../../src/main/app-menu')
+    await launch()
+    const state = vi.mocked(buildAppMenuTemplate).mock.calls.at(-1)![2]!
+    expect(state.dialogOpen).toBe(false)
+    state.openSettings()
+    expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalledOnce()
   })
 })
 

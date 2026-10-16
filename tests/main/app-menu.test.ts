@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 import { buildAppMenuTemplate, buildTextContextMenuTemplate } from '../../src/main/app-menu'
 import { loadTranslator } from '../../src/shared/i18n/translate'
@@ -43,6 +43,22 @@ describe('application menu', () => {
     }
     expect(template[4]!.role).toBe('windowMenu')
     expect(submenu(template[0]!).find((item) => item.role === 'about')?.label).toBe(de.t('nativeMenu.about', { app: 'ImageQueue' }))
+  })
+
+  // app-chrome-conventions: the app menu leads with About and Settings (Cmd+,),
+  // both disabled while a dialog is in front.
+  it('offers Settings with Cmd+, under About on macOS, both waiting while a dialog is open', async () => {
+    const en = await loadTranslator('en')
+    const openSettings = vi.fn()
+    const appMenu = (dialogOpen: boolean) => submenu(buildAppMenuTemplate(en, 'darwin', { dialogOpen, openSettings })[0]!)
+    const items = appMenu(false)
+    expect(items.slice(0, 2).map((item) => item.label)).toEqual(['About ImageQueue', 'Settings'])
+    expect(items[1]).toMatchObject({ accelerator: 'Cmd+,', enabled: true })
+    ;(items[1]!.click as () => void)()
+    expect(openSettings).toHaveBeenCalledOnce()
+    expect(appMenu(true).slice(0, 2).map((item) => item.enabled)).toEqual([false, false])
+    const windows = buildAppMenuTemplate(en, 'win32').flatMap((menu) => submenu(menu) ?? [])
+    expect(windows.map((item) => item.label)).not.toContain('Settings')
   })
 
   it('offers no Spaces fullscreen on either platform; only the fullscreen view is fullscreen', async () => {

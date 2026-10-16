@@ -1,4 +1,5 @@
 import { drainExports } from './utils/storage-wait'
+import { handle } from './ipc-boundary'
 import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, onConfigSaved, summarizeConfig, updateConfig } from './config'
@@ -21,7 +22,7 @@ import { registerConceptsIpc } from './concepts-ipc'
 import { registerAppLogIpc } from './app-log-ipc'
 import { registerAppNoticeIpc } from './app-notice-ipc'
 import { closeFullscreenView, destroyFullscreenView } from './fullscreen-view'
-import { registerViewingIpc } from './viewing-ipc'
+import { registerViewingIpc, WINDOW_COMMAND_CHANNEL } from './viewing-ipc'
 import { closePreviewWindow, hidePreviewWindow, showPreviewWindow, syncPreviewWindow } from './preview-window'
 import { closeNotificationWindow, initNotificationWindow, registerNotificationIpc } from './notification'
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
@@ -277,12 +278,35 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+// Settings opens in the main window, brought forward first; a dialog in front
+// of it disables About and Settings until it closes.
+let mainDialogOpen = false
+let applyAppMenu = (): void => {}
+
+function openSettingsFromMenu(): void {
+  void mainWindowController?.restoreOrCreate().then(() => {
+    const main = mainWindowController?.getWindow()
+    if (main && !main.isDestroyed()) main.webContents.send(WINDOW_COMMAND_CHANNEL, 'settings')
+  })
+}
+
 function installAppMenu(): void {
-  const apply = (): void => {
-    Menu.setApplicationMenu(Menu.buildFromTemplate(buildAppMenuTemplate(mainTranslator(), process.platform)))
+  applyAppMenu = (): void => {
+    Menu.setApplicationMenu(Menu.buildFromTemplate(buildAppMenuTemplate(mainTranslator(), process.platform, {
+      dialogOpen: mainDialogOpen,
+      openSettings: openSettingsFromMenu,
+    })))
   }
-  apply()
-  onLanguageChanged(apply)
+  applyAppMenu()
+  onLanguageChanged(() => applyAppMenu())
+}
+
+function registerMenuStateIpc(): void {
+  handle('menu:dialogOpen', (event, open: unknown) => {
+    if (event.sender !== mainWindowController?.getWindow()?.webContents || typeof open !== 'boolean' || open === mainDialogOpen) return
+    mainDialogOpen = open
+    applyAppMenu()
+  })
 }
 
 async function startUp(): Promise<void> {
@@ -387,6 +411,7 @@ async function startUp(): Promise<void> {
   registerAppNoticeIpc()
   registerViewingIpc(() => mainWindowController?.getWindow() ?? null)
   registerUnsavedDraftsIpc(() => mainWindowController?.getWindow()?.webContents ?? null)
+  registerMenuStateIpc()
   registerNotificationIpc()
   initNotificationWindow()
   if (!isQuitting()) startProcessor()

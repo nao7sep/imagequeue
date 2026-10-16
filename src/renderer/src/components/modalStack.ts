@@ -15,14 +15,30 @@
 // Pure array logic, no DOM, so it is unit-testable without jsdom.
 
 const stack: string[] = []
+const listeners = new Set<(open: boolean) => void>()
+
+function notify(wasOpen: boolean): void {
+  if (wasOpen === isAnyModalOpen()) return
+  for (const listener of listeners) listener(isAnyModalOpen())
+}
 
 export function pushModal(id: string): void {
+  const wasOpen = isAnyModalOpen()
   stack.push(id)
+  notify(wasOpen)
 }
 
 export function popModal(id: string): void {
+  const wasOpen = isAnyModalOpen()
   const index = stack.lastIndexOf(id)
   if (index >= 0) stack.splice(index, 1)
+  notify(wasOpen)
+}
+
+/** Follows whether any modal is open, for the native menu's About and Settings. */
+export function onModalOpenChange(listener: (open: boolean) => void): () => void {
+  listeners.add(listener)
+  return () => { listeners.delete(listener) }
 }
 
 export function isTopmostModal(id: string): boolean {

@@ -21,6 +21,7 @@
   "rendererFailure.message": "윈도우를 새로고침하면 복구됩니다. 저장된 세션과 생성된 이미지는 변경되지 않았습니다.",
   "rendererFailure.reload": "윈도우 새로고침",
   "nativeMenu.about": "{app}에 관하여",
+  "nativeMenu.settings": "설정",
   "nativeMenu.services": "서비스",
   "nativeMenu.hide": "{app} 가리기",
   "nativeMenu.hideOthers": "기타 가리기",

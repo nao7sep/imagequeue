@@ -21,6 +21,7 @@
   "rendererFailure.message": "ウインドウを再読み込みすると回復します。保存済みのセッションと生成済みの画像は変更されていません。",
   "rendererFailure.reload": "ウインドウを再読み込み",
   "nativeMenu.about": "{app} について",
+  "nativeMenu.settings": "設定",
   "nativeMenu.services": "サービス",
   "nativeMenu.hide": "{app} を非表示",
   "nativeMenu.hideOthers": "ほかを非表示",

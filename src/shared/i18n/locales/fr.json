@@ -23,6 +23,7 @@
   "rendererFailure.message": "Rechargez la fenêtre pour la rétablir. Vos sessions enregistrées et vos images générées sont intactes.",
   "rendererFailure.reload": "Recharger la fenêtre",
   "nativeMenu.about": "À propos d’{app}",
+  "nativeMenu.settings": "Réglages",
   "nativeMenu.services": "Services",
   "nativeMenu.hide": "Masquer {app}",
   "nativeMenu.hideOthers": "Masquer les autres",

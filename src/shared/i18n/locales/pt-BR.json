@@ -23,6 +23,7 @@
   "rendererFailure.message": "Recarregue a janela para recuperá-la. Suas sessões salvas e imagens geradas não foram alteradas.",
   "rendererFailure.reload": "Recarregar janela",
   "nativeMenu.about": "Sobre o {app}",
+  "nativeMenu.settings": "Ajustes",
   "nativeMenu.services": "Serviços",
   "nativeMenu.hide": "Ocultar {app}",
   "nativeMenu.hideOthers": "Ocultar Outros",

@@ -23,6 +23,7 @@
   "rendererFailure.message": "Vuelve a cargar la ventana para recuperarla. Tus sesiones guardadas y las imágenes generadas no han cambiado.",
   "rendererFailure.reload": "Volver a cargar la ventana",
   "nativeMenu.about": "Acerca de {app}",
+  "nativeMenu.settings": "Configuración",
   "nativeMenu.services": "Servicios",
   "nativeMenu.hide": "Ocultar {app}",
   "nativeMenu.hideOthers": "Ocultar otros",
