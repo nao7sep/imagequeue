@@ -8,8 +8,7 @@ import {
   PROMPT_PREVIEW_MIN_GRAPHEMES,
 } from '../../../../src/shared/textCleanup'
 
-// These mirror the test-proven cases from the convention's reference
-// verification, plus the specific shapes this app actually relies on:
+// The cases cover the shapes this app relies on:
 // single-line for names/directives/negative prompts, multiline for prompt and
 // template bodies, and multiline-truncation for the one-line preview surfaces.
 

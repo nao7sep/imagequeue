@@ -25,9 +25,8 @@ import { useImeGuard } from '../utils/imeGuard'
 // / outside click close. Items are `menuitem`s navigated by the arrows, never by
 // Tab. A Submenu parent opens on Right and closes on Left/Esc; a MenuCheckboxItem
 // toggles and stays open. Both popup levels are portalled to the viewport and
-// collision-positioned there, beyond any pane's clipping boundary. Mirrors
-// tapebox's Menu, hand-rolled on the renderer's own imeGuard — not imported
-// across apps.
+// collision-positioned there, beyond any pane's clipping boundary. Built on the
+// renderer's own imeGuard.
 
 type TriggerProps = {
   ref: (el: HTMLButtonElement | null) => void

@@ -224,7 +224,7 @@ export class StatusIconController {
   }
 
   private currentAppearance(): StatusIconAppearance {
-    // Forced-colors themes reuse the same exact T2 geometry: white on a dark
+    // Forced-colors themes reuse the same card geometry: white on a dark
     // system surface, black on a light one. A separate outlined asset changed
     // the cards' apparent spacing and was less faithful without adding contrast.
     return nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? 'dark' : 'light'

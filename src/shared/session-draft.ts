@@ -46,7 +46,8 @@ export interface FormatDirectives {
   lengths: Record<PromptLength, string>
 }
 
-// Matches the max enforced by the iteration input in the Advanced Prompting modal.
+// The most iterations a draft holds; the Advanced Prompting input and the clamp
+// below both take it from here.
 export const MAX_DRAFT_ITERATIONS = 9999
 
 export interface SessionDraft {

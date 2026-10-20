@@ -118,7 +118,7 @@ describe('storage root (IMAGEQUEUE_DATA_DIR)', () => {
   // therefore the backup root) at $HOME itself. Both ways an override can end
   // up empty — an unset reference and one explicitly set to '' — must hard-
   // error identically rather than falling back to $HOME or to the default
-  // root. Mirrors mumbler/tapebox's reference resolveStorageRoot.
+  // root.
   describe('hard-errors when the override expands to an empty path', () => {
     it('rejects an override that is only a reference to an UNSET variable', () => {
       const REF_VAR = 'IMAGEQUEUE_TEST_ROOT_UNSET_XYZ'

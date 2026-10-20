@@ -2,8 +2,8 @@
  * Guards that read the provider's own account of a result before anything parses it —
  * ai-model-routing-conventions, *never invent a cause the provider gave you*.
  *
- * The failure these prevent is not a vague error but a confident wrong one. Measured across
- * the fleet on 2026-08-20: a refused Gemini request surfaced as "returned an empty text
+ * The failure these prevent is not a vague error but a confident wrong one. Seen in
+ * practice: a refused Gemini request surfaced as "returned an empty text
  * response", and that message was believed well enough to produce a written finding that a
  * widely-used model could not transcribe audio — a defect that does not exist. A refusal is
  * the user's to act on (they must change the input) and only the stated reason says so.

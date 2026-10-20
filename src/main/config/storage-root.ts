@@ -20,8 +20,7 @@ const DEFAULT_DIR_NAME = '.imagequeue'
 // behavior, rather than being left as a literal that would become a directory
 // name — this is what lets the empty-after-expansion check below catch BOTH an
 // unset reference and one a caller set to "" explicitly, uniformly, instead of
-// only catching the latter. Mirrors the reference implementation in
-// mumbler/tapebox.
+// only catching the latter.
 function expandEnvReferences(value: string): string {
   return value.replace(/\$(\w+)|\$\{(\w+)\}|%(\w+)%/g, (_match, a, b, c) => {
     const name = a ?? b ?? c

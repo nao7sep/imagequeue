@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Generate the approved T2 rounded-card status icons and review specimen."""
+"""Generate the status icons the packaged app ships, and optionally a review sheet.
+
+Run from anywhere after changing the glyph (needs Pillow):
+
+    python3 scripts/generate-status-icons.py [--specimen-output sheet.png]
+
+It writes build/status-icons/, which electron-builder copies into the app's
+resources; commit the regenerated files with the change.
+"""
 
 import argparse
 from pathlib import Path
@@ -11,7 +19,7 @@ OUTPUT_DIR = Path(__file__).resolve().parents[1] / "build" / "status-icons"
 
 
 def draw_tiles(size: int, fill: str) -> Image.Image:
-    # Approved T2 geometry after packaged-menu optical correction: four 7 px
+    # Geometry, optically corrected in the packaged menu bar: four 7 px
     # rounded cards, no embedded outer padding, a 2 px central gap, and a 2 px
     # radius in a 16 px logical canvas. The status item / notification area
     # supplies its own spacing; transparent rounded corners keep the glyph from
@@ -79,7 +87,7 @@ def draw_specimen(output_path: Path) -> None:
 
     sheet = Image.new("RGB", (width, 54 + row_height * len(rows)), "#ffffff")
     draw = ImageDraw.Draw(sheet)
-    draw.text((20, 16), "ImageQueue T2 rounded-card status icon specimen - native pixels and nearest-neighbor enlargement", fill="#111111", font=font)
+    draw.text((20, 16), "ImageQueue rounded-card status icon specimen - native pixels and nearest-neighbor enlargement", fill="#111111", font=font)
 
     for row_index, (label, background, frames) in enumerate(rows):
         top = 54 + row_index * row_height
@@ -107,8 +115,8 @@ def draw_specimen(output_path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--specimen-output", type=Path)
+    parser = argparse.ArgumentParser(description="Generate the status icons into build/status-icons.")
+    parser.add_argument("--specimen-output", type=Path, help="also write a review sheet of every size to this PNG")
     args = parser.parse_args()
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-// Matches the config.json schema from the product spec.
+// The shape of config.json.
 //
 // No api_key field appears anywhere in this type, and that is load-bearing: keys
 // live only in the separate 0600 api-keys.json (config/api-keys-store.ts). A type

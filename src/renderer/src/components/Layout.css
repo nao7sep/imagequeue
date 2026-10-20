@@ -194,8 +194,6 @@
   z-index: 201;
 }
 
-/* Shared modal styles live in Modal.css */
-
 /* Shortcuts. The groups stand side by side wherever the width allows, and fall
    back to fewer columns in a narrow window; the height bound is the shell's
    (.modal-box), so this body only claims the room left between header and

@@ -11,8 +11,7 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 //   - CLI missing, or update available → WARN, shown until resolved
 //   - configs.json missing / unchecked → INFO, normal muted ink, also permanent
 //
-// Both roles show PERMANENTLY (fleet decision, 2026-08-21, superseding the old
-// 30-second temporary info): this pointer is the one standing path to notice the
+// Both roles show PERMANENTLY: this pointer is the one standing path to notice the
 // Draw Things tools are missing or may be stale — a nudge that hides leaves only
 // the menu item, which nothing points at. It sits among the column's other
 // state-driven rows (which themselves appear once the CLI is installed), so it
