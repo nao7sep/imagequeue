@@ -49,7 +49,9 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $runtimeHelper = Join-Path $scriptDir "launcher-runtime.mjs"
 $runtimeToken = [guid]::NewGuid().ToString("N")
-$rendererUrl = "http://127.0.0.1:20641"
+$rendererHost = "127.0.0.1"
+$rendererPort = "20641"
+$rendererUrl = "http://${rendererHost}:${rendererPort}"
 
 try {
     Set-Utf8Console
@@ -61,17 +63,14 @@ try {
     Write-Step "Replacing any existing ImageQueue runtime"
     Invoke-Native -FilePath "node" -ArgumentList @($runtimeHelper, "claim", $runtimeToken)
     Invoke-Native -FilePath "node" -ArgumentList @($runtimeHelper, "stop", "electron", "ImageQueue", "ImageQueue")
-    Invoke-Native -FilePath "node" -ArgumentList @($runtimeHelper, "check-endpoint", "127.0.0.1", "20641")
+    Invoke-Native -FilePath "node" -ArgumentList @($runtimeHelper, "check-endpoint", $rendererHost, $rendererPort)
 
     Write-Step "Installing dependencies"
     Invoke-Native -FilePath "npm" -ArgumentList @("install")
 
     # npm install skips the Electron binary if the package is already at the locked version.
     Write-Step "Verifying Electron binary"
-    if (-not (Test-Path "node_modules/electron/path.txt")) {
-        Write-Host "Electron binary missing; downloading..."
-        Invoke-Native -FilePath "node" -ArgumentList @("node_modules/electron/install.js")
-    }
+    Invoke-Native -FilePath "npm" -ArgumentList @("run", "prepare:electron")
 
     Write-Step "Starting ImageQueue in development mode"
     $devProcess = Start-Process -FilePath (Get-Command "npm.cmd").Source -ArgumentList @("run", "dev") -NoNewWindow -PassThru

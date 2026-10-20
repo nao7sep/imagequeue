@@ -43,29 +43,21 @@ require_command npm
 cd "$REPO_DIR"
 
 log_step "Installing dependencies"
-npm install --no-audit --no-fund
+npm install
 
 # npm install skips the Electron binary if the package is already at the locked version.
 log_step "Verifying Electron binary"
-if [[ ! -f node_modules/electron/path.txt ]]; then
-  echo "Electron binary missing; downloading..."
-  node node_modules/electron/install.js
-fi
+npm run prepare:electron
 
 # Remove stale output so a build that fails to emit a file can't be masked by a
 # leftover artifact from a previous run.
 log_step "Cleaning previous build"
 rm -rf out "$OUT_DIR"
 
-# The release build type-checks the shipped sources (main/preload + renderer);
-# the dev server skips this entirely. Tests are checked separately and are not
-# part of the release build, so they are not gated here.
-log_step "Type-checking production sources (node + web)"
-node_modules/.bin/tsc --noEmit -p tsconfig.node.json
-node_modules/.bin/tsc --noEmit -p tsconfig.web.json
-
+# The project's own build: it type-checks the shipped sources, then bundles
+# them. Tests are not part of it and are not gated here.
 log_step "Building production bundle"
-node_modules/.bin/electron-vite build
+npm run build
 
 # Package the built output into a real .app bundle — the .app only, no dmg/zip
 # installer; electron-builder ad-hoc-signs on macOS by default. The bundle gives

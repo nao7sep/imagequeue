@@ -66,10 +66,7 @@ try {
 
     # npm install skips the Electron binary if the package is already at the locked version.
     Write-Step "Verifying Electron binary"
-    if (-not (Test-Path "node_modules/electron/path.txt")) {
-        Write-Host "Electron binary missing; downloading..."
-        Invoke-Native -FilePath "node" -ArgumentList @("node_modules/electron/install.js")
-    }
+    Invoke-Native -FilePath "npm" -ArgumentList @("run", "prepare:electron")
 
     # Windows locks the packaged executable while it runs, so replacement must
     # happen before cleaning the package directory.
@@ -83,15 +80,10 @@ try {
     if (Test-Path "out") { Remove-Item -Recurse -Force "out" }
     if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
 
-    # The release build type-checks the shipped sources (main/preload + renderer);
-    # the dev server skips this entirely. Tests are checked separately and are not
-    # part of the release build, so they are not gated here.
-    Write-Step "Type-checking production sources (node + web)"
-    Invoke-Native -FilePath "node_modules/.bin/tsc.cmd" -ArgumentList @("--noEmit", "-p", "tsconfig.node.json")
-    Invoke-Native -FilePath "node_modules/.bin/tsc.cmd" -ArgumentList @("--noEmit", "-p", "tsconfig.web.json")
-
+    # The project's own build: it type-checks the shipped sources, then bundles
+    # them. Tests are not part of it and are not gated here.
     Write-Step "Building production bundle"
-    Invoke-Native -FilePath "node_modules/.bin/electron-vite.cmd" -ArgumentList @("build")
+    Invoke-Native -FilePath "npm" -ArgumentList @("run", "build")
 
     # Package the built output into a real app bundle — the unpacked app only, no
     # installer. This is what gives the app its own identity (correct name and

@@ -10,7 +10,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNTIME_HELPER="$SCRIPT_DIR/launcher-runtime.mjs"
 RUNTIME_TOKEN="run-dev-$$-$(date +%s)-$RANDOM"
-RENDERER_URL="http://127.0.0.1:20641"
+RENDERER_HOST="127.0.0.1"
+RENDERER_PORT="20641"
+RENDERER_URL="http://$RENDERER_HOST:$RENDERER_PORT"
 
 log_step() {
   printf '\n==> %s\n' "$1"
@@ -52,17 +54,14 @@ cd "$REPO_DIR"
 log_step "Replacing any existing ImageQueue runtime"
 node "$RUNTIME_HELPER" claim "$RUNTIME_TOKEN"
 node "$RUNTIME_HELPER" stop electron "ImageQueue" "ImageQueue"
-node "$RUNTIME_HELPER" check-endpoint 127.0.0.1 20641
+node "$RUNTIME_HELPER" check-endpoint "$RENDERER_HOST" "$RENDERER_PORT"
 
 log_step "Installing dependencies"
 npm install
 
 # npm install skips the Electron binary if the package is already at the locked version.
 log_step "Verifying Electron binary"
-if [[ ! -f node_modules/electron/path.txt ]]; then
-  echo "Electron binary missing; downloading..."
-  node node_modules/electron/install.js
-fi
+npm run prepare:electron
 
 log_step "Starting ImageQueue in development mode"
 npm run dev &
