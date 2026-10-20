@@ -13,7 +13,8 @@
 // may ring; a container the covering rule in styles.css reaches; or a site listed
 // below with the reason it is neither. A new one that is none of these fails.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -104,8 +105,8 @@ function withoutComments(text: string): string {
     .replace(/(^[ \t]*|\{)(\/\*[\s\S]*?\*\/)/gm, (_all, lead: string, body: string) => lead + blank(body));
 }
 
-function focusSites(): Site[] {
-  return sourceFiles(join(ROOT, SOURCE_DIR)).flatMap((path) => {
+function focusSites(dir = join(ROOT, SOURCE_DIR)): Site[] {
+  return sourceFiles(dir).flatMap((path) => {
     const text = withoutComments(readFileSync(path, "utf8"));
     const file = relative(ROOT, path);
     return [...text.matchAll(FOCUS_SITE)].map((match) => {
@@ -250,6 +251,46 @@ function suppressedByClass(context: string): boolean {
   );
 }
 
+// Each check returns what it finds wrong, so planted sources can show that it
+// finds them.
+function unplaced(found: Site[]): string[] {
+  return found
+    .filter((site) => placement(site) === undefined)
+    .map((site) => `${site.file}:${site.line} ${site.context.slice(0, 120)}`);
+}
+
+function ringedContainers(found: Site[]): string[] {
+  return found
+    .filter((site) => ["covered", "suppressed"].includes(placement(site) ?? ""))
+    .filter((site) => CONTAINER_RING.test(site.context))
+    .map((site) => `${site.file}:${site.line}`);
+}
+
+function drawingOnContainers(found: Site[], css: Rule[]): string[] {
+  const containerClasses = [
+    ...new Set(
+      found
+        .filter((site) => ["covered", "suppressed"].includes(placement(site) ?? ""))
+        .flatMap((site) => classesOf(site.context)),
+    ),
+  ];
+  const byClass = containerClasses.length
+    ? `|\\.(${containerClasses.join("|")})(?![\\w-])`
+    : "";
+  const containerSelector = new RegExp(
+    `\\[role="(${CONTAINER_ROLES.join("|")})"\\]|\\[data-passive-scroll-region\\]${byClass}`,
+  );
+  return css
+    .filter((rule) => draws(rule.body))
+    .filter((rule) =>
+      subjects(rule.selector).some(
+        (subject) =>
+          /:focus(-visible)?(?![\w-])/.test(subject) && containerSelector.test(subject),
+      ),
+    )
+    .map((rule) => rule.selector);
+}
+
 describe("focus rings belong to what the key acts on", () => {
   it("finds this app's focus sites at all", () => {
     // A pattern that silently stopped matching would pass every check below.
@@ -264,18 +305,11 @@ describe("focus rings belong to what the key acts on", () => {
   });
 
   it("places every focus site as a control, a covered container, or an explained exception", () => {
-    const unplaced = sites
-      .filter((site) => placement(site) === undefined)
-      .map((site) => `${site.file}:${site.line} ${site.context.slice(0, 120)}`);
-    expect(unplaced).toEqual([]);
+    expect(unplaced(sites)).toEqual([]);
   });
 
   it("gives no container a ring utility of its own", () => {
-    const ringed = sites
-      .filter((site) => ["covered", "suppressed"].includes(placement(site) ?? ""))
-      .filter((site) => CONTAINER_RING.test(site.context))
-      .map((site) => `${site.file}:${site.line}`);
-    expect(ringed).toEqual([]);
+    expect(ringedContainers(sites)).toEqual([]);
   });
 
   it("covers the containers of a page that carries its own stylesheet, in that stylesheet", () => {
@@ -311,28 +345,29 @@ describe("focus rings belong to what the key acts on", () => {
   });
 
   it("lets no other focus rule draw on a container, by role or by class", () => {
-    const containerClasses = [
-      ...new Set(
-        sites
-          .filter((site) => ["covered", "suppressed"].includes(placement(site) ?? ""))
-          .flatMap((site) => classesOf(site.context)),
-      ),
-    ];
-    const byClass = containerClasses.length
-      ? `|\\.(${containerClasses.join("|")})(?![\\w-])`
-      : "";
-    const containerSelector = new RegExp(
-      `\\[role="(${CONTAINER_ROLES.join("|")})"\\]|\\[data-passive-scroll-region\\]${byClass}`,
-    );
-    const drawing = everyRule
-      .filter((rule) => draws(rule.body))
-      .filter((rule) =>
-        subjects(rule.selector).some(
-          (subject) =>
-            /:focus(-visible)?(?![\w-])/.test(subject) && containerSelector.test(subject),
-        ),
-      )
-      .map((rule) => rule.selector);
-    expect(drawing).toEqual([]);
+    expect(drawingOnContainers(sites, everyRule)).toEqual([]);
+  });
+
+  it("finds an unplaced site, a ringed container and a container's ring in planted sources", () => {
+    const dir = mkdtempSync(join(tmpdir(), "imagequeue-focus-rings-"));
+    try {
+      writeFileSync(join(dir, "Planted.tsx"), [
+        "export const Planted = () => (",
+        "  <>",
+        "    <div tabIndex={0}>loose</div>",
+        '    <div role="listbox" tabIndex={0} className="planted-list focus-visible:ring-2">items</div>',
+        "  </>",
+        ")",
+        "",
+      ].join("\n"));
+      const planted = focusSites(dir);
+      expect(planted).toHaveLength(2);
+      expect(unplaced(planted)).toHaveLength(1);
+      expect(unplaced(planted)[0]).toMatch(/Planted\.tsx:3 /);
+      expect(ringedContainers(planted)).toEqual([expect.stringMatching(/Planted\.tsx:4$/)]);
+      expect(drawingOnContainers(planted, rules(".planted-list:focus-visible { outline: 2px solid red; }"))).toEqual([".planted-list:focus-visible"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

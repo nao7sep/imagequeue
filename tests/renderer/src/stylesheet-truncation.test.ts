@@ -63,28 +63,56 @@ function rules(css: string): Array<{ selector: string; body: string }> {
   }))
 }
 
-const all = sources().flatMap(({ file, css }) => rules(css).map((rule) => ({ file, ...rule })))
+type Rule = { file: string; selector: string; body: string }
+const all: Rule[] = sources().flatMap(({ file, css }) => rules(css).map((rule) => ({ file, ...rule })))
+
+// Each check returns the sites it finds wrong, so a planted stylesheet can show
+// that it finds them.
+function unreviewedEllipses(found: Rule[]): string[] {
+  return found.filter((rule) => /text-overflow:\s*ellipsis/.test(rule.body))
+    .map((rule) => `${rule.file} ${rule.selector}`)
+    .filter((site) => !Object.keys(REVIEWED_ELLIPSIS).some((selector) => site.endsWith(` ${selector}`)))
+}
+
+function unreviewedClamps(found: Rule[]): string[] {
+  return found.filter((rule) => /line-clamp/.test(rule.body)).map((rule) => rule.selector)
+    .filter((selector) => !(selector in REVIEWED_LINE_CLAMP))
+}
+
+function unmarkedClips(found: Rule[]): string[] {
+  return found.filter((rule) =>
+    /white-space:\s*(nowrap|pre)\s*[;}]?/.test(rule.body)
+    && /overflow(-x)?:\s*(hidden|clip)/.test(rule.body)
+    && !/text-overflow:\s*ellipsis/.test(rule.body)
+    && !NOT_TEXT.has(rule.selector)).map((rule) => `${rule.file} ${rule.selector}`)
+}
 
 describe('stylesheet truncation sites', () => {
   it('draws an ellipsis only at reviewed sites', () => {
+    expect(unreviewedEllipses(all)).toEqual([])
     const sites = all.filter((rule) => /text-overflow:\s*ellipsis/.test(rule.body))
-    expect(sites.map((rule) => `${rule.file} ${rule.selector}`).filter((site) => !Object.keys(REVIEWED_ELLIPSIS).some((selector) => site.endsWith(` ${selector}`)))).toEqual([])
     expect(Object.keys(REVIEWED_ELLIPSIS).filter((selector) => !sites.some((rule) => rule.selector === selector)), 'reviewed but gone').toEqual([])
   })
 
   it('clamps lines only at reviewed sites', () => {
+    expect(unreviewedClamps(all)).toEqual([])
     const sites = all.filter((rule) => /line-clamp/.test(rule.body))
-    expect(sites.map((rule) => rule.selector).filter((selector) => !(selector in REVIEWED_LINE_CLAMP))).toEqual([])
     expect(Object.keys(REVIEWED_LINE_CLAMP).filter((selector) => !sites.some((rule) => rule.selector === selector)), 'reviewed but gone').toEqual([])
   })
 
   it('never clips a line of text without a marker', () => {
-    const unmarked = all.filter((rule) =>
-      /white-space:\s*(nowrap|pre)\s*[;}]?/.test(rule.body)
-      && /overflow(-x)?:\s*(hidden|clip)/.test(rule.body)
-      && !/text-overflow:\s*ellipsis/.test(rule.body)
-      && !NOT_TEXT.has(rule.selector))
-    expect(unmarked.map((rule) => `${rule.file} ${rule.selector}`)).toEqual([])
+    expect(unmarkedClips(all)).toEqual([])
+  })
+
+  it('finds each kind of unreviewed site in a planted stylesheet', () => {
+    const planted = rules(`
+      .planted-ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .planted-clamp { -webkit-line-clamp: 2; }
+      .planted-clip { white-space: nowrap; overflow: hidden; }
+    `).map((rule) => ({ file: 'Planted.css', ...rule }))
+    expect(unreviewedEllipses(planted)).toEqual(['Planted.css .planted-ellipsis'])
+    expect(unreviewedClamps(planted)).toEqual(['.planted-clamp'])
+    expect(unmarkedClips(planted)).toEqual(['Planted.css .planted-clip'])
   })
 
   // Text to be read wraps whole inside a height limit that scrolls.

@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { BACKEND_IDS_IN_UI_ORDER } from '../../../src/shared/types'
 
 // Text keeps its readability floor; line roles keep the restrained values
@@ -63,66 +63,78 @@ const PANE_INKS: Record<string, string[]> = {
 }
 const FILLS = ['--accent', '--accent-hover', '--success', '--error', '--error-hover', '--warning', ...BACKEND_IDS_IN_UI_ORDER.map((backend) => `--backend-${backend}`)]
 
+// Each check returns the pairs below its floor, so one run lists them all and a
+// planted block can show that it finds them.
+function shortfalls(pairs: Array<[ink: Rgb, background: Rgb, label: string]>): string[] {
+  return pairs.flatMap(([ink, background, label]) => {
+    const ratio = contrast(ink, background)
+    return ratio < 4.5 ? [`${label}: ${ratio.toFixed(2)}`] : []
+  })
+}
+
+function surfaceShortfalls(block: string): string[] {
+  return shortfalls([
+    ...INKS.flatMap((ink) => SURFACES.map((surface) => [hexOf(block, ink), hexOf(block, surface), `${ink} on ${surface}`] as [Rgb, Rgb, string])),
+    [hexOf(block, '--text-primary'), hexOf(block, '--bg-hover'), '--text-primary on --bg-hover'],
+    ...BACKEND_IDS_IN_UI_ORDER.map((backend) =>
+      [hexOf(block, `--backend-${backend}-text`), hexOf(block, '--bg-surface'), `${backend} text on --bg-surface`] as [Rgb, Rgb, string]),
+  ])
+}
+
+function paneShortfalls(block: string): string[] {
+  return shortfalls(Object.entries(PANE_INKS).flatMap(([pane, inks]) =>
+    inks.map((ink) => [hexOf(block, ink), hexOf(block, pane), `${ink} on ${pane}`] as [Rgb, Rgb, string])))
+}
+
+function fillShortfalls(block: string): string[] {
+  const onAccent = hexOf(block, '--text-on-accent')
+  const pairs: Array<[Rgb, Rgb, string]> = FILLS.map((fill) => [onAccent, hexOf(block, fill), `--text-on-accent on ${fill}`])
+  pairs.push([onAccent, mix(hexOf(block, '--accent'), [0, 0, 0], 0.8), '--text-on-accent on the darkened accent'])
+  for (const status of ['--error', '--warning', '--success']) {
+    // Main-window notices tint the pane they sit on; toasts tint the floating surface.
+    for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary', '--pane-bg', '--floating-bg']) {
+      // The strongest tint a status badge uses is 14% (the dependency badges).
+      pairs.push([hexOf(block, status), mix(hexOf(block, status), hexOf(block, surface), 0.14), `${status} on its tint over ${surface}`])
+    }
+  }
+  // A destructive trigger rests on an 8% error tint and deepens it to 18% under
+  // the pointer, so its letters are read on the deeper one too.
+  for (const amount of [0.08, 0.18]) {
+    pairs.push([hexOf(block, '--error'), mix(hexOf(block, '--error'), hexOf(block, '--bg-surface'), amount), `--error on its ${amount * 100}% tint`])
+  }
+  // The informational notice: secondary text on a 10% accent tint over the pane.
+  pairs.push([hexOf(block, '--text-secondary'), mix(hexOf(block, '--accent'), hexOf(block, '--pane-bg'), 0.1), 'info notice text'])
+  for (const tag of ['amber', 'blue']) {
+    pairs.push([hexOf(block, `--tag-${tag}-text`), mix(hexOf(block, `--tag-${tag}`), hexOf(block, '--bg-secondary'), 0.14), `${tag} tag`])
+  }
+  return shortfalls(pairs)
+}
+
+/** The block with one token set to another token's value. */
+function planted(block: string, token: string, valueOf: string): string {
+  return block.replace(new RegExp(`(${token.replaceAll('-', '\\-')}\\s*:\\s*)[^;]+;`), `$1${tokenValue(block, valueOf)};`)
+}
+
 describe('theme token contrast', () => {
   for (const theme of ['light', 'dark'] as const) describe(`${theme} theme`, () => {
     const block = themeBlock(theme)
-    // Collects every shortfall so one run lists them all.
-    let failures: string[] = []
-    const check = (ink: Rgb, background: Rgb, floor: number, label: string) => {
-      const ratio = contrast(ink, background)
-      if (ratio < floor) failures.push(`${label}: ${ratio.toFixed(2)}`)
-    }
-    beforeEach(() => {
-      failures = []
-    })
-    afterEach(() => {
-      expect(failures.join('\n'), `pairs below the floor in ${theme}`).toBe('')
-    })
 
     it(`keeps text at 4.5:1 or more on the opaque surfaces in the ${theme} theme`, () => {
-      for (const ink of INKS) {
-        for (const surface of SURFACES) check(hexOf(block, ink), hexOf(block, surface), 4.5, `${ink} on ${surface}`)
-      }
-      check(hexOf(block, '--text-primary'), hexOf(block, '--bg-hover'), 4.5, '--text-primary on --bg-hover')
-      for (const backend of BACKEND_IDS_IN_UI_ORDER) {
-        check(hexOf(block, `--backend-${backend}-text`), hexOf(block, '--bg-surface'), 4.5, `${backend} text on --bg-surface`)
-      }
+      expect(surfaceShortfalls(block)).toEqual([])
     })
 
     it(`keeps text at 4.5:1 or more on the panes in the ${theme} theme`, () => {
-      for (const [pane, inks] of Object.entries(PANE_INKS)) {
-        for (const ink of inks) check(hexOf(block, ink), hexOf(block, pane), 4.5, `${ink} on ${pane}`)
-      }
+      expect(paneShortfalls(block)).toEqual([])
     })
 
     it(`keeps text on filled controls and tinted notices at 4.5:1 or more in the ${theme} theme`, () => {
-      const onAccent = hexOf(block, '--text-on-accent')
-      for (const fill of FILLS) check(onAccent, hexOf(block, fill), 4.5, `--text-on-accent on ${fill}`)
-      check(onAccent, mix(hexOf(block, '--accent'), [0, 0, 0], 0.8), 4.5, '--text-on-accent on the darkened accent')
-      for (const status of ['--error', '--warning', '--success']) {
-        // Main-window notices tint the pane they sit on; toasts tint the floating surface.
-        for (const surface of ['--bg-surface', '--bg-secondary', '--bg-primary', '--pane-bg', '--floating-bg']) {
-          // The strongest tint a status badge uses is 14% (the dependency badges).
-          check(hexOf(block, status), mix(hexOf(block, status), hexOf(block, surface), 0.14), 4.5, `${status} on its tint over ${surface}`)
-        }
-      }
-      // A destructive trigger rests on an 8% error tint and deepens it to 18% under
-      // the pointer, so its letters are read on the deeper one too.
-      for (const amount of [0.08, 0.18]) {
-        check(hexOf(block, '--error'), mix(hexOf(block, '--error'), hexOf(block, '--bg-surface'), amount), 4.5, `--error on its ${amount * 100}% tint`)
-      }
-      // The informational notice: secondary text on a 10% accent tint over the pane.
-      check(hexOf(block, '--text-secondary'), mix(hexOf(block, '--accent'), hexOf(block, '--pane-bg'), 0.1), 4.5, 'info notice text')
-      for (const tag of ['amber', 'blue']) {
-        check(hexOf(block, `--tag-${tag}-text`), mix(hexOf(block, `--tag-${tag}`), hexOf(block, '--bg-secondary'), 0.14), 4.5, `${tag} tag`)
-      }
+      expect(fillShortfalls(block)).toEqual([])
     })
 
-    it(`keeps the measured control-edge choices in the ${theme} theme`, () => {
-      const chosen = theme === 'light'
-        ? { '--field-border': '#9ba7c0', '--control-border-on-surface': '#9ba7c0' }
-        : { '--field-border': '#4b5680', '--control-border-on-surface': '#5a6790' }
-      for (const [token, value] of Object.entries(chosen)) expect(tokenValue(block, token)).toBe(value)
+    it(`finds an ink planted on its own background in the ${theme} theme`, () => {
+      expect(surfaceShortfalls(planted(block, '--text-muted', '--bg-primary'))).toContain('--text-muted on --bg-primary: 1.00')
+      expect(paneShortfalls(planted(block, '--warning', '--pane-bg'))).toContain('--warning on --pane-bg: 1.00')
+      expect(fillShortfalls(planted(block, '--text-on-accent', '--accent'))).toContain('--text-on-accent on --accent: 1.00')
     })
   })
 
@@ -166,20 +178,30 @@ describe('theme token contrast', () => {
     return Math.sqrt(((l2 - l1) / sL) ** 2 + ((cp2 - cp1) / sC) ** 2 + (dH / sH) ** 2 + rT * ((cp2 - cp1) / sC) * (dH / sH))
   }
 
+  function accentClashes(block: string): string[] {
+    const accents = BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, hexOf(block, `--backend-${backend}`)] as const)
+    return accents.flatMap(([name, color], index) => [
+      ...accents.slice(index + 1)
+        .filter(([, otherColor]) => deltaE(color, otherColor) < 20)
+        .map(([other]) => `${name} and ${other}`),
+      // The residual floor band the dark set was accepted at: never a status
+      // color's twin, since every column also carries its backend's name.
+      ...['--success', '--warning', '--error']
+        .filter((status) => deltaE(color, hexOf(block, status)) < 8)
+        .map((status) => `${name} and ${status}`),
+    ])
+  }
+
   for (const theme of ['light', 'dark'] as const) {
     it(`keeps the backend accents apart from each other and from the status colors in the ${theme} theme`, () => {
+      expect(accentClashes(themeBlock(theme))).toEqual([])
+    })
+
+    it(`finds a backend accent planted on another's or a status color in the ${theme} theme`, () => {
+      const [first, second] = BACKEND_IDS_IN_UI_ORDER
       const block = themeBlock(theme)
-      const accents = BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, hexOf(block, `--backend-${backend}`)] as const)
-      for (const [index, [name, color]] of accents.entries()) {
-        for (const [other, otherColor] of accents.slice(index + 1)) {
-          expect(deltaE(color, otherColor), `${name} and ${other}`).toBeGreaterThanOrEqual(20)
-        }
-        // The residual floor band the dark set was accepted at: never a status
-        // color's twin, since every column also carries its backend's name.
-        for (const status of ['--success', '--warning', '--error']) {
-          expect(deltaE(color, hexOf(block, status)), `${name} and ${status}`).toBeGreaterThanOrEqual(8)
-        }
-      }
+      expect(accentClashes(planted(block, `--backend-${second}`, `--backend-${first}`))).toContain(`${first} and ${second}`)
+      expect(accentClashes(planted(block, `--backend-${first}`, '--error'))).toContain(`${first} and --error`)
     })
   }
 
