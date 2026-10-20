@@ -17,32 +17,14 @@ import './ElaborationSettingsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
+import type { BrainstormConfig } from '../../../shared/brainstorm-config'
 
 interface Props {
   onClose: () => void
 }
 
-interface BrainstormForm {
-  batch_size: number
-  concurrency: number
-  max_retries_per_turn: number
-  retry_backoff_ms_csv: string
-  prefer_new_concepts: boolean
-  templates: {
-    expansion: string
-  }
-  format_directives: FormatDirectives
-}
-
-interface BrainstormConfig {
-  batch_size: number
-  concurrency: number
-  max_retries_per_turn: number
-  retry_backoff_ms: number[]
-  prefer_new_concepts: boolean
-  templates: BrainstormForm['templates']
-  format_directives: FormatDirectives
-}
+// The form edits the settings as they are stored.
+type BrainstormForm = BrainstormConfig
 
 function cloneDirectives(d: FormatDirectives): FormatDirectives {
   return { formats: { ...d.formats }, lengths: { ...d.lengths } }
@@ -64,7 +46,6 @@ function fromConfig(cfg: BrainstormConfig): BrainstormForm {
     batch_size: cfg.batch_size,
     concurrency: cfg.concurrency,
     max_retries_per_turn: cfg.max_retries_per_turn,
-    retry_backoff_ms_csv: cfg.retry_backoff_ms.join(', '),
     prefer_new_concepts: cfg.prefer_new_concepts,
     templates: { ...cfg.templates },
     format_directives: cloneDirectives(cfg.format_directives),
@@ -72,20 +53,6 @@ function fromConfig(cfg: BrainstormConfig): BrainstormForm {
 }
 
 // Validation results are messages, worded where they are shown.
-function parseBackoffCsv(csv: string): { ok: true; value: number[] } | { ok: false; error: Message } {
-  const parts = csv.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
-  if (parts.length === 0) return { ok: false, error: msg('elabSettings.backoffNone') }
-  if (parts.length > 8) return { ok: false, error: msg('elabSettings.backoffTooMany', { max: 8 }) }
-  const numbers: number[] = []
-  for (const part of parts) {
-    const n = Number(part)
-    if (!Number.isFinite(n) || !Number.isInteger(n)) return { ok: false, error: msg('elabSettings.backoffNotInteger', { value: part }) }
-    if (n < 100 || n > 60000) return { ok: false, error: msg('elabSettings.backoffRange', { min: 100, max: 60000, value: n }) }
-    numbers.push(n)
-  }
-  return { ok: true, value: numbers }
-}
-
 function checkPlaceholders(form: BrainstormForm): Message | null {
   const t = form.templates
   for (const tag of ['{{ELABORATOR}}', '{{SEED}}', '{{CONCEPTS}}', '{{FORMAT}}', '{{N}}'] as const) {
@@ -188,11 +155,6 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       setMessage(msg('elabSettings.retriesRange', { min: 0, max: 10 }))
       return
     }
-    const backoff = parseBackoffCsv(form.retry_backoff_ms_csv)
-    if (!backoff.ok) {
-      setMessage(backoff.error)
-      return
-    }
     const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
     if (warn) {
       const ok = await confirm({
@@ -210,11 +172,10 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       // edges/trailing whitespace, keep interior structure); format and length
       // directives are scalar sentences (single-line — flatten pasted line
       // breaks, keep horizontal spacing).
-      const next = {
+      const next: BrainstormConfig = {
         batch_size: form.batch_size,
         concurrency: form.concurrency,
         max_retries_per_turn: form.max_retries_per_turn,
-        retry_backoff_ms: backoff.value,
         prefer_new_concepts: form.prefer_new_concepts,
         templates: {
           expansion: multiline(form.templates.expansion),
@@ -313,16 +274,6 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
               onChange={(e) => setForm({ ...form, max_retries_per_turn: parseInt(e.target.value) || 0 })}
             />
             <span className="elaboration-settings-hint">{t('elabSettings.maxRetriesHint', { min: 0, max: 10 })}</span>
-          </div>
-          <div className="elaboration-settings-row">
-            <label>{t('elabSettings.backoff')}</label>
-            <input
-              type="text"
-              value={form.retry_backoff_ms_csv}
-              onChange={(e) => setForm({ ...form, retry_backoff_ms_csv: e.target.value })}
-              placeholder="1000, 2000, 4000"
-            />
-            <span className="elaboration-settings-hint">{t('elabSettings.backoffHint')}</span>
           </div>
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.preferNew')}</label>

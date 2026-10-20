@@ -114,7 +114,6 @@ export function createDefaultConfig(): AppConfig {
       batch_size: 10,
       concurrency: 12,
       max_retries_per_turn: 3,
-      retry_backoff_ms: [1000, 2000, 4000],
       prefer_new_concepts: false,
       // The expansion call's job is CONVERSION, not invention: variety is the
       // concept ledger's, delivered as per-prompt assignments that are disjoint

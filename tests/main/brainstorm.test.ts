@@ -35,7 +35,19 @@ vi.mock('../../src/main/logger', () => ({
 }))
 const logged = (message: string): Record<string, unknown>[] =>
   logCalls.filter((c) => c.message === message).map((c) => c.data)
-const mockKnobs = vi.hoisted(() => ({ concurrency: 1, maxRetries: 0, backoffMs: [] as number[] }))
+const mockKnobs = vi.hoisted(() => ({ concurrency: 1, maxRetries: 0 }))
+// The wait between resends is the outbound call these tests stub: it records
+// what was asked for and returns at once, or holds until cancelled.
+const delays = vi.hoisted(() => ({ requested: [] as number[], hold: false }))
+vi.mock('../../src/main/utils/abortable-delay', () => ({
+  abortableDelay: (ms: number, signal: AbortSignal) => {
+    delays.requested.push(ms)
+    if (!delays.hold) return Promise.resolve()
+    return new Promise<void>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')), { once: true })
+    })
+  },
+}))
 vi.mock('../../src/main/text-ai/templates', () => ({
   PROMPTS_RESPONSE_SCHEMA: { marker: 'prompts' },
   fillTemplate: (template: string, values: Record<string, string>) =>
@@ -44,7 +56,6 @@ vi.mock('../../src/main/text-ai/templates', () => ({
     batch_size: 2,
     concurrency: mockKnobs.concurrency,
     max_retries_per_turn: mockKnobs.maxRetries,
-    retry_backoff_ms: mockKnobs.backoffMs,
     prefer_new_concepts: false,
     templates: {
       expansion: 'exp|{{FORMAT}}|{{SEED}}|{{N}}\n{{CONCEPTS}}',
@@ -167,11 +178,12 @@ describe('brainstormPrompts (concept-driven)', () => {
   const originalHome = process.env[ENV_VAR]
 
   beforeEach(() => {
+    delays.requested.length = 0
+    delays.hold = false
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-brainstorm-'))
     process.env[ENV_VAR] = tmpRoot
     mockKnobs.concurrency = 1
     mockKnobs.maxRetries = 0
-    mockKnobs.backoffMs = []
     logCalls.length = 0
     vi.mocked(getElaborator).mockImplementation((id: string) =>
       id === 'composition' || id === 'style'
@@ -347,7 +359,7 @@ describe('brainstormPrompts (concept-driven)', () => {
 
   it('cancels immediately during retry backoff and starts no later request', async () => {
     mockKnobs.maxRetries = 2
-    mockKnobs.backoffMs = [60_000]
+    delays.hold = true
     let proseAttempts = 0
     installScriptedProvider({
       onProseCall: () => {
@@ -365,9 +377,8 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(hasActiveBrainstorms()).toBe(false)
   })
 
-  it('makes max_retries_per_turn + 1 attempts on a repeated 503', async () => {
+  it('makes max_retries_per_turn + 1 attempts on a repeated 503, waiting between them', async () => {
     mockKnobs.maxRetries = 5
-    mockKnobs.backoffMs = [0]
     let proseAttempts = 0
     const error = Object.assign(new Error('unavailable'), { status: 503 })
     installScriptedProvider({
@@ -379,6 +390,9 @@ describe('brainstormPrompts (concept-driven)', () => {
 
     await expect(brainstormPrompts(request({ requestId: 'retry-cap', count: 1 }))).rejects.toBe(error)
     expect(proseAttempts).toBe(6)
+    // The constant backoff, a code constant rather than a setting: 1, 2 and 4
+    // seconds, the last repeating.
+    expect(delays.requested).toEqual([1_000, 2_000, 4_000, 4_000, 4_000])
   })
 
   // The user waits on elaboration, so a timeout or a 5xx may have been billed:

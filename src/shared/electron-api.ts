@@ -1,3 +1,4 @@
+import type { BrainstormConfig } from './brainstorm-config'
 import type { DraftSurface, QuitQuestion } from './quit'
 import {
   ElaboratedPromptRecord,
@@ -127,17 +128,7 @@ export interface ElectronAPI {
     length: PromptLength
   }) => Promise<BrainstormOutcome>
   cancelBrainstorm: (requestId: string) => Promise<void>
-  brainstormGetDefaults: () => Promise<{
-    batch_size: number
-    concurrency: number
-    max_retries_per_turn: number
-    retry_backoff_ms: number[]
-    prefer_new_concepts: boolean
-    templates: {
-      expansion: string
-    }
-    format_directives: FormatDirectives
-  }>
+  brainstormGetDefaults: () => Promise<BrainstormConfig>
   // Concept ledger (the Concept Library modal)
   listConceptFacets: () => Promise<ConceptFacetSummary[]>
   listConceptRows: (facetId: number) => Promise<ConceptRow[]>
@@ -155,7 +146,7 @@ export interface ElectronAPI {
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>) => Promise<{ success: boolean }>
-  saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<{ success: boolean }>
+  saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<{ success: boolean }>
   getApiKeyPresence: () => Promise<ApiKeyPresence>
   // Stored values are read separately and submitted as a separate changed-key
   // map with the form; config.json never receives keys.

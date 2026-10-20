@@ -3,6 +3,7 @@ import type { ApiKeyPresence, CloudBackendId, SecretId } from '../../../shared/t
 import { serializeError } from '../../../shared/serialize-error'
 import { Modal } from '../components/Modal'
 import { useI18n } from '../i18n/I18nContext'
+import type { BrainstormConfig } from '../../../shared/brainstorm-config'
 
 interface SettingsContextValue {
   settings: Record<string, unknown> | null
@@ -18,7 +19,7 @@ interface SettingsContextValue {
   // `settings`: config.json cannot hold one; Save carries a separate key map.
   apiKeys: Record<SecretId, string> | null
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>) => Promise<Record<string, unknown>>
-  saveBrainstormSettings: (brainstorm: Record<string, unknown>) => Promise<Record<string, unknown>>
+  saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<Record<string, unknown>>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveNotificationField: (field: string, value: unknown) => Promise<Record<string, unknown>>
 }
@@ -101,7 +102,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   )
 
   const saveBrainstormSettings = useCallback(
-    async (brainstorm: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    async (brainstorm: BrainstormConfig): Promise<Record<string, unknown>> => {
       await window.electronAPI.saveBrainstormSettings(brainstorm)
       return refreshSettings()
     },

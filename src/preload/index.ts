@@ -1,3 +1,4 @@
+import type { BrainstormConfig } from '../shared/brainstorm-config'
 import type { DraftSurface, QuitQuestion } from '../shared/quit'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
@@ -187,17 +188,7 @@ const api = {
   cancelBrainstorm: (requestId: string): Promise<void> =>
     ipcRenderer.invoke('elaborators:brainstormCancel', requestId),
 
-  brainstormGetDefaults: (): Promise<{
-    batch_size: number
-    concurrency: number
-    max_retries_per_turn: number
-    retry_backoff_ms: number[]
-    prefer_new_concepts: boolean
-    templates: {
-      expansion: string
-    }
-    format_directives: FormatDirectives
-  }> =>
+  brainstormGetDefaults: (): Promise<BrainstormConfig> =>
     ipcRenderer.invoke('brainstorm:getDefaults'),
 
   // Concept ledger (the Concept Library modal)
@@ -246,7 +237,7 @@ const api = {
   ): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveChangedFields', base, next, keys),
 
-  saveBrainstormSettings: (brainstorm: Record<string, unknown>): Promise<{ success: boolean }> =>
+  saveBrainstormSettings: (brainstorm: BrainstormConfig): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
   getApiKeyPresence: (): Promise<ApiKeyPresence> =>
     ipcRenderer.invoke('settings:getApiKeyPresence'),
