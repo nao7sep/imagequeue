@@ -97,8 +97,8 @@ export interface SurfaceConfirmRequest {
 }
 
 // The preview window's layout: the image above the failure strip, with 12px
-// (--space-3) around and 8px (--space-2) between them. PreviewWindow.css
-// mirrors these by value.
+// (--space-3) around and 8px (--space-2) between them. The stylesheets draw it;
+// a test reads each figure back from them and checks the minimum below.
 const PREVIEW_WINDOW_PADDING = 12
 const PREVIEW_WINDOW_GAP = 8
 // .preview-area's floor and .preview-failure's cap: five 11px lines at 1.4,
