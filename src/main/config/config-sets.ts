@@ -6,6 +6,7 @@ import { isTimeZone } from '../../shared/time-zone'
 import { AI_ROLES, TEXT_PROVIDERS, textRowFor } from '../../shared/ai-models'
 import { multiline, singleLine } from '../../shared/textCleanup'
 import { valuesEqual } from '../settings-changes'
+import { BRAINSTORM_LIMITS } from '../../shared/brainstorm-config'
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -78,13 +79,20 @@ export function applyConfigSet(config: AppConfig, key: string, value: unknown): 
 }
 
 // The ranges the app's own code requires.
-function meetsAppMinimum(key: string, value: number): boolean {
+// The elaboration counts take the whole numbers Elaboration Settings accepts,
+// so a hand-edited file or another caller cannot exceed them either.
+const BRAINSTORM_LIMIT_SETS = new Map<string, { min: number; max: number }>(
+  Object.entries(BRAINSTORM_LIMITS).map(([name, limits]) => [`brainstorm.${name}`, limits]))
+
+function meetsAppLimits(key: string, value: number): boolean {
+  const limits = BRAINSTORM_LIMIT_SETS.get(key)
+  if (limits) return Number.isInteger(value) && value >= limits.min && value <= limits.max
   if (key.endsWith('.concurrency')) return value >= 1
   if (key.endsWith('.timeout_ms')) return value > 0
   return true
 }
 
-// Shape and the app's own minimums: provider limits and current model support
+// Shape and the app's own limits: provider limits and current model support
 // belong to the feature.
 export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean {
   if (key === 'general.theme') return ['system', 'light', 'dark'].includes(String(value))
@@ -104,7 +112,7 @@ export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean
   if (isObject(builtIn)) {
     return isObject(value) && Object.entries(builtIn).every(([member, expected]) => hasSetShape(value[member], expected, `${key}.${member}`))
   }
-  return typeof value === typeof builtIn && (typeof value !== 'number' || (Number.isFinite(value) && meetsAppMinimum(key, value)))
+  return typeof value === typeof builtIn && (typeof value !== 'number' || (Number.isFinite(value) && meetsAppLimits(key, value)))
 }
 
 const MODEL_ID_SETS = new Set<string>(TEXT_PROVIDERS.flatMap((provider) => AI_ROLES.map((role) => `${provider}.${role.id}`)))

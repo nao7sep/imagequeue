@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { BRAINSTORM_LIMITS } from '../../../src/shared/brainstorm-config'
 
 // The security property behind keys living outside the config type: the shipped
 // config shape has nowhere to PUT a key, so config.json is key-free by
@@ -374,6 +375,32 @@ describe('settings by set', () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.general.theme = 'dark' })
     expect(stored()).toEqual({ general: { language: 'ja', theme: 'dark' } })
+  })
+  // The elaboration attempt cap and backoff became constants.
+  it('drops the retired elaboration retry settings on the next save', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { max_retries_per_turn: 5, retry_backoff_ms: [1, 2], concurrency: 4 } }))
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    await updateConfig((draft) => { draft.general.theme = 'dark' })
+    expect(stored()).toEqual({ brainstorm: { concurrency: 4 }, general: { theme: 'dark' } })
+  })
+  // Elaboration Settings is one way to set these counts; a hand-edited file or
+  // any other caller of the save meets the same limits here.
+  describe.each(Object.entries(BRAINSTORM_LIMITS))('the elaboration %s', (name, { min, max }) => {
+    type Count = keyof typeof BRAINSTORM_LIMITS
+    it.each([min - 1, max + 1, min + 0.5])('reads a stored %s as its built-in', async (value) => {
+      fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { [name]: value } }))
+      const { loadConfig } = await import('../../../src/main/config/config-store')
+      expect(loadConfig().brainstorm[name as Count]).toBe(createDefaultConfig().brainstorm[name as Count])
+    })
+    it.each([min - 1, max + 1, min + 0.5])('refuses to save %s', async (value) => {
+      const { updateConfig } = await import('../../../src/main/config/config-store')
+      await expect(updateConfig((draft) => { draft.brainstorm[name as Count] = value })).rejects.toMatchObject({ name: 'InvalidConfigSetError' })
+    })
+    it.each([min, max])('saves %s', async (value) => {
+      const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+      await updateConfig((draft) => { draft.brainstorm[name as Count] = value })
+      expect(loadConfig().brainstorm[name as Count]).toBe(value)
+    })
   })
   it('keeps every built-in text in its cleaned form', async () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')
