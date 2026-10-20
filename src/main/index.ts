@@ -1,4 +1,5 @@
 import { app, dialog } from 'electron'
+import { APP_NAME } from '../shared/app-identity'
 
 // Every mutable app store is process-owned. Letting a second ImageQueue process
 // open the same root would turn otherwise-atomic file replacement into competing
@@ -23,7 +24,7 @@ function start(): Promise<void> {
   return import('./primary-instance').then(({ runPrimaryInstance }) => runPrimaryInstance()).catch((error: unknown) => {
     // Nothing is running yet to report through, so this is Electron's own
     // error box, as an uncaught exception at load would show.
-    dialog.showErrorBox('ImageQueue', error instanceof Error ? error.stack ?? error.message : String(error))
+    dialog.showErrorBox(APP_NAME, error instanceof Error ? error.stack ?? error.message : String(error))
     app.exit(1)
   })
 }

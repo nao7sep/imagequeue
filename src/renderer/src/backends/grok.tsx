@@ -3,6 +3,7 @@ import type { GrokAspectRatio, GrokModelDef, GrokQuality, GrokResolution } from 
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
 import { optionLabel } from '../i18n/optionLabels'
+import { IMAGE_DEFAULT_PARAMS } from '../../../shared/image-backend-defaults'
 
 export type GrokParams = {
   aspectRatio: GrokAspectRatio
@@ -64,11 +65,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<GrokParam
 }
 
 export const grokBackend: BackendParamModel<GrokParams, GrokModelDef> = {
-  defaults: () => ({
-    aspectRatio: '1:1',
-    resolution: '1k',
-    quality: 'auto',
-  }),
+  defaults: () => ({ ...IMAGE_DEFAULT_PARAMS.grok }),
 
   clampToModel: (params, modelDef) => resolveParams(params, modelDef),
   fromSaved: (saved, modelDef) => resolveParams(saved, modelDef),

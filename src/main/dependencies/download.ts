@@ -4,6 +4,7 @@ import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import https from 'node:https'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { APP_NAME } from '../../shared/app-identity'
 
 const MAX_REDIRECTS = 5
 
@@ -198,7 +199,7 @@ export function fetchBytesWithHeaders(
   url: string,
   limits: TransferLimits,
   signal?: AbortSignal,
-  headers: Record<string, string> = { 'User-Agent': 'ImageQueue' }
+  headers: Record<string, string> = { 'User-Agent': APP_NAME }
 ): Promise<FetchedBytes> {
   return withWholeOperationTimeout(signal, limits.wholeTimeoutMs, 'Network transfer', (boundedSignal) =>
     fetchBytesHop(url, limits, boundedSignal, headers, MAX_REDIRECTS)
@@ -210,7 +211,7 @@ export async function fetchBytes(
   url: string,
   limits: TransferLimits,
   signal?: AbortSignal,
-  headers: Record<string, string> = { 'User-Agent': 'ImageQueue' }
+  headers: Record<string, string> = { 'User-Agent': APP_NAME }
 ): Promise<Buffer> {
   return (await fetchBytesWithHeaders(url, limits, signal, headers)).body
 }
@@ -242,7 +243,7 @@ export function fetchHeaders(
   url: string,
   limits: TransferLimits,
   signal?: AbortSignal,
-  headers: Record<string, string> = { 'User-Agent': 'ImageQueue' }
+  headers: Record<string, string> = { 'User-Agent': APP_NAME }
 ): Promise<IncomingHttpHeaders> {
   return withWholeOperationTimeout(signal, limits.wholeTimeoutMs, 'Network request', (boundedSignal) =>
     fetchHeadersHop(url, limits, boundedSignal, headers, MAX_REDIRECTS)
@@ -257,7 +258,7 @@ async function downloadHop(
   onProgress: ((progress: DownloadProgress) => void) | undefined,
   redirectsLeft: number
 ): Promise<void> {
-  const response = await requestResponse(url, limits, signal, { 'User-Agent': 'ImageQueue' })
+  const response = await requestResponse(url, limits, signal, { 'User-Agent': APP_NAME })
   const next = redirectTarget(response, url)
   if (next) {
     response.destroy()

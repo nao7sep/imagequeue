@@ -8,6 +8,8 @@ import { expandUserPath } from './local-cli'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
 import { mainTranslator } from './i18n'
+import { TOAST_MARKS } from '../shared/toast-marks'
+import { APP_NAME } from '../shared/app-identity'
 
 let notificationWin: BrowserWindow | null = null
 let dismissTimeout: ReturnType<typeof setTimeout> | null = null
@@ -123,12 +125,8 @@ function showNotification(type: 'success' | 'failure'): void {
   const display = screen.getPrimaryDisplay()
 
   // Drawn, not typed: the toast renders in a user-configurable font, which is
-  // exactly the weight-drift the app's drawn-icon rule exists to prevent — the
-  // check and cross reuse the renderer icon set's own paths inline, since this
-  // window cannot import the React component.
-  const MARK_SVG = type === 'success'
-    ? '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><polyline points="4 12 10 18 20 6"/></svg>'
-    : '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>'
+  // exactly the weight-drift the app's drawn-icon rule exists to prevent.
+  const MARK_SVG = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.125em">${TOAST_MARKS[type === 'success' ? 'check' : 'close']}</svg>`
   const translator = mainTranslator()
   const label = translator.t(type === 'success' ? 'toast.complete' : 'toast.failed')
   const cssClass = type === 'success' ? 'toast success' : 'toast failure'
@@ -165,7 +163,7 @@ function showNotification(type: 'success' | 'failure'): void {
 
       var app = document.createElement('span');
       app.className = 'toast-app';
-      app.textContent = 'ImageQueue';
+      app.textContent = ${JSON.stringify(APP_NAME)};
 
       var msg = document.createElement('span');
       msg.className = 'toast-message';

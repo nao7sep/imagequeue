@@ -6,6 +6,8 @@ import { cleanDisplay, normalizeKey } from './normalize'
 import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceError } from '../store-format'
 import { serializeError } from '../../shared/serialize-error'
 import { setAsideFile } from '../utils/set-aside'
+import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../shared/types'
+export type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow }
 
 // The concept ledger: every facet, probe (the narrow domain an ask mined), and
 // concept value the text AI has ever produced, plus one row per time a value
@@ -312,15 +314,6 @@ export function recordUse(conceptId: number, sessionId: string): void {
 
 // ---- Concept Library (view/manage) -----------------------------------------
 
-export interface ConceptFacetSummary {
-  id: number
-  display: string
-  conceptCount: number
-  unusedCount: number
-  probeCount: number
-  lastUsedAt: string | null
-}
-
 export function listFacetsWithStats(): ConceptFacetSummary[] {
   return open().prepare(`
     SELECT f.id, f.display,
@@ -332,32 +325,14 @@ export function listFacetsWithStats(): ConceptFacetSummary[] {
   `).all() as unknown as ConceptFacetSummary[]
 }
 
-export interface ConceptListRow {
-  id: number
-  probeId: number
-  display: string
-  probe: string
-  useCount: number
-  lastUsedAt: string | null
-  createdAt: string
-}
-
-export function listConceptRows(facetId: number): ConceptListRow[] {
+export function listConceptRows(facetId: number): ConceptRow[] {
   return open().prepare(`
     SELECT c.id, c.probe_id AS probeId, c.display, p.display AS probe,
            c.use_count AS useCount, c.last_used_at AS lastUsedAt, c.created_at AS createdAt
     FROM concepts c JOIN probes p ON p.id = c.probe_id
     WHERE c.facet_id = ?
     ORDER BY c.use_count DESC, c.display ASC
-  `).all(facetId) as unknown as ConceptListRow[]
-}
-
-export interface ConceptProbeSummary {
-  id: number
-  display: string
-  expanded: number
-  conceptCount: number
-  unusedCount: number
+  `).all(facetId) as unknown as ConceptRow[]
 }
 
 /** Domains of a facet with their cluster statistics, creation order. */

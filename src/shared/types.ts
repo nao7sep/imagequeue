@@ -301,8 +301,8 @@ export interface ApiKeyPresence {
   openaiText: boolean
 }
 
-// Concept-ledger rows surfaced to the Concept Library modal. Shapes mirror
-// concept-store.ts; shared here so preload and renderer type against one source.
+// Concept-ledger rows surfaced to the Concept Library modal: the concept
+// database returns them, and preload and renderer type against the same shapes.
 export interface ConceptFacetSummary {
   id: number
   display: string

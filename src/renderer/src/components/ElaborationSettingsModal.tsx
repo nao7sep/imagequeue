@@ -17,7 +17,7 @@ import './ElaborationSettingsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
-import type { BrainstormConfig } from '../../../shared/brainstorm-config'
+import { BRAINSTORM_LIMITS, EXPANSION_PLACEHOLDERS, REQUIRED_EXPANSION_PLACEHOLDERS, placeholderTag, type BrainstormConfig } from '../../../shared/brainstorm-config'
 
 interface Props {
   onClose: () => void
@@ -55,7 +55,7 @@ function fromConfig(cfg: BrainstormConfig): BrainstormForm {
 // Validation results are messages, worded where they are shown.
 function checkPlaceholders(form: BrainstormForm): Message | null {
   const t = form.templates
-  for (const tag of ['{{ELABORATOR}}', '{{SEED}}', '{{CONCEPTS}}', '{{FORMAT}}', '{{N}}'] as const) {
+  for (const tag of REQUIRED_EXPANSION_PLACEHOLDERS.map(placeholderTag)) {
     if (!t.expansion.includes(tag)) return msg('elabSettings.missingTag', { tag })
   }
   return null
@@ -143,16 +143,20 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
 
   const handleSave = useCallback(async (): Promise<void> => {
     if (!form) return
-    if (form.batch_size < 1 || form.batch_size > 50 || !Number.isInteger(form.batch_size)) {
-      setMessage(msg('elabSettings.batchSizeRange', { min: 1, max: 50 }))
+    const outside = (key: keyof typeof BRAINSTORM_LIMITS): boolean => {
+      const { min, max } = BRAINSTORM_LIMITS[key]
+      return form[key] < min || form[key] > max || !Number.isInteger(form[key])
+    }
+    if (outside('batch_size')) {
+      setMessage(msg('elabSettings.batchSizeRange', BRAINSTORM_LIMITS.batch_size))
       return
     }
-    if (form.concurrency < 1 || form.concurrency > 24 || !Number.isInteger(form.concurrency)) {
-      setMessage(msg('elabSettings.concurrencyRange', { min: 1, max: 24 }))
+    if (outside('concurrency')) {
+      setMessage(msg('elabSettings.concurrencyRange', BRAINSTORM_LIMITS.concurrency))
       return
     }
-    if (form.max_retries_per_turn < 0 || form.max_retries_per_turn > 10 || !Number.isInteger(form.max_retries_per_turn)) {
-      setMessage(msg('elabSettings.retriesRange', { min: 0, max: 10 }))
+    if (outside('max_retries_per_turn')) {
+      setMessage(msg('elabSettings.retriesRange', BRAINSTORM_LIMITS.max_retries_per_turn))
       return
     }
     const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
@@ -246,34 +250,34 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <label>{t('elabSettings.batchSize')}</label>
             <input
               type="number"
-              min={1}
-              max={50}
+              min={BRAINSTORM_LIMITS.batch_size.min}
+              max={BRAINSTORM_LIMITS.batch_size.max}
               value={form.batch_size}
-              onChange={(e) => setForm({ ...form, batch_size: parseInt(e.target.value) || 1 })}
+              onChange={(e) => setForm({ ...form, batch_size: parseInt(e.target.value) || BRAINSTORM_LIMITS.batch_size.min })}
             />
-            <span className="elaboration-settings-hint">{t('elabSettings.batchSizeHint', { min: 1, max: 50 })}</span>
+            <span className="elaboration-settings-hint">{t('elabSettings.batchSizeHint', BRAINSTORM_LIMITS.batch_size)}</span>
           </div>
           <div className="elaboration-settings-row">
             <label>{t('settings.concurrency')}</label>
             <input
               type="number"
-              min={1}
-              max={24}
+              min={BRAINSTORM_LIMITS.concurrency.min}
+              max={BRAINSTORM_LIMITS.concurrency.max}
               value={form.concurrency}
-              onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || 1 })}
+              onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || BRAINSTORM_LIMITS.concurrency.min })}
             />
-            <span className="elaboration-settings-hint">{t('elabSettings.concurrencyHint', { min: 1, max: 24 })}</span>
+            <span className="elaboration-settings-hint">{t('elabSettings.concurrencyHint', BRAINSTORM_LIMITS.concurrency)}</span>
           </div>
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.maxRetries')}</label>
             <input
               type="number"
-              min={0}
-              max={10}
+              min={BRAINSTORM_LIMITS.max_retries_per_turn.min}
+              max={BRAINSTORM_LIMITS.max_retries_per_turn.max}
               value={form.max_retries_per_turn}
-              onChange={(e) => setForm({ ...form, max_retries_per_turn: parseInt(e.target.value) || 0 })}
+              onChange={(e) => setForm({ ...form, max_retries_per_turn: parseInt(e.target.value) || BRAINSTORM_LIMITS.max_retries_per_turn.min })}
             />
-            <span className="elaboration-settings-hint">{t('elabSettings.maxRetriesHint', { min: 0, max: 10 })}</span>
+            <span className="elaboration-settings-hint">{t('elabSettings.maxRetriesHint', BRAINSTORM_LIMITS.max_retries_per_turn)}</span>
           </div>
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.preferNew')}</label>
@@ -290,18 +294,18 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           <div className="elaboration-settings-section-title">{t('elabSettings.templates')}</div>
           <p className="elaboration-settings-help">
             {t('elabSettings.templatesHelp', {
-              elaborator: '{{ELABORATOR}}',
-              seed: '{{SEED}}',
-              concepts: '{{CONCEPTS}}',
-              format: '{{FORMAT}}',
-              n: '{{N}}',
-              json: '{{JSON}}',
+              elaborator: placeholderTag('ELABORATOR'),
+              seed: placeholderTag('SEED'),
+              concepts: placeholderTag('CONCEPTS'),
+              format: placeholderTag('FORMAT'),
+              n: placeholderTag('N'),
+              json: placeholderTag('JSON'),
             })}
           </p>
 
           <label className="elaboration-settings-template">
             <span>{t('elabSettings.expansion')}</span>
-            <span className="elaboration-settings-tags">{'{{ELABORATOR}} {{SEED}} {{CONCEPTS}} {{FORMAT}} {{N}} {{JSON}}'}</span>
+            <span className="elaboration-settings-tags">{EXPANSION_PLACEHOLDERS.map(placeholderTag).join(' ')}</span>
             <textarea
               rows={8}
               value={form.templates.expansion}
@@ -313,7 +317,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         <div className="elaboration-settings-section">
           <div className="elaboration-settings-section-title">{t('elabSettings.formatDirectives')}</div>
           <p className="elaboration-settings-help">
-            {rich('elabSettings.formatDirectivesHelp', { tag: <code>{'{{FORMAT}}'}</code> })}
+            {rich('elabSettings.formatDirectivesHelp', { tag: <code>{placeholderTag('FORMAT')}</code> })}
           </p>
           {PROMPT_FORMATS.map((format) => (
             <label className="elaboration-settings-template" key={`format-${format}`}>

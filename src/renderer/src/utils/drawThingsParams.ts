@@ -1,5 +1,6 @@
 import type { DrawThingsModelParams } from '../../../shared/types'
 import { singleLine } from '../../../shared/textCleanup'
+import { DRAWTHINGS_FALLBACK_PARAMS } from '../../../shared/image-backend-defaults'
 
 // The one answer to "what parameters does a Draw Things model generate with".
 // Two surfaces build these — the column's form and Advanced Prompting's batch
@@ -28,22 +29,22 @@ export interface DtRecommendationParams {
 }
 
 /**
- * The configured fallbacks, with the pre-load placeholder values in ONE place.
- * The literals apply only while settings have not arrived; every populated
- * effective config carries all four numbers from its whole fallback set.
+ * The configured fallbacks. Before settings arrive the built-in fallbacks
+ * stand in; every populated effective config carries its whole fallback set.
  */
 export function dtFallbacksFromSettings(settings: Record<string, unknown> | null): DtFallbackParams {
   const defaults = (
     (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.drawthings
       ?.default_params as Record<string, unknown> | undefined
   ) ?? {}
+  const builtIn = DRAWTHINGS_FALLBACK_PARAMS
   return {
-    width: (defaults.fallback_width as number | undefined) ?? 1024,
-    height: (defaults.fallback_height as number | undefined) ?? 1024,
-    steps: (defaults.fallback_steps as number | undefined) ?? 4,
-    guidance: (defaults.fallback_guidance as number | undefined) ?? 1,
+    width: (defaults.fallback_width as number | undefined) ?? builtIn.fallback_width,
+    height: (defaults.fallback_height as number | undefined) ?? builtIn.fallback_height,
+    steps: (defaults.fallback_steps as number | undefined) ?? builtIn.fallback_steps,
+    guidance: (defaults.fallback_guidance as number | undefined) ?? builtIn.fallback_guidance,
     seed: defaults.seed == null ? '' : String(defaults.seed),
-    negativePrompt: (defaults.fallback_negative_prompt as string | undefined) ?? '',
+    negativePrompt: (defaults.fallback_negative_prompt as string | undefined) ?? builtIn.fallback_negative_prompt,
   }
 }
 

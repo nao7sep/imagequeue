@@ -65,6 +65,7 @@ import { setQueuePausedAndPublish } from './queue/control-actions'
 import { ownMainWindowContentLoad } from './main-window-content'
 import { applyLocalePreferences, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
 import { buildAppMenuTemplate, buildTextContextMenuTemplate } from './app-menu'
+import { PRELOAD_PATH } from './renderer-surface'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
@@ -247,7 +248,7 @@ function createWindow(): BrowserWindow {
     ...windowOptions,
     backgroundColor: windowBackground(),
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true

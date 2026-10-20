@@ -30,3 +30,24 @@ export interface BrainstormConfig {
   templates: BrainstormTemplates
   format_directives: FormatDirectives
 }
+
+/** The placeholders the expansion template is filled through. The app always
+ *  supplies JSON (the response shape); the rest carry the turn's content. */
+export const EXPANSION_PLACEHOLDERS = ['ELABORATOR', 'SEED', 'CONCEPTS', 'FORMAT', 'N', 'JSON'] as const
+export type ExpansionPlaceholder = (typeof EXPANSION_PLACEHOLDERS)[number]
+
+/** The placeholders a template the user writes must contain. */
+export const REQUIRED_EXPANSION_PLACEHOLDERS: readonly ExpansionPlaceholder[] = ['ELABORATOR', 'SEED', 'CONCEPTS', 'FORMAT', 'N']
+
+/** A placeholder as it is written in a template. */
+export function placeholderTag(name: ExpansionPlaceholder): string {
+  return `{{${name}}}`
+}
+
+/** The whole numbers Elaboration Settings accepts for each count. */
+export const BRAINSTORM_LIMITS = {
+  batch_size: { min: 1, max: 50 },
+  concurrency: { min: 1, max: 24 },
+  max_retries_per_turn: { min: 0, max: 10 },
+} as const satisfies Partial<Record<keyof BrainstormConfig, { min: number; max: number }>>
+

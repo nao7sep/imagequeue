@@ -1,3 +1,4 @@
+import type { ExpansionPlaceholder } from '../shared/brainstorm-config'
 import { refreshApiKeys } from './config/api-keys-store'
 import { BrowserWindow } from 'electron'
 import type { BrainstormPhase, ElaboratedPromptRecord } from '../shared/types'
@@ -356,7 +357,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
             SEED: req.seed,
             CONCEPTS: conceptsText,
             N: String(assignments.length),
-          })
+          } satisfies Record<Exclude<ExpansionPlaceholder, 'JSON'>, string>)
           // Fresh context on every turn: exactly one user message, never the
           // conversation so far. This is the attractor kill — nothing of the
           // model's own output is available for it to imitate.

@@ -1,4 +1,5 @@
 import { session } from 'electron'
+import { IMAGE_SCHEME } from '../shared/image-url'
 
 // Content-Security-Policy for the app renderer, set as a response header so it
 // governs both the file:// document of a production build and the dev-server
@@ -21,7 +22,7 @@ export function installContentSecurityPolicy(isProductionRenderer: boolean): voi
           "default-src 'self'",
           "script-src 'self'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: iq-image:",
+          `img-src 'self' data: blob: ${IMAGE_SCHEME}:`,
           "font-src 'self'",
           "connect-src 'self'",
           "object-src 'none'",
@@ -32,7 +33,7 @@ export function installContentSecurityPolicy(isProductionRenderer: boolean): voi
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: iq-image:",
+          `img-src 'self' data: blob: ${IMAGE_SCHEME}:`,
           "font-src 'self' data:",
           "connect-src 'self' ws: http: https:",
           "object-src 'none'",

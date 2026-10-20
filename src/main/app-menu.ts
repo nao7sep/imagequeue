@@ -1,7 +1,7 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import type { Translator } from '../shared/i18n/translate'
+import { APP_NAME } from '../shared/app-identity'
 
-const APP_NAME = 'ImageQueue'
 
 /**
  * The application menu: Electron's default menu, item for item, plus Settings

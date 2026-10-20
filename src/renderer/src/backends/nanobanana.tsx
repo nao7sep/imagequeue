@@ -1,7 +1,7 @@
 import type { NanoBananaModelDef } from '../../../shared/models'
-import { getDefaultModelForBackend } from '../../../shared/ai-models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
+import { IMAGE_DEFAULT_PARAMS } from '../../../shared/image-backend-defaults'
 
 export type NanoBananaParams = {
   aspectRatio: string
@@ -59,11 +59,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
 }
 
 export const nanoBananaBackend: BackendParamModel<NanoBananaParams, NanoBananaModelDef> = {
-  defaults: () => ({
-    aspectRatio: '1:1',
-    imageSize: '1K',
-    thinking: getDefaultModelForBackend('nanobanana').defaultThinking,
-  }),
+  defaults: () => ({ ...IMAGE_DEFAULT_PARAMS.nanobanana }),
 
   // Models take different thinking levels, so a model switch resets thinking to
   // the new model's default; the ratio and size keep a value the new model takes.

@@ -1,5 +1,6 @@
 import { AppConfig } from './types'
 import { defaultModelFor, getDefaultModelForBackend, PROVIDER_ENDPOINTS } from '../../shared/ai-models'
+import { DRAWTHINGS_FALLBACK_PARAMS, IMAGE_DEFAULT_PARAMS } from '../../shared/image-backend-defaults'
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -38,61 +39,31 @@ export function createDefaultConfig(): AppConfig {
         // Seeded from the table's default row rather than restated here, so a
         // table change reaches a fresh install without a second edit.
         model: getDefaultModelForBackend('openai').id,
-        default_params: {
-          width: 1024,
-          height: 1024,
-          quality: 'auto',
-          outputFormat: 'png',
-          outputCompression: 100,
-          background: 'auto'
-        },
+        default_params: { ...IMAGE_DEFAULT_PARAMS.openai },
         concurrency: 3,
         timeout_ms: 180000
       },
       nanobanana: {
         model: getDefaultModelForBackend('nanobanana').id,
-        default_params: {
-          aspectRatio: '1:1',
-          imageSize: '1K',
-          thinking: getDefaultModelForBackend('nanobanana').defaultThinking
-        },
+        default_params: { ...IMAGE_DEFAULT_PARAMS.nanobanana },
         concurrency: 3,
         timeout_ms: 180000
       },
       grok: {
         model: getDefaultModelForBackend('grok').id,
-        default_params: {
-          aspectRatio: '1:1',
-          resolution: '1k',
-          // `auto` is the API's own default, sent as chosen; low and medium are
-          // xAI's two real levels, so medium is the higher one, not a middle.
-          quality: 'auto'
-        },
+        default_params: { ...IMAGE_DEFAULT_PARAMS.grok },
         concurrency: 3,
         timeout_ms: 180000
       },
       flux: {
         model: getDefaultModelForBackend('flux').id,
-        // The default row's parameters. No steps/guidance: they apply only to a
-        // model that declares their ranges, and that model's own defaults are the
-        // source.
-        default_params: {
-          aspectRatio: '1:1',
-          resolution: '1k'
-        },
+        default_params: { ...IMAGE_DEFAULT_PARAMS.flux },
         concurrency: 3,
         timeout_ms: 180000
       },
       drawthings: {
         timeout_ms: 1800000,
-        default_params: {
-          fallback_width: 1024,
-          fallback_height: 1024,
-          fallback_steps: 4,
-          fallback_guidance: 1,
-          fallback_negative_prompt: '',
-          seed: null,
-        },
+        default_params: { ...DRAWTHINGS_FALLBACK_PARAMS },
         models_dir: '',
         check_updates_at_launch: true
       }

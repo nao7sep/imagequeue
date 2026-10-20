@@ -1,8 +1,10 @@
 import type { BrowserWindow } from 'electron'
 import path from 'path'
 
-/** The renderer surfaces a secondary window can show; main.tsx picks the page by it. */
-export type RendererSurface = 'records' | 'preview-window' | 'fullscreen-view'
+import type { RendererSurface } from '../shared/renderer-surface'
+
+/** The preload script every app window runs. */
+export const PRELOAD_PATH = path.join(__dirname, '../preload/index.js')
 
 /** Loads the app's renderer into a secondary window as the given surface, from
  *  the dev server in development and from the bundle otherwise. */

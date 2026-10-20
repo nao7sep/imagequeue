@@ -5,6 +5,7 @@ import { log, serializeError } from './logger'
 import { subscribeQueueControlState } from './queue/publisher'
 import { message, type Message, type Translator } from '../shared/i18n/translate'
 import { mainTranslator, onLanguageChanged } from './i18n'
+import { APP_NAME } from '../shared/app-identity'
 
 export type StatusIconAppearance = 'light' | 'dark'
 
@@ -27,7 +28,7 @@ export function buildStatusIconTooltip(state: QueueControlState, translator: Tra
   const summary = parts.length === 0
     ? message('statusIcon.idle')
     : parts.reduceRight((rest, first) => message('statusIcon.join', { first, rest }))
-  return translator.t('statusIcon.tooltip', { app: 'ImageQueue', state: summary })
+  return translator.t('statusIcon.tooltip', { app: APP_NAME, state: summary })
 }
 
 interface StatusIconControllerOptions {
@@ -165,7 +166,7 @@ export class StatusIconController {
     const { t } = translator
     const template: MenuItemConstructorOptions[] = [
       {
-        label: t('statusIcon.open', { app: 'ImageQueue' }),
+        label: t('statusIcon.open', { app: APP_NAME }),
         click: () => { this.runAction('restore main window', this.options.restoreMainWindow) },
       },
       {
@@ -183,7 +184,7 @@ export class StatusIconController {
       ...this.noticesItem(t),
       { type: 'separator' },
       {
-        label: t(this.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: 'ImageQueue' }),
+        label: t(this.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: APP_NAME }),
         click: this.options.requestQuit,
       },
     ]

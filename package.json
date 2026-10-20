@@ -9,6 +9,10 @@
     "email": "yoshinao@inoguchi.com"
   },
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nao7sep/imagequeue"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck:node && npm run typecheck:web && electron-vite build",

@@ -4,7 +4,7 @@ import { getDataDir } from '../config'
 import { log } from '../logger'
 import { NewerFormatError, StoreLeftInPlaceError } from '../store-format'
 import type * as Database from './concept-database'
-export type { FacetRow, ProbeRow, DrawOptions, DrawnConcept, ConceptFacetSummary, ConceptListRow, ConceptProbeSummary } from './concept-database'
+export type { FacetRow, ProbeRow, DrawOptions, DrawnConcept, ConceptFacetSummary, ConceptRow, ConceptProbeSummary } from './concept-database'
 export const CONCEPT_REUSE_WINDOW_DRAWS = 1000
 let worker: Worker | null = null
 let failed: Error | null = null

@@ -381,7 +381,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               type="number"
               min={0}
               step={1}
-              value={(general.auto_preview_idle_seconds as number) ?? 30}
+              value={general.auto_preview_idle_seconds as number}
               onChange={(e) => updateGeneral('auto_preview_idle_seconds', Math.max(0, parseInt(e.target.value) || 0))}
             />
             <p className="settings-hint">{t('settings.autoPreviewHint')}</p>
@@ -620,7 +620,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-nanobanana-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-nanobanana-concurrency" type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 3)} />
+            <input id="settings-nanobanana-concurrency" type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-nanobanana-timeout">{t('settings.timeout')}</label>
@@ -636,7 +636,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-grok-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-grok-concurrency" type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 3)} />
+            <input id="settings-grok-concurrency" type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-grok-timeout">{t('settings.timeout')}</label>
@@ -652,7 +652,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-flux-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-flux-concurrency" type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 3)} />
+            <input id="settings-flux-concurrency" type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 1)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-flux-timeout">{t('settings.timeout')}</label>
@@ -672,7 +672,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-drawthings-timeout">{t('settings.timeout')}</label>
-            <input id="settings-drawthings-timeout" type="number" min={1} value={Math.round(((backends.drawthings.timeout_ms as number) ?? 1800000) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <input id="settings-drawthings-timeout" type="number" min={1} value={Math.round((backends.drawthings.timeout_ms as number) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
             <p className="settings-hint">{t('settings.drawThingsTimeoutHint')}</p>
           </div>
           <div className="settings-field">

@@ -34,6 +34,7 @@ import { clearOperationalFailure, recordOperationalDiagnostic, reportOperational
 import { canShowImage, selectedImageOf, type WindowCommand } from '../../../shared/viewing'
 import { FULLSCREEN_VIEW_TOGGLE_EVENT } from '../utils/fullscreenView'
 import { useI18n } from '../i18n/I18nContext'
+import { APP_NAME } from '../../../shared/app-identity'
 
 type Overlay = 'settings' | 'sessions' | 'shortcuts' | 'about' | 'elaborators' | 'elaboration-settings' | 'elaborated-prompts' | 'concept-library' | 'dependencies' | null
 
@@ -296,7 +297,7 @@ export function Layout(): React.JSX.Element {
       <div className="left-pane">
         <div className="pane-toolbar">
           <div className="pane-toolbar-title">
-            <span className="app-name">ImageQueue</span>
+            <span className="app-name">{APP_NAME}</span>
             <QueuePausedBadge />
           </div>
           <div className="pane-toolbar-actions">

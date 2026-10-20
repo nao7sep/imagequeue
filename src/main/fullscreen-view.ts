@@ -1,8 +1,7 @@
 import { BrowserWindow, screen } from 'electron'
-import path from 'path'
 import { latestSelection, onSelectionPublished, SELECTION_SNAPSHOT_CHANNEL } from './selection-snapshot'
 import { dismissSurfaceConfirms } from './surface-confirm'
-import { loadRendererSurface } from './renderer-surface'
+import { loadRendererSurface, PRELOAD_PATH } from './renderer-surface'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
 
@@ -57,7 +56,7 @@ export function buildFullscreenViewOptions(bounds: Electron.Rectangle): Electron
     backgroundColor: '#000000',
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

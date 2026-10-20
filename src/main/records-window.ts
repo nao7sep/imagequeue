@@ -1,9 +1,8 @@
 import { BrowserWindow, Menu } from 'electron'
-import path from 'path'
 import { RECORDS_WINDOW_MIN_HEIGHT, RECORDS_WINDOW_MIN_WIDTH } from '../shared/records-layout'
 import { buildTextContextMenuTemplate } from './app-menu'
 import { mainTranslator } from './i18n'
-import { loadRendererSurface } from './renderer-surface'
+import { loadRendererSurface, PRELOAD_PATH } from './renderer-surface'
 import { log, serializeError } from './logger'
 import { trackThemedWindow, windowBackground } from './theme'
 import { hardenWindow } from './utils/harden-window'
@@ -50,7 +49,7 @@ export function buildRecordsWindowOptions(title: string): Electron.BrowserWindow
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

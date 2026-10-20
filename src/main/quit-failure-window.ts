@@ -1,10 +1,11 @@
 import { BrowserWindow, ipcMain, screen } from 'electron'
-import path from 'path'
 import { mainTranslator } from './i18n'
 import { hardenWindow } from './utils/harden-window'
 import { trackThemedWindow, windowBackground } from './theme'
 import type { QuitChoice } from './quit-handler'
 import type { QuitQuestion } from '../shared/quit'
+import { APP_NAME } from '../shared/app-identity'
+import { loadRendererSurface, PRELOAD_PATH } from './renderer-surface'
 
 // The question the open quit window asks, read by its own page.
 let asking: { contents: Electron.WebContents; question: QuitQuestion } | null = null
@@ -30,14 +31,14 @@ export function showQuitQuestion(question: QuitQuestion, signal: AbortSignal, on
     registerQuestionIpc()
     const t = mainTranslator().t
     const title = question.kind === 'saveFailed' ? t('quit.title')
-      : t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: 'ImageQueue' })
+      : t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: APP_NAME })
     const parent = questionOwner(owner)
     const win = new BrowserWindow({
       ...(parent ? { parent, modal: true } : {}),
       title, width: Math.min(540, screen.getPrimaryDisplay().workArea.width), height: 240,
       show: false, resizable: false, minimizable: false, maximizable: false,
       fullscreenable: false, autoHideMenuBar: true, backgroundColor: windowBackground(),
-      webPreferences: { preload: path.join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+      webPreferences: { preload: PRELOAD_PATH, contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
     hardenWindow(win)
     trackThemedWindow(win)
@@ -78,9 +79,6 @@ export function showQuitQuestion(question: QuitQuestion, signal: AbortSignal, on
     showTimer = setTimeout(() => finish('cancel', new Error('The quit question could not be shown')), 10_000)
     win.on('closed', () => finish('cancel'))
     win.webContents.on('render-process-gone', (_event, details) => finish('cancel', new Error(`Quit question renderer exited: ${details.reason}`)))
-    const loaded = process.env['ELECTRON_RENDERER_URL']
-      ? win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?surface=quit-failure`)
-      : win.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { surface: 'quit-failure' } })
-    void loaded.catch((error) => finish('cancel', error))
+    void loadRendererSurface(win, 'quit-failure').catch((error) => finish('cancel', error))
   })
 }

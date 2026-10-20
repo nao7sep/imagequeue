@@ -1,7 +1,7 @@
 // The Records window's layout: a user-adjustable list pane (filters above the
 // record list), a 1px splitter, and the detail pane, which takes the rest.
-// Pane sizing follows window-conventions. RecordsWindow.css mirrors these by
-// value.
+// Pane sizing follows window-conventions. The stylesheets draw the same sizes,
+// and tests read them back from the stylesheets.
 
 // The list pane's bounds. `min` still fits two filter selects side by side.
 export const RECORDS_LIST_WIDTH = { min: 320, default: 380, max: 640 } as const

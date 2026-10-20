@@ -1,11 +1,10 @@
 import { BrowserWindow, Menu } from 'electron'
-import path from 'path'
 import { PREVIEW_WINDOW_MIN_HEIGHT, PREVIEW_WINDOW_MIN_WIDTH } from '../shared/viewing'
 import { buildTextContextMenuTemplate } from './app-menu'
 import { loadConfig, updateConfig } from './config'
 import { mainTranslator } from './i18n'
 import { log, serializeError } from './logger'
-import { loadRendererSurface } from './renderer-surface'
+import { loadRendererSurface, PRELOAD_PATH } from './renderer-surface'
 import { onSelectionPublished, SELECTION_SNAPSHOT_CHANNEL } from './selection-snapshot'
 import { raiseAppNotice } from './app-notices'
 import { message } from '../shared/i18n/translate'
@@ -47,7 +46,7 @@ export function buildPreviewWindowOptions(title: string): Electron.BrowserWindow
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

@@ -1,5 +1,4 @@
 import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
-import path from 'path'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
   STARTUP_FAILURE_MESSAGE_CHANNEL,
@@ -12,6 +11,7 @@ import { trackThemedWindow, windowBackground } from './theme'
 import { log, serializeError } from './logger'
 import { mainTranslator } from './i18n'
 import type { Message } from '../shared/i18n/translate'
+import { loadRendererSurface, PRELOAD_PATH } from './renderer-surface'
 
 /**
  * Creates ImageQueue's app-authored fatal-startup surface without a native alert
@@ -32,7 +32,7 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
     backgroundColor: windowBackground(),
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -83,15 +83,7 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
     if (!win.isDestroyed()) win.close()
   }
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-    url.searchParams.set('surface', 'startup-failure')
-    void win.loadURL(url.toString()).catch(handleLoadFailure)
-  } else {
-    void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
-      query: { surface: 'startup-failure' },
-    }).catch(handleLoadFailure)
-  }
+  void loadRendererSurface(win, 'startup-failure').catch(handleLoadFailure)
 
   return win
 }

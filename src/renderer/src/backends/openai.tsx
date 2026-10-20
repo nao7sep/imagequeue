@@ -14,6 +14,7 @@ import {
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
 import { optionLabel, sizePresetLabel } from '../i18n/optionLabels'
+import { IMAGE_DEFAULT_PARAMS } from '../../../shared/image-backend-defaults'
 
 const CUSTOM_OPENAI_SIZE = 'custom'
 
@@ -166,14 +167,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
 }
 
 export const openaiBackend: BackendParamModel<OpenAIParams, OpenAIModelDef> = {
-  defaults: () => ({
-    width: 1024,
-    height: 1024,
-    quality: 'auto',
-    outputFormat: 'png',
-    outputCompression: OPENAI_COMPRESSION_RANGE.default,
-    background: 'auto',
-  }),
+  defaults: () => ({ ...IMAGE_DEFAULT_PARAMS.openai }),
 
   // Every enum field is membership-or-default and the size snaps through
   // resolveOpenAiSize, so a model switch and a saved record resolve identically.

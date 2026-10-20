@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../i18n/I18nContext'
 import { DRAFT_SURFACE_NAMES, type QuitQuestion } from '../../../shared/quit'
 import './QuitFailureApp.css'
+import { APP_NAME } from '../../../shared/app-identity'
 
 // The quit window's page: either the question before quit stops live work, or
 // the Retry / Quit anyway / Cancel question after a required save failed. Main
@@ -57,7 +58,7 @@ export function QuitFailureApp(): React.JSX.Element | null {
     <footer>
       <button className="modal-btn" autoFocus onClick={() => window.electronAPI.chooseQuit('cancel')}>{t('common.cancel')}</button>
       <button className="modal-btn modal-btn-danger" onClick={() => window.electronAPI.chooseQuit('quit')}>
-        {t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: 'ImageQueue' })}
+        {t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: APP_NAME })}
       </button>
     </footer>
   </main>

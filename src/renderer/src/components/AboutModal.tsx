@@ -3,6 +3,7 @@ import { Icon } from './Icon'
 import { InlineFailureResult } from './InlineFailureResult'
 import { useExternalLinkResults } from '../hooks/useExternalLinkResults'
 import { useI18n } from '../i18n/I18nContext'
+import { APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_LICENSE_NAME, APP_NAME, APP_REPOSITORY_URL } from '../../../shared/app-identity'
 
 interface Props {
   onClose: () => void
@@ -22,7 +23,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
 
   return (
     <Modal
-      title={t('nativeMenu.about', { app: 'ImageQueue' })}
+      title={t('nativeMenu.about', { app: APP_NAME })}
       titleHidden
       className="about-modal-box"
       onClose={onClose}
@@ -41,7 +42,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
               (harden-window.ts), so route external links through the OS browser
               via the IPC bridge, like the rest of the app. */}
           <a
-            href="https://github.com/nao7sep/imagequeue"
+            href={APP_REPOSITORY_URL}
             rel="noreferrer"
             className="about-link"
             onClick={(e) => {
@@ -52,7 +53,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
             GitHub <Icon name="external-link" />
           </a>
           <a
-            href="https://github.com/nao7sep/imagequeue/issues"
+            href={`${APP_REPOSITORY_URL}/issues`}
             rel="noreferrer"
             className="about-link"
             onClick={(e) => {
@@ -72,7 +73,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
           />
         ) : null)}
         <p className="about-copyright">
-          {t('about.copyright', { year: '2026', author: 'Yoshinao Inoguchi', license: 'GNU GPL v3' })}
+          {t('about.copyright', { year: String(APP_COPYRIGHT_YEAR), author: APP_AUTHOR, license: APP_LICENSE_NAME })}
         </p>
       </div>
     </Modal>

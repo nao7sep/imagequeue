@@ -8,9 +8,11 @@ import { MainProcessLanguage } from './i18n/I18nContext'
 import { RecordsApp } from './records/RecordsWindow'
 import { FullscreenViewApp } from './viewing/FullscreenView'
 import { PreviewWindowApp } from './viewing/PreviewWindow'
+import type { RendererSurface } from '../../shared/renderer-surface'
 
 const query = new URLSearchParams(window.location.search)
-const surface = query.get('surface')
+// One of the shared surface names, or none for the main window.
+const surface = query.get('surface') as RendererSurface | null
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

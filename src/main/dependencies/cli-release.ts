@@ -6,6 +6,7 @@
 
 import { log, serializeError } from '../logger'
 import { fetchBytes, RELEASE_METADATA_LIMITS } from './download'
+import { APP_NAME } from '../../shared/app-identity'
 
 const LATEST_RELEASE_URL =
   'https://api.github.com/repos/drawthingsai/draw-things-community/releases/latest'
@@ -43,7 +44,7 @@ async function fetchReleaseJson(signal?: AbortSignal): Promise<GithubRelease | n
       LATEST_RELEASE_URL,
       RELEASE_METADATA_LIMITS,
       signal,
-      { 'User-Agent': 'ImageQueue', Accept: 'application/vnd.github+json' }
+      { 'User-Agent': APP_NAME, Accept: 'application/vnd.github+json' }
     )
     return JSON.parse(bytes.toString('utf8')) as GithubRelease
   } catch (error) {

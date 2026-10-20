@@ -2,6 +2,7 @@ import { OPENAI_OUTPUT_FORMAT_LABELS, type FluxModelDef, type FluxOutputFormat }
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
 import { optionLabel, sizePresetLabel } from '../i18n/optionLabels'
+import { IMAGE_DEFAULT_PARAMS } from '../../../shared/image-backend-defaults'
 
 // The UI keeps steps/guidance values even for a model that declares no range
 // (the fields are hidden and never enqueued); these are the numbers a fresh
@@ -156,8 +157,7 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
     steps: FALLBACK_STEPS,
     guidance: FALLBACK_GUIDANCE,
     seed: '',
-    aspectRatio: '1:1',
-    resolution: '1k',
+    ...IMAGE_DEFAULT_PARAMS.flux,
   }),
 
   // Model switch: an index off the new model's shorter ladder falls to the
