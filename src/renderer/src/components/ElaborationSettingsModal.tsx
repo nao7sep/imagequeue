@@ -45,7 +45,6 @@ function fromConfig(cfg: BrainstormConfig): BrainstormForm {
   return {
     batch_size: cfg.batch_size,
     concurrency: cfg.concurrency,
-    max_retries_per_turn: cfg.max_retries_per_turn,
     prefer_new_concepts: cfg.prefer_new_concepts,
     templates: { ...cfg.templates },
     format_directives: cloneDirectives(cfg.format_directives),
@@ -155,10 +154,6 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       setMessage(msg('elabSettings.concurrencyRange', BRAINSTORM_LIMITS.concurrency))
       return
     }
-    if (outside('max_retries_per_turn')) {
-      setMessage(msg('elabSettings.retriesRange', BRAINSTORM_LIMITS.max_retries_per_turn))
-      return
-    }
     const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
     if (warn) {
       const ok = await confirm({
@@ -179,7 +174,6 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       const next: BrainstormConfig = {
         batch_size: form.batch_size,
         concurrency: form.concurrency,
-        max_retries_per_turn: form.max_retries_per_turn,
         prefer_new_concepts: form.prefer_new_concepts,
         templates: {
           expansion: multiline(form.templates.expansion),
@@ -267,17 +261,6 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
               onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || BRAINSTORM_LIMITS.concurrency.min })}
             />
             <span className="elaboration-settings-hint">{t('elabSettings.concurrencyHint', BRAINSTORM_LIMITS.concurrency)}</span>
-          </div>
-          <div className="elaboration-settings-row">
-            <label>{t('elabSettings.maxRetries')}</label>
-            <input
-              type="number"
-              min={BRAINSTORM_LIMITS.max_retries_per_turn.min}
-              max={BRAINSTORM_LIMITS.max_retries_per_turn.max}
-              value={form.max_retries_per_turn}
-              onChange={(e) => setForm({ ...form, max_retries_per_turn: parseInt(e.target.value) || BRAINSTORM_LIMITS.max_retries_per_turn.min })}
-            />
-            <span className="elaboration-settings-hint">{t('elabSettings.maxRetriesHint', BRAINSTORM_LIMITS.max_retries_per_turn)}</span>
           </div>
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.preferNew')}</label>

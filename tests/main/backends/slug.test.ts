@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const ask = vi.hoisted(() => vi.fn())
 const handle = vi.hoisted(() => ({ timeoutMs: 30000 }))
 vi.mock('../../../src/main/config', () => ({
-  loadConfig: () => ({ prompts: { slug: 'Name this: {{PROMPT}}' }, brainstorm: { max_retries_per_turn: 5 } }),
+  loadConfig: () => ({ prompts: { slug: 'Name this: {{PROMPT}}' }}),
 }))
 vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
 vi.mock('../../../src/main/text-ai', () => ({
@@ -36,10 +36,10 @@ describe('generateSlug', () => {
     expect(received.aborted).toBe(true)
   })
 
-  it('makes max_retries_per_turn + 1 attempts on a repeated 503, then falls back', async () => {
+  it('makes the convention\'s three attempts on a repeated 503, then falls back', async () => {
     ask.mockRejectedValue(Object.assign(new Error('unavailable'), { status: 503 }))
     await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
-    expect(ask).toHaveBeenCalledTimes(6)
+    expect(ask).toHaveBeenCalledTimes(3)
   })
 
   it('gives each attempt its own full provider timeout', async () => {

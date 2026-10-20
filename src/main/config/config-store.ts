@@ -173,8 +173,9 @@ export function updateConfig(apply: (draft: AppConfig) => void): Promise<AppConf
 const RETIRED_KEYS: ReadonlySet<string> = new Set([
   // The GitHub release check was removed: no app checks for its own versions.
   'general.check_github_releases_at_launch',
-  // The elaboration retry backoff is a constant, as provider retries are.
+  // The elaboration attempt cap and backoff are constants, as provider retries are.
   'brainstorm.retry_backoff_ms',
+  'brainstorm.max_retries_per_turn',
 ])
 
 // Writes each key `stored` holds outside the known sets into `next`, unchanged.

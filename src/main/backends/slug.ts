@@ -40,7 +40,7 @@ export async function generateSlug(prompt: string, taskId: string, signal: Abort
       timeoutMs: handle.timeoutMs,
       signal: attemptSignal,
       record: { purpose: 'slug', taskId },
-    }), { signal, maxAttempts: config.brainstorm.max_retries_per_turn + 1 })
+    }), { signal })
 
     const answer = (result.parsed as { slug?: unknown } | undefined)?.slug
     const slug = (typeof answer === 'string' ? answer : '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')

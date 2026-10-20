@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { brainstormPrompts, cancelBrainstorm, hasActiveBrainstorms } from '../../src/main/brainstorm'
+import { PROVIDER_RETRY_BACKOFF_MS } from '../../src/main/provider-retry'
 import { listProbesWithStats, closeConceptStore, listConceptRows, listFacetsWithStats } from '../../src/main/concepts/concept-store'
 import { getElaborator } from '../../src/main/elaborators'
 import { getMainProvider } from '../../src/main/text-ai'
@@ -35,7 +36,7 @@ vi.mock('../../src/main/logger', () => ({
 }))
 const logged = (message: string): Record<string, unknown>[] =>
   logCalls.filter((c) => c.message === message).map((c) => c.data)
-const mockKnobs = vi.hoisted(() => ({ concurrency: 1, maxRetries: 0 }))
+const mockKnobs = vi.hoisted(() => ({ concurrency: 1 }))
 // The wait between resends is the outbound call these tests stub: it records
 // what was asked for and returns at once, or holds until cancelled.
 const delays = vi.hoisted(() => ({ requested: [] as number[], hold: false }))
@@ -55,7 +56,6 @@ vi.mock('../../src/main/text-ai/templates', () => ({
   getRuntimeBrainstormConfig: () => ({
     batch_size: 2,
     concurrency: mockKnobs.concurrency,
-    max_retries_per_turn: mockKnobs.maxRetries,
     prefer_new_concepts: false,
     templates: {
       expansion: 'exp|{{FORMAT}}|{{SEED}}|{{N}}\n{{CONCEPTS}}',
@@ -183,7 +183,6 @@ describe('brainstormPrompts (concept-driven)', () => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-brainstorm-'))
     process.env[ENV_VAR] = tmpRoot
     mockKnobs.concurrency = 1
-    mockKnobs.maxRetries = 0
     logCalls.length = 0
     vi.mocked(getElaborator).mockImplementation((id: string) =>
       id === 'composition' || id === 'style'
@@ -358,7 +357,6 @@ describe('brainstormPrompts (concept-driven)', () => {
   })
 
   it('cancels immediately during retry backoff and starts no later request', async () => {
-    mockKnobs.maxRetries = 2
     delays.hold = true
     let proseAttempts = 0
     installScriptedProvider({
@@ -377,8 +375,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(hasActiveBrainstorms()).toBe(false)
   })
 
-  it('makes max_retries_per_turn + 1 attempts on a repeated 503, waiting between them', async () => {
-    mockKnobs.maxRetries = 5
+  it('makes the convention\'s three attempts on a repeated 503, waiting between them', async () => {
     let proseAttempts = 0
     const error = Object.assign(new Error('unavailable'), { status: 503 })
     installScriptedProvider({
@@ -389,10 +386,9 @@ describe('brainstormPrompts (concept-driven)', () => {
     })
 
     await expect(brainstormPrompts(request({ requestId: 'retry-cap', count: 1 }))).rejects.toBe(error)
-    expect(proseAttempts).toBe(6)
-    // The constant backoff, a code constant rather than a setting: 1, 2 and 4
-    // seconds, the last repeating.
-    expect(delays.requested).toEqual([1_000, 2_000, 4_000, 4_000, 4_000])
+    expect(proseAttempts).toBe(3)
+    // Elaboration waits as every provider call does.
+    expect(delays.requested).toEqual(PROVIDER_RETRY_BACKOFF_MS.slice(0, 2))
   })
 
   // The user waits on elaboration, so a timeout or a 5xx may have been billed:
@@ -401,7 +397,6 @@ describe('brainstormPrompts (concept-driven)', () => {
     ['a timeout', Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' })],
     ['a server error', Object.assign(new Error('internal error'), { status: 500 })],
   ])('reports %s without resending the call', async (_label, error) => {
-    mockKnobs.maxRetries = 3
     let proseAttempts = 0
     installScriptedProvider({
       onProseCall: () => {
@@ -516,7 +511,6 @@ describe('brainstormPrompts (concept-driven)', () => {
     // cannot say whether an aspects ask or a prose turn is the one struggling,
     // and those have entirely different causes.
     it('says which call is being retried', async () => {
-      mockKnobs.maxRetries = 1
       let proseAttempts = 0
       installScriptedProvider({
         onProseCall: () => {

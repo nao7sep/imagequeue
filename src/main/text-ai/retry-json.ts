@@ -18,15 +18,12 @@ export async function askJsonWithRetry<T>(options: {
   schema: object
   timeoutMs: number
   validate: (parsed: unknown, rawText: string) => T | null
-  maxRetries: number
-  backoffSchedule: number[]
   signal: AbortSignal
   label: JsonCallLabel
   requestId: string
 }): Promise<T> {
   const {
-    provider, messages, schema, timeoutMs, validate, maxRetries,
-    backoffSchedule, signal, label, requestId,
+    provider, messages, schema, timeoutMs, validate, signal, label, requestId,
   } = options
   return withProviderRetry(async (attemptSignal) => {
     const result = await provider.ask({ messages, schema, timeoutMs, signal: attemptSignal, record: { purpose: label, requestId } })
@@ -44,7 +41,7 @@ export async function askJsonWithRetry<T>(options: {
     }
     return value
   }, {
-    signal, maxAttempts: maxRetries + 1, backoff: backoffSchedule,
+    signal,
     onRetry: (error, attempt, backoff) => log('warn', 'Brainstorm call failed, retrying', {
       requestId, call: label, attempt, backoff, error: serializeError(error),
     }),

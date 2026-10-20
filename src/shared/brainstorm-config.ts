@@ -22,7 +22,6 @@ export interface BrainstormConfig {
   // this trades only wall time against provider rate limits — an overshoot
   // lands in the retry path as a 429, never in a correctness failure.
   concurrency: number
-  max_retries_per_turn: number
   // Mint new concept values in preference to reusing ones whose last use has
   // aged out of the reuse window. Off: stale values are reused first and the
   // text AI is only asked for more when nothing at all is eligible.
@@ -44,10 +43,10 @@ export function placeholderTag(name: ExpansionPlaceholder): string {
   return `{{${name}}}`
 }
 
-/** The whole numbers Elaboration Settings accepts for each count. */
+/** The whole numbers each elaboration count takes: Elaboration Settings offers
+ *  them and the main process refuses anything else. */
 export const BRAINSTORM_LIMITS = {
   batch_size: { min: 1, max: 50 },
   concurrency: { min: 1, max: 24 },
-  max_retries_per_turn: { min: 0, max: 10 },
 } as const satisfies Partial<Record<keyof BrainstormConfig, { min: number; max: number }>>
 

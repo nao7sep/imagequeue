@@ -32,10 +32,6 @@ import {
   type RunExcludes,
 } from './concepts/acquisition'
 
-// The wait before each resend, the last repeating: a constant in code, as
-// provider retries are (ai-model-routing-conventions), not a setting.
-const ELABORATION_RETRY_BACKOFF_MS = [1000, 2000, 4000]
-
 export interface BrainstormRequest {
   requestId: string
   compositionElaboratorId: string
@@ -189,7 +185,6 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
   const formatDirective = `${formats[req.format]} ${lengths[req.length]}`
   const batchSize = Math.max(1, brainstormConfig.batch_size)
   const concurrency = brainstormConfig.concurrency
-  const maxRetries = Math.max(0, brainstormConfig.max_retries_per_turn)
   const preferNew = brainstormConfig.prefer_new_concepts === true
 
   const startTime = Date.now()
@@ -232,8 +227,6 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
         schema,
         timeoutMs: handle.timeoutMs,
         validate: (parsed) => (parsed === null || parsed === undefined ? null : parsed),
-        maxRetries,
-        backoffSchedule: ELABORATION_RETRY_BACKOFF_MS,
         signal: controller.signal,
         label,
         requestId: req.requestId,
@@ -370,8 +363,6 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
               const prompts = extractPromptsFromParsed(parsed)
               return prompts.length > 0 ? prompts : null
             },
-            maxRetries,
-            backoffSchedule: ELABORATION_RETRY_BACKOFF_MS,
             signal: controller.signal,
             label: 'prose',
             requestId: req.requestId,

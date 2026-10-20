@@ -24,8 +24,6 @@ function run(provider: TextAIProvider, timeoutMs = 1000): Promise<unknown> {
     schema: {},
     timeoutMs,
     validate: (parsed) => parsed ?? null,
-    maxRetries: 3,
-    backoffSchedule: [0],
     signal: new AbortController().signal,
     label: 'prose',
     requestId: 'r1',
@@ -54,7 +52,7 @@ describe('askJsonWithRetry', () => {
   ])('resends %s, which proves nothing was processed', async (_label, error) => {
     const { provider, ask } = failingProvider(error)
     await expect(run(provider)).rejects.toBe(error)
-    expect(ask).toHaveBeenCalledTimes(4)
+    expect(ask).toHaveBeenCalledTimes(3)
   })
 
   it.each([

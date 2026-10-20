@@ -22,27 +22,27 @@ export function retryDelayMs(error: unknown, backoff: number, now = Date.now()):
   return Math.max(0, backoff)
 }
 
+// The attempt cap and backoff are constants, not settings
+// (ai-model-routing-conventions), the same for every provider call.
+export const PROVIDER_MAX_ATTEMPTS = 3
+export const PROVIDER_RETRY_BACKOFF_MS: readonly number[] = [1000, 2000]
+
 // Only answers proving no processing are resent; SDKs perform exactly one
-// attempt. `maxAttempts` is the caller's own cap; a caller with none gets three
-// attempts. `timeoutMs`, when given, bounds all attempts together; a caller
+// attempt. `timeoutMs`, when given, bounds all attempts together; a caller
 // without it leaves each attempt to the call's own timeout.
 export async function withProviderRetry<T>(call: (signal: AbortSignal) => Promise<T>, options: {
   signal: AbortSignal
-  maxAttempts?: number
-  backoff?: readonly number[]
   timeoutMs?: number
   onRetry?: (error: unknown, attempt: number, backoffMs: number) => void
 }): Promise<T> {
-  const { backoff = [1000, 2000] } = options
   const timeout = options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs)
   const signal = timeout ? AbortSignal.any([options.signal, timeout]) : options.signal
-  const attempts = Math.max(1, options.maxAttempts ?? 3)
   try {
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted()
       try { return await call(signal) } catch (error) {
-        if (signal.aborted || attempt + 1 >= attempts || !provedNotProcessed(error)) throw error
-        const backoffMs = retryDelayMs(error, backoff[Math.min(attempt, backoff.length - 1)] ?? 1000)
+        if (signal.aborted || attempt + 1 >= PROVIDER_MAX_ATTEMPTS || !provedNotProcessed(error)) throw error
+        const backoffMs = retryDelayMs(error, PROVIDER_RETRY_BACKOFF_MS[Math.min(attempt, PROVIDER_RETRY_BACKOFF_MS.length - 1)]!)
         options.onRetry?.(error, attempt + 1, backoffMs)
         await abortableDelay(backoffMs, signal)
       }
