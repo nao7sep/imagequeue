@@ -65,7 +65,7 @@ describe('Windows launcher stop orchestration', () => {
     })
     // Pass the owning algorithm's grace period without sleeping or extending
     // a test limit. This verifies command routing, not Windows kernel behavior.
-    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(6_000)
+    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(Number.POSITIVE_INFINITY)
     // @ts-expect-error Plain ESM launcher has no declaration file.
     await import('../../scripts/launcher-runtime.mjs')
     await vi.waitFor(() => expect(execute.mock.calls.filter(([file]) => file === 'taskkill.exe')).toHaveLength(2))
@@ -82,7 +82,7 @@ describe('Windows launcher stop orchestration', () => {
       if (file === 'taskkill.exe') return { stdout: '' }
       throw new Error(`Unexpected executable: ${file}`)
     })
-    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(6_000)
+    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(Number.POSITIVE_INFINITY)
     // @ts-expect-error Plain ESM launcher has no declaration file.
     await import('../../scripts/launcher-runtime.mjs')
     await vi.waitFor(() => expect(lists).toBe(2))

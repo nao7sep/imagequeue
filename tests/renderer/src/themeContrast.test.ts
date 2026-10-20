@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { BACKEND_IDS_IN_UI_ORDER } from '../../../src/shared/types'
 
 // Text keeps its readability floor; line roles keep the restrained values
 // chosen and verified on the rendered surfaces. Light tokens live in the
@@ -52,16 +53,15 @@ function contrast(first: Rgb, second: Rgb): number {
 
 const SURFACES = ['--app-bg', '--bg-primary', '--bg-secondary', '--bg-surface', '--bg-input', '--task-kept-bg', '--floating-bg']
 const INKS = ['--text-primary', '--text-secondary', '--text-muted', '--accent', '--success', '--error', '--warning']
-const BACKENDS = ['openai', 'grok', 'flux', 'nanobanana', 'drawthings']
 // What each pane carries: the column, prompt, and welcome panes carry labels,
 // empty states, warnings, and each column's enqueue text; the metadata strip
 // carries its toggle and the model name; the preview well its placeholder.
 const PANE_INKS: Record<string, string[]> = {
-  '--pane-bg': ['--text-primary', '--text-secondary', '--text-muted', '--warning', '--error', ...BACKENDS.map((backend) => `--backend-${backend}-text`)],
+  '--pane-bg': ['--text-primary', '--text-secondary', '--text-muted', '--warning', '--error', ...BACKEND_IDS_IN_UI_ORDER.map((backend) => `--backend-${backend}-text`)],
   '--pane-bg-strong': ['--text-primary', '--text-secondary', '--text-muted', '--accent'],
   '--preview-bg': ['--text-primary', '--text-secondary'],
 }
-const FILLS = ['--accent', '--accent-hover', '--success', '--error', '--error-hover', '--warning', ...BACKENDS.map((backend) => `--backend-${backend}`)]
+const FILLS = ['--accent', '--accent-hover', '--success', '--error', '--error-hover', '--warning', ...BACKEND_IDS_IN_UI_ORDER.map((backend) => `--backend-${backend}`)]
 
 describe('theme token contrast', () => {
   for (const theme of ['light', 'dark'] as const) describe(`${theme} theme`, () => {
@@ -84,7 +84,7 @@ describe('theme token contrast', () => {
         for (const surface of SURFACES) check(hexOf(block, ink), hexOf(block, surface), 4.5, `${ink} on ${surface}`)
       }
       check(hexOf(block, '--text-primary'), hexOf(block, '--bg-hover'), 4.5, '--text-primary on --bg-hover')
-      for (const backend of BACKENDS) {
+      for (const backend of BACKEND_IDS_IN_UI_ORDER) {
         check(hexOf(block, `--backend-${backend}-text`), hexOf(block, '--bg-surface'), 4.5, `${backend} text on --bg-surface`)
       }
     })
@@ -169,7 +169,7 @@ describe('theme token contrast', () => {
   for (const theme of ['light', 'dark'] as const) {
     it(`keeps the backend accents apart from each other and from the status colors in the ${theme} theme`, () => {
       const block = themeBlock(theme)
-      const accents = BACKENDS.map((backend) => [backend, hexOf(block, `--backend-${backend}`)] as const)
+      const accents = BACKEND_IDS_IN_UI_ORDER.map((backend) => [backend, hexOf(block, `--backend-${backend}`)] as const)
       for (const [index, [name, color]] of accents.entries()) {
         for (const [other, otherColor] of accents.slice(index + 1)) {
           expect(deltaE(color, otherColor), `${name} and ${other}`).toBeGreaterThanOrEqual(20)
