@@ -44,7 +44,7 @@ describe('buildGeminiImageRequest', () => {
     }
   })
 
-  it.each(['gemini-2.5-flash-image', 'unlisted-model'])('sends %s, an id with no row, exactly the plain request: no thinking, size or safety', (model) => {
+  it.each(['unlisted-model'])('sends %s, an id with no row, exactly the plain request: no thinking, size or safety', (model) => {
     expect(buildGeminiImageRequest(makeTask(model, { aspectRatio: '16:9', imageSize: '2K', thinking: 'high' }))).toEqual({
       model, contents: 'a cat', config: { responseModalities: ['TEXT', 'IMAGE'] },
     })

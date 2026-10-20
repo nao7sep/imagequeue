@@ -256,6 +256,13 @@ describe("focus rings belong to what the key acts on", () => {
     expect(sites.length).toBeGreaterThan(3);
   });
 
+  it("explains only sites that still need it", () => {
+    const stale = Object.entries(EXPLAINED)
+      .filter(([file, { kind }]) => !sites.some((site) => site.file === file && site.kind === kind && placement({ ...site, file: "" }) === undefined))
+      .map(([file]) => file);
+    expect(stale, "explanations that match no unplaced site").toEqual([]);
+  });
+
   it("places every focus site as a control, a covered container, or an explained exception", () => {
     const unplaced = sites
       .filter((site) => placement(site) === undefined)

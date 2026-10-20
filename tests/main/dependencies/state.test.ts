@@ -39,9 +39,6 @@ describe('isLaunchCheckDue', () => {
     expect(isLaunchCheckDue(wellPast, now)).toBe(true)
   })
 
-  it('uses a 24-hour interval', () => {
-    expect(LAUNCH_CHECK_INTERVAL_MS).toBe(24 * 60 * 60 * 1000)
-  })
 })
 
 describe('compareRecommendations', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
-import { modelsFor, PROVIDER_ENDPOINTS } from '../../../src/shared/ai-models'
+import { defaultModelFor, PROVIDER_ENDPOINTS } from '../../../src/shared/ai-models'
 import { PROMPT_FORMATS, PROMPT_LENGTHS } from '../../../src/shared/session-draft'
 
 describe('createDefaultConfig', () => {
@@ -38,11 +38,10 @@ describe('text defaults', () => {
   it('derives each role from the supported rows', () => {
     const config = createDefaultConfig()
     expect(config.provider).toBe('gemini')
-    expect(config.gemini.elaboration).toBe('gemini-3.8-flash')
-    expect(config.gemini.slug).toBe('gemini-3.5-flash-lite')
-    expect(config.openai.elaboration).toBe('gpt-5.6-terra')
-    expect(config.openai.slug).toBe('gpt-6-luna')
-    expect(modelsFor('gemini', 'text-balanced').map((row) => row.id)).toContain(config.gemini.elaboration)
+    for (const provider of ['gemini', 'openai'] as const) {
+      expect(config[provider].elaboration).toBe(defaultModelFor(provider, 'text-balanced'))
+      expect(config[provider].slug).toBe(defaultModelFor(provider, 'text-fast'))
+    }
     expect(config.gemini.endpoint).toBe(PROVIDER_ENDPOINTS.gemini)
     expect(config.openai.endpoint).toBe(PROVIDER_ENDPOINTS.openai)
   })

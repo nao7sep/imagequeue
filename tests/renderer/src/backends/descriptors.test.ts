@@ -16,20 +16,16 @@ import {
   getModelsForBackend,
 } from '../../../../src/shared/ai-models'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
+import { createDefaultConfig } from '../../../../src/main/config/defaults'
 
+// A fresh column starts with the parameters a fresh install stores.
 describe('defaults', () => {
-  it('pins each backend\'s fresh-column params', () => {
-    expect(openaiBackend.defaults()).toEqual({
-      width: 1024,
-      height: 1024,
-      quality: 'auto',
-      outputFormat: 'png',
-      outputCompression: 100,
-      background: 'auto',
-    })
-    expect(nanoBananaBackend.defaults()).toEqual({ aspectRatio: '1:1', imageSize: '1K', thinking: 'minimal' })
-    expect(grokBackend.defaults()).toEqual({ aspectRatio: '1:1', resolution: '1k', quality: 'auto' })
-    expect(fluxBackend.defaults()).toEqual({ sizeIdx: 0, outputFormat: 'png', steps: 50, guidance: 5, seed: '', aspectRatio: '1:1', resolution: '1k' })
+  it('starts each fresh column with the settings a fresh install stores', () => {
+    const stored = createDefaultConfig().image_backends
+    expect(openaiBackend.defaults()).toEqual(stored.openai.default_params)
+    expect(nanoBananaBackend.defaults()).toEqual(stored.nanobanana.default_params)
+    expect(grokBackend.defaults()).toEqual(stored.grok.default_params)
+    expect(fluxBackend.defaults()).toMatchObject(stored.flux.default_params)
   })
 })
 

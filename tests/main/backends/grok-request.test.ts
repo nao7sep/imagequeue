@@ -28,7 +28,7 @@ describe('buildXaiImageBody', () => {
     })
   })
 
-  it.each(['grok-imagine-image-quality', 'unlisted-model'])('sends %s, an id with no row, the plain request', (model) => {
+  it.each(['unlisted-model'])('sends %s, an id with no row, the plain request', (model) => {
     expect(buildXaiImageBody(makeTask(model, { aspectRatio: '1:1', resolution: '1k', quality: 'low' }))).toEqual({ model, ...plain })
   })
 })

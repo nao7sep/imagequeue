@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { parse } from "@babel/parser";
 import { describe, expect, it } from "vitest";
@@ -24,8 +25,6 @@ const LITERAL_TEXT = new Set([
   // Brand and product names.
   "ImageQueue",
   "GitHub",
-  "Gemini",
-  "OpenAI",
   "GPT Image",
   "Nano Banana",
   "Grok Imagine",
@@ -33,13 +32,11 @@ const LITERAL_TEXT = new Set([
   "Draw Things",
   "Hugging Face",
   "Google",
-  // A file name and the official endpoint, shown as they are.
+  // A file name, shown as it is.
   "custom.json",
-  "https://api.openai.com/v1",
-  // Template placeholder tokens, which the templates must contain verbatim.
-  "{{ELABORATOR}} {{SEED}} {{CONCEPTS}} {{FORMAT}} {{N}} {{JSON}}",
-  "{{FORMAT}}",
 ]);
+// Entries the scan met, so one that no longer matches anything fails.
+const usedLiterals = new Set<string>();
 
 type Node = { type: string; loc?: { start: { line: number } }; [key: string]: unknown };
 
@@ -52,7 +49,11 @@ function tsxFiles(dir: string): string[] {
 }
 
 function hasWords(text: string): boolean {
-  return /\p{L}/u.test(text) && !LITERAL_TEXT.has(text.trim());
+  if (LITERAL_TEXT.has(text.trim())) {
+    usedLiterals.add(text.trim());
+    return false;
+  }
+  return /\p{L}/u.test(text);
 }
 
 function literalText(node: Node | undefined): string | null {
@@ -119,5 +120,18 @@ describe("interface text", () => {
   it("comes from the catalogues, not from JSX literals", () => {
     const all = tsxFiles(SOURCE).flatMap(findings);
     expect(all).toEqual([]);
+    expect([...LITERAL_TEXT].filter((text) => !usedLiterals.has(text)), "allowed literals that match nothing").toEqual([]);
+  });
+
+  // The scan can fail: a planted literal in each place it reads is found.
+  it("finds a literal in text, an expression and a read attribute", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hardcoded-text-"));
+    const file = join(dir, "Planted.tsx");
+    try {
+      writeFileSync(file, 'export const A = () => <div title="Planted title">Planted text{"Planted expression"}</div>\n');
+      expect(findings(file).map((finding) => finding.replace(/^.*: /, ""))).toEqual(['"Planted title"', '"Planted text"', '"Planted expression"']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

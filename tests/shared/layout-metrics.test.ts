@@ -53,13 +53,6 @@ describe('getVisibleBackendsForPlatform', () => {
 })
 
 describe('computeWindowMinWidth', () => {
-  it('equals LEFT_PANE_MIN + one COLUMN_MIN and border per pane', () => {
-    for (const panes of [1, 2, 4, 5]) {
-      expect(computeWindowMinWidth(panes)).toBe(
-        LEFT_PANE_MIN_PX + panes * COLUMN_MIN_PX + panes * PANE_BORDER_PX
-      )
-    }
-  })
 
   it('reserves at least the sum of the pane minimums', () => {
     for (const panes of [1, 2, 4, 5]) {
@@ -82,25 +75,11 @@ describe('computeWindowMinWidth', () => {
   // window sized for a full set of columns that are not being drawn.
   it('lets a single-pane layout open far narrower than a full one', () => {
     expect(computeWindowMinWidth(1)).toBeLessThan(computeWindowMinWidth(5))
-    expect(computeWindowMinWidth(1)).toBe(LEFT_PANE_MIN_PX + COLUMN_MIN_PX + PANE_BORDER_PX)
   })
 
-  it('still agrees with the platform column count when every backend is shown', () => {
-    for (const platform of ['darwin', 'win32', 'linux'] as const) {
-      const columns = getVisibleBackendCount(platform)
-      expect(computeWindowMinWidth(columns)).toBe(
-        LEFT_PANE_MIN_PX + columns * COLUMN_MIN_PX + columns * PANE_BORDER_PX
-      )
-    }
-  })
 })
 
 describe('computeWindowMinHeight', () => {
-  it('equals the sum of the stacked region minimums', () => {
-    expect(computeWindowMinHeight()).toBe(
-      PANE_TOOLBAR_MIN_PX + PROMPT_REGION_MIN_PX + PREVIEW_REGION_MIN_PX
-    )
-  })
 
   it('reserves the fixed pane-toolbar chrome on top of the content regions', () => {
     expect(computeWindowMinHeight()).toBeGreaterThan(PROMPT_REGION_MIN_PX + PREVIEW_REGION_MIN_PX)

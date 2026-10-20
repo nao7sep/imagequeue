@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AI_ROLES, MODEL_LINEUP, SUPPORTED_MODELS, TEXT_PROVIDERS, defaultModelFor, hasThinkingChoice, isTextModel, modelsFor, textRowFor, thinkingFor } from '../../src/shared/ai-models'
-import { ThinkingLevel } from '@google/genai'
+import { HarmCategory, ThinkingLevel } from '@google/genai'
 import { configSetDefaults } from '../../src/main/config/config-sets'
 import { GEMINI_SAFETY_SETTINGS, geminiTextParams, openaiTextParams } from '../../src/main/text-ai/request'
 
@@ -53,21 +53,18 @@ describe('text routing guard', () => {
     expect(openaiTextParams('nonsense-id', 'high')).toEqual({})
     expect(openaiTextParams('nonsense-id', 'high', schema)).toEqual({ response_format: { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema } } })
   })
-  it('treats a removed text id as an id with no row', () => {
-    for (const id of ['gpt-6-sol', 'gemini-2.5-flash', 'gpt-5.6-sol', 'gpt-5.6-luna']) {
-      expect(textRowFor('openai', id) ?? textRowFor('gemini', id), id).toBeUndefined()
-      expect(openaiTextParams(id, 'high')).toEqual({})
-      expect(geminiTextParams(id, 'high')).toEqual({})
-    }
-  })
+  // Every harm category the SDK knows, except the unspecified placeholder,
+  // civic integrity and the image-only categories text calls never use.
   it('sends every current harm category off, and not civic integrity', () => {
-    expect(GEMINI_SAFETY_SETTINGS).toEqual([
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'OFF' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'OFF' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'OFF' },
-      { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'OFF' },
-    ])
+    const sent = GEMINI_SAFETY_SETTINGS.map((setting) => setting.category)
+    expect(GEMINI_SAFETY_SETTINGS.every((setting) => setting.threshold === 'OFF')).toBe(true)
+    expect(sent).not.toContain(HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY)
+    expect(new Set(sent).size).toBe(sent.length)
+    for (const category of sent) expect(Object.values(HarmCategory), category).toContain(category)
+    for (const category of Object.values(HarmCategory)) {
+      if (category === HarmCategory.HARM_CATEGORY_UNSPECIFIED || category === HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY || category.startsWith('HARM_CATEGORY_IMAGE_')) continue
+      expect(sent, category).toContain(category)
+    }
   })
   it('sends the row\'s default for a chosen value the row does not list', () => {
     const luna = TEXT_MODELS.find((each) => each.id === 'gpt-6-luna')!

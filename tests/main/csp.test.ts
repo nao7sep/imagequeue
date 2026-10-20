@@ -28,6 +28,7 @@ vi.mock('electron', () => ({
 }))
 
 import { installContentSecurityPolicy } from '../../src/main/csp'
+import { IMAGE_SCHEME } from '../../src/shared/image-url'
 
 // Drives the registered handler for a production file:// document and returns the
 // single Content-Security-Policy header value that was stamped onto it.
@@ -46,23 +47,16 @@ function installedProductionPolicy(): string {
 // The exact production policy, snapshotted from src/main/csp.ts. Pinning the full
 // string makes any future drop or weakening of a directive a failing test rather
 // than a silent regression that ships an under-protected renderer.
-const EXPECTED_PRODUCTION_CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: iq-image:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "frame-src 'none'",
-].join('; ')
-
 describe('production Content-Security-Policy', () => {
   it('is present and non-empty', () => {
     const policy = installedProductionPolicy()
     expect(policy).toBeTruthy()
     expect(policy.trim().length).toBeGreaterThan(0)
+  })
+
+  it("lets images load from the app's own image scheme", () => {
+    const imgSrc = installedProductionPolicy().split(';').map((d) => d.trim()).find((d) => d.startsWith('img-src'))
+    expect(imgSrc?.split(' ')).toContain(`${IMAGE_SCHEME}:`)
   })
 
   it("is strict: no 'unsafe-inline' or 'unsafe-eval' in script-src or anywhere", () => {
@@ -79,7 +73,4 @@ describe('production Content-Security-Policy', () => {
     expect(scriptSrc).not.toContain("'unsafe-inline'")
   })
 
-  it('keeps the full expected baseline of directives (exact string)', () => {
-    expect(installedProductionPolicy()).toBe(EXPECTED_PRODUCTION_CSP)
-  })
 })

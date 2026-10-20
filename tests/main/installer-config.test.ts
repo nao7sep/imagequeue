@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LANGUAGES } from "../../src/shared/i18n/languages";
+import { APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, APP_REPOSITORY_URL } from "../../src/shared/app-identity";
 
 // Packaging repeats values whose source lives elsewhere: the interface
 // languages, the artifact names the release workflow attaches, and the order of
@@ -10,7 +11,9 @@ import { LANGUAGES } from "../../src/shared/i18n/languages";
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
 const builderConfig = read("../../electron-builder.yml");
 const releaseWorkflow = read("../../.github/workflows/release.yml");
-const packageJson = JSON.parse(read("../../package.json")) as { name: string; version: string; scripts: Record<string, string> };
+const packageJson = JSON.parse(read("../../package.json")) as {
+  name: string; version: string; scripts: Record<string, string>; author: { name: string }; license: string; repository: { url: string }
+};
 
 /** One top-level block of electron-builder.yml, from its key to the next top-level key. */
 function section(key: string): string {
@@ -25,6 +28,20 @@ function listUnder(block: string, key: string): string[] {
 }
 
 const primarySubtag = (tag: string): string => tag.split(/[-_]/)[0]!.toLowerCase();
+
+describe("packaged identity", () => {
+  it("packages the app under the name, author, copyright and repository it shows", () => {
+    expect(/^productName: (.+)$/m.exec(builderConfig)?.[1]).toBe(APP_NAME);
+    expect(/^copyright: (.+)$/m.exec(builderConfig)?.[1]).toBe(`Copyright © ${APP_COPYRIGHT_YEAR} ${APP_AUTHOR}`);
+    expect(packageJson.author.name).toBe(APP_AUTHOR);
+    expect(packageJson.repository.url).toBe(APP_REPOSITORY_URL);
+  });
+
+  // About says "GNU GPL v3 or later"; the package declares the same licence.
+  it("declares the licence About names", () => {
+    expect(packageJson.license).toBe("GPL-3.0-or-later");
+  });
+});
 
 describe("packaged interface languages", () => {
   it("lists exactly the app's languages for AppKit, in the app's order", () => {

@@ -61,7 +61,7 @@ describe('buildOpenAIImageParams', () => {
     expect(buildOpenAIImageParams(makeTask({ width: 2048, height: 2048 }, model)).size).toBe('2048x2048')
   })
 
-  it.each(['gpt-image-1', 'gpt-image-1.5', 'gpt-image-1-mini', 'unlisted-model'])('sends %s, an id with no row, the plain request: the model alone', (model) => {
+  it.each(['unlisted-model'])('sends %s, an id with no row, the plain request: the model alone', (model) => {
     expect(buildOpenAIImageParams(makeTask({ width: 1000, height: 1024, quality: 'high', background: 'opaque' }, model))).toEqual({ model })
   })
 })

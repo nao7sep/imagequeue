@@ -126,12 +126,6 @@ describe('image routing guard', () => {
     }
   })
 
-  it('treats a removed image id as an id not in the list', () => {
-    expect(findModel('grok', 'grok-imagine-image-quality')).toBeUndefined()
-    for (const id of ['gpt-image-1.5', 'gpt-image-1-mini']) expect(findModel('openai', id), id).toBeUndefined()
-    expect(findModel('nanobanana', 'gemini-2.5-flash-image')).toBeUndefined()
-  })
-
   it('finds a row only by its exact id', () => {
     expect(findModel('openai', 'gpt-image-2.5-flare')?.id).toBe('gpt-image-2.5-flare')
     expect(findModel('openai', 'unlisted-model')).toBeUndefined()

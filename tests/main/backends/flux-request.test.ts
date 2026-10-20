@@ -38,7 +38,7 @@ describe('buildFluxBody', () => {
     expect(() => buildFluxBody(makeTask('flux-2-pro', { width: 4096, height: 2048 }))).toThrow(/4MP/)
   })
 
-  it.each(['flux-2-pro-preview', 'unlisted-model'])('sends %s, an id with no row, the prompt alone', (model) => {
+  it.each(['unlisted-model'])('sends %s, an id with no row, the prompt alone', (model) => {
     expect(buildFluxBody(makeTask(model, { width: 1024, height: 1024, outputFormat: 'png', seed: 7 }))).toEqual({ prompt: 'a cat' })
   })
 })
