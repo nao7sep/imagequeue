@@ -65,7 +65,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
     '--output', outputPath,
     '--disable-preview',
     // A missing model is the Models window's to download, never a silent part
-    // of generating (README: nothing downloads silently).
+    // of generating: the user decides when gigabytes are fetched.
     '--no-download-missing',
     // Decoding the finished image in tiles roughly halves the peak memory at
     // 2048×1152 (measured 8.8 GB to 4.4 GB) with the same image and time, and

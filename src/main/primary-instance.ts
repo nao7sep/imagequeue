@@ -312,8 +312,8 @@ function registerMenuStateIpc(): void {
 async function startUp(): Promise<void> {
   // Set the renderer CSP before any window loads its content. Gate the strict
   // policy on the production-renderer signal (no dev-server URL), not
-  // app.isPackaged — so run-built/rebuild (electron-vite preview, which runs
-  // unpackaged) still exercise the strict production CSP.
+  // app.isPackaged, so every production renderer, packaged or not, runs under
+  // the strict policy.
   installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
   registerImageProtocol()
   ensureDataDir()

@@ -33,7 +33,10 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-      - run: npm install --global npm@12.0.2
+      # The npm version comes from packageManager in package.json, its one source.
+      - name: Install the project's npm
+        shell: bash
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
       - run: npm ci
       - name: Verify release tag matches package.json
         if: github.ref_type == 'tag'
@@ -59,7 +62,10 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-      - run: npm install --global npm@12.0.2
+      # The npm version comes from packageManager in package.json, its one source.
+      - name: Install the project's npm
+        shell: bash
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
       - run: npm ci
 
       # One command: electron-vite build + electron-builder for the host OS.

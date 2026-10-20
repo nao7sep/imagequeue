@@ -3,8 +3,8 @@ import { session } from 'electron'
 // Content-Security-Policy for the app renderer, set as a response header so it
 // governs both the file:// document of a production build and the dev-server
 // document in development. Gated on the production-renderer signal (the dev
-// server being absent), NOT app.isPackaged — so an unpackaged production run via
-// electron-vite preview (run-built/rebuild) still gets the strict policy. The
+// server being absent), NOT app.isPackaged — so an unpackaged production build
+// still gets the strict policy. The
 // renderer makes no network requests of its own (all I/O goes through IPC to
 // main) and loads output images from the app's own iq-image: scheme
 // (image-protocol.ts), so the production policy is strict:

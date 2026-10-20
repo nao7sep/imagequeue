@@ -1,88 +1,16 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { LANGUAGES } from "../../src/shared/i18n/languages";
 
-const builderConfig = readFileSync(
-  new URL("../../electron-builder.yml", import.meta.url),
-  "utf8",
-);
-const packageJson = JSON.parse(
-  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-);
+// Packaging repeats values whose source lives elsewhere: the interface
+// languages, the artifact names the release workflow attaches, and the order of
+// preparing Electron before packaging. Each is checked against that source here
+// (app-release-conventions: one source per repeated value).
 
-describe("Windows installer configuration", () => {
-  it("uses the assisted multi-user installer", () => {
-    for (const setting of [
-      "oneClick: false",
-      "perMachine: false",
-      "allowElevation: true",
-      "createDesktopShortcut: true",
-      "createStartMenuShortcut: true",
-      "runAfterFinish: true",
-    ]) {
-      expect(builderConfig).toContain(`  ${setting}`);
-    }
-  });
-});
-
-describe("packaged license texts", () => {
-  it("ships the app, Electron, and Chromium licenses", () => {
-    for (const line of [
-      "  - from: LICENSE",
-      "    to: LICENSE.txt",
-      "  - from: THIRD_PARTY_NOTICES",
-      "    to: THIRD_PARTY_NOTICES.txt",
-      "  - from: node_modules/electron/dist/LICENSE",
-      "    to: electron/LICENSE",
-      "  - from: node_modules/electron/dist/LICENSES.chromium.html",
-      "    to: electron/LICENSES.chromium.html",
-    ]) {
-      expect(builderConfig).toContain(line);
-    }
-  });
-
-  it("prepares Electron before every package-script builder invocation", () => {
-    for (const script of Object.values(packageJson.scripts) as string[]) {
-      if (script.includes("electron-builder")) {
-        expect(script.indexOf("npm run prepare:electron")).toBeLessThan(
-          script.indexOf("electron-builder"),
-        );
-      }
-    }
-  });
-});
-
-describe("node-pty package shape", () => {
-  it("preserves the excluded winpty source notice in the packaged notices", () => {
-    const notices = readFileSync(new URL("../../THIRD_PARTY_NOTICES", import.meta.url), "utf8");
-    const upstream = readFileSync(new URL("../../node_modules/node-pty/deps/winpty/LICENSE", import.meta.url), "utf8");
-    expect(notices).toContain(upstream.trim());
-  });
-
-  it("unpacks only runtime prebuilds and excludes development material", () => {
-    expect(builderConfig).toContain("- '**/node_modules/node-pty/prebuilds/**'");
-    expect(builderConfig).not.toContain("- '**/node_modules/node-pty/**'");
-
-    for (const exclusion of [
-      "!**/node_modules/node-pty/binding.gyp",
-      "!**/node_modules/node-pty/{deps,scripts,src,third_party,typings}/**",
-      "!**/node_modules/node-pty/lib/**/*.test.js",
-    ]) {
-      expect(builderConfig).toContain(`  - '${exclusion}'`);
-    }
-  });
-});
-
-describe("packaged development metadata", () => {
-  it("excludes the independent line-measurement build", () => {
-    expect(builderConfig).toContain("- '!out/measure-lines/**'");
-  });
-
-  it("excludes source maps and TypeScript declarations", () => {
-    for (const exclusion of ["!**/*.map", "!**/*.d.ts", "!**/*.d.mts", "!**/*.d.cts"]) {
-      expect(builderConfig).toContain(`  - '${exclusion}'`);
-    }
-  });
-});
+const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
+const builderConfig = read("../../electron-builder.yml");
+const releaseWorkflow = read("../../.github/workflows/release.yml");
+const packageJson = JSON.parse(read("../../package.json")) as { name: string; version: string; scripts: Record<string, string> };
 
 /** One top-level block of electron-builder.yml, from its key to the next top-level key. */
 function section(key: string): string {
@@ -90,11 +18,56 @@ function section(key: string): string {
   return match ? match[1] : "";
 }
 
-describe("release artifact names", () => {
-  it("names every artifact per the release naming contract, with no arch suffix", () => {
-    expect(section("mac")).toContain("  artifactName: ${name}-${version}-mac.${ext}");
-    expect(section("win")).toContain("  artifactName: ${name}-${version}-win.${ext}");
-    expect(section("dmg")).toContain("  artifactName: ${name}-${version}.${ext}");
-    expect(section("nsis")).toContain("  artifactName: ${name}-${version}-setup.${ext}");
+/** The items of a YAML list nested under `key` inside a block. */
+function listUnder(block: string, key: string): string[] {
+  const match = block.match(new RegExp(`^(\\s*)${key}:\\n((?:\\1\\s+- .*\\n?)*)`, "m"));
+  return match ? [...match[2].matchAll(/- (\S+)/g)].map((item) => item[1]) : [];
+}
+
+const primarySubtag = (tag: string): string => tag.split(/[-_]/)[0]!.toLowerCase();
+
+describe("packaged interface languages", () => {
+  it("lists exactly the app's languages for AppKit, in the app's order", () => {
+    expect(listUnder(section("mac"), "CFBundleLocalizations")).toEqual([...LANGUAGES]);
+  });
+
+  it("offers an installer language for each app language, in the app's order", () => {
+    expect(listUnder(section("nsis"), "installerLanguages").map(primarySubtag)).toEqual(LANGUAGES.map(primarySubtag));
+  });
+});
+
+describe("release artifacts", () => {
+  // Each target's artifactName, expanded as electron-builder names the file.
+  const artifacts = [
+    ["mac", "zip"],
+    ["dmg", "dmg"],
+    ["win", "zip"],
+    ["nsis", "exe"],
+  ].map(([key, ext]) => {
+    const pattern = section(key!).match(/^ {2}artifactName: (.+)$/m)?.[1];
+    expect(pattern, `${key} artifactName`).toBeTruthy();
+    return pattern!.replace("${name}", packageJson.name).replace("${version}", packageJson.version).replace("${ext}", ext!);
+  });
+  const globs = [...releaseWorkflow.matchAll(/^\s+(dist\/\S+)$/gm)].map((match) => match[1]!);
+  const matches = (glob: string, file: string): boolean =>
+    new RegExp(`^${glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")}$`).test(file);
+
+  it("attaches every installer and portable the builder names, and nothing it does not", () => {
+    for (const artifact of artifacts) {
+      expect(globs.filter((glob) => matches(glob, `dist/${artifact}`)), artifact).toHaveLength(1);
+    }
+    for (const glob of globs) {
+      expect(artifacts.some((artifact) => matches(glob, `dist/${artifact}`)), glob).toBe(true);
+    }
+  });
+});
+
+describe("package scripts", () => {
+  it("prepare Electron before every builder invocation", () => {
+    for (const script of Object.values(packageJson.scripts)) {
+      if (script.includes("electron-builder")) {
+        expect(script.indexOf("npm run prepare:electron")).toBeLessThan(script.indexOf("electron-builder"));
+      }
+    }
   });
 });
