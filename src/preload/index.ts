@@ -357,8 +357,8 @@ const api = {
   ): Promise<void> =>
     ipcRenderer.invoke('drawthings:applyParamsToAll', modelFiles, patch),
 
-  openFileDialog: (filters: { name: string; extensions: string[] }[]): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:openFile', filters),
+  openFileDialog: (filters: { name: string; extensions: string[] }[], currentPath?: string, purpose?: 'model-import'): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openFile', filters, currentPath, purpose),
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
@@ -384,8 +384,8 @@ const api = {
   copyImageToClipboard: (baseName: string, ext: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:copyImage', baseName, ext),
 
-  openDirectoryDialog: (): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:openDirectory'),
+  openDirectoryDialog: (currentPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openDirectory', currentPath),
 
   onSettingsChanged: (callback: () => void): (() => void) => {
     const handler = (): void => callback()

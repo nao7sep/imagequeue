@@ -55,6 +55,29 @@ function configuredExportDir(): string {
   return configured ? expandUserPath(configured, os.homedir()) : app.getPath('desktop')
 }
 
+// Native absolute selections remain literal. GUI-authored relative sources use
+// Home so importing is independent of the launcher and the CLI's working directory.
+// The CLI receives an argument, not shell text: variable names stay literal.
+function importSourcePath(raw: string): string {
+  if (path.isAbsolute(raw)) return raw
+  const authored = raw.trim()
+  if (authored === '~') return os.homedir()
+  if (authored.startsWith('~/') || authored.startsWith('~\\')) return path.join(os.homedir(), authored.slice(2))
+  return path.resolve(os.homedir(), authored)
+}
+
+// A missing proposal should still open somewhere useful, without creating it.
+async function existingPickerPath(candidate: string): Promise<string | undefined> {
+  let current = candidate
+  while (current) {
+    if (await fs.promises.stat(current).then(() => true, () => false)) return current
+    const parent = path.dirname(current)
+    if (parent === current) return undefined
+    current = parent
+  }
+  return undefined
+}
+
 function readClipboardText(): Promise<string> {
   return clipboard.readText()
 }
@@ -191,6 +214,7 @@ export function registerSettingsIpc(
   })
 
   handle('cli-job:startImport', async (event, artifactPath: string) => {
+    artifactPath = importSourcePath(artifactPath)
     const cliPath = resolveCliPath()
     const dir = await ensureModelsDir()
     assertNotQuitting()
@@ -236,9 +260,13 @@ export function registerSettingsIpc(
     return resolveRecommendedParams(modelFile)
   })
 
-  handle('dialog:openFile', async (event, filters: Electron.FileFilter[]) => {
+  handle('dialog:openFile', async (event, filters: Electron.FileFilter[], currentPath?: string, purpose?: 'model-import') => {
     const owner = BrowserWindow.fromWebContents(event.sender)
-    const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters }
+    const resolved = currentPath
+      ? purpose === 'model-import' ? importSourcePath(currentPath) : expandUserPath(currentPath, os.homedir())
+      : undefined
+    const defaultPath = resolved ? await existingPickerPath(resolved) : undefined
+    const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters, ...(defaultPath ? { defaultPath } : {}) }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
   })
@@ -337,9 +365,10 @@ export function registerSettingsIpc(
     ])
   })
 
-  handle('dialog:openDirectory', async (event) => {
+  handle('dialog:openDirectory', async (event, currentPath?: string) => {
     const owner = BrowserWindow.fromWebContents(event.sender)
-    const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'] }
+    const defaultPath = await existingPickerPath(currentPath ? expandUserPath(currentPath, os.homedir()) : app.getPath('desktop'))
+    const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'], ...(defaultPath ? { defaultPath } : {}) }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
   })

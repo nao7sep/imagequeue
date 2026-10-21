@@ -203,7 +203,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   const handleBrowse = async (): Promise<void> => {
     setImportError(null)
     try {
-      const picked = await window.electronAPI.openFileDialog([])
+      const picked = await window.electronAPI.openFileDialog([], importPath, 'model-import')
       if (picked) setImportPath(picked)
     } catch (error) {
       setImportError(presentFailure('drawthings-browse', error))

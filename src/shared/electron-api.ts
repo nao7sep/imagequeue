@@ -195,7 +195,7 @@ export interface ElectronAPI {
     patch: Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
   ) => Promise<void>
 
-  openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
+  openFileDialog: (filters: { name: string; extensions: string[] }[], currentPath?: string, purpose?: 'model-import') => Promise<string | null>
   openExternal: (url: string) => Promise<void>
   openSessionsFolder: () => Promise<void>
   revealFile: (baseName: string, ext: string) => Promise<void>
@@ -204,7 +204,7 @@ export interface ElectronAPI {
   readClipboardText: () => Promise<string>
   hasClipboardText: () => Promise<boolean>
   copyImageToClipboard: (baseName: string, ext: string) => Promise<void>
-  openDirectoryDialog: () => Promise<string | null>
+  openDirectoryDialog: (currentPath?: string) => Promise<string | null>
   // The main process changed a setting on its own (closing the preview window).
   onSettingsChanged: (callback: () => void) => (() => void)
   // The views of the selected image (shared/viewing). The main window publishes

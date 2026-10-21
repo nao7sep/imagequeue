@@ -131,3 +131,23 @@ describe('DrawThingsModelsModal operation failures', () => {
     await until(() => expect(screen.queryByRole('alert')).toBeNull())
   })
 })
+
+describe('DrawThingsModelsModal Browse context', () => {
+  it('passes the current draft and repeated selection, preserving Cancel', async () => {
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    await until(() => screen.getByText('No official models available.'))
+    const input = screen.getByPlaceholderText('Model file path') as HTMLInputElement
+    const browse = screen.getByRole('button', { name: 'Browse' })
+    fireEvent.click(browse)
+    await until(() => expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith([], '', 'model-import'))
+    fireEvent.change(input, { target: { value: '~/models/draft.ckpt' } })
+    const picked = '/models/ $HOME%MODEL%.ckpt '
+    vi.mocked(window.electronAPI.openFileDialog).mockResolvedValueOnce(picked)
+    fireEvent.click(browse)
+    await until(() => expect(input.value).toBe(picked))
+    expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith([], '~/models/draft.ckpt', 'model-import')
+    fireEvent.click(browse)
+    await until(() => expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith([], picked, 'model-import'))
+    expect(input.value).toBe(picked)
+  })
+})

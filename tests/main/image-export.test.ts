@@ -290,7 +290,7 @@ describe('picking a file or a folder', () => {
     mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/pictures/exports'] })
 
     await expect(invoke('dialog:openDirectory')).resolves.toBe('/pictures/exports')
-    expect(mocks.showOpenDialog).toHaveBeenCalledWith({ properties: ['openDirectory', 'createDirectory'] })
+    expect(mocks.showOpenDialog).toHaveBeenCalledWith({ properties: ['openDirectory', 'createDirectory'], defaultPath: mocks.desktop })
   })
 
   it('asks the window that owns the request when there is one', async () => {

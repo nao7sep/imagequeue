@@ -415,7 +415,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 type="button"
                 className="settings-browse-btn"
                 onClick={() => {
-                  void window.electronAPI.openDirectoryDialog().then((dir) => {
+                  void window.electronAPI.openDirectoryDialog((general.export_dir as string) ?? '').then((dir) => {
                     if (dir) updateGeneral('export_dir', dir)
                   }).catch(handleBrowseFailure)
                 }}
@@ -563,7 +563,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 onClick={() => {
                   void window.electronAPI.openFileDialog([
                     { name: t('settings.audioFilter'), extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
-                  ]).then((f) => { if (f) updateNotificationFile('success_file', f) }).catch(handleBrowseFailure)
+                  ], (notificationCfg.success_file as string) ?? '').then((f) => { if (f) updateNotificationFile('success_file', f) }).catch(handleBrowseFailure)
                 }}
               >{t('settings.browse')}</button>
             </div>
@@ -583,7 +583,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                 onClick={() => {
                   void window.electronAPI.openFileDialog([
                     { name: t('settings.audioFilter'), extensions: ['mp3', 'wav', 'ogg', 'm4a'] }
-                  ]).then((f) => { if (f) updateNotificationFile('failure_file', f) }).catch(handleBrowseFailure)
+                  ], (notificationCfg.failure_file as string) ?? '').then((f) => { if (f) updateNotificationFile('failure_file', f) }).catch(handleBrowseFailure)
                 }}
               >{t('settings.browse')}</button>
             </div>

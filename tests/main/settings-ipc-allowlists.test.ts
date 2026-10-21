@@ -1,3 +1,5 @@
+import os from 'os'
+import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../src/main/config/types'
 
@@ -267,4 +269,16 @@ it.each(['cli-job:startImport', 'cli-job:startDownload'])('refuses %s if quit st
   } finally { setQuitting(false) }
   await invoke(channel, 'model')
   expect(mocks.startCliJob).toHaveBeenCalledOnce()
+})
+
+it.each(['relative/model.ckpt', '~/models/file.ckpt', '$HOME/models/file.ckpt'])('resolves authored model imports against Home before invoking the CLI: %s', async (source) => {
+  await invoke('cli-job:startImport', source)
+  const expected = path.join(os.homedir(), source.startsWith('~/') ? source.slice(2) : source)
+  expect(mocks.startCliJob).toHaveBeenCalledWith(expect.objectContaining({ args: ['models', 'import', expected, '--models-dir', '/models'] }))
+})
+
+it('keeps a native absolute model source literal', async () => {
+  const source = path.join(os.homedir(), ' $HOME%MODEL% .ckpt ')
+  await invoke('cli-job:startImport', source)
+  expect(mocks.startCliJob).toHaveBeenCalledWith(expect.objectContaining({ args: ['models', 'import', source, '--models-dir', '/models'] }))
 })
