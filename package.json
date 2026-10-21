@@ -57,8 +57,6 @@
   "allowScripts": {
     "@google/genai@2.28.0": false,
     "electron-winstaller@5.4.0": true,
-    "esbuild@0.25.12": true,
-    "esbuild@0.28.2": true,
     "fsevents@2.3.3": false,
     "node-pty@1.1.0": true,
     "protobufjs@7.6.6": false
