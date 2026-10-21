@@ -33,8 +33,10 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/ipc-boundary', () => ({
   handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler),
 }))
-vi.mock('../../src/main/config', () => ({ loadConfig: () => mocks.config, saveConfig: vi.fn() }))
-vi.mock('../../src/main/settings-changes', () => ({ applyChangedFields: vi.fn() }))
+vi.mock('../../src/main/config', () => ({
+  loadConfig: () => mocks.config,
+  updateConfig: async (apply: (draft: AppConfig) => void) => { apply(mocks.config); return mocks.config },
+}))
 vi.mock('../../src/main/session', () => ({ getSessionDir: () => mocks.sessionDir }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => ({ error }) }))
 
@@ -77,6 +79,36 @@ describe('exporting an image', () => {
     expect(destination).toBe(path.join(root, 'Exports', 'imagequeue', `${BASE}.png`))
     expect(fs.readFileSync(destination, 'utf-8')).toBe('image bytes')
     expect(fs.existsSync(path.join(mocks.sessionDir, `${BASE}.png`)), 'the session keeps its copy').toBe(true)
+  })
+
+  it('expands typed absolute expressions once on Save before exporting', async () => {
+    vi.stubEnv('IMAGEQUEUE_LITERAL_PATH', '$IMAGEQUEUE_SECOND_PATH')
+    vi.stubEnv('IMAGEQUEUE_SECOND_PATH', 'must-stay-literal')
+    try {
+      const base = structuredClone(mocks.config)
+      const next = structuredClone(base)
+      next.general.export_dir = path.join(root, '$IMAGEQUEUE_LITERAL_PATH')
+      await invoke('settings:saveChangedFields', base, next, {}, ['export_dir'])
+      const expected = path.join(root, '$IMAGEQUEUE_SECOND_PATH')
+      expect(mocks.config.general.export_dir).toBe(expected)
+      const destination = await invoke('shell:exportImage', BASE, 'png') as string
+      expect(destination).toBe(path.join(expected, `${BASE}.png`))
+      expect(fs.readFileSync(destination, 'utf8')).toBe('image bytes')
+    } finally { vi.unstubAllEnvs() }
+  })
+
+  it('exports and proposes Save As in the literal selected folder', async () => {
+    vi.stubEnv('IMAGEQUEUE_LITERAL_PATH', 'expanded')
+    try {
+      const selected = path.join(root, '$IMAGEQUEUE_LITERAL_PATH%IMAGEQUEUE_LITERAL_PATH% ')
+      mocks.config.general.export_dir = selected
+      const destination = await invoke('shell:exportImage', BASE, 'png') as string
+      expect(destination).toBe(path.join(selected, `${BASE}.png`))
+      expect(fs.readFileSync(destination, 'utf8')).toBe('image bytes')
+      mocks.showSaveDialog.mockResolvedValue({ canceled: true })
+      await invoke('shell:exportImageAs', BASE, 'png')
+      expect(mocks.showSaveDialog).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: destination }))
+    } finally { vi.unstubAllEnvs() }
   })
 
   it('expands a home-relative or environment folder the user typed, wherever the app was launched from', async () => {

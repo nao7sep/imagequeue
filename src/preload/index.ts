@@ -233,9 +233,10 @@ const api = {
   saveChangedSettings: (
     base: Record<string, unknown>,
     next: Record<string, unknown>,
-    keys?: Partial<Record<SecretId, string>>
+    keys?: Partial<Record<SecretId, string>>,
+    authoredPaths?: string[]
   ): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveChangedFields', base, next, keys),
+    ipcRenderer.invoke('settings:saveChangedFields', base, next, keys, authoredPaths),
 
   saveBrainstormSettings: (brainstorm: BrainstormConfig): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
@@ -357,8 +358,8 @@ const api = {
   ): Promise<void> =>
     ipcRenderer.invoke('drawthings:applyParamsToAll', modelFiles, patch),
 
-  openFileDialog: (filters: { name: string; extensions: string[] }[], currentPath?: string, purpose?: 'model-import'): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:openFile', filters, currentPath, purpose),
+  openFileDialog: (filters: { name: string; extensions: string[] }[], currentPath?: string, purpose?: 'model-import', authored?: boolean): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openFile', filters, currentPath, purpose, authored),
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
@@ -384,8 +385,8 @@ const api = {
   copyImageToClipboard: (baseName: string, ext: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:copyImage', baseName, ext),
 
-  openDirectoryDialog: (currentPath?: string): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:openDirectory', currentPath),
+  openDirectoryDialog: (currentPath?: string, authored?: boolean): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openDirectory', currentPath, authored),
 
   onSettingsChanged: (callback: () => void): (() => void) => {
     const handler = (): void => callback()

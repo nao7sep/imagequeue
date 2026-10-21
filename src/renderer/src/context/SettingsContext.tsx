@@ -18,7 +18,7 @@ interface SettingsContextValue {
   // Stored key values by id, for the Settings form alone. Keys are not part of
   // `settings`: config.json cannot hold one; Save carries a separate key map.
   apiKeys: Record<SecretId, string> | null
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>) => Promise<Record<string, unknown>>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]) => Promise<Record<string, unknown>>
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<Record<string, unknown>>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
   saveNotificationField: (field: string, value: unknown) => Promise<Record<string, unknown>>
@@ -94,8 +94,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   }, [refreshSettings])
 
   const saveChangedSettings = useCallback(
-    async (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>): Promise<Record<string, unknown>> => {
-      await window.electronAPI.saveChangedSettings(base, next, keys)
+    async (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]): Promise<Record<string, unknown>> => {
+      await window.electronAPI.saveChangedSettings(base, next, keys, authoredPaths)
       return refreshSettings()
     },
     [refreshSettings]

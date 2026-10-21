@@ -145,7 +145,7 @@ export interface ElectronAPI {
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>) => Promise<{ success: boolean }>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<{ success: boolean }>
   getApiKeyPresence: () => Promise<ApiKeyPresence>
   // Stored values are read separately and submitted as a separate changed-key
@@ -195,7 +195,7 @@ export interface ElectronAPI {
     patch: Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
   ) => Promise<void>
 
-  openFileDialog: (filters: { name: string; extensions: string[] }[], currentPath?: string, purpose?: 'model-import') => Promise<string | null>
+  openFileDialog: (filters: { name: string; extensions: string[] }[], currentPath?: string, purpose?: 'model-import', authored?: boolean) => Promise<string | null>
   openExternal: (url: string) => Promise<void>
   openSessionsFolder: () => Promise<void>
   revealFile: (baseName: string, ext: string) => Promise<void>
@@ -204,7 +204,7 @@ export interface ElectronAPI {
   readClipboardText: () => Promise<string>
   hasClipboardText: () => Promise<boolean>
   copyImageToClipboard: (baseName: string, ext: string) => Promise<void>
-  openDirectoryDialog: (currentPath?: string) => Promise<string | null>
+  openDirectoryDialog: (currentPath?: string, authored?: boolean) => Promise<string | null>
   // The main process changed a setting on its own (closing the preview window).
   onSettingsChanged: (callback: () => void) => (() => void)
   // The views of the selected image (shared/viewing). The main window publishes

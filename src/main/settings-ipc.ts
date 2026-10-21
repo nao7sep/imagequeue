@@ -34,7 +34,7 @@ import {
   killCliJob,
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
-import { expandUserPath } from './local-cli'
+import { expandUserPath, resolveSettingsPath } from './utils/user-path'
 import { applyDimensionsToModels, drainSetAsideModelParamsPaths, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
 import { modelParamsResetPresentation } from './failure-presentation'
 import { getModelParamsPersistenceState } from './model-params-persistence'
@@ -47,12 +47,11 @@ import {
   type SecretId,
 } from '../shared/types'
 
-// The configured Export Folder, expanded and made absolute the way every
-// user-typed path is (storage-path conventions), a relative one against the
-// home directory; unset, the Desktop.
+// Absolute settings references remain literal; authored relative expressions
+// resolve against Home. An unset export destination uses Desktop.
 function configuredExportDir(): string {
   const configured = loadConfig().general.export_dir
-  return configured ? expandUserPath(configured, os.homedir()) : app.getPath('desktop')
+  return configured ? resolveSettingsPath(configured, os.homedir()) : app.getPath('desktop')
 }
 
 // Native absolute selections remain literal. GUI-authored relative sources use
@@ -109,13 +108,23 @@ export function registerSettingsIpc(
     return loadConfig()
   })
 
-  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}) => {
+  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}, authoredPaths: string[] = []) => {
     validateKeyChanges(keys)
     // Both store owners capture the complete form before the first wait. Quit
     // can now drain/retry it even if the renderer's later refresh is refused.
     const results = await Promise.allSettled([
       updateConfig((draft) => {
         applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
+        // Expand text edits once at admission; native selections and unchanged
+        // stored references must never be interpreted as expressions again.
+        if (authoredPaths.includes('export_dir') && next.general.export_dir !== base.general.export_dir) {
+          draft.general.export_dir = next.general.export_dir ? expandUserPath(next.general.export_dir, os.homedir()) : ''
+        }
+        for (const field of ['success_file', 'failure_file'] as const) {
+          if (authoredPaths.includes(field) && next.notifications[field] !== base.notifications[field]) {
+            draft.notifications[field] = next.notifications[field] ? expandUserPath(next.notifications[field], os.homedir()) : ''
+          }
+        }
       }),
       Object.keys(keys).length ? setStoredApiKeys(keys) : Promise.resolve(),
     ])
@@ -260,10 +269,10 @@ export function registerSettingsIpc(
     return resolveRecommendedParams(modelFile)
   })
 
-  handle('dialog:openFile', async (event, filters: Electron.FileFilter[], currentPath?: string, purpose?: 'model-import') => {
+  handle('dialog:openFile', async (event, filters: Electron.FileFilter[], currentPath?: string, purpose?: 'model-import', authored = false) => {
     const owner = BrowserWindow.fromWebContents(event.sender)
     const resolved = currentPath
-      ? purpose === 'model-import' ? importSourcePath(currentPath) : expandUserPath(currentPath, os.homedir())
+      ? purpose === 'model-import' ? importSourcePath(currentPath) : authored ? expandUserPath(currentPath, os.homedir()) : resolveSettingsPath(currentPath, os.homedir())
       : undefined
     const defaultPath = resolved ? await existingPickerPath(resolved) : undefined
     const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters, ...(defaultPath ? { defaultPath } : {}) }
@@ -365,9 +374,9 @@ export function registerSettingsIpc(
     ])
   })
 
-  handle('dialog:openDirectory', async (event, currentPath?: string) => {
+  handle('dialog:openDirectory', async (event, currentPath?: string, authored = false) => {
     const owner = BrowserWindow.fromWebContents(event.sender)
-    const defaultPath = await existingPickerPath(currentPath ? expandUserPath(currentPath, os.homedir()) : app.getPath('desktop'))
+    const defaultPath = await existingPickerPath(currentPath ? (authored ? expandUserPath : resolveSettingsPath)(currentPath, os.homedir()) : app.getPath('desktop'))
     const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'], ...(defaultPath ? { defaultPath } : {}) }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]

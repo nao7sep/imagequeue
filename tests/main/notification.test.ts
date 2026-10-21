@@ -53,6 +53,17 @@ describe('notification:loadAudioFile', () => {
     await expect(loadAudioFile(configured)).resolves.toBe(`data:audio/wav;base64,${Buffer.from('RIFF').toString('base64')}`)
   })
 
+  it('reads literal selected names even when their variables exist in the environment', async () => {
+    vi.stubEnv('IMAGEQUEUE_SOUND_PATH', 'expanded')
+    try {
+      const selected = path.join(soundDir, '$IMAGEQUEUE_SOUND_PATH%IMAGEQUEUE_SOUND_PATH%.wav ')
+      fs.writeFileSync(selected, 'literal audio')
+      mocks.notifications.success_file = selected
+      await expect(loadAudioFile(selected)).resolves.toBe(`data:audio/mpeg;base64,${Buffer.from('literal audio').toString('base64')}`)
+      await expect(loadAudioFile(selected.replaceAll('$IMAGEQUEUE_SOUND_PATH', 'expanded'))).resolves.toBeNull()
+    } finally { vi.unstubAllEnvs() }
+  })
+
   it('still refuses a path the user did not configure', async () => {
     mocks.notifications.success_file = path.join('~', path.basename(soundDir), 'done.wav')
     await expect(loadAudioFile(path.join(soundDir, 'other.wav'))).resolves.toBeNull()

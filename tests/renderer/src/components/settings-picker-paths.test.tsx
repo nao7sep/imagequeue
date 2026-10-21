@@ -65,16 +65,41 @@ describe('Settings Browse context', () => {
     const input = document.getElementById('settings-exportFolder') as HTMLInputElement
     const browse = within(input.parentElement!).getByRole('button', { name: 'Browse' })
     fireEvent.click(browse)
-    await until(() => expect(window.electronAPI.openDirectoryDialog).toHaveBeenLastCalledWith(''))
+    await until(() => expect(window.electronAPI.openDirectoryDialog).toHaveBeenLastCalledWith('', false))
     fireEvent.change(input, { target: { value: '~/draft' } })
     const picked = '/chosen/ $HOME%EXPORT% '
     vi.mocked(window.electronAPI.openDirectoryDialog).mockResolvedValueOnce(picked)
     fireEvent.click(browse)
     await until(() => expect(input.value).toBe(picked))
-    expect(window.electronAPI.openDirectoryDialog).toHaveBeenLastCalledWith('~/draft')
+    expect(window.electronAPI.openDirectoryDialog).toHaveBeenLastCalledWith('~/draft', true)
     fireEvent.click(browse)
-    await until(() => expect(window.electronAPI.openDirectoryDialog).toHaveBeenLastCalledWith(picked))
+    await until(() => expect(window.electronAPI.openDirectoryDialog).toHaveBeenLastCalledWith(picked, false))
     expect(input.value).toBe(picked)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenLastCalledWith(
+      expect.any(Object), expect.any(Object), {}, [],
+    ))
+  })
+
+  it('marks typed absolute expressions for expansion on Save', async () => {
+    renderWith(undefined)
+    const input = document.getElementById('settings-exportFolder') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '/exports/$HOME' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledWith(
+      expect.any(Object), expect.any(Object), {}, ['export_dir'],
+    ))
+  })
+
+  it.each([['successSound', 'success_file'], ['failureSound', 'failure_file']])('marks the typed %s expression on Save', async (id, field) => {
+    renderWith(undefined)
+    fireEvent.click(screen.getByRole('tab', { name: 'Notifications' }))
+    const input = document.getElementById('settings-' + id) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '/sounds/%SOUND%.wav' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledWith(
+      expect.any(Object), expect.any(Object), {}, [field],
+    ))
   })
 
   it.each(['successSound', 'failureSound'])('uses the current %s draft, preserving a literal pick and Cancel', async (id) => {
@@ -87,9 +112,13 @@ describe('Settings Browse context', () => {
     vi.mocked(window.electronAPI.openFileDialog).mockResolvedValueOnce(picked)
     fireEvent.click(browse)
     await until(() => expect(input.value).toBe(picked))
-    expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith(expect.any(Array), '~/sounds/draft.wav')
+    expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith(expect.any(Array), '~/sounds/draft.wav', undefined, true)
     fireEvent.click(browse)
-    await until(() => expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith(expect.any(Array), picked))
+    await until(() => expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith(expect.any(Array), picked, undefined, false))
     expect(input.value).toBe(picked)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenLastCalledWith(
+      expect.any(Object), expect.any(Object), {}, [],
+    ))
   })
 })

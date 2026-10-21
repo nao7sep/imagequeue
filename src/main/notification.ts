@@ -4,7 +4,7 @@ import os from 'os'
 import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig } from './config'
-import { expandUserPath } from './local-cli'
+import { resolveSettingsPath } from './utils/user-path'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
 import { mainTranslator } from './i18n'
@@ -219,13 +219,12 @@ export function registerNotificationIpc(): void {
     // The renderer may only ask for the two paths the user configured through
     // the file dialog — this was the one IPC read not pinned to a known
     // location, making it an arbitrary-file read for a compromised renderer.
-    // Configured paths are user-typed, so both sides are expanded and made
-    // absolute, a relative one against the home directory, before they are
-    // compared or read (storage-path conventions).
+    // Resolve authored expressions against Home while preserving literal
+    // absolute selections on both sides of the comparison and read.
     const notifications = loadConfig().notifications
-    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map((p) => expandUserPath(p, os.homedir()))
+    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map((p) => resolveSettingsPath(p, os.homedir()))
     if (!filePath) return null
-    const requested = expandUserPath(filePath, os.homedir())
+    const requested = resolveSettingsPath(filePath, os.homedir())
     if (!allowed.includes(requested)) return null
     const data = await fs.promises.readFile(requested).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
