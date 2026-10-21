@@ -7,7 +7,55 @@ import { GEMINI_SAFETY_SETTINGS, geminiTextParams, openaiTextParams } from '../.
 const safety = { safetySettings: GEMINI_SAFETY_SETTINGS }
 const TEXT_MODELS = SUPPORTED_MODELS.filter(isTextModel)
 
+const NO_THINKING = ['none', 'off', 'between_tools']
+
+type TierRow = { id: string; kinds: readonly string[]; defaultFor: readonly string[]; thinking?: readonly string[]; defaultThinking?: string }
+
+// What a row's tier allows it to default to (ai-model-routing-conventions): a
+// row is a default only for kinds it serves, a frontier row is never a
+// default, and its default thinking follows its tier. A fast row defaults to
+// its no-thinking value, else its lowest, and any other row to `adaptive`,
+// else `medium`; a row with neither has its default decided by the lineup
+// research. Returns the rows that break this, so a planted table shows it is
+// found.
+function tierViolations(rows: readonly TierRow[]): string[] {
+  return rows.flatMap((row) => {
+    const found: string[] = []
+    for (const kind of row.defaultFor) if (!row.kinds.includes(kind)) found.push(`${row.id} defaults for ${kind}, which it does not serve`)
+    if (row.kinds.includes('text-frontier') && row.defaultFor.length > 0) found.push(`${row.id} is a frontier default`)
+    const { thinking, defaultThinking } = row
+    if (thinking && defaultThinking !== undefined) {
+      const quiet = thinking.findIndex((value) => NO_THINKING.includes(value))
+      if (quiet > 0) found.push(`${row.id} lists ${thinking[quiet]} after other values`)
+      const expected = row.kinds.includes('text-fast')
+        ? thinking[0]
+        : ['adaptive', 'medium'].find((value) => thinking.includes(value)) ?? defaultThinking
+      if (defaultThinking !== expected) found.push(`${row.id} defaults to ${defaultThinking} thinking, not ${expected}`)
+    }
+    return found
+  })
+}
+
 describe('text routing guard', () => {
+  it('gives every row only the defaults its tier allows', () => {
+    expect(tierViolations(SUPPORTED_MODELS)).toEqual([])
+  })
+  it('finds a row whose defaults its tier does not allow', () => {
+    const planted: TierRow[] = [
+      { id: 'frontier', kinds: ['text-frontier'], defaultFor: ['text-frontier'] },
+      { id: 'stray', kinds: ['text-smart'], defaultFor: ['text-balanced'] },
+      { id: 'fast', kinds: ['text-fast'], defaultFor: [], thinking: ['none', 'low', 'medium'], defaultThinking: 'medium' },
+      { id: 'smart', kinds: ['text-smart'], defaultFor: [], thinking: ['adaptive', 'low', 'medium'], defaultThinking: 'medium' },
+      { id: 'late', kinds: ['text-smart'], defaultFor: [], thinking: ['low', 'none', 'medium'], defaultThinking: 'medium' },
+    ]
+    expect(tierViolations(planted)).toEqual([
+      'frontier is a frontier default',
+      'stray defaults for text-balanced, which it does not serve',
+      'fast defaults to medium thinking, not none',
+      'smart defaults to medium thinking, not adaptive',
+      'late lists none after other values',
+    ])
+  })
   it('lists each text row\'s default thinking among its values', () => {
     for (const row of TEXT_MODELS) expect(row.thinking, row.id).toContain(row.defaultThinking)
   })
