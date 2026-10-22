@@ -25,7 +25,10 @@
 .pane-toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  /* The menu button has no text to share a baseline with, so baseline
+     alignment set the title by the button's box and left it low; centring
+     the title's trimmed box centres its letters in the band. */
+  align-items: center;
   padding: 8px 12px;
   border-top: 3px solid var(--accent);
   border-bottom: 1px solid var(--border);
@@ -37,6 +40,7 @@
 }
 
 .app-name {
+  text-box: trim-both cap alphabetic;
   font-size: 19px;
   font-weight: 700;
   color: var(--text-primary);
