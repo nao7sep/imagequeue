@@ -70,6 +70,21 @@ describe('DependenciesModal cancellation', () => {
     })
   })
 
+  it('keeps the window after a check when no install has left warnings', async () => {
+    const checked: DependenciesState = { ...initialState, cli: { ...initialState.cli, lastCheckedAtUtc: '2026-10-22T00:00:00.000Z' } }
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      checkDependencies: vi.fn(async () => checked),
+      cancelDependencyOperations: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+    renderModal()
+    fireEvent.click(await until(() => screen.getByRole('button', { name: 'Check for updates' })))
+    await until(() => expect(window.electronAPI.checkDependencies).toHaveBeenCalled())
+    await until(() => expect(screen.getByRole('button', { name: 'Check for updates' })).toBeTruthy())
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('emphasizes required absence without coloring optional absence as a warning', async () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),

@@ -131,10 +131,10 @@ function reducer(state: ControllerState, action: Action): ControllerState {
       if (action.cancelled) terminalOutcomes[action.operation] = 'cancelled'
       const warnings = { ...state.warnings }
       if (action.snapshot && !action.error && !action.cancelled) warnings[action.operation] = action.warnings
-      if (action.operation === 'check' && action.snapshot && !action.error && !action.cancelled) {
+      if (action.operation === 'check' && action.snapshot && !action.error && !action.cancelled && warnings.cli) {
         // A check repairs check facts only; it cannot repair artifact identity
         // or establish that an earlier file sync completed.
-        warnings.cli = warnings.cli?.filter((warning) => warning !== 'check-not-saved')
+        warnings.cli = warnings.cli.filter((warning) => warning !== 'check-not-saved')
       }
       return {
         ...state,
