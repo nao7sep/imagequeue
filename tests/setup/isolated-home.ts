@@ -15,6 +15,13 @@ process.env.HOME = home
 process.env.USERPROFILE = home
 process.env.IMAGEQUEUE_DATA_DIR = path.join(home, '.imagequeue')
 
+// Provider keys resolve from the environment before the key file, so keys the
+// developer exports for the live lane would otherwise answer tests that expect
+// the file's own outcome. A test that needs one sets it itself.
+for (const name of Object.keys(process.env)) {
+  if (name.endsWith('_API_KEY')) delete process.env[name]
+}
+
 afterAll(() => {
   fs.rmSync(home, { recursive: true, force: true })
 })
