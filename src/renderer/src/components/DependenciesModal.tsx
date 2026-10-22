@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useEffect } from 'react'
 import { Modal } from './Modal'
 import { useDependencies } from '../context/DependenciesContext'
 import { useI18n, type Translator } from '../i18n/I18nContext'
@@ -92,36 +92,32 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
     installCli,
     installRecommendations,
     setCheckAtLaunch,
-    cancelOperations,
+    cancel,
+    registerView,
   } = useDependencies()
   const i18n = useI18n()
   const { t } = i18n
   const anyBusy = busy.size > 0
   const lastChecked = state ? lastSetCheck(state) : null
 
-  // The application controller outlives this replaceable modal. Closing while an
-  // operation is active explicitly asks that controller to cancel and then hides
-  // the view immediately; terminal reconciliation continues outside the modal.
-  const requestClose = useCallback((): void => {
-    // The application owner checks its live operation registry. Do not infer
-    // cancellation correctness from this replaceable view's rendered flags.
-    void cancelOperations()
-    onClose()
-  }, [cancelOperations, onClose])
+  // The application controller outlives this replaceable modal, so closing it
+  // by any path only hides the view: running work continues, the Draw Things
+  // column shows it, and only an operation's own Cancel stops it.
+  useEffect(() => registerView(), [registerView])
 
   return (
     <Modal
       title={t('dependencies.title')}
       className="dependencies-modal-box"
-      onClose={requestClose}
+      onClose={onClose}
       closeOnBackdropClick
       footer={
         <button
           type="button"
           className="modal-btn"
-          onClick={requestClose}
+          onClick={onClose}
         >
-          {anyBusy ? t('dependencies.cancelAndClose') : t('common.close')}
+          {t('common.close')}
         </button>
       }
     >
@@ -147,6 +143,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               progress={busy.has('cli') ? progress : null}
               terminalOutcome={terminalOutcomes.cli}
               onAction={() => { void installCli() }}
+              onCancel={() => { void cancel('cli') }}
             />
             <DependencySection
               title={t('dependencies.recommendationsTitle')}
@@ -158,6 +155,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
               progress={null}
               terminalOutcome={terminalOutcomes.recommendations}
               onAction={() => { void installRecommendations() }}
+              onCancel={() => { void cancel('recommendations') }}
             />
             <section className="dependency-row">
               <div className="dependency-heading">
@@ -172,14 +170,20 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
                       {!busy.has('check') && terminalOutcomes.check === 'cancelled' && (
                         <span className="dependency-terminal-outcome" role="status">{t('dependencies.checkCancelled')}</span>
                       )}
-                      <button
-                        type="button"
-                        className="modal-btn"
-                        disabled={anyBusy}
-                        onClick={() => { void check() }}
-                      >
-                        {busy.has('check') ? t('dependencies.checking') : t('dependencies.checkForUpdates')}
-                      </button>
+                      {busy.has('check') ? (
+                        <button type="button" className="modal-btn" onClick={() => { void cancel('check') }}>
+                          {t('dependencies.cancelCheck')}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="modal-btn"
+                          disabled={anyBusy}
+                          onClick={() => { void check() }}
+                        >
+                          {t('dependencies.checkForUpdates')}
+                        </button>
+                      )}
                     </>
                   }
                 >
@@ -235,6 +239,7 @@ function DependencySection({
   progress,
   terminalOutcome,
   onAction,
+  onCancel,
 }: {
   title: string
   description: string
@@ -245,6 +250,7 @@ function DependencySection({
   progress: DependencyProgress | null
   terminalOutcome: 'cancelled' | undefined
   onAction: () => void
+  onCancel: () => void
 }): React.JSX.Element {
   const i18n = useI18n()
   const { t } = i18n
@@ -278,14 +284,20 @@ function DependencySection({
                 {!busy && terminalOutcome === 'cancelled' && (
                   <span className="dependency-terminal-outcome" role="status">{t('dependencies.cancelled')}</span>
                 )}
-                <button
-                  type="button"
-                  className={`modal-btn${emphasized ? ' modal-btn-primary' : ''}`}
-                  disabled={disabled}
-                  onClick={onAction}
-                >
-                  {busy ? t('dependencies.working') : t(actionLabel)}
-                </button>
+                {busy ? (
+                  <button type="button" className="modal-btn" onClick={onCancel}>
+                    {t('common.cancel')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`modal-btn${emphasized ? ' modal-btn-primary' : ''}`}
+                    disabled={disabled}
+                    onClick={onAction}
+                  >
+                    {t(actionLabel)}
+                  </button>
+                )}
               </>
             )
           }

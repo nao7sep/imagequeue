@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { useState } from 'react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependencyPanePointer } from '../../../../src/renderer/src/components/DependencyPanePointer'
+import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
 import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
 import type { DependenciesState, DependencyInfo } from '../../../../src/shared/types'
 
@@ -23,7 +25,7 @@ function info(id: DependencyInfo['id'], patch: Partial<DependencyInfo>): Depende
 function renderPointer(state: DependenciesState): void {
   window.electronAPI = {
     getDependenciesState: vi.fn(async () => state),
-    cancelDependencyOperations: vi.fn(async () => undefined),
+    cancelDependencyOperation: vi.fn(async () => undefined),
     onDependencyProgress: vi.fn(() => () => undefined),
   } as unknown as typeof window.electronAPI
   render(
@@ -45,5 +47,41 @@ describe('DependencyPanePointer', () => {
     const pointer = await screen.findByRole('button')
     expect(pointer.textContent).toBe('A Draw Things CLI update is available. Open Managed tools.')
     expect(pointer.textContent).not.toMatch(/[—–]/)
+  })
+
+  it('shows work that continues after Managed tools closes, and only then', async () => {
+    const current: DependenciesState = {
+      cli: info('cli', { state: 'up-to-date', installedLabel: 'v26.0910.1', latestLabel: 'v26.0910.1' }),
+      recommendations: info('recommendations', { state: 'up-to-date', entryCount: 56 }),
+      checkUpdatesAtLaunch: true,
+      platformSupported: true,
+    }
+    let finishRefresh: ((state: DependenciesState) => void) | undefined
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => current),
+      downloadRecommendations: vi.fn(() => new Promise<DependenciesState>((resolve) => { finishRefresh = resolve })),
+      cancelDependencyOperation: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+    function Harness(): React.JSX.Element {
+      const [open, setOpen] = useState(true)
+      return (
+        <DependenciesProvider>
+          <DependencyPanePointer />
+          {open && <DependenciesModal onClose={() => setOpen(false)} />}
+        </DependenciesProvider>
+      )
+    }
+    render(<Harness />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
+    await screen.findByRole('button', { name: 'Cancel' })
+    expect(screen.queryByText(/being installed or updated/)).toBeNull()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
+    expect((await screen.findByRole('button')).textContent).toBe('The Draw Things tools are being installed or updated. Open Managed tools.')
+
+    finishRefresh?.(current)
+    await vi.waitFor(() => expect(screen.queryByRole('button')).toBeNull())
   })
 })

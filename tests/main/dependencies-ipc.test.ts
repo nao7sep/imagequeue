@@ -152,7 +152,9 @@ describe('dependency IPC operation ownership', () => {
       'Dependency cli operation is already running'
     )
 
-    await invoke('dependencies:cancelOperations', owner)
+    await invoke('dependencies:cancel', replacement, 'cli')
+    expect(active.signal.aborted).toBe(false)
+    await invoke('dependencies:cancel', owner, 'cli')
     await expect(firstInstall).rejects.toThrow('Dependency operation cancelled')
 
     mocks.installOrUpdateCli.mockResolvedValueOnce(state)
@@ -160,7 +162,7 @@ describe('dependency IPC operation ownership', () => {
     expect(mocks.installOrUpdateCli).toHaveBeenCalledTimes(2)
   })
 
-  it('allows CLI and recommendations operations to run concurrently', async () => {
+  it('runs CLI and recommendations operations concurrently and cancels each alone', async () => {
     const cliOwner = new FakeSender(1)
     const recommendationsOwner = new FakeSender(2)
     let cli!: DeferredOperation
@@ -182,11 +184,14 @@ describe('dependency IPC operation ownership', () => {
 
     expect(cli.signal.aborted).toBe(false)
     expect(recommendations.signal.aborted).toBe(false)
+    await invoke('dependencies:cancel', recommendationsOwner, 'recommendations')
+    expect(recommendations.signal.aborted).toBe(true)
+    expect(cli.signal.aborted).toBe(false)
     cli.resolve()
     recommendations.resolve()
 
     await expect(cliInstall).resolves.toBe(state)
-    await expect(recommendationsDownload).resolves.toBe(state)
+    await expect(recommendationsDownload).rejects.toThrow('Dependency operation cancelled')
   })
 
   it('reserves both tools while the set-wide check is running', async () => {

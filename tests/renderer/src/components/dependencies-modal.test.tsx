@@ -47,7 +47,7 @@ describe('DependenciesModal cancellation', () => {
       getDependenciesState: vi.fn(async () => initialState),
       installCli: vi.fn(async () => ({ state: installed, warnings: ['identity-unavailable', 'check-not-saved'] })),
       checkDependencies: vi.fn().mockRejectedValueOnce(new Error('SECRET_SENTINEL')).mockResolvedValueOnce(installed),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
     renderModal()
@@ -75,7 +75,7 @@ describe('DependenciesModal cancellation', () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),
       checkDependencies: vi.fn(async () => checked),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
     renderModal()
@@ -88,7 +88,7 @@ describe('DependenciesModal cancellation', () => {
   it('emphasizes required absence without coloring optional absence as a warning', async () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -114,7 +114,7 @@ describe('DependenciesModal cancellation', () => {
   it('distinguishes an initial load failure from an empty tools list', async () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => { throw new Error('state unavailable') }),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -135,7 +135,7 @@ describe('DependenciesModal cancellation', () => {
     }
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => unreadable),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -145,65 +145,65 @@ describe('DependenciesModal cancellation', () => {
     expect(screen.queryByText(/^version unreadable/)).toBeNull()
   })
 
-  it('cancels active acquisition and closes instead of trapping the user', async () => {
-    const cancelDependencyOperations = vi.fn(async () => undefined)
+  it('closes by every path without cancelling the running work', async () => {
+    const cancelDependencyOperation = vi.fn(async () => undefined)
     const installCli = vi.fn(() => new Promise<DependenciesState>(() => undefined))
     const onClose = vi.fn()
-    const api = {
+    window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),
       installCli,
-      cancelDependencyOperations,
+      cancelDependencyOperation,
       onDependencyProgress: vi.fn(() => () => undefined),
-    }
-    window.electronAPI = api as unknown as typeof window.electronAPI
+    } as unknown as typeof window.electronAPI
 
     renderModal(onClose)
-    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
-    fireEvent.click(installButtons[0])
+    fireEvent.click((await until(() => screen.getAllByRole('button', { name: 'Install' })))[0])
     await until(() => expect(installCli).toHaveBeenCalledTimes(1))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel and close' }))
+    const dialog = screen.getByRole('dialog', { name: 'Managed tools' })
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' }).at(-1)!)
+    fireEvent.keyDown(dialog, { key: 'Escape' })
 
-    expect(cancelDependencyOperations).toHaveBeenCalledTimes(1)
-    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalled()
+    expect(cancelDependencyOperation).not.toHaveBeenCalled()
   })
 
-  it('retains cancellation across close and reopen until the matching retry', async () => {
+  it('cancels only the row whose Cancel was pressed, and the check through its own Cancel', async () => {
     let rejectInstall: ((error: Error) => void) | undefined
     const installCli = vi.fn(() => new Promise<DependenciesState>((_resolve, reject) => {
       rejectInstall = reject
     }))
-    const cancelDependencyOperations = vi.fn(async () => {
-      rejectInstall?.(new Error('cancelled'))
+    let rejectCheck: ((error: Error) => void) | undefined
+    const checkDependencies = vi.fn(() => new Promise<DependenciesState>((_resolve, reject) => {
+      rejectCheck = reject
+    }))
+    const cancelDependencyOperation = vi.fn(async (dependency: string) => {
+      if (installCli.mock.calls.length > 0 && rejectInstall) {
+        rejectInstall(new Error('cancelled'))
+        rejectInstall = undefined
+      } else rejectCheck?.(new Error('cancelled'))
+      return dependency
     })
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),
       installCli,
-      cancelDependencyOperations,
+      checkDependencies,
+      cancelDependencyOperation,
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
-    function Harness(): React.JSX.Element {
-      const [open, setOpen] = useState(true)
-      return (
-        <DependenciesProvider>
-          <button type="button" onClick={() => setOpen(true)}>Reopen</button>
-          {open && <DependenciesModal onClose={() => setOpen(false)} />}
-        </DependenciesProvider>
-      )
-    }
+    renderModal()
+    const cliRow = (await until(() => screen.getByRole('heading', { name: 'Draw Things CLI' }))).closest('section') as HTMLElement
+    fireEvent.click(within(cliRow).getByRole('button', { name: 'Install' }))
+    fireEvent.click(await until(() => within(cliRow).getByRole('button', { name: 'Cancel' })))
+    await until(() => expect(within(cliRow).getByText('Cancelled')).toBeTruthy())
+    expect(cancelDependencyOperation).toHaveBeenLastCalledWith('cli')
+    expect(screen.queryByRole('alert')).toBeNull()
 
-    render(<Harness />)
-    const installButtons = await until(() => screen.getAllByRole('button', { name: 'Install' }))
-    fireEvent.click(installButtons[0])
-    await until(() => expect(installCli).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel and close' }))
-    await until(() => expect(cancelDependencyOperations).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
-
-    expect(await until(() => screen.getByRole('status'))).toBeTruthy()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0])
-    expect(screen.queryByText('Cancelled')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+    fireEvent.click(await until(() => screen.getByRole('button', { name: 'Cancel check' })))
+    await until(() => expect(screen.getByText('Check cancelled')).toBeTruthy())
+    expect(cancelDependencyOperation).toHaveBeenCalledTimes(2)
   })
 
   it('shows an explicit CLI check failure and re-reads local state', async () => {
@@ -214,7 +214,7 @@ describe('DependenciesModal cancellation', () => {
     const api = {
       getDependenciesState,
       checkDependencies,
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     }
     window.electronAPI = api as unknown as typeof window.electronAPI
@@ -239,7 +239,7 @@ describe('DependenciesModal cancellation', () => {
       checkDependencies: vi.fn(async (): Promise<DependenciesState> => {
         throw new Error('managed tool operation failed')
       }),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
       appLog,
     } as unknown as typeof window.electronAPI
@@ -271,7 +271,7 @@ describe('DependenciesModal cancellation', () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => installed),
       downloadRecommendations,
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -301,7 +301,7 @@ describe('DependenciesModal cancellation', () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),
       installCli,
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -335,7 +335,7 @@ describe('DependenciesModal cancellation', () => {
       checkDependencies: vi.fn(async (): Promise<DependenciesState> => {
         throw new Error('CLI service unavailable')
       }),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -388,7 +388,7 @@ describe('DependenciesModal cancellation', () => {
       downloadRecommendations: vi.fn(() => new Promise<DependenciesState>((resolve) => {
         finishRecommendations = resolve
       })),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -425,7 +425,7 @@ describe('DependenciesModal cancellation', () => {
     window.electronAPI = {
       getDependenciesState,
       installCli: vi.fn(async () => installed),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
 
@@ -459,7 +459,7 @@ describe('DependenciesModal checking', () => {
   function mockState(state: DependenciesState): void {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => state),
-      cancelDependencyOperations: vi.fn(async () => undefined),
+      cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
   }

@@ -65,15 +65,15 @@ export async function runDependencyOperation<T>(
   }
 }
 
-/** Cancel only operations owned by this exact owner. Shared operations (a check
- * reserves two slots) are deduplicated so their controller is aborted once. */
-export function cancelDependencyOperationsOwnedBy(
+/** Cancel the operation holding this dependency's slot, only when this exact
+ * owner started it. A check holds both slots, so either one cancels it. */
+export function cancelDependencyOperation(
   owner: DependencyOperationOwner,
+  dependency: MutableDependency,
   reason: Error
 ): void {
-  for (const operation of new Set(activeOperations.values())) {
-    if (operation.owner === owner) operation.controller.abort(reason)
-  }
+  const operation = activeOperations.get(dependency)
+  if (operation?.owner === owner) operation.controller.abort(reason)
 }
 
 /** Quit owns every operation, including the process-owned launch check. */

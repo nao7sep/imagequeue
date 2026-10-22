@@ -12,7 +12,7 @@ import {
 } from './dependencies/service'
 import { downloadLatestRecommendations } from './recommendations'
 import {
-  cancelDependencyOperationsOwnedBy,
+  cancelDependencyOperation,
   runDependencyOperation,
   type MutableDependency,
 } from './dependencies/operations'
@@ -63,10 +63,10 @@ export function registerDependenciesIpc(): void {
     return getDependenciesState()
   })
 
-  handle('dependencies:cancelOperations', (event) => {
-    cancelDependencyOperationsOwnedBy(
-      event.sender,
-      new Error('Dependency operation cancelled')
-    )
+  handle('dependencies:cancel', (event, dependency: unknown) => {
+    if (dependency !== 'cli' && dependency !== 'recommendations') {
+      throw new Error(`Cannot cancel unsupported dependency: ${String(dependency)}`)
+    }
+    cancelDependencyOperation(event.sender, dependency, new Error('Dependency operation cancelled'))
   })
 }

@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from 'react'
 import type {
@@ -21,6 +22,7 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { message, type Message } from '../../../shared/i18n/translate'
 
 export type DependencyOperation = DependencyId | 'check' | 'toggle'
+export type CancellableDependencyOperation = Exclude<DependencyOperation, 'toggle'>
 export type DependencyTerminalOutcome = 'cancelled'
 
 interface ControllerState {
@@ -161,11 +163,15 @@ interface DependenciesController {
   progress: DependencyProgress | null
   error: Message | null
   terminalOutcomes: Partial<Record<DependencyOperation, DependencyTerminalOutcome>>
+  // Whether a Managed tools view is open, so standing state outside it can show
+  // work in progress once that view closes without repeating it behind the view.
+  viewOpen: boolean
+  registerView: () => () => void
   check: () => Promise<void>
   installCli: () => Promise<void>
   installRecommendations: () => Promise<void>
   setCheckAtLaunch: (value: boolean) => Promise<void>
-  cancelOperations: () => Promise<void>
+  cancel: (operation: CancellableDependencyOperation) => Promise<void>
 }
 
 const DependenciesContext = createContext<DependenciesController | null>(null)
@@ -176,6 +182,12 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   const cancelled = useRef(new Set<DependencyOperation>())
   const operationRevision = useRef(0)
   const refreshSequence = useRef(0)
+  const [openViews, setOpenViews] = useState(0)
+
+  const registerView = useCallback((): (() => void) => {
+    setOpenViews((count) => count + 1)
+    return () => setOpenViews((count) => count - 1)
+  }, [])
 
   const announceChange = useCallback((): void => {
     window.dispatchEvent(new CustomEvent('dependencies-changed'))
@@ -279,16 +291,16 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     [run],
   )
 
-  const cancelOperations = useCallback(async (): Promise<void> => {
-    const cancellable = [...active.current].filter(
-      (operation) => operation === 'cli' || operation === 'recommendations' || operation === 'check',
-    )
-    if (cancellable.length === 0) return
-    cancelled.current = new Set(cancellable)
+  // Closing a view never cancels: the operation belongs to this provider, and
+  // only its own Cancel stops it.
+  const cancel = useCallback(async (operation: CancellableDependencyOperation): Promise<void> => {
+    if (!active.current.has(operation)) return
+    cancelled.current.add(operation)
     try {
-      await window.electronAPI.cancelDependencyOperations()
+      // A check holds both tools' slots, so the CLI's slot names it.
+      await window.electronAPI.cancelDependencyOperation(operation === 'check' ? 'cli' : operation)
     } catch (error) {
-      cancelled.current.clear()
+      cancelled.current.delete(operation)
       dispatch({ type: 'cancel-failure', error: presentFailure('dependencies-cancel', error) })
     }
   }, [])
@@ -313,22 +325,26 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     progress: controller.progress,
     error,
     terminalOutcomes: controller.terminalOutcomes,
+    viewOpen: openViews > 0,
+    registerView,
     check,
     installCli,
     installRecommendations,
     setCheckAtLaunch,
-    cancelOperations,
+    cancel,
   }), [
     controller.snapshot,
     controller.busy,
     controller.progress,
     controller.terminalOutcomes,
     error,
+    openViews,
+    registerView,
     check,
     installCli,
     installRecommendations,
     setCheckAtLaunch,
-    cancelOperations,
+    cancel,
   ])
 
   return <DependenciesContext.Provider value={value}>{children}</DependenciesContext.Provider>

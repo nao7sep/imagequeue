@@ -317,8 +317,8 @@ const api = {
   setCheckUpdatesAtLaunch: (value: boolean): Promise<DependenciesState> =>
     ipcRenderer.invoke('dependencies:setCheckAtLaunch', value),
 
-  cancelDependencyOperations: (): Promise<void> =>
-    ipcRenderer.invoke('dependencies:cancelOperations'),
+  cancelDependencyOperation: (dependency: 'cli' | 'recommendations'): Promise<void> =>
+    ipcRenderer.invoke('dependencies:cancel', dependency),
 
   onDependencyProgress: (callback: (progress: DependencyProgress) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: DependencyProgress): void => callback(progress)

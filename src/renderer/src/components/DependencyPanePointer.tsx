@@ -1,5 +1,5 @@
 import type { DependenciesState, DependencyInfo } from '../../../shared/types'
-import { useDependencies } from '../context/DependenciesContext'
+import { useDependencies, type DependencyOperation } from '../context/DependenciesContext'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
@@ -7,6 +7,7 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 // Its only job is to lead the user to the modal — it carries no actions of its
 // own. It decides its own visibility from the dependency state, following the
 // convention's display models:
+//   - work running, Managed tools closed → INFO, until the work settles
 //   - everything fine                  → silent (renders nothing)
 //   - CLI missing, or update available → WARN, shown until resolved
 //   - configs.json missing / unchecked → INFO, normal muted ink, also permanent
@@ -61,11 +62,21 @@ function summarize(state: DependenciesState): MessageKey {
   return 'dependencyPointer.unchecked'
 }
 
+// Closing Managed tools leaves its work running, so this is where that work
+// stays visible. While the modal is open the modal shows it instead, and a
+// quick refresh behind it never shifts the column.
+function workInProgress(busy: ReadonlySet<DependencyOperation>): MessageKey | null {
+  if (busy.has('check')) return 'dependencyPointer.checking'
+  if (busy.has('cli') || busy.has('recommendations')) return 'dependencyPointer.working'
+  return null
+}
+
 export function DependencyPanePointer(): React.JSX.Element | null {
-  const { state } = useDependencies()
+  const { state, busy, viewOpen } = useDependencies()
   const { t } = useI18n()
 
-  const severity = state?.platformSupported ? severityFor(state) : null
+  const working = state?.platformSupported && !viewOpen ? workInProgress(busy) : null
+  const severity = working ? 'info' : state?.platformSupported ? severityFor(state) : null
   if (!state || !severity) return null
 
   return (
@@ -74,7 +85,7 @@ export function DependencyPanePointer(): React.JSX.Element | null {
       className={`dep-pane-pointer dep-pane-pointer-${severity}`}
       onClick={() => window.dispatchEvent(new CustomEvent('open-dependencies-modal'))}
     >
-      {t('dependencyPointer.pointer', { summary: t(summarize(state)) })}
+      {t('dependencyPointer.pointer', { summary: t(working ?? summarize(state)) })}
     </button>
   )
 }

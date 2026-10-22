@@ -179,7 +179,8 @@ export interface ElectronAPI {
   installCli: () => Promise<CliInstallResult>
   downloadRecommendations: () => Promise<DependenciesState>
   setCheckUpdatesAtLaunch: (value: boolean) => Promise<DependenciesState>
-  cancelDependencyOperations: () => Promise<void>
+  // A check holds both slots, so cancelling either one cancels it.
+  cancelDependencyOperation: (dependency: 'cli' | 'recommendations') => Promise<void>
   onDependencyProgress: (callback: (progress: DependencyProgress) => void) => (() => void)
 
   resolveRecommendation: (modelFile: string) => Promise<RecommendedParams | null>
