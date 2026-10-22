@@ -1,7 +1,7 @@
 // Draw Things CLI integration — detection, model management, generation helpers.
 // macOS only. On other platforms, all functions return appropriate "unsupported" values.
 
-import { execFile, spawn } from 'child_process'
+import { execFile, spawn, type ExecException } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { loadConfig, getDataDir } from './config'
@@ -40,6 +40,14 @@ export async function modelsDirArgs(): Promise<string[]> {
   return ['--models-dir', dir]
 }
 
+// The app-owned binary is absent until the user installs it, and every poll,
+// model list and settings read asks anyway, so its absence is an answer, not a
+// failure; anything else (no permission, a timeout, a binary that will not run)
+// is still logged.
+function isCliAbsent(error: ExecException): boolean {
+  return error.code === 'ENOENT'
+}
+
 /** Check if Draw Things CLI is available. */
 export async function checkCli(): Promise<CliStatus> {
   if (process.platform !== 'darwin') {
@@ -51,7 +59,7 @@ export async function checkCli(): Promise<CliStatus> {
   return new Promise((resolve) => {
     execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout, stderr) => {
       if (error) {
-        log('warn', 'draw-things-cli check failed', { cliPath, error: serializeError(error), stderr })
+        if (!isCliAbsent(error)) log('warn', 'draw-things-cli check failed', { cliPath, error: serializeError(error), stderr })
         resolve({ installed: false, version: null, path: null, platform: 'darwin' })
       } else {
         const version = stdout.trim() || null
@@ -122,7 +130,7 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   return new Promise((resolve) => {
     execFile(cliPath, args, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error) {
-        log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, error: serializeError(error), stderr })
+        if (!isCliAbsent(error)) log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, error: serializeError(error), stderr })
         resolve([])
       } else {
         resolve(parseModelList(stdout))
@@ -139,7 +147,7 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   return new Promise((resolve) => {
     execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
       if (error) {
-        log('error', 'draw-things-cli models list (all) failed', { cliPath, args, error: serializeError(error), stderr })
+        if (!isCliAbsent(error)) log('error', 'draw-things-cli models list (all) failed', { cliPath, args, error: serializeError(error), stderr })
         resolve([])
       } else {
         resolve(parseModelList(stdout))

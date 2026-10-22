@@ -1,11 +1,18 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { checkCli, getDefaultModelsDir, resolveModelsDir } from '../../src/main/local-cli'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { checkCli, getDefaultModelsDir, listAvailableModels, listDownloadedModels, resolveModelsDir } from '../../src/main/local-cli'
+import { getCliBinaryPath } from '../../src/main/dependencies/paths'
+import { log } from '../../src/main/logger'
 import { expandUserPath } from '../../src/main/utils/user-path'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 import { updateConfig } from '../../src/main/config'
+
+vi.mock('../../src/main/logger', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../src/main/logger')>(),
+  log: vi.fn(),
+}))
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'
 
@@ -117,5 +124,27 @@ describe('checkCli platform gate', () => {
   it('reports a missing CLI on macOS as not installed', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     await expect(checkCli()).resolves.toEqual({ installed: false, version: null, path: null, platform: 'darwin' })
+  })
+
+  it('logs nothing for a CLI that is not installed', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    vi.mocked(log).mockClear()
+    await checkCli()
+    await expect(listDownloadedModels()).resolves.toEqual([])
+    await expect(listAvailableModels()).resolves.toEqual([])
+    expect(vi.mocked(log).mock.calls.filter(([, event]) => event.startsWith('draw-things-cli'))).toEqual([])
+  })
+
+  it.skipIf(process.platform === 'win32')('still logs a CLI that is present but will not run', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    fs.mkdirSync(path.dirname(getCliBinaryPath()), { recursive: true })
+    fs.writeFileSync(getCliBinaryPath(), 'not a program', { mode: 0o600 })
+    vi.mocked(log).mockClear()
+    await expect(checkCli()).resolves.toMatchObject({ installed: false })
+    await listDownloadedModels()
+    expect(vi.mocked(log).mock.calls.map(([level, event]) => [level, event])).toEqual([
+      ['warn', 'draw-things-cli check failed'],
+      ['error', 'draw-things-cli models list (downloaded) failed'],
+    ])
   })
 })
