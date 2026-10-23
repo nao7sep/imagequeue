@@ -1,11 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
+import type { WebContents } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fixtures = vi.hoisted(() => ({
   pipes: [] as Array<EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn> }>,
   imports: [] as Array<{ kill: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn>; data: (text: string) => void; exit: (code?: number) => void }>,
-  records: [] as Array<{ jobId: string; finish: ReturnType<typeof vi.fn> }>,
+  records: [] as Array<{ jobId: string; append: ReturnType<typeof vi.fn>; finish: ReturnType<typeof vi.fn> }>,
   closeOnKill: false,
   acceptOutput: true,
   resumes: [] as Array<() => void>,
@@ -91,6 +92,31 @@ describe('CLI job admission and settlement', () => {
     expect(ids.map(status)).toEqual(['exited', 'running', 'running', 'running', 'queued'])
     closePipe(1)
     expect(status(ids[4]!)).toBe('running')
+  })
+
+  it.each(['append', 'replace', 'terminal'] as const)('isolates a failed %s notification from capture, promotion and settlement', async (phase) => {
+    const first = start('a')
+    start('b'); start('c')
+    const queued = start('d')
+    const pipe = fixtures.pipes[0]!
+    if (phase === 'replace') pipe.stdout.write('one\r')
+    const broken = Object.assign(new EventEmitter(), { isDestroyed: () => false, send: vi.fn(() => { throw new Error('frame unavailable') }) })
+    const healthy = Object.assign(new EventEmitter(), { isDestroyed: () => false, send: vi.fn() })
+    scheduler.subscribeCliJob(first, broken as unknown as WebContents)
+    scheduler.subscribeCliJob(first, healthy as unknown as WebContents)
+    if (phase !== 'terminal') {
+      expect(() => pipe.stdout.write(phase === 'replace' ? 'two\r' : 'two\n')).not.toThrow()
+      expect(fixtures.records[0]!.append).toHaveBeenCalled()
+      expect(healthy.send).toHaveBeenCalledWith('cli-job:chunk', expect.objectContaining({ chunk: expect.objectContaining({ text: 'two' }) }))
+    }
+    expect(() => closePipe(0)).not.toThrow()
+    expect(broken.send).toHaveBeenCalledOnce()
+    expect(broken.listenerCount('destroyed')).toBe(0)
+    expect(healthy.send).toHaveBeenCalledWith('cli-job:status', expect.objectContaining({ status: 'exited' }))
+    expect(fixtures.records[0]!.finish).toHaveBeenCalledOnce()
+    expect(status(queued)).toBe('running')
+    fixtures.closeOnKill = true
+    await expect(scheduler.killAllCliJobsAndWait()).resolves.toMatchObject({ settled: true })
   })
 
   it('coalesces exact active, queued and stopping work, then admits a fresh job after close', () => {

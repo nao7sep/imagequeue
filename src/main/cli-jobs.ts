@@ -420,17 +420,7 @@ function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isC
       last.text = text
       last.tsMs = Date.now()
       const event: CliChunkEvent = { jobId: state.jobId, chunk: { ...last }, replace: true }
-      for (const wc of state.subscribers) {
-        if (!wc.isDestroyed()) wc.send('cli-job:chunk', event)
-      }
-      return
-    }
-  }
-
-  if (!isCR && state[lastCRKey] && state.buffer.length > 0) {
-    const last = state.buffer[state.buffer.length - 1]
-    if (last.kind === kind && last.text === text) {
-      state[lastCRKey] = false
+      notifySubscribers(state, 'cli-job:chunk', event)
       return
     }
   }
@@ -450,9 +440,7 @@ function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isC
     state.buffer.splice(0, state.buffer.length - CLI_JOB_BUFFER_MAX_LINES)
   }
   const event: CliChunkEvent = { jobId: state.jobId, chunk }
-  for (const wc of state.subscribers) {
-    if (!wc.isDestroyed()) wc.send('cli-job:chunk', event)
-  }
+  notifySubscribers(state, 'cli-job:chunk', event)
 }
 
 function emitStatus(state: JobState): void {
@@ -462,8 +450,19 @@ function emitStatus(state: JobState): void {
     exitCode: state.exitCode,
     stalled: state.stalled,
   }
+  notifySubscribers(state, 'cli-job:status', event)
+}
+
+function notifySubscribers(state: JobState, channel: string, event: CliChunkEvent | CliStatusEvent): void {
   for (const wc of state.subscribers) {
-    if (!wc.isDestroyed()) wc.send('cli-job:status', event)
+    if (wc.isDestroyed()) { removeSubscriber(state, wc); continue }
+    try {
+      wc.send(channel, event)
+    } catch (error) {
+      // A lost renderer must not interrupt output capture or child settlement.
+      removeSubscriber(state, wc)
+      log('warn', 'CLI subscriber unavailable', { jobId: state.jobId, channel, error: serializeError(error) })
+    }
   }
 }
 
