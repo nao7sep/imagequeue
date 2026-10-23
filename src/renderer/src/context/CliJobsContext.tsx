@@ -10,7 +10,6 @@ interface CliJobsContextValue {
   jobs: Map<string, JobMeta>
   addJob: (jobId: string, kind: CliJobKind, target: string) => void
   removeJob: (jobId: string) => void
-  replaceJob: (oldId: string, newId: string, kind: CliJobKind, target: string) => void
 }
 
 const CliJobsContext = createContext<CliJobsContextValue | null>(null)
@@ -30,17 +29,8 @@ export function CliJobsProvider({ children }: { children: ReactNode }): React.JS
     })
   }
 
-  const replaceJob = (oldId: string, newId: string, kind: CliJobKind, target: string): void => {
-    setJobs((prev) => {
-      const next = new Map(prev)
-      next.delete(oldId)
-      next.set(newId, { kind, target })
-      return next
-    })
-  }
-
   return (
-    <CliJobsContext.Provider value={{ jobs, addJob, removeJob, replaceJob }}>
+    <CliJobsContext.Provider value={{ jobs, addJob, removeJob }}>
       {children}
     </CliJobsContext.Provider>
   )
