@@ -6,7 +6,7 @@
 
 import { loadConfig } from '../config'
 import { log, serializeError } from '../logger'
-import { fetchLatestRecommendationsModified, getRecommendationsStatus } from '../recommendations'
+import { fetchLatestRecommendationsModified, getRecommendationsPath, getRecommendationsStatus, recommendationsExist, type InstalledRecommendations } from '../recommendations'
 import { isCliInstalledAsync, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
 import { compareCliVersions } from './cli-version'
@@ -49,9 +49,12 @@ async function cliInfo(): Promise<DependencyInfo> {
   }
 }
 
-async function recommendationsInfo(): Promise<DependencyInfo> {
+async function recommendationsInfo(observed?: InstalledRecommendations): Promise<DependencyInfo> {
   const cache = await readDependenciesCache()
-  const status = await getRecommendationsStatus()
+  // A directory edit during acquisition must not label the new destination
+  // with an installation that completed in the previous one.
+  const status = observed?.filePath === getRecommendationsPath()
+    ? observed.status : await getRecommendationsStatus()
   const present = status.exists
   // configs.json has no version; its identity is when the server last changed
   // it, recorded with the hash of its bytes (see recommendations-times).
@@ -69,10 +72,10 @@ async function recommendationsInfo(): Promise<DependencyInfo> {
   }
 }
 
-export async function getDependenciesState(): Promise<DependenciesState> {
+export async function getDependenciesState(recommendations?: InstalledRecommendations): Promise<DependenciesState> {
   return {
     cli: await cliInfo(),
-    recommendations: await recommendationsInfo(),
+    recommendations: await recommendationsInfo(recommendations),
     checkUpdatesAtLaunch: checkUpdatesAtLaunch(),
     platformSupported: process.platform === 'darwin',
   }
@@ -163,7 +166,7 @@ export async function checkDependenciesAtLaunch(): Promise<void> {
   }
   const checks = [checkAtLaunch('cli', 'Draw Things CLI', (signal) => checkCliForUpdate(false, signal))]
   // An absent optional file reads "Not installed" whatever the server holds.
-  if ((await getRecommendationsStatus()).exists) {
+  if (await recommendationsExist()) {
     checks.push(checkAtLaunch('recommendations', 'Recommended parameters', checkRecommendationsForUpdate))
   }
   await Promise.all(checks)

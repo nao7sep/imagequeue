@@ -33,8 +33,9 @@ describe('recorded server times', () => {
     const first = place(path.join(home, 'models-a'), bytes)
     const second = place(path.join(home, 'models-b'), bytes)
     await recordServerTime(first, bytes, '2026-09-11T20:46:05.000Z')
-    expect(await recordedServerTime(first)).toBe('2026-09-11T20:46:05.000Z')
-    expect(await recordedServerTime(second)).toBeNull()
+    expect(await recordedServerTime(first, bytes)).toBe('2026-09-11T20:46:05.000Z')
+    expect(await recordedServerTime(second, bytes)).toBeNull()
+    expect(await recordedServerTime(first, Buffer.from('different bytes'))).toBeNull()
   })
 
   it('keeps each path\'s record when another path is recorded or dropped', async () => {
@@ -43,8 +44,8 @@ describe('recorded server times', () => {
     await recordServerTime(first, bytes, '2026-09-11T20:46:05.000Z')
     await recordServerTime(second, bytes, '2026-08-22T20:13:13.000Z')
     await recordServerTime(second, bytes, null)
-    expect(await recordedServerTime(first)).toBe('2026-09-11T20:46:05.000Z')
-    expect(await recordedServerTime(second)).toBeNull()
+    expect(await recordedServerTime(first, bytes)).toBe('2026-09-11T20:46:05.000Z')
+    expect(await recordedServerTime(second, bytes)).toBeNull()
   })
 
   it('writes no store when there is nothing to record', async () => {

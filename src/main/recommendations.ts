@@ -36,6 +36,11 @@ import {
 const RECOMMENDATIONS_URL = 'https://models.drawthings.ai/configs.json'
 const RECOMMENDATIONS_FILE = 'configs.json'
 
+export interface InstalledRecommendations {
+  filePath: string
+  status: RecommendationStatus
+}
+
 // configs.json lives in the effective models dir, alongside Draw Things' own
 // custom.json — its natural home, and shared with the GUI app's models when the
 // user points models_dir there.
@@ -43,27 +48,28 @@ export function getRecommendationsPath(): string {
   return path.join(resolveModelsDir(), RECOMMENDATIONS_FILE)
 }
 
-export async function getRecommendationsStatus(): Promise<RecommendationStatus> {
-  const filePath = getRecommendationsPath()
-  if (!await fs.promises.stat(filePath).then(() => true, (error: NodeJS.ErrnoException) => {
+export async function recommendationsExist(): Promise<boolean> {
+  return fs.promises.stat(getRecommendationsPath()).then(() => true, (error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') return false
     throw error
-  })) {
-    return { exists: false, valid: false, entryCount: 0, updatedAt: null }
-  }
+  })
+}
 
+export async function getRecommendationsStatus(): Promise<RecommendationStatus> {
+  const filePath = getRecommendationsPath()
   const parsed = await parseRecommendationFile(filePath)
   return {
-    exists: true,
-    valid: parsed.error === null,
+    exists: parsed.exists,
+    valid: parsed.exists && parsed.error === null,
     entryCount: parsed.specs.length,
-    updatedAt: await recordedServerTime(filePath)
+    updatedAt: parsed.bytes ? await recordedServerTime(filePath, parsed.bytes) : null
   }
 }
 
 /** Explicitly install or refresh configs.json. The whole transaction is bounded,
  * cancellable through durable staging, and never runs from launch or Check. */
-export function downloadLatestRecommendations(signal?: AbortSignal): Promise<RecommendationStatus> {
+export function downloadLatestRecommendations(signal?: AbortSignal): Promise<InstalledRecommendations> {
+  const filePath = getRecommendationsPath()
   return withWholeOperationTimeout(
     signal,
     3 * 60 * 1000,
@@ -74,11 +80,11 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
         RECOMMENDATIONS_LIMITS,
         boundedSignal
       )
-      validateRecommendationBytes(data)
+      const specs = parseRecommendationBytes(data)
+      if (specs.length === 0) throw new Error('Recommendation file is not valid configs.json')
       boundedSignal.throwIfAborted()
 
-      await fs.promises.mkdir(resolveModelsDir(), { recursive: true })
-      const filePath = getRecommendationsPath()
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
       // not recorded: configs.json is a re-fetchable managed dependency downloaded verbatim from
       // models.drawthings.ai, living in the effective models dir alongside Draw Things' own model data
       // (not under ~/.imagequeue/) — re-acquirable content the app reads, not durable user-authored text
@@ -87,8 +93,9 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Rec
       // The server's time is recorded for these bytes, so a later check can tell
       // whether the server has changed the file since. Without a valid header
       // the file's server time is unknown, and no record describes it.
-      await recordServerTime(filePath, data, lastModifiedOf(headers))
-      return getRecommendationsStatus()
+      const updatedAt = lastModifiedOf(headers)
+      await recordServerTime(filePath, data, updatedAt)
+      return { filePath, status: { exists: true, valid: true, entryCount: specs.length, updatedAt } }
     }
   )
 }
@@ -125,18 +132,16 @@ export async function resolveRecommendedParamsForModels(models: string[]): Promi
   }))
 }
 
-function validateRecommendationBytes(data: Buffer): void {
-  if (parseRecommendationBytes(data).length === 0) {
-    throw new Error('Recommendation file is not valid configs.json')
-  }
-}
-
-async function parseRecommendationFile(filePath: string): Promise<{ specs: RecommendationSpec[]; error: Error | null }> {
+async function parseRecommendationFile(filePath: string): Promise<{
+  exists: boolean; bytes: Buffer | null; specs: RecommendationSpec[]; error: Error | null
+}> {
+  let bytes: Buffer | null = null
   try {
-    const specs = parseRecommendationBytes(await fs.promises.readFile(filePath))
-    return { specs, error: specs.length === 0 ? new Error('No recommendation entries found') : null }
+    bytes = await fs.promises.readFile(filePath)
+    const specs = parseRecommendationBytes(bytes)
+    return { exists: true, bytes, specs, error: specs.length === 0 ? new Error('No recommendation entries found') : null }
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { specs: [], error: null }
-    return { specs: [], error: err instanceof Error ? err : new Error('Unable to read recommendations', { cause: err }) }
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { exists: false, bytes: null, specs: [], error: null }
+    return { exists: true, bytes, specs: [], error: err instanceof Error ? err : new Error('Unable to read recommendations', { cause: err }) }
   }
 }

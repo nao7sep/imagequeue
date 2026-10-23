@@ -12,10 +12,13 @@ vi.mock('../../src/main/dependencies/download', async (importOriginal) => ({
 import {
   downloadLatestRecommendations,
   getRecommendationsStatus,
+  recommendationsExist,
   lastModifiedOf,
   resolveRecommendedParams,
 } from '../../src/main/recommendations'
 import { getRecommendationsTimesPath } from '../../src/main/dependencies/paths'
+import { recordServerTime } from '../../src/main/dependencies/recommendations-times'
+import * as localCli from '../../src/main/local-cli'
 import { FORMAT_VERSIONS } from '../../src/main/store-format'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
@@ -40,6 +43,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await closeBackupStore()
   if (prevHome === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
   else process.env.IMAGEQUEUE_DATA_DIR = prevHome
@@ -47,6 +51,38 @@ afterEach(async () => {
 })
 
 describe('getRecommendationsStatus', () => {
+  it('parses and dates one snapshot even when the source is replaced after its read', async () => {
+    const first = Buffer.from(JSON.stringify([{ name: 'a', configuration: { model: 'm' } }]))
+    const second = Buffer.from(JSON.stringify([
+      { name: 'b', configuration: { model: 'm' } },
+      { name: 'c', configuration: { model: 'n' } },
+    ]))
+    fs.mkdirSync(modelsDir, { recursive: true })
+    fs.writeFileSync(configsPath(), first)
+    await recordServerTime(configsPath(), first, '2026-09-11T20:46:05.000Z')
+    const readFile = fs.promises.readFile
+    const read = vi.spyOn(fs.promises, 'readFile').mockImplementation(async (...args) => {
+      const bytes = await readFile(...args)
+      if (args[0] === configsPath()) fs.writeFileSync(configsPath(), second)
+      return bytes
+    })
+    expect(await getRecommendationsStatus()).toEqual({
+      exists: true, valid: true, entryCount: 1, updatedAt: '2026-09-11T20:46:05.000Z',
+    })
+    expect(read.mock.calls.filter(([file]) => file === configsPath())).toHaveLength(1)
+    expect(await getRecommendationsStatus()).toEqual({ exists: true, valid: true, entryCount: 2, updatedAt: null })
+  })
+
+  it('checks existence without reading or validating file content', async () => {
+    fs.mkdirSync(modelsDir, { recursive: true })
+    fs.writeFileSync(configsPath(), '{ broken')
+    const read = vi.spyOn(fs.promises, 'readFile')
+    expect(await recommendationsExist()).toBe(true)
+    fs.unlinkSync(configsPath())
+    expect(await recommendationsExist()).toBe(false)
+    expect(read.mock.calls.filter(([file]) => file === configsPath())).toHaveLength(0)
+  })
+
   it('reports absent when no file exists', async () => {
     expect(await getRecommendationsStatus()).toEqual({
       exists: false,
@@ -114,9 +150,27 @@ describe('downloadLatestRecommendations', () => {
 
   const served = { body, headers: { 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' } }
 
+  it('publishes to the captured destination when settings change during acquisition', async () => {
+    const nextDirectory = path.join(home, 'next-models')
+    const resolve = vi.spyOn(localCli, 'resolveModelsDir').mockReturnValue(modelsDir)
+    network.fetchBytesWithHeaders.mockImplementationOnce(async () => {
+      resolve.mockReturnValue(nextDirectory)
+      return served
+    })
+    const result = await downloadLatestRecommendations()
+    expect(result.filePath).toBe(configsPath())
+    expect(fs.readFileSync(configsPath())).toEqual(body)
+    expect(fs.existsSync(nextDirectory)).toBe(false)
+  })
+
   it('records the server time it was served with under the storage root, writing nothing else beside the file', async () => {
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
-    const status = await downloadLatestRecommendations()
+    const read = vi.spyOn(fs.promises, 'readFile')
+    const { status } = await downloadLatestRecommendations()
+    expect(status).toMatchObject({ exists: true, valid: true, entryCount: 1 })
+    // The atomic writer checks existing bytes once before publication; status
+    // must not reopen the installed file to parse or hash it again afterward.
+    expect(read.mock.calls.filter(([file]) => file === configsPath())).toHaveLength(1)
     expect(status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
     expect(path.dirname(getRecommendationsTimesPath())).toBe(home)
     const times = JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8'))
@@ -129,7 +183,7 @@ describe('downloadLatestRecommendations', () => {
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
     await downloadLatestRecommendations()
     network.fetchBytesWithHeaders.mockResolvedValueOnce({ body, headers: { 'last-modified': 'yesterday-ish' } })
-    const status = await downloadLatestRecommendations()
+    const { status } = await downloadLatestRecommendations()
     expect(status.updatedAt).toBeNull()
     expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).files).toEqual({})
   })
@@ -146,7 +200,7 @@ describe('downloadLatestRecommendations', () => {
     fs.writeFileSync(getRecommendationsTimesPath(), '{ not json')
     expect(await (await getRecommendationsStatus()).updatedAt).toBeNull()
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
-    expect((await downloadLatestRecommendations()).updatedAt).toBe('2026-09-11T20:46:05.000Z')
+    expect((await downloadLatestRecommendations()).status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
   })
 
   // A cache: the version is written, never checked, so a newer build's record
@@ -155,7 +209,7 @@ describe('downloadLatestRecommendations', () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
     fs.writeFileSync(getRecommendationsTimesPath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsTimes + 1, files: {} }))
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
-    expect((await downloadLatestRecommendations()).updatedAt).toBe('2026-09-11T20:46:05.000Z')
+    expect((await downloadLatestRecommendations()).status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
     expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).formatVersion).toBe(FORMAT_VERSIONS.recommendationsTimes)
   })
 })

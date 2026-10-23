@@ -172,6 +172,17 @@ describe('a present CLI whose version cannot be read', () => {
 describe('recommendations lifecycle', () => {
   const server = '2026-09-11T20:46:05.000Z'
 
+  it('reuses an installed snapshot only for its own destination', async () => {
+    await writeFile(server)
+    const filePath = path.join(home, 'models', 'configs.json')
+    const read = vi.spyOn(fs.promises, 'readFile')
+    const installed = { filePath, status: { exists: true, valid: true, entryCount: 7, updatedAt: server } }
+    expect((await getDependenciesState(installed)).recommendations.entryCount).toBe(7)
+    expect(read.mock.calls.filter(([file]) => file === filePath)).toHaveLength(0)
+    expect((await getDependenciesState({ ...installed, filePath: path.join(home, 'old-models', 'configs.json') })).recommendations.entryCount).toBe(1)
+    expect(read.mock.calls.filter(([file]) => file === filePath)).toHaveLength(1)
+  })
+
   // A file as Install/Refresh leaves it: the bytes, and their server time recorded for them.
   async function writeFile(modifiedUtc: string | null): Promise<void> {
     const models = path.join(home, 'models')

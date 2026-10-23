@@ -68,15 +68,11 @@ function keyOf(filePath: string): string {
   return path.resolve(filePath)
 }
 
-/** The server time recorded for the file's current bytes, or null when none was. */
-export async function recordedServerTime(filePath: string): Promise<string | null> {
+/** The server time recorded for this observed byte snapshot, or null when none was. */
+export async function recordedServerTime(filePath: string, bytes: Buffer): Promise<string | null> {
   const entry = (await readTimes())[keyOf(filePath)]
   if (!entry) return null
-  try {
-    return entry.sha256 === sha256Of(await fs.promises.readFile(filePath)) ? entry.lastModifiedUtc : null
-  } catch {
-    return null
-  }
+  return entry.sha256 === sha256Of(bytes) ? entry.lastModifiedUtc : null
 }
 
 /** Record the server time for the bytes just published at filePath, or drop the

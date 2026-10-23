@@ -35,7 +35,9 @@ vi.mock('../../../src/main/dependencies/cli-release', () => ({
 vi.mock('../../../src/main/recommendations', () => ({
   downloadLatestRecommendations: mocks.downloadLatestRecommendations,
   fetchLatestRecommendationsModified: mocks.fetchLatestRecommendationsModified,
-  getRecommendationsStatus: () => mocks.heldStatus ?? ({
+  recommendationsExist: async () => mocks.heldStatus ? (await mocks.heldStatus).exists : mocks.recommendationsPresent,
+  getRecommendationsPath: () => path.join(mocks.home, 'models', 'configs.json'),
+  getRecommendationsStatus: () => ({
     exists: mocks.recommendationsPresent,
     valid: mocks.recommendationsPresent,
     entryCount: mocks.recommendationsPresent ? 1 : 0,
@@ -170,7 +172,7 @@ describe('launch and manual dependency operation ownership', () => {
   })
 })
 
-it('does not acquire new launch work after quit while recommendations status is held', async () => {
+it('does not acquire new launch work after quit while recommendations existence is held', async () => {
   const { setQuitting } = await import('../../../src/main/quit-state')
   const { cancelAllDependencyOperations } = await import('../../../src/main/dependencies/operations')
   let release!: (value: { exists: boolean }) => void

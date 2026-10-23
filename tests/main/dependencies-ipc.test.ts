@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   checkAllDependencies: vi.fn(),
   installOrUpdateCli: vi.fn(),
   downloadLatestRecommendations: vi.fn(),
+  getDependenciesState: vi.fn(),
 }))
 
 vi.mock('../../src/main/ipc-boundary', () => ({
@@ -47,7 +48,7 @@ const state: DependenciesState = {
 }
 
 vi.mock('../../src/main/dependencies/service', () => ({
-  getDependenciesState: () => state,
+  getDependenciesState: mocks.getDependenciesState,
   checkAllDependencies: mocks.checkAllDependencies,
   installOrUpdateCli: mocks.installOrUpdateCli,
 }))
@@ -108,12 +109,20 @@ function invoke(channel: string, sender: FakeSender, ...args: unknown[]): Promis
 }
 
 beforeEach(() => {
+  mocks.getDependenciesState.mockReset().mockReturnValue(state)
   mocks.checkAllDependencies.mockReset()
   mocks.installOrUpdateCli.mockReset()
   mocks.downloadLatestRecommendations.mockReset()
 })
 
 describe('dependency IPC operation ownership', () => {
+  it('uses the acquisition status without asking for a second file observation', async () => {
+    const status = { filePath: '/fixture/configs.json', status: { exists: true, valid: true, entryCount: 7, updatedAt: '2026-09-11T20:46:05.000Z' } }
+    mocks.downloadLatestRecommendations.mockResolvedValue(status)
+    await invoke('dependencies:downloadRecommendations', new FakeSender(1))
+    expect(mocks.getDependenciesState).toHaveBeenCalledExactlyOnceWith(status)
+  })
+
   it('aborts on owner destruction but retains ownership until settlement', async () => {
     const owner = new FakeSender(1)
     const replacement = new FakeSender(2)
