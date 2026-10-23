@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { OPENAI_OUTPUT_FORMAT_LABELS, type FluxModelDef, type FluxOutputFormat } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
@@ -65,20 +66,21 @@ function outputFormat(saved: Record<string, unknown>, modelDef: FluxModelDef): F
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParams, FluxModelDef>): React.JSX.Element {
   const { t } = useI18n()
+  const fieldId = useId()
   if (modelDef.aspectRatios) {
     return (
       <>
         <div className="setting-row">
-          <label>{t('backend.aspect')}</label>
-          <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
+          <label htmlFor={`${fieldId}-aspect`}>{t('backend.aspect')}</label>
+          <select id={`${fieldId}-aspect`} value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
             {modelDef.aspectRatios.map((ar) => (
               <option key={ar.value} value={ar.value}>{optionLabel(t, ar.value)}</option>
             ))}
           </select>
         </div>
         <div className="setting-row">
-          <label>{t('backend.size')}</label>
-          <select value={params.resolution} onChange={(e) => onChange({ ...params, resolution: e.target.value })}>
+          <label htmlFor={`${fieldId}-size`}>{t('backend.size')}</label>
+          <select id={`${fieldId}-size`} value={params.resolution} onChange={(e) => onChange({ ...params, resolution: e.target.value })}>
             {(modelDef.resolutions ?? []).map((r) => (
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
@@ -90,16 +92,16 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
   return (
     <>
       <div className="setting-row">
-        <label>{t('backend.size')}</label>
-        <select value={params.sizeIdx} onChange={(e) => onChange({ ...params, sizeIdx: Number.parseInt(e.target.value, 10) })}>
+        <label htmlFor={`${fieldId}-size`}>{t('backend.size')}</label>
+        <select id={`${fieldId}-size`} value={params.sizeIdx} onChange={(e) => onChange({ ...params, sizeIdx: Number.parseInt(e.target.value, 10) })}>
           {(modelDef.sizes ?? []).map((s, i) => (
             <option key={i} value={i}>{sizePresetLabel(t, s)}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>{t('backend.format')}</label>
-        <select value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as FluxOutputFormat })}>
+        <label htmlFor={`${fieldId}-format`}>{t('backend.format')}</label>
+        <select id={`${fieldId}-format`} value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as FluxOutputFormat })}>
           {(modelDef.outputFormats ?? []).map((fmt) => (
             <option key={fmt} value={fmt}>{OPENAI_OUTPUT_FORMAT_LABELS[fmt]}</option>
           ))}
@@ -107,8 +109,9 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
       </div>
       {modelDef.stepsRange && (
         <div className="setting-row">
-          <label>{t('backend.steps')}</label>
+          <label htmlFor={`${fieldId}-steps`}>{t('backend.steps')}</label>
           <input
+            id={`${fieldId}-steps`}
             type="number"
             value={params.steps}
             onChange={(e) => {
@@ -125,8 +128,9 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
       )}
       {modelDef.guidanceRange && (
         <div className="setting-row">
-          <label>{t('backend.guidance')}</label>
+          <label htmlFor={`${fieldId}-guidance`}>{t('backend.guidance')}</label>
           <input
+            id={`${fieldId}-guidance`}
             type="number"
             value={params.guidance}
             onChange={(e) => {
@@ -143,8 +147,8 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
         </div>
       )}
       <div className="setting-row">
-        <label>{t('backend.seed')}</label>
-        <input type="text" value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder={t('backend.seedPlaceholder')} />
+        <label htmlFor={`${fieldId}-seed`}>{t('backend.seed')}</label>
+        <input id={`${fieldId}-seed`} type="text" value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder={t('backend.seedPlaceholder')} />
       </div>
     </>
   )

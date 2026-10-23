@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import {
   OPENAI_COMPRESSION_RANGE,
   OPENAI_IMAGE_MAX_EDGE,
@@ -83,6 +84,7 @@ function resolveParams(saved: Record<string, unknown>, modelDef: OpenAIModelDef)
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIParams, OpenAIModelDef>): React.JSX.Element {
   const { t } = useI18n()
+  const fieldId = useId()
   const sizeValue = findPresetValue(modelDef.sizes, params.width, params.height) ?? CUSTOM_OPENAI_SIZE
 
   const handleSizeChange = (value: string): void => {
@@ -95,8 +97,8 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
   return (
     <>
       <div className="setting-row">
-        <label>{t('backend.size')}</label>
-        <select value={sizeValue} onChange={(e) => handleSizeChange(e.target.value)}>
+        <label htmlFor={`${fieldId}-size`}>{t('backend.size')}</label>
+        <select id={`${fieldId}-size`} value={sizeValue} onChange={(e) => handleSizeChange(e.target.value)}>
           {modelDef.sizes.map((size) => (
             <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>{sizePresetLabel(t, size)}</option>
           ))}
@@ -104,8 +106,9 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </select>
       </div>
       <div className="setting-row">
-        <label>{t('backend.width')}</label>
+        <label htmlFor={`${fieldId}-width`}>{t('backend.width')}</label>
         <input
+          id={`${fieldId}-width`}
           type="number"
           min={OPENAI_IMAGE_MIN_EDGE}
           max={OPENAI_IMAGE_MAX_EDGE}
@@ -115,8 +118,9 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         />
       </div>
       <div className="setting-row">
-        <label>{t('backend.height')}</label>
+        <label htmlFor={`${fieldId}-height`}>{t('backend.height')}</label>
         <input
+          id={`${fieldId}-height`}
           type="number"
           min={OPENAI_IMAGE_MIN_EDGE}
           max={OPENAI_IMAGE_MAX_EDGE}
@@ -126,24 +130,24 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         />
       </div>
       <div className="setting-row">
-        <label>{t('backend.quality')}</label>
-        <select value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as OpenAIQuality })}>
+        <label htmlFor={`${fieldId}-quality`}>{t('backend.quality')}</label>
+        <select id={`${fieldId}-quality`} value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as OpenAIQuality })}>
           {modelDef.qualities.map((q) => (
             <option key={q} value={q}>{optionLabel(t, q)}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>{t('backend.background')}</label>
-        <select value={params.background} onChange={(e) => onChange(resolveParams({ ...params, background: e.target.value }, modelDef))}>
+        <label htmlFor={`${fieldId}-background`}>{t('backend.background')}</label>
+        <select id={`${fieldId}-background`} value={params.background} onChange={(e) => onChange(resolveParams({ ...params, background: e.target.value }, modelDef))}>
           {modelDef.backgrounds.map((bg) => (
             <option key={bg} value={bg}>{optionLabel(t, bg)}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>{t('backend.format')}</label>
-        <select value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as OpenAIOutputFormat })}>
+        <label htmlFor={`${fieldId}-format`}>{t('backend.format')}</label>
+        <select id={`${fieldId}-format`} value={params.outputFormat} onChange={(e) => onChange({ ...params, outputFormat: e.target.value as OpenAIOutputFormat })}>
           {formatsFor(modelDef, params.background).map((fmt) => (
             <option key={fmt} value={fmt}>{OPENAI_OUTPUT_FORMAT_LABELS[fmt]}</option>
           ))}
@@ -151,8 +155,9 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
       </div>
       {params.outputFormat !== 'png' && (
         <div className="setting-row">
-          <label>{t('backend.compression')}</label>
+          <label htmlFor={`${fieldId}-compression`}>{t('backend.compression')}</label>
           <input
+            id={`${fieldId}-compression`}
             type="number"
             min={OPENAI_COMPRESSION_RANGE.min}
             max={OPENAI_COMPRESSION_RANGE.max}

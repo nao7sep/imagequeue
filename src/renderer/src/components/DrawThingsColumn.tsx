@@ -1,5 +1,5 @@
 import { setDrawThingsReady } from '../hooks/useVisiblePanes'
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-api'
 import { DRAWTHINGS_SIZE_PRESETS } from '../../../shared/models'
@@ -454,6 +454,7 @@ export function useDrawThingsColumn({
 }
 
 export function DrawThingsControls({ model, column }: { model: string; column: DrawThingsColumn }): React.JSX.Element {
+  const fieldId = useId()
   const c = column.controls
   const { t } = useI18n()
   return (
@@ -483,8 +484,8 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
         <>
           {c.downloadedModels.length > 0 ? (
             <div className="setting-row">
-              <label>{t('column.model')}</label>
-              <select value={model} onChange={(e) => c.onModelChange(e.target.value)}>
+              <label htmlFor={`${fieldId}-model`}>{t('column.model')}</label>
+              <select id={`${fieldId}-model`} value={model} onChange={(e) => c.onModelChange(e.target.value)}>
                 {c.downloadedModels.map((m) => (
                   <option key={m.file} value={m.file}>{localModelName(m)}</option>
                 ))}
@@ -496,8 +497,8 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </div>
           ) : null}
           <div className="setting-row">
-            <label>{t('backend.size')}</label>
-            <select disabled={!column.paramsReady} value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
+            <label htmlFor={`${fieldId}-size`}>{t('backend.size')}</label>
+            <select id={`${fieldId}-size`} disabled={!column.paramsReady} value={c.sizeValue} onChange={(e) => c.onSizeChange(e.target.value)}>
               {DRAWTHINGS_SIZE_PRESETS.map((s) => (
                 <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>{sizePresetLabel(t, s)}</option>
               ))}
@@ -505,20 +506,20 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </select>
           </div>
           <div className="setting-row">
-            <label>{t('backend.width')}</label>
-            <input disabled={!column.paramsReady} type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+            <label htmlFor={`${fieldId}-width`}>{t('backend.width')}</label>
+            <input id={`${fieldId}-width`} disabled={!column.paramsReady} type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
-            <label>{t('backend.height')}</label>
-            <input disabled={!column.paramsReady} type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+            <label htmlFor={`${fieldId}-height`}>{t('backend.height')}</label>
+            <input id={`${fieldId}-height`} disabled={!column.paramsReady} type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
           </div>
           <div className="setting-row">
-            <label>{t('backend.steps')}</label>
-            <input disabled={!column.paramsReady} type="number" value={c.steps} onChange={(e) => c.setSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
+            <label htmlFor={`${fieldId}-steps`}>{t('backend.steps')}</label>
+            <input id={`${fieldId}-steps`} disabled={!column.paramsReady} type="number" value={c.steps} onChange={(e) => c.setSteps(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={50} />
           </div>
           <div className="setting-row">
-            <label>{t('backend.guidance')}</label>
-            <input disabled={!column.paramsReady} type="number" value={c.guidance} onChange={(e) => c.setGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
+            <label htmlFor={`${fieldId}-guidance`}>{t('backend.guidance')}</label>
+            <input id={`${fieldId}-guidance`} disabled={!column.paramsReady} type="number" value={c.guidance} onChange={(e) => c.setGuidance(Math.max(1, parseFloat(e.target.value) || 1))} min={1} max={20} step={0.5} />
           </div>
           {c.canApplyToAllModels && (
             <button
@@ -532,12 +533,12 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
             </button>
           )}
           <div className="setting-row">
-            <label>{t('backend.seed')}</label>
-            <input disabled={!column.paramsReady} type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
+            <label htmlFor={`${fieldId}-seed`}>{t('backend.seed')}</label>
+            <input id={`${fieldId}-seed`} disabled={!column.paramsReady} type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
           </div>
           <div className="setting-row">
-            <label>{t('drawThings.negative')}</label>
-            <input disabled={!column.paramsReady} type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder={t('drawThings.negativePlaceholder')} />
+            <label htmlFor={`${fieldId}-negative`}>{t('drawThings.negative')}</label>
+            <input id={`${fieldId}-negative`} disabled={!column.paramsReady} type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder={t('drawThings.negativePlaceholder')} />
           </div>
           {c.canRestoreRecommended && c.effectiveRecommendation && (
             <button

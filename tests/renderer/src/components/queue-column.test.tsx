@@ -222,14 +222,9 @@ function task(status: Task['status'], error: Message | null = null): Task {
   }
 }
 
-/** The control (select/input) beside the given row label. */
+/** Resolve the control through the visible label's accessible association. */
 function rowControl(container: HTMLElement, label: string): HTMLSelectElement | HTMLInputElement {
-  const row = Array.from(container.querySelectorAll('.setting-row')).find(
-    (r) => r.querySelector('label')?.textContent === label
-  )
-  const control = row?.querySelector('select, input')
-  expect(control, `control for row "${label}"`).toBeTruthy()
-  return control as HTMLSelectElement | HTMLInputElement
+  return within(container).getByLabelText(label, { exact: true }) as HTMLSelectElement | HTMLInputElement
 }
 
 async function flush(): Promise<void> {
@@ -241,6 +236,64 @@ async function advanceAutosave(): Promise<void> {
     vi.advanceTimersByTime(900)
   })
 }
+
+describe('column parameter accessibility', () => {
+  const cloudModels = [
+    ...getModelsForBackend('openai'),
+    ...getModelsForBackend('nanobanana'),
+    ...getModelsForBackend('grok'),
+    ...getModelsForBackend('flux'),
+  ].map((model) => ({ backend: model.backend, model }))
+
+  it.each(cloudModels)('$backend $model.id names every parameter and keeps two columns distinct', async ({ backend, model }) => {
+    stageSettings(backend, model.id, backend === 'openai' ? { outputFormat: 'webp' } : {})
+    const { container } = render(<>
+      <div data-testid="first"><QueueColumn backendId={backend} label={backend} prompt="a cat" /></div>
+      <div data-testid="second"><QueueColumn backendId={backend} label={backend} prompt="a cat" /></div>
+    </>)
+    await flush()
+
+    const names = ['Model']
+    if (model.backend === 'openai') names.push('Size', 'Width', 'Height', 'Quality', 'Background', 'Format', 'Compression')
+    if (model.backend === 'nanobanana') names.push('Aspect', 'Size', 'Thinking')
+    if (model.backend === 'grok') names.push('Aspect', 'Size', ...(model.qualities ? ['Quality'] : []))
+    if (model.backend === 'flux') {
+      names.push(...(model.aspectRatios ? ['Aspect', 'Size'] : ['Size', 'Format', ...(model.stepsRange ? ['Steps'] : []), ...(model.guidanceRange ? ['Guidance'] : []), 'Seed']))
+    }
+    for (const instance of ['first', 'second']) {
+      const scope = within(screen.getByTestId(instance))
+      expect(scope.getAllByRole('combobox').length + scope.queryAllByRole('spinbutton').length + scope.queryAllByRole('textbox').length).toBe(names.length)
+      for (const name of names) {
+        const control = scope.getByLabelText(name, { exact: true })
+        const role = control.tagName === 'SELECT' ? 'combobox' : control.getAttribute('type') === 'number' ? 'spinbutton' : 'textbox'
+        expect(scope.getByRole(role, { name })).toBe(control)
+      }
+    }
+    const ids = [...container.querySelectorAll('select, input')].map((control) => control.id)
+    expect(ids.every(Boolean)).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('names all Draw Things parameters independently across two columns', async () => {
+    electronAPI.localCheckCli.mockResolvedValue(CLI_OK)
+    electronAPI.localListDownloadedModels.mockResolvedValue([MODEL_A])
+    electronAPI.dtGetModelParams.mockResolvedValue(SAVED_DT_PARAMS)
+    const { container } = render(<>
+      <div data-testid="first"><QueueColumn backendId="drawthings" label="Draw Things" prompt="a cat" /></div>
+      <div data-testid="second"><QueueColumn backendId="drawthings" label="Draw Things" prompt="a cat" /></div>
+    </>)
+    await flush()
+    for (const instance of ['first', 'second']) {
+      const scope = within(screen.getByTestId(instance))
+      for (const name of ['Model', 'Size']) expect(scope.getByRole('combobox', { name })).toBe(scope.getByLabelText(name, { exact: true }))
+      for (const name of ['Width', 'Height', 'Steps', 'Guidance']) expect(scope.getByRole('spinbutton', { name })).toBe(scope.getByLabelText(name, { exact: true }))
+      for (const name of ['Seed', 'Neg.']) expect(scope.getByRole('textbox', { name })).toBe(scope.getByLabelText(name, { exact: true }))
+    }
+    const ids = [...container.querySelectorAll('select, input')].map((control) => control.id)
+    expect(ids.every(Boolean)).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+})
 
 describe('cloud columns: saved defaults at launch', () => {
   it.each(CLOUD_BACKEND_IDS_IN_UI_ORDER)(

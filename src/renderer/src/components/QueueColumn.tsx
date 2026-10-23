@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, useId } from 'react'
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
@@ -45,6 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Element {
+  const fieldId = useId()
   const hasPrompt = prompt.trim().length > 0
   const { t } = useI18n()
   const { tasks, loadState } = useQueue()
@@ -336,8 +337,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       <div className="column-settings">
         {backendId !== 'drawthings' && (
           <div className="setting-row">
-            <label>{t('column.model')}</label>
-            <select value={model} onChange={(e) => chooseModel(e.target.value)}>
+            <label htmlFor={`${fieldId}-model`}>{t('column.model')}</label>
+            <select id={`${fieldId}-model`} value={model} onChange={(e) => chooseModel(e.target.value)}>
               {modelNotInList && (
                 <option value={model}>{t('column.modelNotInListOption', { model })}</option>
               )}

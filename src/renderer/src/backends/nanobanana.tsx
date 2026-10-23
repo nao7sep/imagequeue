@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { NanoBananaModelDef } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
@@ -27,19 +28,20 @@ function resolveParams(saved: Record<string, unknown>, modelDef: NanoBananaModel
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBananaParams, NanoBananaModelDef>): React.JSX.Element {
   const { t } = useI18n()
+  const fieldId = useId()
   return (
     <>
       <div className="setting-row">
-        <label>{t('backend.aspect')}</label>
-        <select value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
+        <label htmlFor={`${fieldId}-aspect`}>{t('backend.aspect')}</label>
+        <select id={`${fieldId}-aspect`} value={params.aspectRatio} onChange={(e) => onChange({ ...params, aspectRatio: e.target.value })}>
           {modelDef.aspectRatios.map((ar) => (
             <option key={ar.value} value={ar.value}>{ar.label}</option>
           ))}
         </select>
       </div>
       <div className="setting-row">
-        <label>{t('backend.size')}</label>
-        <select value={params.imageSize} onChange={(e) => onChange({ ...params, imageSize: e.target.value })}>
+        <label htmlFor={`${fieldId}-size`}>{t('backend.size')}</label>
+        <select id={`${fieldId}-size`} value={params.imageSize} onChange={(e) => onChange({ ...params, imageSize: e.target.value })}>
           {modelDef.imageSizes.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
@@ -47,8 +49,8 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<NanoBanan
       </div>
       {/* The provider's own words, as the text settings show them. */}
       <div className="setting-row">
-        <label>{t('settings.thinking')}</label>
-        <select value={params.thinking} onChange={(e) => onChange({ ...params, thinking: e.target.value })}>
+        <label htmlFor={`${fieldId}-thinking`}>{t('settings.thinking')}</label>
+        <select id={`${fieldId}-thinking`} value={params.thinking} onChange={(e) => onChange({ ...params, thinking: e.target.value })}>
           {modelDef.thinking.map((level) => (
             <option key={level} value={level}>{level}</option>
           ))}
