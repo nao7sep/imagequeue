@@ -20,9 +20,18 @@ export function registerUnsavedDraftsIpc(getMainContents: () => WebContents | nu
     if (reporter !== main) {
       dirty.clear()
       reporter = main
-      const forget = (): void => { if (reporter === main) { dirty.clear(); reporter = null } }
+      const forget = (): void => {
+        main.removeListener('destroyed', forget)
+        main.removeListener('render-process-gone', forget)
+        main.removeListener('did-start-navigation', navigating)
+        if (reporter === main) { dirty.clear(); reporter = null }
+      }
+      const navigating = (_event: Electron.Event, _url: string, isInPlace: boolean, isMainFrame: boolean): void => {
+        if (isMainFrame && !isInPlace) forget()
+      }
       main.once('destroyed', forget)
-      main.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) forget() })
+      main.once('render-process-gone', forget)
+      main.on('did-start-navigation', navigating)
     }
     if (isDirty === true) dirty.add(surface as DraftSurface)
     else dirty.delete(surface as DraftSurface)

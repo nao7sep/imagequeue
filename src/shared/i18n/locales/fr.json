@@ -314,6 +314,7 @@
   "previewWindow.title": "Aperçu",
   "previewWindow.closeSaveFailed": "La fenêtre d’aperçu a été fermée, mais son réglage n’a pas pu être enregistré. Elle peut se rouvrir lorsque vous revenez à la fenêtre principale. Vous pouvez la désactiver à nouveau dans les paramètres.",
   "previewWindow.openFailed": "La fenêtre d’aperçu séparée n’a pas pu s’ouvrir. Votre réglage d’aperçu n’a pas changé. Désactivez puis réactivez l’aperçu séparé dans les réglages pour réessayer.",
+  "mainWindow.recoveryFailed": "L’espace de travail n’a pas pu être affiché. Les tâches en attente sont conservées. Réduisez puis restaurez cette fenêtre pour réessayer.",
   "settings.exportFolder": "Dossier d’exportation",
   "settings.exportFolderPlaceholder": "Laisser vide pour utiliser le Bureau",
   "settings.browse": "Parcourir",

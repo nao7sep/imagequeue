@@ -294,6 +294,7 @@
   "previewWindow.title": "预览",
   "previewWindow.closeSaveFailed": "预览窗口已关闭，但无法保存设置。返回主窗口时，它可能会再次打开。你可以在设置中再次将其关闭。",
   "previewWindow.openFailed": "无法打开单独的预览窗口。你的预览设置未更改。在设置中关闭再开启单独窗口预览即可重试。",
+  "mainWindow.recoveryFailed": "无法显示工作区。排队中的任务已保留。最小化此窗口后再还原即可重试。",
   "settings.exportFolder": "导出文件夹",
   "settings.exportFolderPlaceholder": "留空则使用桌面",
   "settings.browse": "浏览",

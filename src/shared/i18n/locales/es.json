@@ -314,6 +314,7 @@
   "previewWindow.title": "Vista previa",
   "previewWindow.closeSaveFailed": "La ventana de vista previa se cerró, pero no se pudo guardar la configuración. Puede volver a abrirse cuando regreses a la ventana principal. Puedes desactivarla de nuevo en Configuración.",
   "previewWindow.openFailed": "No se pudo abrir la ventana de vista previa aparte. Tu configuración de vista previa no ha cambiado. Desactiva y vuelve a activar la vista previa aparte en Configuración para intentarlo de nuevo.",
+  "mainWindow.recoveryFailed": "No se pudo mostrar el espacio de trabajo. Las tareas en cola se conservan. Minimiza y restaura esta ventana para intentarlo de nuevo.",
   "settings.exportFolder": "Carpeta de exportación",
   "settings.exportFolderPlaceholder": "Déjala vacía para usar el Escritorio",
   "settings.browse": "Examinar",

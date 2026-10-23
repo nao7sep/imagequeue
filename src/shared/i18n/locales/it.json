@@ -314,6 +314,7 @@
   "previewWindow.title": "Anteprima",
   "previewWindow.closeSaveFailed": "La finestra di anteprima è stata chiusa, ma non è stato possibile salvare l’impostazione. Potrebbe riaprirsi quando torni alla finestra principale. Puoi disattivarla di nuovo nelle impostazioni.",
   "previewWindow.openFailed": "Impossibile aprire la finestra di anteprima separata. La tua impostazione di anteprima non è cambiata. Disattiva e riattiva l’anteprima separata nelle impostazioni per riprovare.",
+  "mainWindow.recoveryFailed": "Impossibile visualizzare l’area di lavoro. Le attività in coda sono conservate. Riduci a icona e ripristina questa finestra per riprovare.",
   "settings.exportFolder": "Cartella di esportazione",
   "settings.exportFolderPlaceholder": "Lascia vuoto per usare la Scrivania",
   "settings.browse": "Sfoglia",

@@ -294,6 +294,7 @@
   "previewWindow.title": "プレビュー",
   "previewWindow.closeSaveFailed": "プレビューウインドウは閉じましたが、設定を保存できませんでした。メインウインドウに戻ると再び開くことがあります。設定で再度オフにできます。",
   "previewWindow.openFailed": "別のプレビューウインドウを開けませんでした。プレビューの設定は変更されていません。設定で別ウインドウのプレビューをオフにしてからオンにすると、再試行できます。",
+  "mainWindow.recoveryFailed": "ワークスペースを表示できませんでした。待機中のタスクは保持されています。このウインドウを最小化してから元に戻すと、再試行できます。",
   "settings.exportFolder": "書き出し先フォルダ",
   "settings.exportFolderPlaceholder": "空欄にするとデスクトップを使います",
   "settings.browse": "選択",

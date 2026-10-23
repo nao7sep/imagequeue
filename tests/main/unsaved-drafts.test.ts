@@ -41,3 +41,17 @@ describe('unsaved drafts', () => {
     expect(drafts.unsavedDrafts()).toEqual([])
   })
 })
+
+
+it('forgets lost-renderer reports and admits recovered-page reports without accumulating listeners', () => {
+  report(main, 'settings', true)
+  main.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
+  expect(drafts.unsavedDrafts()).toEqual([])
+  expect(main.listenerCount('did-start-navigation')).toBe(0)
+  report(main, 'elaborators', true)
+  expect(drafts.unsavedDrafts()).toEqual(['elaborators'])
+  expect(main.listenerCount('render-process-gone')).toBe(1)
+  main.emit('did-start-navigation', {}, 'app', false, true)
+  expect(drafts.unsavedDrafts()).toEqual([])
+  expect(main.listenerCount('render-process-gone')).toBe(0)
+})

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Delivers the operating system's quit signals into the primary instance's own
@@ -41,6 +42,7 @@ const h = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: h.app,
   powerMonitor: h.powerMonitor,
+  dialog: { showMessageBox: vi.fn(async () => ({ response: 0 })) },
   BrowserWindow: vi.fn(),
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn() },
 }))
@@ -149,7 +151,7 @@ vi.mock('../../src/main/status-icon', () => ({
 }))
 vi.mock('../../src/main/session/open-sessions-folder', () => ({ openSessionsFolder: vi.fn() }))
 vi.mock('../../src/main/queue/control-actions', () => ({ setQueuePausedAndPublish: vi.fn() }))
-vi.mock('../../src/main/main-window-content', () => ({ ownMainWindowContentLoad: vi.fn() }))
+vi.mock('../../src/main/main-window-content', () => ({ loadMainWindowContent: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/i18n', () => ({
   applyLocalePreferences: vi.fn(async () => undefined),
   mainTranslator: vi.fn(() => ({ t: (key: string) => key })),
@@ -393,3 +395,33 @@ describe('primary instance quit routes', () => {
   })
 })
 
+
+
+it.each([true, false])('recovers the existing primary view without restarting work (visible: %s)', async (visible) => {
+  await launch()
+  const { createWindowWithUsablePersistedBounds } = await import('../../src/main/window-state-recovery')
+  const { loadMainWindowContent } = await import('../../src/main/main-window-content')
+  const { dialog } = await import('electron')
+  const { startProcessor } = await import('../../src/main/backends')
+  const webContents = Object.assign(new EventEmitter(), { send: vi.fn() })
+  const win = Object.assign(new EventEmitter(), {
+    webContents, isDestroyed: () => false, isVisible: () => visible,
+    isMinimized: () => false,
+  }) as unknown as Electron.BrowserWindow
+  vi.mocked(createWindowWithUsablePersistedBounds).mockReturnValueOnce(win)
+  const options = h.controllers[0]!.options
+  expect((options.createWindow as () => Electron.BrowserWindow)()).toBe(win)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(loadMainWindowContent).toHaveBeenCalledOnce()
+  webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 7 })
+  expect(dialog.showMessageBox).toHaveBeenCalledTimes(visible ? 1 : 0)
+  expect(loadMainWindowContent).toHaveBeenCalledOnce()
+  const restore = options.prepareWindow as (win: Electron.BrowserWindow) => Promise<boolean>
+  await expect(restore(win)).resolves.toBe(true)
+  expect(loadMainWindowContent).toHaveBeenCalledTimes(2)
+  expect(startProcessor).toHaveBeenCalledOnce()
+  expect(session.initSession).toHaveBeenCalledOnce()
+  expect(createStartupFailureWindow).not.toHaveBeenCalled()
+  expect(h.app.exit).not.toHaveBeenCalled()
+  if (visible) expect(dialog.showMessageBox).toHaveBeenCalledWith(win, expect.objectContaining({ message: 'mainWindow.recoveryFailed' }))
+})

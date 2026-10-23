@@ -11,13 +11,3 @@ export function loadMainWindowContent(
 ): Promise<void> {
   return rendererUrl ? win.loadURL(rendererUrl) : win.loadFile(rendererFile)
 }
-
-/** Route every navigation rejection to the startup recovery owner. */
-export function ownMainWindowContentLoad(
-  win: MainWindowContentTarget,
-  rendererUrl: string | undefined,
-  rendererFile: string,
-  onFailure: (cause: unknown) => void,
-): void {
-  void loadMainWindowContent(win, rendererUrl, rendererFile).catch(onFailure)
-}

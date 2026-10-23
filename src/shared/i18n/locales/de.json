@@ -304,6 +304,7 @@
   "previewWindow.title": "Vorschau",
   "previewWindow.closeSaveFailed": "Das Vorschaufenster wurde geschlossen, aber die Einstellung konnte nicht gespeichert werden. Es kann sich erneut öffnen, wenn Sie zum Hauptfenster zurückkehren. Sie können es in den Einstellungen wieder ausschalten.",
   "previewWindow.openFailed": "Das separate Vorschaufenster konnte nicht geöffnet werden. Ihre Vorschaueinstellung bleibt unverändert. Schalten Sie die separate Vorschau in den Einstellungen aus und wieder ein, um es erneut zu versuchen.",
+  "mainWindow.recoveryFailed": "Der Arbeitsbereich konnte nicht angezeigt werden. Die Aufgaben in der Warteschlange bleiben erhalten. Minimieren Sie dieses Fenster und stellen Sie es wieder her, um es erneut zu versuchen.",
   "settings.exportFolder": "Exportordner",
   "settings.exportFolderPlaceholder": "Leer lassen, um den Schreibtisch zu verwenden",
   "settings.browse": "Auswählen",

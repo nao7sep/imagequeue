@@ -25,6 +25,7 @@ export interface MainWindowDock {
 interface MainWindowControllerOptions<TWindow extends MainWindowLifecycleWindow> {
   platform: NodeJS.Platform
   createWindow: () => TWindow
+  prepareWindow?: (win: TWindow) => Promise<boolean>
   isStatusIconAvailable: () => boolean
   // The secondary windows follow the main window into the background and back.
   onHiddenToBackground: () => void
@@ -137,7 +138,7 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
       const explicitRestore = this.revealWanted
       secondaryHidden = false
       this.revealWanted = true
-      if (!explicitRestore) this.options.onRestored()
+      if (!explicitRestore) void this.restoreOrCreate()
     }
     win.on('show', restoreSecondary)
     win.on('restore', restoreSecondary)
@@ -201,6 +202,10 @@ export class MainWindowController<TWindow extends MainWindowLifecycleWindow> {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
+    // Keep native chrome available while recovery loads, including when its
+    // failure notice must work independently of the page.
+    if (this.options.prepareWindow && !await this.options.prepareWindow(win)) return
+    if (this.mainWindow !== win || win.isDestroyed() || this.shutdownStarted || this.systemSessionEnding || !this.revealWanted) return
     this.options.onRestored()
   }
 

@@ -39,6 +39,7 @@ function makeWindow(options: { destroyed?: boolean; minimized?: boolean } = {}) 
 }
 
 function makeController(options: {
+  prepareWindow?: (win: ReturnType<typeof makeWindow>) => Promise<boolean>
   platform?: NodeJS.Platform
   statusAvailable?: () => boolean
   dock?: { hide: () => void; show: () => Promise<void> }
@@ -53,6 +54,7 @@ function makeController(options: {
   const controller = new MainWindowController({
     platform: options.platform ?? 'win32',
     createWindow,
+    prepareWindow: options.prepareWindow,
     isStatusIconAvailable: options.statusAvailable ?? (() => true),
     onHiddenToBackground,
     onRestored,
@@ -327,4 +329,39 @@ describe('MainWindowController', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     expect(dock.hide).toHaveBeenCalledOnce()
   })
+})
+
+
+it('coalesces content recovery and preserves a later hide while it loads', async () => {
+  let finish!: (ready: boolean) => void
+  const prepareWindow = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve }))
+  const { controller, win, onRestored } = makeController({ prepareWindow })
+  controller.createInitialWindow()
+  controller.markStartupComplete()
+  const first = controller.restoreOrCreate()
+  const second = controller.restoreOrCreate()
+  expect(first).toBe(second)
+  expect(prepareWindow).toHaveBeenCalledOnce()
+  expect(win.show).toHaveBeenCalledOnce()
+  win.emitNative('hide')
+  finish(true)
+  await first
+  expect(win.show).toHaveBeenCalledOnce()
+  expect(onRestored).not.toHaveBeenCalled()
+})
+
+it('uses the same recovery path for native restoration and retains chrome on failure', async () => {
+  const prepareWindow = vi.fn(async () => false)
+  const { controller, win, onRestored } = makeController({ prepareWindow })
+  controller.createInitialWindow()
+  controller.markStartupComplete()
+  win.emitNative('minimize')
+  win.emitNative('restore')
+  await controller.restoreOrCreate()
+  expect(prepareWindow).toHaveBeenCalledOnce()
+  expect(win.show).toHaveBeenCalledOnce()
+  expect(onRestored).not.toHaveBeenCalled()
+  prepareWindow.mockResolvedValue(true)
+  await controller.restoreOrCreate()
+  expect(onRestored).toHaveBeenCalledOnce()
 })
