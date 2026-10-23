@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pushModal, popModal } from '../../../../src/renderer/src/components/modalStack'
 import type { Task } from '../../../../src/shared/types'
 
+const notificationSettings = vi.hoisted(() => ({ save: vi.fn(), values: { notifications_enabled: true, sounds_enabled: true } }))
+
 vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
   useSettings: () => ({
-    settings: { notifications: { notifications_enabled: true, sounds_enabled: true } },
-    saveNotificationField: vi.fn(),
+    settings: { notifications: notificationSettings.values },
+    saveNotificationField: notificationSettings.save,
   }),
 }))
 vi.mock('../../../../src/renderer/src/context/UiStateContext', () => ({
@@ -73,6 +75,8 @@ let clipboardWriteText: ReturnType<typeof vi.fn>
 let decode: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
+  notificationSettings.values = { notifications_enabled: true, sounds_enabled: true }
+  notificationSettings.save.mockReset().mockResolvedValue({})
   HTMLElement.prototype.scrollIntoView = vi.fn()
   selection.reportTaskActionFailure.mockClear()
   selection.clearTaskActionResult.mockClear()
@@ -433,4 +437,26 @@ it('polls clipboard availability only while usable and refreshes on return', asy
   view.unmount()
   await act(async () => { vi.advanceTimersByTime(5000); window.dispatchEvent(new Event('focus')) })
   expect(probe).toHaveBeenCalledTimes(4)
+})
+
+
+it.each([['Notify', 'notifications_enabled'], ['Sound', 'sounds_enabled']] as const)('retains a rejected %s save and clears it after a successful retry', async (name, field) => {
+  let reject!: (error: Error) => void
+  notificationSettings.save.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
+  const view = render(<PromptPane selectedTask={null} prompt="" onPromptChange={vi.fn()} />)
+  const checkbox = screen.getByRole('checkbox', { name }) as HTMLInputElement
+  fireEvent.click(checkbox)
+  expect(notificationSettings.save).toHaveBeenCalledWith(field, false)
+  expect(checkbox.disabled).toBe(true)
+  await act(async () => reject(new Error('PRIVATE_PATH_SENTINEL')))
+  expect(checkbox.disabled).toBe(false)
+  expect(checkbox.checked).toBe(true)
+  expect(screen.getByRole('alert').textContent).not.toContain('PRIVATE_PATH_SENTINEL')
+  expect(appLog).toHaveBeenCalled()
+  view.rerender(<PromptPane selectedTask={selectedTask} prompt="" onPromptChange={vi.fn()} />)
+  expect(screen.getByRole('alert')).toBeTruthy()
+  notificationSettings.save.mockImplementationOnce(async () => { notificationSettings.values[field] = false; return {} })
+  await act(async () => fireEvent.click(checkbox))
+  expect(checkbox.checked).toBe(false)
+  expect(screen.queryByRole('alert')).toBeNull()
 })

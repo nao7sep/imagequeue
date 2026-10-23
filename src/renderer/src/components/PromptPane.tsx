@@ -28,6 +28,8 @@ interface Props {
 }
 
 type PromptPaneAction =
+  | 'notifications_enabled'
+  | 'sounds_enabled'
   | 'paste-text'
   | 'copy-prompt'
   | 'reveal-image'
@@ -35,7 +37,7 @@ type PromptPaneAction =
   | 'export-image'
   | 'save-image-as'
 
-const PROMPT_ACTIONS: readonly PromptPaneAction[] = ['paste-text']
+const PROMPT_ACTIONS: readonly PromptPaneAction[] = ['paste-text', 'notifications_enabled', 'sounds_enabled']
 const PREVIEW_ACTIONS: readonly PromptPaneAction[] = [
   'copy-prompt',
   'reveal-image',
@@ -104,14 +106,11 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
   // Volume is state, not config — it lives in state.json beside the pane width.
   const { uiState, patchUiState } = useUiState()
 
-  const persistNotificationField = useCallback((field: string, value: unknown): void => {
-    void saveNotificationField(field, value)
-  }, [saveNotificationField])
-
   const handleSendToAll = useCallback(() => {
     enqueueToAll(prompt)
   }, [prompt, enqueueToAll])
 
+  const [notificationSaving, setNotificationSaving] = useState(false)
   const [promptCopied, setPromptCopied] = useState(false)
   const [imageCopied, setImageCopied] = useState(false)
   const [exported, setExported] = useState(false)
@@ -174,6 +173,14 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
       return next
     })
   }, [])
+
+  const persistNotificationField = useCallback((field: 'notifications_enabled' | 'sounds_enabled', value: boolean): void => {
+    setNotificationSaving(true)
+    void saveNotificationField(field, value)
+      .then(() => clearActionFailure(field))
+      .catch((error) => reportActionFailure(field, 'failure.settingsSave', error))
+      .finally(() => setNotificationSaving(false))
+  }, [saveNotificationField, clearActionFailure, reportActionFailure])
 
   // The image either loaded or did not; a failure stays on the task, as a
   // thumbnail's does, until a later load of it succeeds.
@@ -387,6 +394,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
             <input
               type="checkbox"
               checked={notificationsEnabled}
+              disabled={notificationSaving}
               onChange={(e) => persistNotificationField('notifications_enabled', e.target.checked)}
             />
             {t('prompt.notify')}
@@ -395,6 +403,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
             <input
               type="checkbox"
               checked={soundsEnabled}
+              disabled={notificationSaving}
               onChange={(e) => persistNotificationField('sounds_enabled', e.target.checked)}
             />
             {t('prompt.sound')}
