@@ -13,7 +13,7 @@ import { getSessionId } from './session'
 import {
   ensureFacet,
   listFacetDisplays,
-  recordUse,
+  recordUses,
   type DrawnConcept,
   type FacetRow,
 } from './concepts/concept-store'
@@ -197,9 +197,8 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
   // those values for 1000 draws.
   const pendingUses: number[][] = []
   const commitUses = async (): Promise<void> => {
-    for (const conceptIds of pendingUses) {
-      for (const conceptId of conceptIds) await recordUse(conceptId, sessionId)
-    }
+    if (pendingUses.length === 0) return
+    await recordUses(req.requestId, pendingUses.flat(), sessionId)
     pendingUses.length = 0
   }
   let turn = 0
@@ -265,8 +264,9 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
       ledger: await ledgerTotals(),
     })
     broadcastProgress({ requestId: req.requestId, done: 0, total: req.count, phase: 'facets' })
-    const knownFacets = new Set((await listFacetDisplays()).map((d) => d.toLowerCase()))
-    const facetNames = await resolveFacets(ask, req.seed, await listFacetDisplays())
+    const existingFacets = await listFacetDisplays()
+    const knownFacets = new Set(existingFacets.map((d) => d.toLowerCase()))
+    const facetNames = await resolveFacets(ask, req.seed, existingFacets)
     const facets = await Promise.all(facetNames.map((name) => ensureFacet(name)))
     const newFacets = facetNames.filter((name) => !knownFacets.has(name.toLowerCase()))
     log('info', 'Concept aspects resolved', {
@@ -414,21 +414,25 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
     // Uses commit before the completion log so the inventory and ledger totals
     // it reports are the post-run truth, not the pre-commit snapshot.
     await commitUses()
-    log('info', 'Brainstorm complete', {
-      requestId: req.requestId,
-      compositionElaborator: compositionElaborator.name,
-      styleElaborator: styleElaborator.name,
-      backend: handle.backend,
-      model: handle.modelId,
-      facets: facetNames,
-      count: collected.length,
-      requested: req.count,
-      turns: turn,
-      durationMs: Date.now() - startTime,
-      concepts: stats,
-      inventory: await facetInventory(facets),
-      ledger: await ledgerTotals(),
-    })
+    try {
+      log('info', 'Brainstorm complete', {
+        requestId: req.requestId,
+        compositionElaborator: compositionElaborator.name,
+        styleElaborator: styleElaborator.name,
+        backend: handle.backend,
+        model: handle.modelId,
+        facets: facetNames,
+        count: collected.length,
+        requested: req.count,
+        turns: turn,
+        durationMs: Date.now() - startTime,
+        concepts: stats,
+        inventory: await facetInventory(facets),
+        ledger: await ledgerTotals(),
+      })
+    } catch (error) {
+      log('warn', 'Could not collect completed brainstorm statistics', { error: serializeError(error) })
+    }
     return { prompts: collected.slice(0, req.count) }
   } catch (err) {
     // An aborted run rejects out of whichever call was in flight — planning or

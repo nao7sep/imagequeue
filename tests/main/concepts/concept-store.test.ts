@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ create: vi.fn() }))
 vi.mock('../../../src/main/concepts/concept-worker?nodeWorker', () => ({ default: mocks.create }))
-import { closeConceptStore, CONCEPT_REQUEST_TIMEOUT_MS, ensureFacet, listFacetDisplays } from '../../../src/main/concepts/concept-store'
+import { closeConceptStore, CONCEPT_REQUEST_TIMEOUT_MS, ensureFacet, listFacetDisplays, recordUses } from '../../../src/main/concepts/concept-store'
 
 type Message = { id: number; op: string; args: unknown[] }
 function thread() {
@@ -38,6 +38,20 @@ describe('concept library serial owner', () => {
     worker.emit('message', { id: worker.posted[2].id, value: undefined, paths: [] })
     await closing
     expect(worker.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('forwards a delivered batch as one ordered request with its operation and session identity', async () => {
+    const worker = thread()
+    mocks.create.mockReturnValue(worker)
+    const ids = [12, 3, 19]
+    const pending = recordUses('operation-a', ids, 'session-a')
+    expect(worker.posted).toHaveLength(1)
+    expect(worker.posted[0]).toMatchObject({ op: 'recordUses', args: ['operation-a', ids, 'session-a'] })
+    worker.emit('message', { id: worker.posted[0].id, value: undefined, paths: [] })
+    await pending
+    const closing = closeConceptStore()
+    worker.emit('message', { id: worker.posted[1].id, value: undefined, paths: [] })
+    await closing
   })
 
   it('fails admitted requests when its worker crashes without reopening a competing owner', async () => {

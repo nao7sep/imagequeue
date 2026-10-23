@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS uses (
   session_id TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS use_batches (
+  operation_id TEXT PRIMARY KEY,
+  payload TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_concepts_facet ON concepts (facet_id, use_count);
 CREATE INDEX IF NOT EXISTS idx_concepts_probe ON concepts (probe_id, use_count);
 CREATE INDEX IF NOT EXISTS idx_uses_session ON uses (session_id);
@@ -295,16 +299,27 @@ export function drawConcept(facetId: number, opts: DrawOptions): DrawnConcept | 
   return stale ?? null
 }
 
-/** Record that a value was woven into a prompt that actually came back. */
-export function recordUse(conceptId: number, sessionId: string): void {
+/** One delivered run commits its uses together. Retrying an uncertain worker
+ * acknowledgment must not count the same output again. */
+export function recordUses(operationId: string, conceptIds: readonly number[], sessionId: string): void {
   const d = open()
+  const payload = JSON.stringify([sessionId, conceptIds])
   const now = new Date().toISOString()
   d.exec('BEGIN IMMEDIATE')
   try {
-    const res = d.prepare('INSERT INTO uses (concept_id, session_id, created_at) VALUES (?, ?, ?)')
-      .run(conceptId, sessionId, now)
-    d.prepare('UPDATE concepts SET use_count = use_count + 1, last_used_draw = ?, last_used_at = ? WHERE id = ?')
-      .run(Number(res.lastInsertRowid), now, conceptId)
+    const previous = d.prepare('SELECT payload FROM use_batches WHERE operation_id = ?').get(operationId) as { payload: string } | undefined
+    if (previous) {
+      if (previous.payload !== payload) throw new Error('Concept-use operation was repeated with different inputs')
+      d.exec('COMMIT')
+      return
+    }
+    const insert = d.prepare('INSERT INTO uses (concept_id, session_id, created_at) VALUES (?, ?, ?)')
+    const update = d.prepare('UPDATE concepts SET use_count = use_count + 1, last_used_draw = ?, last_used_at = ? WHERE id = ?')
+    for (const conceptId of conceptIds) {
+      const res = insert.run(conceptId, sessionId, now)
+      update.run(Number(res.lastInsertRowid), now, conceptId)
+    }
+    d.prepare('INSERT INTO use_batches (operation_id, payload) VALUES (?, ?)').run(operationId, payload)
     d.exec('COMMIT')
   } catch (err) {
     d.exec('ROLLBACK')

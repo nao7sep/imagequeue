@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { brainstormPrompts, cancelBrainstorm, hasActiveBrainstorms } from '../../src/main/brainstorm'
 import { PROVIDER_RETRY_BACKOFF_MS } from '../../src/main/provider-retry'
 import { listProbesWithStats, closeConceptStore, listConceptRows, listFacetsWithStats } from '../../src/main/concepts/concept-store'
+import * as conceptStore from '../../src/main/concepts/concept-store'
+import * as acquisition from '../../src/main/concepts/acquisition'
 import { getElaborator } from '../../src/main/elaborators'
 import { getMainProvider } from '../../src/main/text-ai'
 import type { AskOptions, AskResult, TextAIProvider } from '../../src/main/text-ai'
@@ -192,6 +194,7 @@ describe('brainstormPrompts (concept-driven)', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     await closeConceptStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
@@ -204,6 +207,52 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(result.prompts).toHaveLength(3)
     // batch_size 2 → two prose calls (2 + 1)
     expect(script.proseCalls).toHaveLength(2)
+  })
+
+  it('commits all delivered concepts in prompt and facet order through one batch', async () => {
+    installScriptedProvider()
+    const recorded = vi.spyOn(conceptStore, 'recordUses')
+    const result = await brainstormPrompts(request({ requestId: 'ordered-batch', count: 3 }))
+    const idsByCredit = new Map<string, number>()
+    for (const facet of await listFacetsWithStats()) {
+      for (const row of await listConceptRows(facet.id)) idsByCredit.set(`${facet.display}:${row.display}`, row.id)
+    }
+    const expectedIds = result.prompts.flatMap((prompt) => prompt.concepts.map((credit) => idsByCredit.get(`${credit.facet}:${credit.concept}`)))
+    expect(expectedIds.every((id) => id !== undefined)).toBe(true)
+    expect(recorded).toHaveBeenCalledExactlyOnceWith('ordered-batch', expectedIds, 'test-session')
+  })
+
+  it('delivers committed prompts even when optional completion statistics fail', async () => {
+    installScriptedProvider()
+    const actualRecord = conceptStore.recordUses
+    vi.spyOn(conceptStore, 'recordUses').mockImplementation(async (...args) => {
+      await actualRecord(...args)
+      vi.spyOn(acquisition, 'facetInventory').mockRejectedValueOnce(new Error('statistics unavailable'))
+    })
+    const result = await brainstormPrompts(request({ requestId: 'stats-failure', count: 2 }))
+    expect(result.prompts).toHaveLength(2)
+    expect(logged('Could not collect completed brainstorm statistics')).toHaveLength(1)
+    const used = (await listFacetsWithStats()).reduce((count, facet) => count + facet.conceptCount - facet.unusedCount, 0)
+    expect(used).toBe(4)
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  it('repeats an uncertain committed batch on cancellation without counting its concepts twice', async () => {
+    installScriptedProvider()
+    const actualRecord = conceptStore.recordUses
+    const recorded = vi.spyOn(conceptStore, 'recordUses')
+    recorded.mockImplementationOnce(async (...args) => {
+      await actualRecord(...args)
+      cancelBrainstorm('uncertain-commit')
+      throw new DOMException('Acknowledgment interrupted', 'AbortError')
+    })
+    const result = await brainstormPrompts(request({ requestId: 'uncertain-commit', count: 2 }))
+    expect(result.prompts).toHaveLength(2)
+    expect(recorded).toHaveBeenCalledTimes(2)
+    expect(recorded.mock.calls[1]).toEqual(recorded.mock.calls[0])
+    const rows = (await Promise.all((await listFacetsWithStats()).map((facet) => listConceptRows(facet.id)))).flat()
+    expect(rows.filter((row) => row.useCount > 0)).toHaveLength(4)
+    expect(rows.every((row) => row.useCount <= 1)).toBe(true)
   })
 
   it('sends every prose call with a FRESH context: one user message, no history', async () => {

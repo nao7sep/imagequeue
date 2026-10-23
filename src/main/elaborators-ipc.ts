@@ -91,6 +91,14 @@ export function registerElaboratorsIpc(): void {
         length: PromptLength
       }
     ): Promise<BrainstormOutcome> => {
+      const sender = event.sender
+      const cancel = (): void => cancelBrainstorm(req.requestId)
+      const navigation = (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean): void => {
+        if (isMainFrame && !isInPlace) cancel()
+      }
+      sender.once('destroyed', cancel)
+      sender.once('render-process-gone', cancel)
+      sender.on('did-start-navigation', navigation)
       try {
         const { prompts } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
         return { ok: true, prompts }
@@ -101,6 +109,10 @@ export function registerElaboratorsIpc(): void {
         if (!refused && !said) throw error
         log('warn', 'Brainstorm provider request failed', { error: serializeError(error) })
         return { ok: false, failure: { refused, providerMessage: said } }
+      } finally {
+        sender.off('destroyed', cancel)
+        sender.off('render-process-gone', cancel)
+        sender.off('did-start-navigation', navigation)
       }
     }
   )
