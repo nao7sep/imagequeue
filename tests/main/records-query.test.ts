@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { currentRecordsContext, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
@@ -87,6 +87,86 @@ describe('records page', () => {
     expect(titles({ search: '50%_' })).toEqual(['Careful'])
     expect(titles({ search: '5_%' })).toEqual([])
     db.close()
+  })
+
+  it.each((['all', 'launch', 'session'] as const).flatMap((scope) =>
+    (['first', 'later'] as const).map((page) => ({ scope, page })),
+  ))('uses an ordered index for a $page log-only $scope page', ({ scope, page }) => {
+    const dir = seed()
+    const db = open(dir)
+    const filtered = query({ kind: 'log',
+      ...(scope === 'launch' ? { launch: currentRecordsContext().launch } : {}),
+      ...(scope === 'session' ? { session: '20260102-000000-000-utc' } : {}),
+    })
+    const first = readPage(db, filtered)
+    expect(first.records.length).toBeGreaterThan(0)
+    const last = first.records.at(-1)!
+    const selected = page === 'first' ? filtered : {
+      ...filtered, after: { time: last.time, kind: last.kind, id: last.id },
+    }
+    const explain: string[] = []
+    const prepare = db.prepare.bind(db)
+    const prepared = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
+      const statement = prepare(sql)
+      const all = statement.all.bind(statement)
+      vi.spyOn(statement, 'all').mockImplementation((...params) => {
+        const plan = prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[]
+        explain.push(...plan.map((step) => step.detail))
+        return all(...params)
+      })
+      return statement
+    })
+    try {
+      readPage(db, selected)
+      expect(explain.length).toBeGreaterThan(0)
+      expect(explain.join('\n')).not.toMatch(/TEMP B-TREE|SORT/i)
+    } finally {
+      prepared.mockRestore()
+      db.close()
+    }
+  })
+
+  it('pages across all three source kinds at an equal timestamp without losing or repeating boundaries', () => {
+    const dir = freshRecordsRoot()
+    const time = '2026-01-03T00:00:00.000Z'
+    const count = RECORDS_PAGE_SIZE + 5
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(time))
+    try {
+      for (let index = 0; index < count; index++) {
+        writeLogRecord(time, 'info', `line ${index}`, {})
+        startAiCall({ backend: 'openai', model: 'm', purpose: 'image', request: { index } }).finish({})
+        startCliJobRecord({ jobId: `job-${index}`, kind: 'download', target: 'm', cliPath: '/bin/cli', args: [] })
+          .finish({ startedAt: time, status: 'exited', exitCode: 0, signal: null, stdout: '', stderr: '' })
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+    const db = open(dir)
+    try {
+      const expected = [
+        ...Array.from({ length: count }, (_, index) => `log:${count - index}`),
+        ...Array.from({ length: count }, (_, index) => `cli-job:${count - index}`),
+        ...Array.from({ length: count }, (_, index) => `ai-call:${count - index}`),
+      ]
+      const seen: string[] = []
+      let after: RecordsQuery['after'] = null
+      for (let pageIndex = 0; pageIndex < Math.ceil(expected.length / RECORDS_PAGE_SIZE); pageIndex++) {
+        const page = readPage(db, query({ after }))
+        expect(page.records.map((record) => `${record.kind}:${record.id}`))
+          .toEqual(expected.slice(pageIndex * RECORDS_PAGE_SIZE, (pageIndex + 1) * RECORDS_PAGE_SIZE))
+        expect(page.records.every((record) => record.time === time)).toBe(true)
+        seen.push(...page.records.map((record) => `${record.kind}:${record.id}`))
+        expect(page.more).toBe(seen.length < expected.length)
+        const last = page.records.at(-1)!
+        after = { time: last.time, kind: last.kind, id: last.id }
+      }
+      expect(seen).toEqual(expected)
+      expect(new Set(seen).size).toBe(count * 3)
+      expect(readPage(db, query({ after }))).toEqual({ records: [], more: false })
+    } finally {
+      db.close()
+    }
   })
 
   it('continues a long list from the last record of the page before', () => {

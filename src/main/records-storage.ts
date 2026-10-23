@@ -63,6 +63,15 @@ CREATE TABLE IF NOT EXISTS cli_jobs (
   error      TEXT            -- JSON: the error the process runner reported, null when none
 );
 CREATE INDEX IF NOT EXISTS cli_jobs_session ON cli_jobs (session_id);
+CREATE INDEX IF NOT EXISTS log_records_time ON log_records (time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS log_records_launch_time ON log_records (launch, time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS log_records_session_time ON log_records (session_id, time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS ai_calls_time ON ai_calls (time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS ai_calls_launch_time ON ai_calls (launch, time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS ai_calls_session_time ON ai_calls (session_id, time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS cli_jobs_time ON cli_jobs (time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS cli_jobs_launch_time ON cli_jobs (launch, time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS cli_jobs_session_time ON cli_jobs (session_id, time DESC, id DESC);
 `
 
 type Table = 'log_records' | 'ai_calls' | 'cli_jobs'

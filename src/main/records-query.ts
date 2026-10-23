@@ -30,9 +30,9 @@ function likePattern(search: string): string | null {
 
 export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
   const pattern = likePattern(query.search)
-  const parts: string[] = []
-  const params: SQLInputValue[] = []
-  const table = (select: string, from: string, level: string, searched: string[]): void => {
+  const candidates: RecordSummary[] = []
+  const table = (kind: RecordKind, select: string, from: string, level: string, searched: string[]): void => {
+    const params: SQLInputValue[] = []
     const where = ['1 = 1']
     if (query.launch !== null) {
       where.push('launch = ?')
@@ -52,34 +52,39 @@ export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
       where.push(`(${searched.map((column) => `${column} LIKE ? ESCAPE '\\'`).join(' OR ')})`)
       params.push(...searched.map(() => pattern))
     }
-    parts.push(`${select} FROM ${from} WHERE ${where.join(' AND ')}`)
+    if (query.after) {
+      const after = query.after
+      if (kind === after.kind) {
+        where.push('time <= ? AND (time < ? OR id < ?)')
+        params.push(after.time, after.time, after.id)
+      } else {
+        where.push(kind < after.kind ? 'time <= ?' : 'time < ?')
+        params.push(after.time)
+      }
+    }
+    // Each source uses its own ordered index. Sorting only the bounded merge
+    // avoids SQLite sorting an entire union on a constant source-kind column.
+    params.push(RECORDS_PAGE_SIZE + 1)
+    candidates.push(...db.prepare(`${select} FROM ${from} WHERE ${where.join(' AND ')} ORDER BY time DESC, id DESC LIMIT ?`).all(...params) as unknown as RecordSummary[])
   }
   if (query.kind === null || query.kind === 'log') {
-    table("SELECT 'log' AS kind, id, time, level, message AS title, NULL AS text", 'log_records', 'level', LOG_SEARCHED)
+    table('log', "SELECT 'log' AS kind, id, time, level, message AS title, NULL AS text", 'log_records', 'level', LOG_SEARCHED)
   }
   if (query.kind === null || query.kind === 'ai-call') {
-    table(
+    table('ai-call',
       `SELECT 'ai-call' AS kind, id, time, ${CALL_LEVEL} AS level, backend || ' ' || purpose AS title, model AS text`,
       'ai_calls', CALL_LEVEL, CALL_SEARCHED,
     )
   }
   if (query.kind === null || query.kind === 'cli-job') {
-    table(
+    table('cli-job',
       `SELECT 'cli-job' AS kind, id, time, ${JOB_LEVEL} AS level, ${JOB_TITLE} AS title, target AS text`,
       'cli_jobs', JOB_LEVEL, JOB_SEARCHED,
     )
   }
-  let after = ''
-  if (query.after !== null) {
-    const { time, kind, id } = query.after
-    after = 'WHERE time < ? OR (time = ? AND (kind < ? OR (kind = ? AND id < ?)))'
-    params.push(time, time, kind, kind, id)
-  }
-  params.push(RECORDS_PAGE_SIZE + 1)
-  const rows = db.prepare(
-    `SELECT * FROM (${parts.join(' UNION ALL ')}) ${after} ORDER BY time DESC, kind DESC, id DESC LIMIT ?`,
-  ).all(...params) as unknown as RecordSummary[]
-  return { records: rows.slice(0, RECORDS_PAGE_SIZE), more: rows.length > RECORDS_PAGE_SIZE }
+  const descending = (a: string, b: string): number => a === b ? 0 : a < b ? 1 : -1
+  candidates.sort((a, b) => descending(a.time, b.time) || descending(a.kind, b.kind) || b.id - a.id)
+  return { records: candidates.slice(0, RECORDS_PAGE_SIZE), more: candidates.length > RECORDS_PAGE_SIZE }
 }
 
 export function readSources(db: DatabaseSync): RecordsReadResults['sources'] {
