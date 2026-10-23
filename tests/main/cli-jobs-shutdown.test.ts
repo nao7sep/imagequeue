@@ -20,6 +20,7 @@ function observeJob(
     const subscriber = {
       isDestroyed: () => false,
       once: () => subscriber,
+      off: () => subscriber,
       send: () => {
         const snapshot = getCliJobSnapshot(jobId)
         if (snapshot && matches(snapshot)) finish(snapshot)

@@ -129,8 +129,10 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
 
       // Both pipes are drained as the CLI writes: an unread pipe fills and the
       // CLI blocks on its next write until the timeout kills it.
-      proc.stdout.on('data', (chunk) => { stdout += chunk.toString() })
-      proc.stderr.on('data', (chunk) => { stderr += chunk.toString() })
+      proc.stdout.setEncoding('utf8')
+      proc.stderr.setEncoding('utf8')
+      proc.stdout.on('data', (chunk: string) => { stdout += chunk })
+      proc.stderr.on('data', (chunk: string) => { stderr += chunk })
       proc.on('close', (code, exitSignal) => {
         clearTimeout(timer)
         const answer = { exitCode: code, signal: exitSignal, stdout, stderr }

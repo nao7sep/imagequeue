@@ -36,6 +36,7 @@ interface JobState {
   buffer: CliChunk[]
   nextSeq: number
   subscribers: Set<WebContents>
+  subscriberDestroyed: Map<WebContents, () => void>
   status: CliJobStatus
   exitCode: number | null
   stalled: boolean
@@ -79,6 +80,7 @@ export function startCliJob(opts: StartCliJobOpts): string {
     buffer: [],
     nextSeq: 0,
     subscribers: new Set(),
+    subscriberDestroyed: new Map(),
     status: opts.kind === 'import' ? 'queued' : 'running',
     exitCode: null,
     stalled: false,
@@ -117,9 +119,13 @@ export function startCliJob(opts: StartCliJobOpts): string {
 export function subscribeCliJob(jobId: string, wc: WebContents): CliJobSnapshot | null {
   const state = jobs.get(jobId)
   if (!state) return null
-  state.subscribers.add(wc)
+  if (!state.subscribers.has(wc)) {
+    state.subscribers.add(wc)
+    const onDestroyed = (): void => removeSubscriber(state, wc)
+    state.subscriberDestroyed.set(wc, onDestroyed)
+    wc.once('destroyed', onDestroyed)
+  }
   clearRetentionTimer(state)
-  wc.once('destroyed', () => { removeSubscriber(state, wc) })
   return snapshot(state)
 }
 
@@ -151,10 +157,6 @@ export function killCliJob(jobId: string, killGraceMs = CLI_JOB_KILL_GRACE_MS): 
     try { state.child?.kill('SIGKILL') } catch { /* ignore */ }
   }, killGraceMs)
   log('info', 'CLI job kill requested', { jobId })
-}
-
-export function killAllCliJobs(): void {
-  for (const jobId of jobs.keys()) killCliJob(jobId)
 }
 
 /** Signal every live/queued CLI job and await real child settlement, bounded. */
@@ -432,12 +434,20 @@ function clearRetentionTimer(state: JobState): void {
 function scheduleRetentionTimer(state: JobState, delayMs: number): void {
   clearRetentionTimer(state)
   state.retentionTimer = setTimeout(() => {
+    for (const [wc, onDestroyed] of state.subscriberDestroyed) wc.off('destroyed', onDestroyed)
+    state.subscriberDestroyed.clear()
+    state.subscribers.clear()
     jobs.delete(state.jobId)
     state.retentionTimer = null
   }, delayMs)
 }
 
 function removeSubscriber(state: JobState, wc: WebContents): void {
+  const onDestroyed = state.subscriberDestroyed.get(wc)
+  if (onDestroyed) {
+    wc.off('destroyed', onDestroyed)
+    state.subscriberDestroyed.delete(wc)
+  }
   state.subscribers.delete(wc)
   if (state.subscribers.size === 0 && isTerminalStatus(state.status)) {
     scheduleRetentionTimer(state, CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS)

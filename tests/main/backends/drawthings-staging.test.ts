@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Draw Things is the ONE backend where an external process owns the output file:
@@ -15,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const spawnCalls: { args: string[] }[] = []
 const killSignals: string[] = []
 let hangUntilKilled = false
+let splitUtf8Output = false
 // How the fake CLI ends after writing its (possibly partial) output.
 let exit: { code: number | null; signal: string | null; stderr: string } = { code: 0, signal: null, stderr: '' }
 
@@ -40,11 +42,11 @@ vi.mock('../../../src/main/config', async (importOriginal) => ({
   }),
 }))
 
-function makeProc(args: string[]): EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: (sig?: string) => void } {
+function makeProc(args: string[]): EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: (sig?: string) => void } {
   spawnCalls.push({ args })
   const proc = Object.assign(new EventEmitter(), {
-    stdout: new EventEmitter(),
-    stderr: new EventEmitter(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
     kill: (sig?: string) => {
       killSignals.push(sig ?? 'SIGTERM')
       // The first signal is enough for the fake: report a close by that signal.
@@ -71,8 +73,18 @@ function makeProc(args: string[]): EventEmitter & { stdout: EventEmitter; stderr
     // read, so the fake exits only once someone reads its stdout.
     setTimeout(() => {
       if (proc.stdout.listenerCount('data') === 0) return
-      proc.stdout.emit('data', Buffer.from('step 1/4\n'.repeat(20_000)))
-      if (exit.stderr) proc.stderr.emit('data', Buffer.from(exit.stderr))
+      if (splitUtf8Output) {
+        const bytes = Buffer.from('日本語 😀')
+        for (const byte of bytes) {
+          proc.stdout.write(Buffer.from([byte]))
+          proc.stderr.write(Buffer.from([byte]))
+        }
+      } else {
+        proc.stdout.write(Buffer.from('step 1/4\n'.repeat(20_000)))
+        if (exit.stderr) proc.stderr.write(Buffer.from(exit.stderr))
+      }
+      proc.stdout.end()
+      proc.stderr.end()
       proc.emit('close', exit.code, exit.signal)
     }, 0)
   }
@@ -107,6 +119,7 @@ describe('Draw Things output staging', () => {
     spawnCalls.length = 0
     killSignals.length = 0
     hangUntilKilled = false
+    splitUtf8Output = false
     exit = { code: 0, signal: null, stderr: '' }
     spawnFails = false
     recorded.failures.length = 0
@@ -275,6 +288,14 @@ describe('Draw Things output staging', () => {
     await generateDrawThings(task({ width: 3840, height: 2160 }), new AbortController().signal).catch(() => undefined)
     expect(recorded.failures).toHaveLength(1)
     expect(recorded.failures[0]!.answer).toMatchObject({ exitCode: null, signal: 'SIGKILL', stderr: 'loading model\nsampling step 3/4\n' })
+  })
+
+  it('decodes multibyte UTF-8 split across pipe chunks in both recorded streams', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    splitUtf8Output = true
+    await generateDrawThings(task(), new AbortController().signal)
+    expect(recorded.finished).toHaveLength(1)
+    expect(recorded.finished[0]).toMatchObject({ stdout: '日本語 😀', stderr: '日本語 😀' })
   })
 
   it('explains a CLI that cannot start', async () => {
