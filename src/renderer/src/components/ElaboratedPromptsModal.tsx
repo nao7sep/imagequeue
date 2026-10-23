@@ -25,9 +25,9 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   const { t, rich } = useI18n()
   const { elaboratedPrompts } = state
 
-  // Rows newest-first, each with a STABLE content-derived id (prompt text plus its
-  // occurrence among identical texts), so an id never renumbers when a row above
-  // it is deleted.
+  // Rows newest-first, identified by text and its occurrence in this snapshot.
+  // Deleting a duplicate can renumber occurrences; deletion selection is
+  // recovered by display slot below, not by assuming these IDs stay unchanged.
   const seen = new Map<string, number>()
   const rows = [...elaboratedPrompts].reverse().map((record, index) => {
     const occ = seen.get(record.text) ?? 0

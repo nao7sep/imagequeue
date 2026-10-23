@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
 
-// The three backends with manual abort wiring attach their listener to the
-// queue's signal — and a signal that is ALREADY aborted never fires its
-// listener. Today no await sits between the processor's registration and the
-// attachment, so the case is unreachable; these pin the entry guard that keeps
-// one future refactor from turning a Stop into a silently ignored request
-// (and a paid call).
+// Manual abort wiring must also handle a signal aborted before listener
+// attachment. Grok and FLUX can reach that state while refreshing credentials;
+// these entry checks prevent a pending Stop from starting paid work.
 
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({

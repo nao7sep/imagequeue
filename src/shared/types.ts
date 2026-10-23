@@ -60,8 +60,9 @@ export interface DependencyInfo {
   // configs.json only: how many entries the installed file holds, or null when
   // it is present but unreadable. Null for the CLI and for an absent file.
   entryCount: number | null
-  // When the installed artifact was last written (configs.json's mtime); null for
-  // the CLI, whose identity is its tag. ISO-8601 UTC; the renderer formats it.
+  // configs.json's recorded server Last-Modified for hash-matched installed
+  // bytes, otherwise null. Also null for the CLI, whose identity is its tag.
+  // ISO-8601 UTC; the renderer formats it.
   updatedAtUtc: string | null
   lastCheckedAtUtc: string | null
 }

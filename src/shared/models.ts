@@ -114,7 +114,8 @@ export const OPENAI_OUTPUT_FORMAT_LABELS: Record<OpenAIOutputFormat, string> = {
 }
 
 export type ImageKind = 'image-generate'
-// An image row's provider is its api-key id; its backend is the column it belongs to.
+// An image row's provider identifies its vendor; its backend identifies its
+// column. Credential IDs are mapped separately through IMAGE_BACKEND_SECRET.
 export type ImageProviderId = 'openai' | 'gemini' | 'xai' | 'bfl'
 
 export interface ModelDef {

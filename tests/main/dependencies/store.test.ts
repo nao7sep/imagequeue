@@ -45,7 +45,7 @@ describe('dependencies cache', () => {
   })
 
   // The cache holds NETWORK knowledge only. The CLI's installed tag is in its
-  // sidecar, and configs.json's installed identity is its own modification time.
+  // sidecar; configs.json's server time is recorded separately against its hash.
   it('records nothing about the artifacts themselves', async () => {
     const cache = (await readDependenciesCache())
     expect(Object.keys(cache)).toEqual(['lastAttemptAtUtc', 'cli', 'recommendations'])

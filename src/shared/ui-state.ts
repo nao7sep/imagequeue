@@ -3,7 +3,7 @@
 // Persisted to ~/.imagequeue/state.json, its own store and type per the
 // persisted-store-separation conventions: a settings reset must not touch it, and
 // its splitter-drag churn must never rewrite the config file. Disposable — losing
-// it just restores the default pane width.
+// it restores default queue-column width, Records splitter width and sound volume.
 
 import {
   COLUMN_DEFAULT_PX,

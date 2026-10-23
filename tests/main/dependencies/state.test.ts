@@ -44,7 +44,7 @@ describe('isLaunchCheckDue', () => {
 describe('compareRecommendations', () => {
   const server = '2026-09-11T20:46:05.000Z'
 
-  it('reads a file stamped with the server time as current', () => {
+  it('treats equal recorded and latest server times as current', () => {
     expect(compareRecommendations(server, server)).toBe('current')
   })
 
@@ -52,8 +52,8 @@ describe('compareRecommendations', () => {
     expect(compareRecommendations('2026-08-22T20:13:13.000Z', server)).toBe('outdated')
   })
 
-  it('reads a file written after the server last changed it as current', () => {
-    // A download from before stamping began keeps its own write time.
+  it('treats a recorded server time newer than the latest lookup as current', () => {
+    // This pure comparison receives verified server times, never local file times.
     expect(compareRecommendations('2026-09-19T11:29:40.512Z', server)).toBe('current')
   })
 

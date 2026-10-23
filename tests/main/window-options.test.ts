@@ -11,11 +11,10 @@ import {
   PREVIEW_REGION_MIN_PX,
 } from '../../src/shared/layout-metrics'
 
-// buildMainWindowOptions is the pure source the main process spreads into
-// `new BrowserWindow({...})` and reads themeSource from. It carries no electron
-// import, so it tests in the node env. These assertions pin the conformance
-// points of the window-conventions and app-chrome-conventions: derived minimum size, the app's
-// surface background in each theme, and a framed (not frameless) window.
+// buildMainWindowOptions supplies pure window geometry and chrome options.
+// The main process adds the background from mainWindowBackground using the
+// native-theme owner's resolved appearance. These Electron-free helpers let
+// node tests cover derived minimum sizes and each theme's surface background.
 
 const PANE_COUNTS = [1, 2, 4, 5]
 

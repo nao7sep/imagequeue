@@ -23,9 +23,8 @@ export async function generateGrok(task: Task, signal: AbortSignal): Promise<{ b
     throw new MissingApiKeyError('Grok Imagine')
   }
 
-  // A signal that is ALREADY aborted never fires its listener — today no await
-  // sits between registration and this point, but that is one refactor from
-  // silently ignoring a stop. The guard makes the contract explicit.
+  // Stop can arrive while credentials refresh. An already-aborted signal will
+  // not notify a newly attached listener, so check before starting paid work.
   if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
 
   const { timeout_ms } = config.image_backends.grok
