@@ -264,3 +264,43 @@ describe('records sources and detail', () => {
     db.close()
   })
 })
+
+it('refreshes source membership using only inserted keys and orders late event times correctly', () => {
+  const dir = seed()
+  const db = open(dir)
+  try {
+    const initial = readSources(db)
+    const prepare = db.prepare.bind(db)
+    const ranges: unknown[][] = []
+    const plans: string[] = []
+    const rowCounts: number[] = []
+    const spy = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
+      const statement = prepare(sql)
+      const all = statement.all.bind(statement)
+      vi.spyOn(statement, 'all').mockImplementation((...params) => {
+        ranges.push(params)
+        plans.push(...(prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[]).map((step) => step.detail))
+        const result = all(...params)
+        rowCounts.push(result.length)
+        return result
+      })
+      return statement
+    })
+    expect(readSources(db)).toEqual(initial)
+    expect(rowCounts).toEqual([0, 0, 0])
+    expect(plans.join('\n')).not.toMatch(/SCAN (log_records|ai_calls|cli_jobs)/)
+    expect(plans.filter((line) => line.includes('INTEGER PRIMARY KEY (rowid>?)'))).toHaveLength(3)
+    expect(ranges[0]![0]).toBeGreaterThan(0)
+    expect(ranges[1]![0]).toBeGreaterThan(0)
+    setRecordsSession('new-session')
+    writeLogRecord('2026-01-01T00:00:06.000Z', 'info', 'late arrival', {})
+    expect(readSources(db).sessions).toEqual(['20260102-000000-000-utc', 'new-session', 'old-session'])
+    setRecordsSession('old-session')
+    writeLogRecord('2099-01-01T00:00:00.000Z', 'info', 'new event', {})
+    expect(readSources(db).sessions).toEqual(['old-session', '20260102-000000-000-utc', 'new-session'])
+    spy.mockRestore()
+    // A fresh reader reconstructs the same source index from retained history.
+    const reopened = open(dir)
+    try { expect(readSources(reopened)).toEqual(readSources(db)) } finally { reopened.close() }
+  } finally { db.close() }
+})

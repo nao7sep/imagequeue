@@ -101,17 +101,47 @@ export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
   return { records: candidates.slice(0, RECORDS_PAGE_SIZE), more: candidates.length > RECORDS_PAGE_SIZE }
 }
 
+interface SourceIndex {
+  after: number[]
+  launches: Set<string>
+  sessions: Map<string, string>
+  result: RecordsReadResults['sources']
+}
+const sourceIndexes = new WeakMap<DatabaseSync, SourceIndex>()
+const sourceTables = ['log_records', 'ai_calls', 'cli_jobs'] as const
+
 export function readSources(db: DatabaseSync): RecordsReadResults['sources'] {
-  const launches = db.prepare(
-    'SELECT launch FROM log_records UNION SELECT launch FROM ai_calls UNION SELECT launch FROM cli_jobs ORDER BY launch DESC',
-  ).all() as { launch: string }[]
-  const sessions = db.prepare(
-    `SELECT session_id AS session, MAX(time) AS last FROM (
-      SELECT session_id, time FROM log_records UNION ALL SELECT session_id, time FROM ai_calls
-      UNION ALL SELECT session_id, time FROM cli_jobs
-    ) WHERE session_id IS NOT NULL GROUP BY session_id ORDER BY last DESC`,
-  ).all() as { session: string }[]
-  return { launches: launches.map((row) => row.launch), sessions: sessions.map((row) => row.session) }
+  // Records are append-only. Each connection builds its compact context index
+  // once, then visits only newly inserted primary keys, including late records
+  // whose event time precedes the previous refresh.
+  const index = sourceIndexes.get(db) ?? {
+    after: [0, 0, 0], launches: new Set<string>(), sessions: new Map<string, string>(),
+    result: { launches: [], sessions: [] },
+  }
+  // NOT INDEXED excludes the launch-order indexes: grouping must not turn
+  // this primary-key range into a scan of old records. SQLite still uses rowid.
+  const additions = sourceTables.map((table, position) => db.prepare(
+    `SELECT launch, session_id AS session, MAX(time) AS last, MAX(id) AS id
+     FROM ${table} NOT INDEXED WHERE id > ? GROUP BY launch, session_id`,
+  ).all(index.after[position]!) as { launch: string; session: string | null; last: string; id: number }[])
+  // Do not advance any cursor until all three reads succeed.
+  let changed = false
+  additions.forEach((rows, position) => {
+    for (const row of rows) {
+      index.after[position] = Math.max(index.after[position]!, row.id)
+      if (!index.launches.has(row.launch)) { index.launches.add(row.launch); changed = true }
+      if (row.session !== null && (index.sessions.get(row.session) ?? '') < row.last) {
+        index.sessions.set(row.session, row.last)
+        changed = true
+      }
+    }
+  })
+  if (changed) index.result = {
+    launches: [...index.launches].sort().reverse(),
+    sessions: [...index.sessions].sort((a, b) => a[1] === b[1] ? a[0].localeCompare(b[0]) : a[1] > b[1] ? -1 : 1).map(([id]) => id),
+  }
+  sourceIndexes.set(db, index)
+  return index.result
 }
 
 export function readDetail(db: DatabaseSync, kind: RecordKind, id: number): RecordDetail | null {

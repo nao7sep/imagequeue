@@ -99,7 +99,6 @@ function atTop(scroll: HTMLElement): boolean {
 export function RecordsWindow({ initialListWidth }: { initialListWidth: number }): React.JSX.Element {
   const { t, locale, timeZone } = useI18n()
   const [sources, setSources] = useState<RecordSources | null>(null)
-  const [sourceReads, setSourceReads] = useState(0)
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [searchText, setSearchText] = useState('')
   const [list, setList] = useState<ListState>({ status: 'loading' })
@@ -161,22 +160,38 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     return () => clearTimeout(timer)
   }, [searchText])
 
-  useEffect(() => {
-    let cancelled = false
+  const sourceRead = useRef(false)
+  const sourcePending = useRef(false)
+  const mounted = useRef(false)
+  const [refreshingSources, setRefreshingSources] = useState(false)
+  const refreshSources = useCallback((): void => {
+    if (sourceRead.current) { sourcePending.current = true; return }
+    sourceRead.current = true
+    sourcePending.current = false
+    setRefreshingSources(true)
     void window.electronAPI.readRecordSources().then(
       (next) => {
-        if (!cancelled) { setSources(next); setLiveFailure('sources', false) }
+        if (!mounted.current) return
+        setSources(next)
+        setLiveFailure('sources', false)
       },
       (error: unknown) => {
-        if (cancelled) return
+        if (!mounted.current) return
         setLiveFailure('sources', true)
         recordOperationalDiagnostic('Record sources read failed', error)
       },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [sourceReads, setLiveFailure])
+    ).finally(() => {
+      sourceRead.current = false
+      if (!mounted.current) return
+      setRefreshingSources(false)
+      if (sourcePending.current && !failuresRef.current.sources && !document.hidden) refreshSources()
+    })
+  }, [setLiveFailure])
+  useEffect(() => {
+    mounted.current = true
+    refreshSources()
+    return () => { mounted.current = false }
+  }, [refreshSources])
 
   // A page applies only while the filters it was read for are still the
   // newest ones asked for.
@@ -232,7 +247,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         newestRead.current = null
         if (generation !== listGeneration.current) return
         setRefreshing(false)
-        if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && (!scrollRef.current || atTop(scrollRef.current))) {
+        if (newestPending.current && !document.hidden && !failuresRef.current.records && !failuresRef.current.sources && (!scrollRef.current || atTop(scrollRef.current))) {
           newestPending.current = false
           readNewest()
         }
@@ -245,22 +260,33 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   // under the reader.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = window.electronAPI.onRecordsChanged(() => {
-      if (timer !== null || failuresRef.current.records || failuresRef.current.sources) return
+    let hiddenPending = false
+    const schedule = (): void => {
+      if (failuresRef.current.records || failuresRef.current.sources) return
+      if (document.hidden) { hiddenPending = true; return }
+      if (timer !== null) return
       timer = setTimeout(() => {
         timer = null
+        if (document.hidden) { hiddenPending = true; return }
         if (failuresRef.current.records || failuresRef.current.sources) return
-        setSourceReads((count) => count + 1)
+        hiddenPending = false
+        refreshSources()
         const scroll = scrollRef.current
         if (scroll === null || atTop(scroll)) readNewest()
         else newestPending.current = true
       }, LIVE_INTERVAL_MS)
-    })
+    }
+    const visibilityChanged = (): void => {
+      if (!document.hidden && (hiddenPending || sourcePending.current || newestPending.current)) schedule()
+    }
+    const unsubscribe = window.electronAPI.onRecordsChanged(schedule)
+    document.addEventListener('visibilitychange', visibilityChanged)
     return () => {
       unsubscribe()
+      document.removeEventListener('visibilitychange', visibilityChanged)
       if (timer !== null) clearTimeout(timer)
     }
-  }, [readNewest])
+  }, [readNewest, refreshSources])
 
   const selectedKey = selected === null ? null : recordKey(selected)
 
@@ -503,8 +529,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         {liveFailures.records || liveFailures.sources ? (
           <div className="records-refresh-failure">
             <p role="alert">{t('records.livePaused')}</p>
-            <button className="modal-btn" disabled={refreshing} onClick={() => {
-              setSourceReads((count) => count + 1)
+            <button className="modal-btn" disabled={refreshing || refreshingSources} onClick={() => {
+              refreshSources()
               readNewest()
             }}>{t('common.retry')}</button>
           </div>
