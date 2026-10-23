@@ -3,11 +3,69 @@ import { StrictMode, type ReactNode } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useBrainstormOperation } from '../../../../src/renderer/src/hooks/useBrainstormOperation'
+import type { BrainstormOutcome } from '../../../../src/shared/text-provider-failure'
 
 afterEach(() => {
   cleanup()
   delete (window as unknown as { electronAPI?: unknown }).electronAPI
   vi.restoreAllMocks()
+})
+
+it.each(['completed output', 'IPC rejection'] as const)('cancels the live request and cleans up after late %s', async (settlement) => {
+  let resolve!: (value: BrainstormOutcome) => void
+  let reject!: (reason: unknown) => void
+  const pending = new Promise<BrainstormOutcome>((yes, no) => { resolve = yes; reject = no })
+  const unsubscribe = vi.fn()
+  const onBrainstormProgress = vi.fn(() => unsubscribe)
+  const cancelBrainstorm = vi.fn().mockResolvedValue(undefined)
+  const brainstormPrompts = vi.fn().mockReturnValueOnce(pending)
+    .mockResolvedValueOnce({ ok: true, prompts: [] })
+  window.electronAPI = { onBrainstormProgress, cancelBrainstorm, brainstormPrompts } as unknown as typeof window.electronAPI
+  const { result } = renderHook(() => useBrainstormOperation({
+    compositionElaboratorId: 'composition', styleElaboratorId: 'style', seed: 'seed', format: 'sentences', length: 'medium',
+  }))
+
+  act(() => result.current.cancel())
+  expect(cancelBrainstorm).not.toHaveBeenCalled()
+  let running!: Promise<BrainstormOutcome>
+  act(() => { running = result.current.run(2) })
+  const requestId = brainstormPrompts.mock.calls[0]![0].requestId
+  expect(onBrainstormProgress).toHaveBeenCalledWith(requestId, expect.any(Function))
+  act(() => result.current.cancel())
+  expect(cancelBrainstorm).toHaveBeenCalledExactlyOnceWith(requestId)
+  // Cancellation is a request, not physical settlement: progress ownership and
+  // the run promise remain live until main returns its delivered work or error.
+  expect(unsubscribe).not.toHaveBeenCalled()
+  expect(result.current.progress).not.toBeNull()
+  if (settlement === 'completed output') {
+    const outcome: BrainstormOutcome = { ok: true, prompts: [{ text: 'retained paid result', concepts: [] }] }
+    await act(async () => {
+      resolve(outcome)
+      await expect(running).resolves.toEqual(outcome)
+    })
+  } else {
+    const error = new Error('IPC disconnected after cancellation')
+    await act(async () => {
+      const observed = expect(running).rejects.toBe(error)
+      reject(error)
+      await observed
+    })
+  }
+  expect(unsubscribe).toHaveBeenCalledOnce()
+  expect(result.current.progress).toBeNull()
+  act(() => result.current.cancel())
+  expect(cancelBrainstorm).toHaveBeenCalledTimes(1)
+
+  await act(async () => {
+    const next = result.current.run(1)
+    result.current.cancel()
+    await next
+  })
+  const nextId = brainstormPrompts.mock.calls[1]![0].requestId
+  expect(nextId).not.toBe(requestId)
+  expect(cancelBrainstorm).toHaveBeenLastCalledWith(nextId)
+  expect(unsubscribe).toHaveBeenCalledTimes(2)
+  expect(result.current.progress).toBeNull()
 })
 
 describe('useBrainstormOperation', () => {
