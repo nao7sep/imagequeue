@@ -164,14 +164,6 @@ export class QueueManager {
     return this.queues[backend].filter(isActiveTask)
   }
 
-  getAllVisibleTasks(): Record<BackendId, Task[]> {
-    const visible = createEmptyQueues()
-    for (const backend of Object.keys(visible) as BackendId[]) {
-      visible[backend] = this.getActiveTasks(backend)
-    }
-    return visible
-  }
-
   getAllStoredTasks(): Record<BackendId, Task[]> {
     const stored = createEmptyQueues()
     for (const backend of Object.keys(stored) as BackendId[]) {
@@ -264,27 +256,6 @@ export class QueueManager {
 
   generatingCount(): number {
     return Object.values(this.queues).reduce((count, tasks) => count + tasks.filter((task) => task.status === 'generating').length, 0)
-  }
-
-  // Flips any in-flight 'generating' tasks to 'interrupted', clearing the
-  // per-attempt fields the same way a resumed session does (toResumedTask).
-  // This bulk transition assumes execution has already stopped. Production
-  // shutdown instead waits for the processor to persist each actual outcome.
-  // Returns how many were affected.
-  interruptGeneratingTasks(): number {
-    let count = 0
-    for (const backend of Object.keys(this.queues) as BackendId[]) {
-      for (const task of this.queues[backend]) {
-        if (task.status === 'generating') {
-          this.updateTask(task, {
-            status: 'interrupted', startedAt: null, completedAt: null, durationMs: null,
-            imagePath: null, baseName: null, error: null, providerMessage: null,
-          })
-          count++
-        }
-      }
-    }
-    return count
   }
 
   /** Mark every task waiting to start as interrupted, so it stops being picked

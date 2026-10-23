@@ -102,9 +102,8 @@ describe('QueueManager', () => {
     expect(qm.getActiveTasks('flux').map((t) => t.prompt)).toEqual(['p2'])
   })
 
-  it('getAllVisibleTasks omits kept tasks; getAllStoredTasks keeps and clones them', () => {
+  it('getAllStoredTasks keeps and clones kept tasks', () => {
     seed(qm, [makeTask('a', 'completed'), makeTask('k', 'kept')])
-    expect(qm.getAllVisibleTasks().openai.map((t) => t.id)).toEqual(['a'])
 
     const stored = qm.getAllStoredTasks()
     expect(stored.openai.map((t) => t.id)).toEqual(['a', 'k'])
@@ -128,29 +127,6 @@ describe('QueueManager', () => {
     // Only a 'queued' task counts: generating/completed/failed do not.
     seed(qm, [makeTask('a', 'generating'), makeTask('c', 'completed')])
     expect(qm.hasQueuedTasks()).toBe(false)
-  })
-
-  it('interrupts in-flight generating tasks on shutdown, clearing per-attempt fields', () => {
-    seed(qm, [
-      makeTask('g', 'generating'),
-      makeTask('q', 'queued'),
-      makeTask('c', 'completed', 'flux')
-    ])
-    expect(qm.interruptGeneratingTasks()).toBe(1)
-    const openai = qm.getAllStoredTasks().openai
-    const g = openai.find((t) => t.id === 'g')!
-    expect(g.status).toBe('interrupted')
-    expect(g.startedAt).toBeNull()
-    expect(g.completedAt).toBeNull()
-    expect(g.durationMs).toBeNull()
-    expect(g.imagePath).toBeNull()
-    expect(g.baseName).toBeNull()
-    expect(g.error).toBeNull()
-    // Non-generating tasks are untouched.
-    expect(openai.find((t) => t.id === 'q')!.status).toBe('queued')
-    expect(qm.getAllStoredTasks().flux.find((t) => t.id === 'c')!.status).toBe('completed')
-    // Idempotent: nothing left generating.
-    expect(qm.interruptGeneratingTasks()).toBe(0)
   })
 })
 
@@ -253,21 +229,20 @@ describe('queue changes by consumer', () => {
   })
 
   it('tracks bulk transitions and deletions across backend indexes', () => {
-    seed(qm, [makeTask('queued', 'queued'), makeTask('running', 'generating', 'flux'), makeTask('done', 'completed')])
+    seed(qm, [makeTask('queued', 'queued'), makeTask('other', 'queued', 'flux'), makeTask('done', 'completed')])
     acknowledge('presentation')
-    expect(qm.interruptQueuedTasks()).toBe(1)
-    expect(qm.interruptGeneratingTasks()).toBe(1)
+    expect(qm.interruptQueuedTasks()).toBe(2)
     expect(qm.captureChanges('presentation').upserts.map(task => [task.id, task.status])).toEqual([
-      ['queued', 'interrupted'], ['running', 'interrupted'],
+      ['queued', 'interrupted'], ['other', 'interrupted'],
     ])
     acknowledge('presentation')
     expect(qm.retryAllInterrupted()).toBe(2)
     expect(qm.captureChanges('presentation').upserts).toHaveLength(2)
     acknowledge('presentation')
     expect(qm.removePendingTasks()).toBe(2)
-    expect(qm.captureChanges('presentation').removed).toEqual([{ backend: 'openai', id: 'queued' }, { backend: 'flux', id: 'running' }])
+    expect(qm.captureChanges('presentation').removed).toEqual([{ backend: 'openai', id: 'queued' }, { backend: 'flux', id: 'other' }])
     expect(qm.getTask('openai', 'queued')).toBeUndefined()
-    expect(qm.getTask('flux', 'running')).toBeUndefined()
+    expect(qm.getTask('flux', 'other')).toBeUndefined()
     expect(qm.getTask('openai', 'done')?.status).toBe('completed')
   })
 
