@@ -67,6 +67,23 @@ describe('api-keys-store', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
+  it('re-establishes file and both directory durability after a landed rename fails to sync', async () => {
+    const sync = await import('../../../src/main/utils/fsync')
+    const directory = vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('directory sync failed'))
+    const fileSync = vi.spyOn(sync, 'syncFileAsync')
+    try {
+      await expect(setStoredApiKey('openai.image', 'test-retained')).rejects.toThrow('directory sync failed')
+      const rename = vi.spyOn(fs.promises, 'rename')
+      const { retryApiKeySaves } = await import('../../../src/main/config/api-keys-store')
+      await retryApiKeySaves()
+      expect(rename).not.toHaveBeenCalled()
+      expect(fileSync).toHaveBeenCalledWith(path.join(tmpRoot, 'api-keys.json'))
+      expect(directory.mock.calls.slice(-2)).toEqual([[tmpRoot], [path.join(tmpRoot, 'key-staging')]])
+      expect(getStoredApiKey('openai.image')).toBe('test-retained')
+      rename.mockRestore()
+    } finally { directory.mockRestore(); fileSync.mockRestore() }
+  })
+
   it('stores the key in its OWN api-keys.json, under a keys container, never in config.json', async () => {
     await setStoredApiKey('openai.image', 'sk-stored')
 

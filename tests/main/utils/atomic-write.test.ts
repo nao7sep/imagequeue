@@ -1,3 +1,4 @@
+import * as backup from '../../../src/main/backup/backup-store'
 import * as sync from '../../../src/main/utils/fsync'
 import fs from 'fs'
 import os from 'os'
@@ -30,6 +31,21 @@ function existing(name: string, mode: number): string {
 }
 
 describe('atomic replacement', () => {
+  it('records protected text after a same-byte retry establishes publication durability', async () => {
+    const file = path.join(dir, 'settings.json')
+    const record = vi.spyOn(backup, 'record').mockImplementation(() => {})
+    const directorySync = vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('sync failed'))
+    try {
+      await expect(writeFileAtomicAsync(file, 'authored text', true)).rejects.toThrow('sync failed')
+      expect(record).not.toHaveBeenCalled()
+      const published = fs.statSync(file)
+      await writeFileAtomicAsync(file, 'authored text', true)
+      expect(record).toHaveBeenCalledWith(file, Buffer.from('authored text'))
+      expect(fs.statSync(file).mtimeMs).toBe(published.mtimeMs)
+      expect(directorySync.mock.invocationCallOrder.at(-1)).toBeLessThan(record.mock.invocationCallOrder[0]!)
+    } finally { directorySync.mockRestore(); record.mockRestore() }
+  })
+
   it('falls back from unsupported links to native exclusive rename without copying or overwriting a collision', async () => {
     const occupied = path.join(dir, 'occupied.png')
     const available = path.join(dir, 'available.png')

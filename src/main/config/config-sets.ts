@@ -47,7 +47,7 @@ export function configSetDefaults(): Record<string, unknown> {
 
 export function readPath(object: unknown, key: string): unknown {
   let value = object
-  for (const part of key.split('.')) value = isObject(value) ? value[part] : undefined
+  for (const part of key.split('.')) value = isObject(value) && Object.hasOwn(value, part) ? value[part] : undefined
   return value
 }
 
@@ -123,8 +123,8 @@ const PATH_SETS = new Set<string>([
   'general.export_dir', 'notifications.success_file', 'notifications.failure_file', 'image_backends.drawthings.models_dir',
 ])
 
-function cleanEach(record: Record<string, string>, clean: (text: string) => string): Record<string, string> {
-  return Object.fromEntries(Object.entries(record).map(([key, text]) => [key, clean(text)]))
+function cleanEach<T extends object>(record: T, declared: T, clean: (text: string) => string): T {
+  return { ...record, ...Object.fromEntries(Object.keys(declared).map((key) => [key, clean((record as Record<string, string>)[key])])) }
 }
 
 // A set's text as it is compared and stored (text-cleanup-conventions): bodies
@@ -134,13 +134,14 @@ function cleanEach(record: Record<string, string>, clean: (text: string) => stri
 export function cleanConfigSet(key: string, value: unknown): unknown {
   if (key === 'prompts.slug') return multiline(value as string)
   if (key === 'brainstorm.templates') {
-    return cleanEach(value as BrainstormConfig['templates'] as unknown as Record<string, string>, (text) => multiline(text))
+    return cleanEach(value as BrainstormConfig['templates'], createDefaultConfig().brainstorm.templates, multiline)
   }
   if (key === 'brainstorm.format_directives') {
     const directives = value as BrainstormConfig['format_directives']
     return {
-      formats: cleanEach(directives.formats, (text) => singleLine(text)),
-      lengths: cleanEach(directives.lengths, (text) => singleLine(text)),
+      ...directives,
+      formats: cleanEach(directives.formats, createDefaultConfig().brainstorm.format_directives.formats, singleLine),
+      lengths: cleanEach(directives.lengths, createDefaultConfig().brainstorm.format_directives.lengths, singleLine),
     }
   }
   if (key.endsWith('.defaults') || PATH_SETS.has(key)) return value

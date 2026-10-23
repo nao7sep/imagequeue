@@ -15,6 +15,7 @@ let cachedConfig: AppConfig | null = null
 // there is no file, including after a set-aside. Save compares against it and never
 // re-reads the file, so config.json is read only at load.
 let storedMap: Record<string, unknown> | null = null
+let rejectedStoredSets = new Set<string>()
 
 // Resolve after the environment is known, without filesystem work. Directory
 // setup belongs to startup rather than cached-key reads or runtime save paths.
@@ -105,10 +106,12 @@ function readStoredMap(): Record<string, unknown> | null {
 // fallback); one that fails reads as its built-in and stays in the file.
 function effectiveConfig(stored: Record<string, unknown>): AppConfig {
   const config = createDefaultConfig()
+  rejectedStoredSets = new Set()
   for (const [key, builtIn] of Object.entries(configSetDefaults())) {
     const value = readPath(stored, key)
     if (value === undefined) continue
     if (!hasSetShape(value, builtIn, key)) {
+      rejectedStoredSets.add(key)
       log('warn', 'Invalid config set; using built-in', { key })
       continue
     }
@@ -182,10 +185,19 @@ const RETIRED_KEYS: ReadonlySet<string> = new Set([
 function carryUnknownKeys(stored: Record<string, unknown>, next: Record<string, unknown>, known: readonly string[], prefix = ''): void {
   for (const [name, value] of Object.entries(stored)) {
     const key = prefix ? `${prefix}.${name}` : name
-    if (known.includes(key) || RETIRED_KEYS.has(key)) continue
-    const container = known.some((set) => set.startsWith(`${key}.`))
-    if (container && isObject(value)) carryUnknownKeys(value, next, known, key)
-    else if (readPath(next, key) === undefined) writePath(next, key, value)
+    // Stored member names are literal, including dots and __proto__. Only
+    // declared paths have path semantics; unknown data must never traverse a
+    // prototype or be reinterpreted as a different nested property.
+    const pathMember = !name.includes('.')
+    if (pathMember && (known.includes(key) || RETIRED_KEYS.has(key))) continue
+    const container = pathMember && known.some((set) => set.startsWith(`${key}.`))
+    if (container && isObject(value)) {
+      const child = Object.hasOwn(next, name) && isObject(next[name]) ? next[name] : {}
+      carryUnknownKeys(value, child, known, key)
+      if (Object.keys(child).length > 0) Object.defineProperty(next, name, { value: child, enumerable: true, configurable: true, writable: true })
+    } else if (!Object.hasOwn(next, name)) {
+      Object.defineProperty(next, name, { value: structuredClone(value), enumerable: true, configurable: true, writable: true })
+    }
   }
 }
 
@@ -216,16 +228,22 @@ async function persistConfig(config: AppConfig): Promise<void> {
   const before = loadConfig()
   const builtIns = configSetDefaults()
   const next: Record<string, unknown> = {}
+  const effective = createDefaultConfig()
+  const rejected = new Set<string>()
   for (const [key, builtIn] of Object.entries(builtIns)) {
     const value = readConfigSet(config, key)
     const stored = storedMap === null ? undefined : readPath(storedMap, key)
-    if (stored !== undefined && !hasSetShape(stored, builtIn, key) && valuesEqual(value, readConfigSet(before, key))) {
+    if (rejectedStoredSets.has(key) && valuesEqual(value, readConfigSet(before, key))) {
       writePath(next, key, stored)
+      rejected.add(key)
       continue
     }
     if (!hasSetShape(value, builtIn, key)) throw Object.assign(new Error(`Cannot save invalid config set: ${key}`), { name: 'InvalidConfigSetError' })
     const cleaned = cleanConfigSet(key, value)
-    if (!equalsBuiltIn(key, cleaned, builtIn, config)) writePath(next, key, cleaned)
+    if (!equalsBuiltIn(key, cleaned, builtIn, config)) {
+      writePath(next, key, cleaned)
+      applyConfigSet(effective, key, cleaned)
+    }
   }
   if (storedMap !== null) carryUnknownKeys(storedMap, next, Object.keys(builtIns))
   const unchanged = storedMap === null ? Object.keys(next).length === 0 : valuesEqual(next, storedMap)
@@ -235,7 +253,8 @@ async function persistConfig(config: AppConfig): Promise<void> {
     storedMap = next
     log('info', 'Config saved', { path: file })
   }
-  cachedConfig = effectiveConfig(next)
+  cachedConfig = effective
+  rejectedStoredSets = rejected
   for (const listener of savedListeners) {
     try { listener() } catch (error) { log('error', 'A config listener failed', { error: serializeError(error) }) }
   }

@@ -72,10 +72,11 @@ export async function writeFileAtomicAsync(
     signal?.throwIfAborted()
     if (await holdsBytesAsync(filePath, bytes)) {
       // A retry can observe bytes from a rename whose directory sync failed.
-      // Preserve timestamps and backups, but re-establish durability before
+      // Preserve timestamps, but re-establish durability before
       // acknowledging that same content as saved.
       await syncFileAsync(filePath)
       await syncDirectoryAsync(dir)
+      if (records) record(filePath, bytes)
       return
     }
     handle = await fs.promises.open(tempPath, 'wx', 0o600)

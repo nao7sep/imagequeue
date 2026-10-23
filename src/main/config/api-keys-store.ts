@@ -7,7 +7,7 @@ import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import type { AppNotice } from '../../shared/app-notice'
 import { FORMAT_VERSION_KEY, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
-import { syncDirectoryAsync } from '../utils/fsync'
+import { syncDirectoryAsync, syncFileAsync } from '../utils/fsync'
 import { holdsBytesAsync } from '../utils/holds-bytes'
 import { raiseAppNotice } from '../app-notices'
 import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
@@ -207,7 +207,14 @@ async function writeSecretsFile(file: SecretsFile): Promise<void> {
   // A repeated Clear may leave the destination unchanged; its cleanup still
   // needs directory durability before acknowledging that secret copies are gone.
   if (cleanedStages) await syncDirectoryAsync(stagingDir)
-  if (await holdsBytesAsync(filePath, content)) return
+  if (await holdsBytesAsync(filePath, content)) {
+    // A previous rename may have landed before either directory sync failed.
+    // Equal bytes alone do not establish that publication's durability.
+    await syncFileAsync(filePath)
+    await syncDirectoryAsync(dir)
+    await syncDirectoryAsync(stagingDir)
+    return
+  }
   const tempPath = path.join(stagingDir, `api-keys-${nanoid()}.tmp`)
   let owned = false
   try {

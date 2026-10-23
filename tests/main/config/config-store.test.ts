@@ -50,6 +50,33 @@ describe('settings by set', () => {
     return sets
   }
 
+  it('preserves unknown literal and prototype-like members without interpreting paths', async () => {
+    const raw = JSON.parse('{"formatVersion":1,"__proto__":{"reviewMarker":true},"__proto__.reviewMarker":"literal","general.theme":"literal theme","general":{"future.option":42,"constructor":{"prototype":{"reviewMarker":true}}}}')
+    fs.writeFileSync(file(), JSON.stringify(raw))
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    await updateConfig((draft) => { draft.general.language = 'ja' })
+    const saved = stored()
+    expect(Object.prototype).not.toHaveProperty('reviewMarker')
+    expect(saved.__proto__).toEqual(raw.__proto__)
+    expect(Object.hasOwn(saved, '__proto__')).toBe(true)
+    expect(saved['__proto__.reviewMarker']).toBe('literal')
+    expect(saved['general.theme']).toBe('literal theme')
+    expect(saved.general['future.option']).toBe(42)
+    expect(saved.general.constructor).toEqual(raw.general.constructor)
+  })
+
+  it('cleans declared template text while carrying unknown members unchanged', async () => {
+    const brainstorm = createDefaultConfig().brainstorm
+    const templates = { ...brainstorm.templates, future: 42 }
+    const format_directives = { ...brainstorm.format_directives, future: { enabled: true }, formats: { ...brainstorm.format_directives.formats, future: 17 } }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { templates, format_directives } }))
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    await updateConfig((draft) => { draft.general.language = 'ja' })
+    expect(stored().brainstorm.templates.future).toBe(42)
+    expect(stored().brainstorm.format_directives.future).toEqual({ enabled: true })
+    expect(stored().brainstorm.format_directives.formats.future).toBe(17)
+  })
+
   it('loads built-ins without writing on first run', async () => {
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig()).toEqual(createDefaultConfig())
@@ -341,8 +368,14 @@ describe('settings by set', () => {
     vi.doMock('../../../src/main/logger', async (importOriginal) => ({ ...await importOriginal<object>(), log }))
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'bogus' } }))
     try {
-      const { loadConfig } = await import('../../../src/main/config/config-store')
+      const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
       loadConfig()
+      await updateConfig((draft) => { draft.general.language = 'ja' })
+      await updateConfig((draft) => { draft.general.language = 'de' })
+      expect(stored().general.theme).toBe('bogus')
+      await updateConfig((draft) => { draft.general.theme = 'dark' })
+      expect(loadConfig().general.theme).toBe('dark')
+      expect(stored().general.theme).toBe('dark')
     } finally {
       vi.doUnmock('../../../src/main/logger')
     }
