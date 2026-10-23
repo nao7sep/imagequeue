@@ -22,7 +22,7 @@ import {
   DependencyProgress,
   DrawThingsModelParams,
   SessionListEntry,
-  ApiKeyPresence,
+  SettingsCredentials,
   SecretId,
   QueueControlState,
   ConceptFacetSummary,
@@ -151,10 +151,8 @@ export interface ElectronAPI {
   getSettings: () => Promise<Record<string, unknown>>
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<{ success: boolean }>
-  getApiKeyPresence: () => Promise<ApiKeyPresence>
-  // Stored values are read separately and submitted as a separate changed-key
-  // map with the form; config.json never receives keys.
-  getApiKeys: () => Promise<Record<SecretId, string>>
+  // Stored values and resolved presence share one refresh, separate from config.
+  getCredentials: () => Promise<SettingsCredentials>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
 

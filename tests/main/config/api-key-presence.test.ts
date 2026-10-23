@@ -8,7 +8,7 @@ import { SECRET_IDS } from '../../../src/shared/types'
 // The split that caused the env-only-key bug, pinned at its source: what the
 // settings form reads (the STORED value, deliberately blind to the environment)
 // and what "is this backend usable" means (resolution, environment first) are
-// different questions. settings:getApiKeyPresence answers the second; these
+// different questions. The credential snapshot’s presence answers the second; these
 // tests hold the two apart so a future refactor cannot quietly merge them.
 
 const ENV_VAR = 'IMAGEQUEUE_DATA_DIR'

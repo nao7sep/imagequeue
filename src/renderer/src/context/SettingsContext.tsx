@@ -38,9 +38,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     let cancelled = false
     void Promise.all([
       window.electronAPI.getSettings(),
-      window.electronAPI.getApiKeyPresence(),
-      window.electronAPI.getApiKeys(),
-    ]).then(([cfg, presence, keys]) => {
+      window.electronAPI.getCredentials(),
+    ]).then(([cfg, { presence, keys }]) => {
       if (cancelled) return
       setSettings(cfg as Record<string, unknown>)
       setApiKeyPresence(presence)
@@ -70,10 +69,9 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   // key changes what resolves, and an env-supplied key means the stored value
   // and the presence flag can disagree in either direction.
   const refreshSettings = useCallback(async (): Promise<Record<string, unknown>> => {
-    const [fresh, presence, keys] = await Promise.all([
+    const [fresh, { presence, keys }] = await Promise.all([
       window.electronAPI.getSettings(),
-      window.electronAPI.getApiKeyPresence(),
-      window.electronAPI.getApiKeys(),
+      window.electronAPI.getCredentials(),
     ])
     const next = fresh as Record<string, unknown>
     setSettings(next)

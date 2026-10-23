@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   setStoredApiKeys: vi.fn(async (changes: Record<string, string>) => {
     for (const [id, value] of Object.entries(changes)) mocks.storedKeys.set(id, value)
   }),
+  refreshApiKeys: vi.fn(async () => {}),
   refreshMainWindowMinimumSize: vi.fn(),
   startCliJob: vi.fn(() => 'job-1'),
   subscribeCliJob: vi.fn(),
@@ -56,10 +57,10 @@ vi.mock('../../src/main/config', () => ({
   },
 }))
 vi.mock('../../src/main/config/api-keys-store', () => ({
-  refreshApiKeys: async () => {},
-  getStoredApiKey: (id: string) => mocks.storedKeys.get(id) ?? '',
+  refreshApiKeys: mocks.refreshApiKeys,
+  getStoredApiKey: vi.fn((id: string) => mocks.storedKeys.get(id) ?? ''),
   setStoredApiKeys: mocks.setStoredApiKeys,
-  hasApiKey: (id: string) => mocks.resolvableKeys.has(id),
+  hasApiKey: vi.fn((id: string) => mocks.resolvableKeys.has(id)),
 }))
 vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string) => key }) }))
 vi.mock('../../src/main/settings-changes', () => ({ applyChangedFields: vi.fn() }))
@@ -133,7 +134,7 @@ describe('API keys', () => {
     mocks.storedKeys.set('openai.image', 'sk-stored')
     mocks.resolvableKeys.add('openai.image').add('gemini.text')
 
-    const keys = await invoke('settings:getApiKeys') as Record<string, string>
+    const { keys } = await invoke('settings:getCredentials') as { keys: Record<string, string> }
 
     expect(Object.keys(keys).sort()).toEqual([...SECRET_IDS].sort())
     expect(keys['openai.image']).toBe('sk-stored')
@@ -143,16 +144,57 @@ describe('API keys', () => {
   it('answers separately which keys can actually be resolved', async () => {
     mocks.resolvableKeys.add(IMAGE_BACKEND_SECRET[CLOUD_BACKEND_IDS_IN_UI_ORDER[0]]).add('gemini.text')
 
-    const presence = await invoke('settings:getApiKeyPresence') as {
+    const { presence } = await invoke('settings:getCredentials') as { presence: {
       image: Record<string, boolean>
       geminiText: boolean
       openaiText: boolean
-    }
+    } }
 
     expect(presence.image[CLOUD_BACKEND_IDS_IN_UI_ORDER[0]]).toBe(true)
     expect(presence.image[CLOUD_BACKEND_IDS_IN_UI_ORDER[1]]).toBe(false)
     expect(presence).toMatchObject({ geminiText: true, openaiText: false })
     expect(JSON.stringify(presence), 'presence never carries a value').not.toContain('sk-')
+  })
+
+  it('refreshes once after an unrelated save and shares externally repaired presence with layout', async () => {
+    const store = await vi.importActual<typeof import('../../src/main/config/api-keys-store')>('../../src/main/config/api-keys-store')
+    const boundary = await import('../../src/main/config/api-keys-store')
+    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+    const envNames = ['IMAGEQUEUE_DATA_DIR', ...SECRET_IDS.map((id) => `${id.toUpperCase().replaceAll('.', '_')}_API_KEY`)]
+    const previous = envNames.map((name) => process.env[name])
+    try {
+      for (const name of envNames) delete process.env[name]
+      process.env.IMAGEQUEUE_DATA_DIR = mocks.root
+      process.env.GEMINI_TEXT_API_KEY = 'environment-text-secret'
+      mocks.refreshApiKeys.mockImplementation(store.refreshApiKeys)
+      vi.mocked(boundary.getStoredApiKey).mockImplementation(store.getStoredApiKey)
+      vi.mocked(boundary.hasApiKey).mockImplementation(store.hasApiKey)
+      await invoke('settings:getCredentials')
+      fs.writeFileSync(path.join(mocks.root, 'api-keys.json'), JSON.stringify({
+        formatVersion: FORMAT_VERSIONS.apiKeys, keys: { 'openai.image': 'repaired-key' },
+      }), { mode: 0o600 })
+      await invoke('settings:saveChangedFields', mocks.config, mocks.config, {})
+      const read = vi.spyOn(fs.promises, 'readFile')
+      let layoutPresent = false
+      mocks.refreshMainWindowMinimumSize.mockImplementation(() => { layoutPresent = store.hasApiKey('openai.image') })
+      const snapshot = await invoke('settings:getCredentials') as import('../../src/shared/types').SettingsCredentials
+      expect(read.mock.calls.filter(([file]) => String(file) === path.join(mocks.root, 'api-keys.json'))).toHaveLength(1)
+      expect(snapshot.keys['openai.image']).toBe('repaired-key')
+      expect(snapshot.presence.image.openai).toBe(true)
+      expect(layoutPresent).toBe(true)
+      expect(snapshot.keys['gemini.text']).toBe('')
+      expect(snapshot.presence.geminiText).toBe(true)
+      expect(JSON.stringify(snapshot)).not.toContain('environment-text-secret')
+    } finally {
+      envNames.forEach((name, index) => {
+        if (previous[index] === undefined) delete process.env[name]
+        else process.env[name] = previous[index]
+      })
+      mocks.refreshApiKeys.mockImplementation(async () => {})
+      vi.mocked(boundary.getStoredApiKey).mockImplementation((id) => mocks.storedKeys.get(id) ?? '')
+      vi.mocked(boundary.hasApiKey).mockImplementation((id) => mocks.resolvableKeys.has(id))
+      mocks.refreshMainWindowMinimumSize.mockImplementation(() => {})
+    }
   })
 
   it('stores the keys it was given and re-measures the window, since a key can add a column', async () => {

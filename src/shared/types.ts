@@ -312,6 +312,12 @@ export interface ApiKeyPresence {
   openaiText: boolean
 }
 
+/** One refreshed credential observation; environment values never enter keys. */
+export interface SettingsCredentials {
+  keys: Record<SecretId, string>
+  presence: ApiKeyPresence
+}
+
 // Concept-ledger rows surfaced to the Concept Library modal: the concept
 // database returns them, and preload and renderer type against the same shapes.
 export interface ConceptFacetSummary {

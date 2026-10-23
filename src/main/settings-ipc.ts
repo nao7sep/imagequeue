@@ -153,30 +153,20 @@ export function registerSettingsIpc(
     return { success: true }
   })
 
-  // Keys are read and written by key id, separately from
-  // the config payload. The STORED value is surfaced, not the resolved one: an
-  // environment-supplied key must stay invisible to the form so that saving a
-  // field the user never touched cannot overwrite it.
-  handle('settings:getApiKeys', async () => {
+  // One refresh supplies stored values for editing and resolved presence for
+  // readiness. Environment values stay out of the form. Native layout observes
+  // this same cached snapshot before the renderer receives it.
+  handle('settings:getCredentials', async () => {
     await refreshApiKeys()
     const keys = {} as Record<SecretId, string>
     for (const id of SECRET_IDS) keys[id] = getStoredApiKey(id)
-    return keys
-  })
-
-  // Which secrets are actually resolvable, environment value included. The
-  // renderer cannot work this out for itself: settings:get deliberately surfaces
-  // only the STORED key, so that editing a field can never silently overwrite an
-  // env-supplied one — which means a backend configured purely by environment
-  // variable looks unconfigured to every UI check that reads that string. This
-  // handler is the presence signal those checks need; it never carries a value.
-  handle('settings:getApiKeyPresence', async () => {
-    await refreshApiKeys()
     const image = {} as Record<CloudBackendId, boolean>
     for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
       image[backend] = hasApiKey(IMAGE_BACKEND_SECRET[backend])
     }
-    return { image, geminiText: hasApiKey('gemini.text'), openaiText: hasApiKey('openai.text') }
+    const presence = { image, geminiText: hasApiKey('gemini.text'), openaiText: hasApiKey('openai.text') }
+    refreshMainWindowMinimumSize()
+    return { keys, presence }
   })
 
   handle('settings:saveBrainstorm', async (_event, brainstorm: AppConfig['brainstorm']) => {
