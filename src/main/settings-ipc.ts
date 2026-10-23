@@ -1,3 +1,4 @@
+import { authorizedSoundFile, grantPickedSoundFile } from './sound-file-grants'
 import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import os from 'os'
@@ -108,10 +109,17 @@ export function registerSettingsIpc(
     return loadConfig()
   })
 
-  handle('settings:saveChangedFields', async (_event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}, authoredPaths: string[] = []) => {
+  handle('settings:saveChangedFields', async (event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}, authoredPaths: string[] = []) => {
     validateKeyChanges(keys)
-    // Both store owners capture the complete form before the first wait. Quit
-    // can now drain/retry it even if the renderer's later refresh is refused.
+    for (const field of ['success_file', 'failure_file'] as const) {
+      const raw = next.notifications[field]
+      if (raw && raw !== base.notifications[field]) {
+        const resolved = authoredPaths.includes(field) ? expandUserPath(raw, os.homedir()) : resolveSettingsPath(raw, os.homedir())
+        if (!await authorizedSoundFile(resolved, event.sender)) throw new Error('Sound file access was not granted')
+      }
+    }
+    // After native consent, both store owners capture the complete form before
+    // waiting on writes. Quit can drain/retry that admitted submission.
     const results = await Promise.allSettled([
       updateConfig((draft) => {
         applyChangedFields(draft as unknown as Record<string, unknown>, base, next)
@@ -188,11 +196,15 @@ export function registerSettingsIpc(
     }
   )
 
-  handle('settings:saveNotificationField', async (_event, field: string, value: unknown) => {
+  handle('settings:saveNotificationField', async (event, field: string, value: unknown) => {
     if (!notificationFields.has(field)) {
       throw new Error(`Cannot save unsupported notification setting: ${field}`)
     }
 
+    if (field === 'success_file' || field === 'failure_file') {
+      if (typeof value !== 'string') throw new Error('Invalid sound file path')
+      if (value && !await authorizedSoundFile(resolveSettingsPath(value, os.homedir()), event.sender)) throw new Error('Sound file access was not granted')
+    }
     await updateConfig((draft) => {
       const notifications = draft.notifications as unknown as Record<string, unknown>
       notifications[field] = value
@@ -277,7 +289,9 @@ export function registerSettingsIpc(
     const defaultPath = resolved ? await existingPickerPath(resolved) : undefined
     const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters, ...(defaultPath ? { defaultPath } : {}) }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
-    return result.canceled ? null : result.filePaths[0]
+    const selected = result.canceled ? null : result.filePaths[0]
+    if (selected && purpose !== 'model-import') await grantPickedSoundFile(selected)
+    return selected
   })
 
   handle('shell:openExternal', async (_event, url: string) => {

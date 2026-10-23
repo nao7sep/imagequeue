@@ -1,4 +1,6 @@
 {
+  "common.allow": "Erlauben",
+  "settings.allowSoundFile": "Darf ImageQueue diese Datei für Benachrichtigungstöne lesen?",
   "storage.stillPending": "Der Speichervorgang dauert länger als erwartet und kann noch abgeschlossen werden. Prüfen Sie das Ergebnis, bevor Sie es erneut versuchen.",
   "quit.title": "Speichern vor dem Beenden fehlgeschlagen",
   "quit.message": "Einige Änderungen konnten nicht gespeichert werden. Versuchen Sie es erneut, beenden Sie, ohne diese Änderungen zu speichern, oder brechen Sie das Beenden ab.",

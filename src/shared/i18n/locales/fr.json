@@ -1,4 +1,6 @@
 {
+  "common.allow": "Autoriser",
+  "settings.allowSoundFile": "Autoriser ImageQueue à lire ce fichier pour les sons de notification\u00a0?",
   "storage.stillPending": "L’opération de stockage prend plus de temps que prévu et peut encore aboutir. Vérifiez le résultat avant de réessayer.",
   "quit.title": "Impossible d’enregistrer avant de quitter",
   "quit.message": "Certaines modifications n’ont pas pu être enregistrées. Réessayez, quittez sans enregistrer ces modifications ou annulez la fermeture.",

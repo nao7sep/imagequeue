@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   config: {
     general: { show_status_icon: true },
+    notifications: { success_file: '', failure_file: '' },
   },
   saveConfig: vi.fn(),
   applyChangedFields: vi.fn(),
@@ -172,7 +173,7 @@ describe('status-icon reconciliation after a settings save', () => {
     const reconcile = vi.fn(() => { order.push('reconcile') })
     const handler = registerAndGetSaveHandler(reconcile)
 
-    await expect(handler({}, {}, {})).resolves.toEqual({ success: true })
+    await expect(handler({}, mocks.config, mocks.config)).resolves.toEqual({ success: true })
 
     expect(order).toEqual(['save', 'reconcile'])
     expect(reconcile).toHaveBeenCalledWith(mocks.config)
@@ -183,7 +184,7 @@ describe('status-icon reconciliation after a settings save', () => {
     const reconcile = vi.fn()
     const handler = registerAndGetSaveHandler(reconcile)
 
-    await expect(handler({}, {}, {})).rejects.toThrow('disk full')
+    await expect(handler({}, mocks.config, mocks.config)).rejects.toThrow('disk full')
     expect(reconcile).not.toHaveBeenCalled()
   })
 
@@ -191,7 +192,7 @@ describe('status-icon reconciliation after a settings save', () => {
     const reconcile = vi.fn(() => { throw new Error('tray unavailable') })
     const handler = registerAndGetSaveHandler(reconcile)
 
-    await expect(handler({}, {}, {})).resolves.toEqual({ success: true })
+    await expect(handler({}, mocks.config, mocks.config)).resolves.toEqual({ success: true })
     expect(mocks.log).toHaveBeenCalledWith(
       'error',
       'Post-settings-save reconciliation failed',

@@ -1,4 +1,6 @@
 {
+  "common.allow": "允许",
+  "settings.allowSoundFile": "允许 ImageQueue 读取此文件用作通知音吗？",
   "storage.stillPending": "存储操作耗时比预期更长，仍可能完成。请在重试前检查结果。",
   "quit.title": "退出前无法保存",
   "quit.message": "部分更改无法保存。请重试保存、不保存这些更改并退出，或取消退出。",

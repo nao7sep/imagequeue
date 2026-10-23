@@ -1,4 +1,6 @@
 {
+  "common.allow": "Allow",
+  "settings.allowSoundFile": "Allow ImageQueue to read this file for notification sounds?",
   "storage.stillPending": "The storage operation is taking longer than expected and may still complete. Check the result before trying again.",
   "quit.title": "Unable to save before quitting",
   "quit.message": "Some changes could not be saved. Retry saving, quit without saving those changes, or cancel quitting.",

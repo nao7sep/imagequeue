@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/ipc-boundary', () => ({
   handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler),
 }))
-vi.mock('../../src/main/config', () => ({ loadConfig: () => mocks.config, saveConfig: vi.fn() }))
+vi.mock('../../src/main/config', () => ({ loadConfig: () => mocks.config, saveConfig: vi.fn(), getDataDir: () => root }))
 vi.mock('../../src/main/settings-changes', () => ({ applyChangedFields: vi.fn() }))
 vi.mock('../../src/main/session', () => ({ getSessionDir: () => mocks.sessionDir }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => ({ error }) }))

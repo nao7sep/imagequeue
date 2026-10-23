@@ -1,6 +1,7 @@
+import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../src/main/config/types'
 
 // What the renderer is allowed to write. Every one of these handlers takes an
@@ -12,6 +13,9 @@ type Handler = (...args: unknown[]) => unknown
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
+  root: '',
+  showMessageBox: vi.fn(),
+  showOpenDialog: vi.fn(),
   config: {} as AppConfig,
   saveConfig: vi.fn(),
   storedKeys: new Map<string, string>(),
@@ -33,7 +37,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn(() => null) },
   ClipboardItem: class {},
   clipboard: { readText: vi.fn(async () => ''), write: vi.fn() },
-  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
+  dialog: { showOpenDialog: mocks.showOpenDialog, showSaveDialog: vi.fn(), showMessageBox: mocks.showMessageBox },
   nativeImage: { createFromBuffer: vi.fn() },
   shell: { openExternal: vi.fn(), showItemInFolder: vi.fn() },
 }))
@@ -44,6 +48,7 @@ vi.mock('../../src/main/ipc-boundary', () => ({
 // there); here it applies to the shared object so the handlers' edits are visible.
 vi.mock('../../src/main/config', () => ({
   loadConfig: () => mocks.config,
+  getDataDir: () => mocks.root,
   updateConfig: (apply: (draft: AppConfig) => void) => {
     apply(mocks.config)
     return Promise.resolve(mocks.saveConfig(mocks.config)).then(() => mocks.config)
@@ -55,6 +60,7 @@ vi.mock('../../src/main/config/api-keys-store', () => ({
   setStoredApiKeys: mocks.setStoredApiKeys,
   hasApiKey: (id: string) => mocks.resolvableKeys.has(id),
 }))
+vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string) => key }) }))
 vi.mock('../../src/main/settings-changes', () => ({ applyChangedFields: vi.fn() }))
 vi.mock('../../src/main/main-window-layout', () => ({
   refreshMainWindowMinimumSize: mocks.refreshMainWindowMinimumSize,
@@ -84,6 +90,7 @@ vi.mock('../../src/main/backend-defaults', () => ({
 }))
 
 const { registerSettingsIpc } = await import('../../src/main/settings-ipc')
+const { registerNotificationIpc } = await import('../../src/main/notification')
 const { CLOUD_BACKEND_IDS_IN_UI_ORDER, IMAGE_BACKEND_SECRET, SECRET_IDS } = await import('../../src/shared/types')
 
 async function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -94,6 +101,8 @@ async function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-settings-sound-'))
+  mocks.showMessageBox.mockReset().mockResolvedValue({ response: 0 })
   mocks.storedKeys.clear()
   mocks.resolvableKeys.clear()
   mocks.config = {
@@ -107,7 +116,10 @@ beforeEach(() => {
   } as unknown as AppConfig
   mocks.handlers.clear()
   registerSettingsIpc()
+  registerNotificationIpc()
 })
+
+afterEach(() => fs.rmSync(mocks.root, { recursive: true, force: true }))
 
 describe('API keys', () => {
   it('shows the form what is stored, and nothing an environment variable supplied', async () => {
@@ -137,22 +149,22 @@ describe('API keys', () => {
   })
 
   it('stores the keys it was given and re-measures the window, since a key can add a column', async () => {
-    await invoke('settings:saveChangedFields', {}, {}, { 'openai.image': 'sk-new', 'gemini.text': '' })
+    await invoke('settings:saveChangedFields', mocks.config, mocks.config, { 'openai.image': 'sk-new', 'gemini.text': '' })
 
     expect(mocks.setStoredApiKeys).toHaveBeenCalledWith({ 'openai.image': 'sk-new', 'gemini.text': '' })
     expect(mocks.refreshMainWindowMinimumSize).toHaveBeenCalledOnce()
   })
 
   it('refuses an id outside the known set, before anything is written', async () => {
-    await expect(invoke('settings:saveChangedFields', {}, {}, { 'openai.image': 'sk-new', 'evil.key': 'x' })).rejects.toThrow(
+    await expect(invoke('settings:saveChangedFields', mocks.config, mocks.config, { 'openai.image': 'sk-new', 'evil.key': 'x' })).rejects.toThrow(
       /unsupported api key: evil.key/,
     )
     expect(mocks.setStoredApiKeys).not.toHaveBeenCalled()
   })
 
   it('leaves the window alone when there was nothing to save', async () => {
-    expect(await invoke('settings:saveChangedFields', {}, {}, {})).toEqual({ success: true })
-    expect(await invoke('settings:saveChangedFields', {}, {}, undefined)).toEqual({ success: true })
+    expect(await invoke('settings:saveChangedFields', mocks.config, mocks.config, {})).toEqual({ success: true })
+    expect(await invoke('settings:saveChangedFields', mocks.config, mocks.config, undefined)).toEqual({ success: true })
     expect(mocks.refreshMainWindowMinimumSize).not.toHaveBeenCalled()
   })
 })
@@ -180,7 +192,7 @@ describe('image backend defaults', () => {
 })
 
 describe('notification settings', () => {
-  it.each(['notifications_enabled', 'sounds_enabled', 'success_file', 'failure_file'])(
+  it.each(['notifications_enabled', 'sounds_enabled'])(
     'saves %s',
     async (field) => {
       expect(await invoke('settings:saveNotificationField', field, 'value')).toEqual({ success: true })
@@ -189,6 +201,34 @@ describe('notification settings', () => {
       expect(mocks.saveConfig).toHaveBeenCalledOnce()
     },
   )
+
+  it.each(['success_file', 'failure_file'])('requires native consent before saving a typed %s', async (field) => {
+    const file = path.join(mocks.root, 'typed.wav')
+    fs.writeFileSync(file, 'sound')
+    await expect(invoke('settings:saveNotificationField', field, file)).rejects.toThrow('Sound file access was not granted')
+    expect(mocks.saveConfig).not.toHaveBeenCalled()
+    expect(fs.existsSync(path.join(mocks.root, 'sound-file-grants.json'))).toBe(false)
+    mocks.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    await expect(invoke('settings:saveNotificationField', field, file)).resolves.toEqual({ success: true })
+    expect((mocks.config.notifications as unknown as Record<string, unknown>)[field]).toBe(file)
+    expect(mocks.saveConfig).toHaveBeenCalledOnce()
+  })
+
+  it('grants a native Browse selection for later use without a second question', async () => {
+    const file = path.join(mocks.root, 'picked.wav')
+    fs.writeFileSync(file, 'sound')
+    mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] })
+    await expect(invoke('dialog:openFile', [])).resolves.toBe(file)
+    await expect(invoke('settings:saveNotificationField', 'success_file', file)).resolves.toEqual({ success: true })
+    await expect(invoke('notification:loadAudioFile', file)).resolves.toBe(`data:audio/wav;base64,${Buffer.from('sound').toString('base64')}`)
+    expect(mocks.showMessageBox).not.toHaveBeenCalled()
+  })
+
+  it('does not grant a canceled Browse selection', async () => {
+    mocks.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    await expect(invoke('dialog:openFile', [])).resolves.toBeNull()
+    expect(fs.existsSync(path.join(mocks.root, 'sound-file-grants.json'))).toBe(false)
+  })
 
   it('refuses a field outside that set', async () => {
     await expect(invoke('settings:saveNotificationField', 'export_dir', '/somewhere')).rejects.toThrow(
@@ -250,7 +290,7 @@ describe('Draw Things CLI jobs', () => {
 it('captures all key edits while the config publication is still held', async () => {
   let release!: () => void
   mocks.saveConfig.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve }))
-  const submitted = invoke('settings:saveChangedFields', {}, {}, { 'openai.image': 'new-one', 'gemini.text': 'new-two' })
+  const submitted = invoke('settings:saveChangedFields', mocks.config, mocks.config, { 'openai.image': 'new-one', 'gemini.text': 'new-two' })
   expect(mocks.setStoredApiKeys).toHaveBeenCalledWith({ 'openai.image': 'new-one', 'gemini.text': 'new-two' })
   release()
   await submitted

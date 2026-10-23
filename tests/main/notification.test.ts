@@ -8,17 +8,19 @@ type Handler = (...args: unknown[]) => unknown
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   notifications: { success_file: '', failure_file: '' },
+  root: '',
+  showMessageBox: vi.fn(),
 }))
 
-vi.mock('electron', () => ({ BrowserWindow: class {}, screen: {} }))
+vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: () => null }, screen: {}, dialog: { showMessageBox: mocks.showMessageBox } }))
 vi.mock('../../src/main/ipc-boundary', () => ({
   handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler),
 }))
 vi.mock('../../src/main/config', () => ({
   loadConfig: () => ({ notifications: mocks.notifications }),
-  getDataDir: () => path.join(os.homedir(), '.imagequeue'),
+  getDataDir: () => mocks.root,
 }))
-vi.mock('../../src/main/i18n', () => ({ mainTranslator: vi.fn() }))
+vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string) => key }) }))
 
 const { registerNotificationIpc } = await import('../../src/main/notification')
 registerNotificationIpc()
@@ -33,7 +35,11 @@ describe('notification:loadAudioFile', () => {
   let soundDir: string
 
   beforeEach(() => {
+    mocks.showMessageBox.mockReset().mockResolvedValue({ response: 1 })
+    mocks.notifications.success_file = ''
+    mocks.notifications.failure_file = ''
     soundDir = fs.mkdtempSync(path.join(os.homedir(), 'sounds-'))
+    mocks.root = soundDir
     fs.writeFileSync(path.join(soundDir, 'done.wav'), 'RIFF')
   })
 
@@ -62,6 +68,41 @@ describe('notification:loadAudioFile', () => {
       await expect(loadAudioFile(selected)).resolves.toBe(`data:audio/mpeg;base64,${Buffer.from('literal audio').toString('base64')}`)
       await expect(loadAudioFile(selected.replaceAll('$IMAGEQUEUE_SOUND_PATH', 'expanded'))).resolves.toBeNull()
     } finally { vi.unstubAllEnvs() }
+  })
+
+  it('asks before returning bytes from an existing configured file on first use', async () => {
+    const configured = path.join(soundDir, 'done.wav')
+    mocks.notifications.success_file = configured
+    let decide!: (answer: { response: number }) => void
+    let entered!: () => void
+    const enteredDialog = new Promise<void>(resolve => { entered = resolve })
+    mocks.showMessageBox.mockImplementationOnce(() => {
+      entered()
+      return new Promise(resolve => { decide = resolve })
+    })
+    const read = vi.spyOn(fs.promises, 'readFile')
+    try {
+      const result = loadAudioFile(configured)
+      await enteredDialog
+      expect(read.mock.calls.some(([file]) => file === configured)).toBe(false)
+      decide({ response: 1 })
+      await expect(result).resolves.toContain(Buffer.from('RIFF').toString('base64'))
+      expect(mocks.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({ detail: fs.realpathSync(configured), defaultId: 0, cancelId: 0 }))
+    } finally { read.mockRestore() }
+  })
+
+  it('does not grant or read sound bytes when native consent is canceled after a renderer config write', async () => {
+    const configured = path.join(soundDir, 'done.wav')
+    mocks.notifications.success_file = configured
+    mocks.showMessageBox.mockResolvedValue({ response: 0 })
+    const read = vi.spyOn(fs.promises, 'readFile')
+    try {
+      await expect(loadAudioFile(configured)).resolves.toBeNull()
+      expect(read.mock.calls.some(([file]) => file === configured)).toBe(false)
+      expect(fs.existsSync(path.join(soundDir, 'sound-file-grants.json'))).toBe(false)
+      await expect(loadAudioFile(configured)).resolves.toBeNull()
+      expect(mocks.showMessageBox).toHaveBeenCalledTimes(2)
+    } finally { read.mockRestore() }
   })
 
   it('still refuses a path the user did not configure', async () => {

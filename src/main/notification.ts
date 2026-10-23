@@ -1,3 +1,4 @@
+import { authorizedSoundFile } from './sound-file-grants'
 import { BrowserWindow, screen } from 'electron'
 import path from 'path'
 import os from 'os'
@@ -215,18 +216,17 @@ export function registerNotificationIpc(): void {
     showNotification(type)
   })
 
-  handle('notification:loadAudioFile', async (_event, filePath: string) => {
-    // The renderer may only ask for the two paths the user configured through
-    // the file dialog — this was the one IPC read not pinned to a known
-    // location, making it an arbitrary-file read for a compromised renderer.
-    // Resolve authored expressions against Home while preserving literal
-    // absolute selections on both sides of the comparison and read.
+  handle('notification:loadAudioFile', async (event, filePath: string) => {
+    // Settings narrow which sound is requested; a separate main-owned native
+    // grant authorizes returning its bytes across the renderer boundary.
     const notifications = loadConfig().notifications
     const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map((p) => resolveSettingsPath(p, os.homedir()))
     if (!filePath) return null
     const requested = resolveSettingsPath(filePath, os.homedir())
     if (!allowed.includes(requested)) return null
-    const data = await fs.promises.readFile(requested).catch((error: NodeJS.ErrnoException) => {
+    const granted = await authorizedSoundFile(requested, event.sender)
+    if (!granted) return null
+    const data = await fs.promises.readFile(granted).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
       throw error
     })
