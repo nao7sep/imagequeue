@@ -7,6 +7,7 @@ import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import type { AppNotice } from '../../shared/app-notice'
 import { FORMAT_VERSION_KEY, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { syncDirectoryAsync } from '../utils/fsync'
 import { holdsBytesAsync } from '../utils/holds-bytes'
 import { raiseAppNotice } from '../app-notices'
 import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
@@ -142,8 +143,6 @@ export async function retryApiKeySaves(): Promise<void> {
   }
 }
 
-export function flushApiKeySaves(): Promise<unknown> { return saving }
-
 let unusableReported = false
 
 // A file that cannot be used reads as holding no keys. The first time in a
@@ -193,9 +192,23 @@ async function writeSecretsFile(file: SecretsFile): Promise<void> {
   // re-entered by the user. This write deliberately does its own 0600 temp+rename rather than routing
   // through writeFileAtomicAsync — the separate path is itself the exclusion, by construction.
   const content = Buffer.from(`${JSON.stringify(markFormat({ ...file.others, keys: file.keys }, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, 'utf-8')
+  const stagingDir = path.join(dir, 'key-staging')
+  await fs.promises.mkdir(stagingDir, { recursive: true, mode: 0o700 })
+  if (ENFORCE_FILE_MODE) await fs.promises.chmod(stagingDir, 0o700)
+  // This private namespace belongs only to this serialized writer. Legacy
+  // sibling temps have no such custody proof and are deliberately untouched.
+  let cleanedStages = false
+  for (const entry of await fs.promises.readdir(stagingDir, { withFileTypes: true })) {
+    if (entry.isFile() && /^api-keys-[A-Za-z0-9_-]{21}\.tmp$/.test(entry.name)) {
+      await fs.promises.rm(path.join(stagingDir, entry.name))
+      cleanedStages = true
+    }
+  }
+  // A repeated Clear may leave the destination unchanged; its cleanup still
+  // needs directory durability before acknowledging that secret copies are gone.
+  if (cleanedStages) await syncDirectoryAsync(stagingDir)
   if (await holdsBytesAsync(filePath, content)) return
-  const stem = path.basename(filePath, path.extname(filePath))
-  const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)
+  const tempPath = path.join(stagingDir, `api-keys-${nanoid()}.tmp`)
   let owned = false
   try {
     const descriptor = await fs.promises.open(tempPath, 'wx', SECRETS_FILE_MODE)
@@ -207,6 +220,8 @@ async function writeSecretsFile(file: SecretsFile): Promise<void> {
       await descriptor.close()
     }
     await fs.promises.rename(tempPath, filePath)
+    await syncDirectoryAsync(dir)
+    await syncDirectoryAsync(stagingDir)
   } finally {
     if (owned) {
       try { await fs.promises.rm(tempPath, { force: true }) } catch { /* Preserve the save's cause. */ }

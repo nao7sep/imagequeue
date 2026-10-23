@@ -33,6 +33,12 @@ const PROVIDER_ENV = [
   'BFL_API_KEY'
 ]
 
+function gate(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 describe('api-keys-store', () => {
   let tmpRoot: string
   const originalHome = process.env[ENV_VAR]
@@ -76,6 +82,172 @@ describe('api-keys-store', () => {
     expect(JSON.parse(onDisk)).toHaveProperty(['keys', 'openai.image'])
     await refreshApiKeys()
     expect(getStoredApiKey('openai.image')).toBe('sk-stored')
+  })
+
+  it.runIf(isPosix)('syncs key bytes then both rename directories before resolving', async () => {
+    const events: string[] = []
+    const originalOpen = fs.promises.open.bind(fs.promises)
+    const originalRename = fs.promises.rename.bind(fs.promises)
+    const destinationStarted = gate()
+    const destinationRelease = gate()
+    const stagingStarted = gate()
+    const stagingRelease = gate()
+    const stagingDir = path.join(tmpRoot, 'key-staging')
+    const open = vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      const handle = await originalOpen(...args)
+      const sync = handle.sync.bind(handle)
+      handle.sync = async () => {
+        if (args[0] === tmpRoot) {
+          events.push('destination-sync')
+          destinationStarted.resolve()
+          await destinationRelease.promise
+        } else if (args[0] === stagingDir) {
+          events.push('staging-sync')
+          stagingStarted.resolve()
+          await stagingRelease.promise
+        } else {
+          events.push('file-sync')
+        }
+        await sync()
+      }
+      return handle
+    })
+    const rename = vi.spyOn(fs.promises, 'rename').mockImplementation(async (...args) => {
+      await originalRename(...args)
+      events.push('rename')
+    })
+    let settled = false
+    const saving = setStoredApiKey('xai', 'directory-sync-key').then(() => { settled = true })
+    try {
+      await destinationStarted.promise
+      expect(events).toEqual(['file-sync', 'rename', 'destination-sync'])
+      expect(fs.existsSync(path.join(tmpRoot, 'api-keys.json'))).toBe(true)
+      expect(settled).toBe(false)
+      destinationRelease.resolve()
+      await stagingStarted.promise
+      expect(events).toEqual(['file-sync', 'rename', 'destination-sync', 'staging-sync'])
+      expect(settled).toBe(false)
+      stagingRelease.resolve()
+      await saving
+      expect(settled).toBe(true)
+    } finally {
+      destinationRelease.resolve()
+      stagingRelease.resolve()
+      await saving
+      open.mockRestore()
+      rename.mockRestore()
+    }
+  })
+
+  it.runIf(isPosix)('waits for abandoned-stage removal to sync when clearing already-empty keys without rewriting the destination', async () => {
+    await setStoredApiKey('xai', '')
+    const target = path.join(tmpRoot, 'api-keys.json')
+    const bytes = fs.readFileSync(target)
+    const stagingDir = path.join(tmpRoot, 'key-staging')
+    const abandoned = path.join(stagingDir, `api-keys-${'a'.repeat(21)}.tmp`)
+    fs.writeFileSync(abandoned, 'abandoned secret')
+    const started = gate()
+    const release = gate()
+    const originalOpen = fs.promises.open.bind(fs.promises)
+    const open = vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      const handle = await originalOpen(...args)
+      if (args[0] === stagingDir) {
+        const sync = handle.sync.bind(handle)
+        handle.sync = async () => { started.resolve(); await release.promise; await sync() }
+      }
+      return handle
+    })
+    const rename = vi.spyOn(fs.promises, 'rename')
+    let settled = false
+    const saving = setStoredApiKey('xai', '').then(() => { settled = true })
+    try {
+      expect(await Promise.race([
+        started.promise.then(() => 'sync'), saving.then(() => 'saved'),
+      ])).toBe('sync')
+      expect(settled).toBe(false)
+      expect(fs.existsSync(abandoned)).toBe(false)
+      expect(fs.readFileSync(target)).toEqual(bytes)
+      expect(rename).not.toHaveBeenCalled()
+      release.resolve()
+      await saving
+      expect(settled).toBe(true)
+      expect(fs.readFileSync(target)).toEqual(bytes)
+      expect(rename).not.toHaveBeenCalled()
+    } finally {
+      release.resolve()
+      await saving
+      open.mockRestore()
+      rename.mockRestore()
+    }
+  })
+
+  it('clearing a key removes only exact owned regular stage names and preserves unrelated and legacy entries', async () => {
+    await setStoredApiKey('xai', 'key-to-clear')
+    const stagingDir = path.join(tmpRoot, 'key-staging')
+    const owned = path.join(stagingDir, `api-keys-${'a'.repeat(21)}.tmp`)
+    fs.writeFileSync(owned, 'abandoned key bytes')
+    const keptFiles = [
+      path.join(tmpRoot, `api-keys-${'b'.repeat(21)}.tmp`),
+      path.join(tmpRoot, 'api-keys.json.tmp'),
+      path.join(stagingDir, `api-keys-${'c'.repeat(20)}.tmp`),
+      path.join(stagingDir, `api-keys-${'d'.repeat(22)}.tmp`),
+      path.join(stagingDir, `other-${'e'.repeat(21)}.tmp`),
+      path.join(stagingDir, `api-keys-${'f'.repeat(21)}.tmp.bak`),
+    ]
+    for (const file of keptFiles) fs.writeFileSync(file, `kept:${path.basename(file)}`)
+    const directory = path.join(stagingDir, `api-keys-${'g'.repeat(21)}.tmp`)
+    fs.mkdirSync(directory)
+    fs.writeFileSync(path.join(directory, 'kept'), 'directory content')
+    const symlink = path.join(stagingDir, `api-keys-${'h'.repeat(21)}.tmp`)
+    if (isPosix) fs.symlinkSync(keptFiles[0], symlink)
+    await setStoredApiKey('xai', '')
+    expect(getStoredApiKey('xai')).toBe('')
+    expect(fs.existsSync(owned)).toBe(false)
+    for (const file of keptFiles) expect(fs.readFileSync(file, 'utf8')).toBe(`kept:${path.basename(file)}`)
+    expect(fs.readFileSync(path.join(directory, 'kept'), 'utf8')).toBe('directory content')
+    if (isPosix) expect(fs.lstatSync(symlink).isSymbolicLink()).toBe(true)
+    if (isPosix) expect(fs.statSync(stagingDir).mode & 0o777).toBe(0o700)
+    expect(fs.readdirSync(stagingDir).filter((name) => /^api-keys-[A-Za-z0-9_-]{21}\.tmp$/.test(name)).sort())
+      .toEqual([path.basename(directory), ...(isPosix ? [path.basename(symlink)] : [])].sort())
+  })
+
+  it('serializes cleanup behind an in-flight staged save and preserves both key changes', async () => {
+    const staged = gate()
+    const release = gate()
+    let stageFile = ''
+    let first = true
+    const originalOpen = fs.promises.open.bind(fs.promises)
+    const open = vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      const handle = await originalOpen(...args)
+      if (first && args[1] === 'wx') {
+        first = false
+        stageFile = String(args[0])
+        const sync = handle.sync.bind(handle)
+        handle.sync = async () => { staged.resolve(); await release.promise; await sync() }
+      }
+      return handle
+    })
+    const remove = vi.spyOn(fs.promises, 'rm')
+    const firstSave = setStoredApiKey('xai', 'first-key')
+    let secondSave: Promise<void> | null = null
+    try {
+      await staged.promise
+      secondSave = setStoredApiKey('bfl', 'second-key')
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(path.dirname(stageFile)).toBe(path.join(tmpRoot, 'key-staging'))
+      expect(fs.existsSync(stageFile)).toBe(true)
+      expect(remove.mock.calls.some(([file]) => file === stageFile)).toBe(false)
+      release.resolve()
+      await Promise.all([firstSave, secondSave])
+      expect(getStoredApiKey('xai')).toBe('first-key')
+      expect(getStoredApiKey('bfl')).toBe('second-key')
+      expect(fs.readdirSync(path.join(tmpRoot, 'key-staging'))).toEqual([])
+    } finally {
+      release.resolve()
+      await Promise.all([firstSave, secondSave])
+      open.mockRestore()
+      remove.mockRestore()
+    }
   })
 
   it('retains a complete multi-key submission for quit retry after failed publication', async () => {
@@ -221,7 +393,8 @@ describe('api-keys-store', () => {
       fs.chmodSync(secretsPath, 0o600)
     }
     expect(fs.readFileSync(secretsPath)).toEqual(original)
-    expect(fs.readdirSync(tmpRoot).filter((name) => name !== 'api-keys.json')).toEqual([])
+    expect(fs.readdirSync(tmpRoot).sort()).toEqual(['api-keys.json', 'key-staging'])
+    expect(fs.readdirSync(path.join(tmpRoot, 'key-staging'))).toEqual([])
   })
 
   it('writes back an entry it cannot use, and every other key the file holds, when saving another key', async () => {
@@ -259,6 +432,7 @@ describe('api-keys-store', () => {
     try {
       await expect(setStoredApiKey('openai.image', 'replacement')).rejects.toThrow(failure)
       expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
+      expect(fs.readdirSync(path.join(tmpRoot, 'key-staging'))).toEqual([])
       expect(getStoredApiKey('openai.image')).toBe('original')
     } finally { rename.mockRestore() }
   })
@@ -311,17 +485,19 @@ describe('api-keys-store', () => {
     }
   })
 
-  it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as the target', async () => {
+  it('writes through an exclusive owned stage in the private key-staging directory', async () => {
     const spy = vi.spyOn(fs.promises, 'open')
     await setStoredApiKey('openai.image', 'sk-stored')
 
     const tempCall = spy.mock.calls.find(
-      (call) => typeof call[0] === 'string' && (call[0] as string).includes('api-keys-')
+      (call) => typeof call[0] === 'string' && call[1] === 'wx'
     )
     expect(tempCall).toBeDefined()
     const tempPath = tempCall![0] as string
-    expect(path.dirname(tempPath)).toBe(tmpRoot)
-    expect(path.basename(tempPath)).toMatch(/^api-keys-[A-Za-z0-9_-]+\.tmp$/)
+    expect(path.dirname(tempPath)).toBe(path.join(tmpRoot, 'key-staging'))
+    expect(path.basename(tempPath)).toMatch(/^api-keys-[A-Za-z0-9_-]{21}\.tmp$/)
+    expect(tempCall![2]).toBe(0o600)
+    expect(fs.readdirSync(path.join(tmpRoot, 'key-staging'))).toEqual([])
     spy.mockRestore()
   })
 

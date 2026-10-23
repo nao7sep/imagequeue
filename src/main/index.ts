@@ -1,4 +1,7 @@
 import { app, dialog } from 'electron'
+import fs from 'node:fs'
+import path from 'node:path'
+import { ensureStorageRoot } from './config/storage-root'
 import { APP_NAME } from '../shared/app-identity'
 
 // Every mutable app store is process-owned. Letting a second ImageQueue process
@@ -19,6 +22,19 @@ import { APP_NAME } from '../shared/app-identity'
 function start(): Promise<void> {
   if (!app.requestSingleInstanceLock()) {
     app.exit(0)
+    return Promise.resolve()
+  }
+  // Acquire the existing application-wide instance authority before changing
+  // profile placement, so distinct storage overrides do not create writers.
+  try {
+    const profile = path.join(ensureStorageRoot(), 'electron')
+    fs.mkdirSync(profile, { recursive: true, mode: 0o700 })
+    app.setPath('userData', profile)
+    app.setPath('sessionData', profile)
+    app.setAppLogsPath(path.join(profile, 'logs'))
+  } catch (error) {
+    dialog.showErrorBox(APP_NAME, error instanceof Error ? error.message : String(error))
+    app.exit(1)
     return Promise.resolve()
   }
   return import('./primary-instance').then(({ runPrimaryInstance }) => runPrimaryInstance()).catch((error: unknown) => {
