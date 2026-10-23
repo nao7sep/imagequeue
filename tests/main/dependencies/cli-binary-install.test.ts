@@ -6,16 +6,17 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The CLI install pipeline on macOS, the only platform with Draw Things, run
-// with the real lipo and xattr against a local fixture: only the network
+// with the real architecture check and xattr against a local fixture: only the network
 // download is replaced, by copying the fixture's bytes into the staging file
 // with a quarantine flag, as a browser download would carry.
 
-const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0) as Buffer, afterDownload: () => {} }))
+const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0) as Buffer, downloads: 0, afterDownload: () => {} }))
 
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../../src/main/dependencies/download', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../../src/main/dependencies/download')>(),
   downloadToFile: async (_url: string, destination: string) => {
+    fixture.downloads++
     fs.writeFileSync(destination, fixture.bytes)
     execFileSync('xattr', ['-w', 'com.apple.quarantine', '0081;00000000;Fixture;', destination])
     fixture.afterDownload()
@@ -25,7 +26,7 @@ vi.mock('../../../src/main/dependencies/download', async (importOriginal) => ({
 const { installCliRelease, readInstalledCliTag } = await import('../../../src/main/dependencies/cli-binary')
 const { getCliBinaryPath, getCliMetaPath, getBinDir, getTempDir } = await import('../../../src/main/dependencies/paths')
 
-// The smallest Mach-O lipo reads: a 64-bit executable header of one architecture.
+// A minimal 64-bit Mach-O executable header of one architecture.
 function machO(cpuType: number, cpuSubtype: number): Buffer {
   const header = Buffer.alloc(32)
   header.writeUInt32LE(0xfeedfacf, 0)
@@ -51,6 +52,7 @@ let home: string
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-cli-install-'))
   vi.stubEnv('IMAGEQUEUE_DATA_DIR', home)
+  fixture.downloads = 0
   fixture.afterDownload = () => {}
 })
 
@@ -60,6 +62,34 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform !== 'darwin')('installCliRelease on macOS', () => {
+  it('refuses a release without a published checksum before downloading or allocating staging', async () => {
+    const withoutChecksum = { ...release(ARM64), sha256: null }
+
+    await expect(installCliRelease(withoutChecksum)).rejects.toThrow('no published checksum')
+
+    expect(fixture.downloads).toBe(0)
+    expect(fs.existsSync(getTempDir())).toBe(false)
+    expect(fs.existsSync(getBinDir())).toBe(false)
+  })
+
+  it('refuses a checksum mismatch, preserving the installed binary and identity and clearing staging', async () => {
+    const installedRelease = release(ARM64)
+    await installCliRelease(installedRelease)
+    const installedBytes = fs.readFileSync(getCliBinaryPath())
+    const identityBytes = fs.readFileSync(getCliMetaPath())
+    const installedInode = fs.statSync(getCliBinaryPath(), { bigint: true }).ino
+    const incorrectChecksum = { ...release(X86_64), sha256: installedRelease.sha256 }
+
+    await expect(installCliRelease(incorrectChecksum)).rejects.toThrow('Checksum mismatch')
+
+    expect(fixture.downloads).toBe(2)
+    expect(fs.readFileSync(getCliBinaryPath())).toEqual(installedBytes)
+    expect(fs.statSync(getCliBinaryPath(), { bigint: true }).ino).toBe(installedInode)
+    expect(fs.readFileSync(getCliMetaPath())).toEqual(identityBytes)
+    expect(await readInstalledCliTag()).toBe(installedRelease.tag)
+    expect(fs.readdirSync(getTempDir())).toEqual([])
+  })
+
   it('installs an arm64 binary executable, with the quarantine flag removed, and records its release', async () => {
     const arm64 = release(ARM64)
     await installCliRelease(arm64)

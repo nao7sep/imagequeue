@@ -10,6 +10,7 @@
 // is verified again on later use.
 
 import fs from 'fs'
+import { hasArm64Slice } from './macho-architecture'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { log, serializeError } from '../logger'
@@ -71,20 +72,6 @@ export async function readInstalledCliTag(): Promise<string | null> {
     return meta.binaryId === await cliBinaryId() ? meta.tag : null
   } catch {
     return null
-  }
-}
-
-/** Whether the Mach-O at `filePath` includes an arm64 slice. A universal binary
- * passes; an x86_64-only one fails (the fleet is Apple-Silicon-native, no Rosetta).
- * A `lipo` failure (not a Mach-O, tool missing) is treated as failing the gate. */
-export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync('lipo', ['-archs', filePath], { timeout: 5_000, signal })
-    return stdout.trim().split(/\s+/).includes('arm64')
-  } catch (err) {
-    if (signal?.aborted) throw signal.reason
-    log('warn', 'lipo arch check failed', { filePath, error: serializeError(err) })
-    return false
   }
 }
 
