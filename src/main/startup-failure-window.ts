@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
+import { BrowserWindow, dialog, ipcMain, screen, type IpcMainEvent } from 'electron'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
   STARTUP_FAILURE_MESSAGE_CHANNEL,
@@ -42,6 +42,21 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
   trackThemedWindow(win)
 
   let measurementSettled = false
+  let failurePresented = false
+  const handleLoadFailure = (error: unknown): void => {
+    if (failurePresented || win.isDestroyed()) return
+    failurePresented = true
+    log('error', 'Failed to load the startup failure surface', { error: serializeError(error) })
+    removeMeasurementOwner()
+    // The app-owned failure page uses the same renderer that just failed.
+    // This last-resort message must work without that runtime or its assets.
+    const translator = mainTranslator()
+    try {
+      dialog.showErrorBox(translator.t('startupFailure.title'), translator.text(failureMessage))
+    } finally {
+      if (!win.isDestroyed()) win.close()
+    }
+  }
   const removeMeasurementOwner = (): void => {
     ipcMain.removeListener(STARTUP_FAILURE_MEASUREMENT_CHANNEL, receiveMeasurement)
   }
@@ -50,8 +65,7 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
     measurementSettled = true
     removeMeasurementOwner()
     if (!isStartupFailureMeasurement(measurement)) {
-      log('error', 'Startup failure surface reported an invalid measurement')
-      if (!win.isDestroyed()) win.close()
+      handleLoadFailure(new Error('Startup failure surface reported an invalid measurement'))
       return
     }
     if (win.isDestroyed()) return
@@ -78,11 +92,9 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
     return failureMessage
   })
 
-  const handleLoadFailure = (error: unknown): void => {
-    log('error', 'Failed to load the startup failure surface', { error: serializeError(error) })
-    if (!win.isDestroyed()) win.close()
-  }
-
+  win.webContents.once('render-process-gone', (_event, details) => {
+    handleLoadFailure(new Error(`Startup failure renderer exited: ${details.reason}`))
+  })
   void loadRendererSurface(win, 'startup-failure').catch(handleLoadFailure)
 
   return win
