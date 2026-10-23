@@ -175,6 +175,7 @@
   "dependencies.cliTitle": "Draw Things CLI",
   "dependencies.cliDescription": "画像生成エンジンです。Draw Things Community の公式リリースから取得し、公開されているチェックサムで検証します。",
   "dependencies.recommendationsTitle": "推奨パラメータ",
+  "dependencies.recommendationsTimeNotSaved": "推奨パラメータはインストールされましたが、更新日を保存できませんでした。",
   "dependencies.recommendationsDescription": "Draw Things が提供するモデルごとの既定値（configs.json）です。これがない場合は、ご自身の既定値で生成します。",
   "dependencies.updatesTitle": "更新",
   "dependencies.updatesDescription": "確認では、各ツールの提供元に最新の状態を問い合わせます。ダウンロードは行いません。",

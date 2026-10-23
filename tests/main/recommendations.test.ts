@@ -18,6 +18,8 @@ import {
 } from '../../src/main/recommendations'
 import { getRecommendationsTimesPath } from '../../src/main/dependencies/paths'
 import { recordServerTime } from '../../src/main/dependencies/recommendations-times'
+import * as recommendationTimes from '../../src/main/dependencies/recommendations-times'
+import * as logger from '../../src/main/logger'
 import * as localCli from '../../src/main/local-cli'
 import { FORMAT_VERSIONS } from '../../src/main/store-format'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
@@ -149,6 +151,21 @@ describe('downloadLatestRecommendations', () => {
   const body = Buffer.from(JSON.stringify([{ name: 'a', configuration: { model: 'm' } }]))
 
   const served = { body, headers: { 'last-modified': 'Fri, 11 Sep 2026 20:46:05 GMT' } }
+
+  it('returns installed bytes and a secondary warning when recording the server date fails', async () => {
+    const failure = new Error('SECRET_SENTINEL metadata write failed', { cause: new Error('disk unavailable') })
+    vi.spyOn(recommendationTimes, 'recordServerTime').mockRejectedValueOnce(failure)
+    const log = vi.spyOn(logger, 'log').mockImplementation(() => undefined)
+    network.fetchBytesWithHeaders.mockReset().mockResolvedValueOnce(served)
+    const result = await downloadLatestRecommendations()
+    expect(fs.readFileSync(configsPath())).toEqual(body)
+    expect(result.status).toEqual({ exists: true, valid: true, entryCount: 1, updatedAt: '2026-09-11T20:46:05.000Z' })
+    expect(result.warnings).toEqual(['time-not-saved'])
+    expect(network.fetchBytesWithHeaders).toHaveBeenCalledTimes(1)
+    expect(log).toHaveBeenCalledExactlyOnceWith('warn', expect.stringContaining('were installed'), {
+      filePath: configsPath(), error: logger.serializeError(failure),
+    })
+  })
 
   it('publishes to the captured destination when settings change during acquisition', async () => {
     const nextDirectory = path.join(home, 'next-models')

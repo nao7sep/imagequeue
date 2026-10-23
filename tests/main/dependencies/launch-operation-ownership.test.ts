@@ -76,7 +76,7 @@ afterAll(() => {
 beforeEach(() => {
   mocks.home = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-launch-ownership-'))
   mocks.resolveLatestCliRelease.mockReset()
-  mocks.downloadLatestRecommendations.mockReset()
+  mocks.downloadLatestRecommendations.mockReset().mockResolvedValue({ filePath: path.join(mocks.home, 'models', 'configs.json'), status: { exists: true, valid: true, entryCount: 1, updatedAt: null }, warnings: [] })
   mocks.fetchLatestRecommendationsModified.mockReset()
   mocks.recommendationsPresent = false
   mocks.heldStatus = null
@@ -98,7 +98,6 @@ describe('launch and manual dependency operation ownership', () => {
         })
       })
     )
-    mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
 
     const launchCheck = checkDependenciesAtLaunch()
     await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
@@ -150,7 +149,6 @@ describe('launch and manual dependency operation ownership', () => {
         finishFileCheck = () => resolve('2026-09-11T20:46:05.000Z')
       })
     )
-    mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
 
     const launchCheck = checkDependenciesAtLaunch()
     await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())

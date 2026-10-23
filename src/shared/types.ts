@@ -83,6 +83,12 @@ export interface CliInstallResult {
   warnings: CliInstallWarning[]
 }
 
+export type RecommendationsInstallWarning = 'time-not-saved'
+export interface RecommendationsInstallResult {
+  state: DependenciesState
+  warnings: RecommendationsInstallWarning[]
+}
+
 export type OutputFileState = 'removed' | 'remaining' | 'unknown'
 export interface TaskDeletionResult {
   removed: boolean

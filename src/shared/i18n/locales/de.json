@@ -180,6 +180,7 @@
   "dependencies.cliTitle": "Draw-Things-CLI",
   "dependencies.cliDescription": "Die Engine zur Bilderzeugung, aus dem offiziellen Release der Draw Things Community und anhand der veröffentlichten Prüfsumme verifiziert.",
   "dependencies.recommendationsTitle": "Empfohlene Parameter",
+  "dependencies.recommendationsTimeNotSaved": "Die empfohlenen Parameter wurden installiert, aber ihr Aktualisierungsdatum konnte nicht gespeichert werden.",
   "dependencies.recommendationsDescription": "Standardeinstellungen pro Modell (configs.json) von Draw Things. Ohne sie verwendet die Erzeugung Ihre eigenen Standardwerte.",
   "dependencies.updatesTitle": "Updates",
   "dependencies.updatesDescription": "Beim Prüfen wird die Quelle jedes Werkzeugs nach dem aktuellen Stand gefragt. Es wird nichts heruntergeladen.",

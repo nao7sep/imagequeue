@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependencyPanePointer } from '../../../../src/renderer/src/components/DependencyPanePointer'
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
 import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
-import type { DependenciesState, DependencyInfo } from '../../../../src/shared/types'
+import type { DependenciesState, DependencyInfo, RecommendationsInstallResult } from '../../../../src/shared/types'
 
 afterEach(cleanup)
 
@@ -56,10 +56,10 @@ describe('DependencyPanePointer', () => {
       checkUpdatesAtLaunch: true,
       platformSupported: true,
     }
-    let finishRefresh: ((state: DependenciesState) => void) | undefined
+    let finishRefresh: ((result: RecommendationsInstallResult) => void) | undefined
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => current),
-      downloadRecommendations: vi.fn(() => new Promise<DependenciesState>((resolve) => { finishRefresh = resolve })),
+      downloadRecommendations: vi.fn(() => new Promise<RecommendationsInstallResult>((resolve) => { finishRefresh = resolve })),
       cancelDependencyOperation: vi.fn(async () => undefined),
       onDependencyProgress: vi.fn(() => () => undefined),
     } as unknown as typeof window.electronAPI
@@ -81,7 +81,7 @@ describe('DependencyPanePointer', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
     expect((await screen.findByRole('button')).textContent).toBe('The Draw Things tools are being installed or updated. Open Managed tools.')
 
-    finishRefresh?.(current)
+    finishRefresh?.({ state: current, warnings: [] })
     await vi.waitFor(() => expect(screen.queryByRole('button')).toBeNull())
   })
 })

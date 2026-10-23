@@ -190,6 +190,7 @@
   "dependencies.cliTitle": "CLI Draw Things",
   "dependencies.cliDescription": "Движок создания изображений из официального выпуска Draw Things Community, проверяется по опубликованной контрольной сумме.",
   "dependencies.recommendationsTitle": "Рекомендуемые параметры",
+  "dependencies.recommendationsTimeNotSaved": "Рекомендуемые параметры установлены, но не удалось сохранить дату их обновления.",
   "dependencies.recommendationsDescription": "Параметры по умолчанию для каждой модели (configs.json) от Draw Things. Без них используются ваши собственные значения по умолчанию.",
   "dependencies.updatesTitle": "Обновления",
   "dependencies.updatesDescription": "При проверке у источника каждого инструмента запрашивается актуальная версия. Ничего не скачивается.",

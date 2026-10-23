@@ -180,6 +180,7 @@
   "dependencies.cliTitle": "Draw Things CLI",
   "dependencies.cliDescription": "The image-generation engine, from the official Draw Things Community release and verified against its published checksum.",
   "dependencies.recommendationsTitle": "Recommended parameters",
+  "dependencies.recommendationsTimeNotSaved": "Recommended parameters were installed, but their update date could not be saved.",
   "dependencies.recommendationsDescription": "Per-model default settings (configs.json) from Draw Things. Without them, generation uses your own defaults.",
   "dependencies.updatesTitle": "Updates",
   "dependencies.updatesDescription": "Checking asks each tool’s source what is current. Nothing is downloaded.",

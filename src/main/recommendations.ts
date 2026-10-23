@@ -13,6 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { resolveModelsDir } from './local-cli'
+import { log, serializeError } from './logger'
 import { recordedServerTime, recordServerTime } from './dependencies/recommendations-times'
 import type { IncomingHttpHeaders } from 'http'
 import {
@@ -24,7 +25,8 @@ import {
 } from './dependencies/download'
 import {
   RecommendedParams,
-  RecommendationStatus
+  RecommendationStatus,
+  RecommendationsInstallWarning,
 } from '../shared/types'
 import {
   RecommendationSpec,
@@ -39,6 +41,7 @@ const RECOMMENDATIONS_FILE = 'configs.json'
 export interface InstalledRecommendations {
   filePath: string
   status: RecommendationStatus
+  warnings: RecommendationsInstallWarning[]
 }
 
 // configs.json lives in the effective models dir, alongside Draw Things' own
@@ -94,8 +97,14 @@ export function downloadLatestRecommendations(signal?: AbortSignal): Promise<Ins
       // whether the server has changed the file since. Without a valid header
       // the file's server time is unknown, and no record describes it.
       const updatedAt = lastModifiedOf(headers)
-      await recordServerTime(filePath, data, updatedAt)
-      return { filePath, status: { exists: true, valid: true, entryCount: specs.length, updatedAt } }
+      const warnings: RecommendationsInstallWarning[] = []
+      try {
+        await recordServerTime(filePath, data, updatedAt)
+      } catch (error) {
+        warnings.push('time-not-saved')
+        log('warn', 'Recommended parameters were installed but their server time was not saved', { filePath, error: serializeError(error) })
+      }
+      return { filePath, status: { exists: true, valid: true, entryCount: specs.length, updatedAt }, warnings }
     }
   )
 }

@@ -176,7 +176,7 @@ describe('recommendations lifecycle', () => {
     await writeFile(server)
     const filePath = path.join(home, 'models', 'configs.json')
     const read = vi.spyOn(fs.promises, 'readFile')
-    const installed = { filePath, status: { exists: true, valid: true, entryCount: 7, updatedAt: server } }
+    const installed = { warnings: [], filePath, status: { exists: true, valid: true, entryCount: 7, updatedAt: server } }
     expect((await getDependenciesState(installed)).recommendations.entryCount).toBe(7)
     expect(read.mock.calls.filter(([file]) => file === filePath)).toHaveLength(0)
     expect((await getDependenciesState({ ...installed, filePath: path.join(home, 'old-models', 'configs.json') })).recommendations.entryCount).toBe(1)

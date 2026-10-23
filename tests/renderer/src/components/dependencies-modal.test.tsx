@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
 import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
-import type { DependenciesState } from '../../../../src/shared/types'
+import type { DependenciesState, RecommendationsInstallResult } from '../../../../src/shared/types'
 import { until } from '../../until'
 
 afterEach(cleanup)
@@ -41,6 +41,32 @@ function renderModal(onClose = vi.fn()): ReturnType<typeof render> {
 }
 
 describe('DependenciesModal cancellation', () => {
+  it('retains the installed-recommendations warning through a check until installation repairs it', async () => {
+    const installed: DependenciesState = {
+      ...initialState,
+      recommendations: { ...initialState.recommendations, state: 'installed-unchecked', entryCount: 42 },
+    }
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      downloadRecommendations: vi.fn()
+        .mockResolvedValueOnce({ state: installed, warnings: ['time-not-saved'] })
+        .mockResolvedValueOnce({ state: installed, warnings: [] }),
+      checkDependencies: vi.fn(async () => installed),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+    renderModal()
+    fireEvent.click((await until(() => screen.getAllByRole('button', { name: 'Install' })))[1])
+    const warning = 'Recommended parameters were installed, but their update date could not be saved.'
+    await until(() => expect(screen.getByRole('alert').textContent).toContain(warning))
+    expect(screen.getByText(/^42 entries/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+    await until(() => expect(window.electronAPI.checkDependencies).toHaveBeenCalledOnce())
+    await until(() => expect(screen.getByRole('button', { name: 'Check for updates' })).toBeTruthy())
+    expect(screen.getByRole('alert').textContent).toContain(warning)
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await until(() => expect(screen.queryByRole('alert')).toBeNull())
+  })
+
   it('retains committed installation warnings and clears only check facts repaired by a successful check', async () => {
     const installed: DependenciesState = { ...initialState, cli: { ...initialState.cli, state: 'installed-unchecked' } }
     window.electronAPI = {
@@ -283,7 +309,7 @@ describe('DependenciesModal cancellation', () => {
         entryCount: 42,
       },
     }
-    const downloadRecommendations = vi.fn(async () => installed)
+    const downloadRecommendations = vi.fn(async () => ({ state: installed, warnings: [] }))
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => installed),
       downloadRecommendations,
@@ -395,13 +421,13 @@ describe('DependenciesModal cancellation', () => {
       },
     }
     let finishCli: ((state: DependenciesState) => void) | undefined
-    let finishRecommendations: ((state: DependenciesState) => void) | undefined
+    let finishRecommendations: ((result: RecommendationsInstallResult) => void) | undefined
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),
       installCli: vi.fn(() => new Promise<DependenciesState>((resolve) => {
         finishCli = resolve
       })),
-      downloadRecommendations: vi.fn(() => new Promise<DependenciesState>((resolve) => {
+      downloadRecommendations: vi.fn(() => new Promise<RecommendationsInstallResult>((resolve) => {
         finishRecommendations = resolve
       })),
       cancelDependencyOperation: vi.fn(async () => undefined),
@@ -414,7 +440,7 @@ describe('DependenciesModal cancellation', () => {
     fireEvent.click(installButtons[1])
     finishCli?.(cliInstalled)
     await until(() => screen.getByText(/^2\.0\.0/))
-    finishRecommendations?.(recommendationsInstalled)
+    finishRecommendations?.({ state: recommendationsInstalled, warnings: [] })
 
     expect(await until(() => screen.getByText(/^24 entries/))).toBeTruthy()
     expect(screen.getByText(/^2\.0\.0/)).toBeTruthy()

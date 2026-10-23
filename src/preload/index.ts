@@ -19,6 +19,7 @@ import {
   RecommendedParams,
   DependenciesState,
   CliInstallResult,
+  RecommendationsInstallResult,
   TaskDeletionResult,
   DependencyProgress,
   DrawThingsModelParams,
@@ -315,7 +316,7 @@ const api = {
   installCli: (): Promise<CliInstallResult> =>
     ipcRenderer.invoke('dependencies:installCli'),
 
-  downloadRecommendations: (): Promise<DependenciesState> =>
+  downloadRecommendations: (): Promise<RecommendationsInstallResult> =>
     ipcRenderer.invoke('dependencies:downloadRecommendations'),
 
   setCheckUpdatesAtLaunch: (value: boolean): Promise<DependenciesState> =>

@@ -175,6 +175,7 @@
   "dependencies.cliTitle": "Draw Things CLI",
   "dependencies.cliDescription": "图像生成引擎，来自 Draw Things Community 的官方发布版本，并用其公布的校验和进行验证。",
   "dependencies.recommendationsTitle": "推荐参数",
+  "dependencies.recommendationsTimeNotSaved": "推荐参数已安装，但无法保存其更新日期。",
   "dependencies.recommendationsDescription": "来自 Draw Things 的各模型默认设置（configs.json）。没有它们时，生成会使用你自己的默认值。",
   "dependencies.updatesTitle": "更新",
   "dependencies.updatesDescription": "检查时会向每个工具的来源查询当前版本，不会下载任何内容。",

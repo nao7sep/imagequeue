@@ -13,6 +13,8 @@ import type {
   DependenciesState,
   CliInstallResult,
   CliInstallWarning,
+  RecommendationsInstallResult,
+  RecommendationsInstallWarning,
   DependencyId,
   DependencyProgress,
 } from '../../../shared/types'
@@ -24,6 +26,7 @@ import { message, type Message } from '../../../shared/i18n/translate'
 export type DependencyOperation = DependencyId | 'check' | 'toggle'
 export type CancellableDependencyOperation = Exclude<DependencyOperation, 'toggle'>
 export type DependencyTerminalOutcome = 'cancelled'
+type InstallWarning = CliInstallWarning | RecommendationsInstallWarning
 
 interface ControllerState {
   snapshot: DependenciesState | null
@@ -31,7 +34,7 @@ interface ControllerState {
   progress: DependencyProgress | null
   errors: Partial<Record<DependencyOperation | 'load' | 'cancel', MessageKey>>
   terminalOutcomes: Partial<Record<DependencyOperation, DependencyTerminalOutcome>>
-  warnings: Partial<Record<DependencyOperation, CliInstallWarning[]>>
+  warnings: Partial<Record<DependencyOperation, InstallWarning[]>>
 }
 
 type Action =
@@ -44,7 +47,7 @@ type Action =
       snapshot: DependenciesState | null
       error: MessageKey | null
       cancelled: boolean
-      warnings: CliInstallWarning[]
+      warnings: InstallWarning[]
     }
   | { type: 'progress'; progress: DependencyProgress }
   | { type: 'cancel-failure'; error: MessageKey }
@@ -236,7 +239,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
 
   const run = useCallback(async (
     operation: DependencyOperation,
-    invoke: () => Promise<DependenciesState | CliInstallResult>,
+    invoke: () => Promise<DependenciesState | CliInstallResult | RecommendationsInstallResult>,
   ): Promise<void> => {
     if (active.current.has(operation)) return
     if (operation === 'check' && (active.current.has('cli') || active.current.has('recommendations'))) return
@@ -246,7 +249,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     dispatch({ type: 'start', operation })
     let snapshot: DependenciesState | null = null
     let error: MessageKey | null = null
-    let warnings: CliInstallWarning[] = []
+    let warnings: InstallWarning[] = []
     let committed = false
     try {
       const result = await invoke()
@@ -309,10 +312,11 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   }, [])
 
   // Several failures stack line by line through one entry, never a joined string.
-  const warningKeys: Record<CliInstallWarning, MessageKey> = {
+  const warningKeys: Record<InstallWarning, MessageKey> = {
     'identity-unavailable': 'dependencies.cliIdentityNotSaved',
     'sync-incomplete': 'dependencies.cliSyncIncomplete',
     'check-not-saved': 'dependencies.cliCheckNotSaved',
+    'time-not-saved': 'dependencies.recommendationsTimeNotSaved',
   }
   const errorMessages = [
     ...Object.values(controller.errors).map((key) => message(key)),

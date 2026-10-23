@@ -175,6 +175,7 @@
   "dependencies.cliTitle": "Draw Things CLI",
   "dependencies.cliDescription": "이미지 생성 엔진입니다. Draw Things Community의 공식 릴리스에서 받아 공개된 체크섬으로 검증합니다.",
   "dependencies.recommendationsTitle": "권장 매개변수",
+  "dependencies.recommendationsTimeNotSaved": "권장 매개변수가 설치되었지만 업데이트 날짜를 저장하지 못했습니다.",
   "dependencies.recommendationsDescription": "Draw Things가 제공하는 모델별 기본 설정(configs.json)입니다. 없으면 사용자의 기본값으로 생성합니다.",
   "dependencies.updatesTitle": "업데이트",
   "dependencies.updatesDescription": "확인하면 각 도구의 제공처에 최신 상태를 문의합니다. 아무것도 다운로드하지 않습니다.",

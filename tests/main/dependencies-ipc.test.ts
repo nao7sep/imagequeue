@@ -24,6 +24,8 @@ vi.mock('../../src/main/config', () => ({
   },
 }))
 
+const installedRecommendations = { filePath: '/fixture/configs.json', status: { exists: true, valid: true, entryCount: 7, updatedAt: null }, warnings: [] }
+
 const state: DependenciesState = {
   cli: {
     id: 'cli',
@@ -117,9 +119,9 @@ beforeEach(() => {
 
 describe('dependency IPC operation ownership', () => {
   it('uses the acquisition status without asking for a second file observation', async () => {
-    const status = { filePath: '/fixture/configs.json', status: { exists: true, valid: true, entryCount: 7, updatedAt: '2026-09-11T20:46:05.000Z' } }
+    const status = { ...installedRecommendations, warnings: ['time-not-saved'] }
     mocks.downloadLatestRecommendations.mockResolvedValue(status)
-    await invoke('dependencies:downloadRecommendations', new FakeSender(1))
+    expect(await invoke('dependencies:downloadRecommendations', new FakeSender(1))).toEqual({ state, warnings: ['time-not-saved'] })
     expect(mocks.getDependenciesState).toHaveBeenCalledExactlyOnceWith(status)
   })
 
@@ -182,7 +184,7 @@ describe('dependency IPC operation ownership', () => {
     })
     mocks.downloadLatestRecommendations.mockImplementation((signal: AbortSignal) => {
       recommendations = deferredOperation(signal)
-      return recommendations.promise
+      return recommendations.promise.then(() => installedRecommendations)
     })
 
     const cliInstall = invoke('dependencies:installCli', cliOwner)
@@ -217,7 +219,7 @@ describe('dependency IPC operation ownership', () => {
     await expect(invoke('dependencies:installCli', otherWindow)).rejects.toThrow(
       'Dependency cli operation is already running'
     )
-    mocks.downloadLatestRecommendations.mockResolvedValue(undefined)
+    mocks.downloadLatestRecommendations.mockResolvedValue(installedRecommendations)
     await expect(invoke('dependencies:downloadRecommendations', otherWindow)).rejects.toThrow(
       'Dependency recommendations operation is already running'
     )
@@ -225,6 +227,6 @@ describe('dependency IPC operation ownership', () => {
 
     check.resolve()
     await expect(checking).resolves.toBe(state)
-    await expect(invoke('dependencies:downloadRecommendations', otherWindow)).resolves.toBe(state)
+    await expect(invoke('dependencies:downloadRecommendations', otherWindow)).resolves.toEqual({ state, warnings: [] })
   })
 })

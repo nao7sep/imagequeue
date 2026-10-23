@@ -51,8 +51,8 @@ export function registerDependenciesIpc(): void {
 
   handle('dependencies:downloadRecommendations', (event) =>
     runWindowDependencyOperation(event.sender, ['recommendations'], async (signal) => {
-      const status = await downloadLatestRecommendations(signal)
-      return getDependenciesState(status)
+      const installed = await downloadLatestRecommendations(signal)
+      return { state: await getDependenciesState(installed), warnings: installed.warnings }
     })
   )
 

@@ -185,6 +185,7 @@
   "dependencies.cliTitle": "CLI di Draw Things",
   "dependencies.cliDescription": "Il motore di generazione delle immagini, dalla release ufficiale di Draw Things Community e verificato con il checksum pubblicato.",
   "dependencies.recommendationsTitle": "Parametri consigliati",
+  "dependencies.recommendationsTimeNotSaved": "I parametri consigliati sono stati installati, ma non è stato possibile salvare la loro data di aggiornamento.",
   "dependencies.recommendationsDescription": "Impostazioni predefinite per modello (configs.json) di Draw Things. Senza di esse, la generazione usa i tuoi valori predefiniti.",
   "dependencies.updatesTitle": "Aggiornamenti",
   "dependencies.updatesDescription": "La verifica chiede alla fonte di ogni strumento qual è la versione attuale. Non viene scaricato nulla.",

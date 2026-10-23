@@ -18,6 +18,7 @@ import {
   RecommendedParams,
   DependenciesState,
   CliInstallResult,
+  RecommendationsInstallResult,
   TaskDeletionResult,
   DependencyProgress,
   DrawThingsModelParams,
@@ -179,7 +180,7 @@ export interface ElectronAPI {
   getDependenciesState: () => Promise<DependenciesState>
   checkDependencies: () => Promise<DependenciesState>
   installCli: () => Promise<CliInstallResult>
-  downloadRecommendations: () => Promise<DependenciesState>
+  downloadRecommendations: () => Promise<RecommendationsInstallResult>
   setCheckUpdatesAtLaunch: (value: boolean) => Promise<DependenciesState>
   // A check holds both slots, so cancelling either one cancels it.
   cancelDependencyOperation: (dependency: 'cli' | 'recommendations') => Promise<void>
