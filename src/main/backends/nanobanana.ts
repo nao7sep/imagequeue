@@ -1,3 +1,4 @@
+import { createGeminiTransport } from '../gemini-transport'
 import { ApiError, GoogleGenAI, type GenerateContentResponse } from '@google/genai'
 import { withProviderRetry } from '../provider-retry'
 import { Task } from '../../shared/types'
@@ -26,12 +27,12 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   }
 
   // The app owns retries; the SDK performs exactly one attempt.
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 } } })
+  const transport = createGeminiTransport()
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 }, fetch: transport.fetch } })
 
   const request = buildGeminiImageRequest(task)
 
-  // The record keeps the request body the app built, not the HTTP request:
-  // @google/genai takes no fetch or request hook to capture what it sends.
+  // The record keeps the app-built request; the transport captures cooldown metadata.
   const response = await withProviderRetry((attemptSignal) => recordAiCall(
     { backend: 'nanobanana', model: task.model, purpose: 'image', taskId: task.id, request, credentials: [apiKey] },
     // No cast: GenerateContentConfig declares every field here, so the
@@ -43,7 +44,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
   ).catch((err: unknown) => {
     if (err instanceof ApiError) {
       const said = reasonFromBody(err.message, geminiReasonField)
-      throw new ProviderHttpError(said ?? `Gemini API error ${err.status}`, err.status, said)
+      throw new ProviderHttpError(said ?? `Gemini API error ${err.status}`, err.status, said, transport.retryAfter())
     }
     throw err
   }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms }).catch((err: unknown) => {

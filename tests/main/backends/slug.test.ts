@@ -9,7 +9,8 @@ const handle = vi.hoisted(() => ({ timeoutMs: 30000 }))
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ prompts: { slug: 'Name this: {{PROMPT}}' }}),
 }))
-vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
+const delay = vi.hoisted(() => vi.fn(async (_ms: number, _signal: AbortSignal): Promise<void> => undefined))
+vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: delay }))
 vi.mock('../../../src/main/text-ai', () => ({
   getLightProvider: () => ({ provider: { ask }, timeoutMs: handle.timeoutMs }),
 }))
@@ -42,7 +43,7 @@ describe('generateSlug', () => {
     expect(ask).toHaveBeenCalledTimes(3)
   })
 
-  it('gives each attempt its own full provider timeout', async () => {
+  it('falls back when retries exceed the shared naming deadline', async () => {
     handle.timeoutMs = 500
     ask.mockImplementation(async (opts: { signal: AbortSignal }) => {
       await new Promise<void>((resolve, reject) => {
@@ -52,7 +53,7 @@ describe('generateSlug', () => {
       if (ask.mock.calls.length === 1) throw Object.assign(new Error('unavailable'), { status: 503 })
       return { text: '{"slug":"Red Fox"}', parsed: { slug: 'Red Fox' } }
     })
-    await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toBe('red-fox')
+    await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
     expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
   })
 
@@ -78,4 +79,14 @@ describe('generateSlug', () => {
     controller.abort()
     await expect(naming).resolves.toMatch(/^[\w-]{10}$/)
   })
+})
+
+it('publishes with a fallback name when server cooldown exceeds the naming deadline', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/main/utils/abortable-delay')>('../../../src/main/utils/abortable-delay')
+  delay.mockImplementationOnce(actual.abortableDelay)
+  handle.timeoutMs = 10
+  const { ProviderHttpError } = await import('../../../src/main/provider-errors')
+  ask.mockRejectedValue(new ProviderHttpError('busy', 503, null, '120'))
+  await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
+  expect(ask).toHaveBeenCalledOnce()
 })

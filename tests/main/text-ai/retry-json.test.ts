@@ -6,7 +6,8 @@ import type { AskOptions, TextAIProvider } from '../../../src/main/text-ai/types
 // reply may have been billed, so it is reported and the user decides to retry.
 
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (e: unknown) => e }))
-vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
+const delay = vi.hoisted(() => vi.fn(async (_ms: number, _signal: AbortSignal): Promise<void> => undefined))
+vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: delay }))
 
 const { askJsonWithRetry } = await import('../../../src/main/text-ai/retry-json')
 const { ProviderRefusalError, ProviderTruncationError, ProviderStatusError, ProviderHttpError } =
@@ -68,7 +69,7 @@ describe('askJsonWithRetry', () => {
     expect(ask).toHaveBeenCalledTimes(1)
   })
 
-  it('gives each attempt its own full provider timeout', async () => {
+  it('keeps all attempts inside the shared timeout', async () => {
     const error = new ProviderHttpError('busy', 503)
     const ask = vi.fn(async (opts: AskOptions) => {
       await new Promise<void>((resolve, reject) => {
@@ -78,7 +79,7 @@ describe('askJsonWithRetry', () => {
       if (ask.mock.calls.length === 1) throw error
       return { text: '{}', parsed: {} }
     })
-    await expect(run({ ask } as unknown as TextAIProvider, 500)).resolves.toEqual({})
+    await expect(run({ ask } as unknown as TextAIProvider, 500)).rejects.toMatchObject({ name: 'TimeoutError' })
     expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
   })
 
@@ -87,4 +88,28 @@ describe('askJsonWithRetry', () => {
     await expect(run({ ask } as unknown as TextAIProvider)).rejects.toThrow('no usable payload')
     expect(ask).toHaveBeenCalledTimes(1)
   })
+})
+
+it('ends a long server cooldown at the text deadline without another request', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/main/utils/abortable-delay')>('../../../src/main/utils/abortable-delay')
+  delay.mockImplementationOnce(actual.abortableDelay)
+  const { provider, ask } = failingProvider(new ProviderHttpError('busy', 503, null, '120'))
+  await expect(run(provider, 10)).rejects.toMatchObject({ name: 'TimeoutError' })
+  expect(ask).toHaveBeenCalledOnce()
+})
+
+it('retains ownership of an admitted request until a late successful answer settles', async () => {
+  let finish!: (result: { text: string; parsed: object }) => void
+  let signal!: AbortSignal
+  const ask = vi.fn((options: AskOptions) => {
+    signal = options.signal!
+    return new Promise<{ text: string; parsed: object }>(resolve => { finish = resolve })
+  })
+  let settled = false
+  const pending = run({ ask }, 10).finally(() => { settled = true })
+  await vi.waitFor(() => expect(signal.aborted).toBe(true))
+  expect(settled).toBe(false)
+  finish({ text: '{}', parsed: {} })
+  await expect(pending).resolves.toEqual({})
+  expect(ask).toHaveBeenCalledOnce()
 })

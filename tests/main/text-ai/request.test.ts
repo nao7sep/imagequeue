@@ -41,7 +41,7 @@ describe('text adapter outbound contracts', () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: { code: 404, message: 'No model my-custom-id', status: 'NOT_FOUND' } }),
       { status: 404, headers: { 'content-type': 'application/json', 'retry-after': '2' } }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(new GeminiProvider('my-custom-id', 'test-key', PROVIDER_ENDPOINTS.gemini).ask(opts)).rejects.toMatchObject({ status: 404, providerMessage: 'No model my-custom-id', retryAfter: null })
+    await expect(new GeminiProvider('my-custom-id', 'test-key', PROVIDER_ENDPOINTS.gemini).ask(opts)).rejects.toMatchObject({ status: 404, providerMessage: 'No model my-custom-id', retryAfter: '2' })
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).generationConfig).not.toHaveProperty('thinkingConfig')
   })

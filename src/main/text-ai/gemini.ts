@@ -1,3 +1,4 @@
+import { createGeminiTransport } from '../gemini-transport'
 import { ApiError, GoogleGenAI } from '@google/genai'
 import type { AskOptions, AskResult, TextAIProvider } from './types'
 import { extractJson } from './json'
@@ -12,17 +13,17 @@ export class GeminiProvider implements TextAIProvider {
 
   async ask(opts: AskOptions): Promise<AskResult> {
     // The app owns retries; the SDK performs exactly one attempt.
+    const transport = createGeminiTransport()
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      httpOptions: { baseUrl: this.endpoint, timeout: opts.timeoutMs, retryOptions: { attempts: 1 } },
+      httpOptions: { baseUrl: this.endpoint, timeout: opts.timeoutMs, retryOptions: { attempts: 1 }, fetch: transport.fetch },
     })
     const request = {
       model: this.model,
       contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
       config: geminiTextParams(this.model, this.thinking, opts.schema),
     }
-    // The record keeps the request body the app built, not the HTTP request:
-    // @google/genai takes no fetch or request hook to capture what it sends.
+    // The record keeps the app-built request; the transport captures cooldown metadata.
     const response = await recordAiCall(
       { backend: 'gemini', model: this.model, ...opts.record, request: { endpoint: this.endpoint, ...request }, credentials: [this.apiKey] },
       () => ai.models.generateContent({
@@ -32,7 +33,7 @@ export class GeminiProvider implements TextAIProvider {
     ).catch((error: unknown) => {
       if (error instanceof ApiError) {
         const said = reasonFromBody(error.message, geminiReasonField)
-        throw new ProviderHttpError(said ?? `Gemini API error ${error.status}`, error.status, said)
+        throw new ProviderHttpError(said ?? `Gemini API error ${error.status}`, error.status, said, transport.retryAfter())
       }
       throw error
     })

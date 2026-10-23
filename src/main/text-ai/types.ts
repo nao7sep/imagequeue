@@ -15,9 +15,8 @@ export interface AskOptions {
   // populating `parsed` on the result.
   schema?: object
   timeoutMs: number
-  // When provided, aborting it cancels the in-flight request. Implementations
-  // pass it through to the underlying SDK call so a cancelled brainstorm stops
-  // spending tokens immediately rather than only between turns.
+  // Passed through to the SDK to cancel the local request and prevent later
+  // turns. A provider may continue processing or charge for already accepted work.
   signal?: AbortSignal
   // What the call is for and what it belongs to, for its record.
   record: Pick<AiCall, 'purpose' | 'taskId' | 'requestId'>

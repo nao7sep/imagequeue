@@ -7,7 +7,8 @@ import { freshRecordsRoot, readRows, removeRecordsRoots } from '../records-fixtu
 // one request per call and the app's own retry policy decides every resend:
 // Nano Banana resends only an answer proving no processing, and the text
 // JSON/slug caller owns text retries.
-vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: async () => undefined }))
+const delay = vi.hoisted(() => vi.fn(async (_ms: number) => undefined))
+vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: delay }))
 
 vi.mock('../../../src/main/config', () => ({
   loadConfig: () => ({ image_backends: { nanobanana: { timeout_ms: 180000 } } }),
@@ -22,10 +23,10 @@ const { GeminiProvider } = await import('../../../src/main/text-ai/gemini')
 
 // retry-after-ms keeps a regressed client's resends immediate, so the count
 // fails the assertion instead of waiting out the SDK's backoff.
-function stubServerError(status = 503): ReturnType<typeof vi.fn> {
+function stubServerError(status = 503, retryAfter = '1'): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { message: 'overloaded' } }), {
     status,
-    headers: { 'content-type': 'application/json', 'retry-after-ms': '1' },
+    headers: { 'content-type': 'application/json', 'retry-after-ms': '1', 'retry-after': retryAfter },
   }))
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
@@ -67,7 +68,6 @@ describe('Gemini request attempt ownership', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
-
 
 it('records image response metadata without serializing the large inline image into a JSON copy', async () => {
   const dir = freshRecordsRoot()
@@ -112,4 +112,15 @@ it('records image response metadata without serializing the large inline image i
     }],
   })
   expect(kept.candidates[0].content.parts[1].inlineData).not.toHaveProperty('data')
+})
+
+it('preserves Gemini response cooldown for the app retry owner', async () => {
+  const fetchMock = stubServerError(503, '120')
+  delay.mockClear()
+  await expect(generateNanoBanana(task, new AbortController().signal)).rejects.toMatchObject({ retryAfter: '120' })
+  expect(fetchMock).toHaveBeenCalledTimes(3)
+  expect(delay.mock.calls.map(([ms]) => ms)).toEqual([120000, 120000])
+  const provider = new GeminiProvider('gemini-test', 'test-key', 'https://generativelanguage.googleapis.com')
+  await expect(provider.ask({ messages: [{ role: 'user', text: 'hi' }], timeoutMs: 30000, record: { purpose: 'prose' } }))
+    .rejects.toMatchObject({ retryAfter: '120' })
 })
