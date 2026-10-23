@@ -8,7 +8,7 @@ import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
 import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, shutdownSignal } from './cancellation'
-import { publishQueueState } from '../queue/publisher'
+import { publishQueueState, publishQueueControlState } from '../queue/publisher'
 import { pauseForStorageFailure, resetStorageFailureNotice } from '../queue/storage-failure'
 import { generateOpenAI } from './openai'
 import { generateNanoBanana } from './nanobanana'
@@ -18,6 +18,7 @@ import { generateDrawThings } from './drawthings'
 import { generateSlug } from './slug'
 import { generationFailurePresentation } from '../failure-presentation'
 import { providerMessage } from '../provider-errors'
+import { maskDiagnostic } from '../records'
 
 // Every generator takes the queue's cancellation signal. It is a parameter
 // rather than something each backend registers for itself: registration lived
@@ -79,7 +80,7 @@ export function processQueues(): void {
   // flight and nothing is queued, the busy period that just ended gets its one
   // summary line. The 500ms tick that observes the idle state may land up to
   // half a second after the last task settled — fine for an aggregate summary.
-  const summary = drainTracker.finalize(Date.now(), totalActive() === 0 && !queueManager.hasQueuedTasks())
+  const summary = drainTracker.finalize(performance.now(), totalActive() === 0 && !queueManager.hasQueuedTasks())
   if (summary) {
     log('info', 'Queue drained', { ...summary })
   }
@@ -108,7 +109,7 @@ export function processQueues(): void {
       // that write fails, nothing starts: the task stays queued and the queue
       // pauses until the user resumes it.
       queueManager.updateTask(task, { status: 'generating', startedAt: new Date().toISOString() })
-      drainTracker.begin(Date.now())
+      drainTracker.begin(performance.now())
       activeCounts[backend]++
       logGenerationStart(task.id, backend, task.model)
       // Registration happens synchronously before processTask's first await.
@@ -125,6 +126,7 @@ export function processQueues(): void {
 
 async function processTask(backend: BackendId, task: Task): Promise<void> {
   const generate = generators[backend]
+  const started = performance.now()
 
   // The processor owns the canceller for the whole generation, so the registry
   // holds an entry for every generating task whatever backend it belongs to —
@@ -139,9 +141,10 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   try {
     await persistActiveSession()
   } catch (error) {
-    queueManager.updateTask(task, { status: 'queued', startedAt: null })
-    pauseForStorageFailure('start', error)
+    queueManager.updateTask(task, { status: controller.signal.aborted ? 'interrupted' : 'queued', startedAt: null })
+    if (controller.signal.aborted) drainTracker.recordCancelled()
     clearInFlight(task.id)
+    pauseForStorageFailure('start', error)
     resolveSettled()
     return
   }
@@ -158,9 +161,10 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     const { buffer: imageBuffer, seed } = await generate(task, controller.signal)
     generated = true
     clearInFlight(task.id)
+    publishQueueControlState()
     const completedAt = new Date()
 
-    const durationMs = completedAt.getTime() - new Date(task.startedAt!).getTime()
+    const durationMs = performance.now() - started
     queueManager.updateTask(task, { completedAt: completedAt.toISOString(), durationMs })
 
     const ext = await validateImage(imageBuffer)
@@ -222,22 +226,23 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       queueManager.updateTask(task, {
         status: 'interrupted', startedAt: null, completedAt: null, durationMs: null, error: null, providerMessage: null,
       })
-      drainTracker.recordFailed()
+      drainTracker.recordCancelled()
       log('info', 'Generation stopped by request', { taskId: task.id, backend })
     } else {
       // The task and manifest keep deliberately authored presentation copy. The
       // complete diagnostic (type, message, stack, cause) remains in the log.
-      const error = generationFailurePresentation(backend, err, generated)
+      const presentation = generationFailurePresentation(backend, err, generated)
+      const error = maskDiagnostic(presentation) as typeof presentation
       // The provider's own words, kept beside the authored copy rather than in
       // it. A save failure after a successful generation is not its answer.
-      queueManager.updateTask(task, { status: 'failed', error, providerMessage: generated ? null : providerMessage(err) })
+      queueManager.updateTask(task, { status: 'failed', error, providerMessage: generated ? null : maskDiagnostic(providerMessage(err)) as string | null })
       drainTracker.recordFailed()
       logGenerationFailed(task.id, err, {
         backend,
         model: task.model,
         prompt: task.prompt,
         params: task.params,
-        durationMs: task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : null
+        durationMs: performance.now() - started
       })
     }
   } finally {

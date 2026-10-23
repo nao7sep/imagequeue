@@ -1,3 +1,5 @@
+import * as logger from '../../../src/main/logger'
+import { startAiCall } from '../../../src/main/records'
 import { EventEmitter } from 'node:events'
 import type { WebContents } from 'electron'
 import { tinyPng } from '../image-fixture'
@@ -122,6 +124,8 @@ afterEach(async () => {
     await cancelAllInFlightAndWait(1_000)
   }
   resetCancellationState()
+  vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('stopping a generation reaches every backend', () => {
@@ -210,6 +214,7 @@ describe('quitting while a finished image is being named', () => {
     expect(inFlightCount()).toBe(0)
 
     await vi.waitFor(() => expect(slugState.entered).toBe(true))
+    expect(sentEvents.filter((event) => event.channel === 'queue:controlState').at(-1)?.payload).toMatchObject({ generating: 0 })
     const result = await cancelAllInFlightAndWait(1_000)
     expect(result).toEqual({ signalled: 0, settled: true })
     expect(slugState.sawAbort).toBe(true)
@@ -295,4 +300,49 @@ describe('a failed task keeps what the provider said', () => {
     await settle()
     expect(queueManager.getAllStoredTasks().openai[0].providerMessage).toBeNull()
   })
+})
+
+
+it('masks echoed request credentials before task persistence and publication', async () => {
+  const secret = 'fixture_request_credential'
+  startAiCall({ backend: 'openai', model: 'm', purpose: 'image', request: {}, credentials: [secret] })
+  const { ProviderRefusalError } = await import('../../../src/main/provider-errors')
+  queueOne('openai')
+  processQueues()
+  await Promise.resolve()
+  captured!.reject(new ProviderRefusalError('blocked', secret, `Invalid credential ${secret}; contact support.`))
+  await settle()
+  const serialized = JSON.stringify(queueManager.getAllStoredTasks())
+  expect(serialized).not.toContain(secret)
+  expect(serialized).toContain('[REDACTED]')
+  expect(JSON.stringify(sentEvents)).not.toContain(secret)
+  expect(queueManager.getAllStoredTasks().openai[0].providerMessage).toBe('Invalid credential [REDACTED]; contact support.')
+})
+
+it.each(['success', 'failure', 'cancel'] as const)('uses elapsed monotonic time through %s and drain completion', async (outcome) => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+  let now = 100
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
+  const logged = vi.spyOn(logger, 'log')
+  const failed = vi.spyOn(logger, 'logGenerationFailed')
+  // Settle any preceding test's drain before opening this one.
+  processQueues()
+  logged.mockClear()
+  queueOne('openai')
+  processQueues()
+  await Promise.resolve()
+  now = 350
+  vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
+  if (outcome === 'success') captured!.resolve({ buffer: await tinyPng() })
+  else {
+    if (outcome === 'cancel') cancelAllInFlight()
+    captured!.reject(new Error('failure'))
+  }
+  await settle()
+  if (outcome === 'success') expect(queueManager.getAllStoredTasks().openai[0].durationMs).toBe(250)
+  if (outcome === 'failure') expect(failed).toHaveBeenCalledWith(expect.any(String), expect.any(Error), expect.objectContaining({ durationMs: 250 }))
+  now = 500
+  processQueues()
+  expect(logged).toHaveBeenCalledWith('info', 'Queue drained', { ok: outcome === 'success' ? 1 : 0, failed: outcome === 'failure' ? 1 : 0, cancelled: outcome === 'cancel' ? 1 : 0, durationMs: 400 })
 })

@@ -236,7 +236,6 @@ describe('Draw Things output staging', () => {
   })
 
   it.each([
-    ['the OS killing it', { code: null, signal: 'SIGKILL', stderr: '' }],
     ['a failed Metal allocation', { code: 1, signal: null, stderr: 'Error: Failed to allocate buffer (out of memory)' }],
   ])('reports running out of memory after %s, at the size it was asked for, and removes the partial image', async (_name, ended) => {
     const { generateDrawThings, DrawThingsOutOfMemoryError } = await import('../../../src/main/backends/drawthings')
@@ -309,7 +308,7 @@ describe('Draw Things output staging', () => {
     expect(fs.existsSync(outPath)).toBe(false)
   })
 
-  it('keeps the whole CLI output and the ending signal in the record of a run that ran out of memory', async () => {
+  it('keeps the whole CLI output and ending signal for an unexplained kill', async () => {
     const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
     exit = { code: null, signal: 'SIGKILL', stderr: 'loading model\nsampling step 3/4\n' }
     await generateDrawThings(task({ width: 3840, height: 2160 }), new AbortController().signal).catch(() => undefined)
@@ -332,11 +331,12 @@ describe('Draw Things output staging', () => {
   })
 })
 
-// The decision on its own: an OS kill with no exit code, or an allocation
-// failure the CLI reports, and nothing else.
+// A signal alone is not evidence of memory exhaustion.
 describe('isOutOfMemoryExit', () => {
   it.each([
-    [null, 'SIGKILL', '', true],
+    [null, 'SIGKILL', '', false],
+    [null, 'SIGSEGV', 'segmentation fault', false],
+    [null, 'SIGABRT', 'assertion failed', false],
     [1, null, 'MTLAllocation failed to allocate 2.1 GB', true],
     [134, null, 'Fatal error: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)', true],
     [1, null, 'Error: Model not found: x.ckpt', false],

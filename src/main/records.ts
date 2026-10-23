@@ -206,9 +206,9 @@ export function maskDiagnostic(value: unknown): unknown {
  *  (an SDK's recordingFetch puts the HTTP request it sent there). */
 export function startAiCall(call: AiCall): AiCallRecord {
   for (const key of call.credentials ?? []) if (key) diagnosticCredentials.add(key)
-  const started = Date.now()
+  const started = performance.now()
   const base = {
-    time: new Date(started).toISOString(), launch, session_id: activeSessionId,
+    time: new Date().toISOString(), launch, session_id: activeSessionId,
     task_id: call.taskId ?? null, request_id: call.requestId ?? null,
     backend: call.backend, model: call.model, purpose: call.purpose,
   }
@@ -221,7 +221,7 @@ export function startAiCall(call: AiCall): AiCallRecord {
     // value records exactly as it serializes.
     const masked = (value: unknown): string => json(maskCredentials(JSON.parse(json(value)), call.credentials))
     write('ai_calls', {
-      ...base, request: masked(call.request), duration_ms: Date.now() - started,
+      ...base, request: masked(call.request), duration_ms: performance.now() - started,
       response: response === undefined ? null : masked(response),
       error: error === undefined ? null : masked(serializeError(error)),
     })

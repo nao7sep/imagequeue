@@ -141,3 +141,22 @@ it('keeps payment behind real manifest settlement and honors Stop while that sav
   expect(generate).not.toHaveBeenCalled()
   expect(queueManager.getAllStoredTasks().openai[0].status).toBe('interrupted')
 })
+
+
+it('preserves Stop when the held start save rejects and Resume cannot admit that task', async () => {
+  let reject!: (error: Error) => void
+  persist.held = new Promise<void>((_resolve, fail) => { reject = fail })
+  queueOne()
+  processQueues()
+  cancelAllInFlight()
+  reject(new Error('disk unavailable'))
+  await settle()
+  expect(queueManager.getAllStoredTasks().openai[0].status).toBe('interrupted')
+  expect(isQueuePaused()).toBe(true)
+  expect(sent.filter(event => event.channel === 'queue:controlState').at(-1)?.payload).toMatchObject({ generating: 0 })
+  persist.held = null
+  setQueuePaused(false)
+  processQueues()
+  await settle()
+  expect(generate).not.toHaveBeenCalled()
+})

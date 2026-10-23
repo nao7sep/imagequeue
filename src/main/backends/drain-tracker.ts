@@ -1,6 +1,7 @@
 export interface DrainSummary {
   ok: number
   failed: number
+  cancelled: number
   durationMs: number
 }
 
@@ -20,6 +21,7 @@ export class DrainTracker {
   private startedAt: number | null = null
   private ok = 0
   private failed = 0
+  private cancelled = 0
 
   // Opens a drain window on the idle→busy transition. A no-op once a window is
   // already open, so later task starts within the same busy period neither
@@ -29,6 +31,7 @@ export class DrainTracker {
       this.startedAt = now
       this.ok = 0
       this.failed = 0
+      this.cancelled = 0
     }
   }
 
@@ -40,6 +43,10 @@ export class DrainTracker {
     this.failed++
   }
 
+  recordCancelled(): void {
+    this.cancelled++
+  }
+
   // Closes the window and returns its summary only when a drain is open and the
   // queue is now idle; otherwise returns null and leaves the window untouched
   // (no drain open, or work still in flight/queued). Resets to idle after a
@@ -49,11 +56,13 @@ export class DrainTracker {
     const summary: DrainSummary = {
       ok: this.ok,
       failed: this.failed,
+      cancelled: this.cancelled,
       durationMs: now - this.startedAt,
     }
     this.startedAt = null
     this.ok = 0
     this.failed = 0
+    this.cancelled = 0
     return summary
   }
 }

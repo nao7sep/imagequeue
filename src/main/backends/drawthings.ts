@@ -14,14 +14,14 @@ import { modelsDirArgs, resolveCliPath } from '../local-cli'
 import { drawThingsDimension } from '../../shared/models'
 
 // The CLI runs in its own process, so running out of memory ends it, never
-// ImageQueue: Metal reports a failed allocation, or the OS kills the process,
-// which arrives as a signal with no exit code. Either way the task says so,
-// with the size it was asked for (volume-handling-conventions, Contain).
+// ImageQueue. Only explicit allocation evidence supports that diagnosis;
+// a terminating signal alone could be a crash or an external stop. Allocation
+// failures include the requested size in their presentation.
 const OUT_OF_MEMORY = /out of memory|insufficient memory|outofmemory|failed to allocate|allocation fail/i
 
 /** Whether a CLI exit that was not a stop or a timeout was a memory failure. */
-export function isOutOfMemoryExit(code: number | null, signal: NodeJS.Signals | null, stderr: string): boolean {
-  return (code === null && signal !== null) || OUT_OF_MEMORY.test(stderr)
+export function isOutOfMemoryExit(_code: number | null, _signal: NodeJS.Signals | null, stderr: string): boolean {
+  return OUT_OF_MEMORY.test(stderr)
 }
 
 export async function generateDrawThings(task: Task, signal: AbortSignal): Promise<{ buffer: Buffer; mimeType?: string; seed?: number }> {
@@ -161,8 +161,8 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
           log('error', 'draw-things-cli ran out of memory', { code, signal: exitSignal, model: task.model, width, height, stderr })
           fail(new DrawThingsOutOfMemoryError(width, height, exitSignal ? `killed by ${exitSignal}` : stderr))
         } else {
-          log('error', 'draw-things-cli exited with error', { code, model: task.model, stderr })
-          fail(new Error(`draw-things-cli exited with code ${code}: ${stderr}`))
+          log('error', 'draw-things-cli exited with error', { code, signal: exitSignal, model: task.model, stderr })
+          fail(new Error(`draw-things-cli exited with ${exitSignal ? `signal ${exitSignal}` : `code ${code}`}: ${stderr}`))
         }
       })
       proc.on('error', (err) => {

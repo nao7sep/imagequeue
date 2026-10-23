@@ -63,6 +63,26 @@ describe('log records', () => {
 })
 
 describe('AI call records', () => {
+  it.each([3_600_000, -3_600_000])('keep elapsed time and the request timestamp when the wall clock jumps %i ms', (clockJump) => {
+    const dir = freshRecordsRoot()
+    const sentAt = '2026-01-01T00:00:00.000Z'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const monotonicClock = vi.spyOn(performance, 'now').mockReturnValue(100)
+    try {
+      vi.setSystemTime(new Date(sentAt))
+      const record = startAiCall({ backend: 'openai', model: 'm', purpose: 'image', request: {} })
+
+      vi.setSystemTime(new Date(Date.parse(sentAt) + clockJump))
+      monotonicClock.mockReturnValue(350.5)
+      record.finish({})
+
+      expect(readRows(dir, 'ai_calls')).toMatchObject([{ time: sentAt, duration_ms: 250.5 }])
+    } finally {
+      monotonicClock.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   // A record keeps a request's structure, never a key it carries
   // (logging-conventions): key headers and every occurrence of a key value the
   // call sent are masked, and so is a signed URL's signature.
