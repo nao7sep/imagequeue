@@ -2,7 +2,7 @@
 // root (so they honor IMAGEQUEUE_DATA_DIR):
 //
 //   bin/draw-things-cli        the persisted CLI binary
-//   bin/draw-things-cli.json   sidecar: the release tag + hash recorded at install
+//   bin/draw-things-cli.json   sidecar: the release tag + binaryId recorded at install
 //   temp/<stem>-<nanoid>.tmp   deletable staging for in-flight downloads
 //   dependencies.json          ephemeral check cache (last-known-latest, timestamps)
 //   recommendations-times.json the server time recorded for each configs.json published

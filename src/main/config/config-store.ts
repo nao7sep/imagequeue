@@ -146,8 +146,6 @@ export async function retryConfigSaves(): Promise<void> {
 }
 
 
-export function flushConfigSaves(): Promise<unknown> { return saving }
-
 export function updateConfig(apply: (draft: AppConfig) => void): Promise<AppConfig> {
   const operation = async (): Promise<AppConfig> => {
   const draft = structuredClone(loadConfig())

@@ -100,9 +100,7 @@ export interface AdvancedGates {
   missingElaboratorKind: ElaboratorKind | null
   elaborate: ControlGate
   queue: ControlGate
-  // Opening the elaborated-prompts history mid-run is blocked: the running
-  // operation captured its avoid-list at start and repopulates the list on
-  // completion, so editing it during the run is misleading.
+  // A busy operation owns the controls, including elaborated-prompts history.
   history: { disabled: boolean }
 }
 

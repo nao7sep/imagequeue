@@ -18,8 +18,8 @@ function shippedElaborators(): Elaborator[] {
   // Each template is a short list of CONCRETE, renderable specifics — the light
   // source, the lens, the palette, the framing — and nothing else. No role
   // preamble, no "preserve the content", no quality adjectives, no negations:
-  // those either belong to the app (they are stated once in the expansion
-  // template, where a user edit cannot weaken them) or do not survive the trip
+  // those either belong to the app (they are stated once in the immutable
+  // combine preamble) or do not survive the trip
   // to an image at all.
   //
   // That shape was measured, not assumed. The previous templates were 33-51
@@ -494,7 +494,6 @@ export async function retryElaboratorSaves(): Promise<void> {
   }
 }
 
-export function flushElaboratorSaves(): Promise<unknown> { return saving }
 function ordered<T>(operation: () => Promise<T>): Promise<T> {
   const result = saving.catch(() => undefined).then(async () => {
     if (retrySave) await retrySave()

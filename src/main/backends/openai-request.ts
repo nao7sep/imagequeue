@@ -16,8 +16,9 @@ import {
 // separate so the conditional-field logic is unit-testable without the SDK.
 
 // The per-request fields we send to images.generate, minus the envelope
-// (prompt/n/stream) that openai.ts adds at call time and never logs. The SDK's
-// quality type predates the 2.5 models' xhigh and max.
+// (prompt/n/stream) that openai.ts adds at call time. Diagnostics capture the
+// complete outgoing request, with credentials masked. The SDK's quality type
+// predates the 2.5 models' xhigh and max.
 export type OpenAIImageParams = Omit<ImageGenerateParamsNonStreaming, 'prompt' | 'n' | 'stream' | 'quality'> & { quality?: OpenAIQuality }
 
 export function validateGptImageSize(width: number, height: number): void {
