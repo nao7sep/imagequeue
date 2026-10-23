@@ -19,8 +19,8 @@ interface ListboxOptions {
   // The committed selection (a projection target). May be null.
   selectedId: string | null
   // Sets the selection. In 'follows-focus' mode this fires on every arrow move;
-  // in 'manual' mode it fires only on click and on Enter/Space (the primary
-  // action), never merely on focus.
+  // in 'manual' mode it fires on click. Enter/Space invokes onPrimary instead;
+  // moving focus alone does not commit a manual selection.
   onSelect: (id: string) => void
   // Whether moving the active item commits it. 'follows-focus' for cheap local
   // selection (Elaborators); 'manual' for destructive/network primaries
@@ -75,11 +75,11 @@ interface UseListboxResult<T extends HTMLElement> {
  * keeps selection in app state as the single source of truth — without
  * restructuring the markup.
  *
- * One tab stop: the selected row (or the first when nothing is selected) is the
- * only tabbable option; while there are no rows, the listbox itself owns that tab
- * stop. Thus Tab can always reach the control, including its loading, failure,
- * and ordinary-empty states. Up/Down move the active row, Home/End and
- * PageUp/PageDown jump, all stopping at the ends. In 'follows-focus' mode moving
+ * One tab stop: the active cursor owns the tabbable option, independently of
+ * committed selection. It starts at the selected row or the first available row;
+ * while there are no rows, the listbox itself owns that tab stop. Thus Tab can
+ * always reach the control, including its loading, failure and ordinary-empty
+ * states. Up/Down move the active row, Home/End and PageUp/PageDown jump, all stopping at the ends. In 'follows-focus' mode moving
  * the cursor selects; in 'manual' mode Enter/Space on the active row runs the
  * primary action. Type-ahead jumps by visible label (IME-guarded), unless ceded.
  *

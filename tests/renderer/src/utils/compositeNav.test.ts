@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  currentCompositeIndex,
   indexOfId,
   nextIndex,
 } from '../../../../src/renderer/src/utils/compositeNav'
 
-// These tests cover only the pure index/recovery math behind the app's composite
-// controls (useListbox and the multi-column queue board). The behaviors that
-// depend on a live DOM — roving tabindex, real focus movement, the aria
-// projections, Tab moving between the queue's columns, the queue's geometry-based
-// Left/Right cross-column switch, the menu's focus-into/return-to-trigger and
-// submenu open/close, and IME-guarded type-ahead — are DOM-only and are verified
-// by manual QA, not here. This suite runs in the node environment with no jsdom,
-// matching the rest of the renderer unit tests.
+// Pure index math runs without a DOM. Separate renderer interaction suites
+// cover focus, roving tab stops, ARIA selection, menu dismissal and IME keys.
 
 describe('nextIndex', () => {
   it('steps forward and backward one item at a time', () => {
@@ -58,22 +51,5 @@ describe('indexOfId', () => {
     expect(indexOfId(['a', 'b', 'c'], 'z')).toBe(-1)
     expect(indexOfId(['a', 'b', 'c'], null)).toBe(-1)
     expect(indexOfId(['a', 'b', 'c'], undefined)).toBe(-1)
-  })
-})
-
-describe('currentCompositeIndex', () => {
-  const ids = ['a', 'b', 'c']
-
-  it('uses the focused item before the locally active or selected item', () => {
-    expect(currentCompositeIndex({ ids, focusedId: 'c', activeId: 'b', selectedId: 'a' })).toBe(2)
-  })
-
-  it('uses the locally active item before a stale selected prop', () => {
-    expect(currentCompositeIndex({ ids, activeId: 'b', selectedId: 'a' })).toBe(1)
-  })
-
-  it('falls back to selected and then no current item', () => {
-    expect(currentCompositeIndex({ ids, selectedId: 'a' })).toBe(0)
-    expect(currentCompositeIndex({ ids, focusedId: 'missing', activeId: 'missing', selectedId: 'missing' })).toBe(-1)
   })
 })

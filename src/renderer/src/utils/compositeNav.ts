@@ -11,7 +11,7 @@ export type NavDirection = 'next' | 'prev' | 'first' | 'last'
  * last. Returns `-1` for an empty set. Each composite maps its own keys onto a
  * direction (a listbox uses Up/Down; the queue board also uses Left/Right for
  * cross-column movement, handled by its own geometry rather than this math) and
- * keeps the DOM focus movement, which is verified by manual QA.
+ * owns DOM focus movement, covered by the renderer interaction suites.
  */
 export function nextIndex(direction: NavDirection, current: number, length: number): number {
   if (length === 0) return -1
@@ -29,26 +29,4 @@ export function nextIndex(direction: NavDirection, current: number, length: numb
 
 export function indexOfId(ids: readonly string[], id: string | null | undefined): number {
   return id ? ids.indexOf(id) : -1
-}
-
-// Resolve the composite's current cursor index, preferring the live DOM focus,
-// then the locally-tracked active item, then a possibly-stale selected prop.
-// This is what lets a listbox keep navigating correctly after the selection
-// prop has drifted from where focus actually sits.
-export function currentCompositeIndex({
-  ids,
-  focusedId,
-  activeId,
-  selectedId,
-}: {
-  ids: readonly string[]
-  focusedId?: string | null
-  activeId?: string | null
-  selectedId?: string | null
-}): number {
-  const focused = indexOfId(ids, focusedId)
-  if (focused >= 0) return focused
-  const active = indexOfId(ids, activeId)
-  if (active >= 0) return active
-  return indexOfId(ids, selectedId)
 }
