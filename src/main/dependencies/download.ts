@@ -281,6 +281,8 @@ export async function writeDownloadResponse(
   onProgress?: (progress: DownloadProgress) => void
 ): Promise<void> {
   let syncHandle: fs.promises.FileHandle | null = null
+  let ownsDestination = false
+  let completed = false
   try {
     assertSuccessfulResponse(response)
     const advertisedBytes = parseContentLength(response, limits.maxBytes)
@@ -315,38 +317,41 @@ export async function writeDownloadResponse(
     // FileHandle stream used autoClose:false and therefore reached 100% then
     // waited forever for the close it had explicitly disabled. Let the stream
     // own its descriptor, then reopen the completed file solely for fsync.
-    const output = fs.createWriteStream(destPath, { flags: 'w' })
+    const output = fs.createWriteStream(destPath, { flags: 'wx' })
+    output.once('open', () => { ownsDestination = true })
     await pipeline(response, meter, output, { signal })
+    if (advertisedBytes !== null && downloadedBytes !== advertisedBytes) {
+      throw new Error('Download ended before its advertised Content-Length')
+    }
     reportProgress(true)
     syncHandle = await fs.promises.open(destPath, 'r+')
     await syncHandle.sync()
+    completed = true
   } finally {
     response.destroy()
     // Cleanup must not replace the transfer/limit error that brought us here.
     await syncHandle?.close().catch(() => undefined)
+    // A rejected URL, response or exclusive open never grants ownership of an
+    // existing path. Pipeline has settled the writer before removing our stage.
+    if (ownsDestination && !completed) await fs.promises.rm(destPath, { force: true }).catch(() => undefined)
   }
 }
 
 /** Download the CLI artifact into its unique staging path. Staged bytes are
- * synced before success; every failure removes the partial staging file. */
+ * synced before success; failures remove only the stage this transfer created. */
 export async function downloadToFile(
   url: string,
   destPath: string,
   onProgress?: (progress: DownloadProgress) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  try {
-    await withWholeOperationTimeout(
-      signal,
-      CLI_DOWNLOAD_LIMITS.wholeTimeoutMs,
-      'CLI download',
-      (boundedSignal) =>
-        downloadHop(url, destPath, CLI_DOWNLOAD_LIMITS, boundedSignal, onProgress, MAX_REDIRECTS)
-    )
-  } catch (error) {
-    await fs.promises.rm(destPath, { force: true }).catch(() => undefined)
-    throw error
-  }
+  await withWholeOperationTimeout(
+    signal,
+    CLI_DOWNLOAD_LIMITS.wholeTimeoutMs,
+    'CLI download',
+    (boundedSignal) =>
+      downloadHop(url, destPath, CLI_DOWNLOAD_LIMITS, boundedSignal, onProgress, MAX_REDIRECTS)
+  )
 }
 
 /** Stream a file through SHA-256 and return the lowercase hex digest. */
