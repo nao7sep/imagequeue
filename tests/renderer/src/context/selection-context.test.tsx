@@ -419,3 +419,26 @@ describe('navigation reveal ownership', () => {
     window.removeEventListener(TASK_REVEAL_EVENT, reveal)
   })
 })
+
+
+describe('auto-preview elapsed idle time', () => {
+  it.each([3600000, -3600000])('ignores a wall-clock adjustment of %s ms', (jump) => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    const wall = vi.spyOn(Date, 'now').mockReturnValue(10000000)
+    settingsValue = { settings: { general: { auto_preview_idle_seconds: 5 } } }
+    const { ctx, rerender } = mountSelection()
+    act(() => ctx().select('openai', 't-failed'))
+    const complete = (id: string): void => {
+      const current = queueValue.tasks as Record<BackendId, Task[]>
+      queueValue = { tasks: { ...current, openai: current.openai.map((t) => t.id === id ? { ...t, status: 'completed', completedAt: '2026-08-18T00:01:00.000Z' } : t) } }
+      act(rerender)
+    }
+    clock.mockReturnValue(2000)
+    wall.mockReturnValue(10000000 + jump)
+    complete('t-queued')
+    expect(ctx().selection?.taskId).toBe('t-failed')
+    clock.mockReturnValue(6000)
+    complete('t-generating')
+    expect(ctx().selection?.taskId).toBe('t-generating')
+  })
+})

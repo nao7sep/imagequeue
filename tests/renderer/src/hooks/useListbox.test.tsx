@@ -16,7 +16,7 @@ if (typeof globalThis.CSS === 'undefined' || typeof globalThis.CSS.escape !== 'f
   }
 }
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 // A minimal consumer of the shared listbox hook, with a real selection model
 // (follows-focus), so click-to-select and arrow navigation are exercised against
@@ -293,4 +293,20 @@ describe('indexed listbox collections', () => {
     expect(document.activeElement?.textContent).toBe('Zebra')
     expect(onSelect).toHaveBeenCalledExactlyOnceWith('Zebra')
   })
+})
+
+
+it('expires typeahead by elapsed time despite a backward wall-clock correction', () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  const wall = vi.spyOn(Date, 'now').mockReturnValue(10000000)
+  const onSelect = vi.fn()
+  const { container } = render(<Harness ids={['Start', 'Apple', 'Banana', 'Abacus']} onSelect={onSelect} />)
+  const list = container.querySelector('[role="listbox"]')!
+  act(() => container.querySelector<HTMLElement>('[role="option"]')!.focus())
+  fireEvent.keyDown(list, { key: 'a' })
+  expect(onSelect).toHaveBeenLastCalledWith('Apple')
+  clock.mockReturnValue(1700)
+  wall.mockReturnValue(1)
+  fireEvent.keyDown(list, { key: 'b' })
+  expect(onSelect).toHaveBeenLastCalledWith('Banana')
 })

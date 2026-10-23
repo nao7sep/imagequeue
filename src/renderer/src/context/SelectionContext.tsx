@@ -106,7 +106,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   // Tracks the last time the user did anything that affects selection
   // (click, keyboard nav, remove, delete, explicit clear). Auto-preview
   // checks this before stealing the selection on a fresh completion.
-  const lastActionRef = useRef<number>(0)
+  const lastActionRef = useRef<number>(-Infinity)
 
   // After a keyboard remove/delete drops the focused row, focus has fallen to the
   // page body and the column would lose its tab stop. This holds the id we should
@@ -128,7 +128,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
   const setSelectionInternal = useCallback(
     (next: Selection | null, opts: { userInitiated: boolean }): void => {
-      if (opts.userInitiated) lastActionRef.current = Date.now()
+      if (opts.userInitiated) lastActionRef.current = performance.now()
       // A second IPC key can arrive before React renders the first navigation.
       selectionRevisionRef.current++
       selectionRef.current = next
@@ -337,7 +337,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
   const restoreTask = useCallback(async (backend: BackendId, taskId: string): Promise<void> => {
     const task = tasksRef.current[backend]?.find((t) => t.id === taskId)
     if (!task || task.status !== 'kept') return
-    lastActionRef.current = Date.now()
+    lastActionRef.current = performance.now()
     await runTaskAction({
       taskId,
       action: 'restore',
@@ -510,7 +510,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     const idleSeconds = ((settings?.general as { auto_preview_idle_seconds?: number } | undefined)?.auto_preview_idle_seconds) ?? 0
     if (!idleSeconds || idleSeconds <= 0) return
 
-    const idleEnough = Date.now() - lastActionRef.current >= idleSeconds * 1000
+    const idleEnough = performance.now() - lastActionRef.current >= idleSeconds * 1000
     if (!idleEnough) return
 
     // Find newly-completed tasks across all backends.

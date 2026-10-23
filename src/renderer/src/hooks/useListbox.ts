@@ -226,7 +226,7 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
     // entirely when the surrounding UI owns the letters.
     if (typeAhead && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
       if (isComposing?.(e.nativeEvent as unknown as { isComposing?: boolean; keyCode?: number })) return
-      const now = Date.now()
+      const now = performance.now()
       const ta = typeAheadRef.current
       ta.buffer = now - ta.at > 600 ? e.key.toLowerCase() : ta.buffer + e.key.toLowerCase()
       ta.at = now
