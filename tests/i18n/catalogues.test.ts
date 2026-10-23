@@ -38,6 +38,7 @@ const SAME_AS_ENGLISH: Partial<Record<Language, readonly string[]>> = {
     "records.levelError", "records.error",
   ],
   fr: [
+    "common.actions",
     "nativeMenu.services", "nativeMenu.zoom", "about.version", "settings.tab.notifications", "statusIcon.notifications", "settings.tab.prompts",
     "settings.volume", "settings.audioFilter", "option.opaque", "option.transparent", "menu.sessions",
     "menu.elaborationPrompts", "shortcuts.app", "details.prompt", "elaborator.kind.composition", "elaborator.kind.style",

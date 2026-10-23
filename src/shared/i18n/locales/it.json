@@ -1,5 +1,6 @@
 {
   "common.allow": "Consenti",
+  "common.actions": "Azioni",
   "settings.allowSoundFile": "Vuoi consentire a ImageQueue di leggere questo file per i suoni di notifica?",
   "storage.stillPending": "L’operazione di archiviazione richiede più tempo del previsto e potrebbe ancora completarsi. Controlla il risultato prima di riprovare.",
   "quit.title": "Impossibile salvare prima di uscire",

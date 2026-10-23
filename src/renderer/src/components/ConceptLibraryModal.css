@@ -215,3 +215,22 @@
   color: var(--text-muted);
   align-self: center;
 }
+
+/* Detail options retain their domain-header and chip shapes while exposing
+   the same selection and keyboard cursor as the facet rail. */
+.concept-library-section-header[role='option'],
+.concept-library-row[role='option'] {
+  cursor: pointer;
+  outline: none;
+}
+
+.concept-library-section-header.selected,
+.concept-library-row.selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-primary));
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.concept-library-section-header[role='option']:focus-visible,
+.concept-library-row[role='option']:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliStatus, LocalModelInfo } from '../../../../src/shared/types'
 import { until } from '../../until'
@@ -10,6 +10,14 @@ vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({
 vi.mock('../../../../src/renderer/src/context/CliJobsContext', () => ({
   useCliJobs: () => ({ addJob: vi.fn() }),
 }))
+
+
+// jsdom lacks the CSSOM escape used by the listbox's real focus lookup.
+if (typeof globalThis.CSS === 'undefined' || typeof globalThis.CSS.escape !== 'function') {
+  ;(globalThis as unknown as { CSS: { escape: (value: string) => string } }).CSS = {
+    escape: (value) => value.replace(/[^a-zA-Z0-9_-]/g, (character) => '\\' + character),
+  }
+}
 
 const { DrawThingsModelsModal } = await import('../../../../src/renderer/src/components/DrawThingsModelsModal')
 
@@ -149,5 +157,42 @@ describe('DrawThingsModelsModal Browse context', () => {
     fireEvent.click(browse)
     await until(() => expect(window.electronAPI.openFileDialog).toHaveBeenLastCalledWith([], picked, 'model-import'))
     expect(input.value).toBe(picked)
+  })
+})
+
+
+describe('model selected actions', () => {
+  it('targets the keyboard active model for links and download without activating on arrow movement', async () => {
+    installApi([OFFICIAL_MODEL, { ...OFFICIAL_MODEL, file: 'beta.ckpt', name: 'Beta', huggingFace: 'org/beta' }])
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    await until(() => screen.getByText('Beta'))
+    const list = screen.getByRole('listbox', { name: 'Official models' })
+    const rows = within(list).getAllByRole('option')
+    act(() => rows[0].focus())
+    fireEvent.keyDown(rows[0], { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rows[1])
+    expect(window.electronAPI.cliStartDownload).not.toHaveBeenCalled()
+    expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
+    fireEvent.keyDown(rows[1], { key: 'ContextMenu' })
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Open on Hugging Face: org/beta' })) })
+    expect(window.electronAPI.openExternal).toHaveBeenCalledWith('https://huggingface.co/org/beta')
+    const trigger = document.activeElement as HTMLButtonElement
+    expect(trigger.textContent).toBe('Actions')
+    expect(list.contains(trigger)).toBe(false)
+    fireEvent.click(trigger)
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Download' })) })
+    expect(window.electronAPI.cliStartDownload).toHaveBeenCalledWith('beta.ckpt')
+  })
+
+  it('disables downloading an already installed active model', async () => {
+    installApi([{ ...OFFICIAL_MODEL, downloaded: true }])
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    await until(() => screen.getByText('Alpha'))
+    const row = screen.getByRole('option')
+    act(() => row.focus())
+    fireEvent.keyDown(row, { key: 'F10', shiftKey: true })
+    expect((screen.getByRole('menuitem', { name: 'Download' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download' }))
+    expect(window.electronAPI.cliStartDownload).not.toHaveBeenCalled()
   })
 })

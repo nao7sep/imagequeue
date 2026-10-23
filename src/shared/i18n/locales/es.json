@@ -1,5 +1,6 @@
 {
   "common.allow": "Permitir",
+  "common.actions": "Acciones",
   "settings.allowSoundFile": "¿Permites que ImageQueue lea este archivo para los sonidos de notificación?",
   "storage.stillPending": "La operación de almacenamiento está tardando más de lo esperado y aún puede completarse. Comprueba el resultado antes de volver a intentarlo.",
   "quit.title": "No se pudo guardar antes de salir",

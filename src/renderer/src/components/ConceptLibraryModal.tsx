@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
+import { MenuItem } from './Menu'
+import { SelectedActions, openSelectedActions } from './SelectedActions'
+import { useImeGuard } from '../utils/imeGuard'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
 import { useI18n } from '../i18n/I18nContext'
@@ -37,6 +40,9 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
   const [filter, setFilter] = useState('')
   const [useFilter, setUseFilter] = useState<UseFilter>('all')
   const [message, setMessage] = useState<MessageKey | null>(null)
+  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null)
+  const detailActionsRef = useRef<HTMLButtonElement>(null)
+  const isComposing = useImeGuard()
 
   const refreshFacets = useCallback(async (): Promise<void> => {
     setFacetsLoading(true)
@@ -57,6 +63,8 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
   useEffect(() => {
     void refreshFacets()
   }, [refreshFacets])
+
+  useEffect(() => { setSelectedDetailId(null) }, [selectedFacetId])
 
   useEffect(() => {
     if (selectedFacetId === null) {
@@ -128,6 +136,20 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
           : useFilter === 'all' || section.rows.length > 0
       )
   }, [probes, rows, filter, useFilter])
+
+  const { activeId: activeDetailId, listboxProps: detailListboxProps, getOptionProps: getDetailOptionProps } = useListbox({
+    ids: detailLoading || detailError ? [] : sections.flatMap(({ probe, rows: sectionRows }) => [
+      `p:${probe.id}`,
+      ...sectionRows.map((row) => `c:${row.id}`),
+    ]),
+    selectedId: selectedDetailId,
+    onSelect: setSelectedDetailId,
+    activation: 'follows-focus',
+    isComposing,
+  })
+  const activeProbe = sections.find(({ probe }) => `p:${probe.id}` === activeDetailId)?.probe
+  const activeConcept = sections.flatMap(({ rows: sectionRows }) => sectionRows).find((row) => `c:${row.id}` === activeDetailId)
+  const detailActionsDisabled = detailLoading || detailError !== null || (!activeProbe && !activeConcept)
 
   const withRefresh = useCallback(
     async (action: () => Promise<void>): Promise<void> => {
@@ -271,6 +293,13 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                       <option value="unused">{t('conceptLibrary.showUnused')}</option>
                       <option value="used">{t('conceptLibrary.showUsed')}</option>
                     </select>
+                    <SelectedActions triggerRef={detailActionsRef} disabled={detailActionsDisabled}>
+                      <MenuItem disabled={detailActionsDisabled} onSelect={() => {
+                        if (detailActionsDisabled) return
+                        if (activeProbe) void handleDeleteProbe(activeProbe)
+                        else if (activeConcept) void handleDeleteConcept(activeConcept)
+                      }}>{t('task.delete')}</MenuItem>
+                    </SelectedActions>
                     <button
                       className="modal-btn modal-btn-danger"
                       onClick={() => void handleDeleteFacet()}
@@ -279,6 +308,11 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                     </button>
                   </div>
 
+                  <div className="concept-library-sections" aria-label={selectedFacet.display} aria-busy={detailLoading} {...detailListboxProps}
+                    onKeyDown={(event) => {
+                      if (!isComposing(event.nativeEvent) && openSelectedActions(event, detailActionsRef)) return
+                      detailListboxProps.onKeyDown(event)
+                    }}>
                   {detailLoading ? (
                     <div className="concept-library-empty">{t('conceptLibrary.loadingFacet')}</div>
                   ) : detailError ? (
@@ -290,10 +324,10 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                         : t('conceptLibrary.noMatch')}
                     </div>
                   ) : (
-                    <div className="concept-library-sections">
+                    <>
                       {sections.map(({ probe, rows: sectionRows }) => (
-                        <section key={probe.id} className="concept-library-section">
-                          <div className="concept-library-section-header">
+                        <section key={probe.id} className="concept-library-section" role="presentation">
+                          <div className={`concept-library-section-header${selectedDetailId === `p:${probe.id}` ? ' selected' : ''}`} {...getDetailOptionProps(`p:${probe.id}`)}>
                             <div className="concept-library-section-title">
                               {probe.display}
                             </div>
@@ -314,7 +348,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                             </button>
                           </div>
                           {sectionRows.length > 0 && (
-                            <div className="concept-library-rows">
+                            <div className="concept-library-rows" role="presentation">
                               {sectionRows.map((row) => (
                                 /* The chip shows what gets consulted — the value
                                    and how spent it is; WHEN it was last drawn is
@@ -322,7 +356,8 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                                    added date. */
                                 <div
                                   key={row.id}
-                                  className="concept-library-row"
+                                  className={`concept-library-row${selectedDetailId === `c:${row.id}` ? ' selected' : ''}`}
+                                  {...getDetailOptionProps(`c:${row.id}`)}
                                   title={row.useCount === 0
                                     ? t('conceptLibrary.neverUsedTitle', { added: date(row.createdAt) })
                                     : t('conceptLibrary.usedTitle', {
@@ -337,9 +372,8 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                                   <div className="concept-library-row-stats">
                                     {row.useCount === 0 ? t('conceptLibrary.unused') : t('conceptLibrary.timesUsed', { count: row.useCount })}
                                   </div>
-                                  {/* Pointer-only affordances (tabIndex -1): the facet
-                                      rail is the keyboard surface; this pane is a
-                                      read/manage table. */}
+                                  {/* Pointer actions remain outside the list's Tab order;
+                                      the Actions menu offers them to the active row. */}
                                   <button
                                     tabIndex={-1}
                                     className="modal-btn modal-btn-danger"
@@ -353,8 +387,9 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                           )}
                         </section>
                       ))}
-                    </div>
+                    </>
                   )}
+                  </div>
                 </>
               )}
             </div>

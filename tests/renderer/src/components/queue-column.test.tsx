@@ -906,3 +906,41 @@ describe('API key warning follows presence, not the stored settings value', () =
     expect(screen.queryByText('API key not set')).toBeNull()
   })
 })
+
+
+describe('queue selected actions', () => {
+  it.each(['failed', 'interrupted'] as const)('offers Retry for the selected %s task from the list keyboard menu', async (status) => {
+    queueValue.tasks.openai = [task(status)]
+    selectionValue.selection = { backend: 'openai', taskId: `task-${status}` }
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    const row = container.querySelector<HTMLButtonElement>('[data-task-id]')!
+    const trigger = screen.getByRole('button', { name: 'Actions' })
+    expect(container.querySelector('.task-list')?.contains(trigger)).toBe(false)
+    act(() => row.focus())
+    fireEvent.keyDown(row, { key: 'ContextMenu' })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Retry' }))
+    await flush()
+    expect(electronAPI.retryTask).toHaveBeenCalledWith('openai', `task-${status}`)
+    expect(selectionValue.runTaskAction).toHaveBeenCalledWith(expect.objectContaining({ taskId: `task-${status}`, action: 'retry' }))
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it.each(['completed', 'kept', 'generating'] as const)('preserves %s action eligibility', async (status) => {
+    queueValue.tasks.openai = [task(status)]
+    selectionValue.selection = { backend: 'openai', taskId: `task-${status}` }
+    const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    const row = container.querySelector<HTMLButtonElement>('[data-task-id]')!
+    act(() => row.focus())
+    fireEvent.keyDown(row, { key: 'F10', shiftKey: true })
+    expect((screen.getByRole('menuitem', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('menuitem', { name: 'Delete' }) as HTMLButtonElement).disabled).toBe(status === 'generating')
+    const action = screen.getByRole('menuitem', { name: status === 'kept' ? 'Restore' : status === 'completed' ? 'Keep' : 'Remove' }) as HTMLButtonElement
+    expect(action.disabled).toBe(status === 'generating')
+    fireEvent.click(action)
+    if (status === 'kept') expect(selectionValue.restoreSelected).toHaveBeenCalledOnce()
+    else if (status === 'completed') expect(selectionValue.removeSelected).toHaveBeenCalledOnce()
+    else expect(selectionValue.removeSelected).not.toHaveBeenCalled()
+  })
+})

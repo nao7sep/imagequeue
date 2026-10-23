@@ -1,5 +1,6 @@
 {
   "common.allow": "許可",
+  "common.actions": "操作",
   "settings.allowSoundFile": "通知音として使用するために、ImageQueueがこのファイルを読み取ることを許可しますか？",
   "storage.stillPending": "保存先での処理に時間がかかっています。処理はまだ完了する可能性があります。再試行する前に結果を確認してください。",
   "quit.title": "終了前に保存できませんでした",

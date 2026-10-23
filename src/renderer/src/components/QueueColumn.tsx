@@ -22,6 +22,8 @@ import { isFreshCompletion } from '../utils/taskScroll'
 import { taskFailureText, taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
+import { MenuItem } from './Menu'
+import { SelectedActions, openSelectedActions } from './SelectedActions'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import './QueueColumn.css'
@@ -54,7 +56,9 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     removeSelected,
     restoreSelected,
     deleteSelected,
+    runTaskAction,
   } = useSelection()
+  const actionsRef = useRef<HTMLButtonElement>(null)
   const isComposing = useImeGuard()
   const { settings, apiKeyPresence, saveImageBackendDefaults } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
@@ -181,6 +185,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     // row command layer. Its focusable X owns Enter/Space and ordinary text
     // keys must never become remove/delete/navigation commands for the row.
     if (e.target instanceof HTMLElement && e.target.closest('.task-action-results')) return
+    if (!isComposing(e.nativeEvent) && openSelectedActions(e, actionsRef)) return
     const sel = selection
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       if (!sel) return
@@ -253,6 +258,10 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     ? selection.taskId
     : columnTasks[0]?.id ?? null
 
+  const actionTask = selection?.backend === backendId
+    ? columnTasks.find((task) => task.id === selection.taskId) ?? null
+    : null
+
   return (
     <>
     <div className="queue-column" data-backend={backendId}>
@@ -315,6 +324,22 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
         </button>
       </div>
 
+      <SelectedActions triggerRef={actionsRef} disabled={!actionTask}>
+        <MenuItem disabled={!actionTask || (actionTask.status !== 'failed' && actionTask.status !== 'interrupted')}
+          onSelect={() => { if (actionTask && (actionTask.status === 'failed' || actionTask.status === 'interrupted')) retryQueueTask(backendId, actionTask.id, runTaskAction) }}>
+          {t('task.retry')}
+        </MenuItem>
+        {actionTask?.status === 'kept' ? (
+          <MenuItem onSelect={() => void restoreSelected()}>{t('task.restore')}</MenuItem>
+        ) : (
+          <MenuItem disabled={!actionTask || actionTask.status === 'generating'} onSelect={() => void removeSelected()}>
+            {t(actionTask?.status === 'completed' ? 'task.keep' : 'task.remove')}
+          </MenuItem>
+        )}
+        <MenuItem disabled={!actionTask || (actionTask.status !== 'completed' && actionTask.status !== 'kept')}
+          onSelect={() => void deleteSelected()}>{t('task.delete')}</MenuItem>
+      </SelectedActions>
+
       <div
         className="task-list"
         role="list"
@@ -367,6 +392,16 @@ const CLOSE_RESULT_LABELS: Record<(typeof TASK_RESULT_ACTIONS)[number], MessageK
   remove: 'task.closeResult.remove',
   restore: 'task.closeResult.restore',
   delete: 'task.closeResult.delete',
+}
+
+function retryQueueTask(backendId: BackendId, taskId: string, runTaskAction: ReturnType<typeof useSelection>['runTaskAction']): void {
+  void runTaskAction({
+    taskId,
+    action: 'retry',
+    message: 'task.retryFailed',
+    diagnosticMessage: 'Failed to retry task',
+    invoke: () => window.electronAPI.retryTask(backendId, taskId),
+  })
 }
 
 function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task: Task; backendId: BackendId; isSelected: boolean; isTabbable: boolean; onSelect: () => void }): React.JSX.Element {
@@ -449,13 +484,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   }
   const handleRetry = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    void runTaskAction({
-      taskId: task.id,
-      action: 'retry',
-      message: 'task.retryFailed',
-      diagnosticMessage: 'Failed to retry task',
-      invoke: () => window.electronAPI.retryTask(backendId, task.id),
-    })
+    retryQueueTask(backendId, task.id, runTaskAction)
   }
   const getExt = (): string => task.imagePath?.split('.').pop() ?? 'png'
   const handleExport = (e: React.MouseEvent): void => {

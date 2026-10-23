@@ -45,6 +45,7 @@ export interface OptionProps {
 // returned `ref` matches, so spreading `listboxProps` onto the chosen element
 // type-checks without a cast.
 interface UseListboxResult<T extends HTMLElement> {
+  activeId: string | null
   listboxProps: {
     ref: React.RefObject<T | null>
     role: 'listbox'
@@ -196,6 +197,7 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
   }
 
   return {
+    activeId: tabbableId,
     listboxProps: { ref, role: 'listbox', tabIndex: ids.length === 0 ? 0 : -1, onKeyDown },
     getOptionProps: (id: string) => ({
       role: 'option',

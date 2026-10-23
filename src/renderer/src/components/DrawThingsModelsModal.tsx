@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
 import { useCliJobs } from '../context/CliJobsContext'
 import { useListbox } from '../hooks/useListbox'
+import { useImeGuard } from '../utils/imeGuard'
 import type { CustomJsonStatus, LocalModelInfo } from '../../../shared/types'
 import { Modal } from './Modal'
+import { MenuItem } from './Menu'
+import { SelectedActions, openSelectedActions } from './SelectedActions'
 import { partitionDrawThingsModels } from '../utils/localModels'
 import { presentFailure } from '../utils/failurePresentation'
 import './DrawThingsModelsModal.css'
@@ -434,8 +437,10 @@ function DtModelList({
   onOpenExternal: (key: string, url: string) => void
 }): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const actionsRef = useRef<HTMLButtonElement>(null)
+  const isComposing = useImeGuard()
   const { t } = useI18n()
-  const { listboxProps, getOptionProps } = useListbox<HTMLUListElement>({
+  const { activeId, listboxProps, getOptionProps } = useListbox<HTMLUListElement>({
     ids: models.map((m) => m.file),
     selectedId,
     onSelect: setSelectedId,
@@ -445,10 +450,28 @@ function DtModelList({
       if (model && isDownloadable(model, kind)) onDownload(file)
     },
     typeAhead: false,
+    isComposing,
   })
 
+  const actionModel = models.find((model) => model.file === activeId)
   return (
-    <ul className="dt-model-list" aria-label={label} aria-busy={loading} {...listboxProps}>
+    <>
+    <SelectedActions triggerRef={actionsRef} disabled={!actionModel}>
+      {actionModel?.huggingFace && (
+        <MenuItem onSelect={() => onOpenExternal(`hugging-face:${actionModel.file}`, hfUrl(actionModel.huggingFace!))}>
+          {t('dtModels.openHuggingFace', { repo: actionModel.huggingFace })}
+        </MenuItem>
+      )}
+      <MenuItem disabled={!actionModel} onSelect={() => { if (actionModel) onOpenExternal(`google:${actionModel.file}`, googleSearchUrl(actionModel)) }}>
+        {actionModel ? t('dtModels.searchGoogle', { model: modelName(actionModel) }) : t('dtModels.searchGoogle', { model: '' })}
+      </MenuItem>
+      <MenuItem disabled={!actionModel || !isDownloadable(actionModel, kind)}
+        onSelect={() => { if (actionModel && isDownloadable(actionModel, kind)) onDownload(actionModel.file) }}>
+        {t('dtModels.download')}
+      </MenuItem>
+    </SelectedActions>
+    <ul className="dt-model-list" aria-label={label} aria-busy={loading} {...listboxProps}
+      onKeyDown={(event) => { if (!isComposing(event.nativeEvent) && openSelectedActions(event, actionsRef)) return; listboxProps.onKeyDown(event) }}>
       {models.length === 0 && (
         <li className="dt-hint" role="presentation">{loading ? t('advanced.loadingModels') : emptyText}</li>
       )}
@@ -496,5 +519,6 @@ function DtModelList({
         </li>
       ))}
     </ul>
+    </>
   )
 }

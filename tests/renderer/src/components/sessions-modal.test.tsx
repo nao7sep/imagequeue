@@ -18,6 +18,14 @@ vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({
   useConfirm: () => async () => true,
 }))
 
+
+// jsdom lacks the CSSOM escape used by the listbox's real focus lookup.
+if (typeof globalThis.CSS === 'undefined' || typeof globalThis.CSS.escape !== 'function') {
+  ;(globalThis as unknown as { CSS: { escape: (value: string) => string } }).CSS = {
+    escape: (value) => value.replace(/[^a-zA-Z0-9_-]/g, (character) => '\\' + character),
+  }
+}
+
 const { SessionsModal } = await import('../../../../src/renderer/src/components/SessionsModal')
 
 const emptyTasks = (): Record<BackendId, Task[]> => ({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
@@ -114,6 +122,47 @@ describe('SessionsModal', () => {
     expect(resumeSession).toHaveBeenCalledExactlyOnceWith('20261003-120000-000-utc')
   })
 })
+
+
+describe('session selected actions', () => {
+  it.each(['newer', 'unreadable'] as const)('opens the active %s folder from a keyboard menu without resuming', async (unopenable) => {
+    listSessions.mockResolvedValueOnce([
+      session(1, '2026-10-04T12:00:00.000Z'),
+      { sessionId: 'other-session', unopenable },
+    ])
+    render(<SessionsModal onClose={vi.fn()} />)
+    const list = await screen.findByRole('listbox')
+    const rows = await within(list).findAllByRole('option')
+    act(() => rows[0].focus())
+    fireEvent.keyDown(rows[0], { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rows[1])
+    expect(resumeSession).not.toHaveBeenCalled()
+    const trigger = screen.getByRole('button', { name: 'Actions' })
+    expect(list.contains(trigger)).toBe(false)
+    expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
+    fireEvent.keyDown(rows[1], { key: 'F10', shiftKey: true })
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect((screen.getByRole('menuitem', { name: 'Delete' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Open Folder' })) })
+    expect(openSessionFolder).toHaveBeenCalledWith('other-session')
+    expect(resumeSession).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('uses the existing eligible deletion command and confirmation', async () => {
+    const previous = { ...session(1, '2026-10-04T12:00:00.000Z'), isCurrent: false }
+    listSessions.mockResolvedValue([previous])
+    const deleteSession = vi.fn(async () => undefined)
+    window.electronAPI.deleteSession = deleteSession
+    render(<SessionsModal onClose={vi.fn()} />)
+    const row = await screen.findByRole('option')
+    act(() => row.focus())
+    fireEvent.keyDown(row, { key: 'ContextMenu' })
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' })) })
+    expect(deleteSession).toHaveBeenCalledExactlyOnceWith(previous.sessionId)
+  })
+})
+
 
 describe('session thumbnail requests', () => {
   it('requests the 64 CSS pixel strip at display density without fetching originals', async () => {

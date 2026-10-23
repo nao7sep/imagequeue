@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
+import { MenuItem } from './Menu'
+import { SelectedActions, openSelectedActions } from './SelectedActions'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useSettings } from '../context/SettingsContext'
@@ -110,6 +112,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   // The active row of the sessions listbox (single source of truth). Manual
   // activation: arrowing only moves this; Enter resumes the active session.
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const actionsRef = useRef<HTMLButtonElement>(null)
   const isComposing = useImeGuard()
 
   const currentTaskCount = useMemo(
@@ -239,7 +242,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
 
   // Manual activation: arrowing moves the active card; Enter resumes it. Resume
   // is a destructive queue replacement, so it never fires merely on focus.
-  const { listboxProps, getOptionProps } = useListbox({
+  const { activeId, listboxProps, getOptionProps } = useListbox({
     ids: sessions.map((s) => s.sessionId),
     selectedId: selectedSessionId,
     onSelect: setSelectedSessionId,
@@ -250,6 +253,9 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     },
     isComposing,
   })
+
+  const actionSession = sessions.find((session) => session.sessionId === activeId)
+  const actionBusy = actionSession?.sessionId === busySessionId || creatingSession
 
   return (
     <Modal
@@ -284,7 +290,20 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
         {loadError && (
           <div className="sessions-modal-message" role="alert">{t('sessions.refreshFailed', { reason: t(loadError) })}</div>
         )}
-        <div className="sessions-list" aria-label={t('menu.sessions')} aria-busy={loading} {...listboxProps}>
+        <SelectedActions triggerRef={actionsRef} disabled={!actionSession}>
+          <MenuItem disabled={!actionSession || actionBusy} onSelect={() => { if (actionSession) void handleOpenFolder(actionSession) }}>
+            {t('sessions.openFolder')}
+          </MenuItem>
+          <MenuItem disabled={!actionSession || isUnopenableSession(actionSession) || actionSession.isCurrent || actionBusy}
+            onSelect={() => { if (actionSession && !isUnopenableSession(actionSession)) void handleDelete(actionSession) }}>
+            {t('task.delete')}
+          </MenuItem>
+        </SelectedActions>
+        <div className="sessions-list" aria-label={t('menu.sessions')} aria-busy={loading} {...listboxProps}
+          onKeyDown={(event) => {
+            if (!isComposing(event.nativeEvent) && openSelectedActions(event, actionsRef)) return
+            listboxProps.onKeyDown(event)
+          }}>
           {sessions.length === 0 && (
             <div className="sessions-modal-empty" role="presentation">
               {loading
