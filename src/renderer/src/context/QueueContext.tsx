@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
 import type { BackendId, Task, EnqueueRequest, EnqueueBatchUnit } from '../../../shared/types'
-import { reportOperationalFailure } from '../utils/operationalFailure'
+import { isQueueTaskVisible } from '../../../shared/queue-visibility'
+import { reportOperationalFailure, clearOperationalFailure } from '../utils/operationalFailure'
 import { serializeError } from '../../../shared/serialize-error'
 
 interface QueueContextValue {
@@ -27,10 +28,7 @@ function createEmptyTaskMap(): Record<BackendId, Task[]> {
 export function QueueProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [storedTasks, setStoredTasks] = useState<Record<BackendId, Task[]>>(createEmptyTaskMap)
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'failed'>('loading')
-  // Intentionally not persisted: kept images are mainly a per-session review
-  // aid for clearing acceptable results out of the active queue, and are
-  // usually obsolete by the next session. Start clean each launch and let the
-  // user opt back in via ⌘⇧K.
+  // Main owns this launch-only presentation choice across renderer lifetimes.
   const [showKeptImages, setShowKeptImages] = useState(false)
 
   const tasks = useMemo(() => {
@@ -38,7 +36,7 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
 
     const visible = createEmptyTaskMap()
     for (const backend of Object.keys(visible) as BackendId[]) {
-      visible[backend] = storedTasks[backend].filter((task) => task.status !== 'kept')
+      visible[backend] = storedTasks[backend].filter((task) => isQueueTaskVisible(task, showKeptImages))
     }
     return visible
   }, [showKeptImages, storedTasks])
@@ -78,8 +76,28 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [])
 
+  useEffect(() => {
+    let disposed = false
+    let receivedUpdate = false
+    const unsubscribe = window.electronAPI.onShowKeptImagesChanged((visible) => {
+      receivedUpdate = true
+      setShowKeptImages(visible)
+      clearOperationalFailure('queue-kept-visibility-load')
+    })
+    void window.electronAPI.getShowKeptImages().then((visible) => {
+      if (disposed || receivedUpdate) return
+      setShowKeptImages(visible)
+      clearOperationalFailure('queue-kept-visibility-load')
+    }).catch((error) => {
+      if (!disposed && !receivedUpdate) reportOperationalFailure('queue-kept-visibility-load', 'operation.uiStateLoadFailed', 'Failed to load kept-image visibility', error)
+    })
+    return () => { disposed = true; unsubscribe() }
+  }, [])
+
   const toggleShowKeptImages = useCallback(() => {
-    setShowKeptImages((current) => !current)
+    void window.electronAPI.toggleShowKeptImages()
+      .then(() => clearOperationalFailure('queue-kept-visibility-save'))
+      .catch((error) => reportOperationalFailure('queue-kept-visibility-save', 'operation.uiStateSaveFailed', 'Failed to change kept-image visibility', error))
   }, [])
 
   const enqueue = useCallback(async (request: EnqueueRequest) => {

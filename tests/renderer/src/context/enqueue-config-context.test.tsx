@@ -16,6 +16,9 @@ it('submits Send to All through one batch so backends share one session operatio
     enqueue, enqueueBatch,
     getAllStoredTasks: async () => ({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] }),
     onQueueUpdated: () => () => undefined,
+    getShowKeptImages: async () => false,
+    toggleShowKeptImages: async () => true,
+    onShowKeptImagesChanged: () => () => undefined,
   } as unknown as typeof window.electronAPI
   let context!: ReturnType<typeof useEnqueueConfigs>
   function Probe(): null { context = useEnqueueConfigs(); return null }

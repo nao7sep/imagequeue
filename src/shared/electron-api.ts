@@ -87,6 +87,8 @@ export interface ElectronAPI {
   // Queue operations
   enqueue: (request: EnqueueRequest) => Promise<Task[]>
   enqueueBatch: (units: EnqueueBatchUnit[]) => Promise<Task[]>
+  getShowKeptImages: () => Promise<boolean>
+  toggleShowKeptImages: () => Promise<boolean>
   getAllStoredTasks: () => Promise<Record<BackendId, Task[]>>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
@@ -230,6 +232,7 @@ export interface ElectronAPI {
   showNotification: (type: 'success' | 'failure') => Promise<void>
   loadAudioFile: (filePath: string) => Promise<string | null>
 
+  onShowKeptImagesChanged: (callback: (visible: boolean) => void) => (() => void)
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void) => (() => void)
   onSessionChanged: (callback: (event: { sessionId: string }) => void) => (() => void)
   onInterruptedTasksOnResume: (callback: (event: { count: number }) => void) => (() => void)

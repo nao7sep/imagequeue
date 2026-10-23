@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IMAGE_BACKEND_SECRET } from '../../src/shared/types'
+import { getShowKeptImages, toggleShowKeptImages } from '../../src/main/queue/view-state'
 import { computeWindowMinHeight, computeWindowMinWidth } from '../../src/shared/layout-metrics'
 
 vi.mock('electron', () => ({
@@ -35,6 +37,7 @@ const {
 let registeredWindow: Parameters<typeof registerMainWindowForLayout>[0] | null = null
 
 beforeEach(() => {
+  if (getShowKeptImages()) toggleShowKeptImages()
   keyed.clear()
   setDrawThingsReady(false)
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
@@ -58,6 +61,30 @@ describe('main-window layout registration and refresh', () => {
   it('derives panes from keyed and occupied cloud backends', () => {
     keyed.add('openai.image')
     queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)
+    expect(getVisiblePaneCount('win32')).toBe(2)
+  })
+
+  it('hides unkeyed kept-only panes and restores them when kept images are shown', () => {
+    keyed.add('openai.image')
+    const kept = queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)[0]
+    kept.status = 'kept'
+    expect(getVisiblePaneCount('win32')).toBe(1)
+    toggleShowKeptImages()
+    expect(getVisiblePaneCount('win32')).toBe(2)
+    toggleShowKeptImages()
+    expect(getVisiblePaneCount('win32')).toBe(1)
+  })
+
+  it('retains keyed kept-only panes and mixed occupied queues regardless of the kept toggle', () => {
+    keyed.add('openai.image')
+    keyed.add(IMAGE_BACKEND_SECRET.grok)
+    const kept = queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)[0]
+    kept.status = 'kept'
+    expect(getVisiblePaneCount('win32')).toBe(2)
+    keyed.delete(IMAGE_BACKEND_SECRET.grok)
+    queueManager.enqueue({ prompt: 'p', backend: 'grok', model: 'm', params: {}, count: 1 } as never)
+    expect(getVisiblePaneCount('win32')).toBe(2)
+    toggleShowKeptImages()
     expect(getVisiblePaneCount('win32')).toBe(2)
   })
 

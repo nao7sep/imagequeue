@@ -1,3 +1,6 @@
+import { broadcastPresentation } from '../presentation'
+import { refreshMainWindowMinimumSize } from '../main-window-layout'
+import { getShowKeptImages, toggleShowKeptImages } from './view-state'
 import { handle } from '../ipc-boundary'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult } from '../../shared/types'
@@ -26,6 +29,16 @@ async function persistQueueChange(): Promise<void> {
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
+  handle('queue:getShowKeptImages', () => getShowKeptImages())
+  handle('queue:toggleShowKeptImages', () => {
+    const visible = toggleShowKeptImages()
+    broadcastPresentation('queue:showKeptImages', visible)
+    try { refreshMainWindowMinimumSize() } catch (error) {
+      log('warn', 'Window geometry presentation failed', { error: serializeError(error) })
+    }
+    return visible
+  })
+
   handle('queue:enqueue', (_event, request: EnqueueRequest) => mutateSession(async () => {
     const tasks = queueManager.enqueue(request)
     for (const task of tasks) {

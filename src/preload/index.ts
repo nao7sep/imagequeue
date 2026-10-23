@@ -93,6 +93,9 @@ const api = {
   enqueueBatch: (units: EnqueueBatchUnit[]): Promise<Task[]> =>
     ipcRenderer.invoke('queue:enqueueBatch', units),
 
+  getShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:getShowKeptImages'),
+  toggleShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:toggleShowKeptImages'),
+
   getAllStoredTasks: (): Promise<Record<BackendId, Task[]>> =>
     ipcRenderer.invoke('queue:getAllStoredTasks'),
 
@@ -477,6 +480,12 @@ const api = {
 
   loadAudioFile: (filePath: string): Promise<string | null> =>
     ipcRenderer.invoke('notification:loadAudioFile', filePath),
+
+  onShowKeptImagesChanged: (callback: (visible: boolean) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, visible: boolean): void => callback(visible)
+    ipcRenderer.on('queue:showKeptImages', handler)
+    return () => { ipcRenderer.removeListener('queue:showKeptImages', handler) }
+  },
 
   // Event listener for queue updates pushed from main process
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {

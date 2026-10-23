@@ -2,6 +2,8 @@ import type { BrowserWindow } from 'electron'
 import { configureWindowMinimum } from './window-minimum'
 import { log, serializeError } from './logger'
 import { hasApiKey } from './config/api-keys-store'
+import { getShowKeptImages } from './queue/view-state'
+import { isQueueTaskVisible } from '../shared/queue-visibility'
 import { queueManager } from './queue/queue-manager'
 import { buildMainWindowOptions } from './window-options'
 import { getVisiblePanes } from '../shared/layout-metrics'
@@ -44,7 +46,10 @@ export function getVisiblePaneCount(platform: Platform = process.platform as Pla
     hasApiKey(IMAGE_BACKEND_SECRET[backend])
   )
   const tasks = queueManager.getAllStoredTasks()
-  const occupied = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) => (tasks[backend]?.length ?? 0) > 0)
+  const showKeptImages = getShowKeptImages()
+  const occupied = CLOUD_BACKEND_IDS_IN_UI_ORDER.filter((backend) =>
+    tasks[backend].some((task) => isQueueTaskVisible(task, showKeptImages))
+  )
   return getVisiblePanes(platform, keyed, occupied, drawThingsReady).length
 }
 

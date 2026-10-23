@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   persistActiveSession: vi.fn(),
   publishQueueState: vi.fn(),
   publishAppNotice: vi.fn(),
+  broadcastPresentation: vi.fn(),
+  refreshMainWindowMinimumSize: vi.fn(),
   setQueuePaused: vi.fn(),
   setQueuePausedAndPublish: vi.fn(),
   buildControlState: vi.fn(() => ({ canPause: true })),
@@ -48,6 +50,8 @@ vi.mock('../../../src/main/session', () => ({
   getSessionId: () => 'A',
   getSessionDir: () => mocks.sessionDir,
 }))
+vi.mock('../../../src/main/presentation', () => ({ broadcastPresentation: mocks.broadcastPresentation }))
+vi.mock('../../../src/main/main-window-layout', () => ({ refreshMainWindowMinimumSize: mocks.refreshMainWindowMinimumSize }))
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState, publishAppNotice: mocks.publishAppNotice }))
 vi.mock('../../../src/main/queue/control-actions', () => ({
   setQueuePausedAndPublish: mocks.setQueuePausedAndPublish,
@@ -65,6 +69,7 @@ vi.mock('../../../src/main/utils/file-output', async (importOriginal) => {
   return { ...actual, deleteImageOutput: mocks.deleteImageOutput, trashImageOutput: mocks.trashImageOutput }
 })
 
+const { getShowKeptImages, toggleShowKeptImages } = await import('../../../src/main/queue/view-state')
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 const { createEmptyQueues, queueManager } = await import('../../../src/main/queue/queue-manager')
 const { resetStorageFailureNotice } = await import('../../../src/main/queue/storage-failure')
@@ -106,6 +111,8 @@ function statuses(backend: BackendId = 'openai'): [string, TaskStatus][] {
 }
 
 beforeEach(() => {
+  if (getShowKeptImages()) toggleShowKeptImages()
+  mocks.refreshMainWindowMinimumSize.mockReset()
   vi.clearAllMocks()
   resetStorageFailureNotice()
   mocks.deleteToTrash = false
@@ -421,5 +428,27 @@ describe('the queue controls', () => {
   it('answers what the control menu may offer', async () => {
     expect((await invoke('queue:getControlState'))).toEqual({ canPause: true })
     expect(mocks.buildControlState).toHaveBeenCalledOnce()
+  })
+})
+
+
+describe('kept-image presentation state', () => {
+  it('starts hidden, toggles one shared value, broadcasts it and refreshes geometry', () => {
+    expect(invoke('queue:getShowKeptImages')).toBe(false)
+    expect(invoke('queue:toggleShowKeptImages')).toBe(true)
+    expect(invoke('queue:getShowKeptImages')).toBe(true)
+    expect(mocks.broadcastPresentation).toHaveBeenLastCalledWith('queue:showKeptImages', true)
+    expect(mocks.refreshMainWindowMinimumSize).toHaveBeenCalledOnce()
+    expect(invoke('queue:toggleShowKeptImages')).toBe(false)
+    expect(mocks.broadcastPresentation).toHaveBeenLastCalledWith('queue:showKeptImages', false)
+    expect(mocks.persistActiveSession).not.toHaveBeenCalled()
+    expect(mocks.publishQueueState).not.toHaveBeenCalled()
+  })
+
+  it('keeps an applied toggle successful when geometry presentation fails', () => {
+    mocks.refreshMainWindowMinimumSize.mockImplementationOnce(() => { throw new Error('geometry unavailable') })
+    expect(invoke('queue:toggleShowKeptImages')).toBe(true)
+    expect(invoke('queue:getShowKeptImages')).toBe(true)
+    expect(mocks.log).toHaveBeenCalledWith('warn', 'Window geometry presentation failed', expect.anything())
   })
 })
