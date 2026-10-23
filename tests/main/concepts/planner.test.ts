@@ -113,7 +113,14 @@ describe('expandProbes / parseClusters', () => {
       },
       ['ports', 'forests']
     )
-    expect(aligned).toEqual([['dry dock'], ['clearing']])
+    expect(aligned).toEqual([[], ['clearing']])
+  })
+
+  it('never reassigns a named duplicate to an omitted domain', () => {
+    expect(parseClusters({ clusters: [
+      { domain: 'ports', concepts: ['dry dock'] },
+      { domain: 'ports', concepts: ['cargo pier'] },
+    ] }, ['ports', 'forests'])).toEqual([['dry dock'], []])
   })
 
   it('yields empty clusters, not a throw, for junk', () => {

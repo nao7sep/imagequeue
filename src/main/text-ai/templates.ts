@@ -35,9 +35,7 @@ export function fillTemplate(template: string, values: Record<string, string>): 
   // {{JSON}} is always provided by us and wins over any caller-supplied key,
   // so users editing templates cannot corrupt the response shape.
   const merged: Record<string, string> = { ...values, JSON: JSON_FORMAT_LITERAL }
-  let out = template
-  for (const [key, value] of Object.entries(merged)) {
-    out = out.split(`{{${key}}}`).join(value)
-  }
-  return out
+  // Match only the original template so inserted user text stays literal.
+  return template.replace(/\{\{([^{}]*)\}\}/g, (placeholder, key: string) =>
+    Object.hasOwn(merged, key) ? merged[key] : placeholder)
 }

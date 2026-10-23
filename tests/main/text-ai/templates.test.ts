@@ -23,4 +23,22 @@ describe('fillTemplate', () => {
   it('keeps the JSON format literal even if a caller passes a JSON value', () => {
     expect(fillTemplate('{{JSON}}', { JSON: 'hijacked' })).toBe(JSON_FORMAT_LITERAL)
   })
+
+  it.each([
+    { SEED: 'Draw {{N}} cats using {{JSON}} and {{ELABORATOR}}.', ELABORATOR: 'Keep {{SEED}} and {{N}} literal.', N: '3' },
+    { N: '3', ELABORATOR: 'Keep {{SEED}} and {{N}} literal.', SEED: 'Draw {{N}} cats using {{JSON}} and {{ELABORATOR}}.' },
+  ])('keeps inserted seed and elaborator text literal regardless of value order', (values) => {
+    expect(fillTemplate('{{SEED}} | {{ELABORATOR}} | {{N}} | {{JSON}} | {{SEED}}', values))
+      .toBe(`Draw {{N}} cats using {{JSON}} and {{ELABORATOR}}. | Keep {{SEED}} and {{N}} literal. | 3 | ${JSON_FORMAT_LITERAL} | Draw {{N}} cats using {{JSON}} and {{ELABORATOR}}.`)
+  })
+
+  it('preserves dollar replacement sequences in inserted text', () => {
+    expect(fillTemplate('Before {{SEED}} after', { SEED: "$$ $& $` $' $1" }))
+      .toBe("Before $$ $& $` $' $1 after")
+  })
+
+  it('leaves placeholders for inherited object properties untouched', () => {
+    expect(fillTemplate('{{toString}} {{constructor}} {{__proto__}}', {}))
+      .toBe('{{toString}} {{constructor}} {{__proto__}}')
+  })
 })

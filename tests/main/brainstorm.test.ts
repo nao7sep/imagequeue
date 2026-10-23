@@ -223,6 +223,34 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect((await listFacetsWithStats()).reduce((n, f) => n + f.conceptCount - f.unusedCount, 0)).toBe(4)
   })
 
+  it('stops a warm concept draw wave after already admitted reads settle', async () => {
+    const script = installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'warm', count: 1 }))
+    script.ask.mockClear()
+    const draw = conceptStore.drawConcept
+    const draws = vi.spyOn(conceptStore, 'drawConcept').mockImplementation(async (...args) => {
+      const value = await draw(...args)
+      cancelBrainstorm('cancel-draws')
+      return value
+    })
+    const result = await brainstormPrompts(request({ requestId: 'cancel-draws', count: 8 }))
+    expect(result.prompts).toEqual([])
+    expect(draws.mock.calls.length).toBeLessThanOrEqual(2)
+    // Only facet resolution ran; neither refill nor prose starts after Stop.
+    expect(script.ask).toHaveBeenCalledOnce()
+  })
+
+  it('reports only each facet’s own concurrent mint rounds', async () => {
+    installScriptedProvider()
+    await brainstormPrompts(request({ requestId: 'facet-stats', count: 2 }))
+    const minted = logged('Minted concepts')
+    const drawn = logged('Concepts drawn for facet')
+    for (const facet of drawn) {
+      expect(facet.mintedRounds).toBe(minted.filter((mint) => mint.facet === facet.facet).length)
+    }
+    expect(logged('Brainstorm complete')[0].concepts).toMatchObject({ mints: minted.length })
+  })
+
   it('commits all delivered concepts in prompt and facet order through one batch', async () => {
     installScriptedProvider()
     const recorded = vi.spyOn(conceptStore, 'recordUses')

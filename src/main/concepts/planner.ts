@@ -167,7 +167,7 @@ export function parseStringList(parsed: unknown, key: string): string[] {
 }
 
 /** Align returned clusters to the asked probes: by normalized domain text when
- *  the model repeated it, by position otherwise. Missing clusters come back
+ *  the model echoed it, by position only for unnamed rows. Missing clusters come back
  *  empty rather than throwing — the caller simply banks fewer concepts. */
 export function parseClusters(parsed: unknown, probeDisplays: readonly string[]): string[][] {
   const raw = (parsed as { clusters?: unknown } | null | undefined)?.clusters
@@ -195,8 +195,8 @@ export function parseClusters(parsed: unknown, probeDisplays: readonly string[])
   }
   for (let probeIndex = 0; probeIndex < probeDisplays.length; probeIndex++) {
     if (aligned[probeIndex]) continue
-    const positional = !claimed.has(probeIndex) && rows[probeIndex] ? probeIndex : -1
-    const rowIndex = positional >= 0 ? positional : rows.findIndex((_, i) => !claimed.has(i))
+    const positional = !claimed.has(probeIndex) && rows[probeIndex]?.key === '' ? probeIndex : -1
+    const rowIndex = positional >= 0 ? positional : rows.findIndex((row, i) => !claimed.has(i) && row.key === '')
     if (rowIndex < 0) {
       aligned[probeIndex] = []
       continue

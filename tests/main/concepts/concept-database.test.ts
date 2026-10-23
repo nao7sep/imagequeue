@@ -350,6 +350,32 @@ describe('concept store', () => {
     expect(listFacetsWithStats()).toHaveLength(0)
     expect(listProbeDisplays(f.id, 50)).toHaveLength(0)
   })
+  it.each(['concept', 'probe', 'facet'] as const)('deleting a %s removes its use rows and preserves unrelated uses', (scope) => {
+    const facet = ensureFacet('target')
+    const other = ensureFacet('unrelated')
+    addProbes(facet.id, ['first', 'second'])
+    addProbes(other.id, ['other'])
+    const probes = unexpandedProbes(facet.id, 2)
+    const unrelatedProbe = unexpandedProbes(other.id, 1)[0]
+    addConcepts(facet.id, probes[0].id, ['a', 'b'])
+    addConcepts(facet.id, probes[1].id, ['c'])
+    addConcepts(other.id, unrelatedProbe.id, ['d'])
+    const targetRows = listConceptRows(facet.id)
+    const otherRows = listConceptRows(other.id)
+    for (const row of [...targetRows, ...otherRows]) recordUse(row.id, 's1')
+    const removed = scope === 'facet' ? targetRows.map(row => row.id)
+      : scope === 'probe' ? targetRows.filter(row => row.probeId === probes[0].id).map(row => row.id)
+      : [targetRows[0].id]
+    if (scope === 'concept') deleteConcept(targetRows[0].id)
+    else if (scope === 'probe') deleteProbe(probes[0].id)
+    else deleteFacet(facet.id)
+    const database = new DatabaseSync(path.join(tmpRoot, 'concepts.sqlite3'), { readOnly: true })
+    try {
+      const actual = database.prepare('SELECT concept_id FROM uses ORDER BY concept_id').all().map(row => row.concept_id)
+      expect(actual).toEqual([...targetRows, ...otherRows].map(row => row.id).filter(id => !removed.includes(id)).sort((a, b) => a - b))
+    } finally { database.close() }
+  })
+
   describe('listProbeDisplays bound', () => {
     // The list is every generation ask's avoid-list, and the ledger accumulates
     // for life: unbounded, a months-old facet ships thousands of domains per

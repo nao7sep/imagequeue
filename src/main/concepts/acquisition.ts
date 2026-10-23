@@ -72,34 +72,43 @@ export async function obtainConceptsForFacet(options: {
   count: number
   requestId: string
   stats: ConceptRunStats
+  signal: AbortSignal
 }): Promise<DrawnConcept[]> {
-  const { facet, ask, sessionId, preferNew, excludes, count, requestId, stats } = options
+  const { facet, ask, sessionId, preferNew, excludes, count, requestId, stats, signal } = options
   const out: DrawnConcept[] = []
-  const mintsBefore = stats.mints
-  for (let index = 0; index < count; index++) {
-    const concept = await obtainConcept({
-      facet,
-      ask,
-      sessionId,
-      preferNew,
-      excludes,
-      valuesStillNeeded: count - index,
+  const localStats = newConceptRunStats()
+  try {
+    for (let index = 0; index < count; index++) {
+      signal.throwIfAborted()
+      const concept = await obtainConcept({
+        facet,
+        ask,
+        sessionId,
+        preferNew,
+        excludes,
+        valuesStillNeeded: count - index,
+        requestId,
+        stats: localStats,
+        signal,
+      })
+      excludes.concepts.add(concept.id)
+      excludes.probes.add(concept.probeId)
+      localStats.draws++
+      out.push(concept)
+    }
+    log('debug', 'Concepts drawn for facet', {
       requestId,
-      stats,
+      facet: facet.display,
+      drawn: count,
+      mintedRounds: localStats.mints,
+      values: out.map((concept) => concept.display),
     })
-    excludes.concepts.add(concept.id)
-    excludes.probes.add(concept.probeId)
-    stats.draws++
-    out.push(concept)
+    return out
+  } finally {
+    // Facets acquire concurrently; merge only this facet's work, including any
+    // completed work before cancellation or failure.
+    for (const key of Object.keys(localStats) as (keyof ConceptRunStats)[]) stats[key] += localStats[key]
   }
-  log('debug', 'Concepts drawn for facet', {
-    requestId,
-    facet: facet.display,
-    drawn: count,
-    mintedRounds: stats.mints - mintsBefore,
-    values: out.map((concept) => concept.display),
-  })
-  return out
 }
 
 async function obtainConcept(options: {
@@ -111,10 +120,11 @@ async function obtainConcept(options: {
   valuesStillNeeded: number
   requestId: string
   stats: ConceptRunStats
+  signal: AbortSignal
 }): Promise<DrawnConcept> {
   const {
     facet, ask, sessionId, preferNew, excludes,
-    valuesStillNeeded, requestId, stats,
+    valuesStillNeeded, requestId, stats, signal,
   } = options
   const baseOpts = {
     sessionId,
@@ -122,19 +132,24 @@ async function obtainConcept(options: {
     excludeConceptIds: [...excludes.concepts],
     excludeProbeIds: [...excludes.probes],
   }
+  signal.throwIfAborted()
   const first = await drawConcept(facet.id, { ...baseOpts, allowStale: !preferNew })
   if (first) return first
 
   for (let round = 0; round < MAX_REFILL_ROUNDS; round++) {
-    const mintStart = Date.now()
+    signal.throwIfAborted()
+    const mintStart = performance.now()
     let generated = 0
     let probes = await unexpandedProbes(facet.id, planProbeBatchSize(valuesStillNeeded))
+    signal.throwIfAborted()
     if (probes.length === 0) {
       const requested = planProbeGenerationSize(valuesStillNeeded)
+      const existing = await listProbeDisplays(facet.id, PROBE_AVOID_LIST_MAX)
+      signal.throwIfAborted()
       const texts = await generateProbes(
         ask,
         facet.display,
-        await listProbeDisplays(facet.id, PROBE_AVOID_LIST_MAX),
+        existing,
         requested,
       )
       generated = await addProbes(facet.id, texts)
@@ -153,6 +168,7 @@ async function obtainConcept(options: {
       }
     }
 
+    signal.throwIfAborted()
     const clusters = await expandProbes(ask, facet.display, probes)
     const totalReturned = clusters.reduce((count, cluster) => count + cluster.concepts.length, 0)
     if (totalReturned === 0) {
@@ -180,12 +196,14 @@ async function obtainConcept(options: {
       domainsGenerated: generated,
       domainsExpanded: probes.length,
       conceptsAdded: added,
-      durationMs: Date.now() - mintStart,
+      durationMs: performance.now() - mintStart,
     })
+    signal.throwIfAborted()
     const fresh = await drawConcept(facet.id, { ...baseOpts, allowStale: false })
     if (fresh) return fresh
   }
 
+  signal.throwIfAborted()
   const stale = await drawConcept(facet.id, { ...baseOpts, allowStale: true })
   if (stale) {
     stats.staleFallbacks++

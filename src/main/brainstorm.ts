@@ -315,6 +315,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
             count: waveTotal,
             requestId: req.requestId,
             stats,
+            signal: controller.signal,
           })
         )
       )
