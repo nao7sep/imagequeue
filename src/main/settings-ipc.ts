@@ -11,6 +11,7 @@ import { saveImageBackendDefaults } from './backend-defaults'
 import { loadConfig, updateConfig } from './config'
 import { getStoredApiKey, setStoredApiKeys, hasApiKey, refreshApiKeys } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
+import { broadcastPresentation } from './presentation'
 import { refreshMainWindowMinimumSize, setDrawThingsReady } from './main-window-layout'
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter, stageExportCopy } from './utils/file-output'
@@ -133,6 +134,12 @@ export function registerSettingsIpc(
           if (authoredPaths.includes(field) && next.notifications[field] !== base.notifications[field]) {
             draft.notifications[field] = next.notifications[field] ? expandUserPath(next.notifications[field], os.homedir()) : ''
           }
+        }
+      }).then((config) => {
+        // Config and credentials commit independently. A later key-save failure
+        // must not leave windows using an older, already replaced font setting.
+        if (config.general.ui_font_family !== base.general.ui_font_family) {
+          broadcastPresentation('settings:uiFont', config.general.ui_font_family)
         }
       }),
       Object.keys(keys).length ? setStoredApiKeys(keys) : Promise.resolve(),

@@ -13,6 +13,7 @@ type Handler = (...args: unknown[]) => unknown
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
+  broadcast: vi.fn(),
   setDrawThingsReady: vi.fn(),
   root: '',
   showMessageBox: vi.fn(),
@@ -33,6 +34,8 @@ const mocks = vi.hoisted(() => ({
   resolveCliPath: vi.fn(() => '/cli/dtcli'),
   ensureModelsDir: vi.fn(() => '/models'),
 }))
+
+vi.mock('../../src/main/presentation', () => ({ broadcastPresentation: mocks.broadcast }))
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
@@ -127,6 +130,26 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   fs.rmSync(mocks.root, { recursive: true, force: true })
+})
+
+it('publishes the saved font to every surface only after the settings write succeeds', async () => {
+  const base = structuredClone(mocks.config)
+  base.general.ui_font_family = ''
+  mocks.config.general.ui_font_family = 'Custom Font'
+  let release!: () => void
+  mocks.saveConfig.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve }))
+  const save = invoke('settings:saveChangedFields', base, mocks.config)
+  expect(mocks.broadcast).not.toHaveBeenCalled()
+  release()
+  await save
+  expect(mocks.broadcast).toHaveBeenCalledExactlyOnceWith('settings:uiFont', 'Custom Font')
+  mocks.broadcast.mockClear()
+  mocks.saveConfig.mockRejectedValueOnce(new Error('disk full'))
+  await expect(invoke('settings:saveChangedFields', base, mocks.config)).rejects.toThrow('disk full')
+  expect(mocks.broadcast).not.toHaveBeenCalled()
+  mocks.setStoredApiKeys.mockRejectedValueOnce(new Error('keys unavailable'))
+  await expect(invoke('settings:saveChangedFields', base, mocks.config, { 'openai.image': 'new-key' })).rejects.toThrow('keys unavailable')
+  expect(mocks.broadcast).toHaveBeenCalledExactlyOnceWith('settings:uiFont', 'Custom Font')
 })
 
 describe('API keys', () => {

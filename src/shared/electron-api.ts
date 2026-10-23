@@ -208,6 +208,8 @@ export interface ElectronAPI {
   hasClipboardText: () => Promise<boolean>
   copyImageToClipboard: (baseName: string, ext: string) => Promise<void>
   openDirectoryDialog: (currentPath?: string, authored?: boolean) => Promise<string | null>
+  // A saved UI font applies to every renderer surface.
+  onUiFontChanged: (callback: (family: string) => void) => (() => void)
   // The main process changed a setting on its own (closing the preview window).
   onSettingsChanged: (callback: () => void) => (() => void)
   // The views of the selected image (shared/viewing). The main window publishes

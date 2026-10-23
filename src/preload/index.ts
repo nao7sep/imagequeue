@@ -392,6 +392,12 @@ const api = {
   openDirectoryDialog: (currentPath?: string, authored?: boolean): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory', currentPath, authored),
 
+  onUiFontChanged: (callback: (family: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, family: string): void => callback(family)
+    ipcRenderer.on('settings:uiFont', handler)
+    return () => { ipcRenderer.removeListener('settings:uiFont', handler) }
+  },
+
   onSettingsChanged: (callback: () => void): (() => void) => {
     const handler = (): void => callback()
     ipcRenderer.on('settings:changed', handler)

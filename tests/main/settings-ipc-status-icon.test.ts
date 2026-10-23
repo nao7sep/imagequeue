@@ -46,9 +46,9 @@ vi.mock('../../src/main/ipc-boundary', () => ({
 
 vi.mock('../../src/main/config', () => ({
   loadConfig: () => mocks.config,
-  updateConfig: (apply: (draft: AppConfig) => void) => {
+  updateConfig: async (apply: (draft: AppConfig) => void) => {
     apply(mocks.config as unknown as AppConfig)
-    mocks.saveConfig(mocks.config)
+    await mocks.saveConfig(mocks.config)
     return mocks.config
   },
 }))

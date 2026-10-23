@@ -54,17 +54,6 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     return () => { cancelled = true }
   }, [loadRevision])
 
-  // Apply the configured UI font by overriding the `--font-ui` CSS variable on :root; blank reverts
-  // to the styles.css default. The string is handed to CSS verbatim (engine-resolved, graceful
-  // fallback) per the app-chrome-conventions; the mono surfaces (--font-mono) are unaffected.
-  const uiFontFamily = (((settings?.general as Record<string, unknown> | undefined)?.ui_font_family) as string | undefined) ?? ''
-  useEffect(() => {
-    const family = uiFontFamily.trim()
-    const root = document.documentElement
-    if (family) root.style.setProperty('--font-ui', family)
-    else root.style.removeProperty('--font-ui')
-  }, [uiFontFamily])
-
   // Every save refreshes presence alongside the settings: storing or clearing a
   // key changes what resolves, and an env-supplied key means the stored value
   // and the presence flag can disagree in either direction.

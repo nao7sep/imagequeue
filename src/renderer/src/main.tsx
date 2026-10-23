@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { UiFont } from './components/UiFont'
 import { QuitFailureApp } from './components/QuitFailureApp'
 import { StartupFailureApp } from './components/StartupFailureApp'
 import { RendererErrorBoundary } from './components/RendererErrorBoundary'
@@ -16,6 +17,7 @@ const surface = query.get('surface') as RendererSurface | null
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <UiFont />
     {surface === 'quit-failure' ? (
       <MainProcessLanguage><QuitFailureApp /></MainProcessLanguage>
     ) : surface === 'startup-failure' ? (

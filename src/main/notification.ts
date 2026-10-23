@@ -151,11 +151,11 @@ function showNotification(type: 'success' | 'failure'): void {
       m.innerHTML = ${JSON.stringify(MARK_SVG)};
       m.appendChild(document.createTextNode(' ' + ${JSON.stringify(label)}));
       var font = ${JSON.stringify(uiFont)};
-      if (font) { t.style.fontFamily = font; }
+      t.style.fontFamily = font;
 
       var measure = document.createElement('div');
       measure.className = ${JSON.stringify(cssClass)};
-      if (font) { measure.style.fontFamily = font; }
+      measure.style.fontFamily = font;
       measure.style.position = 'absolute';
       measure.style.left = '-10000px';
       measure.style.top = '-10000px';
