@@ -56,7 +56,7 @@ export interface SessionDraft {
   // Advanced Prompting: the seed/full prompt and the elaborated result.
   seed: string
   elaborated: string
-  // Advanced Prompting: the three elaborator selections.
+  // Advanced Prompting: composition and style elaborator selections.
   selectedCompositionElaboratorId: string | null
   selectedStyleElaboratorId: string | null
   // Advanced Prompting: the chosen targets and execution settings.
@@ -127,9 +127,6 @@ function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string')
 }
-
-const isString = (value: unknown): boolean => typeof value === 'string'
-const isNullableString = (value: unknown): boolean => value === null || typeof value === 'string'
 
 // Rebuilds a complete, valid SessionDraft from a draft the renderer sends. A
 // malformed field falls back to its empty-draft value rather than the whole
