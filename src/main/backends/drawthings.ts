@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { CLI_HARD_KILL_DELAY_MS, spawnOwnedCli } from '../utils/owned-cli'
 import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
@@ -95,37 +95,35 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   const removePartial = (): Promise<void> => fs.promises.rm(outputPath, { force: true }).catch(() => undefined)
   try {
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const proc = spawnOwnedCli(cliPath, args)
       let stdout = ''
       let stderr = ''
       let cancelled = false
       let timedOut = false
 
-      // The same escalation the abort path uses, on a clock: a wedged CLI (a
-      // corrupt model, a stalled device) otherwise holds the single Draw Things
-      // slot forever with no error and keeps the machine awake.
+      let closed = false
+      let stopping = false
+      let spawnError: Error | undefined
+      let hardKillTimer: ReturnType<typeof setTimeout> | undefined
+      const stop = (): void => {
+        if (closed || stopping) return
+        stopping = true
+        proc.kill('SIGTERM')
+        hardKillTimer = setTimeout(() => {
+          if (!closed) proc.kill('SIGKILL')
+        }, CLI_HARD_KILL_DELAY_MS)
+      }
       const timer = setTimeout(() => {
         timedOut = true
-        try { proc.kill('SIGTERM') } catch { /* already gone */ }
-        setTimeout(() => {
-          try { proc.kill('SIGKILL') } catch { /* already gone */ }
-        }, 2000)
+        stop()
       }, timeout_ms)
-
-      // The child process is the ONLY handle that can stop a Draw Things
-      // generation: there is no request to abort and the CLI runs to completion
-      // otherwise. The queue's signal reaches it here, with the same
-      // SIGTERM-then-SIGKILL escalation cli-jobs uses for downloads — a CLI
-      // mid-write ignores a polite signal often enough to matter.
       const onAbort = (): void => {
         cancelled = true
-        try { proc.kill('SIGTERM') } catch { /* already gone */ }
-        setTimeout(() => {
-          try { proc.kill('SIGKILL') } catch { /* already gone */ }
-        }, 2000)
+        stop()
       }
       signal.addEventListener('abort', onAbort, { once: true })
-      proc.on('close', () => signal.removeEventListener('abort', onAbort))
+      // Preparation can yield before listener registration.
+      if (signal.aborted) onAbort()
 
       // Both pipes are drained as the CLI writes: an unread pipe fills and the
       // CLI blocks on its next write until the timeout kills it.
@@ -134,11 +132,18 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
       proc.stdout.on('data', (chunk: string) => { stdout += chunk })
       proc.stderr.on('data', (chunk: string) => { stderr += chunk })
       proc.on('close', (code, exitSignal) => {
+        closed = true
         clearTimeout(timer)
+        clearTimeout(hardKillTimer)
+        signal.removeEventListener('abort', onAbort)
         const answer = { exitCode: code, signal: exitSignal, stdout, stderr }
         const fail = (err: Error): void => {
           record.fail(err, answer)
           reject(err)
+        }
+        if (spawnError) {
+          fail(new Error(`Failed to spawn draw-things-cli: ${spawnError.message}`, { cause: spawnError }))
+          return
         }
         if (cancelled) {
           fail(new Error(CANCELLED_MESSAGE))
@@ -162,8 +167,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
       })
       proc.on('error', (err) => {
         log('error', 'draw-things-cli spawn failed', { cliPath, error: serializeError(err) })
-        record.fail(err)
-        reject(new Error(`Failed to spawn draw-things-cli: ${err.message}`))
+        spawnError = err
       })
     })
   } catch (error) {

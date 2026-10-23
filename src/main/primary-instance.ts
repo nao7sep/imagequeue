@@ -31,6 +31,7 @@ import { registerRecordsIpc } from './records-ipc'
 import { closeRecordsReader } from './records-reader'
 import { closeRecordsWindow, hideRecordsWindow, notifyRecordsChanged, showRecordsWindow } from './records-window'
 import { hasRunningCliJobs, killAllCliJobsAndWait } from './cli-jobs'
+import { CLI_HARD_KILL_DELAY_MS } from './utils/owned-cli'
 import { cancelAllInFlightAndWait } from './backends/cancellation'
 import { getAllModelParams, drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
@@ -142,9 +143,10 @@ const quitOwner = createQuitOwner({
     cancelAllBrainstorms()
     cancelAllDependencyOperations()
     // Signal both families synchronously, before any persistence wait.
+    // The 500ms hard-kill grace fits inside the 1500ms OS exit budget.
     backgroundWork = Promise.all([
       cancelAllInFlightAndWait(5_000),
-      killAllCliJobsAndWait({ timeoutMs: 5_000 }),
+      killAllCliJobsAndWait({ killGraceMs: CLI_HARD_KILL_DELAY_MS, timeoutMs: 5_000 }),
     ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
   },
   save: async () => {
@@ -156,7 +158,7 @@ const quitOwner = createQuitOwner({
     await Promise.all([drainBackendDefaults(), drainPendingModelParamsWrites()])
     if (!backgroundWork) {
       backgroundWork = Promise.all([
-        cancelAllInFlightAndWait(5_000), killAllCliJobsAndWait({ timeoutMs: 5_000 }),
+        cancelAllInFlightAndWait(5_000), killAllCliJobsAndWait({ killGraceMs: CLI_HARD_KILL_DELAY_MS, timeoutMs: 5_000 }),
       ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
     }
     await backgroundWork

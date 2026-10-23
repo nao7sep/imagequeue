@@ -256,10 +256,12 @@ export function registerSettingsIpc(
   handle('cli-job:startImport', async (event, artifactPath: string) => {
     artifactPath = importSourcePath(artifactPath)
     const cliPath = resolveCliPath()
-    const dir = await ensureModelsDir()
+    const dir = await fs.promises.realpath(await ensureModelsDir())
     assertNotQuitting()
     const jobId = startCliJob({
       kind: 'import',
+      modelsDir: dir,
+      sourceIdentity: path.resolve(artifactPath),
       cliPath,
       args: ['models', 'import', artifactPath, '--models-dir', dir],
       target: path.basename(artifactPath),
@@ -271,10 +273,12 @@ export function registerSettingsIpc(
 
   handle('cli-job:startDownload', async (event, modelFile: string) => {
     const cliPath = resolveCliPath()
-    const dir = await ensureModelsDir()
+    const dir = await fs.promises.realpath(await ensureModelsDir())
     assertNotQuitting()
     const jobId = startCliJob({
       kind: 'download',
+      modelsDir: dir,
+      sourceIdentity: modelFile,
       cliPath,
       args: ['models', 'ensure', '--model', modelFile, '--models-dir', dir],
       target: modelFile,

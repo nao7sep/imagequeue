@@ -26,7 +26,7 @@ afterAll(async () => {
 describe('an import job record', () => {
   it('keeps no signal when node-pty reports 0', async () => {
     const dir = freshRecordsRoot()
-    startCliJob({ kind: 'import', cliPath: '/bin/draw-things-cli', args: ['models', 'import'], target: 'model.ckpt', logContext: {} })
+    startCliJob({ kind: 'import', modelsDir: '/test/models', sourceIdentity: '/test/model.ckpt', cliPath: '/bin/draw-things-cli', args: ['models', 'import'], target: 'model.ckpt', logContext: {} })
     await vi.waitFor(() => expect(exits).toHaveLength(1))
     exits[0]!({ exitCode: 0, signal: 0 })
 

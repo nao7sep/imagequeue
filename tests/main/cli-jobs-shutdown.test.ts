@@ -44,7 +44,7 @@ afterEach(async () => {
 describe('CLI job shutdown barrier', () => {
   it('does not return until the signalled child closes', async () => {
     const jobId = startCliJob({
-      kind: 'download',
+      kind: 'download', modelsDir: '/test/models', sourceIdentity: 'model.ckpt',
       cliPath: process.execPath,
       args: ['-e', "process.stdout.write('ready\\n'); setInterval(() => {}, 1000)"],
       target: 'shutdown-test',
@@ -61,7 +61,7 @@ describe('CLI job shutdown barrier', () => {
 
   it.skipIf(process.platform === 'win32')('escalates when a POSIX child ignores termination', async () => {
     const jobId = startCliJob({
-      kind: 'download',
+      kind: 'download', modelsDir: '/test/models', sourceIdentity: 'model.ckpt',
       cliPath: process.execPath,
       args: ['-e', "process.on('SIGTERM', () => {}); process.stdout.write('ready\\n'); setInterval(() => {}, 1000)"],
       target: 'shutdown-escalation-test',
@@ -76,7 +76,7 @@ describe('CLI job shutdown barrier', () => {
   it('keeps a hostile spawn diagnostic out of the visible terminal chunks', async () => {
     const hostile = 'EACCES Error invoking remote method IPC hostile-sentinel'
     const jobId = startCliJob({
-      kind: 'download',
+      kind: 'download', modelsDir: '/test/models', sourceIdentity: 'model.ckpt',
       cliPath: path.join(os.tmpdir(), hostile),
       args: [],
       target: 'failure-presentation-test',

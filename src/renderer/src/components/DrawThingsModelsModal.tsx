@@ -187,7 +187,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   useEffect(() => {
     if (cliInstalled !== true) return
     return window.electronAPI.onCliJobStatus((event) => {
-      if (event.status === 'exited' || event.status === 'killed') {
+      if (event.status === 'exited' || event.status === 'killed' || event.status === 'timed-out') {
         void loadDownloaded(false)
       }
     })

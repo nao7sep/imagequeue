@@ -6,6 +6,7 @@ import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend, getModelsForBackend } from '../../../../src/shared/ai-models'
 import type { DrawThingsParamsPersistenceState } from '../../../../src/shared/electron-api'
 import { requestTaskReveal } from '../../../../src/renderer/src/utils/taskScroll'
+import type { CliStatusEvent } from '../../../../src/shared/cli-jobs'
 import type { Message } from '../../../../src/shared/i18n/translate'
 
 // The column under test drives everything through four contexts plus
@@ -944,6 +945,19 @@ describe('drawthings column', () => {
     fireEvent.change(size, { target: { value: '3840x2176' } })
     await flush()
     expect([rowControl(container, 'Width').value, rowControl(container, 'Height').value]).toEqual(['3840', '2176'])
+  })
+
+  it('refreshes local models only after a timed-out job has physically stopped', async () => {
+    electronAPI.localCheckCli.mockResolvedValue(CLI_OK)
+    render(<QueueColumn backendId="drawthings" label="Draw Things" prompt="a cat" />)
+    await flush()
+    const onStatus = electronAPI.onCliJobStatus.mock.calls[0][0] as (event: CliStatusEvent) => void
+    const initialCalls = electronAPI.localListDownloadedModels.mock.calls.length
+    act(() => onStatus({ jobId: 'job-1', status: 'stopping', exitCode: null, stalled: false }))
+    expect(electronAPI.localListDownloadedModels).toHaveBeenCalledTimes(initialCalls)
+    act(() => onStatus({ jobId: 'job-1', status: 'timed-out', exitCode: null, stalled: false }))
+    await flush()
+    expect(electronAPI.localListDownloadedModels).toHaveBeenCalledTimes(initialCalls + 1)
   })
 
   it('is not ready with the CLI missing', async () => {

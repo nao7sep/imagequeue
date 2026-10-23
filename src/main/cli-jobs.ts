@@ -1,4 +1,6 @@
-import { spawn } from 'child_process'
+import { availableParallelism } from 'node:os'
+import { spawnOwnedCli, CLI_HARD_KILL_DELAY_MS } from './utils/owned-cli'
+import { assertNotQuitting, isQuitting } from './quit-state'
 import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
 import { spawn as spawnPty } from 'node-pty'
@@ -14,7 +16,6 @@ import {
   CliJobStatus,
   CliStatusEvent,
   CLI_JOB_BUFFER_MAX_LINES,
-  CLI_JOB_KILL_GRACE_MS,
   CLI_JOB_RETENTION_AFTER_EXIT_MS,
   CLI_JOB_STALL_THRESHOLD_MS,
 } from '../shared/cli-jobs'
@@ -25,12 +26,19 @@ interface StartCliJobOpts {
   args: string[]
   target: string
   logContext: Record<string, unknown>
+  modelsDir: string
+  sourceIdentity: string
 }
 
 interface JobState {
   jobId: string
   kind: CliJobKind
   target: string
+  modelsDir: string
+  sourceIdentity: string
+  deadlineTimer: NodeJS.Timeout | null
+  stopReason: 'killed' | 'timed-out' | null
+  processError?: unknown
   startedAtMs: number
   child: { kill(signal?: string): void } | null
   buffer: CliChunk[]
@@ -40,7 +48,7 @@ interface JobState {
   status: CliJobStatus
   exitCode: number | null
   stalled: boolean
-  lastStdoutMs: number
+  lastOutputMs: number
   stallTimer: NodeJS.Timeout | null
   killGraceTimer: NodeJS.Timeout | null
   retentionTimer: NodeJS.Timeout | null
@@ -63,11 +71,23 @@ interface JobState {
 }
 
 const jobs = new Map<string, JobState>()
-const queuedImportJobIds: string[] = []
-let activeImportJobId: string | null = null
+const pendingJobIds: string[] = []
+let draining = false
+let drainDepth = 0
+// Keep half the available CPU capacity for image generation and the interface.
+export const CLI_DOWNLOAD_CONCURRENCY = Math.max(1, Math.floor(availableParallelism() / 2))
+// Ten successive stall windows bound a silent download without treating each
+// slow transfer as a failure. Imports can be quiet during heavy native work.
+export const CLI_DOWNLOAD_INACTIVITY_TIMEOUT_MS = 10 * CLI_JOB_STALL_THRESHOLD_MS
+// A generous unattended conversion budget, independent of download activity.
+export const CLI_IMPORT_TIMEOUT_MS = 6 * 60 * 60_000
 const CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS = 30_000
 
 export function startCliJob(opts: StartCliJobOpts): string {
+  assertNotQuitting()
+  for (const existing of jobs.values()) {
+    if (!existing.finalized && existing.kind === opts.kind && existing.modelsDir === opts.modelsDir && existing.sourceIdentity === opts.sourceIdentity) return existing.jobId
+  }
   const jobId = nanoid()
   let resolveSettled!: () => void
   const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
@@ -75,16 +95,20 @@ export function startCliJob(opts: StartCliJobOpts): string {
     jobId,
     kind: opts.kind,
     target: opts.target,
+    modelsDir: opts.modelsDir,
+    sourceIdentity: opts.sourceIdentity,
+    deadlineTimer: null,
+    stopReason: null,
     startedAtMs: Date.now(),
     child: null,
     buffer: [],
     nextSeq: 0,
     subscribers: new Set(),
     subscriberDestroyed: new Map(),
-    status: opts.kind === 'import' ? 'queued' : 'running',
+    status: 'queued',
     exitCode: null,
     stalled: false,
-    lastStdoutMs: Date.now(),
+    lastOutputMs: Date.now(),
     stallTimer: null,
     killGraceTimer: null,
     retentionTimer: null,
@@ -105,13 +129,8 @@ export function startCliJob(opts: StartCliJobOpts): string {
   }
   jobs.set(jobId, state)
 
-  if (opts.kind === 'import') {
-    queuedImportJobIds.push(jobId)
-    log('info', 'CLI import job queued', { jobId, target: opts.target, ...opts.logContext })
-    launchNextImport()
-  } else {
-    launchJob(state)
-  }
+  pendingJobIds.push(jobId)
+  drainPendingJobs()
 
   return jobId
 }
@@ -135,28 +154,32 @@ export function unsubscribeCliJob(jobId: string, wc: WebContents): void {
   removeSubscriber(state, wc)
 }
 
-export function killCliJob(jobId: string, killGraceMs = CLI_JOB_KILL_GRACE_MS): void {
+export function killCliJob(jobId: string, killGraceMs = CLI_HARD_KILL_DELAY_MS): void {
   const state = jobs.get(jobId)
-  if (!state) return
-
+  if (!state || state.finalized || state.status === 'stopping') return
   if (state.status === 'queued') {
-    removeQueuedImport(jobId)
-    state.status = 'killed'
-    emitStatus(state)
+    removePendingJob(jobId)
     finalize(state, 'killed', null)
-    log('info', 'Queued CLI job removed', { jobId })
     return
   }
+  requestStop(state, 'killed', killGraceMs)
+}
 
-  if (state.status !== 'running' && state.status !== 'stalled') return
-  state.status = 'killed'
+function requestStop(state: JobState, reason: 'killed' | 'timed-out', graceMs = CLI_HARD_KILL_DELAY_MS): void {
+  if (state.finalized || state.status === 'stopping') return
+  state.stopReason = reason
+  state.status = 'stopping'
   state.stalled = false
+  if (reason === 'timed-out') state.processError = new Error(state.kind === 'download'
+    ? 'Model download exceeded the inactivity deadline'
+    : 'Model import exceeded the conversion deadline')
   emitStatus(state)
-  try { state.child?.kill('SIGTERM') } catch { /* ignore */ }
   state.killGraceTimer = setTimeout(() => {
-    try { state.child?.kill('SIGKILL') } catch { /* ignore */ }
-  }, killGraceMs)
-  log('info', 'CLI job kill requested', { jobId })
+    if (!state.finalized) {
+      try { state.child?.kill('SIGKILL') } catch { /* close remains authoritative */ }
+    }
+  }, graceMs)
+  try { state.child?.kill('SIGTERM') } catch { /* close remains authoritative */ }
 }
 
 /** Signal every live/queued CLI job and await real child settlement, bounded. */
@@ -164,11 +187,19 @@ export async function killAllCliJobsAndWait(options: {
   killGraceMs?: number
   timeoutMs?: number
 } = {}): Promise<{ signalled: number; settled: boolean }> {
-  const killGraceMs = options.killGraceMs ?? CLI_JOB_KILL_GRACE_MS
+  const killGraceMs = options.killGraceMs ?? CLI_HARD_KILL_DELAY_MS
   const timeoutMs = options.timeoutMs ?? killGraceMs + 2_000
   const active = [...jobs.values()].filter((state) => !state.finalized)
 
-  for (const state of active) killCliJob(state.jobId, killGraceMs)
+  // Queue cancellation can settle synchronously. Freeze promotion across the
+  // whole snapshot so shutdown never launches work it has not signalled yet.
+  drainDepth++
+  try {
+    for (const state of active) killCliJob(state.jobId, killGraceMs)
+  } finally {
+    drainDepth--
+    drainPendingJobs()
+  }
 
   return {
     signalled: active.length,
@@ -181,28 +212,34 @@ export function getCliJobSnapshot(jobId: string): CliJobSnapshot | null {
   return state ? snapshot(state) : null
 }
 
-// True while any CLI job is doing work. Queued imports always sit behind an
-// active one (launchNextImport promotes immediately), so running and stalled
-// cover every in-flight case. Used by the wake lock to keep the machine awake
-// during long Draw Things downloads and imports.
+// Physical ownership includes queued work and a child still stopping.
 export function hasRunningCliJobs(): boolean {
-  for (const state of jobs.values()) {
-    if (state.status === 'running' || state.status === 'stalled') return true
-  }
-  return false
+  return [...jobs.values()].some((state) => !state.finalized)
 }
 
-function launchNextImport(): void {
-  if (activeImportJobId !== null) return
-
-  while (queuedImportJobIds.length > 0) {
-    const nextJobId = queuedImportJobIds.shift()!
-    const state = jobs.get(nextJobId)
-    if (!state || state.status !== 'queued') continue
-    activeImportJobId = nextJobId
-    launchJob(state)
-    return
-  }
+function drainPendingJobs(): void {
+  if (draining || drainDepth > 0 || isQuitting()) return
+  draining = true
+  try {
+    for (let index = 0; index < pendingJobIds.length;) {
+      const state = jobs.get(pendingJobIds[index])!
+      const active = [...jobs.values()].filter((job) => !job.finalized && job.status !== 'queued')
+      const sameDirectory = active.filter((job) => job.modelsDir === state.modelsDir)
+      const blockedByImport = pendingJobIds.slice(0, index).some((id) => {
+        const earlier = jobs.get(id)!
+        return earlier.kind === 'import' && earlier.modelsDir === state.modelsDir
+      })
+      const canStart = state.kind === 'import'
+        ? !active.some((job) => job.kind === 'import') && sameDirectory.length === 0
+        : active.filter((job) => job.kind === 'download').length < CLI_DOWNLOAD_CONCURRENCY
+          && !sameDirectory.some((job) => job.kind === 'import' || job.sourceIdentity === state.sourceIdentity)
+          && !blockedByImport
+      if (!canStart) { index++; continue }
+      pendingJobIds.splice(index, 1)
+      state.status = 'running'
+      launchJob(state)
+    }
+  } finally { draining = false }
 }
 
 // Two launch mechanisms, deliberately:
@@ -217,6 +254,7 @@ function launchNextImport(): void {
 // Do NOT "simplify" import onto the pipe path — it will break imports entirely.
 function launchJob(state: JobState): void {
   state.processStartedAt = new Date().toISOString()
+  resetDeadline(state)
   if (state.kind === 'import') {
     launchImportJob(state)
     return
@@ -226,28 +264,15 @@ function launchJob(state: JobState): void {
 }
 
 function launchPipeJob(state: JobState): void {
-  const child = spawn(state.cliPath, state.args, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-
-  // stdio fds 1 and 2 are 'pipe', so Node creates these streams; the guard
-  // narrows the `Readable | null` the spawn() return type reports for an
-  // explicit stdio tuple, and routes the impossible miss through the same
-  // failure path as a spawn error rather than throwing uncaught.
+  const child = spawnOwnedCli(state.cliPath, state.args)
   const { stdout, stderr } = child
-  if (!stdout || !stderr) {
-    log('error', 'CLI job spawned without stdout/stderr pipes', { jobId: state.jobId, ...state.logContext })
-    pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, null))
-    finalize(state, 'exited', null, null, new Error('CLI job spawned without stdout/stderr pipes'))
-    return
-  }
 
   state.child = {
     kill: (signal?: string) => {
       child.kill(signal as NodeJS.Signals | undefined)
     },
   }
-  state.lastStdoutMs = Date.now()
+  state.lastOutputMs = Date.now()
   state.status = 'running'
   state.stalled = false
 
@@ -259,17 +284,17 @@ function launchPipeJob(state: JobState): void {
   child.on('error', (err) => {
     log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
     pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, err))
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null, null, err)
+    state.processError = err
   })
 
   child.on('close', (code, signal) => {
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', code, signal)
+    finalize(state, state.stopReason ?? 'exited', state.processError && !state.stopReason ? null : code, signal, state.processError)
   })
 
   if (state.kind === 'download') {
     state.stallTimer = setInterval(() => {
       if (state.status !== 'running' && state.status !== 'stalled') return
-      const idle = Date.now() - state.lastStdoutMs
+      const idle = Date.now() - state.lastOutputMs
       const nextStatus: CliJobStatus = idle >= CLI_JOB_STALL_THRESHOLD_MS ? 'stalled' : 'running'
       const nextStalled = nextStatus === 'stalled'
       if (state.status !== nextStatus || state.stalled !== nextStalled) {
@@ -308,7 +333,7 @@ function launchImportJob(state: JobState): void {
         ptyProcess.kill(signal)
       },
     }
-    state.lastStdoutMs = Date.now()
+    state.lastOutputMs = Date.now()
     state.status = 'running'
     state.stalled = false
 
@@ -319,7 +344,7 @@ function launchImportJob(state: JobState): void {
       dataSubscription?.dispose()
       exitSubscription?.dispose()
       // node-pty reports 0 when no signal ended the process.
-      finalize(state, state.status === 'killed' ? 'killed' : 'exited', exitCode, signal === undefined || signal === 0 ? null : String(signal))
+      finalize(state, state.stopReason ?? 'exited', exitCode, signal === undefined || signal === 0 ? null : String(signal), state.processError)
     })
 
     emitStatus(state)
@@ -333,22 +358,29 @@ function launchImportJob(state: JobState): void {
   } catch (err) {
     log('error', 'CLI PTY spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
     pushChunk(state, 'stderr', cliJobStartFailurePresentation(state.kind, err))
-    finalize(state, state.status === 'killed' ? 'killed' : 'exited', null, null, err)
+    finalize(state, state.stopReason ?? 'exited', null, null, err)
   }
 }
 
+function resetDeadline(state: JobState): void {
+  if (state.deadlineTimer) clearTimeout(state.deadlineTimer)
+  state.deadlineTimer = setTimeout(() => requestStop(state, 'timed-out'),
+    state.kind === 'download' ? CLI_DOWNLOAD_INACTIVITY_TIMEOUT_MS : CLI_IMPORT_TIMEOUT_MS)
+}
+
 function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string): void {
-  if (kind === 'stdout') {
-    state.stdoutReceived += chunk
-    state.lastStdoutMs = Date.now()
+  if (state.finalized) return
+  if (state.kind === 'download' && state.status !== 'stopping') resetDeadline(state)
+  state.lastOutputMs = Date.now()
+  if (state.kind === 'download') {
     if (state.status === 'stalled') {
       state.status = 'running'
       state.stalled = false
       emitStatus(state)
     }
-  } else {
-    state.stderrReceived += chunk
   }
+  if (kind === 'stdout') state.stdoutReceived += chunk
+  else state.stderrReceived += chunk
 
   const fragmentField = kind === 'stdout' ? 'stdoutFragment' : 'stderrFragment'
   const data = state[fragmentField] + chunk
@@ -422,7 +454,7 @@ function emitStatus(state: JobState): void {
 }
 
 function isTerminalStatus(status: CliJobStatus): boolean {
-  return status === 'exited' || status === 'killed'
+  return status === 'exited' || status === 'killed' || status === 'timed-out'
 }
 
 function clearRetentionTimer(state: JobState): void {
@@ -456,13 +488,15 @@ function removeSubscriber(state: JobState, wc: WebContents): void {
 
 function finalize(
   state: JobState,
-  status: 'exited' | 'killed',
+  status: 'exited' | 'killed' | 'timed-out',
   code: number | null,
   signal: string | null = null,
   error?: unknown,
 ): void {
   if (state.finalized) return
   state.finalized = true
+  if (state.deadlineTimer) clearTimeout(state.deadlineTimer)
+  state.deadlineTimer = null
 
   state.status = status
   state.exitCode = code
@@ -508,10 +542,7 @@ function finalize(
     scheduleRetentionTimer(state, CLI_JOB_RETENTION_AFTER_EXIT_MS)
   }
 
-  if (state.kind === 'import' && activeImportJobId === state.jobId) {
-    activeImportJobId = null
-    launchNextImport()
-  }
+  drainPendingJobs()
 
   state.resolveSettled()
 }
@@ -529,9 +560,9 @@ function snapshot(state: JobState): CliJobSnapshot {
   }
 }
 
-function removeQueuedImport(jobId: string): void {
-  const index = queuedImportJobIds.indexOf(jobId)
-  if (index >= 0) queuedImportJobIds.splice(index, 1)
+function removePendingJob(jobId: string): void {
+  const index = pendingJobIds.indexOf(jobId)
+  if (index >= 0) pendingJobIds.splice(index, 1)
 }
 
 function stripAnsi(value: string): string {

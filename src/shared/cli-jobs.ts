@@ -1,7 +1,7 @@
 // Types shared between main and renderer for the in-app CLI job dialog.
 
 export type CliJobKind = 'import' | 'download'
-export type CliJobStatus = 'queued' | 'running' | 'stalled' | 'exited' | 'killed'
+export type CliJobStatus = 'queued' | 'running' | 'stalled' | 'stopping' | 'exited' | 'killed' | 'timed-out'
 export type CliChunkKind = 'stdout' | 'stderr'
 
 // One line of output. Stored in the ring buffer in main, replayed to subscribers,
@@ -21,8 +21,8 @@ export interface CliJobSnapshot {
   target: string
   startedAtMs: number
   status: CliJobStatus
-  exitCode: number | null   // populated once status is 'exited' or 'killed'
-  stalled: boolean          // true while no stdout chunk for >= STALL_THRESHOLD_MS
+  exitCode: number | null   // final exited/killed/timed-out code; null for signals or unknown outcome
+  stalled: boolean          // true while no output chunk for >= STALL_THRESHOLD_MS
   chunks: CliChunk[]        // full ring buffer at snapshot time
 }
 
@@ -46,5 +46,4 @@ export interface CliStatusEvent {
 
 export const CLI_JOB_STALL_THRESHOLD_MS = 60_000
 export const CLI_JOB_BUFFER_MAX_LINES = 2_000
-export const CLI_JOB_KILL_GRACE_MS = 3_000
 export const CLI_JOB_RETENTION_AFTER_EXIT_MS = 10 * 60 * 1_000

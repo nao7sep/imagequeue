@@ -17,11 +17,14 @@ const spawnCalls: { args: string[] }[] = []
 const killSignals: string[] = []
 let hangUntilKilled = false
 let splitUtf8Output = false
+let ignoreTerm = false
 // How the fake CLI ends after writing its (possibly partial) output.
 let exit: { code: number | null; signal: string | null; stderr: string } = { code: 0, signal: null, stderr: '' }
 
-vi.mock('node:child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
-vi.mock('child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
+vi.mock('../../../src/main/utils/owned-cli', () => ({
+  CLI_HARD_KILL_DELAY_MS: 500,
+  spawnOwnedCli: (_cmd: string, args: string[]) => makeProc(args),
+}))
 
 // The generation timeout is read from config, which caches per process — the
 // mock gives each test its own knob.
@@ -49,12 +52,15 @@ function makeProc(args: string[]): EventEmitter & { stdout: PassThrough; stderr:
     stderr: new PassThrough(),
     kill: (sig?: string) => {
       killSignals.push(sig ?? 'SIGTERM')
-      // The first signal is enough for the fake: report a close by that signal.
+      if (ignoreTerm && sig === 'SIGTERM') return
       setTimeout(() => proc.emit('close', null, sig ?? 'SIGTERM'), 0)
     },
   })
   if (spawnFails) {
-    setTimeout(() => proc.emit('error', Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })), 0)
+    setTimeout(() => {
+      proc.emit('error', Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+      proc.emit('close', null, null)
+    }, 0)
     return proc
   }
   if (hangUntilKilled) {
@@ -120,6 +126,7 @@ describe('Draw Things output staging', () => {
     killSignals.length = 0
     hangUntilKilled = false
     splitUtf8Output = false
+    ignoreTerm = false
     exit = { code: 0, signal: null, stderr: '' }
     spawnFails = false
     recorded.failures.length = 0
@@ -278,6 +285,26 @@ describe('Draw Things output staging', () => {
     const failure = await running
     expect(failure).not.toBeInstanceOf(DrawThingsOutOfMemoryError)
     expect(String(failure)).toContain('Generation stopped.')
+    const outPath = spawnCalls[0].args[spawnCalls[0].args.indexOf('--output') + 1]
+    expect(fs.existsSync(outPath)).toBe(false)
+  })
+
+  it('waits for a resistant CLI to close before settling cancellation', async () => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    hangUntilKilled = true
+    ignoreTerm = true
+    const controller = new AbortController()
+    let settled = false
+    const running = generateDrawThings(task(), controller.signal).catch((error: unknown) => error)
+    void running.then(() => { settled = true })
+    await vi.waitFor(() => expect(spawnCalls).toHaveLength(1))
+    controller.abort()
+    expect(settled).toBe(false)
+    expect(killSignals).toEqual(['SIGTERM'])
+    const failure = await running
+    expect(String(failure)).toContain('Generation stopped.')
+    expect(killSignals).toEqual(['SIGTERM', 'SIGKILL'])
+    expect(recorded.failures).toHaveLength(1)
     const outPath = spawnCalls[0].args[spawnCalls[0].args.indexOf('--output') + 1]
     expect(fs.existsSync(outPath)).toBe(false)
   })

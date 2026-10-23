@@ -6,8 +6,9 @@ import { getCliJobSnapshot, startCliJob, subscribeCliJob, unsubscribeCliJob } fr
 import { CLI_JOB_RETENTION_AFTER_EXIT_MS } from '../../src/shared/cli-jobs'
 
 const children: EventEmitter[] = []
-vi.mock('child_process', () => ({
-  spawn: () => {
+vi.mock('../../src/main/utils/owned-cli', () => ({
+  CLI_HARD_KILL_DELAY_MS: 500,
+  spawnOwnedCli: () => {
     const child = Object.assign(new EventEmitter(), {
       stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn(),
     })
@@ -20,7 +21,7 @@ vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: vi.fn() 
 vi.mock('../../src/main/records', () => ({ startCliJobRecord: () => ({ finish: vi.fn() }) }))
 
 const start = (): string => startCliJob({
-  kind: 'download', cliPath: '/fake/cli', args: [], target: 'model', logContext: {},
+  kind: 'download', modelsDir: '/test/models', sourceIdentity: 'model.ckpt', cliPath: '/fake/cli', args: [], target: 'model', logContext: {},
 })
 const subscriber = () => Object.assign(new EventEmitter(), { isDestroyed: () => false, send: vi.fn() })
 const webContents = (sender: ReturnType<typeof subscriber>): WebContents => sender as unknown as WebContents

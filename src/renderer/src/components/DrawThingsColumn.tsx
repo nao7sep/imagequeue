@@ -365,7 +365,7 @@ export function useDrawThingsColumn({
   useEffect(() => {
     if (!active) return
     return window.electronAPI.onCliJobStatus((event) => {
-      if (event.status === 'exited' || event.status === 'killed') {
+      if (event.status === 'exited' || event.status === 'killed' || event.status === 'timed-out') {
         void refreshDrawThingsModels(false)
       }
     })

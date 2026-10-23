@@ -166,6 +166,7 @@ const { queueManager } = await import('../../src/main/queue')
 const { hideRecordsWindow, showRecordsWindow } = await import('../../src/main/records-window')
 const { hidePreviewWindow, showPreviewWindow } = await import('../../src/main/preview-window')
 const { forceExit } = await import('../../src/main/utils/force-exit')
+const { killAllCliJobsAndWait } = await import('../../src/main/cli-jobs')
 const { createStartupFailureWindow } = await import('../../src/main/startup-failure-window')
 
 beforeEach(() => {
@@ -205,6 +206,7 @@ describe('primary instance quit routes', () => {
     const quit = beforeQuit()
 
     await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
+    expect(killAllCliJobsAndWait).toHaveBeenCalledWith({ killGraceMs: 500, timeoutMs: 5_000 })
     expect(shutdown.preventDefault).not.toHaveBeenCalled()
     expect(quit.preventDefault).toHaveBeenCalledOnce()
     expect(session.persistActiveSession).toHaveBeenCalledTimes(2) // startup, then quit

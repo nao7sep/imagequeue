@@ -26,6 +26,7 @@ function jobTitle(
   if (status === 'exited' && exitCode === 0) {
     return title(kind === 'import' ? 'cliJob.imported' : 'cliJob.downloaded')
   }
+  if (status === 'stopping') return title('cliJob.stopping')
   if (status === 'killed') return title('cliJob.stopped')
   return title('cliJob.failed')
 }
@@ -38,6 +39,12 @@ function jobSummary(
 ): { tone: 'warning' | 'error'; text: MessageKey } | null {
   if (status === 'queued') {
     return { tone: 'warning', text: 'cliJob.waiting' }
+  }
+  if (status === 'stopping') {
+    return { tone: 'warning', text: 'cliJob.waitingToStop' }
+  }
+  if (status === 'timed-out') {
+    return { tone: 'error', text: kind === 'download' ? 'cliJob.downloadTimedOut' : 'cliJob.importTimedOut' }
   }
   if (status === 'stalled') {
     return { tone: 'warning', text: 'cliJob.stalled' }
@@ -139,7 +146,7 @@ export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.J
     if (el) el.scrollTop = el.scrollHeight
   }, [chunks])
 
-  const isActive = status === 'queued' || status === 'running' || status === 'stalled'
+  const isActive = status === 'queued' || status === 'running' || status === 'stalled' || status === 'stopping'
   const title = text(jobTitle(kind, target, status, exitCode))
   const summary = jobSummary(kind, status, exitCode, chunks)
   const icon = jobIcon(kind, status, exitCode)
@@ -167,7 +174,7 @@ export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.J
         )}
         <span className={titleClass}>{title}</span>
         {isActive ? (
-          <button className="cli-job-stop" onClick={handleStop}>{t('queueControls.stop')}</button>
+          <button className="cli-job-stop" onClick={handleStop} disabled={status === 'stopping'}>{t('queueControls.stop')}</button>
         ) : (
           <button className="cli-job-result-close" onClick={onDismiss} title={t('common.close')} aria-label={t('cliJob.closeResult')}>
             <Icon name="close" />
@@ -194,7 +201,7 @@ export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.J
       >
         {chunks.length === 0 && isActive ? (
           <div className="cli-job-tail-line cli-job-tail-placeholder">
-            {t(status === 'queued'
+            {t(status === 'queued' || status === 'stopping'
               ? 'cliJob.noOutput'
               : status === 'stalled'
                 ? 'cliJob.noNewOutput'

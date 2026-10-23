@@ -103,6 +103,7 @@ async function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.spyOn(fs.promises, 'realpath').mockImplementation(async (candidate) => String(candidate))
   mocks.root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-settings-sound-'))
   mocks.showMessageBox.mockReset().mockResolvedValue({ response: 0 })
   mocks.storedKeys.clear()
@@ -122,7 +123,10 @@ beforeEach(() => {
   registerNotificationIpc()
 })
 
-afterEach(() => fs.rmSync(mocks.root, { recursive: true, force: true }))
+afterEach(() => {
+  vi.restoreAllMocks()
+  fs.rmSync(mocks.root, { recursive: true, force: true })
+})
 
 describe('API keys', () => {
   it('shows the form what is stored, and nothing an environment variable supplied', async () => {
@@ -259,6 +263,8 @@ describe('Draw Things CLI jobs', () => {
     expect(jobId).toBe('job-1')
     expect(mocks.startCliJob).toHaveBeenCalledExactlyOnceWith({
       kind: 'import',
+      modelsDir: '/models',
+      sourceIdentity: '/downloads/model.ckpt',
       cliPath: '/cli/dtcli',
       args: ['models', 'import', '/downloads/model.ckpt', '--models-dir', '/models'],
       target: 'model.ckpt',
@@ -272,11 +278,27 @@ describe('Draw Things CLI jobs', () => {
 
     expect(mocks.startCliJob).toHaveBeenCalledExactlyOnceWith({
       kind: 'download',
+      modelsDir: '/models',
+      sourceIdentity: 'sd_v1.5_f16.ckpt',
       cliPath: '/cli/dtcli',
       args: ['models', 'ensure', '--model', 'sd_v1.5_f16.ckpt', '--models-dir', '/models'],
       target: 'sd_v1.5_f16.ckpt',
       logContext: { modelFile: 'sd_v1.5_f16.ckpt' },
     })
+  })
+
+  it('uses the actual canonical destination directory for both admission and the CLI arguments', async () => {
+    const destination = path.join(mocks.root, 'models')
+    fs.mkdirSync(destination)
+    vi.mocked(fs.promises.realpath).mockRestore()
+    mocks.ensureModelsDir.mockReturnValueOnce(`${destination}/../models`)
+    await invoke('cli-job:startDownload', 'model.ckpt')
+    const canonicalDestination = fs.realpathSync(destination)
+    expect(mocks.startCliJob).toHaveBeenCalledWith(expect.objectContaining({
+      modelsDir: canonicalDestination,
+      sourceIdentity: 'model.ckpt',
+      args: ['models', 'ensure', '--model', 'model.ckpt', '--models-dir', canonicalDestination],
+    }))
   })
 
   it('lets a window follow, stop following, and kill a job', async () => {

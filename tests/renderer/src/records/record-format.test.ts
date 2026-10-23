@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { cursorAfter, jsonBlockText, mergeNewestPage, outputBlockText, recordKey } from '../../../../src/renderer/src/records/record-format'
+import { CLI_JOB_STATUS_LABELS, cursorAfter, jsonBlockText, mergeNewestPage, outputBlockText, recordKey } from '../../../../src/renderer/src/records/record-format'
+import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
 import type { RecordSummary } from '../../../../src/shared/records'
 
 const row = (id: number, time: string, title = `row ${id}`): RecordSummary => ({
@@ -69,4 +70,10 @@ describe('record formatting', () => {
     expect(cursorAfter([d, c])).toEqual({ time: c.time, kind: 'log', id: 3 })
     expect(cursorAfter([])).toBeNull()
   })
+})
+
+
+it('names a timed-out CLI record without exposing its internal status value', () => {
+  const label = CLI_JOB_STATUS_LABELS['timed-out']!
+  expect(ENGLISH[label]).toBe('Timed out')
 })

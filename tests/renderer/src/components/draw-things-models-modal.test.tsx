@@ -196,3 +196,18 @@ describe('model selected actions', () => {
     expect(window.electronAPI.cliStartDownload).not.toHaveBeenCalled()
   })
 })
+
+
+describe('Draw Things model job settlement', () => {
+  it('refreshes installed models after timeout, but waits while a process is still stopping', async () => {
+    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    await until(() => screen.getByText('No official models available.'))
+    const refresh = vi.mocked(window.electronAPI.localListDownloadedModels)
+    const initialCalls = refresh.mock.calls.length
+    const onStatus = vi.mocked(window.electronAPI.onCliJobStatus).mock.calls[0][0]
+    act(() => onStatus({ jobId: 'job-1', status: 'stopping', exitCode: null, stalled: false }))
+    expect(refresh).toHaveBeenCalledTimes(initialCalls)
+    act(() => onStatus({ jobId: 'job-1', status: 'timed-out', exitCode: null, stalled: false }))
+    await until(() => expect(refresh).toHaveBeenCalledTimes(initialCalls + 1))
+  })
+})

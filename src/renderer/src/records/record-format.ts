@@ -53,6 +53,7 @@ export const KIND_LABELS: Record<RecordKind, MessageKey> = {
 export const CLI_JOB_STATUS_LABELS: Partial<Record<string, MessageKey>> = {
   exited: 'records.statusExited',
   killed: 'records.statusKilled',
+  'timed-out': 'records.statusTimedOut',
 }
 
 export const LEVEL_LABELS: Record<RecordLevel, MessageKey> = {

@@ -39,7 +39,7 @@ const ended = (snapshot: CliJobSnapshot): boolean => snapshot.status === 'exited
 const CLI = process.execPath
 
 function startFixtureJob(script: string, cliPath = CLI): string {
-  return startCliJob({ kind: 'download', cliPath, args: ['-e', script], target: 'model.ckpt', logContext: { test: true } })
+  return startCliJob({ kind: 'download', modelsDir: '/test/models', sourceIdentity: 'model.ckpt', cliPath, args: ['-e', script], target: 'model.ckpt', logContext: { test: true } })
 }
 
 afterEach(async () => {
