@@ -1,3 +1,4 @@
+import { retainWindowTitle } from './window-title'
 import { BrowserWindow, dialog, ipcMain, screen, type IpcMainEvent } from 'electron'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
@@ -38,6 +39,7 @@ export function createStartupFailureWindow(failureMessage: Message): BrowserWind
       sandbox: true,
     },
   })
+  retainWindowTitle(win, () => mainTranslator().t('startupFailure.title'))
   hardenWindow(win)
   trackThemedWindow(win)
 

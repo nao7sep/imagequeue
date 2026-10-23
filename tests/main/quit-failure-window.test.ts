@@ -35,7 +35,7 @@ vi.mock('electron', () => ({
     getDisplayMatching: () => ({ workArea: { width: 1440, height: 900 } }),
   },
 }))
-vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string) => key }) }))
+vi.mock('../../src/main/i18n', () => ({ onLanguageChanged: () => () => {}, mainTranslator: () => ({ t: (key: string) => key }) }))
 vi.mock('../../src/main/theme', () => ({ trackThemedWindow: vi.fn(), windowBackground: () => '#ffffff' }))
 vi.mock('../../src/main/utils/harden-window', () => ({ hardenWindow: vi.fn() }))
 

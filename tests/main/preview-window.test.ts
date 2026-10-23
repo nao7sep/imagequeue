@@ -63,7 +63,7 @@ type FakeWindow = InstanceType<typeof mocks.FakeWindow>
 
 vi.mock('../../src/main/app-notices', () => ({ raiseAppNotice: mocks.notice }))
 vi.mock('electron', () => ({ BrowserWindow: mocks.FakeWindow, Menu: { buildFromTemplate: vi.fn() } }))
-vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string) => (key === 'previewWindow.title' ? 'Preview' : key) }) }))
+vi.mock('../../src/main/i18n', () => ({ onLanguageChanged: () => () => {}, mainTranslator: () => ({ t: (key: string) => (key === 'previewWindow.title' ? 'Preview' : key) }) }))
 vi.mock('../../src/main/theme', () => ({ trackThemedWindow: vi.fn(), windowBackground: () => '#e9eef7' }))
 vi.mock('../../src/main/window-minimum', () => ({ configureWindowMinimum: mocks.minimum }))
 vi.mock('../../src/main/utils/harden-window', () => ({ hardenWindow: vi.fn() }))

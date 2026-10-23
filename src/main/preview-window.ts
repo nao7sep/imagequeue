@@ -1,3 +1,4 @@
+import { retainWindowTitle } from './window-title'
 import { BrowserWindow, Menu } from 'electron'
 import { PREVIEW_WINDOW_MIN_HEIGHT, PREVIEW_WINDOW_MIN_WIDTH } from '../shared/viewing'
 import { buildTextContextMenuTemplate } from './app-menu'
@@ -77,6 +78,7 @@ function openPreviewWindow(focus: boolean): void {
     ...options,
     backgroundColor: windowBackground(),
   }))
+  retainWindowTitle(win, () => mainTranslator().t('previewWindow.title'))
   previewWindow = win
   // A Windows logoff or restart closes every window; that is not the user
   // turning the preview window off.

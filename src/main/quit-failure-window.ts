@@ -1,3 +1,4 @@
+import { retainWindowTitle } from './window-title'
 import { BrowserWindow, ipcMain, screen } from 'electron'
 import { mainTranslator } from './i18n'
 import { hardenWindow } from './utils/harden-window'
@@ -29,17 +30,20 @@ export function showQuitQuestion(question: QuitQuestion, signal: AbortSignal, on
   return new Promise((resolve, reject) => {
     if (signal.aborted) { resolve('cancel'); return }
     registerQuestionIpc()
-    const t = mainTranslator().t
-    const title = question.kind === 'saveFailed' ? t('quit.title')
-      : t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: APP_NAME })
+    const title = (): string => {
+      const t = mainTranslator().t
+      return question.kind === 'saveFailed' ? t('quit.title')
+        : t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: APP_NAME })
+    }
     const parent = questionOwner(owner)
     const win = new BrowserWindow({
       ...(parent ? { parent, modal: true } : {}),
-      title, width: Math.min(540, screen.getPrimaryDisplay().workArea.width), height: 240,
+      title: title(), width: Math.min(540, screen.getPrimaryDisplay().workArea.width), height: 240,
       show: false, resizable: false, minimizable: false, maximizable: false,
       fullscreenable: false, autoHideMenuBar: true, backgroundColor: windowBackground(),
       webPreferences: { preload: PRELOAD_PATH, contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
+    retainWindowTitle(win, title)
     hardenWindow(win)
     trackThemedWindow(win)
     asking = { contents: win.webContents, question }

@@ -26,7 +26,7 @@ vi.mock('../../src/main/ipc-boundary', () => ({ handle: vi.fn() }))
 vi.mock('../../src/main/utils/harden-window', () => ({ hardenWindow: vi.fn() }))
 vi.mock('../../src/main/theme', () => ({ trackThemedWindow: vi.fn(), windowBackground: () => '#fff' }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: String }))
-vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: () => 'Cannot start', text: () => 'The saved settings cannot be read.' }) }))
+vi.mock('../../src/main/i18n', () => ({ onLanguageChanged: () => () => {}, mainTranslator: () => ({ t: () => 'Cannot start', text: () => 'The saved settings cannot be read.' }) }))
 const { createStartupFailureWindow } = await import('../../src/main/startup-failure-window')
 
 beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(undefined) })
