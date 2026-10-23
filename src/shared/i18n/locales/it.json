@@ -886,6 +886,7 @@
   "records.loading": "Caricamento del log…",
   "records.empty": "Nessuna voce corrisponde a questi filtri.",
   "records.loadFailed": "Impossibile leggere il log.",
+  "records.livePaused": "Gli aggiornamenti in tempo reale sono in pausa. Le voci del log visualizzate potrebbero non essere aggiornate.",
   "records.noSelection": "Seleziona una voce per vedere tutto ciò che contiene.",
   "records.detailFailed": "Impossibile leggere questa voce.",
   "records.resizeList": "Ridimensiona l’elenco",

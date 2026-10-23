@@ -118,8 +118,16 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   // New records arrived while the list was scrolled away from the top.
   const newestPending = useRef(false)
   // A failed read is itself logged as a record, whose signal would start the
-  // next read; live reads stop after a failure and resume after a read succeeds.
-  const liveSuspended = useRef(false)
+  // next read; live reads resume only after each failed read owner recovers.
+  const failuresRef = useRef({ records: false, sources: false })
+  const [liveFailures, setLiveFailures] = useState(failuresRef.current)
+  const setLiveFailure = useCallback((owner: 'records' | 'sources', failed: boolean): void => {
+    if (failuresRef.current[owner] === failed) return
+    failuresRef.current = { ...failuresRef.current, [owner]: failed }
+    setLiveFailures(failuresRef.current)
+  }, [])
+  const newestRead = useRef<number | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -157,17 +165,18 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     let cancelled = false
     void window.electronAPI.readRecordSources().then(
       (next) => {
-        if (!cancelled) setSources(next)
+        if (!cancelled) { setSources(next); setLiveFailure('sources', false) }
       },
       (error: unknown) => {
-        liveSuspended.current = true
+        if (cancelled) return
+        setLiveFailure('sources', true)
         recordOperationalDiagnostic('Record sources read failed', error)
       },
     )
     return () => {
       cancelled = true
     }
-  }, [sourceReads])
+  }, [sourceReads, setLiveFailure])
 
   // A page applies only while the filters it was read for are still the
   // newest ones asked for.
@@ -176,21 +185,23 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     const generation = ++listGeneration.current
     fetchingMore.current = false
     newestPending.current = false
+    setRefreshing(false)
     setList({ status: 'loading' })
     void window.electronAPI.readRecordsPage({ ...filters, after: null }).then(
       (page) => {
         if (generation !== listGeneration.current) return
-        liveSuspended.current = false
+        setLiveFailure('records', false)
         setList({ status: 'ready', records: page.records, more: page.more, loadingMore: false, moreFailed: false })
       },
       (error: unknown) => {
         if (generation !== listGeneration.current) return
-        liveSuspended.current = true
+        setLiveFailure('records', true)
         recordOperationalDiagnostic('Records read failed', error)
         setList({ status: 'failed' })
       },
     )
-  }, [filters])
+    return () => { if (listGeneration.current === generation) listGeneration.current++ }
+  }, [filters, setLiveFailure])
 
   // The newest page read again for new records. It joins the rows already
   // shown rather than replacing them, so the list never falls back to the
@@ -198,10 +209,13 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   // copy serves the live subscription below.
   const readNewest = useCallback((): void => {
     const generation = listGeneration.current
+    if (newestRead.current === generation) { newestPending.current = true; return }
+    newestRead.current = generation
+    setRefreshing(true)
     void window.electronAPI.readRecordsPage({ ...filtersRef.current, after: null }).then(
       (page) => {
         if (generation !== listGeneration.current) return
-        liveSuspended.current = false
+        setLiveFailure('records', false)
         setList((current) =>
           current.status === 'ready'
             ? { ...current, ...mergeNewestPage(current.records, current.more, page) }
@@ -210,11 +224,21 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       },
       (error: unknown) => {
         if (generation !== listGeneration.current) return
-        liveSuspended.current = true
+        setLiveFailure('records', true)
         recordOperationalDiagnostic('Records read failed', error)
       },
-    )
-  }, [])
+    ).finally(() => {
+      if (newestRead.current === generation) {
+        newestRead.current = null
+        if (generation !== listGeneration.current) return
+        setRefreshing(false)
+        if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && (!scrollRef.current || atTop(scrollRef.current))) {
+          newestPending.current = false
+          readNewest()
+        }
+      }
+    })
+  }, [setLiveFailure])
 
   // A stored record reaches the list at once while it is scrolled to the top;
   // otherwise it waits until the list is back there, so the list never moves
@@ -222,9 +246,10 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
     const unsubscribe = window.electronAPI.onRecordsChanged(() => {
-      if (timer !== null || liveSuspended.current) return
+      if (timer !== null || failuresRef.current.records || failuresRef.current.sources) return
       timer = setTimeout(() => {
         timer = null
+        if (failuresRef.current.records || failuresRef.current.sources) return
         setSourceReads((count) => count + 1)
         const scroll = scrollRef.current
         if (scroll === null || atTop(scroll)) readNewest()
@@ -273,7 +298,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       (page) => {
         if (generation !== listGeneration.current) return
         fetchingMore.current = false
-        liveSuspended.current = false
         setList((current) =>
           current.status === 'ready'
             ? { ...current, records: [...current.records, ...page.records], more: page.more, loadingMore: false }
@@ -283,7 +307,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       (error: unknown) => {
         if (generation !== listGeneration.current) return
         fetchingMore.current = false
-        liveSuspended.current = true
+        setLiveFailure('records', true)
         recordOperationalDiagnostic('Records read failed', error)
         setList((current) => (current.status === 'ready' ? { ...current, loadingMore: false, moreFailed: true } : current))
       },
@@ -476,6 +500,15 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
             />
           </div>
         </div>
+        {liveFailures.records || liveFailures.sources ? (
+          <div className="records-refresh-failure">
+            <p role="alert">{t('records.livePaused')}</p>
+            <button className="modal-btn" disabled={refreshing} onClick={() => {
+              setSourceReads((count) => count + 1)
+              readNewest()
+            }}>{t('common.retry')}</button>
+          </div>
+        ) : null}
         <div
           ref={scrollRef}
           className="records-list-scroll"

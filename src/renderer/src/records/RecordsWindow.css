@@ -250,3 +250,14 @@ html:has(.records-shell) body {
   overflow-wrap: anywhere;
   user-select: text;
 }
+
+.records-refresh-failure {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--error);
+}
+
+.records-refresh-failure p {
+  margin: 0 0 var(--space-2);
+}
