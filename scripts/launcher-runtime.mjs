@@ -1,321 +1,194 @@
-import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFile, unlink, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
-import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
-import { dirname, join, normalize, relative, resolve } from "node:path";
-import { promisify } from "node:util";
+import { spawn } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createConnection, createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { listProcesses, liveRecorded, processIdentity, retainProcessTree } from './launcher-processes.mjs';
 
-const execFileAsync = promisify(execFile);
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-export const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-const OWNER_FILE = join(
-  tmpdir(),
-  `company-launcher-${createHash("sha256").update(REPO_ROOT).digest("hex").slice(0, 20)}.owner`,
-);
+export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export const RENDERER_HOST = '127.0.0.1';
+export const RENDERER_PORT = 20641;
+const namespace = `imagequeue-launcher-${createHash('sha256').update(REPO_ROOT).digest('hex').slice(0, 20)}`;
+const delay = (ms) => new Promise((done) => setTimeout(done, ms));
+export const handshakePath = (token, directory = tmpdir()) => join(directory, `imagequeue-launch-${token}.json`);
 
-function normalized(value) {
-  return normalize(value ?? "").replaceAll("\\", "/").toLowerCase();
+async function readJson(file) {
+  try { return JSON.parse(await readFile(file, 'utf8')); }
+  catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+}
+async function writeJson(file, value) {
+  const stage = `${file}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(stage, JSON.stringify(value), { mode: 0o600, flag: 'wx' });
+    await rename(stage, file);
+  } finally { await rm(stage, { force: true }); }
 }
 
-function underRoot(value) {
-  const candidate = normalized(value);
-  const root = normalized(REPO_ROOT);
-  return candidate === root || candidate.startsWith(`${root}/`) || candidate.includes(`${root}/`);
-}
-
-export function ownsProcess(processInfo, identity) {
-  const executable = normalized(processInfo.executablePath);
-  const command = normalized(processInfo.commandLine);
-  const combined = `${executable}\n${command}`;
-  if (!underRoot(executable) && !underRoot(command)) return false;
-  if (combined.includes("/scripts/run-dev.command")
-    || combined.includes("/scripts/run-dev.ps1")
-    || combined.includes("/scripts/run-built.command")
-    || combined.includes("/scripts/run-built.ps1")
-    || combined.includes("/scripts/rebuild.command")
-    || combined.includes("/scripts/rebuild.ps1")) {
-    return true;
-  }
-
-  // The Electron runtime this repository starts: the dev server and its
-  // Electron binary, or the packaged app on macOS or Windows.
-  const executableName = identity.executable.toLowerCase();
-  return combined.includes("/node_modules/.bin/electron-vite")
-    || combined.includes("/node_modules/electron-vite/")
-    || combined.includes("/node_modules/electron/dist/")
-    || combined.includes(`/${identity.label.toLowerCase()}.app/contents/macos/${executableName}`)
-    || combined.includes(`/${executableName}.exe`);
-}
-
-function parsePosixProcesses(stdout) {
-  return stdout.trim().split("\n").filter(Boolean).map((line) => {
-    const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
-    if (!match) return undefined;
-    return {
-      pid: Number(match[1]),
-      parentPid: Number(match[2]),
-      executablePath: "",
-      commandLine: match[3],
+export function requestControl(endpoint, command) {
+  return new Promise((resolveRequest, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port: endpoint.port });
+    let text = '';
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.destroy();
+      error ? reject(error) : resolveRequest(value);
     };
-  }).filter(Boolean);
-}
-
-async function listProcesses() {
-  if (process.platform !== "win32") {
-    const { stdout } = await execFileAsync("ps", ["-axo", "pid=,ppid=,command="], {
-      encoding: "utf8",
-      timeout: 5000,
-      maxBuffer: 8 * 1024 * 1024,
-    });
-    return parsePosixProcesses(stdout);
-  }
-
-  const script = [
-    "Get-CimInstance Win32_Process |",
-    "Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine |",
-    "ConvertTo-Json -Compress",
-  ].join(" ");
-  const { stdout } = await execFileAsync("powershell.exe", [
-    "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script,
-  ], {
-    encoding: "utf8",
-    timeout: 10000,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  const decoded = JSON.parse(stdout || "[]");
-  const rows = Array.isArray(decoded) ? decoded : [decoded];
-  return rows.map((row) => ({
-    pid: Number(row.ProcessId),
-    parentPid: Number(row.ParentProcessId),
-    executablePath: row.ExecutablePath ?? "",
-    commandLine: row.CommandLine ?? "",
-  }));
-}
-
-function descendantsOf(processes, roots) {
-  const selected = new Set(roots);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const item of processes) {
-      if (selected.has(item.parentPid) && !selected.has(item.pid)) {
-        selected.add(item.pid);
-        changed = true;
-      }
-    }
-  }
-  return selected;
-}
-
-function ancestorsOf(processes, pid) {
-  const byPid = new Map(processes.map((item) => [item.pid, item]));
-  const selected = new Set([pid]);
-  let current = byPid.get(pid)?.parentPid;
-  while (current && !selected.has(current)) {
-    selected.add(current);
-    current = byPid.get(current)?.parentPid;
-  }
-  return selected;
-}
-
-const delay = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
-
-export async function claimRuntime(token) {
-  await writeFile(OWNER_FILE, `${token}\n`, { encoding: "utf8", mode: 0o600 });
-}
-
-export async function isRuntimeOwner(token) {
-  try {
-    return (await readFile(OWNER_FILE, "utf8")).trim() === token;
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
-  }
-}
-
-export async function releaseRuntime(token) {
-  if (!await isRuntimeOwner(token)) return false;
-  try {
-    await unlink(OWNER_FILE);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  return true;
-}
-
-async function stopRuntime(identity) {
-  const initial = await listProcesses();
-  const excluded = ancestorsOf(initial, process.pid);
-  const ownedRoots = initial.filter((item) => !excluded.has(item.pid) && ownsProcess(item, identity)).map((item) => item.pid);
-  if (ownedRoots.length === 0) return;
-
-  const initialTargets = descendantsOf(initial, ownedRoots);
-  process.stdout.write(`Stopping the existing ${identity.label} runtime (pid ${ownedRoots.join(", ")}).\n`);
-
-  if (process.platform === "win32") {
-    for (const pid of ownedRoots) {
+    const timer = setTimeout(() => finish(new Error('The owned app did not answer its launcher.')), 5000);
+    socket.once('error', (error) => finish(error));
+    socket.once('connect', () => socket.write(`${JSON.stringify({ token: endpoint.token, command })}\n`));
+    socket.on('data', (chunk) => {
+      text += chunk.toString('utf8');
+      if (text.length > 1024) { finish(new Error('Invalid launcher control response.')); return; }
+      const end = text.indexOf('\n');
+      if (end < 0) return;
       try {
-        await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T"], { timeout: 5000 });
-      } catch {
-        // A process may exit while another root tears down the same tree.
-      }
-    }
-  } else {
-    for (const pid of initialTargets) {
-      try { process.kill(pid, "SIGTERM"); } catch {}
-    }
-  }
-
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const current = await listProcesses();
-    if (!current.some((item) => initialTargets.has(item.pid))) return;
-    await delay(100);
-  }
-
-  const current = await listProcesses();
-  const currentOwnedRoots = current
-    .filter((item) => initialTargets.has(item.pid) && !excluded.has(item.pid) && ownsProcess(item, identity))
-    .map((item) => item.pid);
-  const forceTargets = descendantsOf(current, currentOwnedRoots);
-  if (process.platform === "win32") {
-    for (const pid of currentOwnedRoots) {
-      try {
-        await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { timeout: 5000 });
-      } catch {}
-    }
-  } else {
-    for (const pid of forceTargets) {
-      try { process.kill(pid, "SIGKILL"); } catch {}
-    }
-  }
-}
-
-async function assertEndpointAvailable(host, port) {
-  await new Promise((resolveProbe, rejectProbe) => {
-    const probe = createServer();
-    probe.unref();
-    probe.once("error", (error) => {
-      rejectProbe(new Error(
-        `Cannot bind ${host}:${port}: ${error.code ?? error.message}. The listener was left running because its app identity is unknown.`,
-      ));
+        const value = JSON.parse(text.slice(0, end));
+        if (value.token !== endpoint.token || value.pid !== endpoint.pid || !['starting', 'ready', 'failed', 'quitting'].includes(value.status)) {
+          throw new Error('The launcher endpoint belongs to a different app generation.');
+        }
+        finish(null, value);
+      } catch (error) { finish(error); }
     });
-    probe.listen({ host, port, exclusive: true }, () => {
-      probe.close((error) => error ? rejectProbe(error) : resolveProbe());
-    });
+    socket.once('end', () => finish(new Error('The owned app closed its launcher connection before answering.')));
   });
 }
 
-async function waitForHttp(url, timeoutMilliseconds) {
-  const deadline = Date.now() + timeoutMilliseconds;
-  let lastError = "no response";
-  while (Date.now() < deadline) {
+/** One owner covers replacement/build/start. The runtime record outlives this
+ * helper; old dev cleanup can request closure only for its exact generation. */
+export class LauncherRuntime {
+  constructor({ directory = tmpdir(), processes = listProcesses, control = requestControl, now = () => performance.now(), sleep = delay } = {}) {
+    this.directory = directory;
+    this.file = join(directory, `${namespace}.json`);
+    this.lock = `${this.file}.lock`;
+    this.processes = processes;
+    this.control = control;
+    this.now = now;
+    this.sleep = sleep;
+  }
+  async exclusive(operation) {
+    try { await mkdir(this.lock, { mode: 0o700 }); }
+    catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      throw new Error(`Another ImageQueue launch/build is in progress, or its launcher was interrupted. Close that launcher first. If no launcher is running, remove only ${this.lock} and retry.`);
+    }
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
-      if (response.ok) return;
-      lastError = `HTTP ${response.status}`;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
+      await writeJson(join(this.lock, 'owner.json'), { pid: process.pid });
+      return await operation();
+    } finally { await rm(this.lock, { recursive: true, force: true }); }
+  }
+  read() { return readJson(this.file); }
+  save(record) { return writeJson(this.file, record); }
+  async endpoint(token) {
+    const endpoint = await readJson(handshakePath(token, this.directory));
+    if (endpoint && (endpoint.token !== token || !Number.isSafeInteger(endpoint.pid) || endpoint.pid <= 0 || !Number.isInteger(endpoint.port) || endpoint.port <= 0 || endpoint.port > 65535)) {
+      throw new Error('The owned app has an invalid launcher handshake. Close it normally and retry.');
     }
-    await delay(200);
+    return endpoint;
   }
-  throw new Error(`${url} did not become ready within ${timeoutMilliseconds} ms (${lastError}).`);
-}
-
-async function waitForExecutable(executablePath, timeoutMilliseconds) {
-  const expected = normalized(resolve(executablePath));
-  const repoRelativeExpected = normalized(relative(REPO_ROOT, expected));
-  const deadline = Date.now() + timeoutMilliseconds;
-  while (Date.now() < deadline) {
-    const processes = await listProcesses();
-    const byPid = new Map(processes.map((item) => [item.pid, item]));
-    const found = processes.some((item) => {
-      const executable = normalized(item.executablePath);
-      const command = normalized(item.commandLine);
-      if (executable === expected || command === expected || command.startsWith(expected + " ")) return true;
-      const relativeMatch = command === repoRelativeExpected
-        || command.startsWith(repoRelativeExpected + " ");
-      if (!relativeMatch) return false;
-      let parent = byPid.get(item.parentPid);
-      while (parent) {
-        if (underRoot(parent.executablePath) || underRoot(parent.commandLine)) return true;
-        parent = byPid.get(parent.parentPid);
+  async stopCurrent(expectedToken, timeout = 30000) {
+    const record = await this.read();
+    if (!record || (expectedToken !== undefined && record.token !== expectedToken)) return;
+    let current = await this.processes();
+    const endpoint = await this.endpoint(record.token);
+    // A startup interrupted before its main PID was recorded can still prove
+    // ownership through the generation's authenticated, live service.
+    const endpointProcess = endpoint && current.find((item) => item.pid === endpoint.pid);
+    if (endpoint && !record.processes.some((item) => item.pid === endpointProcess?.pid && item.created === endpointProcess.created)) {
+      let authenticated = false;
+      try {
+        await this.control(endpoint, 'status');
+        authenticated = true;
+      } catch (error) {
+        if (record.phase !== 'ready') throw new Error('The interrupted app launch cannot be confirmed closed. Close it normally before removing its launcher record.', { cause: error });
       }
-      return false;
+      if (authenticated) {
+        // A dev reload may have published its new handshake after our snapshot.
+        current = await this.processes();
+        const main = current.find((item) => item.pid === endpoint.pid);
+        if (!main) throw new Error('The owned app answered but its process identity could not be observed. Retry ordinary closure.');
+        record.processes.push(processIdentity(main));
+      }
+    }
+    record.processes = retainProcessTree(record.processes, current);
+    await this.save(record);
+    if (liveRecorded(record.processes, current).length) {
+      if (!endpoint) throw new Error('The owned app is still starting and cannot accept Quit yet. Close it normally or wait, then retry.');
+      let requestError;
+      try { await this.control(endpoint, 'quit'); } catch (error) { requestError = error; }
+      const deadline = this.now() + timeout;
+      while (true) {
+        current = await this.processes();
+        const retained = retainProcessTree(record.processes, current);
+        if (retained.length !== record.processes.length) { record.processes = retained; await this.save(record); }
+        if (!liveRecorded(record.processes, current).length) break;
+        if (requestError) throw new Error('The owned app could not receive ordinary Quit. Close it normally and retry; no process was forced to exit.', { cause: requestError });
+        if (this.now() >= deadline) throw new Error('ImageQueue or its recorded child processes are still running. Finish or cancel work and quit normally, then retry. Nothing was force-closed.');
+        await this.sleep(100);
+      }
+    } else if (record.phase === 'starting' && !endpoint) {
+      throw new Error('An interrupted launch has an unknown outcome. Close any app it opened before removing its launcher record.');
+    }
+    await rm(this.file, { force: true });
+    await rm(handshakePath(record.token, this.directory), { force: true });
+  }
+  async stopIfOwner(token, timeout) {
+    return this.exclusive(() => this.stopCurrent(token, timeout));
+  }
+  async start(executable, args, { development = false, timeout = 60000 } = {}) {
+    const record = { token: randomUUID(), phase: 'starting', processes: [] };
+    await this.save(record);
+    const child = spawn(executable, args, {
+      cwd: REPO_ROOT, detached: true, windowsHide: true,
+      stdio: development ? 'inherit' : 'ignore',
+      env: { ...process.env, IMAGEQUEUE_LAUNCH_TOKEN: record.token },
     });
-    if (found) return;
-    await delay(100);
+    let spawnError;
+    const exited = new Promise((done) => {
+      child.once('error', (error) => { spawnError = error; done(1); });
+      child.once('exit', (code) => done(code ?? 1));
+    });
+    const deadline = this.now() + timeout;
+    let ready = false;
+    try {
+      while (true) {
+        if (spawnError) { record.phase = 'failed'; await this.save(record); throw spawnError; }
+        const current = await this.processes();
+        if (!record.processes.length && child.pid) {
+          const root = current.find((item) => item.pid === child.pid);
+          if (root) record.processes.push(processIdentity(root));
+        }
+        record.processes = retainProcessTree(record.processes, current);
+        const endpoint = await this.endpoint(record.token);
+        if (endpoint) {
+          const status = await this.control(endpoint, 'status');
+          const main = current.find((item) => item.pid === status.pid);
+          if (main && !record.processes.some((item) => item.pid === main.pid && item.created === main.created)) record.processes.push(processIdentity(main));
+          record.processes = retainProcessTree(record.processes, current);
+          if (status.status === 'failed') throw new Error('ImageQueue reported a startup failure. See its recovery window.');
+          if (status.status === 'ready' && main) {
+            record.phase = 'ready';
+            await this.save(record);
+            ready = true;
+            return { token: record.token, exited };
+          }
+        }
+        await this.save(record);
+        if (this.now() >= deadline) throw new Error('The selected ImageQueue generation did not become ready. An independently opened instance or an older build may be active. Quit it normally, or use rebuild to create the current launcher-aware package.');
+        await this.sleep(100);
+      }
+    } finally { if (!development || !ready) child.unref(); }
   }
-  throw new Error(`${executablePath} did not start within ${timeoutMilliseconds} ms.`);
 }
 
-function parseIdentity(args) {
-  const kind = args.shift();
-  const label = args.shift();
-  const executable = args.shift();
-  if (kind !== "electron" || !label || !executable) {
-    throw new Error("Expected runtime identity: electron <label> <executable-name>.");
-  }
-  return { kind, label, executable };
-}
-
-async function main(args) {
-  const command = args.shift();
-  if (command === "claim") {
-    const token = args.shift();
-    if (!token) throw new Error("Expected claim <token>.");
-    await claimRuntime(token);
-    return;
-  }
-  if (command === "is-owner") {
-    const token = args.shift();
-    if (!token) throw new Error("Expected is-owner <token>.");
-    if (!await isRuntimeOwner(token)) process.exitCode = 3;
-    return;
-  }
-  if (command === "stop") {
-    await stopRuntime(parseIdentity(args));
-    return;
-  }
-  if (command === "stop-if-owner") {
-    const token = args.shift();
-    if (!token) throw new Error("Expected stop-if-owner <token> <identity...>.");
-    const identity = parseIdentity(args);
-    if (!await isRuntimeOwner(token)) return;
-    await stopRuntime(identity);
-    await releaseRuntime(token);
-    return;
-  }
-  if (command === "check-endpoint") {
-    const host = args.shift();
-    const port = Number(args.shift());
-    if (!host || !Number.isInteger(port)) throw new Error("Expected check-endpoint <host> <port>.");
-    await assertEndpointAvailable(host, port);
-    return;
-  }
-  if (command === "wait-http") {
-    const url = args.shift();
-    const timeout = Number(args.shift() ?? "60000");
-    if (!url || !Number.isFinite(timeout)) throw new Error("Expected wait-http <url> [timeout-ms].");
-    await waitForHttp(url, timeout);
-    return;
-  }
-  if (command === "wait-process") {
-    const executablePath = args.shift();
-    const timeout = Number(args.shift() ?? "30000");
-    if (!executablePath || !Number.isFinite(timeout)) throw new Error("Expected wait-process <executable-path> [timeout-ms].");
-    await waitForExecutable(executablePath, timeout);
-    return;
-  }
-  throw new Error("Expected one of: claim, is-owner, stop, stop-if-owner, check-endpoint, wait-http, wait-process.");
-}
-
-const invokedPath = process.argv[1] ? resolve(process.argv[1]) : "";
-if (invokedPath === fileURLToPath(import.meta.url)) {
-  main(process.argv.slice(2)).catch((error) => {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    process.exitCode = 1;
+export async function assertEndpointAvailable(host = RENDERER_HOST, port = RENDERER_PORT) {
+  await new Promise((done, reject) => {
+    const probe = createServer();
+    probe.once('error', (error) => reject(new Error(`Cannot bind ${host}:${port}: ${error.code ?? error.message}. The unknown listener was left running.`)));
+    probe.listen({ host, port, exclusive: true }, () => probe.close((error) => error ? reject(error) : done()));
   });
 }

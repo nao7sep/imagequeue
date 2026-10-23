@@ -1,72 +1,20 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $scriptExitCode = 0
-
-# run-built: launch the EXISTING packaged app without rebuilding, so it starts
-# instantly. This is the daily-use launcher and the one that surfaces
-# production-only failures (strict CSP, file:// paths, packaged layout). It never
-# builds — if you changed source, run rebuild first.
-
-function Set-Utf8Console {
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [Console]::InputEncoding = $utf8NoBom
-    [Console]::OutputEncoding = $utf8NoBom
-    $global:OutputEncoding = $utf8NoBom
-    if (Get-Command chcp.com -ErrorAction SilentlyContinue) {
-        & chcp.com 65001 > $null
-        $null = $LASTEXITCODE
-    }
-}
-
-function Write-Step {
-    param([string]$Message)
-    Write-Host ""
-    Write-Host "==> $Message" -ForegroundColor Cyan
-}
-
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoDir = Split-Path -Parent $scriptDir
-$runtimeHelper = Join-Path $scriptDir "launcher-runtime.mjs"
-$runtimeToken = [guid]::NewGuid().ToString("N")
-$appName = "ImageQueue"
-$outDir = "dist"
-$exePath = Join-Path $repoDir "$outDir/win-unpacked/$appName.exe"
-
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$global:OutputEncoding = $utf8
 try {
-    Set-Utf8Console
-
-    if (-not (Get-Command "node" -ErrorAction SilentlyContinue)) {
-        throw "Missing required command: node"
-    }
-
-    Set-Location $repoDir
-
-    # No build here: this launcher must start instantly. If there is no usable
-    # bundle yet, stop and point at rebuild rather than launching something stale
-    # or empty.
-    if (-not (Test-Path $exePath)) {
-        throw "No packaged app found ($outDir/win-unpacked/$appName.exe is missing). Run rebuild first."
-    }
-
-    $builtAt = (Get-Item $exePath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
-    & node $runtimeHelper claim $runtimeToken
-    & node $runtimeHelper stop electron "ImageQueue" "ImageQueue"
-    if ($LASTEXITCODE -ne 0) { throw "Could not replace the existing ImageQueue runtime." }
-    Write-Step "Launching the existing packaged app (built: $builtAt)"
-    Write-Host "If you changed source since then, run rebuild instead."
-
-    # GUI app: launch non-blocking via Start-Process.
-    Start-Process -FilePath $exePath | Out-Null
-    & node $runtimeHelper wait-process $exePath 30000
-    if ($LASTEXITCODE -ne 0) { throw "ImageQueue did not start." }
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Missing required command: node" }
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    & node (Join-Path $scriptDir "launcher.mjs") run-built
+    if ($LASTEXITCODE -eq 130) { exit 130 }
+    if ($LASTEXITCODE -ne 0) { throw "ImageQueue run-built failed with exit code $LASTEXITCODE." }
 }
 catch {
-    Write-Host ""
-    Write-Host "imagequeue run-built failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
     $scriptExitCode = 1
-}
-finally {
     Read-Host "Press Enter to close" | Out-Null
 }
-
 exit $scriptExitCode

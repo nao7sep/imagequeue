@@ -32,6 +32,7 @@ const h = vi.hoisted(() => {
     controllers,
     startUpFails: { value: false },
     iconAvailable: { value: true },
+    createPrimary: { value: false },
     mainWindow: { value: null as null | { isDestroyed: () => boolean; webContents: { send: ReturnType<typeof vi.fn> } } },
     emit(map: Map<string, Listener[]>, event: string, ...args: unknown[]): void {
       for (const listener of map.get(event) ?? []) listener(...args)
@@ -46,6 +47,7 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn(),
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn() },
 }))
+vi.mock('../../src/main/launcher-control', () => ({ startLauncherControl: vi.fn(async () => null) }))
 vi.mock('../../src/main/utils/storage-wait', () => ({ drainExports: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/config', () => ({
   loadConfig: vi.fn(() => ({ general: { theme: 'system', show_status_icon: false, show_preview_window: false } })),
@@ -136,7 +138,9 @@ vi.mock('../../src/main/main-window-lifecycle', () => ({
     const controller = {
       options,
       markStartupComplete: vi.fn(),
-      createInitialWindow: vi.fn(),
+      createInitialWindow: vi.fn(() => {
+        if (h.createPrimary.value) h.mainWindow.value = (options['createWindow'] as () => NonNullable<typeof h.mainWindow.value>)()
+      }),
       beginShutdown: vi.fn(),
       cancelShutdown: vi.fn(),
       dispose: vi.fn(),
@@ -163,6 +167,8 @@ vi.mock('../../src/main/i18n', () => ({
 }))
 vi.mock('../../src/main/app-menu', () => ({ buildAppMenuTemplate: vi.fn(() => []), buildTextContextMenuTemplate: vi.fn() }))
 
+const { startLauncherControl } = await import('../../src/main/launcher-control')
+const { registerMediaSchemesAsPrivileged } = await import('../../src/main/image-protocol')
 const session = await import('../../src/main/session')
 const records = await import('../../src/main/records')
 const { showQuitQuestion: showQuitFailure } = await import('../../src/main/quit-failure-window')
@@ -182,7 +188,9 @@ beforeEach(() => {
   h.controllers.length = 0
   h.startUpFails.value = false
   h.iconAvailable.value = true
+  h.createPrimary.value = false
   h.mainWindow.value = null
+  vi.mocked(startLauncherControl).mockResolvedValue(null)
   vi.mocked(queueManager.generatingCount).mockReturnValue(0)
   vi.mocked(hasActiveBrainstorms).mockReturnValue(false)
   vi.mocked(showQuitFailure).mockImplementation(async () => 'cancel')
@@ -426,4 +434,71 @@ it.each([true, false])('recovers the existing primary view without restarting wo
   expect(createStartupFailureWindow).not.toHaveBeenCalled()
   expect(h.app.exit).not.toHaveBeenCalled()
   if (visible) expect(dialog.showMessageBox).toHaveBeenCalledWith(win, expect.objectContaining({ message: 'mainWindow.recoveryFailed' }))
+})
+
+
+describe('primary instance launcher control', () => {
+  it('registers privileged schemes immediately and waits for control initialization before startup', async () => {
+    let finish!: (value: null) => void
+    vi.mocked(startLauncherControl).mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const { runPrimaryInstance } = await import('../../src/main/primary-instance')
+    runPrimaryInstance()
+    expect(registerMediaSchemesAsPrivileged).toHaveBeenCalledOnce()
+    expect(vi.mocked(registerMediaSchemesAsPrivileged).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(startLauncherControl).mock.invocationCallOrder[0]!)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(session.initSession).not.toHaveBeenCalled()
+    const actions = vi.mocked(startLauncherControl).mock.calls[0]![0]
+    expect(actions.status()).toBe('starting')
+    actions.quit()
+    expect(h.app.quit).toHaveBeenCalledOnce()
+    expect(h.app.exit).not.toHaveBeenCalled()
+    finish(null)
+    await vi.waitFor(() => expect(h.controllers[0]?.markStartupComplete).toHaveBeenCalledOnce())
+    // Session initialization alone does not claim readiness without a ready renderer.
+    expect(actions.status()).toBe('starting')
+  })
+
+  it('presents control initialization failure through the startup failure owner', async () => {
+    vi.mocked(startLauncherControl).mockRejectedValue(new Error('handshake unavailable'))
+    const { runPrimaryInstance } = await import('../../src/main/primary-instance')
+    runPrimaryInstance()
+    await vi.waitFor(() => expect(createStartupFailureWindow).toHaveBeenCalledOnce())
+    expect(session.initSession).not.toHaveBeenCalled()
+    expect(vi.mocked(startLauncherControl).mock.calls[0]![0].status()).toBe('failed')
+  })
+
+  it('closes control on will-quit without waiting for its cleanup', async () => {
+    const close = vi.fn(() => new Promise<void>(() => undefined))
+    vi.mocked(startLauncherControl).mockResolvedValue({ close })
+    await launch()
+    h.emit(h.appListeners, 'will-quit')
+    await Promise.resolve()
+    expect(close).toHaveBeenCalledOnce()
+  })
+})
+
+
+it('reports launcher ready only while the initialized main renderer is ready', async () => {
+  const { BrowserWindow } = await import('electron')
+  const { createWindowWithUsablePersistedBounds } = await import('../../src/main/window-state-recovery')
+  const { loadMainWindowContent } = await import('../../src/main/main-window-content')
+  let loaded!: () => void
+  vi.mocked(loadMainWindowContent).mockReturnValueOnce(new Promise<void>((resolve) => { loaded = resolve }))
+  const win = Object.assign(new EventEmitter(), {
+    isDestroyed: () => false, isVisible: () => false, isMinimized: () => false,
+    webContents: Object.assign(new EventEmitter(), { send: vi.fn() }),
+  })
+  vi.mocked(BrowserWindow).mockImplementationOnce(function () { return win as never })
+  vi.mocked(createWindowWithUsablePersistedBounds).mockImplementationOnce((_key, create) => create())
+  h.createPrimary.value = true
+  await launch()
+  const actions = vi.mocked(startLauncherControl).mock.calls[0]![0]
+  expect(actions.status()).toBe('starting')
+  loaded()
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(actions.status()).toBe('ready')
+  win.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 7 })
+  expect(actions.status()).toBe('starting')
 })

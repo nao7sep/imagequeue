@@ -1,72 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# run-dev: run the app from source with live reload, in its loosest configuration.
-# For active coding and debugging. The strict, production-faithful launchers are
-# run-built (launch the existing packaged app bundle without rebuilding) and
-# rebuild (build and package a fresh bundle, then launch).
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-RUNTIME_HELPER="$SCRIPT_DIR/launcher-runtime.mjs"
-RUNTIME_TOKEN="run-dev-$$-$(date +%s)-$RANDOM"
-RENDERER_HOST="127.0.0.1"
-RENDERER_PORT="20641"
-RENDERER_URL="http://$RENDERER_HOST:$RENDERER_PORT"
-
-log_step() {
-  printf '\n==> %s\n' "$1"
-}
-
-require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Missing required command: $1" >&2
-    exit 1
-  fi
-}
-
 pause_on_failure() {
-  local status="$1"
-  if [[ "$status" -ne 0 && ( "$status" -lt 128 || "$status" -gt 143 ) ]]; then
-    echo
-    echo "imagequeue run-dev failed with exit code $status."
+  local status="$?"
+  if [[ "$status" -ne 0 && "$status" -ne 130 ]]; then
+    echo "ImageQueue run-dev failed."
     read -r -p "Press Enter to close..."
   fi
 }
-
-cleanup() {
-  local status="$?"
-  trap - EXIT
-  if node "$RUNTIME_HELPER" is-owner "$RUNTIME_TOKEN" >/dev/null 2>&1; then
-    node "$RUNTIME_HELPER" stop-if-owner "$RUNTIME_TOKEN" electron "ImageQueue" "ImageQueue" >/dev/null 2>&1 || true
-  fi
-  pause_on_failure "$status"
-  exit "$status"
-}
-
-trap cleanup EXIT
-
-require_command node
-require_command npm
-
-cd "$REPO_DIR"
-
-log_step "Replacing any existing ImageQueue runtime"
-node "$RUNTIME_HELPER" claim "$RUNTIME_TOKEN"
-node "$RUNTIME_HELPER" stop electron "ImageQueue" "ImageQueue"
-node "$RUNTIME_HELPER" check-endpoint "$RENDERER_HOST" "$RENDERER_PORT"
-
-log_step "Installing dependencies"
-npm install
-
-# npm install skips the Electron binary if the package is already at the locked version.
-log_step "Verifying Electron binary"
-npm run prepare:electron
-
-log_step "Starting ImageQueue in development mode"
-npm run dev &
-DEV_PID=$!
-node "$RUNTIME_HELPER" wait-http "$RENDERER_URL" 60000
-node "$RUNTIME_HELPER" wait-process "$REPO_DIR/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" 60000
-log_step "ImageQueue is ready at $RENDERER_URL"
-wait "$DEV_PID"
+trap pause_on_failure EXIT
+if ! command -v node >/dev/null 2>&1; then
+  echo "Missing required command: node" >&2
+  exit 1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "Missing required command: npm" >&2
+  exit 1
+fi
+node "$SCRIPT_DIR/launcher.mjs" run-dev

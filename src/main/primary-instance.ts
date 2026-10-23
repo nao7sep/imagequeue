@@ -70,6 +70,7 @@ import { PrimaryRendererRecovery } from './primary-renderer-recovery'
 import { applyLocalePreferences, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
 import { buildAppMenuTemplate, buildTextContextMenuTemplate } from './app-menu'
 import { PRELOAD_PATH } from './renderer-surface'
+import { startLauncherControl } from './launcher-control'
 
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
@@ -220,6 +221,25 @@ export function runPrimaryInstance(): void {
   // Scheme privileges can only be granted before the app is ready.
   registerMediaSchemesAsPrivileged()
 
+  const launcherControl = startLauncherControl({
+    status: () => {
+      if (startupFailureWindow) return 'failed'
+      const main = mainWindowController?.getWindow()
+      return sessionStarted && main && !main.isDestroyed() && primaryRenderers.get(main)?.isReady() === true
+        ? 'ready' : 'starting'
+    },
+    quit: () => app.quit(),
+  })
+  // Initialization starts before ready, but its failure is presented through
+  // the normal startup surface once language and native menus are available.
+  void launcherControl.catch(() => undefined)
+  app.on('will-quit', () => {
+    // Closing owns live sockets without extending the OS shutdown budget.
+    void launcherControl.then((control) => control?.close()).catch((error) => {
+      log('error', 'Closing launcher control failed', { error: serializeError(error) })
+    })
+  })
+
   app.whenReady().then(async () => {
     try {
     // The language is settled before any window or native menu exists, so the
@@ -233,6 +253,7 @@ export function runPrimaryInstance(): void {
     // the rejection lands in the unhandledRejection hook, which logs and does NOT
     // exit — a running process with no window and no dialog is not a halt
     // (storage-path conventions: a halt names the store and reaches the user).
+      await launcherControl
       startupWork = startUp()
       await startupWork
     } catch (err) {
