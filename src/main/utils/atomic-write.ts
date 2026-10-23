@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import { record } from '../backup/backup-store'
 import { syncDirectoryAsync } from './fsync'
 import { holdsBytesAsync } from './holds-bytes'
+import { renameExclusive } from './rename-exclusive'
 
 // Writes data to filePath atomically via temp file + rename. On POSIX the
 // rename is atomic; on Windows it is atomic as long as the target file
@@ -125,18 +126,7 @@ export async function claimFinalNameAsync(staging: string, destination: string):
     if (code === 'EEXIST') return false
     if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code)) throw error
   }
-  // Only delete a destination this call actually claimed. A failed exclusive
-  // copy is not evidence that a pre-existing destination belongs to us.
-  let claimed = false
-  try {
-    await fs.promises.copyFile(staging, destination, fs.constants.COPYFILE_EXCL)
-    claimed = true
-    const staged = await fs.promises.stat(staging)
-    await fs.promises.utimes(destination, staged.atime, staged.mtime)
-    return true
-  } catch (error) {
-    if (!claimed && (error as NodeJS.ErrnoException).code === 'EEXIST') return false
-    if (claimed) await fs.promises.rm(destination, { force: true }).catch(() => undefined)
-    throw error
-  }
+  // The stage is already complete and synced beside the destination. Native
+  // no-replace rename retains those bytes and metadata on volumes without links.
+  return renameExclusive(staging, destination)
 }

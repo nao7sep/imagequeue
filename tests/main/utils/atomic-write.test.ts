@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stageBesideAsync, claimFinalNameAsync, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
+import * as exclusiveRename from '../../../src/main/utils/rename-exclusive'
 
 // A replacement made through a temp file and a rename keeps what the file had:
 // its permission mode (content-lifecycle conventions). Its times are the new
@@ -28,6 +29,36 @@ function existing(name: string, mode: number): string {
 }
 
 describe('atomic replacement', () => {
+  it('falls back from unsupported links to native exclusive rename without copying or overwriting a collision', async () => {
+    const occupied = path.join(dir, 'occupied.png')
+    const available = path.join(dir, 'available.png')
+    const bytes = Buffer.alloc(64 * 1024, 0x71)
+    fs.writeFileSync(occupied, 'existing image')
+    const stage = await stageBesideAsync(available, bytes)
+    const stageMetadata = fs.statSync(stage)
+    const link = vi.spyOn(fs.promises, 'link').mockRejectedValue(Object.assign(new Error('Links unsupported'), { code: 'EPERM' }))
+    const rename = vi.spyOn(exclusiveRename, 'renameExclusive')
+    const copy = vi.spyOn(fs.promises, 'copyFile')
+    try {
+      expect(await claimFinalNameAsync(stage, occupied)).toBe(false)
+      expect(fs.readFileSync(occupied, 'utf8')).toBe('existing image')
+      expect(fs.readFileSync(stage)).toEqual(bytes)
+      expect(rename).toHaveBeenNthCalledWith(1, stage, occupied)
+
+      expect(await claimFinalNameAsync(stage, available)).toBe(true)
+      expect(rename).toHaveBeenNthCalledWith(2, stage, available)
+      expect(fs.existsSync(stage)).toBe(false)
+      expect(fs.readFileSync(available)).toEqual(bytes)
+      expect(fs.statSync(available).ino).toBe(stageMetadata.ino)
+      expect(fs.statSync(available).mtimeMs).toBe(stageMetadata.mtimeMs)
+      expect(copy).not.toHaveBeenCalled()
+    } finally {
+      copy.mockRestore()
+      rename.mockRestore()
+      link.mockRestore()
+    }
+  })
+
   it.skipIf(process.platform === 'win32')('keeps the replaced file permission mode', async () => {
     const filePath = existing('configs.json', 0o604)
     await writeFileAtomicAsync(filePath, 'new', false)

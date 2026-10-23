@@ -122,6 +122,34 @@ describe('writeImageOutput', () => {
     await expect(writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).rejects.toThrow(failure)
   })
 
+  it('retains the complete delivered image stage when publication fails', async () => {
+    vi.spyOn(fs.promises, 'link').mockRejectedValueOnce(Object.assign(new Error('volume unavailable'), { code: 'EIO' }))
+    await expect(writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).rejects.toThrow('volume unavailable')
+    const files = fs.readdirSync(sessionDir)
+    expect(files).toHaveLength(1)
+    expect(files[0]).toMatch(/\.tmp$/)
+    expect(fs.readFileSync(path.join(sessionDir, files[0]))).toEqual(buf)
+  })
+
+  it('reuses its complete stage when another writer wins the final name', async () => {
+    const link = fs.promises.link
+    let collided = false
+    const imageStages: string[] = []
+    vi.spyOn(fs.promises, 'link').mockImplementation(async (source, target) => {
+      if (String(target).endsWith('.png')) {
+        imageStages.push(String(source))
+        if (!collided) { collided = true; fs.writeFileSync(target, 'other writer') }
+      }
+      return link(source, target)
+    })
+    const base = await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    expect(base).toBe('20260604-093015-utc-cat-openai-2')
+    expect(new Set(imageStages).size).toBe(1)
+    expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'), 'utf8')).toBe('other writer')
+    expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
+    expect(fs.readdirSync(sessionDir).some((file) => file.endsWith('.tmp'))).toBe(false)
+  })
+
   it('leaves no staging file beside a published pair', async () => {
     await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
     expect(fs.readdirSync(sessionDir).sort()).toEqual([

@@ -117,15 +117,11 @@ export function outputBaseName(
   return `${timestamp}-utc-${slug}-${backend}${suffix}`
 }
 
-// Publishes staged bytes under `destination` without replacing a file already
-// there; false when the name is taken. The staging file is always removed.
-async function publishStaged(staging: string, destination: string): Promise<boolean> {
-  try {
-    return await claimFinalNameAsync(staging, destination)
-  } finally {
-    try { await fs.promises.rm(staging, { force: true }) } catch (error) {
-      log('warn', 'Could not remove generated-output staging', { tempPath: staging, error: serializeError(error) })
-    }
+// Remove only a settled stage. Failed paid-image publication keeps its complete
+// bytes recoverable rather than deleting the only delivered copy.
+async function removeOutputStage(staging: string): Promise<void> {
+  try { await fs.promises.rm(staging, { force: true }) } catch (error) {
+    log('warn', 'Could not remove generated-output staging', { tempPath: staging, error: serializeError(error) })
   }
 }
 
@@ -181,21 +177,27 @@ export async function writeImageOutput(
   // generated (and possibly paid) image is never given up for its sidecar
   // (developer decision): the sidecar follows best effort, and nothing in the
   // app reads it back.
+  const stagedImage = await stageBesideAsync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
   for (;;) {
-    const staged = await stageBesideAsync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
-    if (await publishStaged(staged, path.join(dir, `${baseName}.${ext}`))) break
+    if (await claimFinalNameAsync(stagedImage, path.join(dir, `${baseName}.${ext}`))) break
     // Only an occupied final name advances the ordinal; I/O failures escape.
     attempt++
     baseName = outputBaseName(timestamp, attempt, slug, backend)
     while (collides(baseName)) baseName = outputBaseName(timestamp, ++attempt, slug, backend)
   }
 
+  await removeOutputStage(stagedImage)
+
   const sidecarPath = path.join(dir, `${baseName}.json`)
   const sidecar = markFormat(metadata, FORMAT_VERSIONS.imageSidecar, SNAKE_FORMAT_VERSION_KEY)
   try {
     const staged = await stageBesideAsync(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8'))
-    if (!await publishStaged(staged, sidecarPath)) {
-      log('warn', 'Generated image was saved but its metadata sidecar name was taken; the sidecar was not written', { baseName })
+    try {
+      if (!await claimFinalNameAsync(staged, sidecarPath)) {
+        log('warn', 'Generated image was saved but its metadata sidecar name was taken; the sidecar was not written', { baseName })
+      }
+    } finally {
+      await removeOutputStage(staged)
     }
   } catch (error) {
     log('warn', 'Generated image was saved but its metadata sidecar could not be written', { baseName, error: serializeError(error) })

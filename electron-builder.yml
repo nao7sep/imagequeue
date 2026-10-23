@@ -45,6 +45,7 @@ npmRebuild: false
 asarUnpack:
   - '**/node_modules/node-pty/prebuilds/**'
   - '**/node_modules/@img/**'
+  - '**/node_modules/@koromix/koffi-*/**'
 
 # Tahoe "Liquid Glass" icon: ship the pre-compiled asset catalog (committed in
 # build/Assets.car; regeneration uses the private liquid-glass-icon tool) into Contents/Resources.
