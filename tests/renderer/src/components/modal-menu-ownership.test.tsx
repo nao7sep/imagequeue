@@ -69,13 +69,13 @@ describe('modal menu ownership', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
   })
 
-  it.each(['Escape', 'Tab', 'ArrowDown', 'ArrowLeft', 'Home', 'End'])('composing %s preserves the submenu, focus and dialog', async (key) => {
+  it.each([false, true].flatMap((nested) => ['Escape', 'Tab', 'ArrowDown', 'ArrowLeft', 'Home', 'End'].map((key) => ({ nested, key }))))('composing $key preserves focus and dialog (submenu $nested)', async ({ nested, key }) => {
     render(<Surface />)
     await openRoot()
-    await openSubmenu()
+    if (nested) await openSubmenu()
     const focused = document.activeElement
     fireEvent.keyDown(focused!, { key, isComposing: true })
-    expect(screen.getAllByRole('menu')).toHaveLength(2)
+    expect(screen.getAllByRole('menu')).toHaveLength(nested ? 2 : 1)
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(document.activeElement).toBe(focused)
   })
