@@ -1,3 +1,4 @@
+import { deleteSessionWithThumbnails } from '../image-processing'
 import fs from 'fs'
 import path from 'path'
 import { shell } from 'electron'
@@ -387,11 +388,10 @@ async function dropSession(sessionDir: string, sessionId: string, reason: string
   }
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
   log('info', 'Dropping empty session', { reason, sessionId, path: sessionDir, toTrash })
-  if (toTrash) {
-    await shell.trashItem(sessionDir)
-  } else {
-    await fs.promises.rm(sessionDir, { recursive: true, force: true })
-  }
+  await deleteSessionWithThumbnails(sessionDir, async () => {
+    if (toTrash) await shell.trashItem(sessionDir)
+    else await fs.promises.rm(sessionDir, { recursive: true, force: true })
+  })
 }
 
 function shouldAutoDropSession(tasksByBackend: Record<BackendId, Task[]>): boolean {
@@ -655,11 +655,10 @@ async function deleteSessionOwned(sessionId: string): Promise<void> {
   await admitSessionManifest(sessionDir)
 
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
-  if (toTrash) {
-    await shell.trashItem(sessionDir)
-  } else {
-    await fs.promises.rm(sessionDir, { recursive: true, force: true })
-  }
+  await deleteSessionWithThumbnails(sessionDir, async () => {
+    if (toTrash) await shell.trashItem(sessionDir)
+    else await fs.promises.rm(sessionDir, { recursive: true, force: true })
+  })
   drafts.delete(sessionId)
 }
 
