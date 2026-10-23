@@ -577,6 +577,12 @@
   "advanced.noComposition": "No hay plantillas de composición.",
   "advanced.noStyle": "No hay plantillas de estilo.",
   "advanced.noPromptReturned": "La IA de texto no devolvió ningún prompt.",
+  "advanced.partialPrompts": {
+    "one": "Se completó {count} de {requested} prompts. El prompt completado se conserva en el historial; no se agregaron imágenes a la cola.",
+    "many": "Se completaron {count} de {requested} prompts. Los prompts completados se conservan en el historial; no se agregaron imágenes a la cola.",
+    "other": "Se completaron {count} de {requested} prompts. Los prompts completados se conservan en el historial; no se agregaron imágenes a la cola."
+  },
+  "advanced.queueCompleted": "Poner tareas de imagen en cola ({count})",
   "advanced.queued": {
     "one": "{count} tarea en cola.",
     "many": "{count} de tareas en cola.",

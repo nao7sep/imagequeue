@@ -41,6 +41,11 @@ describe('elaborators:brainstorm outcomes', () => {
     mocks.brainstormPrompts.mockRejectedValue(new ProviderHttpError('busy', 503, 'The model is overloaded.'))
     await expect(brainstorm()).resolves.toEqual({ ok: false, failure: { refused: false, providerMessage: 'The model is overloaded.' } })
   })
+  it('delivers partial prompt credits alongside a cleaned failure', async () => {
+    const prompts = [{ text: 'kept', concepts: [{ facet: 'color', concept: 'blue' }] }]
+    mocks.brainstormPrompts.mockResolvedValue({ prompts, failure: new ProviderHttpError('busy', 503, 'Unavailable.') })
+    await expect(brainstorm()).resolves.toEqual({ ok: false, prompts, failure: { refused: false, providerMessage: 'Unavailable.' } })
+  })
   it('rejects any other failure unchanged', async () => {
     const original = new Error('Text AI is not configured.')
     mocks.brainstormPrompts.mockRejectedValue(original)

@@ -577,6 +577,12 @@
   "advanced.noComposition": "Nessun template di composizione.",
   "advanced.noStyle": "Nessun template di stile.",
   "advanced.noPromptReturned": "L’IA testuale non ha restituito alcun prompt.",
+  "advanced.partialPrompts": {
+    "one": "Completato {count} prompt su {requested}. Il prompt completato resta nella cronologia; nessuna immagine è stata aggiunta alla coda.",
+    "many": "Completati {count} prompt su {requested}. I prompt completati restano nella cronologia; nessuna immagine è stata aggiunta alla coda.",
+    "other": "Completati {count} prompt su {requested}. I prompt completati restano nella cronologia; nessuna immagine è stata aggiunta alla coda."
+  },
+  "advanced.queueCompleted": "Metti in coda le attività di generazione immagini ({count})",
   "advanced.queued": {
     "one": "{count} attività messa in coda.",
     "many": "{count} di attività messe in coda.",

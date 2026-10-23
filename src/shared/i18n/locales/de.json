@@ -567,6 +567,11 @@
   "advanced.noComposition": "Keine Kompositionsvorlagen.",
   "advanced.noStyle": "Keine Stilvorlagen.",
   "advanced.noPromptReturned": "Die Text-KI hat keinen Prompt zurückgegeben.",
+  "advanced.partialPrompts": {
+    "one": "{count} von {requested} Prompts fertig. Fertige Prompts bleiben im Verlauf; es wurden keine Bilder eingereiht.",
+    "other": "{count} von {requested} Prompts fertig. Fertige Prompts bleiben im Verlauf; es wurden keine Bilder eingereiht."
+  },
+  "advanced.queueCompleted": "Bildaufträge einreihen ({count})",
   "advanced.queued": {
     "one": "{count} Aufgabe eingereiht.",
     "other": "{count} Aufgaben eingereiht."

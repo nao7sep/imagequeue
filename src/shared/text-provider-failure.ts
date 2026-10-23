@@ -10,4 +10,4 @@ export interface TextProviderFailure {
 
 export type BrainstormOutcome =
   | { ok: true; prompts: ElaboratedPromptRecord[] }
-  | { ok: false; failure: TextProviderFailure }
+  | { ok: false; failure: TextProviderFailure; prompts?: ElaboratedPromptRecord[] }

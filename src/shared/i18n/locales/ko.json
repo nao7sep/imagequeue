@@ -557,6 +557,10 @@
   "advanced.noComposition": "구도 구체화 템플릿이 없습니다.",
   "advanced.noStyle": "스타일 구체화 템플릿이 없습니다.",
   "advanced.noPromptReturned": "텍스트 AI가 프롬프트를 반환하지 않았습니다.",
+  "advanced.partialPrompts": {
+    "other": "프롬프트 {requested}개 중 {count}개를 완료했습니다. 완료된 프롬프트는 기록에 보관되며 이미지는 대기열에 추가되지 않았습니다."
+  },
+  "advanced.queueCompleted": "이미지 생성 작업을 대기열에 추가 ({count})",
   "advanced.queued": {
     "other": "작업 {count}개를 대기열에 추가했습니다."
   },

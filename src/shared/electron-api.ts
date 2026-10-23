@@ -86,7 +86,7 @@ export interface ElectronAPI {
 
   // Queue operations
   enqueue: (request: EnqueueRequest) => Promise<Task[]>
-  enqueueBatch: (units: EnqueueBatchUnit[]) => Promise<Task[]>
+  enqueueBatch: (units: EnqueueBatchUnit[], prompts?: ElaboratedPromptRecord[]) => Promise<Task[]>
   getShowKeptImages: () => Promise<boolean>
   toggleShowKeptImages: () => Promise<boolean>
   getQueueSnapshot: () => Promise<QueueSnapshot>

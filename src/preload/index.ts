@@ -90,8 +90,8 @@ const api = {
   enqueue: (request: EnqueueRequest): Promise<Task[]> =>
     ipcRenderer.invoke('queue:enqueue', request),
 
-  enqueueBatch: (units: EnqueueBatchUnit[]): Promise<Task[]> =>
-    ipcRenderer.invoke('queue:enqueueBatch', units),
+  enqueueBatch: (units: EnqueueBatchUnit[], prompts?: ElaboratedPromptRecord[]): Promise<Task[]> =>
+    ipcRenderer.invoke('queue:enqueueBatch', units, prompts),
 
   getShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:getShowKeptImages'),
   toggleShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:toggleShowKeptImages'),

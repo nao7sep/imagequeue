@@ -32,6 +32,7 @@ import {
   ELABORATOR_KIND_LABELS,
   type ElaboratorKind,
   type LocalModelInfo,
+  type EnqueueBatchUnit,
 } from '../../../shared/types'
 import { localModelName, sortLocalModels } from '../utils/localModels'
 import { isBrainstormMode } from '../utils/promptMode'
@@ -122,6 +123,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   const [error, setError] = useState<MessageKey | null>(null)
   const [retryOperation, setRetryOperation] = useState<'elaborate' | 'queue' | null>(null)
   const [providerError, setProviderError] = useState<string | null>(null)
+  const [partialBatch, setPartialBatch] = useState<{ units: EnqueueBatchUnit[]; count: number; requested: number } | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const elaboratorRowRefs = useRef(new Map<string, HTMLLabelElement>())
   // Set to true when the user confirms closing mid-operation, so that any still-
@@ -278,6 +280,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       const outcome = await brainstorm.run(1)
       if (cancelledRef.current) return
       if (!outcome.ok) {
+        appendElaboratedPrompts(outcome.prompts ?? [])
+        if (outcome.prompts?.[0]) update({ elaborated: outcome.prompts[0].text })
         showFailure('elaborate', outcome.failure, outcome.failure)
         return
       }
@@ -338,7 +342,19 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       sessionPromptCount: elaboratedPrompts.length,
     })
     try {
+      const proprietaryUnits: AdvancedQueueTarget[] = targets.proprietary.map((backendId) => {
+        const snapshot = snapshots[backendId]
+        if (!snapshot || !snapshot.model) {
+          throw new Error(`The ${BACKEND_LABELS[backendId]} column is not ready yet.`)
+        }
+        return {
+          backend: backendId,
+          model: snapshot.model,
+          params: snapshot.params,
+        }
+      })
 
+      const dtUnits = await Promise.all(targets.dt.map((modelFile) => buildDtParams(modelFile)))
       // Pre-generate prompts according to mode.
       // - as-is / elaborated: a single prompt reused for everything.
       // - fresh-iteration: one prompt per iteration, shared across models. Length = copies.
@@ -362,6 +378,14 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         const outcome = await brainstorm.run(promptsNeeded(promptMode, copies, allTargetCount))
         if (cancelledRef.current) return
         if (!outcome.ok) {
+          const completed = outcome.prompts ?? []
+          appendElaboratedPrompts(completed)
+          setPartialBatch(completed.length === 0 ? null : {
+            count: completed.length,
+            requested: promptsNeeded(promptMode, copies, allTargetCount),
+            units: buildAdvancedQueueUnits({ mode: promptMode, prompts: completed.map((record) => record.text), copies,
+              targets: [...proprietaryUnits, ...dtUnits], allowPartial: true }),
+          })
           showFailure('queue', outcome.failure, outcome.failure)
           return
         }
@@ -371,19 +395,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       if (cancelledRef.current) return
       if (prompts.length === 0) throw new Error('No prompts to enqueue.')
 
-      const proprietaryUnits: AdvancedQueueTarget[] = targets.proprietary.map((backendId) => {
-        const snapshot = snapshots[backendId]
-        if (!snapshot || !snapshot.model) {
-          throw new Error(`The ${BACKEND_LABELS[backendId]} column is not ready yet.`)
-        }
-        return {
-          backend: backendId,
-          model: snapshot.model,
-          params: snapshot.params,
-        }
-      })
-
-      const dtUnits = await Promise.all(targets.dt.map((modelFile) => buildDtParams(modelFile)))
       const units = buildAdvancedQueueUnits({
         mode: promptMode,
         prompts,
@@ -396,12 +407,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // queued then. No await sits between this gate and the enqueue, so it
       // can't be raced.
       if (cancelledRef.current) return
-      await window.electronAPI.enqueueBatch(units)
-
-      // Commit: the tasks now exist, so record the freshly brainstormed prompts
-      // in the session history. A run that was cancelled or failed never reaches
-      // this point, so it leaves no orphan entries.
-      if (brainstormed) appendElaboratedPrompts(records)
+      await window.electronAPI.enqueueBatch(units, brainstormed ? records : undefined)
+      // Main captured tasks and their provenance in the same journal transition.
+      if (brainstormed) update({ elaboratedPrompts: [...elaboratedPrompts, ...records] })
+      setPartialBatch(null)
       // Let the finish be SEEN before the modal goes: a receipt with the final
       // count, held just long enough to register. It replaces the surprise of
       // closing on "2 / 12" — the missing ten completed in the same burst.
@@ -410,8 +419,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       await new Promise((resolve) => setTimeout(resolve, QUEUE_COMPLETION_HOLD_MS))
       holdingRef.current = false
       succeeded = true
-      // No success message: the modal closes below (after the finally clears the
-      // busy state), and the now-populated queue columns are the confirmation.
+      // Close after the brief receipt and after the busy state clears.
       // Per-task enqueue is already logged in main; the click-time log above
       // carries the user's intent, so no separate dispatch log is needed here.
     } catch (err) {
@@ -424,8 +432,21 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   }, [
     gates.queue.disabled, effectiveTargets, count, targetCount, promptMode,
     seed, elaborated, brainstorm, buildDtParams, elaboratedPrompts.length,
-    snapshots, appendElaboratedPrompts, onClose, t, showFailure,
+    snapshots, appendElaboratedPrompts, elaboratedPrompts, update, onClose, t, showFailure,
   ])
+
+  const handleQueuePartial = async (): Promise<void> => {
+    if (!partialBatch || gates.busy) return
+    setActiveOperation('queue')
+    try {
+      // This is explicit admission of the captured partial batch, with no new
+      // provider call and no duplicate history append.
+      await window.electronAPI.enqueueBatch(partialBatch.units)
+      setPartialBatch(null)
+      onClose()
+    } catch (error) { showFailure('queue', error, null) }
+    finally { setActiveOperation(null) }
+  }
 
   // Esc / outside-click / X all route through here. The only time we ask the
   // user to confirm is while a long-running operation is in flight, since
@@ -767,6 +788,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
             {error && <div className="advanced-message advanced-message-error" role="alert">
               {t(error)}
               {providerError && <p>{providerError}</p>}
+              {partialBatch && <>
+                <p>{t('advanced.partialPrompts', { count: partialBatch.count, requested: partialBatch.requested })}</p>
+                <button type="button" className="modal-btn" disabled={gates.busy} onClick={() => void handleQueuePartial()}>
+                  {t('advanced.queueCompleted', { count: partialBatch.units.length })}
+                </button>
+              </>}
               {retryOperation && <button type="button" className="modal-btn"
                 disabled={retryOperation === 'elaborate' ? gates.elaborate.disabled : gates.queue.disabled}
                 onClick={() => void (retryOperation === 'elaborate' ? handleElaborate() : handleQueue())}>

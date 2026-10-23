@@ -4,7 +4,8 @@ import { getShowKeptImages, toggleShowKeptImages } from './view-state'
 import { recoverPublishedOutput } from '../session/output-recovery'
 import { handle } from '../ipc-boundary'
 import { queueManager, cloneTask } from './queue-manager'
-import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult } from '../../shared/types'
+import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult, ElaboratedPromptRecord } from '../../shared/types'
+import { enqueueActiveSessionBatch } from '../session/state'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath, imageOutputFileStates } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
@@ -49,8 +50,8 @@ export function registerQueueIpc(): void {
     return tasks
   }))
 
-  handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[]) => mutateSession(async () => {
-    const tasks = queueManager.enqueueBatch(units)
+  handle('queue:enqueueBatch', (_event, units: EnqueueBatchUnit[], prompts: ElaboratedPromptRecord[] = []) => mutateSession(async () => {
+    const tasks = await enqueueActiveSessionBatch(units, prompts)
     tasks.forEach((task, index) => {
       const unit = units[index]
       logEnqueue(task.id, unit.backend, unit.model, unit.prompt, unit.params, 1)

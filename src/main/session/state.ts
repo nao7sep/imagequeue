@@ -5,6 +5,7 @@ import { broadcastPresentation } from '../presentation'
 import {
   ConceptCredit,
   ElaboratedPromptRecord,
+  EnqueueBatchUnit,
   BACKEND_IDS_IN_UI_ORDER,
   BackendId,
   SessionManifest,
@@ -645,6 +646,15 @@ export function setActiveSessionDraft(draft: SessionDraft): void {
 
 export async function getActiveSessionElaboratedPrompts(): Promise<ElaboratedPromptRecord[]> {
   return [...(await ensureActiveSessionLoaded()).elaboratedPrompts]
+}
+
+/** Called inside the queue command's session mutation. Capture task intent and
+ * its prompt provenance before that command takes one journal snapshot. */
+export async function enqueueActiveSessionBatch(units: EnqueueBatchUnit[], prompts: ElaboratedPromptRecord[]): Promise<Task[]> {
+  const session = await ensureActiveSessionLoaded()
+  const tasks = queueManager.enqueueBatch(units)
+  session.elaboratedPrompts = [...session.elaboratedPrompts, ...prompts]
+  return tasks
 }
 
 export async function appendActiveSessionElaboratedPrompts(

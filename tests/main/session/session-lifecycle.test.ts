@@ -175,7 +175,8 @@ describe('starting a new session', () => {
       { backend: 'openai', model: 'first', prompt: 'a cat', params: { quality: 'low' } },
       { backend: 'flux', model: 'second', prompt: 'a cat', params: { aspectRatio: '1:1' } },
     ]
-    const submission = handlers.get('queue:enqueueBatch')!({}, units)
+    const prompts = [{ text: 'a cat', concepts: [{ facet: 'animal', concept: 'cat' }] }]
+    const submission = handlers.get('queue:enqueueBatch')!({}, units, prompts)
     await started
     try {
       expect(queueManager.getAllStoredTasks().openai).toHaveLength(1)
@@ -192,6 +193,7 @@ describe('starting a new session', () => {
       openai: [expect.objectContaining({ model: 'first' })],
       flux: [expect.objectContaining({ model: 'second' })],
     })
+    expect((await readManifest(getSessionDir())).elaboratedPrompts).toEqual(prompts)
     expect(publishQueueState).toHaveBeenCalledOnce()
     expect(saved).toBe(1)
   })

@@ -577,6 +577,12 @@
   "advanced.noComposition": "Aucun gabarit de composition.",
   "advanced.noStyle": "Aucun gabarit de style.",
   "advanced.noPromptReturned": "L’IA de texte n’a renvoyé aucun prompt.",
+  "advanced.partialPrompts": {
+    "one": "{count} prompt terminé sur {requested}. Le prompt terminé est conservé dans l’historique\u00a0; aucune image n’a été ajoutée à la file.",
+    "many": "{count} prompts terminés sur {requested}. Les prompts terminés sont conservés dans l’historique\u00a0; aucune image n’a été ajoutée à la file.",
+    "other": "{count} prompts terminés sur {requested}. Les prompts terminés sont conservés dans l’historique\u00a0; aucune image n’a été ajoutée à la file."
+  },
+  "advanced.queueCompleted": "Mettre les tâches d’image en file ({count})",
   "advanced.queued": {
     "one": "{count} tâche mise en file.",
     "many": "{count} de tâches mises en file.",

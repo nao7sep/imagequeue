@@ -100,7 +100,13 @@ export function registerElaboratorsIpc(): void {
       sender.once('render-process-gone', cancel)
       sender.on('did-start-navigation', navigation)
       try {
-        const { prompts } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+        const { prompts, failure } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+        if (failure !== undefined) {
+          return { ok: false, prompts, failure: {
+            refused: failure instanceof ProviderRefusalError,
+            providerMessage: providerMessage(failure),
+          } }
+        }
         return { ok: true, prompts }
       } catch (error) {
         // Electron passes only an error's message across a rejected invoke, so a provider failure resolves as a typed result.

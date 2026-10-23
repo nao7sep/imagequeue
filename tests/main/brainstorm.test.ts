@@ -19,8 +19,9 @@ import type { Elaborator, ElaboratorKind } from '../../src/shared/types'
 // value is assigned twice within a session, and a use is recorded only for
 // prompts that actually came back.
 
+const windows = vi.hoisted(() => [] as { webContents: { send: ReturnType<typeof vi.fn> } }[])
 vi.mock('electron', () => ({
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: { getAllWindows: () => windows },
 }))
 vi.mock('../../src/main/elaborators', () => ({ getElaborator: vi.fn() }))
 vi.mock('../../src/main/text-ai', () => ({ getMainProvider: vi.fn() }))
@@ -180,6 +181,7 @@ describe('brainstormPrompts (concept-driven)', () => {
   const originalHome = process.env[ENV_VAR]
 
   beforeEach(() => {
+    windows.length = 0
     delays.requested.length = 0
     delays.hold = false
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-brainstorm-'))
@@ -207,6 +209,18 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(result.prompts).toHaveLength(3)
     // batch_size 2 → two prose calls (2 + 1)
     expect(script.proseCalls).toHaveLength(2)
+  })
+
+  it('retains paid output when another progress recipient throws', async () => {
+    installScriptedProvider()
+    const broken = vi.fn(() => { throw new Error('window gone') })
+    const healthy = vi.fn()
+    windows.push({ webContents: { send: broken } }, { webContents: { send: healthy } })
+    const result = await brainstormPrompts(request({ requestId: 'progress-failure', count: 2 }))
+    expect(result.prompts).toHaveLength(2)
+    expect(result.failure).toBeUndefined()
+    expect(healthy).toHaveBeenCalledWith('brainstorm:progress', expect.objectContaining({ done: 2 }))
+    expect((await listFacetsWithStats()).reduce((n, f) => n + f.conceptCount - f.unusedCount, 0)).toBe(4)
   })
 
   it('commits all delivered concepts in prompt and facet order through one batch', async () => {
@@ -348,22 +362,40 @@ describe('brainstormPrompts (concept-driven)', () => {
     }
   })
 
-  // Uses commit only when prompts are DELIVERED. Recording incrementally burnt
-  // earlier waves' values when a later wave failed: the run threw, the caller
-  // kept nothing, yet the window blocked those values for 1000 draws.
-  it('a failed run records no uses at all, even for waves that succeeded first', async () => {
-    mockKnobs.concurrency = 1
-    let call = 0
-    installScriptedProvider({
-      onProseCall: () => {
-        call++
-        if (call === 2) throw new Error('second wave dies')
-      },
-    })
-    // batch_size 2 → count 4 = two waves; wave 1 succeeds, wave 2 throws.
-    await expect(brainstormPrompts(request({ requestId: 'burn1', count: 4 }))).rejects.toThrow('second wave dies')
-    const used = (await listFacetsWithStats()).reduce((n, f) => n + (f.conceptCount - f.unusedCount), 0)
-    expect(used).toBe(0)
+  it('delivers earlier completed waves and commits only their concepts when a later wave fails', async () => {
+    installScriptedProvider({ onProseCall: (call) => { if (call === 2) throw new Error('second wave dies') } })
+    const result = await brainstormPrompts(request({ requestId: 'partial-waves', count: 4 }))
+    expect(result.prompts).toHaveLength(2)
+    expect(result.failure).toEqual(new Error('second wave dies'))
+    const used = (await listFacetsWithStats()).reduce((n, f) => n + f.conceptCount - f.unusedCount, 0)
+    expect(used).toBe(4)
+  })
+
+  it('retains a successful sibling even when the earlier concurrent turn fails', async () => {
+    mockKnobs.concurrency = 2
+    installScriptedProvider({ onProseCall: (call) => { if (call === 1) throw new Error('first turn dies') } })
+    const result = await brainstormPrompts(request({ requestId: 'partial-siblings', count: 4 }))
+    expect(result.prompts.map((prompt) => prompt.text)).toEqual(['prompt 2-1', 'prompt 2-2'])
+    expect(result.failure).toEqual(new Error('first turn dies'))
+    const used = (await listFacetsWithStats()).reduce((n, f) => n + f.conceptCount - f.unusedCount, 0)
+    expect(used).toBe(4)
+  })
+
+  it('keeps the assignment position when an earlier returned prompt is blank', async () => {
+    const script = installScriptedProvider({ proseReplacement: (call) => ({ text: '', parsed: { prompts: call === 1 ? [' ', 'kept second'] : ['top up'] } }) })
+    const result = await brainstormPrompts(request({ requestId: 'blank-position', count: 2 }))
+    expect(result.prompts.map((prompt) => prompt.text)).toEqual(['kept second', 'top up'])
+    const secondAssignment = script.proseCalls[0].text.split('\n')[2]
+    for (const credit of result.prompts[0].concepts) expect(secondAssignment).toContain(`${credit.facet}: ${credit.concept}`)
+  })
+
+  it('preserves the primary provider failure even when optional ledger statistics become unavailable', async () => {
+    const failure = new Error('primary provider failure')
+    installScriptedProvider({ onProseCall: () => {
+      vi.spyOn(acquisition, 'ledgerTotals').mockRejectedValue(new Error('statistics unavailable'))
+      throw failure
+    } })
+    await expect(brainstormPrompts(request({ requestId: 'failure-cause', count: 1 }))).rejects.toBe(failure)
   })
 
   // A domain-expansion reply with NOTHING in it is a failed call, not a set of

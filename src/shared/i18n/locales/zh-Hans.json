@@ -557,6 +557,10 @@
   "advanced.noComposition": "没有构图扩写模板。",
   "advanced.noStyle": "没有风格扩写模板。",
   "advanced.noPromptReturned": "文本 AI 没有返回提示词。",
+  "advanced.partialPrompts": {
+    "other": "已完成 {requested} 条提示词中的 {count} 条。已完成的提示词保留在历史记录中，尚未将图像加入队列。"
+  },
+  "advanced.queueCompleted": "将图像生成任务加入队列（{count}）",
   "advanced.queued": {
     "other": "已将 {count} 个任务加入队列。"
   },

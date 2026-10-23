@@ -577,6 +577,12 @@
   "advanced.noComposition": "Nenhum template de composição.",
   "advanced.noStyle": "Nenhum template de estilo.",
   "advanced.noPromptReturned": "A IA de texto não retornou nenhum prompt.",
+  "advanced.partialPrompts": {
+    "one": "Prompts concluídos: {count} de {requested}. Os prompts concluídos ficam no histórico; nenhuma imagem foi adicionada à fila.",
+    "many": "Prompts concluídos: {count} de {requested}. Os prompts concluídos ficam no histórico; nenhuma imagem foi adicionada à fila.",
+    "other": "Prompts concluídos: {count} de {requested}. Os prompts concluídos ficam no histórico; nenhuma imagem foi adicionada à fila."
+  },
+  "advanced.queueCompleted": "Pôr tarefas de imagem na fila ({count})",
   "advanced.queued": {
     "one": "{count} tarefa na fila.",
     "many": "{count} de tarefas na fila.",

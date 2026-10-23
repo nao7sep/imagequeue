@@ -567,6 +567,11 @@
   "advanced.noComposition": "No composition elaborators.",
   "advanced.noStyle": "No style elaborators.",
   "advanced.noPromptReturned": "Text AI returned no prompt.",
+  "advanced.partialPrompts": {
+    "one": "Completed {count} of {requested} prompts. The completed prompt is kept in history; no images were queued.",
+    "other": "Completed {count} of {requested} prompts. Completed prompts are kept in history; no images were queued."
+  },
+  "advanced.queueCompleted": "Queue image tasks ({count})",
   "advanced.queued": {
     "one": "Queued {count} task.",
     "other": "Queued {count} tasks."

@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BackendId, Task, TaskStatus } from '../../../src/shared/types'
+import type { BackendId, EnqueueBatchUnit, Task, TaskStatus } from '../../../src/shared/types'
 
 // The queue channels the window drives. Two things matter here and are easy to
 // get wrong: live work must never disappear because the renderer's view was a
@@ -56,6 +56,10 @@ vi.mock('../../../src/main/session', () => ({
   getSessionId: () => 'A',
   getSessionDir: () => mocks.sessionDir,
 }))
+vi.mock('../../../src/main/session/state', async () => {
+  const { queueManager } = await import('../../../src/main/queue/queue-manager')
+  return { enqueueActiveSessionBatch: async (units: EnqueueBatchUnit[]) => queueManager.enqueueBatch(units) }
+})
 vi.mock('../../../src/main/presentation', () => ({ broadcastPresentation: mocks.broadcastPresentation }))
 vi.mock('../../../src/main/main-window-layout', () => ({ refreshMainWindowMinimumSize: mocks.refreshMainWindowMinimumSize }))
 vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState, getQueueSnapshot: mocks.getQueueSnapshot, unsubscribeQueue: mocks.unsubscribeQueue, publishAppNotice: mocks.publishAppNotice }))

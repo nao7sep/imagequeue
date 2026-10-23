@@ -557,6 +557,10 @@
   "advanced.noComposition": "構図の詳細化テンプレートはありません。",
   "advanced.noStyle": "スタイルの詳細化テンプレートはありません。",
   "advanced.noPromptReturned": "テキストAIからプロンプトが返されませんでした。",
+  "advanced.partialPrompts": {
+    "other": "プロンプトは {requested} 件中 {count} 件完成しました。完成したプロンプトは履歴に保持され、画像はキューに追加されていません。"
+  },
+  "advanced.queueCompleted": "画像生成タスクをキューに追加（{count}）",
   "advanced.queued": {
     "other": "{count} 件のタスクをキューに追加しました。"
   },

@@ -72,3 +72,16 @@ describe('buildAdvancedQueueUnits', () => {
     expect(units[1].params).toEqual({ steps: 4 })
   })
 })
+
+
+it('admits only completed prompts for an explicitly submitted partial batch', () => {
+  const targets = [
+    { backend: 'openai' as const, model: 'cloud', params: {} },
+    { backend: 'drawthings' as const, model: 'local', params: {} },
+  ]
+  const common = { prompts: ['a', 'b', 'c'], copies: 4, targets, allowPartial: true }
+  expect(buildAdvancedQueueUnits({ ...common, mode: 'fresh-task' }).map((unit) => [unit.backend, unit.prompt])).toEqual([
+    ['openai', 'a'], ['drawthings', 'b'], ['openai', 'c'],
+  ])
+  expect(buildAdvancedQueueUnits({ ...common, mode: 'fresh-iteration' }).map((unit) => unit.prompt)).toEqual(['a', 'a', 'b', 'b', 'c', 'c'])
+})

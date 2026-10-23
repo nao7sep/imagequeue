@@ -47,6 +47,8 @@ export interface BrainstormResult {
    *  records these in the session history, so the Prompts list can show WHICH
    *  concepts a prompt was built from, not just the prose that came out. */
   prompts: ElaboratedPromptRecord[]
+  /** A failed run can still deliver completed prompts and their credits. */
+  failure?: unknown
 }
 
 // Emitted to the renderer after every successful turn so it can show live
@@ -62,7 +64,8 @@ interface BrainstormProgress {
 
 function broadcastProgress(progress: BrainstormProgress): void {
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('brainstorm:progress', progress)
+    try { win.webContents.send('brainstorm:progress', progress) }
+    catch (error) { log('warn', 'Could not present brainstorm progress', { error: serializeError(error) }) }
   }
 }
 
@@ -127,26 +130,26 @@ function buildCombinedElaboratorInstructions(parts: {
 // Accepts either the documented `{ prompts: string[] }` shape or a bare
 // `string[]` (some OpenAI-compatible servers emit this when the prompt asks
 // for "a list of N items" in JSON mode). Anything else returns [].
-function extractPromptsFromParsed(parsed: unknown): string[] {
+function extractPromptsFromParsed(parsed: unknown): (string | null)[] {
   const candidate = Array.isArray(parsed)
     ? parsed
     : (parsed as { prompts?: unknown } | null | undefined)?.prompts
   if (!Array.isArray(candidate)) return []
-  return candidate.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+  return candidate.map((p) => typeof p === 'string' && p.trim().length > 0 ? p : null)
 }
 
 
 // Generate `count` prompts. Concept variety is enforced by construction, not
 // instruction: the seed resolves once into facets (aspects); each prompt draws
-// one never-spent value per facet from the concept ledger; and each batch of
+// one eligible value per facet from the concept ledger; and each batch of
 // assignments expands into prose in a FRESH call carrying no conversation
 // history — so there is no accumulated model output to imitate, which is the
 // mechanism that made long runs collapse onto one repeated concept. A use is
 // recorded only for prompts that actually come back.
 //
 // Returns the full set on success, or the prompts collected so far if the run
-// is cancelled. On failure, throws the last error — the caller persists
-// nothing for a run that didn't complete and queue its tasks.
+// is cancelled or fails after producing some. A partial failure never admits
+// image tasks automatically; the caller retains its completed prompt history.
 export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
   const controller = new AbortController()
   activeControllers.set(req.requestId, controller)
@@ -187,14 +190,11 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
   const concurrency = brainstormConfig.concurrency
   const preferNew = brainstormConfig.prefer_new_concepts === true
 
-  const startTime = Date.now()
+  const startTime = performance.now()
   const sessionId = getSessionId()
   const collected: ElaboratedPromptRecord[] = []
-  // Concept ids per collected prompt, committed as uses only when the prompts
-  // are actually DELIVERED (success, or the cancel path returning partials).
-  // Recording incrementally burnt earlier waves' values when a later wave
-  // failed: the run threw, the caller kept nothing, yet the window blocked
-  // those values for 1000 draws.
+  // Commit credits before delivering full or partial results. The request ID
+  // makes a retry after an uncertain store acknowledgement idempotent.
   const pendingUses: number[][] = []
   const commitUses = async (): Promise<void> => {
     if (pendingUses.length === 0) return
@@ -213,7 +213,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
   // is already reported at `info` ("Concept aspects resolved", "Minted
   // concepts"), and this is the developer's view of the calls behind it.
   const ask: AskJson = async (messages, schema, label) => {
-    const started = Date.now()
+    const started = performance.now()
     log('debug', 'Planning call started', {
       requestId: req.requestId,
       call: label,
@@ -231,7 +231,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
         requestId: req.requestId,
       })
       log('debug', 'Planning call finished', {
-        requestId: req.requestId, call: label, durationMs: Date.now() - started,
+        requestId: req.requestId, call: label, durationMs: performance.now() - started,
       })
       return parsed
     } catch (err) {
@@ -240,7 +240,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
       log('error', 'Planning call failed', {
         requestId: req.requestId,
         call: label,
-        durationMs: Date.now() - started,
+        durationMs: performance.now() - started,
         error: serializeError(err),
       })
       throw err
@@ -361,34 +361,29 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
             timeoutMs: handle.timeoutMs,
             validate: (parsed) => {
               const prompts = extractPromptsFromParsed(parsed)
-              return prompts.length > 0 ? prompts : null
+              return prompts.some((prompt) => prompt !== null) ? prompts : null
             },
             signal: controller.signal,
             label: 'prose',
             requestId: req.requestId,
           })
           const kept = newPrompts.slice(0, assignments.length)
-          done = Math.min(done + kept.length, req.count)
+          done = Math.min(done + kept.filter((prompt) => prompt !== null).length, req.count)
           broadcastProgress({ requestId: req.requestId, done, total: req.count, phase: 'prompts' })
           return { assignments, kept }
         })
       )
 
-      // Assemble in TURN ORDER, keeping the ordered prefix of successes. A
-      // failed turn drops any later fulfilled turns (their tokens are spent
-      // but their values were never recorded as uses, so nothing is burnt);
-      // prompts map to assignments by position, and a use is recorded only
-      // for assignments whose prompt actually came back. An undercounting
-      // turn leaves the outer loop to top up with a fresh wave.
+      // Assemble every successful turn before exposing a sibling failure.
+      // Empty entries retain their positions until paired with assignments,
+      // so a later prompt cannot inherit an earlier blank entry's credits.
       const failure = settled.find(
         (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'
       )?.reason ?? null
-      if (failure !== null) {
-        throw failure instanceof Error ? failure : new Error(String(failure))
-      }
       for (const outcome of settled) {
         if (outcome.status !== 'fulfilled') continue
         outcome.value.kept.forEach((text, i) => {
+          if (text === null) return
           const assignment = outcome.value.assignments[i]
           collected.push({
             text,
@@ -399,6 +394,9 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
           })
           pendingUses.push(assignment.map((part) => part.concept.id))
         })
+      }
+      if (failure !== null) {
+        throw failure instanceof Error ? failure : new Error(String(failure))
       }
 
       // The prompts themselves persist in the session manifest's
@@ -425,7 +423,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
         count: collected.length,
         requested: req.count,
         turns: turn,
-        durationMs: Date.now() - startTime,
+        durationMs: performance.now() - startTime,
         concepts: stats,
         inventory: await facetInventory(facets),
         ledger: await ledgerTotals(),
@@ -443,7 +441,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
         collected: collected.length,
         requested: req.count,
         turns: turn,
-        durationMs: Date.now() - startTime,
+        durationMs: performance.now() - startTime,
         concepts: stats,
       })
       // The cancel path DELIVERS what was collected, so its uses commit too.
@@ -458,11 +456,14 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
       requested: req.count,
       collected: collected.length,
       turns: turn,
-      durationMs: Date.now() - startTime,
+      durationMs: performance.now() - startTime,
       concepts: stats,
-      ledger: await ledgerTotals(),
       error: serializeError(err),
     })
+    if (collected.length > 0) {
+      await commitUses()
+      return { prompts: collected.slice(0, req.count), failure: err }
+    }
     throw err instanceof Error ? err : new Error(String(err))
   }
 }

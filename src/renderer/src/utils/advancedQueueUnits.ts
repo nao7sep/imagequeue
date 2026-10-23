@@ -25,10 +25,8 @@ export function promptsNeeded(mode: PromptMode, copies: number, targetCount: num
  * The prompt for one unit. Iteration-major for fresh-task — iteration 0 across
  * every target, then iteration 1 — matching the order the units are pushed.
  *
- * Throws on a shortfall instead of wrapping around: the engine's contract is
- * exactly-`needed`-or-throw, so an under-delivery reaching this function is a
- * broken invariant, and silently duplicating prompts across tasks (what a
- * modulo would do) hides precisely the defect worth surfacing.
+ * Throws on a shortfall instead of silently duplicating prompts. Explicit
+ * partial submission filters missing units before calling this selector.
  */
 export function promptTextForUnit(
   mode: PromptMode,
@@ -54,6 +52,8 @@ export function buildAdvancedQueueUnits(options: {
   prompts: readonly string[]
   copies: number
   targets: readonly AdvancedQueueTarget[]
+  /** Only for an explicitly reviewed partial result; never repeat a missing prompt. */
+  allowPartial?: boolean
 }): EnqueueBatchUnit[] {
   const { mode, prompts, targets } = options
   const copies = Math.max(1, options.copies)
@@ -61,6 +61,8 @@ export function buildAdvancedQueueUnits(options: {
 
   for (let copyIndex = 0; copyIndex < copies; copyIndex++) {
     targets.forEach((target, targetIndex) => {
+      const promptIndex = mode === 'fresh-task' ? copyIndex * targets.length + targetIndex : mode === 'fresh-iteration' ? copyIndex : 0
+      if (options.allowPartial && prompts[promptIndex] === undefined) return
       units.push({
         prompt: promptTextForUnit(mode, prompts, targetIndex, copyIndex, targets.length),
         backend: target.backend,
