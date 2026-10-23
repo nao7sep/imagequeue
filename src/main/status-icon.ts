@@ -6,6 +6,7 @@ import { subscribeQueueControlState } from './queue/publisher'
 import { message, type Message, type Translator } from '../shared/i18n/translate'
 import { mainTranslator, onLanguageChanged } from './i18n'
 import { APP_NAME } from '../shared/app-identity'
+import { raiseAppNotice } from './app-notices'
 
 export type StatusIconAppearance = 'light' | 'dark'
 
@@ -200,7 +201,20 @@ export class StatusIconController {
       type: 'checkbox',
       label: t('statusIcon.notifications'),
       checked: enabled,
-      click: () => { this.runAction(enabled ? 'turn notices off' : 'turn notices on', () => notices.setEnabled(!enabled)) },
+      click: () => {
+        this.runAction(enabled ? 'turn notices off' : 'turn notices on', async () => {
+          try {
+            await notices.setEnabled(!enabled)
+          } catch (error) {
+            raiseAppNotice({ title: message('statusIcon.notifications'), message: message('failure.settingsSave') })
+            throw error
+          } finally {
+            // Native checkbox clicks toggle immediately; only the saved owner
+            // determines the menu after the write settles, including rejection.
+            this.rebuildPresentation()
+          }
+        })
+      },
     }]
   }
 

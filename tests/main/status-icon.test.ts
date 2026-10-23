@@ -39,8 +39,11 @@ const mocks = vi.hoisted(() => {
     queueListener: null as ((state: { paused: boolean; generating: number; queued: number; interrupted: number }) => void) | null,
     unsubscribe: vi.fn(),
     log: vi.fn(),
+    notice: vi.fn(),
   }
 })
+
+vi.mock('../../src/main/app-notices', () => ({ raiseAppNotice: mocks.notice }))
 
 vi.mock('electron', () => ({
   app: { isPackaged: false, getAppPath: () => '/app' },
@@ -281,6 +284,38 @@ describe('StatusIconController', () => {
 // Notices can be turned on and off from the icon as from the main window
 // (window-conventions, Background mode).
 describe('notices from the icon', () => {
+  it('restores the saved checkbox and presents one failure after a rejected native toggle', async () => {
+    let enabled = true
+    let changed = () => {}
+    let reject!: (error: Error) => void
+    const failure = new Error('EACCES /private/settings sentinel')
+    const setEnabled = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail }))
+    const controller = new StatusIconController({
+      platform: 'darwin', restoreMainWindow: vi.fn(), requestQuit: vi.fn(),
+      openSessionsFolder: vi.fn(), setQueuePaused: vi.fn(),
+      notices: { enabled: () => enabled, setEnabled, onChanged: (listener) => { changed = listener; return () => {} } },
+    })
+    await controller.reconcile(true)
+    const tray = mocks.FakeTray.instances.at(-1)!
+    const item = () => tray.menu.find((entry) => entry.label === 'Notifications')!
+    const clicked = item()
+    clicked.checked = false // Electron's optimistic native checkbox change.
+    ;(clicked.click as () => void)()
+    expect(item().checked).toBe(false)
+    reject(failure)
+    await vi.waitFor(() => expect(item().checked).toBe(true))
+    expect(mocks.notice).toHaveBeenCalledOnce()
+    expect(mocks.notice.mock.calls[0]).toEqual([{
+      title: { key: 'statusIcon.notifications' }, message: { key: 'failure.settingsSave' },
+    }])
+    expect(JSON.stringify(mocks.notice.mock.calls)).not.toContain('sentinel')
+    expect(mocks.log).toHaveBeenCalledWith('error', 'Status icon action failed: turn notices off', expect.anything())
+    enabled = false
+    changed()
+    expect(item().checked).toBe(false)
+    controller.dispose()
+  })
+
   it('shows the notices setting as a checkbox, toggles it, and follows changes made elsewhere', async () => {
     let enabled = true
     let changed: () => void = () => {}
