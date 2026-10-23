@@ -9,6 +9,7 @@
   "quit.generating": {
     "other": "{count} 件の画像を生成中です。終了すると中断されます。"
   },
+  "quit.elaborating": "プロンプトの詳細化を実行中です。終了すると中断されます。",
   "quit.tools": "Draw Things のダウンロード、インポート、または確認を実行中です。終了すると中断されます。",
   "quit.drafts": "{dialogs} の未保存の変更は破棄されます。",
   "common.close": "閉じる",

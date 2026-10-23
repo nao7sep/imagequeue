@@ -106,11 +106,12 @@ let sessionStarted = false
 let backgroundWork: Promise<void> | null = null
 let cleanExit = false
 let backgroundSettled = false
-// What an ordinary quit would end: images generating, Draw Things tool work
+// What an ordinary quit would end: images generating, prompt elaboration, tool work
 // the user started, and main-window dialogs holding unsaved edits.
 function quitWork(): QuitWork {
   return {
     generating: queueManager.generatingCount(),
+    elaborating: hasActiveBrainstorms(),
     tools: hasRunningCliJobs() || hasUserDependencyOperations(),
     drafts: unsavedDrafts(),
   }

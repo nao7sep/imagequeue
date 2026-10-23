@@ -165,6 +165,7 @@ const { showQuitQuestion: showQuitFailure } = await import('../../src/main/quit-
 const { queueManager } = await import('../../src/main/queue')
 const { hideRecordsWindow, showRecordsWindow } = await import('../../src/main/records-window')
 const { hidePreviewWindow, showPreviewWindow } = await import('../../src/main/preview-window')
+const { hasActiveBrainstorms, cancelAllBrainstorms } = await import('../../src/main/brainstorm')
 const { forceExit } = await import('../../src/main/utils/force-exit')
 const { killAllCliJobsAndWait } = await import('../../src/main/cli-jobs')
 const { createStartupFailureWindow } = await import('../../src/main/startup-failure-window')
@@ -179,6 +180,7 @@ beforeEach(() => {
   h.iconAvailable.value = true
   h.mainWindow.value = null
   vi.mocked(queueManager.generatingCount).mockReturnValue(0)
+  vi.mocked(hasActiveBrainstorms).mockReturnValue(false)
   vi.mocked(showQuitFailure).mockImplementation(async () => 'cancel')
   vi.mocked(session.persistActiveSession).mockResolvedValue(undefined as never)
 })
@@ -282,12 +284,34 @@ describe('primary instance quit routes', () => {
     await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
     expect(quit.preventDefault).toHaveBeenCalledOnce()
     const [question, , , owner] = vi.mocked(showQuitFailure).mock.calls[0]!
-    expect(question).toEqual({ kind: 'confirm', work: { generating: 2, tools: false, drafts: [] }, platform: process.platform })
+    expect(question).toEqual({ kind: 'confirm', work: { generating: 2, elaborating: false, tools: false, drafts: [] }, platform: process.platform })
     // The controller stand-in has no window; the question stands alone.
     expect(owner).toBeUndefined()
     await vi.waitFor(() => expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalled())
     expect(h.controllers[0]!.beginShutdown).not.toHaveBeenCalled()
     expect(h.app.exit).not.toHaveBeenCalled()
+  })
+
+  it('asks before stopping elaboration alone and preserves it on Cancel', async () => {
+    await launch()
+    vi.mocked(hasActiveBrainstorms).mockReturnValue(true)
+    beforeQuit()
+    await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
+    expect(vi.mocked(showQuitFailure).mock.calls[0]![0]).toMatchObject({
+      kind: 'confirm', work: { generating: 0, elaborating: true, tools: false, drafts: [] },
+    })
+    expect(cancelAllBrainstorms).not.toHaveBeenCalled()
+    expect(h.controllers[0]!.beginShutdown).not.toHaveBeenCalled()
+    expect(h.app.exit).not.toHaveBeenCalled()
+  })
+
+  it('OS takeover stops elaboration without requesting confirmation', async () => {
+    await launch()
+    vi.mocked(hasActiveBrainstorms).mockReturnValue(true)
+    h.emit(h.powerListeners, 'shutdown')
+    await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
+    expect(cancelAllBrainstorms).toHaveBeenCalledOnce()
+    expect(showQuitFailure).not.toHaveBeenCalled()
   })
 
   it('quits once the user confirms', async () => {

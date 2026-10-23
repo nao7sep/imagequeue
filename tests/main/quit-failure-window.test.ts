@@ -75,7 +75,7 @@ describe('quit failure question', () => {
 })
 
 describe('quit confirmation', () => {
-  const confirm: QuitQuestion = { kind: 'confirm', work: { generating: 2, tools: false, drafts: [] }, platform: 'darwin' }
+  const confirm: QuitQuestion = { kind: 'confirm', work: { generating: 2, elaborating: false, tools: false, drafts: [] }, platform: 'darwin' }
 
   it('accepts only Quit or Cancel, and hands its page the question it asks', async () => {
     const choice = showQuitQuestion(confirm, new AbortController().signal, vi.fn())

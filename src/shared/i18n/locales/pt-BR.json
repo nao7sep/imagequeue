@@ -11,6 +11,7 @@
     "many": "{count} imagens ainda estão sendo geradas e serão interrompidas.",
     "other": "{count} imagens ainda estão sendo geradas e serão interrompidas."
   },
+  "quit.elaborating": "A elaboração de prompts está em andamento e será interrompida.",
   "quit.tools": "Um download, importação ou verificação do Draw Things está em andamento e será interrompido.",
   "quit.drafts": "As alterações não salvas em {dialogs} serão descartadas.",
   "common.close": "Fechar",

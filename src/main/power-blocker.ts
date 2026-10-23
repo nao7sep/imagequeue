@@ -2,6 +2,7 @@ import { powerSaveBlocker } from 'electron'
 import { queueManager } from './queue/queue-manager'
 import { hasRunningCliJobs } from './cli-jobs'
 import { hasActiveBrainstorms } from './brainstorm'
+import { hasActiveDependencyOperations } from './dependencies/operations'
 import { loadConfig } from './config'
 import { log } from './logger'
 
@@ -25,12 +26,11 @@ import { log } from './logger'
 let blockerId: number | null = null
 let monitor: NodeJS.Timeout | null = null
 
-// The three kinds of work worth keeping the machine awake for: an image task
-// generating, a Draw Things CLI download/import running, or a prompt
-// elaboration in flight. Elaboration matters because it runs before any task is
-// queued, so it is the one long operation neither task nor CLI status reflects.
+// Protect image generation, CLI downloads/imports, prompt elaboration, and
+// managed dependency acquisition. The operation owners retain work through
+// physical settlement, including while cancellation is still taking effect.
 function isBusy(): boolean {
-  return queueManager.hasGeneratingTasks() || hasRunningCliJobs() || hasActiveBrainstorms()
+  return queueManager.hasGeneratingTasks() || hasRunningCliJobs() || hasActiveBrainstorms() || hasActiveDependencyOperations()
 }
 
 // The assertion is held only when the user has opted in (the default) AND there

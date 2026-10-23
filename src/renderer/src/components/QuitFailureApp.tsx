@@ -52,6 +52,7 @@ export function QuitFailureApp(): React.JSX.Element | null {
   return <main ref={root} className="quit-failure-app">
     <div className="quit-failure-body">
       {work.generating > 0 && <p>{t('quit.generating', { count: work.generating })}</p>}
+      {work.elaborating && <p>{t('quit.elaborating')}</p>}
       {work.tools && <p>{t('quit.tools')}</p>}
       {work.drafts.length > 0 && <p>{t('quit.drafts', { dialogs })}</p>}
     </div>

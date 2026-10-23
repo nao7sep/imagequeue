@@ -10,6 +10,7 @@
     "one": "{count} image is still generating and will be stopped.",
     "other": "{count} images are still generating and will be stopped."
   },
+  "quit.elaborating": "Prompt elaboration is running and will be stopped.",
   "quit.tools": "A Draw Things download, import or check is running and will be stopped.",
   "quit.drafts": "Unsaved changes in {dialogs} will be discarded.",
   "common.close": "Close",

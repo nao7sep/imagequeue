@@ -11,6 +11,7 @@
     "many": "{count} imágenes todavía se están generando y se detendrán.",
     "other": "{count} imágenes todavía se están generando y se detendrán."
   },
+  "quit.elaborating": "La elaboración de prompts está en curso y se detendrá.",
   "quit.tools": "Hay una descarga, importación o comprobación de Draw Things en curso que se detendrá.",
   "quit.drafts": "Se descartarán los cambios sin guardar en {dialogs}.",
   "common.close": "Cerrar",

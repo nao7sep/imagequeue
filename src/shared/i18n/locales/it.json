@@ -11,6 +11,7 @@
     "many": "{count} immagini sono ancora in generazione e verranno interrotte.",
     "other": "{count} immagini sono ancora in generazione e verranno interrotte."
   },
+  "quit.elaborating": "L’elaborazione dei prompt è in corso e verrà interrotta.",
   "quit.tools": "Un download, un’importazione o una verifica di Draw Things è in corso e verrà interrotto.",
   "quit.drafts": "Le modifiche non salvate in {dialogs} andranno perse.",
   "common.close": "Chiudi",

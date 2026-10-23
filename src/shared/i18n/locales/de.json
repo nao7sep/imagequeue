@@ -10,6 +10,7 @@
     "one": "{count} Bild wird noch erzeugt und wird abgebrochen.",
     "other": "{count} Bilder werden noch erzeugt und werden abgebrochen."
   },
+  "quit.elaborating": "Die Ausarbeitung der Prompts läuft und wird abgebrochen.",
   "quit.tools": "Ein Download, ein Import oder eine Prüfung für Draw Things läuft und wird abgebrochen.",
   "quit.drafts": "Nicht gespeicherte Änderungen in {dialogs} werden verworfen.",
   "common.close": "Schließen",

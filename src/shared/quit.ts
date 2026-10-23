@@ -1,8 +1,8 @@
 import type { MessageKey } from './i18n/catalogues'
 
 // What an ordinary quit would end while the user can still see it
-// (unsaved-edits-conventions, Closing and quitting): images generating, Draw
-// Things tool work, and dialogs in the main window holding unsaved edits. The
+// (unsaved-edits-conventions, Closing and quitting): images generating, prompt
+// elaboration, Draw Things tool work, and dialogs in the main window holding unsaved edits. The
 // prompt being typed is not among them: it is session-only by the developer's
 // decision and is discarded without asking.
 
@@ -20,12 +20,13 @@ export const DRAFT_SURFACE_NAMES: Record<DraftSurface, MessageKey> = {
 
 export interface QuitWork {
   generating: number
+  elaborating: boolean
   tools: boolean
   drafts: DraftSurface[]
 }
 
 export function hasQuitWork(work: QuitWork): boolean {
-  return work.generating > 0 || work.tools || work.drafts.length > 0
+  return work.generating > 0 || work.elaborating || work.tools || work.drafts.length > 0
 }
 
 /** The question the quit window shows: confirm stopping live work, or a

@@ -20,7 +20,7 @@ afterEach(cleanup)
 // Quit asks before ending what the user can still see (unsaved-edits-conventions).
 describe('quit question page', () => {
   it('names the images, tool work and dialogs quitting would end, and quits only on its own button', async () => {
-    const { chooseQuit } = ask({ kind: 'confirm', work: { generating: 2, tools: true, drafts: ['settings', 'elaborators'] }, platform: 'darwin' })
+    const { chooseQuit } = ask({ kind: 'confirm', work: { generating: 2, elaborating: false, tools: true, drafts: ['settings', 'elaborators'] }, platform: 'darwin' })
     render(<QuitFailureApp />)
     await act(async () => {})
     expect(screen.getByText('2 images are still generating and will be stopped.')).toBeTruthy()
@@ -33,12 +33,21 @@ describe('quit question page', () => {
   })
 
   it('says only what applies, and uses Exit on Windows', async () => {
-    ask({ kind: 'confirm', work: { generating: 1, tools: false, drafts: [] }, platform: 'win32' })
+    ask({ kind: 'confirm', work: { generating: 1, elaborating: false, tools: false, drafts: [] }, platform: 'win32' })
     render(<QuitFailureApp />)
     await act(async () => {})
     expect(screen.getByText('1 image is still generating and will be stopped.')).toBeTruthy()
     expect(screen.queryByText(/Draw Things/)).toBeNull()
     expect(screen.getByRole('button', { name: 'Exit ImageQueue' })).toBeTruthy()
+  })
+
+  it('names elaboration without inventing an image count or tool job', async () => {
+    ask({ kind: 'confirm', work: { generating: 0, elaborating: true, tools: false, drafts: [] }, platform: 'darwin' })
+    render(<QuitFailureApp />)
+    await act(async () => {})
+    expect(screen.getByText('Prompt elaboration is running and will be stopped.')).toBeTruthy()
+    expect(screen.queryByText(/images? (is|are) still generating/)).toBeNull()
+    expect(screen.queryByText(/Draw Things/)).toBeNull()
   })
 
   it('keeps Retry, Quit anyway and Cancel for a failed save', async () => {
