@@ -75,10 +75,10 @@ describe('Draw Things resolved parameters and authored edits', () => {
     const { result } = renderHook(() => useDrawThingsColumn({ active: true, model: 'selected', setModel, settings: null }))
     await until(() => {
       expect(result.current.paramsReady).toBe(true)
-      expect(result.current.controls.width).toBe(640)
+      expect(result.current.controls.width).toBe('640')
     })
     expect(window.electronAPI.dtSaveModelParams).not.toHaveBeenCalled()
-    act(() => result.current.controls.setWidth(896))
+    act(() => result.current.controls.setWidth('896'))
     await until(() => expect(window.electronAPI.dtSaveModelParams).toHaveBeenCalledExactlyOnceWith('selected', {
       width: 896, height: 768, steps: 12, guidance: 3, seed: '', negativePrompt: 'recommended negative',
     }))
@@ -118,13 +118,13 @@ describe('Draw Things resolved parameters and authored edits', () => {
     { initialProps: { settings: settingsFor('/models/first') } })
     await until(() => {
       expect(result.current.paramsReady).toBe(true)
-      expect(result.current.controls.width).toBe(640)
+      expect(result.current.controls.width).toBe('640')
     })
     rerender({ settings: settingsFor('/models/second') })
     expect(result.current.paramsReady).toBe(false)
     await until(() => {
       expect(result.current.paramsReady).toBe(true)
-      expect(result.current.controls.width).toBe(896)
+      expect(result.current.controls.width).toBe('896')
     })
     expect(window.electronAPI.resolveRecommendation).toHaveBeenCalledTimes(2)
     expect(window.electronAPI.dtGetModelParams).toHaveBeenCalledTimes(2)
@@ -165,13 +165,13 @@ describe('Draw Things resolved parameters and authored edits', () => {
     act(() => window.dispatchEvent(new Event('dependencies-changed')))
     await until(() => {
       expect(result.current.paramsReady).toBe(true)
-      expect(result.current.controls.width).toBe(896)
+      expect(result.current.controls.width).toBe('896')
     })
     await act(async () => {
       oldRecommendation.resolve(recommendation(640))
       await oldRecommendation.promise
     })
-    expect(result.current.controls.width).toBe(896)
+    expect(result.current.controls.width).toBe('896')
     expect(result.current.paramsReady).toBe(true)
     expect(window.electronAPI.dtSaveModelParams).not.toHaveBeenCalled()
   })

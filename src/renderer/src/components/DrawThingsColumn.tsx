@@ -2,7 +2,7 @@ import { useInstalledModels } from '../hooks/useInstalledModels'
 import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-api'
-import { DRAWTHINGS_SIZE_PRESETS } from '../../../shared/models'
+import { DRAWTHINGS_SIZE_PRESETS, drawThingsDimension } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
 import { IMAGE_SEED_LIMITS, resolveImageSeed } from '../../../shared/image-seed'
@@ -50,6 +50,7 @@ export interface DrawThingsColumn {
   /** The DT branch of the column's enqueue params (memo-stable). */
   enqueueParams: Record<string, unknown> | null
   paramsReady: boolean
+  commitDimensions: () => void
   cliInstalled: boolean
   downloadedModelCount: number
   showModelsModal: boolean
@@ -64,8 +65,8 @@ export interface DrawThingsColumn {
     paramsLoadError: MessageKey | null
     retryParamsLoad: () => void
     sizeValue: string
-    width: number
-    height: number
+    width: string
+    height: string
     steps: number
     guidance: number
     seed: string
@@ -76,8 +77,8 @@ export interface DrawThingsColumn {
     canApplyToAllModels: boolean
     onModelChange: (model: string) => void
     onSizeChange: (value: string) => void
-    setWidth: (n: number) => void
-    setHeight: (n: number) => void
+    setWidth: (n: string) => void
+    setHeight: (n: string) => void
     setSteps: (n: number) => void
     setGuidance: (n: number) => void
     setSeed: (s: string) => void
@@ -100,8 +101,19 @@ export function useDrawThingsColumn({
 }): DrawThingsColumn {
   const [authored, setAuthored] = useState(false)
   const modelsDirectory = (settings?.image_backends as { drawthings?: { models_dir?: string } } | undefined)?.drawthings?.models_dir ?? ''
-  const [localWidth, setLocalWidth] = useState(1024)
-  const [localHeight, setLocalHeight] = useState(1024)
+  // Preserve intermediate typing while the admitted/saved dimensions already
+  // use the CLI's grid. Blur or submission commits that normalized display.
+  const [widthText, setWidthText] = useState('1024')
+  const [heightText, setHeightText] = useState('1024')
+  const localWidth = widthText.trim() ? drawThingsDimension(Number(widthText)) : NaN
+  const localHeight = heightText.trim() ? drawThingsDimension(Number(heightText)) : NaN
+  const dimensionsValid = Number.isFinite(localWidth) && Number.isFinite(localHeight)
+  const setLocalWidth = useCallback((value: number) => setWidthText(String(drawThingsDimension(value))), [])
+  const setLocalHeight = useCallback((value: number) => setHeightText(String(drawThingsDimension(value))), [])
+  const commitDimensions = useCallback(() => {
+    if (Number.isFinite(localWidth)) setWidthText(String(localWidth))
+    if (Number.isFinite(localHeight)) setHeightText(String(localHeight))
+  }, [localWidth, localHeight])
   const [localSteps, setLocalSteps] = useState(4)
   const [localGuidance, setLocalGuidance] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
@@ -167,8 +179,8 @@ export function useDrawThingsColumn({
   const effectiveRecommendation = useMemo(() => {
     if (!selectedRecommendation) return null
     return {
-      width: selectedRecommendation.width ?? fallbacks.width,
-      height: selectedRecommendation.height ?? fallbacks.height,
+      width: drawThingsDimension(selectedRecommendation.width ?? fallbacks.width),
+      height: drawThingsDimension(selectedRecommendation.height ?? fallbacks.height),
       steps: selectedRecommendation.steps ?? fallbacks.steps,
       guidance: selectedRecommendation.guidance ?? fallbacks.guidance,
       negativePrompt: selectedRecommendation.negativePrompt ?? fallbacks.negativePrompt,
@@ -217,7 +229,7 @@ export function useDrawThingsColumn({
   }, [active])
 
   const canApplyToAllModels = useMemo(() => {
-    if (!active || downloadedModels.length <= 1) return false
+    if (!active || !dimensionsValid || downloadedModels.length <= 1) return false
     return downloadedModels.some((m) => {
       if (m.file === model) return false
       const entry = Object.hasOwn(allModelParams, m.file) ? allModelParams[m.file] : undefined
@@ -227,10 +239,11 @@ export function useDrawThingsColumn({
         || entry.steps !== localSteps
         || entry.guidance !== localGuidance
     })
-  }, [active, downloadedModels, model, allModelParams, localWidth, localHeight, localSteps, localGuidance])
+  }, [active, dimensionsValid, downloadedModels, model, allModelParams, localWidth, localHeight, localSteps, localGuidance])
 
   const onApplyToAllModels = useCallback(async (): Promise<void> => {
-    if (!active || downloadedModels.length === 0) return
+    if (!active || !dimensionsValid || downloadedModels.length === 0) return
+    commitDimensions()
     const modelFiles = downloadedModels.map((m) => m.file)
     try {
       await window.electronAPI.dtApplyParamsToAllModels(modelFiles, {
@@ -247,6 +260,8 @@ export function useDrawThingsColumn({
     await refreshAllModelParams()
   }, [
     active,
+    dimensionsValid,
+    commitDimensions,
     downloadedModels,
     localWidth,
     localHeight,
@@ -337,27 +352,29 @@ export function useDrawThingsColumn({
   // debounce here. The resolved-owner gate also covers recommendation/default
   // reloads, so stale values cannot be written or used for generation.
   useEffect(() => {
-    if (!paramsReady || !authored) return
+    if (!paramsReady || !dimensionsValid || !authored) return
     setAuthored(false)
     window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
       .catch((err) => {
         logSaveError('autosave Draw Things model parameters', err, { model })
         setParamsSaveError('drawThings.paramsSaveFailed')
       })
-  }, [paramsReady, authored, model, currentDrawThingsParams])
+  }, [paramsReady, dimensionsValid, authored, model, currentDrawThingsParams])
 
   const enqueueParams = useMemo<Record<string, unknown> | null>(() => {
+    if (!dimensionsValid) return null
     // Seed/negative gating shared with Advanced Prompting (drawThingsParams.ts).
     return toDrawThingsTaskParams(
       buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt)
     )
-  }, [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt])
+  }, [dimensionsValid, localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt])
 
   const closeModelsModal = useCallback(() => setShowModelsModal(false), [])
 
   return {
     enqueueParams,
     paramsReady,
+    commitDimensions,
     cliInstalled: !!cliStatus?.installed,
     downloadedModelCount: downloadedModels.length,
     showModelsModal,
@@ -371,8 +388,8 @@ export function useDrawThingsColumn({
       paramsLoadError,
       retryParamsLoad: () => setRecommendationRevision((value) => value + 1),
       sizeValue,
-      width: localWidth,
-      height: localHeight,
+      width: widthText,
+      height: heightText,
       steps: localSteps,
       guidance: localGuidance,
       seed: localSeed,
@@ -383,8 +400,8 @@ export function useDrawThingsColumn({
       canApplyToAllModels,
       onModelChange,
       onSizeChange,
-      setWidth: (value) => { setAuthored(true); setLocalWidth(value) },
-      setHeight: (value) => { setAuthored(true); setLocalHeight(value) },
+      setWidth: (value) => { setAuthored(true); setWidthText(value) },
+      setHeight: (value) => { setAuthored(true); setHeightText(value) },
       setSteps: (value) => { setAuthored(true); setLocalSteps(value) },
       setGuidance: (value) => { setAuthored(true); setLocalGuidance(value) },
       setSeed: (value) => { setAuthored(true); setLocalSeed(value) },
@@ -450,11 +467,11 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           </div>
           <div className="setting-row">
             <label htmlFor={`${fieldId}-width`}>{t('backend.width')}</label>
-            <input id={`${fieldId}-width`} disabled={!column.paramsReady} type="number" value={c.width} onChange={(e) => c.setWidth(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+            <input id={`${fieldId}-width`} disabled={!column.paramsReady} type="number" value={c.width} onChange={(e) => c.setWidth(e.target.value)} onBlur={column.commitDimensions} onKeyDown={(e) => { if (e.key === 'Enter') column.commitDimensions() }} min={64} step={64} />
           </div>
           <div className="setting-row">
             <label htmlFor={`${fieldId}-height`}>{t('backend.height')}</label>
-            <input id={`${fieldId}-height`} disabled={!column.paramsReady} type="number" value={c.height} onChange={(e) => c.setHeight(Math.max(64, parseInt(e.target.value) || 64))} min={64} step={64} />
+            <input id={`${fieldId}-height`} disabled={!column.paramsReady} type="number" value={c.height} onChange={(e) => c.setHeight(e.target.value)} onBlur={column.commitDimensions} onKeyDown={(e) => { if (e.key === 'Enter') column.commitDimensions() }} min={64} step={64} />
           </div>
           <div className="setting-row">
             <label htmlFor={`${fieldId}-steps`}>{t('backend.steps')}</label>

@@ -166,8 +166,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       setSnapshot(backendId, null)
       return
     }
-    setSnapshot(backendId, { model, params: currentEnqueueParams ?? {}, ready: readyToEnqueue, ...(currentEnqueueParams === null ? { invalidParams: true } : {}) })
-  }, [backendId, model, currentEnqueueParams, readyToEnqueue, setSnapshot])
+    setSnapshot(backendId, { model, params: currentEnqueueParams ?? {}, ready: readyToEnqueue, ...(currentEnqueueParams === null ? { invalidParams: true } : {}), ...(backendId === 'drawthings' ? { onEnqueue: drawThings.commitDimensions } : {}) })
+  }, [backendId, model, currentEnqueueParams, readyToEnqueue, setSnapshot, drawThings.commitDimensions])
 
   useEffect(() => {
     return () => { setSnapshot(backendId, null) }

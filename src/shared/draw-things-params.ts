@@ -1,3 +1,4 @@
+import { drawThingsDimension } from './models'
 import { resolveImageSeed } from './image-seed'
 import type { DrawThingsModelParams } from './types'
 import { singleLine } from './textCleanup'
@@ -56,10 +57,10 @@ export function resolveDtParams(
   recommendation: DtRecommendationParams | null,
   fallbacks: DtFallbackParams,
 ): DrawThingsModelParams {
-  if (saved) return { ...saved }
+  if (saved) return { ...saved, width: drawThingsDimension(saved.width), height: drawThingsDimension(saved.height) }
   return {
-    width: recommendation?.width ?? fallbacks.width,
-    height: recommendation?.height ?? fallbacks.height,
+    width: drawThingsDimension(recommendation?.width ?? fallbacks.width),
+    height: drawThingsDimension(recommendation?.height ?? fallbacks.height),
     steps: recommendation?.steps ?? fallbacks.steps,
     guidance: recommendation?.guidance ?? fallbacks.guidance,
     seed: fallbacks.seed,
@@ -78,8 +79,8 @@ export function toDrawThingsTaskParams(params: DrawThingsModelParams): Record<st
   const seed = resolveImageSeed(params.seed, 'drawthings')
   if (!seed.valid) return null
   const task: Record<string, unknown> = {
-    width: params.width,
-    height: params.height,
+    width: drawThingsDimension(params.width),
+    height: drawThingsDimension(params.height),
     steps: params.steps,
     guidance: params.guidance,
   }

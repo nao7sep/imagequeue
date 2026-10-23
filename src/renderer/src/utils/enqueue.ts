@@ -9,6 +9,8 @@ export interface EnqueueConfigSnapshot {
   // owns this judgement; the builders below skip not-ready backends.
   ready: boolean
   invalidParams?: boolean
+  // Commit a normalized field display when a keyboard action submits without blur.
+  onEnqueue?: () => void
 }
 
 // Backend-config readiness, independent of the prompt: API key present for

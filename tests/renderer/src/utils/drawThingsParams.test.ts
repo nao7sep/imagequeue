@@ -13,7 +13,7 @@ const FALLBACKS = { width: 512, height: 512, steps: 4, guidance: 1, seed: '', ne
 
 describe('resolveDtParams', () => {
   it('saved params take the whole set, recommendation ignored', () => {
-    const saved = { width: 1, height: 2, steps: 3, guidance: 4, seed: '5', negativePrompt: 'n' }
+    const saved = { width: 512, height: 768, steps: 3, guidance: 4, seed: '5', negativePrompt: 'n' }
     expect(resolveDtParams(saved, { width: 999 }, FALLBACKS)).toEqual(saved)
   })
 
@@ -63,4 +63,14 @@ describe('dtFallbacksFromSettings', () => {
     expect(fallbacks.width).toBe(640)
     expect(fallbacks.seed).toBe('9')
   })
+})
+
+
+it('normalizes saved, recommended and submitted dimensions through the same CLI grid', () => {
+  const saved = { ...FALLBACKS, width: 1000, height: 777 }
+  const resolved = resolveDtParams(saved, null, FALLBACKS)
+  expect(resolved).toMatchObject({ width: 1024, height: 768 })
+  expect(resolveDtParams(null, { width: 1000, height: 777 }, FALLBACKS)).toMatchObject({ width: 1024, height: 768 })
+  expect(toDrawThingsTaskParams(saved)).toMatchObject({ width: 1024, height: 768 })
+  expect(saved).toMatchObject({ width: 1000, height: 777 })
 })
