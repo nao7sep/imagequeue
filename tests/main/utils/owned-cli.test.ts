@@ -94,8 +94,7 @@ describe('owned pipe CLI', () => {
 
   it.skipIf(process.platform === 'win32')('reports unexpected guardian loss without fabricating child success', async () => {
     const proc = spawnOwnedCli(process.execPath, ['-e', `
-      process.kill(process.ppid, 'SIGKILL');
-      process.stdout.write('child finished');
+      process.stdout.write('child finished', () => process.kill(process.ppid, 'SIGKILL'));
     `])
     const observed = collect(proc)
     expect(await observed.result).toEqual({ code: null, signal: null })
@@ -120,6 +119,66 @@ describe('owned pipe CLI', () => {
     expect(await observed.result).toEqual({ code: null, signal: 'SIGKILL' })
     clearTimeout(timer)
     expect(alive(proc.pid!)).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32').each(['automatic escalation', 'explicit stop'])(
+    'stops a surviving child after guardian death through %s and drains its output', async (mode) => {
+      const proc = spawnOwnedCli(process.execPath, ['-e', `
+        process.on('SIGTERM', () => {
+          process.stdout.write('term ignored');
+          process.stderr.write('still owned');
+        });
+        process.stdout.write(JSON.stringify({ guardian: process.ppid }));
+        setInterval(() => {}, 20);
+      `])
+      const observed = collect(proc)
+      await vi.waitFor(() => {
+        expect(proc.pid).toBeGreaterThan(0)
+        expect(observed.output()).toContain('}')
+      })
+      const guardianPid = (JSON.parse(observed.output()) as { guardian: number }).guardian
+      let closed = false
+      void observed.result.then(() => { closed = true })
+      // This PID is the parent of the fixture child, not a process-name match.
+      process.kill(guardianPid, 'SIGKILL')
+      await vi.waitFor(() => expect(observed.output()).toContain('term ignored'))
+      expect(closed).toBe(false)
+      expect(alive(proc.pid!)).toBe(true)
+      if (mode === 'explicit stop') expect(proc.kill('SIGKILL')).toBe(true)
+      expect(await observed.result).toEqual({ code: null, signal: null })
+      expect(observed.diagnostic()).toBe('still owned')
+      expect(observed.errors).toHaveLength(1)
+      expect(observed.errors[0]!.message).toContain('CLI guardian ended before reporting child exit')
+      await vi.waitFor(() => expect(alive(proc.pid!)).toBe(false))
+      expect(proc.kill()).toBe(false)
+    },
+  )
+
+  it.skipIf(process.platform === 'win32')('retains a guardianless child after it closes both output pipes', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-cli-pipes-'))
+    cleanup.push(() => fs.rmSync(root, { recursive: true, force: true }))
+    const stateFile = path.join(root, 'state')
+    const proc = spawnOwnedCli(process.execPath, ['-e', `
+      const fs = require('node:fs');
+      process.on('SIGTERM', () => fs.writeFileSync(process.argv[1], 'term ignored'));
+      process.stdout.write(JSON.stringify({ guardian: process.ppid }), () => {
+        fs.closeSync(1); fs.closeSync(2);
+        fs.writeFileSync(process.argv[1], 'pipes closed');
+      });
+      setInterval(() => {}, 20);
+    `, stateFile])
+    const observed = collect(proc)
+    await vi.waitFor(() => expect(fs.readFileSync(stateFile, 'utf8')).toBe('pipes closed'))
+    await vi.waitFor(() => expect(proc.pid).toBeGreaterThan(0))
+    let closed = false
+    void observed.result.then(() => { closed = true })
+    process.kill((JSON.parse(observed.output()) as { guardian: number }).guardian, 'SIGKILL')
+    await vi.waitFor(() => expect(fs.readFileSync(stateFile, 'utf8')).toBe('term ignored'))
+    expect(closed).toBe(false)
+    expect(alive(proc.pid!)).toBe(true)
+    expect(await observed.result).toEqual({ code: null, signal: null })
+    expect(alive(proc.pid!)).toBe(false)
+    expect(observed.errors).toHaveLength(1)
   })
 
   it.skipIf(process.platform === 'win32')('stops a live resistant child when its parent is killed, with no name lookup', async () => {
