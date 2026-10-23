@@ -12,7 +12,7 @@ type Handler = (...args: unknown[]) => unknown
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
-  config: { general: { export_dir: '' } } as AppConfig,
+  config: { general: { export_dir: '' }, notifications: { success_file: '', failure_file: '' } } as AppConfig,
   sessionDir: '',
   desktop: '',
   owner: null as unknown,
@@ -35,6 +35,7 @@ vi.mock('../../src/main/ipc-boundary', () => ({
 }))
 vi.mock('../../src/main/config', () => ({
   loadConfig: () => mocks.config,
+  getDataDir: () => root,
   updateConfig: async (apply: (draft: AppConfig) => void) => { apply(mocks.config); return mocks.config },
 }))
 vi.mock('../../src/main/session', () => ({ getSessionDir: () => mocks.sessionDir }))
@@ -58,7 +59,7 @@ beforeEach(() => {
   fs.mkdirSync(mocks.sessionDir, { recursive: true })
   fs.mkdirSync(mocks.desktop, { recursive: true })
   fs.writeFileSync(path.join(mocks.sessionDir, '20260101-000000-utc-cat-openai.png'), 'image bytes')
-  mocks.config = { general: { export_dir: '' } } as AppConfig
+  mocks.config = { general: { export_dir: '' }, notifications: { success_file: '', failure_file: '' } } as AppConfig
   mocks.owner = null
   mocks.handlers.clear()
   registerSettingsIpc()
@@ -310,8 +311,10 @@ describe('revealing an image', () => {
 describe('picking a file or a folder', () => {
   it('hands back the chosen file, and null when the user backs out', async () => {
     const filters = [{ name: 'Models', extensions: ['ckpt'] }]
-    mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/downloads/model.ckpt'] })
-    await expect(invoke('dialog:openFile', filters)).resolves.toBe('/downloads/model.ckpt')
+    const selected = path.join(root, 'model.ckpt')
+    fs.writeFileSync(selected, 'model')
+    mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [selected] })
+    await expect(invoke('dialog:openFile', filters)).resolves.toBe(selected)
     expect(mocks.showOpenDialog).toHaveBeenCalledWith({ properties: ['openFile'], filters })
 
     mocks.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
