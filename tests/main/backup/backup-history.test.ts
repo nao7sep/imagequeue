@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openBackupHistory, recordVersion } from '../../../src/main/backup/backup-history'
-import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError } from '../../../src/main/store-format'
+import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError, OlderFormatError } from '../../../src/main/store-format'
 
 // The history itself (data-backup-conventions): the last version of each
 // protected file saved in each launch, as the exact bytes written.
@@ -96,15 +96,15 @@ describe('backup history', () => {
     expect(rows().map((row) => path.basename(row.path))).toEqual(['config.json', 'elaborators.json'])
   })
 
-  it('creates a fresh store at the current version', () => {
+  it('initializes an empty version-0 store at the current version', () => {
+    new DatabaseSync(file).close()
+    expect(userVersion()).toBe(0)
     history()
     rows()
     expect(userVersion()).toBe(FORMAT_VERSIONS.backups)
   })
 
-  // Existing history is preserved: an earlier store, marked or not, is adopted
-  // and its rows stay as earlier history.
-  it.each([0, 1])('adopts a version-%s store, keeping its rows and adding launch rows beside them', (version) => {
+  it.each([0, 1])('refuses version-%s history, leaving its bytes as they were', (version) => {
     const seeded = new DatabaseSync(file)
     seeded.exec(`CREATE TABLE backups (
       id INTEGER PRIMARY KEY, path TEXT NOT NULL, content BLOB NOT NULL, content_sha256 TEXT NOT NULL,
@@ -115,9 +115,38 @@ describe('backup history', () => {
       insert.run(target(), Buffer.from(text), createHash('sha256').update(text).digest('hex'), text.length, '2026-07-06T00:00:00.000Z')
     }
     seeded.close()
-    recordVersion(history(), 'launch-a', target(), Buffer.from('{"new":1}'))
+    const bytes = fs.readFileSync(file)
+    expect(() => history()).toThrow(version === 0 ? MissingFormatError : OlderFormatError)
+    expect(fs.readFileSync(file)).toEqual(bytes)
+    expect(fs.readdirSync(root)).toEqual(['backups.sqlite3'])
+    expect(userVersion()).toBe(version)
+  })
+
+  it('refuses an empty marked version-1 store without changing its bytes', () => {
+    const seeded = new DatabaseSync(file)
+    seeded.exec('PRAGMA user_version = 1')
+    seeded.close()
+    const bytes = fs.readFileSync(file)
+    expect(() => history()).toThrow(OlderFormatError)
+    expect(fs.readFileSync(file)).toEqual(bytes)
+  })
+
+  it('opens current history with nullable historic rows unchanged and records a new save', () => {
+    const seeded = history()
+    const bytes = Buffer.from('{"old":1}')
+    seeded.prepare(`
+      INSERT INTO backups (session_id, path, content, content_sha256, byte_size, written_at_utc)
+      VALUES (NULL, ?, ?, ?, ?, ?)
+    `).run(target(), bytes, createHash('sha256').update(bytes).digest('hex'), bytes.length, '2026-07-06T00:00:00.000Z')
+    recordVersion(seeded, 'launch-before', target(), Buffer.from('{"old":2}'))
+    const before = rows()
+    const reopened = history()
+    expect(reopened.prepare('SELECT * FROM backups ORDER BY id').all()).toEqual(before)
+    recordVersion(reopened, 'launch-a', target(), Buffer.from('{"new":1}'))
     const kept = rows()
-    expect(kept.map((row) => row.session_id)).toEqual([null, null, 'launch-a'])
+    expect(kept.slice(0, before.length)).toEqual(before)
+    expect(kept.map((row) => row.session_id)).toEqual([null, 'launch-before', 'launch-a'])
+    expect(Buffer.from(kept[2].content).toString()).toBe('{"new":1}')
     expect(userVersion()).toBe(FORMAT_VERSIONS.backups)
   })
 

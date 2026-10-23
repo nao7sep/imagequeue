@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { saveConfig, loadConfig } from '../../../src/main/config'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { createElaborator } from '../../../src/main/elaborators'
-import { setModelParams } from '../../../src/main/model-params'
+import { drainPendingWrites, setModelParams } from '../../../src/main/model-params'
 import { updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { recordServerTime } from '../../../src/main/dependencies/recommendations-times'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
@@ -58,17 +58,17 @@ describe('record/no-record decisions at real write sites', () => {
 
   it('records config.json on save', async () => {
     await saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } })
-    closeBackupStore()
+    await closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'config.json'))
   })
 
   it('records elaborators.json on a mutating write', async () => {
     await createElaborator({ kind: 'style', name: 'X', template: 'a template' })
-    closeBackupStore()
+    await closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'elaborators.json'))
   })
 
-  it('records params.json when a model param is set (after the debounced write flushes)', async () => {
+  it('records params.json when a model param is set and its write drains', async () => {
     setModelParams('some-model.ckpt', {
       width: 512,
       height: 512,
@@ -77,9 +77,8 @@ describe('record/no-record decisions at real write sites', () => {
       seed: '',
       negativePrompt: '',
     })
-    // model-params debounces its write ~200ms; wait past that so the flush lands and records.
-    await new Promise((r) => setTimeout(r, 350))
-    closeBackupStore()
+    await drainPendingWrites()
+    await closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'params.json'))
   })
 
@@ -89,7 +88,7 @@ describe('record/no-record decisions at real write sites', () => {
     })
     // The cache file must be on disk...
     expect(fs.existsSync(path.join(tmpRoot, 'dependencies.json'))).toBe(true)
-    closeBackupStore()
+    await closeBackupStore()
     // ...but never recorded into the backup store.
     expect(recordedPaths(tmpRoot)).not.toContain(path.join(tmpRoot, 'dependencies.json'))
   })
@@ -100,7 +99,7 @@ describe('record/no-record decisions at real write sites', () => {
     fs.writeFileSync(configs, '[]')
     await recordServerTime(configs, Buffer.from('[]'), '2026-09-11T20:46:05.000Z')
     expect(fs.existsSync(path.join(tmpRoot, 'recommendations-times.json'))).toBe(true)
-    closeBackupStore()
+    await closeBackupStore()
     expect(recordedPaths(tmpRoot)).not.toContain(path.join(tmpRoot, 'recommendations-times.json'))
   })
 
@@ -108,14 +107,14 @@ describe('record/no-record decisions at real write sites', () => {
     await updateDependenciesCache((cache) => {
       cache.cli.lastCheckedAtUtc = '2026-07-06T00:00:00.000Z'
     })
-    closeBackupStore()
+    await closeBackupStore()
     // No recorded write happened, so backups.sqlite3 was never opened/created.
     expect(fs.existsSync(path.join(tmpRoot, 'backups.sqlite3'))).toBe(false)
   })
 
   it('store-file filter: backups.sqlite3 and its -wal/-shm sidecars are excludable when asserting root contents', async () => {
     await saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } }) // triggers a recorded write → store file (+ WAL sidecars) appear
-    closeBackupStore()
+    await closeBackupStore()
 
     const isStoreArtifact = (name: string) =>
       name === 'backups.sqlite3' || name === 'backups.sqlite3-wal' || name === 'backups.sqlite3-shm'

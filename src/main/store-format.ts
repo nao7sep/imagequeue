@@ -42,6 +42,14 @@ export class NewerFormatError extends Error {
   }
 }
 
+/** A store whose older format this build does not read or convert. */
+export class OlderFormatError extends Error {
+  constructor(readonly path: string, readonly found: number, readonly supported: number) {
+    super(`${path} has format version ${found}, older than the ${supported} this build reads; it was left unchanged`)
+    this.name = 'OlderFormatError'
+  }
+}
+
 /** A SQLite store holding schema objects but no format version: unreadable (store-recovery-conventions). */
 export class MissingFormatError extends Error {
   constructor(readonly path: string) {

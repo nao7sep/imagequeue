@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError } from '../store-format'
+import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError, OlderFormatError } from '../store-format'
 
 // The backup history itself (data-backup-conventions): `backups.sqlite3` keeps,
 // for each protected file, the last version saved in each launch. Only the
@@ -24,9 +24,8 @@ CREATE TABLE IF NOT EXISTS backups (
 );
 `
 
-// Version 1 had no session_id; version 2 keeps one row per file per launch.
-// Rows recorded before launches were told apart keep a NULL session_id, which a
-// unique index never matches, so they stay as earlier history.
+// Current-format history may already contain rows with a NULL session_id from
+// before launches were told apart. The unique index leaves those rows intact.
 const INDEXES = `
 CREATE UNIQUE INDEX IF NOT EXISTS backups_path_session ON backups (path, session_id);
 CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
@@ -36,15 +35,9 @@ function userVersion(db: DatabaseSync): number {
   return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
 }
 
-function hasTable(db: DatabaseSync, name: string): boolean {
-  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined
-}
-
 /**
- * Opens the history and brings it to the current version. A fresh file is
- * created; an earlier one, marked or not, is adopted with its rows kept
- * ("Existing history is preserved"). A newer store, or a populated file that is
- * not a backup history, throws and is left as it is.
+ * Opens current-format history or initializes an empty file. Unsupported
+ * development formats are left unchanged, without adopting or converting them.
  */
 export function openBackupHistory(file: string): DatabaseSync {
   const db = new DatabaseSync(file, { timeout: 1_000 })
@@ -53,14 +46,15 @@ export function openBackupHistory(file: string): DatabaseSync {
     if (found > FORMAT_VERSIONS.backups) throw new NewerFormatError(file, found, FORMAT_VERSIONS.backups)
     if (found === 0) {
       const { objects } = db.prepare('SELECT count(*) AS objects FROM sqlite_master').get() as { objects: number }
-      if (objects > 0 && !hasTable(db, 'backups')) throw new MissingFormatError(file)
+      if (objects > 0) throw new MissingFormatError(file)
+    } else if (found < FORMAT_VERSIONS.backups) {
+      throw new OlderFormatError(file, found, FORMAT_VERSIONS.backups)
     }
     db.exec('PRAGMA journal_mode = WAL')
+    if (found === FORMAT_VERSIONS.backups) return db
     db.exec('BEGIN IMMEDIATE')
     try {
       db.exec(SCHEMA)
-      const columns = db.prepare('PRAGMA table_info(backups)').all() as { name: string }[]
-      if (!columns.some((column) => column.name === 'session_id')) db.exec('ALTER TABLE backups ADD COLUMN session_id TEXT')
       db.exec(INDEXES)
       db.exec(`PRAGMA user_version = ${FORMAT_VERSIONS.backups}`)
       db.exec('COMMIT')
