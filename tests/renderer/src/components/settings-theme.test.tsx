@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { useState } from 'react'
+import { RetainedModal } from '../../../../src/renderer/src/components/RetainedModal'
+import { MODAL_OPERATION_WAIT_MS } from '../../../../src/renderer/src/hooks/useModalOperation'
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react'
 import { until } from '../../until'
@@ -62,7 +65,7 @@ function themeRadios(): HTMLInputElement[] {
 beforeEach(() => {
   ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { platform: 'darwin', ...settingsEnvironment }
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.useRealTimers() })
 
 describe('Settings theme choice', () => {
   it('associates each Settings field label with its actual control', () => {
@@ -164,4 +167,64 @@ it('reports unsaved edits while they exist, and none once it closes', async () =
   await until(() => expect(report).toHaveBeenLastCalledWith('settings', true))
   cleanup()
   expect(report).toHaveBeenLastCalledWith('settings', false)
+})
+
+
+it.each(['success', 'failure'] as const)('keeps a timed-out Settings draft through hiding and late %s', async (outcome) => {
+  let finish!: () => void
+  let reject!: (error: Error) => void
+  let start!: () => void
+  const save = vi.fn((_base: unknown, _next: unknown, _keys: unknown, _paths: unknown, onWriteStarted: () => void) => {
+    start = onWriteStarted
+    return new Promise<void>((resolve, fail) => { finish = resolve; reject = fail })
+  })
+  settingsValue = { settings: baseConfig('system'), apiKeys: {}, saveChangedSettings: save }
+  function Harness(): React.JSX.Element {
+    const [overlay, setOverlay] = useState('settings')
+    return <>
+      <button onClick={() => setOverlay('other')}>Other surface</button>
+      {overlay === 'other' && <div>Other surface stays open</div>}
+      <RetainedModal open={overlay === 'settings'} titleKey="settings.title"
+        onOpen={() => setOverlay('settings')} onClose={() => setOverlay('')}>
+        {(props) => <SettingsModal {...props} />}
+      </RetainedModal>
+    </>
+  }
+  render(<Harness />)
+  await act(async () => {})
+  vi.useFakeTimers()
+  fireEvent.click(themeRadios()[1]!)
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  // The native consent decision does not consume the write deadline.
+  await act(async () => vi.advanceTimersByTimeAsync(2 * MODAL_OPERATION_WAIT_MS))
+  expect(screen.queryByRole('status')).toBeNull()
+  expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true)
+  act(() => start())
+  await act(async () => vi.advanceTimersByTimeAsync(MODAL_OPERATION_WAIT_MS))
+  expect(screen.getByRole('status').textContent).toContain('Completion is not confirmed')
+  expect(themeRadios().every((radio) => radio.matches(':disabled'))).toBe(true)
+  fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
+  expect(screen.queryByRole('dialog')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /still pending/ }))
+  expect(themeRadios().find((radio) => radio.checked)?.value).toBe('light')
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(save).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
+  fireEvent.click(screen.getByRole('button', { name: 'Other surface' }))
+  await act(async () => {
+    if (outcome === 'success') finish()
+    else reject(new Error('SECRET_SENTINEL'))
+  })
+  expect(screen.getByText('Other surface stays open')).toBeTruthy()
+  if (outcome === 'success') expect(screen.queryByRole('button', { name: /still pending|needs attention/ })).toBeNull()
+  else {
+    fireEvent.click(screen.getByRole('button', { name: /needs attention/ }))
+    expect(themeRadios().find((radio) => radio.checked)?.value).toBe('light')
+    expect(screen.getByRole('alert').textContent).not.toContain('SECRET_SENTINEL')
+    expect(themeRadios().every((radio) => !radio.matches(':disabled'))).toBe(true)
+    settingsValue.saveChangedSettings = vi.fn(async () => ({}))
+    fireEvent.click(themeRadios()[2]!)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  }
 })

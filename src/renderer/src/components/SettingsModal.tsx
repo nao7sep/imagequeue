@@ -20,10 +20,8 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { useI18n } from '../i18n/I18nContext'
 import './SettingsModal.css'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
-
-interface Props {
-  onClose: () => void
-}
+import { useModalOperation } from '../hooks/useModalOperation'
+import type { RetainedModalProps } from './RetainedModal'
 
 // The Settings tabs: the six per-backend sections share one Image Backends tab
 // (six small same-shaped blocks, one category), the rest map one section per tab.
@@ -55,7 +53,9 @@ function withNotificationField(config: Record<string, unknown> | null, key: stri
   }
 }
 
-export function SettingsModal({ onClose }: Props): React.JSX.Element {
+export function SettingsModal(props: RetainedModalProps): React.JSX.Element | null {
+  const { visible = true } = props
+  const { busy: saving, busyRef: saveInFlight, pending, run, hide, close: onClose } = useModalOperation(props)
   const { settings, apiKeys, saveChangedSettings, saveNotificationField } = useSettings()
   const confirm = useConfirm()
   const { t, language: interfaceLanguage } = useI18n()
@@ -93,8 +93,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [errorMessage, setErrorMessage] = useState<MessageKey | null>(null)
-  const [saving, setSaving] = useState(false)
-  const saveInFlight = useRef(false)
   const authoredPaths = useRef(new Set<string>())
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const handleBrowseFailure = useCallback((error: unknown): void => {
@@ -156,31 +154,22 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       setErrorMessage('settings.endpointRequired')
       return
     }
-    // This submitted draft owns the modal until both stores settle. Freezing
-    // it prevents a successful save from closing over edits made afterwards.
-    saveInFlight.current = true
-    setSaving(true)
-    try {
-      // Clean the slug template (a multiline body) at this commit point before
-      // diffing against base, so the stored and compared value is the tidy one.
+    await run(async (startWait) => {
+      // Submitted fields stay frozen through physical settlement, even after
+      // the modal is hidden. Native consent precedes the storage wait clock.
       const prompts = config.prompts as Record<string, string>
       const cleaned =
         typeof prompts?.slug === 'string'
           ? { ...config, prompts: { ...prompts, slug: multiline(prompts.slug) } }
           : config
-      await saveChangedSettings(baseConfig, cleaned, changedKeys, [...authoredPaths.current])
+      await saveChangedSettings(baseConfig, cleaned, changedKeys, [...authoredPaths.current], startWait)
       setBaseKeys({ ...keys })
-      onClose()
-    } catch (e) {
-      setErrorMessage(presentFailure('settings-save', e))
-    } finally {
-      saveInFlight.current = false
-      setSaving(false)
-    }
+      return 'close'
+    }, (error) => setErrorMessage(presentFailure('settings-save', error)))
   }
 
   const handleClose = useCallback(async (): Promise<void> => {
-    if (saveInFlight.current) return
+    if (saveInFlight.current) { if (pending) hide(); return }
     if (dirty) {
       const ok = await confirm({
         title: t('settings.unsavedTitle'),
@@ -192,7 +181,23 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       if (!ok) return
     }
     onClose()
-  }, [dirty, confirm, onClose, t])
+  }, [dirty, confirm, onClose, t, pending, hide, saveInFlight])
+
+  // Notification toggles save immediately (bypass staged config). Volume is not
+  // among them — it is state, and patchUiState persists it on its own channel.
+  const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
+    setErrorMessage(null)
+    try {
+      await saveNotificationField(key, value)
+      // Immediate settings are no longer dirty once the main process accepts them.
+      setConfig((prev) => withNotificationField(prev, key, value))
+      setBaseConfig((prev) => withNotificationField(prev, key, value))
+    } catch (error) {
+      setErrorMessage(presentFailure('settings-save', error))
+    }
+  }, [saveNotificationField])
+
+  if (!visible) return null
 
   if (!config) return (
     <Modal
@@ -241,20 +246,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     setConfig({ ...config, notifications: { ...notificationCfg, [key]: value } })
   }
 
-  // Notification toggles save immediately (bypass staged config). Volume is not
-  // among them — it is state, and patchUiState persists it on its own channel.
-  const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
-    setErrorMessage(null)
-    try {
-      await saveNotificationField(key, value)
-      // Immediate settings are no longer dirty once the main process accepts them.
-      setConfig((prev) => withNotificationField(prev, key, value))
-      setBaseConfig((prev) => withNotificationField(prev, key, value))
-    } catch (error) {
-      setErrorMessage(presentFailure('settings-save', error))
-    }
-  }, [saveNotificationField])
-
   // A cloud backend's credentials and transport knobs only. Its model and generation
   // parameters belong to the queue column: that is the live surface, and it autosaves
   // them into these same keys, so editing them here too would put two writers on one
@@ -281,10 +272,10 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       title={t('settings.title')}
       className="settings-modal-box"
       onClose={handleClose}
-      dismissable={!saving}
+      dismissable={!saving || pending}
       footer={
         <>
-          <button className="modal-btn" onClick={() => void handleClose()} disabled={saving}>{t('common.cancel')}</button>
+          <button className="modal-btn" onClick={() => void handleClose()} disabled={saving && !pending}>{t(pending ? 'common.close' : 'common.cancel')}</button>
           <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty || saving} aria-busy={saving}>{t('common.save')}</button>
         </>
       }
@@ -305,6 +296,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       </div>
       </div>
       <div className="settings-overlay">
+      {pending && <p role="status">{t('settings.savePending')}</p>}
       <fieldset className="settings-edit-fields" disabled={saving} aria-busy={saving}>
       {errorMessage && <div className="settings-error" role="alert">{t(errorMessage)}</div>}
       <div className="app-tabpanel" {...tablist.getPanelProps('general')} hidden={activeTab !== 'general'}>

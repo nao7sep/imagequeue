@@ -129,6 +129,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
   fs.rmSync(mocks.root, { recursive: true, force: true })
 })
 
@@ -437,4 +438,43 @@ describe('authoritative local readiness', () => {
     await older
     expect(mocks.setDrawThingsReady).not.toHaveBeenCalled()
   })
+})
+
+
+it('starts the correlated settings write wait only after native consent, retaining both stores until settlement', async () => {
+  const base = structuredClone(mocks.config)
+  const next = structuredClone(base)
+  next.notifications.success_file = path.join(mocks.root, 'chosen.wav')
+  fs.writeFileSync(next.notifications.success_file, 'sound')
+  let answer!: (value: { response: number }) => void
+  let entered!: () => void
+  const consent = new Promise<void>((resolve) => { entered = resolve })
+  mocks.showMessageBox.mockImplementationOnce(() => { entered(); return new Promise((resolve) => { answer = resolve }) })
+  let configDone!: () => void
+  let keysDone!: () => void
+  mocks.saveConfig.mockImplementationOnce(() => new Promise<void>((resolve) => { configDone = resolve }))
+  mocks.setStoredApiKeys.mockImplementationOnce(() => new Promise<void>((resolve) => { keysDone = resolve }))
+  let writeStarted!: () => void
+  const starting = new Promise<void>((resolve) => { writeStarted = resolve })
+  const send = vi.fn(() => writeStarted())
+  vi.useFakeTimers()
+  let settled = false
+  const saving = Promise.resolve(mocks.handlers.get('settings:saveChangedFields')!(
+    { sender: { isDestroyed: () => false, send } }, base, next, { 'openai.image': 'changed' }, [], 42,
+  )).then(() => { settled = true })
+  await consent
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(send).not.toHaveBeenCalled()
+  expect(mocks.saveConfig).not.toHaveBeenCalled()
+  answer({ response: 1 })
+  await starting
+  expect(send).toHaveBeenCalledExactlyOnceWith('settings:writeStarted', 42)
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(settled).toBe(false)
+  configDone()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(settled).toBe(false)
+  keysDone()
+  await saving
+  expect(settled).toBe(true)
 })

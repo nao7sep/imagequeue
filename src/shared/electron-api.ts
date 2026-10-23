@@ -152,7 +152,7 @@ export interface ElectronAPI {
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]) => Promise<{ success: boolean }>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[], onWriteStarted?: () => void) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<{ success: boolean }>
   // Stored values and resolved presence share one refresh, separate from config.
   getCredentials: () => Promise<SettingsCredentials>

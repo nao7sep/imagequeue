@@ -58,6 +58,8 @@ export type { CliStatus, CustomJsonStatus, Elaborator, ElaboratorKind, LocalMode
 export type { CliJobSnapshot, CliChunkEvent, CliStatusEvent }
 export type { ElectronAPI } from '../shared/electron-api'
 
+let settingsSaveSequence = 0
+
 const api = {
   platform: process.platform,
   chooseQuit: (choice: 'retry' | 'quit' | 'cancel'): void => { ipcRenderer.send('quit:choice', choice) },
@@ -241,13 +243,22 @@ const api = {
   getSettings: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke('settings:get'),
 
-  saveChangedSettings: (
+  saveChangedSettings: async (
     base: Record<string, unknown>,
     next: Record<string, unknown>,
     keys?: Partial<Record<SecretId, string>>,
-    authoredPaths?: string[]
-  ): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveChangedFields', base, next, keys, authoredPaths),
+    authoredPaths?: string[],
+    onWriteStarted?: () => void,
+  ): Promise<{ success: boolean }> => {
+    const requestId = ++settingsSaveSequence
+    const started = (_event: Electron.IpcRendererEvent, id: number): void => {
+      if (id === requestId) onWriteStarted?.()
+    }
+    if (onWriteStarted) ipcRenderer.on('settings:writeStarted', started)
+    try {
+      return await ipcRenderer.invoke('settings:saveChangedFields', base, next, keys, authoredPaths, onWriteStarted ? requestId : undefined)
+    } finally { if (onWriteStarted) ipcRenderer.removeListener('settings:writeStarted', started) }
+  },
 
   saveBrainstormSettings: (brainstorm: BrainstormConfig): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),

@@ -111,7 +111,7 @@ export function registerSettingsIpc(
     return loadConfig()
   })
 
-  handle('settings:saveChangedFields', async (event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}, authoredPaths: string[] = []) => {
+  handle('settings:saveChangedFields', async (event, base: AppConfig, next: AppConfig, keys: Record<string, string> = {}, authoredPaths: string[] = [], requestId?: number) => {
     validateKeyChanges(keys)
     for (const field of ['success_file', 'failure_file'] as const) {
       const raw = next.notifications[field]
@@ -120,6 +120,7 @@ export function registerSettingsIpc(
         if (!await authorizedSoundFile(resolved, event.sender)) throw new Error('Sound file access was not granted')
       }
     }
+    if (requestId !== undefined && !event.sender.isDestroyed()) event.sender.send('settings:writeStarted', requestId)
     // After native consent, both store owners capture the complete form before
     // waiting on writes. Quit can drain/retry that admitted submission.
     const results = await Promise.allSettled([

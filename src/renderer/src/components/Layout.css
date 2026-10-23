@@ -392,3 +392,16 @@
 .menu-item:disabled:hover {
   background: none;
 }
+
+.retained-modal-pointer {
+  flex-shrink: 0;
+  margin: 4px 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

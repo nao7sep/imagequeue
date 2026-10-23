@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
+import { RetainedModal } from './RetainedModal'
 import { SettingsModal } from './SettingsModal'
 import { SessionsModal } from './SessionsModal'
 import { ElaboratorsModal } from './ElaboratorsModal'
@@ -267,20 +268,11 @@ export function Layout(): React.JSX.Element {
           <div className="modal-body">{draftUnavailable ? <p role="alert">{t(draftUnavailable)}</p> : <p role="status">{t('common.loading')}</p>}</div>
         </Modal>
       )}
-      {overlay === 'settings' && (
-        <SettingsModal onClose={() => setOverlay(null)} />
-      )}
       {overlay === 'shortcuts' && (
         <ShortcutsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'sessions' && (
         <SessionsModal onClose={() => setOverlay(null)} />
-      )}
-      {overlay === 'elaborators' && (
-        <ElaboratorsModal onClose={() => setOverlay(null)} />
-      )}
-      {overlay === 'elaboration-settings' && (
-        <ElaborationSettingsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'elaborated-prompts' && (
         <ElaboratedPromptsModal onClose={() => setOverlay(null)} />
@@ -342,6 +334,21 @@ export function Layout(): React.JSX.Element {
           </Menu>
           </div>
         </div>
+        <RetainedModal open={overlay === 'settings'} titleKey="settings.title"
+          onOpen={() => setOverlay('settings')}
+          onClose={() => setOverlay((current) => current === 'settings' ? null : current)}>
+          {(props) => <SettingsModal {...props} />}
+        </RetainedModal>
+        <RetainedModal open={overlay === 'elaborators'} titleKey="menu.elaborators"
+          onOpen={() => setOverlay('elaborators')}
+          onClose={() => setOverlay((current) => current === 'elaborators' ? null : current)}>
+          {(props) => <ElaboratorsModal {...props} />}
+        </RetainedModal>
+        <RetainedModal open={overlay === 'elaboration-settings'} titleKey="elabSettings.title"
+          onOpen={() => setOverlay('elaboration-settings')}
+          onClose={() => setOverlay((current) => current === 'elaboration-settings' ? null : current)}>
+          {(props) => <ElaborationSettingsModal {...props} />}
+        </RetainedModal>
         <PromptPane
             selectedTask={selectedTask}
             prompt={prompt}
