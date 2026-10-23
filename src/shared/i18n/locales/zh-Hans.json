@@ -839,6 +839,7 @@
   "records.empty": "没有符合这些筛选条件的条目。",
   "records.loadFailed": "无法读取日志。",
   "records.livePaused": "实时更新已暂停。显示的日志可能不是最新的。",
+  "records.searchIncomplete": "无法搜索部分 CLI 输出。结果可能不完整，实时更新已暂停。",
   "records.noSelection": "选择一个条目即可查看其全部内容。",
   "records.detailFailed": "无法读取此条目。",
   "records.resizeList": "调整列表宽度",

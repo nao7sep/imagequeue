@@ -60,6 +60,8 @@ export interface RecordSummary {
 }
 
 export interface RecordsPage {
+  /** Some CLI output was unavailable; intact matches are still returned. */
+  searchIncomplete?: true
   records: RecordSummary[]
   more: boolean
 }

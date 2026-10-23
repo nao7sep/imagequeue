@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openRecords, closeRecords, write } from '../../src/main/records-storage'
 import { readDetail, readOutput, readPage, runRecordsRead } from '../../src/main/records-query'
 import { RECORDS_OUTPUT_PAGE_SIZE, type RecordsQuery } from '../../src/shared/records'
@@ -117,16 +117,45 @@ describe('recorded CLI output paging and search with real SQLite/files', () => {
     expect(indexes).toEqual(expect.arrayContaining(['cli_jobs_time', 'cli_jobs_launch_time', 'cli_jobs_session_time']))
   })
 
+  it('keeps unrelated matches and complete diagnostics when one output is unavailable, then recovers', () => {
+    const reference = `20261024-000000-utc-${randomUUID()}-stdout.log`
+    const missing = row({ stdout_file: reference })
+    const healthy = row({ stderr_file: file('a needle in intact output', 'stderr') })
+    write('log_records', { time: '2026-10-24T00:00:03.000Z', launch: 'launch', session_id: null,
+      task_id: null, request_id: null, level: 'info', message: 'needle in a log', fields: '{}' })
+    const report = vi.fn()
+    const page = readPage(db, { ...query('needle'), kind: null }, report)
+    expect(page.searchIncomplete).toBe(true)
+    expect(page.records.map((item) => item.kind)).toEqual(['log', 'cli-job'])
+    expect(page.records[1]!.id).toBe(healthy)
+    expect(report).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith({ unavailableInputs: 1, first: {
+      jobId: missing, stream: 'stdout', reference,
+      error: expect.objectContaining({ code: 'ENOENT', path: path.join(fs.realpathSync(root), 'records', 'cli', reference), stack: expect.any(String) }),
+    } })
+    fs.writeFileSync(path.join(root, 'records', 'cli', reference), 'recovered needle')
+    const recovered = readPage(db, { ...query('needle'), kind: null }, report)
+    expect(recovered.searchIncomplete).toBeUndefined()
+    expect(recovered.records.map((item) => item.id)).toContain(missing)
+    expect(report).toHaveBeenCalledOnce()
+  })
+
+  it('reports incomplete captured output even when its retained bytes remain readable', () => {
+    row({ stdout_file: file('partial bytes'), output_error: 'capture was interrupted' })
+    expect(readPage(db, query('absent'))).toMatchObject({ records: [], searchIncomplete: true })
+    expect(readPage(db, query(''))).not.toHaveProperty('searchIncomplete')
+  })
+
   it('rejects references outside the writer filename/stream contract and reports missing output', () => {
     for (const ref of ['../elsewhere', '/tmp/out.log', `${randomUUID()}-stdout.log`, `20261024-000000-utc-${randomUUID()}-stderr.log`]) {
       const id = row({ stdout_file: ref })
       expect(() => readOutput(db, id, 'stdout', 0)).toThrow('Invalid CLI output file reference')
-      expect(() => readPage(db, query('unmatched'))).toThrow()
+      expect(readPage(db, query('unmatched'))).toEqual({ records: [], more: false, searchIncomplete: true })
       db.prepare('DELETE FROM cli_jobs WHERE id = ?').run(id)
     }
     const id = row({ stdout_file: `20261024-000000-utc-${randomUUID()}-stdout.log` })
     expect(() => readOutput(db, id, 'stdout', 0)).toThrow('ENOENT')
-    expect(() => readPage(db, query('unmatched'))).toThrow()
+    expect(readPage(db, query('unmatched'))).toEqual({ records: [], more: false, searchIncomplete: true })
     expect(() => readOutput(db, 999999, 'stdout', 0)).toThrow('no longer exists')
   })
 })

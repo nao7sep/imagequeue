@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import path from 'path'
+import { DatabaseSync } from 'node:sqlite'
 import { writeLogRecord } from '../../src/main/records'
 import type { RecordsReaderResponse } from '../../src/main/records-reader'
 import { freshRecordsRoot, removeRecordsRoots } from './records-fixture'
@@ -45,5 +46,24 @@ describe('records reader worker', () => {
     const failed = ask({ id: 9, read: { op: 'page', query: { launch: null, session: null, kind: null, level: null, search: 5, after: null } } })
     expect(failed).toMatchObject({ id: 9, ok: false, error: expect.stringContaining('TypeError') })
     expect(ask({ id: 10, read: { op: 'detail', kind: 'log', id: 99_999 } })).toEqual({ id: 10, ok: true, value: null })
+  })
+})
+
+it('transports an incomplete-search diagnostic separately from the usable page', () => {
+  const writer = new DatabaseSync(port.databasePath)
+  const reference = '20261024-000000-utc-00000000-0000-4000-8000-000000000000-stdout.log'
+  try {
+    writer.prepare(`INSERT INTO cli_jobs
+      (time, launch, session_id, job_id, job_kind, target, cli_path, args, started_at, ended_at, status,
+       exit_code, signal, stdout, stderr, stdout_file, output_error, error)
+      VALUES ('2026-01-01T00:00:00.000Z', 'launch', NULL, 'job', 'download', 'model', '/cli', '[]', NULL,
+       '2026-01-01T00:00:00.000Z', 'exited', 0, NULL, '', '', ?, NULL, NULL)`).run(reference)
+  } finally { writer.close() }
+  const result = ask({ id: 20, read: { op: 'page', query: {
+    launch: null, session: null, kind: null, level: null, search: 'Read on the worker', after: null,
+  } } })
+  expect(result).toMatchObject({ id: 20, ok: true,
+    value: { records: [{ title: 'Read on the worker' }], searchIncomplete: true },
+    warning: { unavailableInputs: 1, first: { reference, error: { code: 'ENOENT', stack: expect.any(String) } } },
   })
 })

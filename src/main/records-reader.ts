@@ -1,6 +1,7 @@
 import type { Worker } from 'node:worker_threads'
 import createReaderWorker from './records-reader-worker?nodeWorker'
-import { flushRecords, recordsDatabasePath } from './records'
+import { flushRecords, recordsDatabasePath, writeLogRecord } from './records'
+import type { RecordsSearchWarning } from './records-query'
 import type { RecordsRead, RecordsReadResults } from '../shared/records'
 
 // History scans and selected-record reads have separate owners so a slow
@@ -15,7 +16,7 @@ export interface RecordsReaderRequest {
 }
 
 export type RecordsReaderResponse =
-  | { id: number; ok: true; value: RecordsReadResults[RecordsRead['op']] }
+  | { id: number; ok: true; value: RecordsReadResults[RecordsRead['op']]; warning?: RecordsSearchWarning }
   | { id: number; ok: false; error: string }
 
 interface PendingRead {
@@ -53,7 +54,10 @@ function createReadLane() {
       if (!read) return
       pending.delete(response.id)
       clearTimeout(read.timer)
-      if (response.ok) read.resolve(response.value as never)
+      if (response.ok) {
+        if (response.warning) writeLogRecord(new Date().toISOString(), 'warn', 'CLI output search was incomplete', { ...response.warning })
+        read.resolve(response.value as never)
+      }
       else read.reject(new Error(response.error))
     })
     created.on('error', (error) => {

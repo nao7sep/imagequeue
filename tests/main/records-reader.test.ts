@@ -2,9 +2,9 @@ import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RecordsReaderRequest } from '../../src/main/records-reader'
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), databasePath: '/disposable/records.sqlite3' as string | null }))
+const mocks = vi.hoisted(() => ({ create: vi.fn(), writeLogRecord: vi.fn(), databasePath: '/disposable/records.sqlite3' as string | null }))
 vi.mock('../../src/main/records-reader-worker?nodeWorker', () => ({ default: mocks.create }))
-vi.mock('../../src/main/records', () => ({ flushRecords: async () => {}, recordsDatabasePath: () => mocks.databasePath }))
+vi.mock('../../src/main/records', () => ({ flushRecords: async () => {}, writeLogRecord: mocks.writeLogRecord, recordsDatabasePath: () => mocks.databasePath }))
 import { RECORDS_READ_TIMEOUT_MS, closeRecordsReader, readRecords } from '../../src/main/records-reader'
 
 type FakeWorker = EventEmitter & {
@@ -193,4 +193,18 @@ it('keeps selected records and output available while history is stalled and ter
     await expect(output).resolves.toEqual(page)
     expect(mocks.create).toHaveBeenCalledTimes(2)
   } finally { finish() }
+})
+
+it('records a partial search warning without rejecting its intact matches', async () => {
+  const worker = fakeWorker()
+  mocks.create.mockReturnValue(worker)
+  const result = readRecords({ op: 'page', query: { launch: null, session: null, kind: null, level: null, search: 'needle', after: null } })
+  await Promise.resolve()
+  await Promise.resolve()
+  const warning = { unavailableInputs: 2, first: { jobId: 8, stream: 'stdout', reference: 'retained.log',
+    error: { name: 'Error', code: 'EACCES', message: '/private/SENTINEL', stack: 'complete stack' } } }
+  const page = { ...PAGE, searchIncomplete: true }
+  worker.emit('message', { id: worker.posted[0]!.id, ok: true, value: page, warning })
+  await expect(result).resolves.toEqual(page)
+  expect(mocks.writeLogRecord).toHaveBeenCalledWith(expect.any(String), 'warn', 'CLI output search was incomplete', warning)
 })

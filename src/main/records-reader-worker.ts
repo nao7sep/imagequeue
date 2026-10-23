@@ -1,6 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { DatabaseSync } from 'node:sqlite'
-import { runRecordsRead } from './records-query'
+import { runRecordsRead, type RecordsSearchWarning } from './records-query'
 import type { RecordsReaderRequest, RecordsReaderResponse } from './records-reader'
 
 // The Records window's reads, on their own thread and their own read-only
@@ -23,7 +23,9 @@ parentPort?.on('message', ({ id, read }: RecordsReaderRequest) => {
     // the dedicated writer worker keeps writing on its own connection.
     db.exec('BEGIN')
     try {
-      response = { id, ok: true, value: runRecordsRead(db, read) }
+      let warning: RecordsSearchWarning | undefined
+      const value = runRecordsRead(db, read, (result) => { warning = result })
+      response = { id, ok: true, value, ...(warning ? { warning } : {}) }
     } finally {
       db.exec('COMMIT')
     }

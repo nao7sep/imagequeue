@@ -887,6 +887,7 @@
   "records.empty": "Nessuna voce corrisponde a questi filtri.",
   "records.loadFailed": "Impossibile leggere il log.",
   "records.livePaused": "Gli aggiornamenti in tempo reale sono in pausa. Le voci del log visualizzate potrebbero non essere aggiornate.",
+  "records.searchIncomplete": "Impossibile cercare in parte dell’output della CLI. I risultati potrebbero essere incompleti; gli aggiornamenti in tempo reale sono in pausa.",
   "records.noSelection": "Seleziona una voce per vedere tutto ciò che contiene.",
   "records.detailFailed": "Impossibile leggere questa voce.",
   "records.resizeList": "Ridimensiona l’elenco",

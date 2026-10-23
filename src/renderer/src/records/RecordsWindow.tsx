@@ -102,6 +102,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [searchText, setSearchText] = useState('')
   const [list, setList] = useState<ListState>({ status: 'loading' })
+  const [searchIncomplete, setSearchIncomplete] = useState(false)
+  const incompleteSearch = useRef(false)
   const [selected, setSelected] = useState<Selection | null>(null)
   const [detail, setDetail] = useState<DetailState>({ status: 'none' })
   const [listWidth, setListWidth] = useState(initialListWidth)
@@ -193,31 +195,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     return () => { mounted.current = false }
   }, [refreshSources])
 
-  // A page applies only while the filters it was read for are still the
-  // newest ones asked for.
-  useEffect(() => {
-    filtersRef.current = filters
-    const generation = ++listGeneration.current
-    fetchingMore.current = false
-    newestPending.current = false
-    setRefreshing(false)
-    setList({ status: 'loading' })
-    void window.electronAPI.readRecordsPage({ ...filters, after: null }).then(
-      (page) => {
-        if (generation !== listGeneration.current) return
-        setLiveFailure('records', false)
-        setList({ status: 'ready', records: page.records, more: page.more, loadingMore: false, moreFailed: false })
-      },
-      (error: unknown) => {
-        if (generation !== listGeneration.current) return
-        setLiveFailure('records', true)
-        recordOperationalDiagnostic('Records read failed', error)
-        setList({ status: 'failed' })
-      },
-    )
-    return () => { if (listGeneration.current === generation) listGeneration.current++ }
-  }, [filters, setLiveFailure])
-
   // The newest page read again for new records. It joins the rows already
   // shown rather than replacing them, so the list never falls back to the
   // loading note and the pages already read stay. It reads only refs, so one
@@ -230,7 +207,9 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     void window.electronAPI.readRecordsPage({ ...filtersRef.current, after: null }).then(
       (page) => {
         if (generation !== listGeneration.current) return
-        setLiveFailure('records', false)
+        incompleteSearch.current ||= page.searchIncomplete === true
+        setLiveFailure('records', incompleteSearch.current)
+        setSearchIncomplete(incompleteSearch.current)
         setList((current) =>
           current.status === 'ready'
             ? { ...current, ...mergeNewestPage(current.records, current.more, page) }
@@ -241,6 +220,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         if (generation !== listGeneration.current) return
         setLiveFailure('records', true)
         recordOperationalDiagnostic('Records read failed', error)
+        setList((current) => current.status === 'loading' ? { status: 'failed' } : current)
       },
     ).finally(() => {
       if (newestRead.current === generation) {
@@ -254,6 +234,20 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       }
     })
   }, [setLiveFailure])
+
+  // Initial/filter reads share the newest-page owner, so a live signal while
+  // hydration is pending schedules one follow-up rather than racing its result.
+  useEffect(() => {
+    filtersRef.current = filters
+    const generation = ++listGeneration.current
+    fetchingMore.current = false
+    newestPending.current = false
+    setList({ status: 'loading' })
+    incompleteSearch.current = false
+    setSearchIncomplete(false)
+    readNewest()
+    return () => { if (listGeneration.current === generation) listGeneration.current++ }
+  }, [filters, readNewest])
 
   // A stored record reaches the list at once while it is scrolled to the top;
   // otherwise it waits until the list is back there, so the list never moves
@@ -324,6 +318,11 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       (page) => {
         if (generation !== listGeneration.current) return
         fetchingMore.current = false
+        if (page.searchIncomplete) {
+          incompleteSearch.current = true
+          setSearchIncomplete(true)
+          setLiveFailure('records', true)
+        }
         setList((current) =>
           current.status === 'ready'
             ? { ...current, records: [...current.records, ...page.records], more: page.more, loadingMore: false }
@@ -352,7 +351,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const onListScroll = (): void => {
     const scroll = scrollRef.current
     if (scroll === null) return
-    if (newestPending.current && atTop(scroll)) {
+    if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && atTop(scroll)) {
       newestPending.current = false
       readNewest()
     }
@@ -528,10 +527,11 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         </div>
         {liveFailures.records || liveFailures.sources ? (
           <div className="records-refresh-failure">
-            <p role="alert">{t('records.livePaused')}</p>
+            <p role="alert">{t(searchIncomplete ? 'records.searchIncomplete' : 'records.livePaused')}</p>
             <button className="modal-btn" disabled={refreshing || refreshingSources} onClick={() => {
               refreshSources()
-              readNewest()
+              if (searchIncomplete) setFilters((current) => ({ ...current }))
+              else readNewest()
             }}>{t('common.retry')}</button>
           </div>
         ) : null}

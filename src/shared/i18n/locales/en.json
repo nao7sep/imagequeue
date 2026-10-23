@@ -863,6 +863,7 @@
   "records.empty": "No records match these filters.",
   "records.loadFailed": "The records could not be read.",
   "records.livePaused": "Live updates are paused. The displayed records may be out of date.",
+  "records.searchIncomplete": "Some CLI output could not be searched. Results may be incomplete; live updates are paused.",
   "records.noSelection": "Select a record to see everything it holds.",
   "records.detailFailed": "This record could not be read.",
   "records.resizeList": "Resize list pane",

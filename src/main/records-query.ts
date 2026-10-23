@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
+import { serializeError } from '../shared/serialize-error'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import {
   RECORDS_PAGE_SIZE,
@@ -34,9 +35,15 @@ function likePattern(search: string): string | null {
   return trimmed === '' ? null : `%${trimmed.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
 }
 
-export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
+export interface RecordsSearchWarning {
+  unavailableInputs: number
+  first: { jobId: number; stream: RecordOutputStream; reference: string | null; error: Record<string, unknown> }
+}
+
+export function readPage(db: DatabaseSync, query: RecordsQuery, reportWarning?: (warning: RecordsSearchWarning) => void): RecordsPage {
   const pattern = likePattern(query.search)
-  if (pattern !== null) registerOutputSearch(db)
+  const search = pattern === null ? null : registerOutputSearch(db)
+  if (search) search.warning = null
   const candidates: RecordSummary[] = []
   const table = (kind: RecordKind, select: string, from: string, level: string, searched: string[]): void => {
     const params: SQLInputValue[] = []
@@ -60,7 +67,7 @@ export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
       params.push(...searched.map(() => pattern))
       if (kind === 'cli-job') {
         for (const stream of ['stdout', 'stderr']) {
-          terms.push(`cli_output_contains(${stream}_file, ?, '${stream}')`)
+          terms.push(`cli_output_contains(${stream}_file, ?, '${stream}', output_error, id)`)
           params.push(query.search.trim())
         }
       }
@@ -98,7 +105,10 @@ export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
   }
   const descending = (a: string, b: string): number => a === b ? 0 : a < b ? 1 : -1
   candidates.sort((a, b) => descending(a.time, b.time) || descending(a.kind, b.kind) || b.id - a.id)
-  return { records: candidates.slice(0, RECORDS_PAGE_SIZE), more: candidates.length > RECORDS_PAGE_SIZE }
+  if (search?.warning) reportWarning?.(search.warning)
+  return { records: candidates.slice(0, RECORDS_PAGE_SIZE), more: candidates.length > RECORDS_PAGE_SIZE,
+    ...(search?.warning ? { searchIncomplete: true as const } : {}),
+  }
 }
 
 interface SourceIndex {
@@ -171,8 +181,8 @@ export function readDetail(db: DatabaseSync, kind: RecordKind, id: number): Reco
   return (row as unknown as RecordDetail | undefined) ?? null
 }
 
-export function runRecordsRead(db: DatabaseSync, read: RecordsRead): RecordsReadResults[RecordsRead['op']] {
-  if (read.op === 'page') return readPage(db, read.query)
+export function runRecordsRead(db: DatabaseSync, read: RecordsRead, reportWarning?: (warning: RecordsSearchWarning) => void): RecordsReadResults[RecordsRead['op']] {
+  if (read.op === 'page') return readPage(db, read.query, reportWarning)
   if (read.op === 'sources') return readSources(db)
   if (read.op === 'output') return readOutput(db, read.id, read.stream, read.offset)
   return readDetail(db, read.kind, read.id)
@@ -225,29 +235,55 @@ function outputChunk(buffer: Buffer, offset: number): RecordsOutputPage {
   return { text: buffer.toString('utf8', 0, end), nextOffset: end < buffer.length ? offset + end : null }
 }
 
-const searchConnections = new WeakSet<DatabaseSync>()
+interface OutputSearch { warning: RecordsSearchWarning | null }
+const searchConnections = new WeakMap<DatabaseSync, OutputSearch>()
 const asciiLower = (value: string): string => value.replace(/[A-Z]/g, (character) => character.toLowerCase())
-function registerOutputSearch(db: DatabaseSync): void {
-  if (searchConnections.has(db)) return
+function registerOutputSearch(db: DatabaseSync): OutputSearch {
+  const existing = searchConnections.get(db)
+  if (existing) return existing
   const directory = outputDirectory(db)
-  // Search runs in the existing reader worker and carries only a chunk and
-  // the possible match tail. Failed capture may still settle a pending write.
-  db.function('cli_output_contains', (reference, needle, stream) => {
-    if (reference === null) return 0
-    const file = fs.openSync(outputPath(directory, String(reference), stream as RecordOutputStream), 'r')
+  const state: OutputSearch = { warning: null }
+  // A shared storage failure can affect many files. Retain its first complete
+  // diagnostic and the affected-input count, without accumulating errors for
+  // an entire history. The caller presents incomplete results and pauses live
+  // retry, so recording this warning cannot create a refresh/log loop.
+  db.function('cli_output_contains', (reference, needle, stream, captureError, jobId) => {
+    let unavailable = false
+    const note = (error: Record<string, unknown>): void => {
+      if (unavailable) return
+      unavailable = true
+      if (state.warning) state.warning.unavailableInputs++
+      else state.warning = { unavailableInputs: 1, first: {
+        jobId: Number(jobId), stream: stream as RecordOutputStream,
+        reference: reference === null ? null : String(reference), error,
+      } }
+    }
+    if (reference === null) {
+      if (captureError !== null) note({ captureError })
+      return 0
+    }
     try {
-      const wanted = asciiLower(String(needle))
-      const decoder = new StringDecoder('utf8')
-      const buffer = Buffer.allocUnsafe(RECORDS_OUTPUT_PAGE_SIZE)
-      let tail = ''
-      for (;;) {
-        const length = fs.readSync(file, buffer, 0, buffer.length, null)
-        const chunk = tail + asciiLower(length ? decoder.write(buffer.subarray(0, length)) : decoder.end())
-        if (chunk.includes(wanted)) return 1
-        if (!length) return 0
-        tail = wanted.length > 1 ? chunk.slice(-(wanted.length - 1)) : ''
-      }
-    } finally { fs.closeSync(file) }
+      const file = fs.openSync(outputPath(directory, String(reference), stream as RecordOutputStream), 'r')
+      try {
+        const wanted = asciiLower(String(needle))
+        const decoder = new StringDecoder('utf8')
+        const buffer = Buffer.allocUnsafe(RECORDS_OUTPUT_PAGE_SIZE)
+        let tail = ''
+        for (;;) {
+          const length = fs.readSync(file, buffer, 0, buffer.length, null)
+          const chunk = tail + asciiLower(length ? decoder.write(buffer.subarray(0, length)) : decoder.end())
+          if (chunk.includes(wanted)) return 1
+          if (!length) return 0
+          tail = wanted.length > 1 ? chunk.slice(-(wanted.length - 1)) : ''
+        }
+      } finally { fs.closeSync(file) }
+    } catch (error) {
+      note({ ...serializeError(error), ...(captureError !== null ? { captureError } : {}) })
+      return 0
+    } finally {
+      if (captureError !== null && !unavailable) note({ captureError })
+    }
   })
-  searchConnections.add(db)
+  searchConnections.set(db, state)
+  return state
 }

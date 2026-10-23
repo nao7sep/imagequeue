@@ -887,6 +887,7 @@
   "records.empty": "Aucune entrée ne correspond à ces filtres.",
   "records.loadFailed": "Le journal n’a pas pu être lu.",
   "records.livePaused": "Les mises à jour en temps réel sont en pause. Les entrées affichées dans le journal peuvent ne plus être à jour.",
+  "records.searchIncomplete": "Une partie de la sortie de la CLI n’a pas pu être recherchée. Les résultats peuvent être incomplets. Les mises à jour en temps réel sont en pause.",
   "records.noSelection": "Sélectionnez une entrée pour voir tout ce qu’elle contient.",
   "records.detailFailed": "Cette entrée n’a pas pu être lue.",
   "records.resizeList": "Redimensionner la liste",
