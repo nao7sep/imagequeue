@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { currentRecordsContext, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
-import { readDetail, readPage, readSources, readOutput, runRecordsRead } from '../../src/main/records-query'
+import { readDetail, readPage, readSummaries, readSources, readOutput, runRecordsRead } from '../../src/main/records-query'
 import { RECORDS_PAGE_SIZE, type RecordsQuery } from '../../src/shared/records'
 import { freshRecordsRoot, removeRecordsRoots } from './records-fixture'
 
@@ -303,4 +303,35 @@ it('refreshes source membership using only inserted keys and orders late event t
     const reopened = open(dir)
     try { expect(readSources(reopened)).toEqual(readSources(db)) } finally { reopened.close() }
   } finally { db.close() }
+})
+
+
+describe('record summary refetch', () => {
+  it('returns the page summary fields in requested mixed-kind order and omits missing identities', () => {
+    const dir = seed()
+    startCliJobRecord({ jobId: 'summary-job', kind: 'download', target: 'summary.ckpt', cliPath: '/bin/cli', args: [] })
+      .finish({ startedAt: '2026-01-03T00:00:00.000Z', status: 'killed', exitCode: null, signal: 'SIGTERM', stdout: '', stderr: '' })
+    const db = open(dir)
+    try {
+      const records = readPage(db, query()).records
+      const log = records.find((record) => record.kind === 'log')!
+      const call = records.find((record) => record.kind === 'ai-call' && record.level === 'error')!
+      const job = records.find((record) => record.kind === 'cli-job')!
+      const requested = [call, log, job, call]
+      const identities = requested.map(({ kind, id }) => ({ kind, id }))
+      identities.splice(1, 0, { kind: 'cli-job', id: 999_999 })
+      expect(readSummaries(db, identities)).toEqual(requested)
+      expect(runRecordsRead(db, { op: 'summaries', identities })).toEqual(requested)
+      expect(readSummaries(db, [{ kind: 'log', id: 999_999 }])).toEqual([])
+    } finally { db.close() }
+  })
+
+  it('returns an empty selection without querying the database', () => {
+    const db = open(seed())
+    const prepare = vi.spyOn(db, 'prepare')
+    try {
+      expect(readSummaries(db, [])).toEqual([])
+      expect(prepare).not.toHaveBeenCalled()
+    } finally { prepare.mockRestore(); db.close() }
+  })
 })

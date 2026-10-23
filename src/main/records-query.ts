@@ -5,10 +5,12 @@ import { serializeError } from '../shared/serialize-error'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import {
   RECORDS_PAGE_SIZE,
+  RECORD_KINDS,
   RECORDS_OUTPUT_PAGE_SIZE,
   type RecordOutputStream,
   type RecordsOutputPage,
   type RecordDetail,
+  type RecordIdentity,
   type RecordKind,
   type RecordsPage,
   type RecordsQuery,
@@ -26,6 +28,18 @@ const CALL_LEVEL = "CASE WHEN error IS NULL THEN 'info' ELSE 'error' END"
 // did not exit with 0 as an error.
 const JOB_LEVEL = "CASE WHEN status = 'killed' THEN 'warn' WHEN error IS NULL AND exit_code = 0 THEN 'info' ELSE 'error' END"
 const JOB_TITLE = "'draw-things-cli ' || job_kind"
+// Both page reads and viewport refetches project exactly these summary fields.
+const SUMMARY_SOURCES = {
+  log: { select: "SELECT 'log' AS kind, id, time, level, message AS title, NULL AS text", from: 'log_records' },
+  'ai-call': {
+    select: `SELECT 'ai-call' AS kind, id, time, ${CALL_LEVEL} AS level, backend || ' ' || purpose AS title, model AS text`,
+    from: 'ai_calls',
+  },
+  'cli-job': {
+    select: `SELECT 'cli-job' AS kind, id, time, ${JOB_LEVEL} AS level, ${JOB_TITLE} AS title, target AS text`,
+    from: 'cli_jobs',
+  },
+} satisfies Record<RecordKind, { select: string; from: string }>
 const LOG_SEARCHED = ['message', 'session_id', 'task_id', 'request_id', 'fields']
 const CALL_SEARCHED = ['backend', 'model', 'purpose', 'session_id', 'task_id', 'request_id', 'request', 'response', 'error']
 const JOB_SEARCHED = ['job_kind', 'target', 'cli_path', 'args', 'session_id', 'job_id', 'status', 'stdout', 'stderr', 'error']
@@ -89,18 +103,16 @@ export function readPage(db: DatabaseSync, query: RecordsQuery, reportWarning?: 
     candidates.push(...db.prepare(`${select} FROM ${from} WHERE ${where.join(' AND ')} ORDER BY time DESC, id DESC LIMIT ?`).all(...params) as unknown as RecordSummary[])
   }
   if (query.kind === null || query.kind === 'log') {
-    table('log', "SELECT 'log' AS kind, id, time, level, message AS title, NULL AS text", 'log_records', 'level', LOG_SEARCHED)
+    table('log', SUMMARY_SOURCES.log.select, SUMMARY_SOURCES.log.from, 'level', LOG_SEARCHED)
   }
   if (query.kind === null || query.kind === 'ai-call') {
     table('ai-call',
-      `SELECT 'ai-call' AS kind, id, time, ${CALL_LEVEL} AS level, backend || ' ' || purpose AS title, model AS text`,
-      'ai_calls', CALL_LEVEL, CALL_SEARCHED,
+      SUMMARY_SOURCES['ai-call'].select, SUMMARY_SOURCES['ai-call'].from, CALL_LEVEL, CALL_SEARCHED,
     )
   }
   if (query.kind === null || query.kind === 'cli-job') {
     table('cli-job',
-      `SELECT 'cli-job' AS kind, id, time, ${JOB_LEVEL} AS level, ${JOB_TITLE} AS title, target AS text`,
-      'cli_jobs', JOB_LEVEL, JOB_SEARCHED,
+      SUMMARY_SOURCES['cli-job'].select, SUMMARY_SOURCES['cli-job'].from, JOB_LEVEL, JOB_SEARCHED,
     )
   }
   const descending = (a: string, b: string): number => a === b ? 0 : a < b ? 1 : -1
@@ -109,6 +121,23 @@ export function readPage(db: DatabaseSync, query: RecordsQuery, reportWarning?: 
   return { records: candidates.slice(0, RECORDS_PAGE_SIZE), more: candidates.length > RECORDS_PAGE_SIZE,
     ...(search?.warning ? { searchIncomplete: true as const } : {}),
   }
+}
+
+/** Refetch only requested summary payloads, preserving viewport order. */
+export function readSummaries(db: DatabaseSync, identities: RecordIdentity[]): RecordSummary[] {
+  const found = new Map<string, RecordSummary>()
+  for (const kind of RECORD_KINDS) {
+    const ids = identities.filter((identity) => identity.kind === kind).map((identity) => identity.id)
+    if (ids.length === 0) continue
+    const { select, from } = SUMMARY_SOURCES[kind]
+    const rows = db.prepare(`${select} FROM ${from} WHERE id IN (${ids.map(() => '?').join(', ')})`)
+      .all(...ids) as unknown as RecordSummary[]
+    for (const row of rows) found.set(`${kind}:${row.id}`, row)
+  }
+  return identities.flatMap(({ kind, id }) => {
+    const row = found.get(`${kind}:${id}`)
+    return row ? [row] : []
+  })
 }
 
 interface SourceIndex {
@@ -184,6 +213,7 @@ export function readDetail(db: DatabaseSync, kind: RecordKind, id: number): Reco
 export function runRecordsRead(db: DatabaseSync, read: RecordsRead, reportWarning?: (warning: RecordsSearchWarning) => void): RecordsReadResults[RecordsRead['op']] {
   if (read.op === 'page') return readPage(db, read.query, reportWarning)
   if (read.op === 'sources') return readSources(db)
+  if (read.op === 'summaries') return readSummaries(db, read.identities)
   if (read.op === 'output') return readOutput(db, read.id, read.stream, read.offset)
   return readDetail(db, read.kind, read.id)
 }

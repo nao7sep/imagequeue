@@ -44,7 +44,7 @@ import type {
 import type { ElectronAPI } from '../shared/electron-api'
 import type { AppNotice } from '../shared/app-notice'
 import type { LanguageEnvironment } from '../shared/i18n/languages'
-import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery, RecordOutputStream, RecordsOutputPage } from '../shared/records'
+import type { RecordDetail, RecordIdentity, RecordSummary, RecordKind, RecordSources, RecordsPage, RecordsQuery, RecordOutputStream, RecordsOutputPage } from '../shared/records'
 import {
   STARTUP_FAILURE_MEASUREMENT_CHANNEL,
   STARTUP_FAILURE_MESSAGE_CHANNEL,
@@ -547,6 +547,8 @@ const api = {
     ipcRenderer.invoke('records:open'),
   readRecordsPage: (query: RecordsQuery): Promise<RecordsPage> =>
     ipcRenderer.invoke('records:page', query),
+  readRecordSummaries: (identities: RecordIdentity[]): Promise<RecordSummary[]> =>
+    ipcRenderer.invoke('records:summaries', identities),
   readRecordDetail: (kind: RecordKind, id: number): Promise<RecordDetail | null> =>
     ipcRenderer.invoke('records:detail', kind, id),
   readRecordOutput: (id: number, stream: RecordOutputStream, offset: number): Promise<RecordsOutputPage> =>

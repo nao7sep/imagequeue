@@ -208,3 +208,25 @@ it('records a partial search warning without rejecting its intact matches', asyn
   await expect(result).resolves.toEqual(page)
   expect(mocks.writeLogRecord).toHaveBeenCalledWith(expect.any(String), 'warn', 'CLI output search was incomplete', warning)
 })
+
+
+it('routes viewport summaries through the history lane while detail reads remain independent', async () => {
+  const background = fakeWorker()
+  const foreground = fakeWorker()
+  mocks.create.mockReturnValueOnce(background).mockReturnValueOnce(foreground)
+  const sources = readRecords({ op: 'sources' })
+  const identities = [{ kind: 'log' as const, id: 7 }]
+  const summaries = readRecords({ op: 'summaries', identities })
+  const detail = readRecords({ op: 'detail', kind: 'log', id: 7 })
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(mocks.create).toHaveBeenCalledTimes(2)
+  expect(background.posted.map(({ read }) => read)).toEqual([{ op: 'sources' }, { op: 'summaries', identities }])
+  expect(foreground.posted[0]!.read).toEqual({ op: 'detail', kind: 'log', id: 7 })
+  background.emit('message', { id: background.posted[0]!.id, ok: true, value: { launches: [], sessions: [] } })
+  background.emit('message', { id: background.posted[1]!.id, ok: true, value: [] })
+  foreground.emit('message', { id: foreground.posted[0]!.id, ok: true, value: null })
+  await expect(sources).resolves.toEqual({ launches: [], sessions: [] })
+  await expect(summaries).resolves.toEqual([])
+  await expect(detail).resolves.toBeNull()
+})

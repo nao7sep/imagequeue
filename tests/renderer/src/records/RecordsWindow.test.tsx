@@ -55,6 +55,7 @@ const newer: RecordSummary = {
 
 let root: Root | null = null
 const readRecordsPage = vi.fn<ElectronAPI['readRecordsPage']>()
+const readRecordSummaries = vi.fn<ElectronAPI['readRecordSummaries']>()
 const readRecordDetail = vi.fn<ElectronAPI['readRecordDetail']>()
 const readRecordOutput = vi.fn<ElectronAPI['readRecordOutput']>()
 const readRecordSources = vi.fn<ElectronAPI['readRecordSources']>()
@@ -85,16 +86,17 @@ function pointer(target: EventTarget, type: string, init: MouseEventInit & { poi
 }
 
 class TestResizeObserver {
-  private readonly callback: () => void
-  constructor(callback: () => void) {
-    this.callback = callback
+  private readonly elements = new Set<Element>()
+  private readonly deliver: () => void
+  constructor(callback: ResizeObserverCallback) {
+    this.deliver = () => callback([...this.elements].map((target) => ({
+      target, borderBoxSize: [{ inlineSize: 700, blockSize: (target as HTMLElement).offsetHeight }],
+      contentRect: { width: 700, height: (target as HTMLElement).offsetHeight },
+    })) as unknown as ResizeObserverEntry[], this as unknown as ResizeObserver)
   }
-  observe(): void {
-    resizeCallbacks.add(this.callback)
-  }
-  disconnect(): void {
-    resizeCallbacks.delete(this.callback)
-  }
+  observe(element: Element): void { this.elements.add(element); resizeCallbacks.add(this.deliver) }
+  unobserve(element: Element): void { this.elements.delete(element) }
+  disconnect(): void { this.elements.clear(); resizeCallbacks.delete(this.deliver) }
 }
 const isScroll = (element: HTMLElement) => element.classList.contains('records-list-scroll')
 
@@ -102,6 +104,8 @@ beforeEach(() => {
   zone = 'UTC'
   readRecordsPage.mockReset()
   readRecordsPage.mockResolvedValue({ records: [call, line], more: false } satisfies RecordsPage)
+  readRecordSummaries.mockReset()
+  readRecordSummaries.mockImplementation(async (ids) => ids.flatMap((id) => [call, line, job, newer].filter((record) => record.kind === id.kind && record.id === id.id)))
   readRecordOutput.mockReset()
   readRecordOutput.mockResolvedValue({ text: 'Downloading 10%\rDownloading 40%\r', nextOffset: null })
   readRecordDetail.mockReset()
@@ -122,6 +126,12 @@ beforeEach(() => {
   capturedPointers.clear()
   vi.stubGlobal('ResizeObserver', TestResizeObserver)
   Object.defineProperties(HTMLElement.prototype, {
+    offsetHeight: { configurable: true, get(this: HTMLElement) { return isScroll(this) ? box.clientHeight : 76 } },
+    offsetWidth: { configurable: true, get() { return 700 } },
+    scrollTo: { configurable: true, value(this: HTMLElement, options: ScrollToOptions) {
+      this.scrollTop = options.top ?? this.scrollTop
+      this.dispatchEvent(new Event('scroll'))
+    } },
     setPointerCapture: {
       configurable: true,
       value(this: HTMLElement, pointerId: number) { capturedPointers.set(pointerId, this) },
@@ -153,7 +163,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'electronAPI', {
     configurable: true,
     value: {
-      readRecordsPage, readRecordDetail, readRecordOutput, readRecordSources, appLog, updateUiState, getUiState, onRecordsChanged,
+      readRecordsPage, readRecordSummaries, readRecordDetail, readRecordOutput, readRecordSources, appLog, updateUiState, getUiState, onRecordsChanged,
     } satisfies Partial<ElectronAPI>,
   })
 })
@@ -166,7 +176,7 @@ afterEach(async () => {
   document.body.style.userSelect = ''
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  for (const name of ['scrollTop', 'scrollHeight', 'clientHeight', 'clientWidth', 'setPointerCapture', 'hasPointerCapture', 'releasePointerCapture']) {
+  for (const name of ['offsetHeight', 'offsetWidth', 'scrollTo', 'scrollTop', 'scrollHeight', 'clientHeight', 'clientWidth', 'setPointerCapture', 'hasPointerCapture', 'releasePointerCapture']) {
     delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name]
   }
 })
@@ -397,7 +407,7 @@ describe('RecordsWindow', () => {
     readRecordsPage.mockResolvedValueOnce({ records: [], more: false })
     await mount()
     expect(document.body.textContent).toContain('No records match these filters.')
-    expect(document.querySelector('[role="listbox"]')).toBeNull()
+    expect(document.querySelector<HTMLElement>('[role="listbox"]')?.tabIndex).toBe(0)
 
     vi.useFakeTimers()
     readRecordsPage.mockResolvedValueOnce({ records: [newer], more: false })
@@ -880,4 +890,87 @@ it('queues live refresh behind initial hydration and keeps the newer partial-res
   expect(readRecordsPage).toHaveBeenCalledTimes(2)
   expect(document.body.textContent).toContain('Some CLI output could not be searched.')
   expect(titles()).toEqual(['Arrived while open', 'gemini brainstorm'])
+})
+
+it('virtualizes visited history and refetches evicted rows while preserving offscreen keyboard selection', async () => {
+  const rows: RecordSummary[] = Array.from({ length: 300 }, (_, index) => ({
+    kind: 'log', id: 300 - index, time: new Date((300 - index) * 1000).toISOString(),
+    level: 'info', title: `History row ${300 - index}`, text: null,
+  }))
+  readRecordsPage.mockImplementation(async ({ after }) => {
+    const start = after ? rows.findIndex((row) => row.id === after.id) + 1 : 0
+    return { records: rows.slice(start, start + 100), more: start + 100 < rows.length }
+  })
+  readRecordSummaries.mockImplementation(async (ids) => ids.map(({ id }) => rows.find((row) => row.id === id)!))
+  box.scrollHeight = 300 * 78
+  await mount()
+  expect(options().length).toBeLessThan(20)
+  await act(async () => options()[0]!.focus())
+  await press('End')
+  await press('End')
+  await press('End')
+  expect(document.activeElement?.getAttribute('data-listbox-option')).toBe('log:1')
+  expect(readRecordDetail).toHaveBeenLastCalledWith('log', 1)
+  expect(options().length).toBeLessThan(20)
+  readRecordSummaries.mockClear()
+  await scrollTo(50 * 78)
+  expect(readRecordSummaries).toHaveBeenCalled()
+  expect(titles()).toContain('History row 250')
+  expect(options().find((row) => row.dataset.listboxOption === 'log:1')?.tabIndex).toBe(0)
+  await scrollTo(0)
+  expect(titles()).toContain('History row 300')
+  expect(options().length).toBeLessThan(20)
+  expect(readRecordDetail).toHaveBeenLastCalledWith('log', 1)
+})
+
+it('bridges a burst larger than a page and retains the selected old record', async () => {
+  vi.useFakeTimers()
+  let newestId = 2
+  const makeRow = (id: number): RecordSummary => ({ kind: 'log', id, time: new Date(id * 1000).toISOString(), level: 'info', title: `Burst row ${id}`, text: null })
+  readRecordsPage.mockImplementation(async ({ after }) => {
+    const end = after ? after.id - 1 : newestId
+    return { records: Array.from({ length: Math.min(100, end) }, (_, i) => makeRow(end - i)), more: end > 100 }
+  })
+  readRecordSummaries.mockImplementation(async (ids) => ids.map(({ id }) => makeRow(id)))
+  box.scrollHeight = 40000
+  await mount()
+  await act(async () => options()[1]!.click())
+  newestId = 352
+  await act(async () => { recordsChanged!(); await vi.advanceTimersByTimeAsync(1000) })
+  expect(readRecordsPage.mock.calls.slice(1).map(([query]) => query.after?.id ?? null)).toEqual([null, 253, 153, 53])
+  expect(options()[0]?.getAttribute('aria-setsize')).toBe('352')
+  expect(readRecordDetail).toHaveBeenLastCalledWith('log', 1)
+  await scrollTo(200 * 78)
+  expect(titles()).toContain('Burst row 152')
+  expect(options().length).toBeLessThan(20)
+})
+
+it('keeps cache-refetch failure visible and retries the missing viewport explicitly', async () => {
+  const rows: RecordSummary[] = Array.from({ length: 100 }, (_, index) => ({
+    kind: 'log', id: 100 - index, time: new Date((100 - index) * 1000).toISOString(), level: 'info', title: `Cached row ${100 - index}`, text: null,
+  }))
+  readRecordsPage.mockResolvedValue({ records: rows, more: false })
+  readRecordSummaries.mockRejectedValueOnce(new Error('unavailable')).mockImplementation(async (ids) => ids.map(({ id }) => rows.find((row) => row.id === id)!))
+  box.scrollHeight = 7800
+  await mount()
+  await scrollTo(50 * 78)
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('paused')
+  expect(readRecordSummaries).toHaveBeenCalledTimes(1)
+  const retry = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Retry')!
+  await act(async () => retry.click())
+  expect(titles()).toContain('Cached row 50')
+  expect(document.querySelector('.records-refresh-failure')).toBeNull()
+})
+
+it('keeps an empty or loading history reachable as the same listbox', async () => {
+  const waiting = deferred<RecordsPage>()
+  readRecordsPage.mockReturnValueOnce(waiting.promise)
+  await mount()
+  const listbox = document.querySelector<HTMLElement>('[role="listbox"]')!
+  expect(listbox.tabIndex).toBe(0)
+  expect(listbox.textContent).toContain('Loading')
+  await act(async () => waiting.resolve({ records: [], more: false }))
+  expect(document.querySelector('[role="listbox"]')).toBe(listbox)
+  expect(listbox.tabIndex).toBe(0)
+  expect(listbox.textContent).toContain('No records')
 })

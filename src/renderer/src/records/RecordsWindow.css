@@ -69,11 +69,6 @@ html:has(.records-shell) body {
   padding: var(--space-2);
 }
 
-.records-list {
-  display: grid;
-  gap: 2px;
-}
-
 .records-row {
   display: grid;
   gap: 2px;

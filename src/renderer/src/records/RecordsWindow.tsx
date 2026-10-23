@@ -11,6 +11,7 @@ import {
 } from 'react'
 import {
   RECORD_KINDS,
+  RECORDS_PAGE_SIZE,
   RECORD_LEVEL_FILTERS,
   type RecordDetail,
   type RecordOutputStream,
@@ -19,10 +20,10 @@ import {
   type RecordLevelFilter,
   type RecordSources,
   type RecordsQuery,
-  type RecordSummary,
 } from '../../../shared/records'
 import { RECORDS_LIST_WIDTH, clampRecordsListWidth, displayedRecordsListWidth } from '../../../shared/records-layout'
-import { useListbox } from '../hooks/useListbox'
+import { useVirtualListbox } from '../hooks/useVirtualListbox'
+import { RecordHistory, readHistoryPrefix } from './record-history'
 import { useI18n } from '../i18n/I18nContext'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 import { sessionDisplayName } from '../utils/sessionName'
@@ -31,9 +32,7 @@ import {
   KIND_LABELS,
   LEVEL_FILTER_LABELS,
   LEVEL_LABELS,
-  cursorAfter,
   jsonBlockText,
-  mergeNewestPage,
   recordKey,
 } from './record-format'
 import { CliOutputBlock } from './CliOutputBlock'
@@ -77,7 +76,7 @@ const RESIZE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 type ListState =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; records: RecordSummary[]; more: boolean; loadingMore: boolean; moreFailed: boolean }
+  | { status: 'ready'; history: RecordHistory; loadingMore: boolean; moreFailed: boolean }
 
 type DetailState =
   | { status: 'none' }
@@ -120,9 +119,9 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const newestPending = useRef(false)
   // A failed read is itself logged as a record, whose signal would start the
   // next read; live reads resume only after each failed read owner recovers.
-  const failuresRef = useRef({ records: false, sources: false })
+  const failuresRef = useRef({ records: false, sources: false, summaries: false })
   const [liveFailures, setLiveFailures] = useState(failuresRef.current)
-  const setLiveFailure = useCallback((owner: 'records' | 'sources', failed: boolean): void => {
+  const setLiveFailure = useCallback((owner: 'records' | 'sources' | 'summaries', failed: boolean): void => {
     if (failuresRef.current[owner] === failed) return
     failuresRef.current = { ...failuresRef.current, [owner]: failed }
     setLiveFailures(failuresRef.current)
@@ -130,7 +129,9 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const newestRead = useRef<number | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const shellRef = useRef<HTMLDivElement | null>(null)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const historyRef = useRef(new RecordHistory())
+  const summaryRead = useRef<number | null>(null)
+  const summaryFailed = useRef(false)
 
   useEffect(() => () => activeDrag.current?.finish('unmount'), [])
 
@@ -195,25 +196,28 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     return () => { mounted.current = false }
   }, [refreshSources])
 
-  // The newest page read again for new records. It joins the rows already
-  // shown rather than replacing them, so the list never falls back to the
-  // loading note and the pages already read stay. It reads only refs, so one
-  // copy serves the live subscription below.
+  // Live prefixes are admitted only after their gap to visited history closes.
   const readNewest = useCallback((): void => {
     const generation = listGeneration.current
     if (newestRead.current === generation) { newestPending.current = true; return }
     newestRead.current = generation
     setRefreshing(true)
-    void window.electronAPI.readRecordsPage({ ...filtersRef.current, after: null }).then(
-      (page) => {
-        if (generation !== listGeneration.current) return
-        incompleteSearch.current ||= page.searchIncomplete === true
+    const history = historyRef.current
+    void readHistoryPrefix(history,
+      (after) => window.electronAPI.readRecordsPage({ ...filtersRef.current, after }),
+      () => generation === listGeneration.current,
+    ).then(
+      (prefix) => {
+        if (!prefix || generation !== listGeneration.current) return
+        if (!history.count) history.append(prefix.first)
+        else history.prepend(prefix.cursors, prefix.first.records)
+        incompleteSearch.current ||= prefix.incomplete
         setLiveFailure('records', incompleteSearch.current)
         setSearchIncomplete(incompleteSearch.current)
         setList((current) =>
           current.status === 'ready'
-            ? { ...current, ...mergeNewestPage(current.records, current.more, page) }
-            : { status: 'ready', records: page.records, more: page.more, loadingMore: false, moreFailed: false },
+            ? { ...current }
+            : { status: 'ready', history, loadingMore: false, moreFailed: false },
         )
       },
       (error: unknown) => {
@@ -227,7 +231,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         newestRead.current = null
         if (generation !== listGeneration.current) return
         setRefreshing(false)
-        if (newestPending.current && !document.hidden && !failuresRef.current.records && !failuresRef.current.sources && (!scrollRef.current || atTop(scrollRef.current))) {
+        if (newestPending.current && !document.hidden && !failuresRef.current.records && !failuresRef.current.sources && !failuresRef.current.summaries && (!scrollRef.current || atTop(scrollRef.current))) {
           newestPending.current = false
           readNewest()
         }
@@ -241,6 +245,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     filtersRef.current = filters
     const generation = ++listGeneration.current
     fetchingMore.current = false
+    historyRef.current = new RecordHistory()
+    summaryFailed.current = false
     newestPending.current = false
     setList({ status: 'loading' })
     incompleteSearch.current = false
@@ -256,13 +262,13 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     let timer: ReturnType<typeof setTimeout> | null = null
     let hiddenPending = false
     const schedule = (): void => {
-      if (failuresRef.current.records || failuresRef.current.sources) return
+      if (failuresRef.current.records || failuresRef.current.sources || failuresRef.current.summaries) return
       if (document.hidden) { hiddenPending = true; return }
       if (timer !== null) return
       timer = setTimeout(() => {
         timer = null
         if (document.hidden) { hiddenPending = true; return }
-        if (failuresRef.current.records || failuresRef.current.sources) return
+        if (failuresRef.current.records || failuresRef.current.sources || failuresRef.current.summaries) return
         hiddenPending = false
         refreshSources()
         const scroll = scrollRef.current
@@ -310,11 +316,12 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   // Loading more: composite-control-conventions, Integration Points. A failed
   // page is read again when the end is reached again.
   const loadMore = (): void => {
-    if (list.status !== 'ready' || !list.more || fetchingMore.current) return
+    if (list.status !== 'ready' || !list.history.more || fetchingMore.current) return
     fetchingMore.current = true
     const generation = listGeneration.current
     setList((current) => (current.status === 'ready' ? { ...current, loadingMore: true, moreFailed: false } : current))
-    void window.electronAPI.readRecordsPage({ ...filters, after: cursorAfter(list.records) }).then(
+    const history = list.history
+    void window.electronAPI.readRecordsPage({ ...filters, after: history.after }).then(
       (page) => {
         if (generation !== listGeneration.current) return
         fetchingMore.current = false
@@ -323,9 +330,10 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
           setSearchIncomplete(true)
           setLiveFailure('records', true)
         }
+        history.append(page)
         setList((current) =>
           current.status === 'ready'
-            ? { ...current, records: [...current.records, ...page.records], more: page.more, loadingMore: false }
+            ? { ...current, loadingMore: false }
             : current,
         )
       },
@@ -351,35 +359,78 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const onListScroll = (): void => {
     const scroll = scrollRef.current
     if (scroll === null) return
-    if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && atTop(scroll)) {
+    if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && !failuresRef.current.summaries && atTop(scroll)) {
       newestPending.current = false
       readNewest()
     }
     if (nearEnd(scroll)) loadMore()
   }
 
-  const records = list.status === 'ready' ? list.records : []
-  const keys = records.map(recordKey)
-
-  // The list is one listbox (composite-control-conventions, Listbox) through the
-  // app's listbox layer; the selection follows focus.
-  const { listboxProps, getOptionProps } = useListbox<HTMLDivElement>({
-    ids: keys,
+  const history = list.status === 'ready' ? list.history : historyRef.current
+  const items = useMemo(() => ({
+    count: history.count,
+    idAt: (index: number) => history.idAt(index),
+    indexOf: (key: string) => history.indexOf(key),
+  }), [history, history.count])
+  const { listboxProps, getOptionProps, scrollRef, virtualizer, rowStyle, activeId } = useVirtualListbox<HTMLDivElement>({
+    items,
+    estimateSize: 76,
+    gap: 2,
     selectedId: selectedKey,
     onSelect: (key) => {
-      const record = records.find((candidate) => recordKey(candidate) === key)
-      if (record && key !== selectedKey) setSelected({ kind: record.kind, id: record.id })
+      const index = history.indexOf(key)
+      if (index >= 0 && key !== selectedKey) {
+        const cursor = history.at(index)
+        setSelected({ kind: cursor.kind, id: cursor.id })
+      }
     },
     activation: 'follows-focus',
-    // Every row starts with its time, so typed letters have nothing to match.
     typeAhead: false,
   })
+  const visibleRows = virtualizer.getVirtualItems()
+  const wantedKeys = new Set(visibleRows.map((row) => history.idAt(row.index)))
+  if (activeId && history.indexOf(activeId) >= 0) wantedKeys.add(activeId)
+  const wantedRef = useRef(wantedKeys)
+  wantedRef.current = wantedKeys
+  const visibleKey = [...wantedKeys].join('|')
+
+  // Evict text, never navigation identities. Exact-identity reads can rehydrate
+  // any visited viewport without replaying filters or keeping earlier payloads.
+  useEffect(() => {
+    if (list.status !== 'ready') return
+    history.retain(wantedRef.current)
+    const generation = listGeneration.current
+    if (summaryRead.current === generation || summaryFailed.current) return
+    const missing = [...wantedRef.current].filter((key) => !history.summaries.has(key)).slice(0, RECORDS_PAGE_SIZE)
+    if (!missing.length) { setLiveFailure('summaries', false); return }
+    summaryRead.current = generation
+    void window.electronAPI.readRecordSummaries(missing.map((key) => history.at(history.indexOf(key)))).then(
+      (records) => {
+        if (generation !== listGeneration.current) return
+        if (records.length !== missing.length) throw new Error('A visited record summary is unavailable')
+        for (const record of records) {
+          const key = recordKey(record)
+          if (wantedRef.current.has(key)) history.summaries.set(key, record)
+        }
+      },
+    ).catch((error: unknown) => {
+      if (generation !== listGeneration.current) return
+      summaryFailed.current = true
+      setLiveFailure('summaries', true)
+      recordOperationalDiagnostic('Records summaries read failed', error)
+    }).finally(() => {
+      if (summaryRead.current === generation) summaryRead.current = null
+      if (generation === listGeneration.current) setList((current) => ({ ...current }))
+    })
+  }, [list, history, visibleKey, setLiveFailure])
 
   const onListKeyDown = (event: KeyboardEvent): void => {
     listboxProps.onKeyDown(event)
     if (!TOWARD_END.has(event.key)) return
+    // The virtual destination may mount after this event. The final rendered
+    // row or End still requests the next contiguous history page.
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.listboxOption : undefined
-    if (focused !== undefined && focused === keys.at(-1)) loadMore()
+    if (event.key === 'End' || (focused && history.indexOf(focused) >= history.count - 2)) loadMore()
   }
 
   // Resize intent: window-conventions, Content-based minimum size. Only the
@@ -525,10 +576,12 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
             />
           </div>
         </div>
-        {liveFailures.records || liveFailures.sources ? (
+        {liveFailures.records || liveFailures.sources || liveFailures.summaries ? (
           <div className="records-refresh-failure">
             <p role="alert">{t(searchIncomplete ? 'records.searchIncomplete' : 'records.livePaused')}</p>
             <button className="modal-btn" disabled={refreshing || refreshingSources} onClick={() => {
+              summaryFailed.current = false
+              setList((current) => ({ ...current }))
               refreshSources()
               if (searchIncomplete) setFilters((current) => ({ ...current }))
               else readNewest()
@@ -541,22 +594,29 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
           aria-busy={list.status === 'loading'}
           onScroll={onListScroll}
         >
+          <div {...listboxProps} onKeyDown={onListKeyDown} aria-label={t('records.title')} className="records-list"
+            style={{ height: history.count ? virtualizer.getTotalSize() : undefined, position: 'relative' }}>
           {list.status === 'failed' ? (
             <p className="records-note records-note--error" role="alert">{t('records.loadFailed')}</p>
           ) : list.status === 'loading' ? (
             <p className="records-note">{t('records.loading')}</p>
-          ) : records.length === 0 ? (
+          ) : history.count === 0 ? (
             <p className="records-note">{t('records.empty')}</p>
           ) : (
-            <div {...listboxProps} onKeyDown={onListKeyDown} aria-label={t('records.title')} className="records-list">
-              {records.map((record) => {
-                const key = recordKey(record)
+            <>
+              {visibleRows.map((row) => {
+                const key = history.idAt(row.index)
+                const record = history.summaries.get(key)
                 return (
                   <div
                     key={key}
+                    data-index={row.index}
+                    ref={record ? virtualizer.measureElement : undefined}
+                    style={{ ...rowStyle(row.start), ...(!record ? { height: row.size } : {}) }}
                     {...getOptionProps(key)}
                     className={`records-row${key === selectedKey ? ' selected' : ''}`}
                   >
+                    {record ? <>
                     <div className="records-row-meta">
                       <span>{timeFormat.format(new Date(record.time))}</span>
                       <LevelPill level={record.level} />
@@ -564,11 +624,13 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
                     </div>
                     <div className={`records-row-title${record.kind !== 'log' ? ' records-code' : ''}`}>{record.title}</div>
                     {record.text ? <div className="records-row-text">{record.text}</div> : null}
+                    </> : <span>{t(summaryFailed.current ? 'records.loadFailed' : 'records.loading')}</span>}
                   </div>
                 )
               })}
-            </div>
+            </>
           )}
+          </div>
           {list.status === 'ready' && list.loadingMore ? (
             <p className="records-note">{t('records.loading')}</p>
           ) : null}
