@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
-import { MenuItem } from './Menu'
-import { SelectedActions, openSelectedActions } from './SelectedActions'
-import { useImeGuard } from '../utils/imeGuard'
+import { ConceptLibraryDetails } from './ConceptLibraryDetails'
 import { useConfirm } from '../context/ConfirmContext'
 import { useListbox } from '../hooks/useListbox'
 import { useI18n } from '../i18n/I18nContext'
@@ -16,8 +14,6 @@ interface Props {
   onClose: () => void
 }
 
-type UseFilter = 'all' | 'unused' | 'used'
-
 // Browses and manages the concept ledger (concepts.sqlite3) at its real
 // hierarchy: facet → domain (the narrow ask a cluster was mined from) →
 // concept. Deletion exists at every level and always cascades downward;
@@ -28,21 +24,11 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const i18n = useI18n()
   const { t } = i18n
-  const date = (iso: string): string => i18n.dateTime(iso)
   const [facets, setFacets] = useState<ConceptFacetSummary[]>([])
   const [facetsLoading, setFacetsLoading] = useState(true)
   const [facetsError, setFacetsError] = useState<MessageKey | null>(null)
   const [selectedFacetId, setSelectedFacetId] = useState<number | null>(null)
-  const [probes, setProbes] = useState<ConceptProbeSummary[]>([])
-  const [rows, setRows] = useState<ConceptRow[]>([])
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailError, setDetailError] = useState<MessageKey | null>(null)
-  const [filter, setFilter] = useState('')
-  const [useFilter, setUseFilter] = useState<UseFilter>('all')
   const [message, setMessage] = useState<MessageKey | null>(null)
-  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null)
-  const detailActionsRef = useRef<HTMLButtonElement>(null)
-  const isComposing = useImeGuard()
 
   const refreshFacets = useCallback(async (): Promise<void> => {
     setFacetsLoading(true)
@@ -64,41 +50,6 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
     void refreshFacets()
   }, [refreshFacets])
 
-  useEffect(() => { setSelectedDetailId(null) }, [selectedFacetId])
-
-  useEffect(() => {
-    if (selectedFacetId === null) {
-      setProbes([])
-      setRows([])
-      setDetailLoading(false)
-      setDetailError(null)
-      return
-    }
-    let cancelled = false
-    setDetailLoading(true)
-    setDetailError(null)
-    setProbes([])
-    setRows([])
-    Promise.all([
-      window.electronAPI.listConceptProbes(selectedFacetId),
-      window.electronAPI.listConceptRows(selectedFacetId),
-    ])
-      .then(([probeList, conceptList]) => {
-        if (cancelled) return
-        setProbes(probeList)
-        setRows(conceptList)
-      })
-      .catch((error) => {
-        if (!cancelled) setDetailError(presentFailure('concept-details-load', error))
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedFacetId, facets])
-
   const { listboxProps, getOptionProps } = useListbox<HTMLDivElement>({
     ids: facets.map((f) => String(f.id)),
     selectedId: selectedFacetId !== null ? String(selectedFacetId) : null,
@@ -107,49 +58,6 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
   })
 
   const selectedFacet = facets.find((f) => f.id === selectedFacetId) ?? null
-
-  // Domain sections, filtered: the search needle matches a concept's value or
-  // its domain text; the use filter narrows rows; a section with no surviving
-  // rows disappears (unless the domain itself matched the search).
-  const sections = useMemo(() => {
-    const needle = filter.trim().toLowerCase()
-    const byProbe = new Map<number, ConceptRow[]>()
-    for (const row of rows) {
-      if (useFilter === 'unused' && row.useCount > 0) continue
-      if (useFilter === 'used' && row.useCount === 0) continue
-      const list = byProbe.get(row.probeId) ?? []
-      list.push(row)
-      byProbe.set(row.probeId, list)
-    }
-    return probes
-      .map((probe) => {
-        const domainMatches = needle.length > 0 && probe.display.toLowerCase().includes(needle)
-        let sectionRows = byProbe.get(probe.id) ?? []
-        if (needle && !domainMatches) {
-          sectionRows = sectionRows.filter((r) => r.display.toLowerCase().includes(needle))
-        }
-        return { probe, rows: sectionRows, domainMatches }
-      })
-      .filter((section) =>
-        needle
-          ? section.domainMatches || section.rows.length > 0
-          : useFilter === 'all' || section.rows.length > 0
-      )
-  }, [probes, rows, filter, useFilter])
-
-  const { activeId: activeDetailId, listboxProps: detailListboxProps, getOptionProps: getDetailOptionProps } = useListbox({
-    ids: detailLoading || detailError ? [] : sections.flatMap(({ probe, rows: sectionRows }) => [
-      `p:${probe.id}`,
-      ...sectionRows.map((row) => `c:${row.id}`),
-    ]),
-    selectedId: selectedDetailId,
-    onSelect: setSelectedDetailId,
-    activation: 'follows-focus',
-    isComposing,
-  })
-  const activeProbe = sections.find(({ probe }) => `p:${probe.id}` === activeDetailId)?.probe
-  const activeConcept = sections.flatMap(({ rows: sectionRows }) => sectionRows).find((row) => `c:${row.id}` === activeDetailId)
-  const detailActionsDisabled = detailLoading || detailError !== null || (!activeProbe && !activeConcept)
 
   const withRefresh = useCallback(
     async (action: () => Promise<void>): Promise<void> => {
@@ -265,7 +173,7 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
                     {facet.lastUsedAt
                       ? t('conceptLibrary.pair', {
                           first: msg('conceptLibrary.domainCount', { count: facet.probeCount }),
-                          second: msg('conceptLibrary.lastUsed', { date: date(facet.lastUsedAt) }),
+                          second: msg('conceptLibrary.lastUsed', { date: i18n.dateTime(facet.lastUsedAt) }),
                         })
                       : t('conceptLibrary.domainCount', { count: facet.probeCount })}
                   </div>
@@ -273,126 +181,14 @@ export function ConceptLibraryModal({ onClose }: Props): React.JSX.Element {
               ))}
             </div>
 
-            <div className="concept-library-detail">
-              {selectedFacet && (
-                <>
-                  <div className="concept-library-toolbar">
-                    <input
-                      type="search"
-                      placeholder={t('conceptLibrary.filterPlaceholder')}
-                      value={filter}
-                      onChange={(e) => setFilter(e.target.value)}
-                      aria-label={t('conceptLibrary.filterLabel')}
-                    />
-                    <select
-                      value={useFilter}
-                      onChange={(e) => setUseFilter(e.target.value as UseFilter)}
-                      aria-label={t('conceptLibrary.show')}
-                    >
-                      <option value="all">{t('conceptLibrary.showAll')}</option>
-                      <option value="unused">{t('conceptLibrary.showUnused')}</option>
-                      <option value="used">{t('conceptLibrary.showUsed')}</option>
-                    </select>
-                    <SelectedActions triggerRef={detailActionsRef} disabled={detailActionsDisabled}>
-                      <MenuItem disabled={detailActionsDisabled} onSelect={() => {
-                        if (detailActionsDisabled) return
-                        if (activeProbe) void handleDeleteProbe(activeProbe)
-                        else if (activeConcept) void handleDeleteConcept(activeConcept)
-                      }}>{t('task.delete')}</MenuItem>
-                    </SelectedActions>
-                    <button
-                      className="modal-btn modal-btn-danger"
-                      onClick={() => void handleDeleteFacet()}
-                    >
-                      {t('conceptLibrary.deleteFacetTitle')}
-                    </button>
-                  </div>
+            {selectedFacet && <ConceptLibraryDetails
+              facet={selectedFacet}
+              refreshToken={facets}
+              onDeleteConcept={handleDeleteConcept}
+              onDeleteProbe={handleDeleteProbe}
+              onDeleteFacet={handleDeleteFacet}
+            />}
 
-                  <div className="concept-library-sections" aria-label={selectedFacet.display} aria-busy={detailLoading} {...detailListboxProps}
-                    onKeyDown={(event) => {
-                      if (!isComposing(event.nativeEvent) && openSelectedActions(event, detailActionsRef)) return
-                      detailListboxProps.onKeyDown(event)
-                    }}>
-                  {detailLoading ? (
-                    <div className="concept-library-empty">{t('conceptLibrary.loadingFacet')}</div>
-                  ) : detailError ? (
-                    <div className="concept-library-empty" role="alert">{t('conceptLibrary.facetFailed', { reason: t(detailError) })}</div>
-                  ) : sections.length === 0 ? (
-                    <div className="concept-library-empty">
-                      {rows.length === 0
-                        ? t('conceptLibrary.facetEmpty')
-                        : t('conceptLibrary.noMatch')}
-                    </div>
-                  ) : (
-                    <>
-                      {sections.map(({ probe, rows: sectionRows }) => (
-                        <section key={probe.id} className="concept-library-section" role="presentation">
-                          <div className={`concept-library-section-header${selectedDetailId === `p:${probe.id}` ? ' selected' : ''}`} {...getDetailOptionProps(`p:${probe.id}`)}>
-                            <div className="concept-library-section-title">
-                              {probe.display}
-                            </div>
-                            <div className="concept-library-section-meta">
-                              {probe.expanded
-                                ? t('conceptLibrary.pair', {
-                                    first: msg('conceptLibrary.conceptCount', { count: probe.conceptCount }),
-                                    second: msg('conceptLibrary.unusedCount', { count: probe.unusedCount }),
-                                  })
-                                : t('conceptLibrary.notExpanded')}
-                            </div>
-                            <button
-                              tabIndex={-1}
-                              className="modal-btn modal-btn-danger"
-                              onClick={() => void handleDeleteProbe(probe)}
-                            >
-                              {t('task.delete')}
-                            </button>
-                          </div>
-                          {sectionRows.length > 0 && (
-                            <div className="concept-library-rows" role="presentation">
-                              {sectionRows.map((row) => (
-                                /* The chip shows what gets consulted — the value
-                                   and how spent it is; WHEN it was last drawn is
-                                   trivia, so it lives in the tooltip with the
-                                   added date. */
-                                <div
-                                  key={row.id}
-                                  className={`concept-library-row${selectedDetailId === `c:${row.id}` ? ' selected' : ''}`}
-                                  {...getDetailOptionProps(`c:${row.id}`)}
-                                  title={row.useCount === 0
-                                    ? t('conceptLibrary.neverUsedTitle', { added: date(row.createdAt) })
-                                    : t('conceptLibrary.usedTitle', {
-                                        count: row.useCount,
-                                        last: date(row.lastUsedAt ?? row.createdAt),
-                                        added: date(row.createdAt),
-                                      })}
-                                >
-                                  <div className="concept-library-row-name">
-                                    {row.display}
-                                  </div>
-                                  <div className="concept-library-row-stats">
-                                    {row.useCount === 0 ? t('conceptLibrary.unused') : t('conceptLibrary.timesUsed', { count: row.useCount })}
-                                  </div>
-                                  {/* Pointer actions remain outside the list's Tab order;
-                                      the Actions menu offers them to the active row. */}
-                                  <button
-                                    tabIndex={-1}
-                                    className="modal-btn modal-btn-danger"
-                                    onClick={() => void handleDeleteConcept(row)}
-                                  >
-                                    {t('task.delete')}
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </section>
-                      ))}
-                    </>
-                  )}
-                  </div>
-                </>
-              )}
-            </div>
           </div>
       </div>
     </Modal>

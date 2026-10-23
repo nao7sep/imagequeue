@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, fireEvent, act, cleanup } from '@testing-library/react'
-import { useListbox } from '../../../../src/renderer/src/hooks/useListbox'
+import { useListbox, type ListboxItems } from '../../../../src/renderer/src/hooks/useListbox'
 
 // jsdom omits CSS.escape (a CSSOM API the real Electron/Chromium renderer has,
 // which is why the live app's listboxes work). Polyfill it so the hook's
@@ -130,5 +130,167 @@ describe('useListbox with prompt-style ids (spaces + punctuation)', () => {
     onSelect.mockClear()
     fireEvent.keyDown(list, { key: 'Enter' })
     expect(onSelect).toHaveBeenCalledExactlyOnceWith(PROMPT_IDS[1])
+  })
+})
+
+
+function IndexedHarness({ items, onNavigate, onSelect = () => {}, activation = 'follows-focus', onPrimary }: {
+  items: ListboxItems
+  onNavigate: (id: string) => void
+  onSelect?: (id: string) => void
+  activation?: 'follows-focus' | 'manual'
+  onPrimary?: (id: string) => void
+}): React.JSX.Element {
+  const { activeId, listboxProps, getOptionProps } = useListbox({
+    items, onNavigate, onSelect, selectedId: null, activation, onPrimary,
+  })
+  return <><div {...listboxProps} data-active={activeId}>
+    <div {...getOptionProps('item-0')}>First mounted page</div>
+  </div><input aria-label="Outside list" /></>
+}
+
+function indexedItems(): ListboxItems {
+  return {
+    count: 100000,
+    idAt: vi.fn((index: number) => `item-${index}`),
+    indexOf: (id: string) => {
+      const match = /^item-(\d+)$/.exec(id)
+      return match && Number(match[1]) < 100000 ? Number(match[1]) : -1
+    },
+  }
+}
+
+function deferredIndex(): { promise: Promise<number>; resolve: (index: number) => void } {
+  let resolve!: (index: number) => void
+  const promise = new Promise<number>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
+function focusIndexed(container: HTMLElement): HTMLElement {
+  const option = container.querySelector<HTMLElement>('[role="option"]')!
+  act(() => option.focus())
+  return container.querySelector<HTMLElement>('[role="listbox"]')!
+}
+
+describe('indexed listbox collections', () => {
+  it('navigates the full collection without enumerating ids or waiting for DOM focus', () => {
+    const items = indexedItems()
+    const onNavigate = vi.fn()
+    const onSelect = vi.fn()
+    const { container } = render(<IndexedHarness items={items} onNavigate={onNavigate} onSelect={onSelect} />)
+    const list = focusIndexed(container)
+    vi.mocked(items.idAt).mockClear()
+    fireEvent.keyDown(list, { key: 'ArrowDown' })
+    fireEvent.keyDown(list, { key: 'ArrowDown' })
+    fireEvent.keyDown(list, { key: 'End' })
+    fireEvent.keyDown(list, { key: 'PageUp' })
+    fireEvent.keyDown(list, { key: 'Home' })
+    expect(onNavigate.mock.calls.map(([id]) => id)).toEqual(['item-1', 'item-2', 'item-99999', 'item-99991', 'item-0'])
+    expect(onSelect.mock.calls).toEqual(onNavigate.mock.calls)
+    expect(vi.mocked(items.idAt).mock.calls.map(([index]) => index)).toEqual([1, 2, 99999, 99991, 0])
+    expect(document.activeElement).toBe(list.querySelector('[role="option"]'))
+  })
+
+  it('keeps manual navigation separate from primary activation while mounting is pending', () => {
+    const onNavigate = vi.fn()
+    const onSelect = vi.fn()
+    const onPrimary = vi.fn()
+    const { container } = render(<IndexedHarness items={indexedItems()} onNavigate={onNavigate} onSelect={onSelect} onPrimary={onPrimary} activation="manual" />)
+    const list = focusIndexed(container)
+    fireEvent.keyDown(list, { key: 'End' })
+    expect(onNavigate).toHaveBeenCalledWith('item-99999')
+    expect(onSelect).not.toHaveBeenCalled()
+    fireEvent.keyDown(list, { key: 'Enter' })
+    expect(onPrimary).toHaveBeenCalledExactlyOnceWith('item-99999')
+  })
+
+  it('uses asynchronous full-collection prefix search without walking unloaded ids', async () => {
+    const result = deferredIndex()
+    const items = { ...indexedItems(), findPrefix: vi.fn(() => result.promise) }
+    const onNavigate = vi.fn()
+    const onSelect = vi.fn()
+    const { container } = render(<IndexedHarness items={items} onNavigate={onNavigate} onSelect={onSelect} />)
+    const list = focusIndexed(container)
+    vi.mocked(items.idAt).mockClear()
+    fireEvent.keyDown(list, { key: 'z' })
+    expect(items.findPrefix).toHaveBeenCalledExactlyOnceWith('z', 0)
+    expect(onNavigate).not.toHaveBeenCalled()
+    await act(async () => result.resolve(87654))
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith('item-87654')
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('item-87654')
+    expect(items.idAt).toHaveBeenCalledExactlyOnceWith(87654)
+  })
+
+  it('applies only the latest typeahead result and ignores no match', async () => {
+    const first = deferredIndex()
+    const second = deferredIndex()
+    const third = deferredIndex()
+    const items = { ...indexedItems(), findPrefix: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise) }
+    const onNavigate = vi.fn()
+    const { container } = render(<IndexedHarness items={items} onNavigate={onNavigate} />)
+    const list = focusIndexed(container)
+    fireEvent.keyDown(list, { key: 'z' })
+    fireEvent.keyDown(list, { key: 'e' })
+    await act(async () => first.resolve(50))
+    expect(onNavigate).not.toHaveBeenCalled()
+    await act(async () => second.resolve(90))
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith('item-90')
+    fireEvent.keyDown(list, { key: 'r' })
+    await act(async () => third.resolve(-1))
+    expect(onNavigate).toHaveBeenCalledOnce()
+  })
+
+  it.each(['navigation', 'blur', 'model', 'unmount'] as const)('invalidates an outstanding search on %s', async (action) => {
+    const result = deferredIndex()
+    const items = { ...indexedItems(), findPrefix: vi.fn(() => result.promise) }
+    const onNavigate = vi.fn()
+    const view = render(<IndexedHarness items={items} onNavigate={onNavigate} />)
+    const list = focusIndexed(view.container)
+    fireEvent.keyDown(list, { key: 'z' })
+    if (action === 'navigation') fireEvent.keyDown(list, { key: 'End' })
+    if (action === 'blur') {
+      act(() => view.container.querySelector('input')!.focus())
+      // Returning before the request finishes still must not revive the search.
+      act(() => list.querySelector<HTMLElement>('[role="option"]')!.focus())
+    }
+    if (action === 'model') view.rerender(<IndexedHarness items={{ ...items }} onNavigate={onNavigate} />)
+    if (action === 'unmount') view.unmount()
+    onNavigate.mockClear()
+    await act(async () => result.resolve(500))
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('uses the current navigation handler when a pending search resolves', async () => {
+    const result = deferredIndex()
+    const items = { ...indexedItems(), findPrefix: () => result.promise }
+    const original = vi.fn()
+    const latest = vi.fn()
+    const view = render(<IndexedHarness items={items} onNavigate={original} />)
+    const list = focusIndexed(view.container)
+    fireEvent.keyDown(list, { key: 'z' })
+    view.rerender(<IndexedHarness items={items} onNavigate={latest} />)
+    await act(async () => result.resolve(500))
+    expect(original).not.toHaveBeenCalled()
+    expect(latest).toHaveBeenCalledExactlyOnceWith('item-500')
+  })
+
+  it('accepts synchronous indexed prefix search', () => {
+    const items = { ...indexedItems(), findPrefix: vi.fn(() => 700) }
+    const onNavigate = vi.fn()
+    const { container } = render(<IndexedHarness items={items} onNavigate={onNavigate} />)
+    const list = focusIndexed(container)
+    fireEvent.keyDown(list, { key: 's' })
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith('item-700')
+  })
+
+  it('preserves synchronous visible-label typeahead for array consumers', () => {
+    const ids = ['Alpha', 'Beta', 'Zebra']
+    const onSelect = vi.fn()
+    const { container } = render(<Harness ids={ids} onSelect={onSelect} />)
+    const list = container.querySelector<HTMLElement>('[role="listbox"]')!
+    act(() => list.querySelector<HTMLElement>('[role="option"]')!.focus())
+    fireEvent.keyDown(list, { key: 'z' })
+    expect(document.activeElement?.textContent).toBe('Zebra')
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('Zebra')
   })
 })

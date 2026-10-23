@@ -1,3 +1,4 @@
+import type { ConceptLibraryQuery, ConceptLibraryIndex, ConceptLibraryPage, ConceptLibraryItem, ConceptLibraryLocation, ConceptLibraryLocationResult } from '../shared/concept-library'
 import type { QueueSnapshot, QueueUpdate } from '../shared/queue-updates'
 import type { BrainstormConfig } from '../shared/brainstorm-config'
 import type { DraftSurface, QuitQuestion } from '../shared/quit'
@@ -27,8 +28,6 @@ import {
   SecretId,
   QueueControlState,
   ConceptFacetSummary,
-  ConceptProbeSummary,
-  ConceptRow,
 } from '../shared/types'
 import type {
   DrawThingsParamsPersistenceState,
@@ -198,10 +197,14 @@ const api = {
   // Concept ledger (the Concept Library modal)
   listConceptFacets: (): Promise<ConceptFacetSummary[]> =>
     ipcRenderer.invoke('concepts:listFacets'),
-  listConceptRows: (facetId: number): Promise<ConceptRow[]> =>
-    ipcRenderer.invoke('concepts:listConcepts', facetId),
-  listConceptProbes: (facetId: number): Promise<ConceptProbeSummary[]> =>
-    ipcRenderer.invoke('concepts:listProbes', facetId),
+  queryConceptLibrary: (query: ConceptLibraryQuery): Promise<ConceptLibraryIndex> =>
+    ipcRenderer.invoke('concepts:queryConceptLibrary', query),
+  readConceptLibraryPage: (query: ConceptLibraryQuery, revision: string, probeId: number, offset: number): Promise<ConceptLibraryPage> =>
+    ipcRenderer.invoke('concepts:readConceptLibraryPage', query, revision, probeId, offset),
+  locateConceptLibraryItem: (query: ConceptLibraryQuery, revision: string, item: ConceptLibraryItem): Promise<ConceptLibraryLocationResult> =>
+    ipcRenderer.invoke('concepts:locateConceptLibraryItem', query, revision, item),
+  searchConceptLibraryPrefix: (query: ConceptLibraryQuery, revision: string, prefix: string, after: ConceptLibraryLocation | null): Promise<ConceptLibraryLocationResult> =>
+    ipcRenderer.invoke('concepts:searchConceptLibraryPrefix', query, revision, prefix, after),
   deleteConceptProbe: (probeId: number): Promise<void> =>
     ipcRenderer.invoke('concepts:deleteProbe', probeId),
   deleteConceptRow: (conceptId: number): Promise<void> =>

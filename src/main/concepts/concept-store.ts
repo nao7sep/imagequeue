@@ -90,3 +90,11 @@ export const listProbesWithStats = (...args: Parameters<typeof Database.listProb
 export const deleteProbe = (...args: Parameters<typeof Database.deleteProbe>): Promise<ReturnType<typeof Database.deleteProbe>> => request('deleteProbe', args)
 export const deleteConcept = (...args: Parameters<typeof Database.deleteConcept>): Promise<ReturnType<typeof Database.deleteConcept>> => request('deleteConcept', args)
 export const deleteFacet = (...args: Parameters<typeof Database.deleteFacet>): Promise<ReturnType<typeof Database.deleteFacet>> => request('deleteFacet', args)
+
+export const queryConceptLibrary = (...args: Parameters<typeof Database.queryConceptLibrary>): Promise<ReturnType<typeof Database.queryConceptLibrary>> => request('queryConceptLibrary', args)
+
+export const readConceptLibraryPage = (...args: Parameters<typeof Database.readConceptLibraryPage>): Promise<ReturnType<typeof Database.readConceptLibraryPage>> => request('readConceptLibraryPage', args)
+
+export const locateConceptLibraryItem = (...args: Parameters<typeof Database.locateConceptLibraryItem>): Promise<ReturnType<typeof Database.locateConceptLibraryItem>> => request('locateConceptLibraryItem', args)
+
+export const searchConceptLibraryPrefix = (...args: Parameters<typeof Database.searchConceptLibraryPrefix>): Promise<ReturnType<typeof Database.searchConceptLibraryPrefix>> => request('searchConceptLibraryPrefix', args)

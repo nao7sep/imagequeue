@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -7,6 +8,8 @@ import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceE
 import { serializeError } from '../../shared/serialize-error'
 import { setAsideFile } from '../utils/set-aside'
 import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../shared/types'
+import { CONCEPT_LIBRARY_PAGE_SIZE } from '../../shared/concept-library'
+import type { ConceptLibraryQuery, ConceptLibraryIndex, ConceptLibraryPage, ConceptLibraryItem, ConceptLibraryLocation, ConceptLibraryLocationResult } from '../../shared/concept-library'
 export type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow }
 
 // The concept ledger: every facet, probe (the narrow domain an ask mined), and
@@ -74,10 +77,12 @@ CREATE TABLE IF NOT EXISTS use_batches (
 );
 CREATE INDEX IF NOT EXISTS idx_concepts_facet ON concepts (facet_id, use_count);
 CREATE INDEX IF NOT EXISTS idx_concepts_probe ON concepts (probe_id, use_count);
+CREATE INDEX IF NOT EXISTS idx_concepts_library_order ON concepts (probe_id, use_count DESC, display, id);
 CREATE INDEX IF NOT EXISTS idx_uses_session ON uses (session_id);
 `
 
 let db: DatabaseSync | null = null
+let generation = ''
 
 let dataDir = ''
 let log: (level: string, message: string, fields: Record<string, unknown>) => void = () => {}
@@ -134,7 +139,9 @@ function open(): DatabaseSync {
     setAside(file, err)
     return open()
   }
+  opened.function('js_lower', { deterministic: true }, (value) => String(value).toLowerCase())
   db = opened
+  generation = randomUUID()
   return db
 }
 
@@ -358,6 +365,91 @@ export function listProbesWithStats(facetId: number): ConceptProbeSummary[] {
       (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0) AS unusedCount
     FROM probes p WHERE p.facet_id = ? ORDER BY p.id
   `).all(facetId) as unknown as ConceptProbeSummary[]
+}
+
+// One connection owns all reads and writes in the worker. total_changes includes
+// every mutation without maintaining a second invalidation counter.
+function libraryRevision(): string {
+  const changes = open().prepare('SELECT total_changes() AS n').get() as { n: number }
+  return `${generation}:${changes.n}`
+}
+
+const LIBRARY_FILTER = `
+  (?3 = 'all' OR (?3 = 'unused' AND c.use_count = 0) OR (?3 = 'used' AND c.use_count > 0))
+  AND (instr(js_lower(p.display), ?2) > 0 OR instr(js_lower(c.display), ?2) > 0)`
+const LIBRARY_CTE = `WITH filtered AS NOT MATERIALIZED (
+  SELECT c.id, c.probe_id, c.display, c.use_count
+  FROM concepts c JOIN probes p ON p.id = c.probe_id
+  WHERE p.facet_id = ?1 AND ${LIBRARY_FILTER}
+), groups AS (
+  SELECT p.id AS probeId, p.display,
+    (SELECT COUNT(*) FROM filtered c WHERE c.probe_id = p.id) AS count
+  FROM probes p WHERE p.facet_id = ?1
+), visible AS (
+  SELECT * FROM groups WHERE count > 0
+    OR (?2 <> '' AND instr(js_lower(display), ?2) > 0)
+    OR (?2 = '' AND ?3 = 'all')
+)`
+const queryArgs = (query: ConceptLibraryQuery): [number, string, string] =>
+  [query.facetId, query.filter.trim().toLowerCase(), query.useFilter]
+
+export function queryConceptLibrary(query: ConceptLibraryQuery): ConceptLibraryIndex {
+  const d = open()
+  const revision = libraryRevision()
+  const groups = d.prepare(`${LIBRARY_CTE} SELECT probeId, count FROM visible ORDER BY probeId`)
+    .all(...queryArgs(query)) as unknown as ConceptLibraryIndex['groups']
+  const total = d.prepare('SELECT COUNT(*) AS count FROM concepts WHERE facet_id = ?').get(query.facetId) as { count: number }
+  return { revision, groups, totalConceptCount: total.count }
+}
+
+export function readConceptLibraryPage(query: ConceptLibraryQuery, revision: string, probeId: number, offset: number): ConceptLibraryPage {
+  const d = open()
+  if (libraryRevision() !== revision) return { stale: true }
+  const probe = d.prepare(`SELECT p.id, p.display, p.expanded,
+    (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id) AS conceptCount,
+    (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0) AS unusedCount
+    FROM probes p WHERE p.id = ? AND p.facet_id = ?`).get(probeId, query.facetId) as unknown as ConceptProbeSummary | undefined
+  if (!probe) return { stale: true }
+  const rows = d.prepare(`SELECT c.id, c.probe_id AS probeId, c.display, p.display AS probe,
+    c.use_count AS useCount, c.last_used_at AS lastUsedAt, c.created_at AS createdAt
+    FROM concepts c JOIN probes p ON p.id = c.probe_id
+    WHERE p.facet_id = ?1 AND ${LIBRARY_FILTER} AND c.probe_id = ?4
+    ORDER BY c.use_count DESC, c.display ASC, c.id ASC LIMIT ?5 OFFSET ?6`)
+    .all(...queryArgs(query), probeId, CONCEPT_LIBRARY_PAGE_SIZE, offset) as unknown as ConceptRow[]
+  return { stale: false, probe, rows }
+}
+
+export function locateConceptLibraryItem(query: ConceptLibraryQuery, revision: string, item: ConceptLibraryItem): ConceptLibraryLocationResult {
+  const d = open()
+  if (libraryRevision() !== revision) return { stale: true }
+  const sql = item.kind === 'probe'
+    ? `${LIBRARY_CTE} SELECT probeId, -1 AS offset FROM visible WHERE probeId = ?4`
+    : `${LIBRARY_CTE} SELECT target.probe_id AS probeId,
+      (SELECT COUNT(*) FROM filtered c WHERE c.probe_id = target.probe_id AND (
+        c.use_count > target.use_count OR (c.use_count = target.use_count AND (
+          c.display < target.display OR (c.display = target.display AND c.id < target.id))))) AS offset
+      FROM filtered target WHERE target.id = ?4`
+  const location = d.prepare(sql).get(...queryArgs(query), item.id) as unknown as ConceptLibraryLocation | undefined
+  return { stale: false, location: location ?? null }
+}
+
+export function searchConceptLibraryPrefix(query: ConceptLibraryQuery, revision: string, prefix: string, after: ConceptLibraryLocation | null): ConceptLibraryLocationResult {
+  const d = open()
+  if (libraryRevision() !== revision) return { stale: true }
+  // Ranking lives in SQLite: only the single matching location crosses the
+  // worker boundary, including matches outside the renderer's current pages.
+  const location = d.prepare(`${LIBRARY_CTE}, ranked AS (
+    SELECT c.probe_id AS probeId, c.display,
+      ROW_NUMBER() OVER (PARTITION BY c.probe_id ORDER BY c.use_count DESC, c.display, c.id) - 1 AS offset
+    FROM filtered c
+  ), labels AS (
+    SELECT probeId, display, -1 AS offset FROM visible
+    UNION ALL SELECT probeId, display, offset FROM ranked
+  ) SELECT probeId, offset FROM labels WHERE substr(js_lower(display), 1, length(?4)) = ?4
+    ORDER BY CASE WHEN probeId > ?5 OR (probeId = ?5 AND offset > ?6) THEN 0 ELSE 1 END,
+      probeId, offset LIMIT 1`)
+    .get(...queryArgs(query), prefix.toLowerCase(), after?.probeId ?? -1, after?.offset ?? -1) as unknown as ConceptLibraryLocation | undefined
+  return { stale: false, location: location ?? null }
 }
 
 /** Delete one domain with its whole cluster: concepts and their use history.

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CONCEPT_LIBRARY_PAGE_SIZE, type ConceptLibraryQuery, type ConceptLibraryLocation, type ConceptLibraryPage } from '../../../../src/shared/concept-library'
 import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../../../src/shared/types'
 
 const confirm = vi.hoisted(() => vi.fn(async () => true))
@@ -14,6 +15,54 @@ if (typeof globalThis.CSS === 'undefined' || typeof globalThis.CSS.escape !== 'f
   }
 }
 
+// Give the real virtualizer the layout information a browser supplies.
+class LibraryResizeObserver {
+  constructor(private callback: ResizeObserverCallback) {}
+  observe(target: Element): void {
+    queueMicrotask(() => this.callback([{ target, contentRect: target.getBoundingClientRect(),
+      borderBoxSize: [{ inlineSize: 640, blockSize: (target as HTMLElement).offsetHeight }],
+    } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver))
+  }
+  disconnect(): void {}
+  unobserve(): void {}
+}
+function elementHeight(element: HTMLElement): number {
+  if (element.classList.contains('concept-library-virtual')) return 400
+  if (element.classList.contains('concept-library-block')) {
+    const count = element.querySelectorAll('.concept-library-row').length
+    if (!element.querySelector('.concept-library-page')) return Number.parseFloat(element.firstElementChild?.getAttribute('style')?.match(/height: ([\d.]+)/)?.[1] ?? '768')
+    return Math.ceil(count / 2) * 48 + (element.querySelector('.concept-library-section-header') ? 56 : 0) + (element.classList.contains('last') ? 12 : 0)
+  }
+  return 48
+}
+
+let revision: number
+let transferred: number
+function matched(query: ConceptLibraryQuery) {
+  const filter = query.filter.trim().toLowerCase()
+  return probes.map((probe) => {
+    const domainMatch = probe.display.toLowerCase().includes(filter)
+    const values = rows.filter((row) => row.probeId === probe.id &&
+      (query.useFilter === 'all' || (query.useFilter === 'used' ? row.useCount > 0 : row.useCount === 0)) &&
+      (domainMatch || row.display.toLowerCase().includes(filter)))
+      .sort((a, b) => b.useCount - a.useCount || (a.display < b.display ? -1 : a.display > b.display ? 1 : a.id - b.id))
+    return { probe, values }
+  }).filter(({ probe, values }) => values.length || (filter ? probe.display.toLowerCase().includes(filter) : query.useFilter === 'all'))
+}
+function page(query: ConceptLibraryQuery, version: string, probeId: number, offset: number): ConceptLibraryPage {
+  if (version !== String(revision)) return { stale: true }
+  const group = matched(query).find((group) => group.probe.id === probeId) ?? { probe: probes.find((probe) => probe.id === probeId)!, values: [] }
+  const values = group.values.slice(offset, offset + CONCEPT_LIBRARY_PAGE_SIZE)
+  transferred += values.length
+  return { stale: false, probe: group.probe, rows: values }
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
+  return { promise, resolve, reject }
+}
+
 let facets: ConceptFacetSummary[]
 let probes: ConceptProbeSummary[]
 let rows: ConceptRow[]
@@ -23,18 +72,57 @@ const makeRow = (id: number, probeId: number, display: string, probe: string, us
 
 beforeEach(() => {
   confirm.mockReset().mockResolvedValue(true)
+  revision = 1; transferred = 0
+  vi.stubGlobal('ResizeObserver', LibraryResizeObserver)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return elementHeight(this) })
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) { return elementHeight(this) })
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(640)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return { width: 640, height: elementHeight(this), top: 0, left: 0, right: 640, bottom: elementHeight(this), x: 0, y: 0, toJSON: () => ({}) }
+  })
+  HTMLElement.prototype.scrollTo = vi.fn(function (this: HTMLElement, options?: ScrollToOptions | number) {
+    if (typeof options === 'object') this.scrollTop = options.top ?? this.scrollTop
+    this.dispatchEvent(new Event('scroll'))
+  })
+  HTMLElement.prototype.scrollIntoView = vi.fn()
   facets = [{ id: 1, display: 'place', conceptCount: 3, unusedCount: 2, probeCount: 2, lastUsedAt: null }]
   probes = [
     { id: 10, display: 'ports', expanded: 1, conceptCount: 2, unusedCount: 1 },
     { id: 20, display: 'woods', expanded: 1, conceptCount: 1, unusedCount: 1 },
   ]
-  rows = [makeRow(100, 10, 'dock', 'ports'), makeRow(101, 10, 'wharf', 'ports', 1), makeRow(200, 20, 'tree', 'woods')]
+  rows = [makeRow(100, 10, 'dock', 'ports', 1), makeRow(101, 10, 'wharf', 'ports'), makeRow(200, 20, 'tree', 'woods')]
   window.electronAPI = {
     listConceptFacets: vi.fn(async () => [...facets]),
-    listConceptProbes: vi.fn(async () => [...probes]),
-    listConceptRows: vi.fn(async () => [...rows]),
-    deleteConceptRow: vi.fn(async (id: number) => { rows = rows.filter((row) => row.id !== id) }),
+    queryConceptLibrary: vi.fn(async (query: ConceptLibraryQuery) => ({
+      revision: String(revision), groups: matched(query).map(({ probe, values }) => ({ probeId: probe.id, count: values.length })), totalConceptCount: rows.length,
+    })),
+    readConceptLibraryPage: vi.fn(async (...args: Parameters<typeof page>) => page(...args)),
+    locateConceptLibraryItem: vi.fn(async (query: ConceptLibraryQuery, version: string, item: { kind: 'probe' | 'concept'; id: number }) => {
+      if (version !== String(revision)) return { stale: true }
+      for (const { probe, values } of matched(query)) {
+        if (item.kind === 'probe' && probe.id === item.id) return { stale: false, location: { probeId: probe.id, offset: -1 } }
+        const offset = item.kind === 'concept' ? values.findIndex((row) => row.id === item.id) : -1
+        if (offset >= 0) return { stale: false, location: { probeId: probe.id, offset } }
+      }
+      return { stale: false, location: null }
+    }),
+    searchConceptLibraryPrefix: vi.fn(async (query: ConceptLibraryQuery, version: string, prefix: string, after: ConceptLibraryLocation | null) => {
+      if (version !== String(revision)) return { stale: true }
+      const labels = matched(query).flatMap(({ probe, values }) => [
+        { display: probe.display, location: { probeId: probe.id, offset: -1 } },
+        ...values.map((row, offset) => ({ display: row.display, location: { probeId: probe.id, offset } })),
+      ])
+      const start = after ? labels.findIndex(({ location }) => location.probeId === after.probeId && location.offset === after.offset) : -1
+      for (let step = 1; step <= labels.length; step++) {
+        const label = labels[(start + step) % labels.length]
+        if (label.display.toLowerCase().startsWith(prefix.toLowerCase())) return { stale: false, location: label.location }
+      }
+      return { stale: false, location: null }
+    }),
+    deleteConceptRow: vi.fn(async (id: number) => { rows = rows.filter((row) => row.id !== id); revision++ }),
     deleteConceptProbe: vi.fn(async (id: number) => {
+      revision++
       probes = probes.filter((probe) => probe.id !== id)
       rows = rows.filter((row) => row.probeId !== id)
     }),
@@ -43,7 +131,7 @@ beforeEach(() => {
   } as unknown as typeof window.electronAPI
 })
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 async function mountDetails(): Promise<HTMLElement> {
   render(<ConceptLibraryModal onClose={vi.fn()} />)
@@ -65,11 +153,11 @@ describe('concept library detail actions', () => {
   it('navigates domain then concepts in displayed order through one Tab stop', async () => {
     const list = await mountDetails()
     const options = within(list).getAllByRole('option')
-    expect(options.map((option) => option.dataset.listboxOption)).toEqual(['p:10', 'c:100', 'c:101', 'p:20', 'c:200'])
+    expect(options.map((option) => option.dataset.listboxOption)).toEqual(['p:10', 'c:10:0', 'c:10:1', 'p:20', 'c:20:0'])
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
     act(() => options[0].focus())
     fireEvent.keyDown(options[0], { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(options[1])
+    await waitFor(() => expect(document.activeElement).toBe(options[1]))
     expect(options[1].getAttribute('aria-selected')).toBe('true')
     expect(options[1].classList.contains('selected')).toBe(true)
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
@@ -103,8 +191,9 @@ describe('concept library detail actions', () => {
     const dock = within(list).getByText('dock').closest<HTMLElement>('[role="option"]')!
     fireEvent.click(dock)
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'tree' } })
-    expect(within(list).queryByText('dock')).toBeNull()
-    expect(within(list).getAllByRole('option').map((option) => option.dataset.listboxOption)).toEqual(['p:20', 'c:200'])
+    await waitFor(() => expect(within(list).queryByText('dock')).toBeNull())
+    await within(list).findByText('tree')
+    expect(within(list).getAllByRole('option').map((option) => option.dataset.listboxOption)).toEqual(['p:20', 'c:20:0'])
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     await menuDelete()
@@ -128,7 +217,7 @@ describe('concept library detail actions', () => {
 
   it('disables Actions while details are loading, failed, or filtered empty', async () => {
     let reject!: (error: Error) => void
-    vi.mocked(window.electronAPI.listConceptRows).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
+    vi.mocked(window.electronAPI.queryConceptLibrary).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
     render(<ConceptLibraryModal onClose={vi.fn()} />)
     const trigger = await screen.findByRole('button', { name: 'Actions' }) as HTMLButtonElement
     expect(trigger.disabled).toBe(true)
@@ -149,5 +238,92 @@ describe('concept library detail actions', () => {
     await menuDelete()
     expect(window.electronAPI.deleteConceptProbe).toHaveBeenCalledWith(10)
     expect(window.electronAPI.deleteConceptRow).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('large concept library paging', () => {
+  function largeFacet(): void {
+    probes = [{ id: 10, display: 'ports', expanded: 1, conceptCount: 3201, unusedCount: 3201 }]
+    rows = Array.from({ length: 3200 }, (_, i) => makeRow(10000 + i, 10, `dock ${String(i).padStart(4, '0')}`, 'ports'))
+    rows.push(makeRow(50000, 10, 'zebra destination', 'ports'))
+    facets = [{ ...facets[0], conceptCount: rows.length, unusedCount: rows.length, probeCount: 1 }]
+  }
+  async function mountLarge(): Promise<HTMLElement> {
+    largeFacet()
+    render(<ConceptLibraryModal onClose={vi.fn()} />)
+    const list = await screen.findByRole('listbox', { name: 'place' })
+    await within(list).findByText('dock 0000')
+    return list
+  }
+  function option(list: HTMLElement, key: string): HTMLElement | null {
+    return list.querySelector(`[data-listbox-option="${key}"]`)
+  }
+  async function key(list: HTMLElement, value: string, expected: string): Promise<HTMLElement> {
+    fireEvent.keyDown(list, { key: value })
+    await waitFor(() => expect(document.activeElement).toBe(option(list, expected)))
+    const target = option(list, expected)!
+    expect(target.getAttribute('aria-selected')).toBe('true')
+    return target
+  }
+
+  it('bounds mounted chips and transfers while navigating the complete facet across page boundaries', async () => {
+    const list = await mountLarge()
+    expect(list.querySelectorAll('.concept-library-row').length).toBeLessThan(150)
+    expect(transferred).toBeLessThan(rows.length)
+    act(() => option(list, 'p:10')!.focus())
+    await key(list, 'End', 'c:10:3200')
+    expect(document.activeElement?.textContent).toContain('zebra destination')
+    expect(list.querySelectorAll('.concept-library-row').length).toBeLessThan(150)
+    await key(list, 'Home', 'p:10')
+    act(() => { for (let i = 0; i < 32; i++) fireEvent.keyDown(list, { key: 'ArrowDown' }) })
+    await waitFor(() => expect(document.activeElement).toBe(option(list, 'c:10:31')))
+    await key(list, 'ArrowDown', 'c:10:32')
+    await key(list, 'ArrowUp', 'c:10:31')
+    expect(transferred).toBeLessThan(rows.length)
+    expect(window.electronAPI.readConceptLibraryPage).toHaveBeenCalledWith(expect.anything(), expect.any(String), 10, 32)
+    expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
+  })
+
+  it('typeahead finds an unloaded item and Actions uses its real identity', async () => {
+    const list = await mountLarge()
+    expect(within(list).queryByText('zebra destination')).toBeNull()
+    act(() => option(list, 'p:10')!.focus())
+    await key(list, 'z', 'c:10:3200')
+    openMenu(document.activeElement as HTMLElement)
+    await menuDelete()
+    expect(window.electronAPI.deleteConceptRow).toHaveBeenCalledExactlyOnceWith(50000)
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('zebra destination') }))
+    await waitFor(() => expect(within(list).queryByText('zebra destination')).toBeNull())
+  })
+
+  it('ignores a superseded filter index completion', async () => {
+    const list = await mountDetails()
+    const pending = deferred<Awaited<ReturnType<typeof window.electronAPI.queryConceptLibrary>>>()
+    vi.mocked(window.electronAPI.queryConceptLibrary).mockImplementationOnce(() => pending.promise)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'dock' } })
+    await waitFor(() => expect(window.electronAPI.queryConceptLibrary).toHaveBeenLastCalledWith(expect.objectContaining({ filter: 'dock' })))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'tree' } })
+    await within(list).findByText('tree')
+    await act(async () => pending.resolve({ revision: String(revision), groups: [{ probeId: 10, count: 1 }], totalConceptCount: rows.length }))
+    expect(within(list).getByText('tree')).toBeTruthy()
+    expect(within(list).queryByText('dock')).toBeNull()
+    expect(within(list).getAllByRole('option').map((row) => row.dataset.listboxOption)).toEqual(['p:20', 'c:20:0'])
+  })
+
+  it('ignores a page completion from the previous filter', async () => {
+    const pending = deferred<ConceptLibraryPage>()
+    const obsoletePage = page({ facetId: 1, filter: '', useFilter: 'all' }, String(revision), 10, 0)
+    vi.mocked(window.electronAPI.readConceptLibraryPage).mockImplementationOnce(() => pending.promise)
+    render(<ConceptLibraryModal onClose={vi.fn()} />)
+    const list = await screen.findByRole('listbox', { name: 'place' })
+    await waitFor(() => expect(window.electronAPI.readConceptLibraryPage).toHaveBeenCalled())
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'tree' } })
+    await act(async () => pending.resolve(obsoletePage))
+    await within(list).findByText('tree')
+    expect(within(list).queryByText('dock')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    await menuDelete()
+    expect(window.electronAPI.deleteConceptProbe).toHaveBeenCalledExactlyOnceWith(20)
   })
 })
