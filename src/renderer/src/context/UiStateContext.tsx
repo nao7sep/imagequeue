@@ -17,8 +17,8 @@ import { useI18n } from '../i18n/I18nContext'
 
 interface UiStateContextValue {
   uiState: UiState
-  /** Patch and persist. The local value updates immediately; the write follows. */
-  patchUiState: (patch: Partial<UiState>) => void
+  /** Publish confirmed values after persistence; false retains the save failure notice. */
+  patchUiState: (patch: Partial<UiState>) => Promise<boolean>
 }
 
 const UiStateContext = createContext<UiStateContextValue | null>(null)
@@ -44,14 +44,18 @@ export function UiStateProvider({ children }: { children: ReactNode }): React.JS
     }
   }, [loadRevision])
 
-  const patchUiState = useCallback((patch: Partial<UiState>): void => {
-    void window.electronAPI.updateUiState(patch)
+  const patchUiState = useCallback((patch: Partial<UiState>): Promise<boolean> => {
+    return window.electronAPI.updateUiState(patch)
       .then(() => {
         setUiState((prev) => ({ ...prev, ...patch }))
         // A later successful save supersedes an earlier failed one.
         clearOperationalFailure('ui-state-save')
+        return true
       })
-      .catch((error) => reportOperationalFailure('ui-state-save', 'operation.uiStateSaveFailed', 'Failed to persist UI state', error))
+      .catch((error) => {
+        reportOperationalFailure('ui-state-save', 'operation.uiStateSaveFailed', 'Failed to persist UI state', error)
+        return false
+      })
   }, [])
 
   return (
