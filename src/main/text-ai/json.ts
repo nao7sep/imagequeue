@@ -15,15 +15,28 @@ export function extractJson(text: string): unknown {
     try { return JSON.parse(fenced[1]) } catch { /* fall through */ }
   }
 
-  // 3. Balanced-substring parse — find the first `{` or `[` and shrink the
-  // tail until JSON.parse succeeds. Covers prose-wrapped responses like
-  // "Sure! Here you go:\n{...}\nHope that helps." without regex tricks.
+  // 3. Scan the first candidate once, respecting delimiters inside strings.
   const start = trimmed.search(/[{[]/)
-  if (start >= 0) {
-    for (let end = trimmed.length; end > start + 1; end--) {
-      try { return JSON.parse(trimmed.slice(start, end)) } catch { /* keep shrinking */ }
+  if (start < 0) return undefined
+  const stack: string[] = []
+  let quoted = false
+  let escaped = false
+  for (let index = start; index < trimmed.length; index++) {
+    const character = trimmed[index]
+    if (quoted) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') quoted = false
+      continue
+    }
+    if (character === '"') quoted = true
+    else if (character === '{' || character === '[') stack.push(character)
+    else if (character === '}' || character === ']') {
+      if (stack.pop() !== (character === '}' ? '{' : '[')) return undefined
+      if (stack.length === 0) {
+        try { return JSON.parse(trimmed.slice(start, index + 1)) } catch { return undefined }
+      }
     }
   }
-
   return undefined
 }

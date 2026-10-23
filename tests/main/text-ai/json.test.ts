@@ -34,6 +34,21 @@ describe('extractJson', () => {
     expect(extractJson(text)).toEqual({ outer: { inner: [1, 2] }, k: 'v' })
   })
 
+  it('ignores braces and escaped quotes inside JSON strings', () => {
+    const value = { text: 'braces } ] { [ and quote " and slash \\', nested: [{ ok: true }] }
+    expect(extractJson(`result: ${JSON.stringify(value)} trailing`)).toEqual(value)
+  })
+
+  it('only considers the first balanced candidate', () => {
+    expect(extractJson('result: {invalid} then {"ok":true}')).toBeUndefined()
+    expect(extractJson('result: {[}] then {"ok":true}')).toBeUndefined()
+  })
+
+  it('rejects a long malformed response without repeated parsing', () => {
+    expect(extractJson(`result: {"text":"${'x'.repeat(200_000)}`)).toBeUndefined()
+    expect(extractJson(`result: {"text":"${'x'.repeat(200_000)}", invalid} trailing`)).toBeUndefined()
+  })
+
   it('returns undefined for empty or whitespace-only input', () => {
     expect(extractJson('')).toBeUndefined()
     expect(extractJson('   \n\t ')).toBeUndefined()
