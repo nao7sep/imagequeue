@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import crypto from 'node:crypto'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendId, Task, TaskStatus } from '../../../src/shared/types'
 
 // The queue channels the window drives. Two things matter here and are easy to
@@ -450,5 +454,72 @@ describe('kept-image presentation state', () => {
     expect(invoke('queue:toggleShowKeptImages')).toBe(true)
     expect(invoke('queue:getShowKeptImages')).toBe(true)
     expect(mocks.log).toHaveBeenCalledWith('warn', 'Window geometry presentation failed', expect.anything())
+  })
+})
+
+
+describe('manual retry with pending publication evidence', () => {
+  let root: string
+  const delivered = Buffer.from('delivered and validated provider bytes')
+  const pendingOutput = () => ({ baseName: '20260102-030405-utc-paid-openai', ext: 'webp' as const, sha256: crypto.createHash('sha256').update(delivered).digest('hex') })
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-retry-output-'))
+    mocks.sessionDir = root
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  it('adopts and persists matching published bytes rather than buying the image again', async () => {
+    const pending = pendingOutput()
+    fs.writeFileSync(path.join(root, `${pending.baseName}.webp`), delivered)
+    seed([makeTask('paid', 'interrupted', { pendingOutput: pending, error: { key: 'taskFailure.notSaved' } })])
+    const retry = vi.spyOn(queueManager, 'retryTask')
+    mocks.persistActiveSession.mockImplementationOnce(async () => {
+      fs.writeFileSync(path.join(root, 'persisted-queue.json'), JSON.stringify(queueManager.getAllStoredTasks()))
+    })
+    await invoke('queue:retryTask', 'openai', 'paid')
+    expect(retry).not.toHaveBeenCalled()
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'completed', baseName: pending.baseName, imagePath: `${pending.baseName}.webp`, error: null })
+    expect(queueManager.getTask('openai', 'paid')?.pendingOutput).toBeUndefined()
+    const saved = JSON.parse(fs.readFileSync(path.join(root, 'persisted-queue.json'), 'utf8')) as Record<BackendId, Task[]>
+    expect(saved.openai[0]).toMatchObject({ status: 'completed', imagePath: `${pending.baseName}.webp` })
+    expect(saved.openai[0].pendingOutput).toBeUndefined()
+    expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
+    expect(mocks.publishQueueState).toHaveBeenCalledOnce()
+    expect(fs.readFileSync(path.join(root, `${pending.baseName}.webp`))).toEqual(delivered)
+  })
+
+  it('does not recover a task while its publishing attempt is still running', async () => {
+    const pending = pendingOutput()
+    fs.writeFileSync(path.join(root, `${pending.baseName}.webp`), delivered)
+    seed([makeTask('paid', 'generating', { pendingOutput: pending })])
+    await invoke('queue:retryTask', 'openai', 'paid')
+    expect(queueManager.getTask('openai', 'paid')?.status).toBe('generating')
+    expect(mocks.persistActiveSession).not.toHaveBeenCalled()
+  })
+
+  it('recovers published output before bulk retry and only queues remaining tasks', async () => {
+    const pending = pendingOutput()
+    fs.writeFileSync(path.join(root, `${pending.baseName}.webp`), delivered)
+    seed([makeTask('paid', 'interrupted', { pendingOutput: pending }), makeTask('unfinished', 'interrupted')])
+    expect(await invoke('queue:resumeInterrupted')).toBe(1)
+    expect(queueManager.getTask('openai', 'paid')?.status).toBe('completed')
+    expect(queueManager.getTask('openai', 'paid')?.pendingOutput).toBeUndefined()
+    expect(queueManager.getTask('openai', 'unfinished')?.status).toBe('queued')
+    expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
+  })
+
+  it.each(['missing', 'foreign'] as const)('allows an ordinary retry when final output is %s and clears old evidence', async condition => {
+    const pending = pendingOutput()
+    const image = path.join(root, `${pending.baseName}.webp`)
+    if (condition === 'foreign') fs.writeFileSync(image, 'another writer won')
+    seed([makeTask('paid', 'interrupted', { pendingOutput: pending })])
+    await invoke('queue:retryTask', 'openai', 'paid')
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'queued', imagePath: null, baseName: null })
+    expect(queueManager.getTask('openai', 'paid')?.pendingOutput).toBeUndefined()
+    expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
+    if (condition === 'foreign') expect(fs.readFileSync(image, 'utf8')).toBe('another writer won')
   })
 })

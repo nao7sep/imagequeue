@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
+import crypto from 'node:crypto'
 import os from 'os'
 import path from 'path'
 import {
@@ -122,6 +123,29 @@ describe('writeImageOutput', () => {
     await expect(writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).rejects.toThrow(failure)
   })
 
+  it('waits for durable output identity before exposing the final name', async () => {
+    let entered!: () => void
+    let release!: () => void
+    const called = new Promise<void>((resolve) => { entered = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const identity = vi.fn(async () => { entered(); await held })
+    const writing = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png', identity)
+    await called
+    try {
+      expect(identity).toHaveBeenCalledWith({ baseName: '20260604-093015-utc-cat-openai', ext: 'png', sha256: crypto.createHash('sha256').update(buf).digest('hex') })
+      expect(fs.readdirSync(sessionDir).every((file) => file.endsWith('.tmp'))).toBe(true)
+    } finally { release(); await writing }
+    expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'))).toEqual(buf)
+  })
+
+  it('preserves staged bytes and publishes nothing when saving the identity fails', async () => {
+    await expect(writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png', async () => { throw new Error('identity save failed') })).rejects.toThrow('identity save failed')
+    const files = fs.readdirSync(sessionDir)
+    expect(files).toHaveLength(1)
+    expect(files[0]).toMatch(/\.tmp$/)
+    expect(fs.readFileSync(path.join(sessionDir, files[0]))).toEqual(buf)
+  })
+
   it('retains the complete delivered image stage when publication fails', async () => {
     vi.spyOn(fs.promises, 'link').mockRejectedValueOnce(Object.assign(new Error('volume unavailable'), { code: 'EIO' }))
     await expect(writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')).rejects.toThrow('volume unavailable')
@@ -142,7 +166,12 @@ describe('writeImageOutput', () => {
       }
       return link(source, target)
     })
-    const base = await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png')
+    const allocations = vi.fn(async () => undefined)
+    const base = await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png', allocations)
+    expect(allocations.mock.calls).toEqual([
+      [expect.objectContaining({ baseName: '20260604-093015-utc-cat-openai' })],
+      [expect.objectContaining({ baseName: '20260604-093015-utc-cat-openai-2' })],
+    ])
     expect(base).toBe('20260604-093015-utc-cat-openai-2')
     expect(new Set(imageStages).size).toBe(1)
     expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'), 'utf8')).toBe('other writer')

@@ -8,9 +8,10 @@ import type { IncomingMessage } from 'http'
 import {
   writeDownloadResponse,
   parseAdvertisedLength,
-  sha256File,
   withWholeOperationTimeout,
 } from '../../../src/main/dependencies/download'
+
+import { sha256File } from '../../../src/main/utils/sha256-file'
 
 const tempDirs: string[] = []
 

@@ -18,7 +18,8 @@ function isActiveTask(task: Task): boolean {
 export function normalizeTaskRecord(task: Task): Task {
   return {
     ...task,
-    params: { ...task.params }
+    params: { ...task.params },
+    ...(task.pendingOutput ? { pendingOutput: { ...task.pendingOutput } } : {})
   }
 }
 
@@ -128,6 +129,7 @@ export class QueueManager {
   // the per-attempt result fields. Shared by single retry and bulk resume.
   private requeueTask(task: Task): void {
     task.status = 'queued'
+    delete task.pendingOutput
     task.error = null
     task.providerMessage = null
     task.startedAt = null

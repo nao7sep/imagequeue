@@ -29,6 +29,7 @@ import { publishQueueState } from '../queue/publisher'
 import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
 
 import { isStoredTaskParams } from './stored-task-params'
+import { isPendingTaskOutput, recoverPublishedOutput } from './output-recovery'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
@@ -189,7 +190,8 @@ function isStoredTask(value: unknown): value is Task {
     nullable(task.imagePath, isString) &&
     nullable(task.baseName, isString) &&
     nullable(task.error, isMessage) &&
-    nullable(task.providerMessage, isString)
+    nullable(task.providerMessage, isString) &&
+    (task.pendingOutput === undefined || isPendingTaskOutput(task.pendingOutput))
   )
 }
 
@@ -598,12 +600,20 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
     throw new Error('That session is missing a readable session.json file.')
   }
 
+  // This identity was saved before publication. Inspect it before classifying
+  // unfinished work, so a crash after the paid image landed never invites a
+  // second generation merely because the final lifecycle save was interrupted.
+  let recoveredUpdatedAt = manifest.updatedAt
+  for (const task of collectTasks(manifest.tasks)) {
+    if (await recoverPublishedOutput(task, sessionDir) && task.completedAt &&
+      Date.parse(task.completedAt) > Date.parse(recoveredUpdatedAt)) recoveredUpdatedAt = task.completedAt
+  }
   const resumedQueues = normalizeResumedQueues(manifest.tasks)
   // Judged against the resumed queues: lifecycle changes are not content edits.
   const { saved: session } = await writeSessionManifest(sessionDir, sessionState({
     elaboratedPrompts: [...manifest.elaboratedPrompts],
     createdAt: manifest.createdAt,
-    updatedAt: manifest.updatedAt,
+    updatedAt: recoveredUpdatedAt,
     lastResumedAt: new Date().toISOString(),
   }, resumedQueues), resumedQueues)
   resetOutputTimestampAllocators()

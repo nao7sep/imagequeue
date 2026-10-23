@@ -172,6 +172,13 @@ export interface Elaborator {
   template: string
 }
 
+/** Durable evidence established before a delivered image claims its final name. */
+export interface PendingTaskOutput {
+  baseName: string
+  ext: 'png' | 'jpg' | 'webp'
+  sha256: string
+}
+
 export interface Task {
   id: string
   prompt: string
@@ -185,6 +192,7 @@ export interface Task {
   durationMs: number | null
   imagePath: string | null
   baseName: string | null
+  pendingOutput?: PendingTaskOutput
   // Why the task failed, as a message rendered in the current language.
   error: Message | null
   // The provider's human-readable reason when this attempt failed — the message

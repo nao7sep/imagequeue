@@ -3,12 +3,14 @@ import fs from 'fs'
 import path from 'path'
 import { shell } from 'electron'
 import { getSessionDir } from '../session'
-import { BackendId, OutputFileState } from '../../shared/types'
+import { BackendId, OutputFileState, PendingTaskOutput } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log, serializeError } from '../logger'
 import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
 import { claimFinalNameAsync, stageBesideAsync, stagingPathFor } from './atomic-write'
 import { syncDirectoryAsync } from './fsync'
+import { sha256File } from './sha256-file'
+import { isSafeOutputBaseName } from '../../shared/output-name'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
 
@@ -18,15 +20,7 @@ export type ImageExt = 'png' | 'jpg' | 'webp'
 // reveal a file outside the session dir. Mirrors the session-id guard in
 // session/state.ts.
 export function assertSafeBaseName(baseName: unknown): string {
-  if (
-    typeof baseName !== 'string' ||
-    baseName.length === 0 ||
-    baseName.includes('/') ||
-    baseName.includes('\\') ||
-    baseName.includes('..') ||
-    baseName.includes('\0') ||
-    path.basename(baseName) !== baseName
-  ) {
+  if (!isSafeOutputBaseName(baseName)) {
     throw new Error(`Unsafe output base name: ${String(baseName)}`)
   }
   return baseName
@@ -134,7 +128,8 @@ export async function writeImageOutput(
   backend: BackendId,
   imageBuffer: Buffer,
   metadata: ImageMetadata,
-  ext: ImageExt
+  ext: ImageExt,
+  beforePublish?: (output: PendingTaskOutput) => Promise<void>,
 ): Promise<string> {
   const dir = getSessionDir()
   await fs.promises.mkdir(dir, { recursive: true })
@@ -178,7 +173,11 @@ export async function writeImageOutput(
   // (developer decision): the sidecar follows best effort, and nothing in the
   // app reads it back.
   const stagedImage = await stageBesideAsync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
+  const digest = beforePublish ? await sha256File(stagedImage) : null
   for (;;) {
+    // Save this exact identity before each claim, including collision retries.
+    // The digest distinguishes our bytes from a foreign file that wins the name.
+    if (beforePublish) await beforePublish({ baseName, ext, sha256: digest! })
     if (await claimFinalNameAsync(stagedImage, path.join(dir, `${baseName}.${ext}`))) break
     // Only an occupied final name advances the ordinal; I/O failures escape.
     attempt++

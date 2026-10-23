@@ -91,7 +91,17 @@ it('warns once after a user pause and preserves delivered images through sidecar
     if (String(destination).endsWith('.json')) throw Object.assign(new Error('sidecar unavailable'), { code: 'EACCES' })
     return link(source, destination)
   })
-  const finalSaveFailure = vi.spyOn(fs.promises, 'rename').mockRejectedValue(new Error('session unavailable'))
+  const rename = fs.promises.rename.bind(fs.promises)
+  const recorded = new Set<string>()
+  const finalSaveFailure = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
+    const next = JSON.parse(fs.readFileSync(source, 'utf8')) as SessionManifest
+    const pending = next.tasks.openai.flatMap(task => task.pendingOutput ? [task.pendingOutput.baseName] : [])
+    // Required pre-publication evidence may land; only the later outcome save
+    // fails. An allocation snapshot may already include a sibling's completion.
+    if (!pending.some(name => !recorded.has(name))) throw new Error('session unavailable')
+    for (const name of pending) recorded.add(name)
+    await rename(source, destination)
+  })
   const image = await tinyPng()
   deliver({ buffer: image })
   // The shutdown barrier waits for actual publication and final-save attempts,
@@ -105,7 +115,8 @@ it('warns once after a user pause and preserves delivered images through sidecar
     expect(fs.readFileSync(path.join(dir, task.imagePath!))).toEqual(image)
     expect(fs.existsSync(path.join(dir, `${task.baseName}.json`))).toBe(false)
   }
-  expect(readManifest(dir).tasks.openai.map((task) => task.status)).toEqual(['generating', 'generating'])
+  expect(readManifest(dir).tasks.openai.some((task) => task.status === 'generating')).toBe(true)
+  expect(recorded.size).toBe(2)
   await expect(drainSessionWrites()).rejects.toThrow('session unavailable')
   expect(send.mock.calls.filter(([channel]) => channel === 'app:notice').map(([, notice]) => notice)).toEqual([
     { title: { key: 'notice.queuePausedTitle' }, message: { key: 'notice.queuePausedMessage' } },
@@ -123,4 +134,41 @@ it('warns once after a user pause and preserves delivered images through sidecar
   setQueuePaused(false)
   processQueues()
   expect(generate).toHaveBeenCalledTimes(2)
+})
+
+
+it('records delivered identity before publication and recovers it after the final save is lost', async () => {
+  const image = await tinyPng()
+  generate.mockResolvedValue({ buffer: image })
+  const [task] = queueManager.enqueue({ backend: 'openai', model: 'gpt-image-2', prompt: 'a cat', params: {}, count: 1 })
+  await persistActiveSession()
+  const directory = getSessionDir(), id = getSessionId()
+  let durableBeforePublication: SessionManifest | undefined
+  const link = fs.promises.link.bind(fs.promises)
+  vi.spyOn(fs.promises, 'link').mockImplementation(async (source, destination) => {
+    if (String(destination).endsWith('.png')) {
+      durableBeforePublication = readManifest(directory)
+      expect(durableBeforePublication.tasks.openai[0]).toMatchObject({
+        id: task.id, status: 'generating', pendingOutput: { baseName: path.basename(String(destination), '.png'), ext: 'png', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      })
+    }
+    await link(source, destination)
+  })
+  processQueues()
+  await vi.waitFor(() => expect(queueManager.getTask('openai', task.id)?.status).toBe('completed'))
+  await cancelAllInFlightAndWait(1_000)
+  const completed = queueManager.getTask('openai', task.id)!
+  expect(completed.pendingOutput).toBeUndefined()
+  const name = completed.baseName!
+  await createSession()
+  // Recreate precisely the durable state observed before the final image
+  // appeared, as a crash before its outcome save would leave it.
+  fs.writeFileSync(path.join(directory, 'session.json'), JSON.stringify(durableBeforePublication))
+  fs.rmSync(path.join(directory, `${name}.json`))
+  await resumeSession(id)
+  expect(queueManager.getTask('openai', task.id)).toMatchObject({ status: 'completed', baseName: name, imagePath: `${name}.png` })
+  expect(queueManager.getTask('openai', task.id)?.pendingOutput).toBeUndefined()
+  processQueues()
+  expect(generate).toHaveBeenCalledOnce()
+  expect(fs.readFileSync(path.join(directory, `${name}.png`))).toEqual(image)
 })

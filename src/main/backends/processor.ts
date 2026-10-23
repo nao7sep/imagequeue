@@ -189,7 +189,10 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
     let baseName: string
     try {
-      baseName = await writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)
+      baseName = await writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext, async (output) => {
+        task.pendingOutput = output
+        await persistActiveSession()
+      })
     } catch (writeErr) {
       // Generation already succeeded (and, for cloud backends, was billed), so a
       // write failure here is a distinct, more costly event than a generation
@@ -203,6 +206,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     }
 
     task.status = 'completed'
+    delete task.pendingOutput
     task.baseName = baseName
     task.imagePath = `${baseName}.${ext}`
     drainTracker.recordOk()

@@ -19,8 +19,8 @@ export const FORMAT_VERSIONS = {
   cliSidecar: 1,
   /** recommendations-times.json */
   recommendationsTimes: 1,
-  /** sessions/<session>/session.json */
-  session: 1,
+  /** sessions/<session>/session.json; 2 protects pre-publication output evidence */
+  session: 2,
   /** sessions/<session>/<image>.json, whose keys are snake_case */
   imageSidecar: 1,
   /** records.sqlite3 */

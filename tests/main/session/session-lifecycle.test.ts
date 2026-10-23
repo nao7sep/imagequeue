@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import crypto from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } from '../../../src/shared/types'
@@ -1001,5 +1002,112 @@ describe('physical session write ownership', () => {
       await newSave
     }
     expect(readManifest(dir).tasks.openai.map((task) => task.id)).toEqual(['latest'])
+  })
+})
+
+
+describe('recovering published output before resume normalization', () => {
+  const bytes = Buffer.from('already validated provider image bytes')
+  const pendingOutput = () => ({ baseName: '20260102-030405-utc-delivered-openai', ext: 'png' as const, sha256: crypto.createHash('sha256').update(bytes).digest('hex') })
+  const id = '20260125-000000-utc'
+
+  it('adopts matching final bytes without a sidecar and durably clears pending evidence', async () => {
+    const pending = pendingOutput()
+    const target = stageSession(id, { tasks: withTasks([makeTask('paid', 'generating', {
+      pendingOutput: pending, error: { key: 'taskFailure.notSaved' }, providerMessage: 'old diagnostic',
+      completedAt: '2026-01-25T00:00:03.000Z',
+    })]) })
+    const image = path.join(target, `${pending.baseName}.${pending.ext}`)
+    fs.writeFileSync(image, bytes)
+    await resumeSession(id)
+    const recovered = queueManager.getTask('openai', 'paid')!
+    expect(recovered).toMatchObject({ status: 'completed', baseName: pending.baseName, imagePath: `${pending.baseName}.png`, error: null, providerMessage: null })
+    expect(recovered.pendingOutput).toBeUndefined()
+    expect(readManifest(target).tasks.openai[0]).toMatchObject({ status: 'completed', baseName: pending.baseName, imagePath: `${pending.baseName}.png`, error: null })
+    expect(readManifest(target).tasks.openai[0].pendingOutput).toBeUndefined()
+    expect(fs.existsSync(path.join(target, `${pending.baseName}.json`))).toBe(false)
+    expect(fs.readFileSync(image)).toEqual(bytes)
+    expect(sent('session:interruptedTasks')).toEqual([])
+  })
+
+  it.each(['foreign bytes', 'missing final', 'directory'] as const)('keeps interrupted work and evidence when the final is %s', async problem => {
+    const pending = pendingOutput()
+    const target = stageSession(id, { tasks: withTasks([makeTask('paid', 'generating', { pendingOutput: pending })]) })
+    const image = path.join(target, `${pending.baseName}.${pending.ext}`)
+    if (problem === 'foreign bytes') fs.writeFileSync(image, 'foreign winner')
+    if (problem === 'directory') fs.mkdirSync(image)
+    await resumeSession(id)
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'interrupted', imagePath: null, baseName: null, pendingOutput: pending })
+    expect(readManifest(target).tasks.openai[0]).toMatchObject({ status: 'interrupted', pendingOutput: pending })
+    expect(sent('session:interruptedTasks')).toEqual([{ count: 1 }])
+    if (problem === 'foreign bytes') expect(fs.readFileSync(image, 'utf8')).toBe('foreign winner')
+    if (problem === 'missing final') expect(fs.existsSync(image)).toBe(false)
+    if (problem === 'directory') expect(fs.statSync(image).isDirectory()).toBe(true)
+  })
+
+  it.skipIf(process.platform === 'win32')('does not adopt a symlink even when its destination has the expected bytes', async () => {
+    const pending = pendingOutput()
+    const target = stageSession(id, { tasks: withTasks([makeTask('paid', 'generating', { pendingOutput: pending })]) })
+    const original = path.join(target, 'other-file.png')
+    const image = path.join(target, `${pending.baseName}.${pending.ext}`)
+    fs.writeFileSync(original, bytes)
+    fs.symlinkSync(original, image)
+    await resumeSession(id)
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'interrupted', pendingOutput: pending })
+    expect(fs.lstatSync(image).isSymbolicLink()).toBe(true)
+    expect(fs.readFileSync(original)).toEqual(bytes)
+  })
+
+  it.each([
+    null, [],
+    { baseName: '../outside', ext: 'png', sha256: 'a'.repeat(64) },
+    { baseName: 'unsafe\\path', ext: 'png', sha256: 'a'.repeat(64) },
+    { baseName: 'safe', ext: 'svg', sha256: 'a'.repeat(64) },
+    { baseName: 'safe', ext: 'png', sha256: 'A'.repeat(64) },
+    { baseName: 'safe', ext: 'png', sha256: 'a'.repeat(63) },
+  ])('leaves malformed pending evidence unreadable and all bytes untouched: %j', async pending => {
+    const task = makeTask('paid', 'generating', { pendingOutput: pending as unknown as Task['pendingOutput'] })
+    const target = stageSession(id, { tasks: withTasks([task]) })
+    const image = path.join(target, 'safe.png')
+    fs.writeFileSync(image, bytes)
+    const manifest = fs.readFileSync(path.join(target, 'session.json'))
+    const current = getSessionDir()
+    expect(await listSessions()).toContainEqual({ sessionId: id, unopenable: 'unreadable' })
+    await expect(resumeSession(id)).rejects.toThrow('missing a readable session.json')
+    expect(getSessionDir()).toBe(current)
+    expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(manifest)
+    expect(fs.readFileSync(image)).toEqual(bytes)
+  })
+
+  it.each(['EACCES', 'EIO'])('refuses to adopt a session when inspecting paid output fails with %s', async code => {
+    const pending = pendingOutput()
+    const target = stageSession(id, { tasks: withTasks([makeTask('paid', 'generating', { pendingOutput: pending })]) })
+    const image = path.join(target, `${pending.baseName}.${pending.ext}`)
+    fs.writeFileSync(image, bytes)
+    const original = fs.readFileSync(path.join(target, 'session.json'))
+    const current = getSessionDir()
+    const inspect = fs.promises.lstat.bind(fs.promises)
+    const failed = vi.spyOn(fs.promises, 'lstat').mockImplementation((...args) => {
+      if (String(args[0]) === image) return Promise.reject(Object.assign(new Error('storage unavailable'), { code }))
+      return inspect(...args)
+    })
+    try {
+      await expect(resumeSession(id)).rejects.toMatchObject({ code })
+      expect(getSessionDir()).toBe(current)
+      expect(queueManager.getTask('openai', 'paid')).toBeUndefined()
+      expect(sent('session:changed')).toEqual([])
+      expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(original)
+      expect(fs.readFileSync(image)).toEqual(bytes)
+    } finally { failed.mockRestore() }
+  })
+
+  it('reads a version-one manifest unchanged before applying ordinary resume normalization', async () => {
+    const target = stageSession(id, { formatVersion: 1, tasks: withTasks([makeTask('old', 'queued')]) })
+    const original = fs.readFileSync(path.join(target, 'session.json'))
+    expect(await listSessions()).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
+    expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(original)
+    await resumeSession(id)
+    expect(queueManager.getTask('openai', 'old')?.status).toBe('interrupted')
+    expect(readManifest(target).formatVersion).toBe(2)
   })
 })

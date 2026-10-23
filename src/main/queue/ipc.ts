@@ -1,13 +1,14 @@
 import { broadcastPresentation } from '../presentation'
 import { refreshMainWindowMinimumSize } from '../main-window-layout'
 import { getShowKeptImages, toggleShowKeptImages } from './view-state'
+import { recoverPublishedOutput } from '../session/output-recovery'
 import { handle } from '../ipc-boundary'
 import { queueManager } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath, imageOutputFileStates } from '../utils/file-output'
 import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
-import { getSessionId, mutateSession, persistActiveSession } from '../session'
+import { getSessionDir, getSessionId, mutateSession, persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
 import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
@@ -144,6 +145,12 @@ export function registerQueueIpc(): void {
   })
 
   handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
+    const pending = queueManager.getTask(backend, taskId)
+    if (pending && (pending.status === 'failed' || pending.status === 'interrupted') &&
+      pending.pendingOutput && await recoverPublishedOutput(pending, getSessionDir())) {
+      await persistQueueChange()
+      return
+    }
     const task = queueManager.retryTask(backend, taskId)
     if (task) {
       log('info', 'Task retry requested', { taskId, backend })
@@ -152,8 +159,22 @@ export function registerQueueIpc(): void {
   }))
 
   handle('queue:resumeInterrupted', () => mutateSession(async () => {
+    const recovered = []
+    for (const tasks of Object.values(queueManager.getAllStoredTasks())) {
+      for (const task of tasks) {
+        if (task.status === 'interrupted' && task.pendingOutput &&
+          await recoverPublishedOutput(task, getSessionDir())) recovered.push(task)
+      }
+    }
+    // Inspect every candidate before changing memory: inaccessible storage must
+    // leave the entire retry operation available to try again.
+    for (const task of recovered) {
+      const current = queueManager.getTask(task.backend, task.id)!
+      Object.assign(current, task)
+      delete current.pendingOutput
+    }
     const count = queueManager.retryAllInterrupted()
-    if (count > 0) {
+    if (count > 0 || recovered.length > 0) {
       log('info', 'Resuming interrupted tasks', { count })
       await persistQueueChange()
     }
