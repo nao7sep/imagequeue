@@ -1,3 +1,4 @@
+import * as sync from '../../../src/main/utils/fsync'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -100,6 +101,21 @@ describe('atomic replacement', () => {
     await writeFileAtomicAsync(path.join(dir, 'fresh.json'), 'one', false)
     expect(fs.readFileSync(path.join(dir, 'fresh.json'), 'utf-8')).toBe('one')
     expect(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('retries durability after a published rename loses its acknowledgment without rewriting identical bytes', async () => {
+    const filePath = existing('uncertain.json', 0o644)
+    const directorySync = vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('directory unavailable'))
+    const rename = vi.spyOn(fs.promises, 'rename')
+    try {
+      await expect(writeFileAtomicAsync(filePath, 'new', false)).rejects.toThrow('directory unavailable')
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('new')
+      const modified = fs.statSync(filePath).mtimeMs
+      await writeFileAtomicAsync(filePath, 'new', false)
+      expect(directorySync).toHaveBeenCalledTimes(2)
+      expect(rename).toHaveBeenCalledOnce()
+      expect(fs.statSync(filePath).mtimeMs).toBe(modified)
+    } finally { directorySync.mockRestore(); rename.mockRestore() }
   })
 
   it('skips a write whose bytes the file already holds', async () => {

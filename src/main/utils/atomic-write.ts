@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 import { record } from '../backup/backup-store'
-import { syncDirectoryAsync } from './fsync'
+import { syncDirectoryAsync, syncFileAsync } from './fsync'
 import { holdsBytesAsync } from './holds-bytes'
 import { renameExclusive } from './rename-exclusive'
 
@@ -70,7 +70,14 @@ export async function writeFileAtomicAsync(
   let owned = false
   try {
     signal?.throwIfAborted()
-    if (await holdsBytesAsync(filePath, bytes)) return
+    if (await holdsBytesAsync(filePath, bytes)) {
+      // A retry can observe bytes from a rename whose directory sync failed.
+      // Preserve timestamps and backups, but re-establish durability before
+      // acknowledging that same content as saved.
+      await syncFileAsync(filePath)
+      await syncDirectoryAsync(dir)
+      return
+    }
     handle = await fs.promises.open(tempPath, 'wx', 0o600)
     owned = true
     const chunkSize = 1024 * 1024

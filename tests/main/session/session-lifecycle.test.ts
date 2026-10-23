@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import crypto from 'node:crypto'
+import * as journalFile from '../../../src/main/session/journal-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } from '../../../src/shared/types'
@@ -64,6 +65,7 @@ const {
   listSessions,
   persistActiveSession,
   resumeSession,
+  readManifestFromDir,
   setActiveSessionDraft,
 } = await import('../../../src/main/session/state')
 const { getSessionsDir, getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
@@ -99,8 +101,14 @@ function withTasks(tasks: Task[]): Record<BackendId, Task[]> {
   return queues
 }
 
-function readManifest(sessionDir: string): SessionManifest {
-  return JSON.parse(fs.readFileSync(path.join(sessionDir, 'session.json'), 'utf-8')) as SessionManifest
+async function readManifest(sessionDir: string): Promise<Omit<SessionManifest, 'formatVersion'>> {
+  const result = await readManifestFromDir(sessionDir)
+  if (!result.manifest) throw new Error('Expected a readable durable session')
+  return result.manifest
+}
+
+function readCheckpoint(sessionDir: string): SessionManifest {
+  return JSON.parse(fs.readFileSync(path.join(sessionDir, 'session.json'), 'utf8')) as SessionManifest
 }
 
 /** A session folder on disk that this process never opened. */
@@ -152,16 +160,16 @@ afterEach(() => {
 
 describe('starting a new session', () => {
   it('admits and saves a multi-backend batch under one held session operation', async () => {
-    const renameOriginal = fs.promises.rename.bind(fs.promises)
+    const appendOriginal = journalFile.appendSessionTransition
     let release!: () => void
     let entered!: () => void
     const started = new Promise<void>((resolve) => { entered = resolve })
     const held = new Promise<void>((resolve) => { release = resolve })
     let saved = 0
-    const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(async (...args) => {
+    const append = vi.spyOn(journalFile, 'appendSessionTransition').mockImplementationOnce(async (...args) => {
       entered()
       await held
-      await renameOriginal(...args)
+      return appendOriginal(...args)
     })
     const units = [
       { backend: 'openai', model: 'first', prompt: 'a cat', params: { quality: 'low' } },
@@ -177,10 +185,10 @@ describe('starting a new session', () => {
     } finally {
       release()
       await submission
-      saved = rename.mock.calls.length
-      rename.mockRestore()
+      saved = append.mock.calls.length
+      append.mockRestore()
     }
-    expect(readManifest(getSessionDir()).tasks).toMatchObject({
+    expect((await readManifest(getSessionDir())).tasks).toMatchObject({
       openai: [expect.objectContaining({ model: 'first' })],
       flux: [expect.objectContaining({ model: 'second' })],
     })
@@ -194,7 +202,7 @@ describe('starting a new session', () => {
     await createSession()
 
     expect(getSessionDir()).not.toBe(previous)
-    const manifest = readManifest(getSessionDir())
+    const manifest = readCheckpoint(getSessionDir())
     expect(manifest).toMatchObject({
       formatVersion: FORMAT_VERSIONS.session,
       sessionId: getSessionId(),
@@ -214,7 +222,7 @@ describe('starting a new session', () => {
 
     await createSession()
 
-    expect(readManifest(previous).tasks.openai.map((task) => task.id)).toEqual(['a', 'b'])
+    expect((await readManifest(previous)).tasks.openai.map((task) => task.id)).toEqual(['a', 'b'])
   })
 
   it('drops an outgoing session that holds nothing, when the setting says so', async () => {
@@ -333,7 +341,7 @@ describe('resuming a session', () => {
     ])
     expect(sent('session:changed')).toEqual([{ sessionId: '20260105-000000-utc' }])
     expect(sent('session:interruptedTasks'), 'a failure is not offered for another run').toEqual([{ count: 2 }])
-    expect(readManifest(staged).lastResumedAt, 'the resume is stamped on disk').not.toBeNull()
+    expect((await readManifest(staged)).lastResumedAt, 'the resume is stamped on disk').not.toBeNull()
   })
 
   it('keeps a failed task failed, with its reason and the provider\'s words', async () => {
@@ -519,7 +527,7 @@ describe('session operations awaiting Trash', () => {
       settle()
       await deletion
     }
-    expect(readManifest(originalDir).tasks.openai).toEqual([])
+    expect((await readManifest(originalDir)).tasks.openai).toEqual([])
     await resumeSession(targetId)
     expect(queueManager.getTask('openai', 'same')).toMatchObject({ prompt: 'B image' })
     await resumeSession(originalId)
@@ -554,17 +562,17 @@ describe('session operations awaiting Trash', () => {
     fs.writeFileSync(path.join(dir, 'image.json'), '{}')
     await persistActiveSession()
     publishQueueState.mockClear()
-    vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(new Error('manifest unavailable'))
+    vi.spyOn(journalFile, 'appendSessionTransition').mockRejectedValueOnce(new Error('manifest unavailable'))
     try {
       await expect(handlers.get('queue:deleteWithFiles')!({}, 'openai', 'deleted')).resolves.toMatchObject({ removed: true, sessionSaved: false })
       expect(fs.existsSync(path.join(dir, 'image.png'))).toBe(false)
       expect(fs.existsSync(path.join(dir, 'image.json'))).toBe(false)
       expect(queueManager.getTask('openai', 'deleted')).toBeUndefined()
       expect(publishQueueState).toHaveBeenCalledOnce()
-      expect(readManifest(dir).tasks.openai).toHaveLength(1)
+      expect((await readManifest(dir)).tasks.openai).toHaveLength(1)
       await expect(drainSessionWrites()).rejects.toThrow('manifest unavailable')
       await persistActiveSession()
-      expect(readManifest(dir).tasks.openai).toEqual([])
+      expect((await readManifest(dir)).tasks.openai).toEqual([])
       await expect(drainSessionWrites()).resolves.toBeUndefined()
     } finally { vi.restoreAllMocks() }
   })
@@ -600,7 +608,7 @@ describe('the working draft and its elaborated prompts', () => {
     expect(getActiveSessionDraft().prompt).toBe('a cat')
     expect(getActiveSessionDraft().count, 'a nonsense count is repaired').toBeGreaterThan(0)
     await persistActiveSession()
-    expect(readManifest(getSessionDir())).not.toHaveProperty('draft')
+    expect((await readManifest(getSessionDir()))).not.toHaveProperty('draft')
   })
 
   it('keeps each session\'s draft while the app runs, so switching back finds it, and its prompts', async () => {
@@ -645,16 +653,16 @@ describe('the working draft and its elaborated prompts', () => {
       { text: 'first', concepts: [] },
       { text: 'second', concepts: [] },
     ]))
-    expect(readManifest(getSessionDir()).elaboratedPrompts.map((entry) => entry.text)).toEqual(['first', 'second'])
+    expect((await readManifest(getSessionDir())).elaboratedPrompts.map((entry) => entry.text)).toEqual(['first', 'second'])
 
     expect((await deleteActiveSessionElaboratedPromptAt(0)).map((entry) => entry.text)).toEqual(['second'])
-    expect(readManifest(getSessionDir()).elaboratedPrompts.map((entry) => entry.text)).toEqual(['second'])
+    expect((await readManifest(getSessionDir())).elaboratedPrompts.map((entry) => entry.text)).toEqual(['second'])
 
     expect((await deleteActiveSessionElaboratedPromptAt(7)), 'an index that is not there changes nothing').toHaveLength(1)
     expect((await appendActiveSessionElaboratedPrompts([])), 'appending nothing changes nothing').toHaveLength(1)
 
     expect((await clearActiveSessionElaboratedPrompts())).toEqual([])
-    expect(readManifest(getSessionDir()).elaboratedPrompts).toEqual([])
+    expect((await readManifest(getSessionDir())).elaboratedPrompts).toEqual([])
   })
 })
 
@@ -723,7 +731,7 @@ describe('the updated time', () => {
   const later = (): void => {
     vi.setSystemTime(new Date('2026-03-01T00:00:00.000Z'))
   }
-  const updatedAt = (): string => readManifest(getSessionDir()).updatedAt
+  const updatedAt = async (): Promise<string> => (await readManifest(getSessionDir())).updatedAt
 
   it('stays when a past session is opened, so the list keeps its order', async () => {
     stageSession('20260102-000000-utc', {
@@ -735,7 +743,7 @@ describe('the updated time', () => {
 
     await resumeSession('20260102-000000-utc')
 
-    const manifest = readManifest(getSessionDir())
+    const manifest = (await readManifest(getSessionDir()))
     expect(manifest.updatedAt).toBe('2026-01-02T00:00:00.000Z')
     expect(manifest.lastResumedAt).toBe('2026-03-01T00:00:00.000Z')
     const ids = (await listSessions()).map((summary) => summary.sessionId)
@@ -750,59 +758,57 @@ describe('the updated time', () => {
 
     await createSession()
 
-    expect(readManifest(previous).updatedAt).toBe('2026-02-01T00:00:00.000Z')
-    expect(updatedAt(), 'a new session is updated when it is made').toBe('2026-03-01T00:00:00.000Z')
+    expect((await readManifest(previous)).updatedAt).toBe('2026-02-01T00:00:00.000Z')
+    expect((await updatedAt()), 'a new session is updated when it is made').toBe('2026-03-01T00:00:00.000Z')
   })
 
   it('stays when a finished task is kept or restored, or when only statuses change', async () => {
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'completed'), makeTask('b', 'failed')]))
     await persistActiveSession()
-    const before = updatedAt()
+    const before = (await updatedAt())
     later()
 
     queueManager.keepTask('openai', 'a')
     await persistActiveSession()
-    expect(updatedAt()).toBe(before)
+    expect((await updatedAt())).toBe(before)
 
     queueManager.restoreTask('openai', 'a')
     queueManager.retryTask('openai', 'b')
     await persistActiveSession()
-    expect(updatedAt()).toBe(before)
+    expect((await updatedAt())).toBe(before)
   })
 
   it('moves on an edit to the tasks or the prompts', async () => {
-    const before = updatedAt()
+    const before = (await updatedAt())
     later()
     queueManager.replaceAllTasks(withTasks([makeTask('a', 'queued')]))
     expect((await persistActiveSession()).updatedAt).toBe('2026-03-01T00:00:00.000Z')
-    expect(updatedAt()).not.toBe(before)
+    expect((await updatedAt())).not.toBe(before)
 
     vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
     await appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])
-    expect(updatedAt()).toBe('2026-04-01T00:00:00.000Z')
+    expect((await updatedAt())).toBe('2026-04-01T00:00:00.000Z')
   })
 
   it('keeps an edit whose save failed at its own time when a later save writes it', async () => {
     later()
-    const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(() => {
-      throw new Error('simulated full disk')
-    })
+    const append = vi.spyOn(journalFile, 'appendSessionTransition').mockRejectedValueOnce(new Error('simulated full disk'))
     await expect(appendActiveSessionElaboratedPrompts([{ text: 'a cat on a shelf', concepts: [] }])).rejects.toThrow('simulated full disk')
-    rename.mockRestore()
+    append.mockRestore()
 
     vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
     expect((await persistActiveSession()).updatedAt).toBe('2026-03-01T00:00:00.000Z')
-    expect(updatedAt()).toBe('2026-03-01T00:00:00.000Z')
+    expect((await updatedAt())).toBe('2026-03-01T00:00:00.000Z')
   })
 
   it('stays when only the draft changes, since the draft is never saved', async () => {
-    const before = updatedAt()
+    const before = (await updatedAt())
     later()
 
     setActiveSessionDraft({ ...createEmptySessionDraft(), prompt: 'a cat' })
     await persistActiveSession()
 
-    expect(updatedAt()).toBe(before)
+    expect((await updatedAt())).toBe(before)
   })
 })
 
@@ -885,7 +891,7 @@ describe('governing session manifest mutation admission', () => {
     }
     const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'partial')
     expect(result).toEqual({ removed: true, sessionId: getSessionId(), baseName: 'partial', ext: 'png', files: { image: 'removed', metadata: 'remaining' } })
-    expect(readManifest(dir).tasks.openai).toEqual([])
+    expect((await readManifest(dir)).tasks.openai).toEqual([])
     expect(fs.existsSync(image)).toBe(false)
     expect(fs.existsSync(sidecar)).toBe(true)
     expect(JSON.stringify(result)).not.toContain('SECRET_SENTINEL')
@@ -926,7 +932,7 @@ describe('governing session manifest mutation admission', () => {
     await persistActiveSession()
     const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'later')
     expect(result).toEqual({ removed: true, sessionId: getSessionId(), baseName: 'later', ext: 'png' })
-    expect(readManifest(dir).tasks.openai).toEqual([])
+    expect((await readManifest(dir)).tasks.openai).toEqual([])
     expect(fs.existsSync(image)).toBe(false)
     expect(fs.existsSync(sidecar)).toBe(false)
   })
@@ -953,7 +959,7 @@ describe('the manifest format version', () => {
   it('reads back the version it writes', async () => {
     await persistActiveSession()
 
-    expect(readManifest(getSessionDir()).formatVersion).toBe(FORMAT_VERSIONS.session)
+    expect(readCheckpoint(getSessionDir()).formatVersion).toBe(FORMAT_VERSIONS.session)
     expect((await listSessions()).map((summary) => summary.sessionId)).toEqual([getSessionId()])
   })
 
@@ -973,14 +979,14 @@ describe('the manifest format version', () => {
 
 
 describe('physical session write ownership', () => {
-  it('orders immutable submissions while unrelated reads continue and keeps the latest bytes', async () => {
+  it('orders immutable submissions and active-session listing behind physical saves', async () => {
     const dir = getSessionDir()
     const rename = fs.promises.rename
     let release!: () => void
     let entered!: () => void
     const reached = new Promise<void>((resolve) => { entered = resolve })
     let first = true
-    vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
+    const physicalRename = vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
       if (first && to === path.join(dir, 'session.json')) {
         first = false
         entered()
@@ -993,15 +999,18 @@ describe('physical session write ownership', () => {
     await reached
     queueManager.replaceAllTasks(withTasks([makeTask('latest', 'queued')]))
     const newSave = persistActiveSession()
+    const listing = listSessions()
     try {
-      expect((await listSessions()).some((entry) => entry.sessionId === getSessionId())).toBe(true)
-      expect(readManifest(dir).tasks.openai).toEqual([])
+      expect((await readManifest(dir)).tasks.openai).toEqual([])
     } finally {
       release()
-      await oldSave
-      await newSave
+      try {
+        await oldSave
+        await newSave
+      } finally { physicalRename.mockRestore() }
     }
-    expect(readManifest(dir).tasks.openai.map((task) => task.id)).toEqual(['latest'])
+    expect((await listing).some((entry) => entry.sessionId === getSessionId())).toBe(true)
+    expect((await readManifest(dir)).tasks.openai.map((task) => task.id)).toEqual(['latest'])
   })
 })
 
@@ -1023,8 +1032,8 @@ describe('recovering published output before resume normalization', () => {
     const recovered = queueManager.getTask('openai', 'paid')!
     expect(recovered).toMatchObject({ status: 'completed', baseName: pending.baseName, imagePath: `${pending.baseName}.png`, error: null, providerMessage: null })
     expect(recovered.pendingOutput).toBeUndefined()
-    expect(readManifest(target).tasks.openai[0]).toMatchObject({ status: 'completed', baseName: pending.baseName, imagePath: `${pending.baseName}.png`, error: null })
-    expect(readManifest(target).tasks.openai[0].pendingOutput).toBeUndefined()
+    expect((await readManifest(target)).tasks.openai[0]).toMatchObject({ status: 'completed', baseName: pending.baseName, imagePath: `${pending.baseName}.png`, error: null })
+    expect((await readManifest(target)).tasks.openai[0].pendingOutput).toBeUndefined()
     expect(fs.existsSync(path.join(target, `${pending.baseName}.json`))).toBe(false)
     expect(fs.readFileSync(image)).toEqual(bytes)
     expect(sent('session:interruptedTasks')).toEqual([])
@@ -1038,7 +1047,7 @@ describe('recovering published output before resume normalization', () => {
     if (problem === 'directory') fs.mkdirSync(image)
     await resumeSession(id)
     expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'interrupted', imagePath: null, baseName: null, pendingOutput: pending })
-    expect(readManifest(target).tasks.openai[0]).toMatchObject({ status: 'interrupted', pendingOutput: pending })
+    expect((await readManifest(target)).tasks.openai[0]).toMatchObject({ status: 'interrupted', pendingOutput: pending })
     expect(sent('session:interruptedTasks')).toEqual([{ count: 1 }])
     if (problem === 'foreign bytes') expect(fs.readFileSync(image, 'utf8')).toBe('foreign winner')
     if (problem === 'missing final') expect(fs.existsSync(image)).toBe(false)
@@ -1108,6 +1117,150 @@ describe('recovering published output before resume normalization', () => {
     expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(original)
     await resumeSession(id)
     expect(queueManager.getTask('openai', 'old')?.status).toBe('interrupted')
-    expect(readManifest(target).formatVersion).toBe(2)
+    expect(readCheckpoint(target).formatVersion).toBe(FORMAT_VERSIONS.session)
   })
+})
+
+
+describe('session journal admission and active read ordering', () => {
+  it.each([
+    { pendingOutput: { baseName: '../outside', ext: 'png', sha256: 'a'.repeat(64) } },
+    { error: { key: 'taskFailure.generic', values: { name: false } } },
+  ])('refuses a complete journal row with malformed nested task data and leaves both files untouched: %j', async malformed => {
+    const id = '20260127-000000-utc'
+    const target = stageSession(id, { journalSequence: 0, tasks: withTasks([makeTask('queued', 'queued')]) })
+    const checkpoint = path.join(target, 'session.json')
+    const journal = path.join(target, journalFile.JOURNAL_FILENAME)
+    const invalid = { ...makeTask('queued', 'generating'), ...malformed }
+    fs.writeFileSync(journal, JSON.stringify({ sequence: 1, updatedAt: '2026-01-27T00:00:01.000Z', upserts: [invalid], removed: [] }) + '\n')
+    const before = [checkpoint, journal].map(file => fs.readFileSync(file))
+    const current = getSessionDir()
+    expect(await listSessions()).toContainEqual({ sessionId: id, unopenable: 'unreadable' })
+    await expect(resumeSession(id)).rejects.toThrow('missing a readable session.json')
+    expect(getSessionDir()).toBe(current)
+    expect([checkpoint, journal].map(file => fs.readFileSync(file))).toEqual(before)
+  })
+
+  it('replays pending publication evidence before recovering matching output without a sidecar', async () => {
+    const id = '20260128-000000-utc'
+    const target = stageSession(id, { journalSequence: 0, tasks: withTasks([makeTask('paid', 'queued')]) })
+    const bytes = Buffer.from('delivered validated image retained across journal recovery')
+    const pendingOutput = { baseName: '20260128-010203-utc-paid-openai', ext: 'png' as const, sha256: crypto.createHash('sha256').update(bytes).digest('hex') }
+    const image = path.join(target, `${pendingOutput.baseName}.png`)
+    fs.writeFileSync(image, bytes)
+    fs.writeFileSync(path.join(target, journalFile.JOURNAL_FILENAME), JSON.stringify({
+      sequence: 1, updatedAt: '2026-01-28T01:02:03.000Z',
+      upserts: [makeTask('paid', 'generating', { pendingOutput, completedAt: '2026-01-28T01:02:03.000Z' })], removed: [],
+    }) + '\n')
+    expect(readCheckpoint(target).tasks.openai[0].status).toBe('queued')
+    await resumeSession(id)
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'completed', baseName: pendingOutput.baseName, imagePath: `${pendingOutput.baseName}.png`, error: null })
+    expect(queueManager.getTask('openai', 'paid')?.pendingOutput).toBeUndefined()
+    expect((await readManifest(target)).tasks.openai[0]).toMatchObject({ status: 'completed', imagePath: `${pendingOutput.baseName}.png` })
+    expect((await readManifest(target)).tasks.openai[0].pendingOutput).toBeUndefined()
+    expect(fs.existsSync(path.join(target, `${pendingOutput.baseName}.json`))).toBe(false)
+    expect(fs.readFileSync(image)).toEqual(bytes)
+    expect(sent('session:interruptedTasks')).toEqual([])
+  })
+
+  it('holds active-session listing behind an append and reports the resulting saved counts', async () => {
+    const tasks = Array.from({ length: 20 }, (_, index) => makeTask(`completed-${index}`, 'completed'))
+    queueManager.replaceAllTasks(withTasks(tasks))
+    await persistActiveSession()
+    const current = getSessionDir()
+    const append = journalFile.appendSessionTransition
+    let release!: () => void
+    let entered!: () => void
+    const held = new Promise<void>(resolve => { release = resolve })
+    const writing = new Promise<void>(resolve => { entered = resolve })
+    const physicalAppend = vi.spyOn(journalFile, 'appendSessionTransition').mockImplementationOnce(async (...args) => {
+      entered()
+      await held
+      return append(...args)
+    })
+    queueManager.updateTask(queueManager.getTask('openai', 'completed-0')!, { status: 'failed' })
+    const saved = persistActiveSession()
+    await writing
+    const directoryRead = vi.spyOn(fs.promises, 'readdir')
+    const checkpointRead = vi.spyOn(fs.promises, 'readFile')
+    let settled = false
+    const listing = listSessions().then(result => { settled = true; return result })
+    try {
+      // Flush promise continuations: the whole listing must wait on the
+      // held writer before even enumerating session directories.
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      expect(directoryRead).not.toHaveBeenCalled()
+      expect(checkpointRead.mock.calls.some(([file]) => file === path.join(current, 'session.json'))).toBe(false)
+      release()
+      await saved
+      const rows = await listing
+      expect(rows).toContainEqual(expect.objectContaining({
+        sessionId: getSessionId(), isCurrent: true, completedCount: 19,
+        taskCounts: expect.objectContaining({ total: 20, completed: 19, failed: 1 }),
+      }))
+      expect(settled).toBe(true)
+      expect(physicalAppend).toHaveBeenCalledOnce()
+    } finally {
+      release()
+      await Promise.allSettled([saved, listing])
+      checkpointRead.mockRestore()
+      directoryRead.mockRestore()
+      physicalAppend.mockRestore()
+    }
+  })
+})
+
+
+it('keeps a listing behind incoming session adoption while its checkpoint is held', async () => {
+  const id = '20260129-000000-utc'
+  const target = stageSession(id, { journalSequence: 0, tasks: withTasks([makeTask('incoming', 'queued')]) })
+  fs.writeFileSync(path.join(target, journalFile.JOURNAL_FILENAME), JSON.stringify({
+    sequence: 1, updatedAt: '2026-01-29T00:00:01.000Z',
+    upserts: [makeTask('incoming', 'completed')], removed: [],
+  }) + '\n')
+  const outgoing = getSessionId()
+  const rename = fs.promises.rename.bind(fs.promises)
+  let release!: () => void
+  let entered!: () => void
+  const held = new Promise<void>(resolve => { release = resolve })
+  const writing = new Promise<void>(resolve => { entered = resolve })
+  const checkpoint = vi.spyOn(fs.promises, 'rename').mockImplementation(async (...args) => {
+    if (String(args[1]) === path.join(target, 'session.json')) {
+      entered()
+      await held
+    }
+    return rename(...args)
+  })
+  const resuming = resumeSession(id)
+  await writing
+  const directoryRead = vi.spyOn(fs.promises, 'readdir')
+  const checkpointRead = vi.spyOn(fs.promises, 'readFile')
+  let settled = false
+  const listing = listSessions().then(rows => { settled = true; return rows })
+  try {
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(getSessionId()).toBe(outgoing)
+    expect(settled).toBe(false)
+    expect(directoryRead).not.toHaveBeenCalled()
+    expect(checkpointRead).not.toHaveBeenCalled()
+    release()
+    await resuming
+    const rows = await listing
+    expect(getSessionId()).toBe(id)
+    expect(rows).toContainEqual(expect.objectContaining({
+      sessionId: id, isCurrent: true, completedCount: 1,
+      taskCounts: expect.objectContaining({ total: 1, queued: 0, completed: 1 }),
+    }))
+    expect(readCheckpoint(target).journalSequence).toBe(1)
+    expect(readCheckpoint(target).tasks.openai[0].status).toBe('completed')
+  } finally {
+    release()
+    await Promise.allSettled([resuming, listing])
+    checkpointRead.mockRestore()
+    directoryRead.mockRestore()
+    checkpoint.mockRestore()
+  }
 })

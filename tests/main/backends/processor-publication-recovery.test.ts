@@ -39,14 +39,16 @@ vi.mock('../../../src/main/session/session', async (importOriginal) => {
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager, createEmptyQueues } = await import('../../../src/main/queue/queue-manager')
-const { createSession, resumeSession, persistActiveSession, drainSessionWrites } = await import('../../../src/main/session/state')
+const { createSession, resumeSession, persistActiveSession, drainSessionWrites, readManifestFromDir } = await import('../../../src/main/session/state')
 const { getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
 const { setQueuePaused, isQueuePaused, cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
 
 let rejectDelivery: (error: Error) => void = () => undefined
 
-function readManifest(dir: string): SessionManifest {
-  return JSON.parse(fs.readFileSync(path.join(dir, 'session.json'), 'utf8')) as SessionManifest
+async function readManifest(dir: string) {
+  const read = await readManifestFromDir(dir)
+  if (!read.manifest) throw new Error(`Durable session is ${read.problem}`)
+  return read.manifest
 }
 
 beforeEach(async () => {
@@ -92,15 +94,33 @@ it('warns once after a user pause and preserves delivered images through sidecar
     return link(source, destination)
   })
   const rename = fs.promises.rename.bind(fs.promises)
+  const open = fs.promises.open.bind(fs.promises)
   const recorded = new Set<string>()
-  const finalSaveFailure = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-    const next = JSON.parse(fs.readFileSync(source, 'utf8')) as SessionManifest
-    const pending = next.tasks.openai.flatMap(task => task.pendingOutput ? [task.pendingOutput.baseName] : [])
+  const permitPublicationEvidence = (entries: SessionManifest['tasks']['openai']): void => {
+    const pending = entries.flatMap(task => task.pendingOutput ? [task.pendingOutput.baseName] : [])
     // Required pre-publication evidence may land; only the later outcome save
     // fails. An allocation snapshot may already include a sibling's completion.
     if (!pending.some(name => !recorded.has(name))) throw new Error('session unavailable')
     for (const name of pending) recorded.add(name)
+  }
+  const finalCheckpointFailure = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
+    if (String(destination).endsWith('session.json')) {
+      const next = JSON.parse(fs.readFileSync(source, 'utf8')) as SessionManifest
+      permitPublicationEvidence(next.tasks.openai)
+    }
     await rename(source, destination)
+  })
+  const finalJournalFailure = vi.spyOn(fs.promises, 'open').mockImplementation(async (file, flags, mode) => {
+    const handle = await open(file, flags, mode)
+    if (String(file).endsWith('session-changes.jsonl') && flags !== 'r') {
+      const write = handle.write.bind(handle)
+      vi.spyOn(handle, 'write').mockImplementation((async (...args: unknown[]) => {
+        const transition = JSON.parse(Buffer.from(args[0] as Uint8Array).toString('utf8')) as { upserts: SessionManifest['tasks']['openai'] }
+        permitPublicationEvidence(transition.upserts)
+        return Reflect.apply(write, handle, args)
+      }) as typeof handle.write)
+    }
+    return handle
   })
   const image = await tinyPng()
   deliver({ buffer: image })
@@ -115,7 +135,7 @@ it('warns once after a user pause and preserves delivered images through sidecar
     expect(fs.readFileSync(path.join(dir, task.imagePath!))).toEqual(image)
     expect(fs.existsSync(path.join(dir, `${task.baseName}.json`))).toBe(false)
   }
-  expect(readManifest(dir).tasks.openai.some((task) => task.status === 'generating')).toBe(true)
+  expect((await readManifest(dir)).tasks.openai.some((task) => task.status === 'generating')).toBe(true)
   expect(recorded.size).toBe(2)
   await expect(drainSessionWrites()).rejects.toThrow('session unavailable')
   expect(send.mock.calls.filter(([channel]) => channel === 'app:notice').map(([, notice]) => notice)).toEqual([
@@ -123,13 +143,14 @@ it('warns once after a user pause and preserves delivered images through sidecar
   ])
 
   sidecarFailure.mockRestore()
-  finalSaveFailure.mockRestore()
+  finalCheckpointFailure.mockRestore()
+  finalJournalFailure.mockRestore()
   await persistActiveSession()
   await expect(drainSessionWrites()).resolves.toBeUndefined()
   await createSession()
   await resumeSession(sessionId)
   expect(queueManager.getAllStoredTasks().openai).toEqual(completed)
-  expect(new Set(readManifest(dir).tasks.openai.map((task) => task.id))).toEqual(new Set(queued.map((task) => task.id)))
+  expect(new Set((await readManifest(dir)).tasks.openai.map((task) => task.id))).toEqual(new Set(queued.map((task) => task.id)))
   for (const task of completed) expect(fs.readFileSync(path.join(dir, task.imagePath!))).toEqual(image)
   setQueuePaused(false)
   processQueues()
@@ -143,12 +164,17 @@ it('records delivered identity before publication and recovers it after the fina
   const [task] = queueManager.enqueue({ backend: 'openai', model: 'gpt-image-2', prompt: 'a cat', params: {}, count: 1 })
   await persistActiveSession()
   const directory = getSessionDir(), id = getSessionId()
-  let durableBeforePublication: SessionManifest | undefined
+  let durableBeforePublication: { manifest: Buffer; journal: Buffer | null } | undefined
   const link = fs.promises.link.bind(fs.promises)
   vi.spyOn(fs.promises, 'link').mockImplementation(async (source, destination) => {
     if (String(destination).endsWith('.png')) {
-      durableBeforePublication = readManifest(directory)
-      expect(durableBeforePublication.tasks.openai[0]).toMatchObject({
+      const durable = await readManifest(directory)
+      durableBeforePublication = {
+        manifest: fs.readFileSync(path.join(directory, 'session.json')),
+        journal: fs.existsSync(path.join(directory, 'session-changes.jsonl'))
+          ? fs.readFileSync(path.join(directory, 'session-changes.jsonl')) : null,
+      }
+      expect(durable.tasks.openai[0]).toMatchObject({
         id: task.id, status: 'generating', pendingOutput: { baseName: path.basename(String(destination), '.png'), ext: 'png', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) },
       })
     }
@@ -163,7 +189,13 @@ it('records delivered identity before publication and recovers it after the fina
   await createSession()
   // Recreate precisely the durable state observed before the final image
   // appeared, as a crash before its outcome save would leave it.
-  fs.writeFileSync(path.join(directory, 'session.json'), JSON.stringify(durableBeforePublication))
+  expect(durableBeforePublication).toBeDefined()
+  fs.writeFileSync(path.join(directory, 'session.json'), durableBeforePublication!.manifest)
+  if (durableBeforePublication!.journal) {
+    fs.writeFileSync(path.join(directory, 'session-changes.jsonl'), durableBeforePublication!.journal)
+  } else {
+    fs.rmSync(path.join(directory, 'session-changes.jsonl'), { force: true })
+  }
   fs.rmSync(path.join(directory, `${name}.json`))
   await resumeSession(id)
   expect(queueManager.getTask('openai', task.id)).toMatchObject({ status: 'completed', baseName: name, imagePath: `${name}.png` })
