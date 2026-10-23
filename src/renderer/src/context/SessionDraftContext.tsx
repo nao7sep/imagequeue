@@ -28,11 +28,10 @@ interface SessionDraftContextValue {
   state: SessionDraftState
   // A catalogue key, rendered where it is shown.
   draftUnavailable: MessageKey | null
+  draftLoading: boolean
   retryDraftHydration: () => void
-  // Partial updates to one or more fields. Use the function form when the next
-  // value depends on the previous (e.g. toggling a Set membership).
+  // Partial edits are admitted only after the active session snapshot is ready.
   update: (patch: Partial<SessionDraftState>) => void
-  updateWith: (fn: (prev: SessionDraftState) => SessionDraftState) => void
   appendElaboratedPrompts: (prompts: ElaboratedPromptRecord[]) => void
   deleteElaboratedPromptAt: (index: number) => void
   clearElaboratedPrompts: () => void
@@ -55,6 +54,8 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
   const [state, setState] = useState<SessionDraftState>(emptyState)
   const [draftFailure, setDraftFailure] = useState<DraftFailure | null>(null)
   const [hydrateRetry, setHydrateRetry] = useState(0)
+  const [draftLoading, setDraftLoading] = useState(true)
+  const generationRef = useRef(0)
   const draftUnavailable = draftFailure?.message ?? null
   // Guards the send effect: stays false until the first hydrate completes, and
   // tracks the last draft sent so re-applying a hydrated draft doesn't
@@ -69,6 +70,9 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     const hydrate = async (): Promise<void> => {
       const revision = ++hydrateRevision
       loadedRef.current = false
+      generationRef.current++
+      setDraftLoading(true)
+      setDraftFailure(null)
       try {
         const [draft, elaboratedPrompts] = await Promise.all([
           window.electronAPI.getSessionDraft(),
@@ -85,6 +89,8 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
         lastSentDraftRef.current = ''
         setDraftFailure({ message: 'draft.hydrationFailed' })
         logDraftFailure('Failed to hydrate the active session draft', error)
+      } finally {
+        if (!cancelled && revision === hydrateRevision) setDraftLoading(false)
       }
     }
 
@@ -118,28 +124,27 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
 
   const retryDraftHydration = useCallback((): void => setHydrateRetry((value) => value + 1), [])
 
-  const handleDraftMutationFailure = useCallback((operation: string, error: unknown): void => {
+  const handleDraftMutationFailure = useCallback((operation: string, error: unknown, generation: number): void => {
+    logDraftFailure(operation, error)
+    if (generation !== generationRef.current) return
     loadedRef.current = false
     setDraftFailure({ message: 'draft.mutationFailed' })
-    logDraftFailure(operation, error)
   }, [])
 
   const update = useCallback((patch: Partial<SessionDraftState>): void => {
-    setState((prev) => ({ ...prev, ...patch }))
-  }, [])
-
-  const updateWith = useCallback((fn: (prev: SessionDraftState) => SessionDraftState): void => {
-    setState(fn)
+    if (loadedRef.current) setState((prev) => ({ ...prev, ...patch }))
   }, [])
 
   const appendElaboratedPrompts = useCallback((prompts: ElaboratedPromptRecord[]): void => {
     if (prompts.length === 0) return
+    const generation = generationRef.current
     setState((prev) => ({ ...prev, elaboratedPrompts: [...prev.elaboratedPrompts, ...prompts] }))
     void window.electronAPI.appendSessionElaboratedPrompts(prompts)
-      .catch((error) => handleDraftMutationFailure('Failed to append elaborated prompts', error))
+      .catch((error) => handleDraftMutationFailure('Failed to append elaborated prompts', error, generation))
   }, [handleDraftMutationFailure])
 
   const deleteElaboratedPromptAt = useCallback((index: number): void => {
+    const generation = generationRef.current
     setState((prev) => {
       if (index < 0 || index >= prev.elaboratedPrompts.length) return prev
       const next = prev.elaboratedPrompts.slice()
@@ -147,13 +152,14 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
       return { ...prev, elaboratedPrompts: next }
     })
     void window.electronAPI.deleteSessionElaboratedPromptAt(index)
-      .catch((error) => handleDraftMutationFailure('Failed to delete elaborated prompt', error))
+      .catch((error) => handleDraftMutationFailure('Failed to delete elaborated prompt', error, generation))
   }, [handleDraftMutationFailure])
 
   const clearElaboratedPrompts = useCallback((): void => {
+    const generation = generationRef.current
     setState((prev) => ({ ...prev, elaboratedPrompts: [] }))
     void window.electronAPI.clearSessionElaboratedPrompts()
-      .catch((error) => handleDraftMutationFailure('Failed to clear elaborated prompts', error))
+      .catch((error) => handleDraftMutationFailure('Failed to clear elaborated prompts', error, generation))
   }, [handleDraftMutationFailure])
 
   return (
@@ -161,9 +167,9 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
       value={{
         state,
         draftUnavailable,
+        draftLoading,
         retryDraftHydration,
         update,
-        updateWith,
         appendElaboratedPrompts,
         deleteElaboratedPromptAt,
         clearElaboratedPrompts,
