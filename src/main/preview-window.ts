@@ -127,8 +127,12 @@ function openPreviewWindow(focus: boolean): void {
     if (reopen) syncPreviewWindow(loadConfig().general.show_preview_window, { focus: false })
   })
   void loadRendererSurface(win, 'preview-window').then(() => { loaded = true }, (error) => {
+    // Closing or replacing this window supersedes its pending navigation. A
+    // late rejection must not report failure for a newer preview.
+    if (previewWindow !== win || win.isDestroyed()) return
     log('error', 'The preview window could not load', { error: serializeError(error) })
     destroy(win)
+    raiseAppNotice({ title: message('previewWindow.title'), message: message('previewWindow.openFailed') })
   })
 }
 

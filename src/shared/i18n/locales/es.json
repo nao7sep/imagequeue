@@ -313,6 +313,7 @@
   "settings.previewWindowHint": "La ventana de vista previa sigue la selección junto a la ventana principal. Al cerrarla, esta opción se desactiva.",
   "previewWindow.title": "Vista previa",
   "previewWindow.closeSaveFailed": "La ventana de vista previa se cerró, pero no se pudo guardar la configuración. Puede volver a abrirse cuando regreses a la ventana principal. Puedes desactivarla de nuevo en Configuración.",
+  "previewWindow.openFailed": "No se pudo abrir la ventana de vista previa aparte. Tu configuración de vista previa no ha cambiado. Desactiva y vuelve a activar la vista previa aparte en Configuración para intentarlo de nuevo.",
   "settings.exportFolder": "Carpeta de exportación",
   "settings.exportFolderPlaceholder": "Déjala vacía para usar el Escritorio",
   "settings.browse": "Examinar",

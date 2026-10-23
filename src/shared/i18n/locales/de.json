@@ -303,6 +303,7 @@
   "settings.previewWindowHint": "Das Vorschaufenster folgt neben dem Hauptfenster der Auswahl. Wenn Sie es schließen, wird diese Option ausgeschaltet.",
   "previewWindow.title": "Vorschau",
   "previewWindow.closeSaveFailed": "Das Vorschaufenster wurde geschlossen, aber die Einstellung konnte nicht gespeichert werden. Es kann sich erneut öffnen, wenn Sie zum Hauptfenster zurückkehren. Sie können es in den Einstellungen wieder ausschalten.",
+  "previewWindow.openFailed": "Das separate Vorschaufenster konnte nicht geöffnet werden. Ihre Vorschaueinstellung bleibt unverändert. Schalten Sie die separate Vorschau in den Einstellungen aus und wieder ein, um es erneut zu versuchen.",
   "settings.exportFolder": "Exportordner",
   "settings.exportFolderPlaceholder": "Leer lassen, um den Schreibtisch zu verwenden",
   "settings.browse": "Auswählen",

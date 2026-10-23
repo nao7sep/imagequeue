@@ -11,6 +11,7 @@ const mocks = await vi.hoisted(async () => {
     minimum: vi.fn(),
     saved: vi.fn(),
     notice: vi.fn(),
+    load: vi.fn(),
   }
   class FakeWindow extends EventEmitter {
     options: Record<string, unknown>
@@ -53,8 +54,8 @@ const mocks = await vi.hoisted(async () => {
       this.destroyed = true
       this.emit('closed')
     }
-    async loadURL(url: string): Promise<void> { this.loaded.push(url) }
-    async loadFile(file: string, options: unknown): Promise<void> { this.loaded.push([file, options]) }
+    async loadURL(url: string): Promise<void> { this.loaded.push(url); await state.load() }
+    async loadFile(file: string, options: unknown): Promise<void> { this.loaded.push([file, options]); await state.load() }
   }
   return Object.assign(state, { FakeWindow })
 })
@@ -98,6 +99,7 @@ beforeEach(async () => {
   mocks.recovered.mockClear()
   mocks.saved.mockReset()
   mocks.notice.mockClear()
+  mocks.load.mockReset()
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined)
   preview = await import('../../src/main/preview-window')
   snapshots = await import('../../src/main/selection-snapshot')
@@ -351,3 +353,39 @@ describe('Close Window in the preview', () => {
   })
 })
 
+
+
+describe('failed preview navigation', () => {
+  it('retains a safe notice and the setting, then retries only on an explicit return', async () => {
+    const failure = new Error('EACCES /private/preview-secret SENTINEL')
+    mocks.load.mockRejectedValueOnce(failure)
+    preview.syncPreviewWindow(true, { focus: true })
+    await vi.waitFor(() => expect(mocks.notice).toHaveBeenCalledOnce())
+    expect(previews()[0]!.destroyed).toBe(true)
+    expect(mocks.config.general.show_preview_window).toBe(true)
+    expect(mocks.saved).not.toHaveBeenCalled()
+    expect(mocks.notice).toHaveBeenCalledWith({
+      title: { key: 'previewWindow.title' }, message: { key: 'previewWindow.openFailed' },
+    })
+    const { log } = await import('../../src/main/logger')
+    expect(log).toHaveBeenCalledWith('error', 'The preview window could not load', { error: failure })
+    snapshots.publishSelection(null)
+    expect(previews()).toHaveLength(1)
+    preview.showPreviewWindow()
+    await vi.waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(2))
+    expect(previews()[1]!.destroyed).toBe(false)
+    expect(mocks.notice).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a failed navigation after its window was replaced', async () => {
+    let reject!: (reason: unknown) => void
+    mocks.load.mockImplementationOnce(() => new Promise<void>((_resolve, no) => { reject = no }))
+    preview.syncPreviewWindow(true, { focus: false })
+    preview.closePreviewWindow()
+    preview.showPreviewWindow()
+    reject(new Error('old navigation'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.notice).not.toHaveBeenCalled()
+    expect(previews()[1]!.destroyed).toBe(false)
+  })
+})
