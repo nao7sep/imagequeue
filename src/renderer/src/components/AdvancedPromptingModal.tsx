@@ -1,3 +1,4 @@
+import { useInstalledModels } from '../hooks/useInstalledModels'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
@@ -31,10 +32,9 @@ import {
   type Elaborator,
   ELABORATOR_KIND_LABELS,
   type ElaboratorKind,
-  type LocalModelInfo,
   type EnqueueBatchUnit,
 } from '../../../shared/types'
-import { localModelName, sortLocalModels } from '../utils/localModels'
+import { localModelName } from '../utils/localModels'
 import { isBrainstormMode } from '../utils/promptMode'
 import { shownElaboratorId, shownSeed } from '../utils/advancedPromptingDefaults'
 import { presentFailure } from '../utils/failurePresentation'
@@ -115,11 +115,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
   // committed, so a close during it must neither warn about discarding work
   // (nothing will be discarded) nor cancel anything — just close.
   const holdingRef = useRef(false)
-  const [downloadedDtModels, setDownloadedDtModels] = useState<LocalModelInfo[]>([])
-  const [dtModelsLoading, setDtModelsLoading] = useState(isMacPlatform)
-  const [dtModelsError, setDtModelsError] = useState<MessageKey | null>(null)
-  // Only errors surface in the modal: a successful queue closes it (the now-
-  // populated queue columns are the confirmation), so there is no info state.
+  const modelsDirectory = (settings?.image_backends as { drawthings?: { models_dir?: string } } | undefined)?.drawthings?.models_dir ?? ''
+  const inventory = useInstalledModels(isMacPlatform, modelsDirectory)
+  const downloadedDtModels = inventory.models
+  const dtModelsLoading = inventory.status === 'loading'
+  const dtModelsError = inventory.error
+  // Errors stay available for retry; successful queueing shows the brief receipt.
   const [error, setError] = useState<MessageKey | null>(null)
   const [retryOperation, setRetryOperation] = useState<'elaborate' | 'queue' | null>(null)
   const [providerError, setProviderError] = useState<string | null>(null)
@@ -162,20 +163,6 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       elaboratorRowRefs.current.get(id)?.scrollIntoView({ block: 'nearest' })
     }
   }, [selectedCompositionElaboratorId, selectedStyleElaboratorId, elaborators])
-
-  useEffect(() => {
-    if (!isMacPlatform) {
-      setDownloadedDtModels([])
-      setDtModelsLoading(false)
-      return
-    }
-    setDtModelsLoading(true)
-    setDtModelsError(null)
-    void window.electronAPI.localListDownloadedModels()
-      .then((list) => setDownloadedDtModels(sortLocalModels(list)))
-      .catch((loadError) => setDtModelsError(presentFailure('advanced-models-load', loadError)))
-      .finally(() => setDtModelsLoading(false))
-  }, [])
 
   // From the presence signal, not settings' stored api_key string — see
   // hasApiKeyFor. Reading the stored value here hid env-configured backends
@@ -644,6 +631,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
               {isMacPlatform && (
                 <>
                   <div className="advanced-targets-group-title">Draw Things</div>
+                  {dtModelsError && downloadedDtModels.length > 0 && <div role="alert">{t(dtModelsError)}</div>}
                   {downloadedDtModels.length === 0 ? (
                     <div className="advanced-empty" role={dtModelsError ? 'alert' : undefined}>
                       {dtModelsLoading

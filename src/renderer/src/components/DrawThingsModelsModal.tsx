@@ -1,3 +1,4 @@
+import { useInstalledModels } from '../hooks/useInstalledModels'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useConfirm } from '../context/ConfirmContext'
 import { useCliJobs } from '../context/CliJobsContext'
@@ -18,6 +19,7 @@ import type { Translator } from '../../../shared/i18n/translate'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
 
 interface Props {
+  modelsDirectory: string
   onClose: () => void
 }
 
@@ -99,16 +101,22 @@ function mergeModels(availableModels: LocalModelInfo[], downloadedModels: LocalM
   return [...byFile.values()]
 }
 
-export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
+export function DrawThingsModelsModal({ onClose, modelsDirectory }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const { t, rich } = useI18n()
   const { addJob } = useCliJobs()
-  const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
+  const inventory = useInstalledModels(true, modelsDirectory)
   const [availableModels, setAvailableModels] = useState<LocalModelInfo[]>([])
-  const [customJsonStatus, setCustomJsonStatus] = useState<CustomJsonStatus>({ kind: 'absent' })
-  const [loadingDownloaded, setLoadingDownloaded] = useState(true)
+  // Pair the shared inventory with its import classification before showing it.
+  // A refresh keeps the previous pair visible; a new directory starts loading.
+  const [modelView, setModelView] = useState<{ directory: string | null; models: LocalModelInfo[]; customJson: CustomJsonStatus }>({
+    directory: null, models: [], customJson: { kind: 'absent' },
+  })
+  const downloadedModels = modelView.directory === modelsDirectory ? modelView.models : []
+  const customJsonStatus = modelView.directory === modelsDirectory ? modelView.customJson : { kind: 'absent' } as const
   const [loadingAvailable, setLoadingAvailable] = useState(true)
-  const [downloadedError, setDownloadedError] = useState<MessageKey | null>(null)
+  const [customJsonError, setCustomJsonError] = useState<MessageKey | null>(null)
+  const loadingDownloaded = inventory.status === 'loading' || (inventory.status === 'ready' && modelView.directory !== modelsDirectory && customJsonError === null)
   const [availableError, setAvailableError] = useState<MessageKey | null>(null)
   const [importPath, setImportPath] = useState('')
   const [importError, setImportError] = useState<MessageKey | null>(null)
@@ -117,8 +125,8 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   // null while the check is in flight. Every operation in this modal runs the
   // CLI (list/import/download all shell out), so without it the modal can do
   // nothing — it shows a pointer to the Dependencies window instead of empty lists.
-  const [cliInstalled, setCliInstalled] = useState<boolean | null>(null)
-  const [cliError, setCliError] = useState<MessageKey | null>(null)
+  const cliInstalled = inventory.cliStatus?.installed ?? null
+  const cliError = inventory.error
   const externalLinks = useExternalLinkResults()
   // A typed but not imported path is the only edit this dialog holds.
   useUnsavedDraftReport('drawThingsModels', importPath.trim() !== '')
@@ -138,60 +146,31 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
     if (ok) onClose()
   }, [importPath, confirm, onClose, t])
 
-  const loadDownloaded = useCallback(async (showLoading = true): Promise<void> => {
-    if (showLoading) setLoadingDownloaded(true)
-    setDownloadedError(null)
-    try {
-      const [list, status] = await Promise.all([
-        window.electronAPI.localListDownloadedModels(),
-        window.electronAPI.localReadCustomJsonImportedFiles(),
-      ])
-      setDownloadedModels(list)
-      setCustomJsonStatus(status)
-    } catch (error) {
-      setDownloadedError(presentFailure('drawthings-models-load', error))
-    } finally {
-      setLoadingDownloaded(false)
-    }
-  }, [])
-
   useEffect(() => {
-    void window.electronAPI.localCheckCli()
-      .then((status) => setCliInstalled(status.installed))
-      .catch((error) => setCliError(presentFailure('drawthings-cli-load', error)))
-  }, [])
+    if (cliInstalled !== true || inventory.status !== 'ready') return
+    let cancelled = false
+    void window.electronAPI.localReadCustomJsonImportedFiles().then((status) => {
+      if (cancelled) return
+      setModelView({ directory: modelsDirectory, models: inventory.models, customJson: status })
+      setCustomJsonError(null)
+    }).catch((error) => {
+      if (!cancelled) setCustomJsonError(presentFailure('drawthings-models-load', error))
+    })
+    return () => { cancelled = true }
+  }, [cliInstalled, inventory.status, inventory.revision, inventory.models, modelsDirectory])
 
   useEffect(() => {
     if (cliInstalled !== true) return
-    void loadDownloaded()
+    let cancelled = false
     setLoadingAvailable(true)
     setAvailableError(null)
-    void window.electronAPI.localListAvailableModels()
-      .then(setAvailableModels)
-      .catch((error) => setAvailableError(presentFailure('drawthings-catalog-load', error)))
-      .finally(() => setLoadingAvailable(false))
-  }, [cliInstalled, loadDownloaded])
-
-  // Keep the downloaded list fresh while jobs finish in the background.
-  useEffect(() => {
-    if (cliInstalled !== true) return
-    const handler = (): void => { void loadDownloaded(false) }
-    window.addEventListener('focus', handler)
-    const id = window.setInterval(handler, 30000)
-    return () => {
-      window.removeEventListener('focus', handler)
-      window.clearInterval(id)
-    }
-  }, [cliInstalled, loadDownloaded])
-
-  useEffect(() => {
-    if (cliInstalled !== true) return
-    return window.electronAPI.onCliJobStatus((event) => {
-      if (event.status === 'exited' || event.status === 'killed' || event.status === 'timed-out') {
-        void loadDownloaded(false)
-      }
-    })
-  }, [cliInstalled, loadDownloaded])
+    void window.electronAPI.localListAvailableModels().then((models) => {
+      if (!cancelled) setAvailableModels(models)
+    }).catch((error) => {
+      if (!cancelled) setAvailableError(presentFailure('drawthings-catalog-load', error))
+    }).finally(() => { if (!cancelled) setLoadingAvailable(false) })
+    return () => { cancelled = true }
+  }, [cliInstalled, modelsDirectory])
 
   const handleStartDownload = async (modelFile: string): Promise<void> => {
     setImportError(null)
@@ -226,7 +205,7 @@ export function DrawThingsModelsModal({ onClose }: Props): React.JSX.Element {
   }
 
   const loadingModels = loadingDownloaded || loadingAvailable
-  const modelsError = downloadedError ?? availableError
+  const modelsError = inventory.error ?? customJsonError ?? availableError
   const allModels = mergeModels(availableModels, downloadedModels)
 
   // custom.json is the import ground truth (the CLI mislabels every import as

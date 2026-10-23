@@ -1,4 +1,4 @@
-import { setDrawThingsReady } from '../hooks/useVisiblePanes'
+import { useInstalledModels } from '../hooks/useInstalledModels'
 import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react'
 import type { CliStatus, DrawThingsModelParams, LocalModelInfo, RecommendedParams } from '../../../shared/types'
 import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-api'
@@ -6,7 +6,7 @@ import { DRAWTHINGS_SIZE_PRESETS } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
 import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
-import { localModelName, sortLocalModels } from '../utils/localModels'
+import { localModelName } from '../utils/localModels'
 import { presentFailure } from '../utils/failurePresentation'
 import { DependencyPanePointer } from './DependencyPanePointer'
 import { useI18n } from '../i18n/I18nContext'
@@ -15,9 +15,9 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 // Draw Things is the one backend that is not a parameter descriptor
 // (src/renderer/src/backends): it drives a local CLI with per-model persisted
-// params, recommended-parameter resolution, and its own model list — a
-// different lifecycle, not a wider parameter set. This file owns that whole
-// lifecycle; QueueColumn only mounts the hook and renders the controls.
+// params and recommended-parameter resolution, alongside the shared installed
+// model inventory. This file owns its parameter lifecycle; QueueColumn mounts
+// the hook and renders the controls.
 
 const CUSTOM_DRAWTHINGS_SIZE = 'custom'
 
@@ -99,17 +99,14 @@ export function useDrawThingsColumn({
 }): DrawThingsColumn {
   const [authored, setAuthored] = useState(false)
   const modelsDirectory = (settings?.image_backends as { drawthings?: { models_dir?: string } } | undefined)?.drawthings?.models_dir ?? ''
-  const refreshRevision = useRef(0)
   const [localWidth, setLocalWidth] = useState(1024)
   const [localHeight, setLocalHeight] = useState(1024)
   const [localSteps, setLocalSteps] = useState(4)
   const [localGuidance, setLocalGuidance] = useState(1)
   const [localSeed, setLocalSeed] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
-  const [cliStatus, setCliStatus] = useState<CliStatus | null>(null)
-  const [downloadedModels, setDownloadedModels] = useState<LocalModelInfo[]>([])
-  const [modelsLoadState, setModelsLoadState] = useState<'loading' | 'ready' | 'failed'>('loading')
-  const [modelsLoadError, setModelsLoadError] = useState<MessageKey | null>(null)
+  const inventory = useInstalledModels(active, modelsDirectory)
+  const { cliStatus, models: downloadedModels, status: modelsLoadState, error: modelsLoadError } = inventory
   const [paramsSaveError, setParamsSaveError] = useState<MessageKey | null>(null)
   const [paramsLoadError, setParamsLoadError] = useState<MessageKey | null>(null)
   const [showModelsModal, setShowModelsModal] = useState(false)
@@ -197,42 +194,10 @@ export function useDrawThingsColumn({
     setLocalHeight(preset.height)
   }, [])
 
-  const refreshDrawThingsModels = useCallback(async (isInitial = false): Promise<void> => {
-    if (!active) return
-    const revision = ++refreshRevision.current
-    if (isInitial) setModelsLoadState('loading')
-    setModelsLoadError(null)
-    try {
-      const status = await window.electronAPI.localCheckCli()
-      if (revision !== refreshRevision.current) return
-      setCliStatus(status)
-      if (!status.installed) {
-        setDrawThingsReady(false)
-        setDownloadedModels([])
-        setModelsLoadState('ready')
-        return
-      }
-      const list = await window.electronAPI.localListDownloadedModels()
-      if (revision !== refreshRevision.current) return
-      setDrawThingsReady(list.length > 0)
-      const sortedList = sortLocalModels(list)
-      setDownloadedModels((prev) => {
-        const prevFiles = prev.map((m) => m.file).join(',')
-        const nextFiles = sortedList.map((m) => m.file).join(',')
-        if (prevFiles === nextFiles) return prev
-        if (isInitial || sortedList.length > 0) {
-          setModel((cur: string) => (sortedList.find((m) => m.file === cur) ? cur : sortedList[0]?.file ?? ''))
-        }
-        return sortedList
-      })
-      setModelsLoadState('ready')
-    } catch (error) {
-      if (revision !== refreshRevision.current) return
-      setDrawThingsReady(false)
-      setModelsLoadError(presentFailure('drawthings-models-poll', error))
-      setModelsLoadState('failed')
-    }
-  }, [active, setModel, modelsDirectory])
+  useEffect(() => {
+    if (!active || modelsLoadState !== 'ready' || downloadedModels.length === 0) return
+    setModel((current) => downloadedModels.some((item) => item.file === current) ? current : downloadedModels[0].file)
+  }, [active, modelsLoadState, downloadedModels, setModel])
 
   const onRestoreRecommended = useCallback((): void => {
     if (!effectiveRecommendation) return
@@ -348,29 +313,6 @@ export function useDrawThingsColumn({
     return () => { cancelled = true }
   }, [active, model, fallbacks, recommendationRevision, modelsDirectory])
 
-  // Check CLI status and load models on mount (local backend only)
-  useEffect(() => {
-    if (!active) return
-    void refreshDrawThingsModels(true)
-    const id = window.setInterval(() => { void refreshDrawThingsModels(false) }, 30000)
-    const handleFocus = (): void => { void refreshDrawThingsModels(false) }
-    window.addEventListener('focus', handleFocus)
-    return () => {
-      refreshRevision.current += 1
-      window.clearInterval(id)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [active, refreshDrawThingsModels])
-
-  useEffect(() => {
-    if (!active) return
-    return window.electronAPI.onCliJobStatus((event) => {
-      if (event.status === 'exited' || event.status === 'killed' || event.status === 'timed-out') {
-        void refreshDrawThingsModels(false)
-      }
-    })
-  }, [active, refreshDrawThingsModels])
-
   // A managed-dependency change (CLI installed/updated, or configs.json
   // downloaded/updated from the Dependencies modal) re-resolves this column: the
   // model list and CLI availability may have changed, and a new configs.json
@@ -380,7 +322,6 @@ export function useDrawThingsColumn({
     const openModels = (): void => setShowModelsModal(true)
     const dependenciesChanged = (): void => {
       setRecommendationRevision((value) => value + 1)
-      void refreshDrawThingsModels(false)
     }
     window.addEventListener('open-models-modal', openModels)
     window.addEventListener('dependencies-changed', dependenciesChanged)
@@ -388,7 +329,7 @@ export function useDrawThingsColumn({
       window.removeEventListener('open-models-modal', openModels)
       window.removeEventListener('dependencies-changed', dependenciesChanged)
     }
-  }, [active, refreshDrawThingsModels])
+  }, [active])
 
   // Persist only authored edits; resolving defaults is not authorship. The main process coalesces
   // rapid writes and drains pending writes on `before-quit`, so we don't

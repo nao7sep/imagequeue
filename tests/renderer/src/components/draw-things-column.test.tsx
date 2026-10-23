@@ -143,12 +143,13 @@ describe('Draw Things resolved parameters and authored edits', () => {
     { initialProps: { settings: settingsFor('/models/first') } })
     await until(() => expect(window.electronAPI.localListDownloadedModels).toHaveBeenCalledTimes(1))
     rerender({ settings: settingsFor('/models/second') })
-    await until(() => expect(result.current.controls.downloadedModels).toEqual(current))
+    expect(window.electronAPI.localListDownloadedModels).toHaveBeenCalledTimes(1)
+    expect(result.current.controls.modelsLoadState).toBe('loading')
     await act(async () => {
       oldList.resolve([{ ...current[0], file: 'obsolete', name: 'obsolete' }])
       await oldList.promise
     })
-    expect(result.current.controls.downloadedModels).toEqual(current)
+    await until(() => expect(result.current.controls.downloadedModels).toEqual(current))
     expect(result.current.controls.modelsLoadState).toBe('ready')
   })
 

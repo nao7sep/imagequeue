@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { createEmptySessionDraft } from '../../../../src/shared/session-draft'
 import type { LocalModelInfo } from '../../../../src/shared/types'
 import { until } from '../../until'
@@ -43,6 +43,8 @@ async function openOn(platform: string): Promise<void> {
       appLog: vi.fn().mockResolvedValue(undefined),
       listElaborators: vi.fn().mockResolvedValue([]),
       localListDownloadedModels,
+      localCheckCli: vi.fn().mockResolvedValue({ installed: true, version: '1', path: '/cli', platform: 'darwin' }),
+      onCliJobStatus: vi.fn(() => () => {}),
     },
   })
   vi.resetModules()
@@ -64,6 +66,16 @@ describe('Advanced Prompting on macOS', () => {
     const model = await until(() => screen.getByRole('checkbox', { name: /FLUX\.1 Dev/ }))
     expect((model as HTMLInputElement).checked).toBe(false)
     expect(localListDownloadedModels).toHaveBeenCalledOnce()
+  })
+
+  it('adds a completed background download without reopening the modal', async () => {
+    await openOn('darwin')
+    await until(() => screen.getByRole('checkbox', { name: /FLUX\.1 Dev/ }))
+    localListDownloadedModels.mockResolvedValue([...MODELS, { ...MODELS[0], file: 'new.ckpt', name: 'New download' }])
+    const onStatus = vi.mocked(window.electronAPI.onCliJobStatus).mock.calls[0][0]
+    act(() => onStatus({ jobId: 'download', status: 'exited', exitCode: 0, stalled: false }))
+    await until(() => screen.getByRole('checkbox', { name: 'New download' }))
+    expect(localListDownloadedModels).toHaveBeenCalledTimes(2)
   })
 
   it('offers the scopes that cover all cloud services or all Draw Things models', async () => {

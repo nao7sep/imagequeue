@@ -472,6 +472,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
     {drawThings.showModelsModal && (
       <DrawThingsModelsModal
+        modelsDirectory={(settings?.image_backends as { drawthings?: { models_dir?: string } } | undefined)?.drawthings?.models_dir ?? ''}
         onClose={drawThings.closeModelsModal}
       />
     )}

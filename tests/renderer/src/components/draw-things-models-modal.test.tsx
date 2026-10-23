@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { useInstalledModels } from '../../../../src/renderer/src/hooks/useInstalledModels'
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliStatus, LocalModelInfo } from '../../../../src/shared/types'
 import { until } from '../../until'
@@ -59,7 +60,7 @@ afterEach(cleanup)
 
 describe('DrawThingsModelsModal empty states', () => {
   it('reports an actually empty source without calling it a search miss', async () => {
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
 
     expect(await until(() => screen.getByText('No official models available.'))).toBeTruthy()
     expect(screen.queryByText('No official models match this search.')).toBeNull()
@@ -67,7 +68,7 @@ describe('DrawThingsModelsModal empty states', () => {
 
   it('distinguishes a filtered miss from an empty source', async () => {
     installApi([OFFICIAL_MODEL])
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('Alpha'))
 
     fireEvent.change(screen.getByPlaceholderText('Search official models'), {
@@ -80,7 +81,7 @@ describe('DrawThingsModelsModal empty states', () => {
 
   it('renders one accessible load failure above the bounded model columns', async () => {
     installApi([], new Error('catalog unavailable'))
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
 
     const alert = await until(() => screen.getByRole('alert'))
     expect(alert.textContent).toContain('Available Draw Things models could not be loaded')
@@ -98,7 +99,7 @@ describe('DrawThingsModelsModal operation failures', () => {
     installApi([])
     const hostile = new Error('EACCES /private/tmp/IMAGEQUEUE_IMPORT_SENTINEL')
     vi.mocked(window.electronAPI.cliStartImport).mockRejectedValue(hostile)
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('No official models available.'))
 
     const input = screen.getByPlaceholderText('Model file path')
@@ -122,7 +123,7 @@ describe('DrawThingsModelsModal operation failures', () => {
     vi.mocked(window.electronAPI.openExternal)
       .mockRejectedValueOnce(hostile)
       .mockResolvedValueOnce(undefined)
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('Alpha'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Hugging Face' }))
@@ -142,7 +143,7 @@ describe('DrawThingsModelsModal operation failures', () => {
 
 describe('DrawThingsModelsModal Browse context', () => {
   it('passes the current draft and repeated selection, preserving Cancel', async () => {
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('No official models available.'))
     const input = screen.getByPlaceholderText('Model file path') as HTMLInputElement
     const browse = screen.getByRole('button', { name: 'Browse' })
@@ -164,7 +165,7 @@ describe('DrawThingsModelsModal Browse context', () => {
 describe('model selected actions', () => {
   it('targets the keyboard active model for links and download without activating on arrow movement', async () => {
     installApi([OFFICIAL_MODEL, { ...OFFICIAL_MODEL, file: 'beta.ckpt', name: 'Beta', huggingFace: 'org/beta' }])
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('Beta'))
     const list = screen.getByRole('listbox', { name: 'Official models' })
     const rows = within(list).getAllByRole('option')
@@ -186,7 +187,7 @@ describe('model selected actions', () => {
 
   it('disables downloading an already installed active model', async () => {
     installApi([{ ...OFFICIAL_MODEL, downloaded: true }])
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('Alpha'))
     const row = screen.getByRole('option')
     act(() => row.focus())
@@ -200,7 +201,7 @@ describe('model selected actions', () => {
 
 describe('Draw Things model job settlement', () => {
   it('refreshes installed models after timeout, but waits while a process is still stopping', async () => {
-    render(<DrawThingsModelsModal onClose={vi.fn()} />)
+    render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
     await until(() => screen.getByText('No official models available.'))
     const refresh = vi.mocked(window.electronAPI.localListDownloadedModels)
     const initialCalls = refresh.mock.calls.length
@@ -210,4 +211,25 @@ describe('Draw Things model job settlement', () => {
     act(() => onStatus({ jobId: 'job-1', status: 'timed-out', exitCode: null, stalled: false }))
     await until(() => expect(refresh).toHaveBeenCalledTimes(initialCalls + 1))
   })
+})
+
+
+it('shares the active installed inventory while the management modal is open', async () => {
+  const { result } = renderHook(() => useInstalledModels(true, ''))
+  await until(() => expect(result.current.status).toBe('ready'))
+  render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
+  await until(() => screen.getByText('No official models available.'))
+  expect(window.electronAPI.localListDownloadedModels).toHaveBeenCalledOnce()
+  expect(window.electronAPI.onCliJobStatus).toHaveBeenCalledOnce()
+  act(() => window.dispatchEvent(new Event('focus')))
+  await until(() => expect(result.current.revision).toBe(2))
+  expect(window.electronAPI.localListDownloadedModels).toHaveBeenCalledTimes(2)
+})
+
+it('ends loading and retains a visible failure when import classification cannot be read', async () => {
+  vi.mocked(window.electronAPI.localReadCustomJsonImportedFiles).mockRejectedValue(new Error('read failed'))
+  render(<DrawThingsModelsModal modelsDirectory="" onClose={vi.fn()} />)
+  await until(() => expect(screen.getByRole('alert').textContent).toContain('Draw Things models could not be loaded'))
+  for (const list of screen.getAllByRole('listbox')) expect(list.getAttribute('aria-busy')).toBe('false')
+  expect(screen.queryByText('Loading models…')).toBeNull()
 })
