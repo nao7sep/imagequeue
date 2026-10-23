@@ -9,7 +9,6 @@ import {
   PROMPT_REGION_MIN_PX,
   PREVIEW_REGION_MIN_PX,
   getVisibleBackendsForPlatform,
-  getVisibleBackendCount,
   computeWindowMinWidth,
   computeWindowMinHeight,
 } from '../../src/shared/layout-metrics'
@@ -22,33 +21,20 @@ describe('backend pane width bounds', () => {
   })
 })
 
-// The window minimum must be DERIVED from the pane minimums and the
-// platform-dependent visible-column count, never a hand-typed constant. These
-// tests pin that derivation: the value equals the explicit sum, moves when the
-// constants move, and the column count it uses agrees with the same filter the
-// UI renders from.
+// Window geometry derives from pane minimums and the actual visible pane count.
+// Platform capability is only one input to visibility.
 
 describe('getVisibleBackendsForPlatform', () => {
-  it('shows every backend, including Draw Things, on darwin', () => {
+  it('supports every backend, including Draw Things, on darwin', () => {
     expect(getVisibleBackendsForPlatform('darwin')).toEqual(BACKEND_IDS_IN_UI_ORDER)
     expect(getVisibleBackendsForPlatform('darwin')).toContain('drawthings')
   })
 
-  it('hides Draw Things on non-darwin platforms', () => {
+  it('excludes Draw Things on non-darwin platforms', () => {
     expect(getVisibleBackendsForPlatform('win32')).toEqual(
       BACKEND_IDS_IN_UI_ORDER.filter((b) => b !== 'drawthings')
     )
     expect(getVisibleBackendsForPlatform('linux')).not.toContain('drawthings')
-  })
-
-  it('counts 5 columns on darwin and 4 elsewhere', () => {
-    expect(getVisibleBackendCount('darwin')).toBe(5)
-    expect(getVisibleBackendCount('win32')).toBe(4)
-    expect(getVisibleBackendCount('linux')).toBe(4)
-    // Derived from the list, not a literal: the darwin count is the full list,
-    // and the off-mac count is exactly one fewer (Draw Things).
-    expect(getVisibleBackendCount('darwin')).toBe(BACKEND_IDS_IN_UI_ORDER.length)
-    expect(getVisibleBackendCount('win32')).toBe(BACKEND_IDS_IN_UI_ORDER.length - 1)
   })
 })
 

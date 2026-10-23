@@ -8,7 +8,7 @@
 // its content floor and a useful maximum; the preview is the primary content
 // pane and receives the remaining width. The binding horizontal dimension is
 // therefore the left pane's real minimum plus one column minimum per *visible*
-// backend (Draw Things is macOS-only, so the column count is platform-dependent)
+// backend, determined by platform support, credentials and occupied queues,
 // plus the inter-pane borders.
 //
 // CSS cannot import these constants, so the matching CSS rules mirror the left
@@ -60,22 +60,12 @@ export const PANE_TOOLBAR_MIN_PX = 42
 export const PROMPT_REGION_MIN_PX = 220
 export const PREVIEW_REGION_MIN_PX = 280
 
-/**
- * Backends shown as columns for a given platform, derived from the single UI
- * order list. Draw Things is macOS-only. This is the pure, platform-parameterized
- * form of the renderer's getVisibleBackends() — both must use this one filter so
- * the window minimum's column count can never disagree with what the UI renders.
- */
+/** Platform-supported backends in UI order. Actual pane visibility also depends
+ * on credentials, queued work and welcome state; getVisiblePanes owns that rule. */
 export function getVisibleBackendsForPlatform(platform: Platform): BackendId[] {
   return platform === 'darwin'
     ? BACKEND_IDS_IN_UI_ORDER
     : BACKEND_IDS_IN_UI_ORDER.filter((b) => b !== 'drawthings')
-}
-
-/** Number of visible backend columns for a platform — one fewer off macOS,
- *  where Draw Things does not run. */
-export function getVisibleBackendCount(platform: Platform): number {
-  return getVisibleBackendsForPlatform(platform).length
 }
 
 /** A pane in the right-hand group. Every backend column, plus the welcome pane,
