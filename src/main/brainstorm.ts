@@ -49,6 +49,8 @@ export interface BrainstormResult {
   prompts: ElaboratedPromptRecord[]
   /** A failed run can still deliver completed prompts and their credits. */
   failure?: unknown
+  /** Main-process diagnostic context for the IPC owner; never sent to the renderer. */
+  failureContext?: Record<string, unknown>
 }
 
 // Emitted to the renderer after every successful turn so it can show live
@@ -148,7 +150,7 @@ function extractPromptsFromParsed(parsed: unknown): (string | null)[] {
 // recorded only for prompts that actually come back.
 //
 // Returns the full set on success, or the prompts collected so far if the run
-// is cancelled or fails after producing some. A partial failure never admits
+// is cancelled or fails. A partial failure never admits
 // image tasks automatically; the caller retains its completed prompt history.
 export async function brainstormPrompts(req: BrainstormRequest): Promise<BrainstormResult> {
   const controller = new AbortController()
@@ -204,12 +206,11 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
   let turn = 0
 
   const stats = newConceptRunStats()
-
+  const planningFailures = new Map<unknown, { call: string; durationMs: number }>()
 
   // Planning calls share the prose calls' provider, retry policy, and abort
   // signal; validation is the planner's (it parses and throws on junk).
-  // Every planning call crosses the same boundary, so it is logged in one
-  // place rather than three. `debug`, not `info`: the outcome each call feeds
+  // `debug`, not `info`: the outcome each call feeds
   // is already reported at `info` ("Concept aspects resolved", "Minted
   // concepts"), and this is the developer's view of the calls behind it.
   const ask: AskJson = async (messages, schema, label) => {
@@ -237,11 +238,11 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
     } catch (err) {
       // Cancellation is the user's doing, not a failure of the call.
       if (controller.signal.aborted) throw err
-      log('error', 'Planning call failed', {
-        requestId: req.requestId,
+      // Carry call context to the IPC diagnostic owner without changing the
+      // original error or logging the same terminal failure at each layer.
+      planningFailures.set(err, {
         call: label,
         durationMs: performance.now() - started,
-        error: serializeError(err),
       })
       throw err
     }
@@ -397,7 +398,7 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
         })
       }
       if (failure !== null) {
-        throw failure instanceof Error ? failure : new Error(String(failure))
+        throw failure
       }
 
       // The prompts themselves persist in the session manifest's
@@ -449,7 +450,8 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
       await commitUses()
       return { prompts: collected.slice(0, req.count) }
     }
-    log('error', 'Brainstorm failed', {
+    const failureContext: Record<string, unknown> = {
+      requestId: req.requestId,
       compositionElaborator: compositionElaborator.name,
       styleElaborator: styleElaborator.name,
       backend: handle.backend,
@@ -459,12 +461,9 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
       turns: turn,
       durationMs: performance.now() - startTime,
       concepts: stats,
-      error: serializeError(err),
-    })
-    if (collected.length > 0) {
-      await commitUses()
-      return { prompts: collected.slice(0, req.count), failure: err }
+      planningCall: planningFailures.get(err),
     }
-    throw err instanceof Error ? err : new Error(String(err))
+    await commitUses()
+    return { prompts: collected.slice(0, req.count), failure: err, failureContext }
   }
 }

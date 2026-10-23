@@ -203,6 +203,23 @@ describe('brainstormPrompts (concept-driven)', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
+  it.each([
+    [{ count: 0 }, 'Count must be at least 1.'],
+    [{ seed: ' ' }, 'Seed prompt is empty.'],
+    [{ compositionElaboratorId: 'missing' }, 'Composition elaborator not found.'],
+    [{ styleElaboratorId: 'missing' }, 'Style elaborator not found.'],
+  ])('still rejects invalid setup %j', async (patch, message) => {
+    await expect(brainstormPrompts({ ...request({ requestId: 'invalid-setup', count: 1 }), ...patch })).rejects.toThrow(message)
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  it('still rejects an unexpected provider setup error unchanged', async () => {
+    const failure = new Error('provider setup failed')
+    vi.mocked(getMainProvider).mockImplementationOnce(() => { throw failure })
+    await expect(brainstormPrompts(request({ requestId: 'provider-setup', count: 1 }))).rejects.toBe(failure)
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
   it('produces the requested count across batches', async () => {
     const script = installScriptedProvider()
     const result = await brainstormPrompts(request({ requestId: 'r1', count: 3 }))
@@ -418,12 +435,48 @@ describe('brainstormPrompts (concept-driven)', () => {
   })
 
   it('preserves the primary provider failure even when optional ledger statistics become unavailable', async () => {
-    const failure = new Error('primary provider failure')
+    const cause = new Error('underlying provider failure')
+    const failure = new Error('primary provider failure', { cause })
     installScriptedProvider({ onProseCall: () => {
       vi.spyOn(acquisition, 'ledgerTotals').mockRejectedValue(new Error('statistics unavailable'))
       throw failure
     } })
-    await expect(brainstormPrompts(request({ requestId: 'failure-cause', count: 1 }))).rejects.toBe(failure)
+    const result = await brainstormPrompts(request({ requestId: 'failure-cause', count: 1 }))
+    expect(result.prompts).toEqual([])
+    expect(result.failure).toBe(failure)
+    expect((result.failure as Error).cause).toBe(cause)
+    expect(result.failureContext).toMatchObject({ requestId: 'failure-cause', backend: 'openai', model: 'm', collected: 0 })
+    expect(logCalls.filter((entry) => entry.level === 'error')).toEqual([])
+  })
+
+  it('carries planning call context and its original cause to the diagnostic owner without logging it twice', async () => {
+    const cause = new Error('provider transport failed')
+    const failure = new Error('planning failed', { cause })
+    const script = installScriptedProvider()
+    script.ask.mockRejectedValue(failure)
+
+    const result = await brainstormPrompts(request({ requestId: 'planning-failure', count: 1 }))
+    expect(result.prompts).toEqual([])
+    expect(result.failure).toBe(failure)
+    expect((result.failure as Error).cause).toBe(cause)
+    expect(result.failureContext).toMatchObject({
+      requestId: 'planning-failure', compositionElaborator: 'composition', styleElaborator: 'style',
+      backend: 'openai', model: 'm', requested: 1, collected: 0, turns: 0,
+      durationMs: expect.any(Number), planningCall: { call: 'aspects', durationMs: expect.any(Number) },
+    })
+    expect(logCalls.filter((entry) => entry.level === 'error')).toEqual([])
+    expect(hasActiveBrainstorms()).toBe(false)
+  })
+
+  it('keeps planning cancellation quiet and returns no failure context', async () => {
+    const script = installScriptedProvider()
+    script.ask.mockImplementationOnce(async () => {
+      cancelBrainstorm('planning-cancel')
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    })
+    await expect(brainstormPrompts(request({ requestId: 'planning-cancel', count: 1 }))).resolves.toEqual({ prompts: [] })
+    expect(logged('Brainstorm cancelled')).toHaveLength(1)
+    expect(logCalls.filter((entry) => entry.level === 'error')).toEqual([])
   })
 
   // A domain-expansion reply with NOTHING in it is a failed call, not a set of
@@ -494,7 +547,7 @@ describe('brainstormPrompts (concept-driven)', () => {
       },
     })
 
-    await expect(brainstormPrompts(request({ requestId: 'retry-cap', count: 1 }))).rejects.toBe(error)
+    expect((await brainstormPrompts(request({ requestId: 'retry-cap', count: 1 }))).failure).toBe(error)
     expect(proseAttempts).toBe(3)
     // Elaboration waits as every provider call does.
     expect(delays.requested).toEqual(PROVIDER_RETRY_BACKOFF_MS.slice(0, 2))
@@ -514,7 +567,7 @@ describe('brainstormPrompts (concept-driven)', () => {
       },
     })
 
-    await expect(brainstormPrompts(request({ requestId: 'no-resend', count: 1 }))).rejects.toBe(error)
+    expect((await brainstormPrompts(request({ requestId: 'no-resend', count: 1 }))).failure).toBe(error)
     expect(proseAttempts).toBe(1)
   })
 
@@ -527,7 +580,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     vi.mocked(getMainProvider).mockReturnValue({
       provider: { ask: failing } as TextAIProvider, timeoutMs: 1000, backend: 'openai', modelId: 'm',
     })
-    await expect(brainstormPrompts(request({ requestId: 'r9', count: 1 }))).rejects.toThrow('boom')
+    expect((await brainstormPrompts(request({ requestId: 'r9', count: 1 }))).failure).toEqual(new Error('boom'))
     expect(hasActiveBrainstorms()).toBe(false)
   })
 

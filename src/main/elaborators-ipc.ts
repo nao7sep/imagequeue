@@ -100,8 +100,9 @@ export function registerElaboratorsIpc(): void {
       sender.once('render-process-gone', cancel)
       sender.on('did-start-navigation', navigation)
       try {
-        const { prompts, failure } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+        const { prompts, failure, failureContext } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
         if (failure !== undefined) {
+          log('error', 'Brainstorm failed', { ...failureContext, error: serializeError(failure) })
           return { ok: false, prompts, failure: {
             refused: failure instanceof ProviderRefusalError,
             providerMessage: providerMessage(failure),
