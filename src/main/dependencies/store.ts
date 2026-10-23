@@ -50,12 +50,29 @@ export async function readDependenciesCache(): Promise<DependenciesCache> {
   try {
     const raw: unknown = JSON.parse(await fs.promises.readFile(file, 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('dependencies.json must be a JSON object')
-    const parsed = raw as Partial<DependenciesCache>
-    const base = emptyCache()
+    const parsed = raw as Record<string, unknown>
+    function section(value: unknown): Record<string, unknown> {
+      if (value === undefined) return {}
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Invalid dependencies cache section')
+      return value as Record<string, unknown>
+    }
+    function nullableString(value: unknown): string | null {
+      if (value === undefined || value === null) return null
+      if (typeof value !== 'string') throw new Error('Invalid dependencies cache string field')
+      return value
+    }
+    const cli = section(parsed.cli)
+    const recommendations = section(parsed.recommendations)
     return {
-      lastAttemptAtUtc: typeof parsed.lastAttemptAtUtc === 'string' ? parsed.lastAttemptAtUtc : null,
-      cli: { ...base.cli, ...parsed.cli },
-      recommendations: { ...base.recommendations, ...parsed.recommendations },
+      lastAttemptAtUtc: nullableString(parsed.lastAttemptAtUtc),
+      cli: {
+        lastKnownLatest: nullableString(cli.lastKnownLatest),
+        lastCheckedAtUtc: nullableString(cli.lastCheckedAtUtc),
+      },
+      recommendations: {
+        lastKnownModifiedUtc: nullableString(recommendations.lastKnownModifiedUtc),
+        lastCheckedAtUtc: nullableString(recommendations.lastCheckedAtUtc),
+      },
     }
   } catch (err) {
     // Absent is an expected probe (silent); present-but-unparseable is an

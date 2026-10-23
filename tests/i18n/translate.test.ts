@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadCatalogue, type Catalogue, type MessageKey } from "../../src/shared/i18n/catalogues";
-import { createTranslator, loadTranslator, message } from "../../src/shared/i18n/translate";
+import { createTranslator, isMessage, loadTranslator, message } from "../../src/shared/i18n/translate";
 
 describe("createTranslator", () => {
   it("fills placeholders and formats numbers for the locale", async () => {
@@ -49,5 +49,30 @@ describe("createTranslator", () => {
     // could still reach it, and a window must not go down over one string.
     const missing = "gone.missing" as unknown as MessageKey;
     expect((await loadTranslator("ja")).t(missing)).toBe("gone.missing");
+  });
+});
+
+describe("isMessage", () => {
+  it.each([null, [], { key: 2 }, { key: "x", values: null }, { key: "x", values: [] },
+    ...[null, true, undefined, [], {}, NaN, Infinity].map(value => ({ key: "x", values: { value } })),
+    { key: "x", values: { nested: { key: "y", values: { bad: false } } } },
+  ])("rejects invalid message values: %j", value => {
+    expect(isMessage(value)).toBe(false);
+  });
+
+  it("accepts unknown keys and shared nested messages", async () => {
+    const nested = { key: "unknown.key", values: { count: 2, text: "ok" } };
+    expect(isMessage({ key: "x", values: { first: nested, second: nested } })).toBe(true);
+    expect(isMessage(nested)).toBe(true);
+    expect((await loadTranslator("en")).text(nested as ReturnType<typeof message>)).toBe("unknown.key");
+  });
+
+  it("rejects cycles without imposing a depth limit", () => {
+    const cyclic: { key: string; values?: Record<string, unknown> } = { key: "x" };
+    cyclic.values = { self: cyclic };
+    expect(isMessage(cyclic)).toBe(false);
+    let nested: unknown = { key: "leaf" };
+    for (let index = 0; index < 20_000; index++) nested = { key: "x", values: { nested } };
+    expect(isMessage(nested)).toBe(true);
   });
 });

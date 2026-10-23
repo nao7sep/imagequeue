@@ -175,6 +175,16 @@ describe('isSessionManifest', () => {
     expect(isSessionManifest({ ...valid, tasks: tasks([{ ...makeTask('a', 'completed'), baseName: 7 }]) })).toBe(false)
   })
 
+  it('rejects stored error messages whose substitutions cannot be rendered', () => {
+    for (const error of [{ key: 'taskFailure.generic', values: null }, { key: 'taskFailure.generic', values: { name: false } }]) {
+      const task = { ...makeTask('a', 'failed'), error }
+      expect(isSessionManifest({ ...valid, tasks: { ...createEmptyQueues(), openai: [task] } })).toBe(false)
+    }
+    expect(isSessionManifest({ ...valid, tasks: queuesWith([
+      makeTask('a', 'failed', { error: { key: 'taskFailure.generic', values: { name: 'OpenAI' } } }),
+    ]) })).toBe(true)
+  })
+
   it('rejects missing fields and malformed task maps', () => {
     expect(isSessionManifest(null)).toBe(false)
     expect(isSessionManifest({ ...valid, sessionId: 123 })).toBe(false)

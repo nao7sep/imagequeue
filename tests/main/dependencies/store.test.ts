@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -7,6 +7,7 @@ import {
   updateDependenciesCache,
 } from '../../../src/main/dependencies/store'
 import { getDependenciesStatePath } from '../../../src/main/dependencies/paths'
+import * as logger from '../../../src/main/logger'
 import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 let home: string
@@ -70,6 +71,38 @@ describe('dependencies cache', () => {
       lastAttemptAtUtc: null,
       cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
       recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
+    })
+  })
+
+  it.each([
+    { cli: { lastKnownLatest: 42 } },
+    { cli: { lastCheckedAtUtc: 42 } },
+    { recommendations: { lastKnownModifiedUtc: 42 } },
+    { recommendations: { lastCheckedAtUtc: 42 } },
+    { cli: [] },
+    { recommendations: null },
+  ])('warns and rebuilds invalid nested cache fields: %j', async (fields) => {
+    const warning = vi.spyOn(logger, 'log').mockImplementation(() => undefined)
+    try {
+      fs.writeFileSync(getDependenciesStatePath(), JSON.stringify(fields))
+      expect(await readDependenciesCache()).toEqual({
+        lastAttemptAtUtc: null,
+        cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
+        recommendations: { lastKnownModifiedUtc: null, lastCheckedAtUtc: null },
+      })
+      expect(warning).toHaveBeenCalledWith('warn', expect.stringContaining('rebuilding'), expect.any(Object))
+    } finally { warning.mockRestore() }
+  })
+
+  it('selects known string fields without copying unknown properties', async () => {
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({
+      cli: { lastKnownLatest: 'v1', extra: 42 },
+      recommendations: { lastKnownModifiedUtc: 'date', extra: true },
+    }))
+    expect(await readDependenciesCache()).toEqual({
+      lastAttemptAtUtc: null,
+      cli: { lastKnownLatest: 'v1', lastCheckedAtUtc: null },
+      recommendations: { lastKnownModifiedUtc: 'date', lastCheckedAtUtc: null },
     })
   })
 

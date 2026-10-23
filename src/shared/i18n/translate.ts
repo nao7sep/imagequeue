@@ -20,7 +20,28 @@ export function message(key: MessageKey, values?: MessageValues): Message {
 }
 
 export function isMessage(value: unknown): value is Message {
-  return typeof value === 'object' && value !== null && typeof (value as { key?: unknown }).key === 'string'
+  const ancestors = new Set<object>()
+  const pending: { value: unknown; exit?: boolean }[] = [{ value }]
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    const candidate = current.value
+    if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) return false
+    if (current.exit) {
+      ancestors.delete(candidate)
+      continue
+    }
+    if (ancestors.has(candidate) || !('key' in candidate) || typeof candidate.key !== 'string') return false
+    const values = (candidate as { values?: unknown }).values
+    if (values === undefined) continue
+    if (typeof values !== 'object' || values === null || Array.isArray(values)) return false
+    ancestors.add(candidate)
+    pending.push({ value: candidate, exit: true })
+    for (const item of Object.values(values)) {
+      if (typeof item === 'string' || (typeof item === 'number' && Number.isFinite(item))) continue
+      pending.push({ value: item })
+    }
+  }
+  return true
 }
 
 const PLACEHOLDER = /\{(\w+)\}/g
