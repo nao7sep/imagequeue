@@ -9,7 +9,7 @@ import { Icon } from './Icon'
 import { useImeGuard } from '../utils/imeGuard'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import { isEditableTarget, shadowsMacTextBinding, windowCommandFor } from '../utils/shortcuts'
-import { isAnyModalOpen } from './modalStack'
+import { isAnyModalOpen, onModalOpenChange } from './modalStack'
 import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
 import { selectedImageOf, type SelectedImage, type WindowCommand } from '../../../shared/viewing'
 import { useSelection } from '../context/SelectionContext'
@@ -335,21 +335,22 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
   }, [runCommand, isImeComposing])
 
   useEffect(() => {
-    refreshClipboardTextAvailable()
-
-    const intervalId = window.setInterval(() => {
-      refreshClipboardTextAvailable()
-    }, 1000)
-
-    const handleFocus = (): void => {
-      refreshClipboardTextAvailable()
+    const refreshIfActive = (): void => {
+      if (document.visibilityState === 'visible' && document.hasFocus() && !isAnyModalOpen()) {
+        refreshClipboardTextAvailable()
+      }
     }
-
-    window.addEventListener('focus', handleFocus)
+    refreshIfActive()
+    const intervalId = window.setInterval(refreshIfActive, 1000)
+    window.addEventListener('focus', refreshIfActive)
+    document.addEventListener('visibilitychange', refreshIfActive)
+    const stopModalListener = onModalOpenChange(refreshIfActive)
 
     return () => {
       window.clearInterval(intervalId)
-      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('focus', refreshIfActive)
+      document.removeEventListener('visibilitychange', refreshIfActive)
+      stopModalListener()
     }
   }, [refreshClipboardTextAvailable])
 

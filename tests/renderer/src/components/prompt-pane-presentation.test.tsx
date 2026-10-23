@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { pushModal, popModal } from '../../../../src/renderer/src/components/modalStack'
 import type { Task } from '../../../../src/shared/types'
 
 vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
@@ -96,7 +97,7 @@ beforeEach(() => {
   } as unknown as typeof window.electronAPI
 })
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); popModal('clipboard-test') })
 
 describe('PromptPane presentation', () => {
   it('draws a completed task\'s image from the app\'s image scheme once it has decoded, and clears an earlier load failure', async () => {
@@ -401,4 +402,35 @@ describe('export selection ownership', () => {
     await act(async () => { resolve('/exports/image.png') })
     expect(screen.getByRole('button', { name: 'Export' })).toBeTruthy()
   })
+})
+
+
+it('polls clipboard availability only while usable and refreshes on return', async () => {
+  vi.useFakeTimers()
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  const probe = vi.mocked(window.electronAPI.hasClipboardText)
+  const view = render(<PromptPane selectedTask={null} prompt="" onPromptChange={vi.fn()} />)
+  await act(async () => {})
+  expect(probe).toHaveBeenCalledTimes(1)
+  focused.mockReturnValue(false)
+  await act(async () => { vi.advanceTimersByTime(5000) })
+  expect(probe).toHaveBeenCalledTimes(1)
+  focused.mockReturnValue(true)
+  await act(async () => { window.dispatchEvent(new Event('focus')) })
+  expect(probe).toHaveBeenCalledTimes(2)
+  visibility.mockReturnValue('hidden')
+  await act(async () => { vi.advanceTimersByTime(5000) })
+  expect(probe).toHaveBeenCalledTimes(2)
+  visibility.mockReturnValue('visible')
+  await act(async () => { document.dispatchEvent(new Event('visibilitychange')) })
+  expect(probe).toHaveBeenCalledTimes(3)
+  act(() => pushModal('clipboard-test'))
+  await act(async () => { vi.advanceTimersByTime(5000); window.dispatchEvent(new Event('focus')) })
+  expect(probe).toHaveBeenCalledTimes(3)
+  await act(async () => { popModal('clipboard-test') })
+  expect(probe).toHaveBeenCalledTimes(4)
+  view.unmount()
+  await act(async () => { vi.advanceTimersByTime(5000); window.dispatchEvent(new Event('focus')) })
+  expect(probe).toHaveBeenCalledTimes(4)
 })
