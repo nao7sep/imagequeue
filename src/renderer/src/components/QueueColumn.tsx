@@ -122,7 +122,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       : null,
     [proprietaryBackend, backendSettings, models, defaultModel]
   )
-  const currentEnqueueParams = useMemo<Record<string, unknown>>(() => {
+  const currentEnqueueParams = useMemo<Record<string, unknown> | null>(() => {
     if (backendId === 'drawthings') {
       return drawThings.enqueueParams
     }
@@ -154,7 +154,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // Backend-config readiness only (no prompt check — the prompt is validated by
   // the enqueue action). Mirrored into the snapshot so Send-to-All / Cmd+N can
   // skip not-ready backends, and reused for the "+ Queue" button's disabled state.
-  const readyToEnqueue = (backendId !== 'drawthings' || drawThings.paramsReady) && isBackendReadyToEnqueue({
+  const readyToEnqueue = currentEnqueueParams !== null && (backendId !== 'drawthings' || drawThings.paramsReady) && isBackendReadyToEnqueue({
     backendId,
     apiKeyMissing,
     cliInstalled: drawThings.cliInstalled,
@@ -166,7 +166,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       setSnapshot(backendId, null)
       return
     }
-    setSnapshot(backendId, { model, params: currentEnqueueParams, ready: readyToEnqueue })
+    setSnapshot(backendId, { model, params: currentEnqueueParams ?? {}, ready: readyToEnqueue, ...(currentEnqueueParams === null ? { invalidParams: true } : {}) })
   }, [backendId, model, currentEnqueueParams, readyToEnqueue, setSnapshot])
 
   useEffect(() => {

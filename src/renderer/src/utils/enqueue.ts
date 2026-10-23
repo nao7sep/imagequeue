@@ -8,6 +8,7 @@ export interface EnqueueConfigSnapshot {
   // backends, CLI installed with at least one model for Draw Things). The column
   // owns this judgement; the builders below skip not-ready backends.
   ready: boolean
+  invalidParams?: boolean
 }
 
 // Backend-config readiness, independent of the prompt: API key present for

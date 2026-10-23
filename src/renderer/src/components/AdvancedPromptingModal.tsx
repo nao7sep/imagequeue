@@ -297,7 +297,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   // Resolution and gating shared with the column (drawThingsParams.ts): saved
   // params take the whole set, else recommendation over configured fallbacks.
-  const buildDtParams = useCallback(async (modelFile: string): Promise<AdvancedQueueTarget> => {
+  const buildDtParams = useCallback(async (modelFile: string): Promise<AdvancedQueueTarget | null> => {
     const saved = await window.electronAPI.dtGetModelParams(modelFile)
     const rec = saved ? null : await window.electronAPI.resolveRecommendation(modelFile)
     // Saved params need no fallbacks; a resolution without them halts rather
@@ -306,7 +306,8 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       throw new Error('Draw Things settings are still loading — try again in a moment.')
     }
     const resolved = resolveDtParams(saved, rec, drawThingsFallbacks!)
-    return { backend: 'drawthings', model: modelFile, params: toDrawThingsTaskParams(resolved) }
+    const params = toDrawThingsTaskParams(resolved)
+    return params ? { backend: 'drawthings', model: modelFile, params } : null
   }, [drawThingsFallbacks])
 
   const handleQueue = useCallback(async (): Promise<void> => {
@@ -329,6 +330,10 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       sessionPromptCount: elaboratedPrompts.length,
     })
     try {
+      if (targets.proprietary.some((backendId) => snapshots[backendId]?.invalidParams)) {
+        setError('advanced.invalidImageSeed')
+        return
+      }
       const proprietaryUnits: AdvancedQueueTarget[] = targets.proprietary.map((backendId) => {
         const snapshot = snapshots[backendId]
         if (!snapshot || !snapshot.model) {
@@ -341,7 +346,12 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
         }
       })
 
-      const dtUnits = await Promise.all(targets.dt.map((modelFile) => buildDtParams(modelFile)))
+      const resolvedDtUnits = await Promise.all(targets.dt.map((modelFile) => buildDtParams(modelFile)))
+      if (resolvedDtUnits.some((unit) => unit === null)) {
+        setError('advanced.invalidImageSeed')
+        return
+      }
+      const dtUnits = resolvedDtUnits.filter((unit): unit is AdvancedQueueTarget => unit !== null)
       // Pre-generate prompts according to mode.
       // - as-is / elaborated: a single prompt reused for everything.
       // - fresh-iteration: one prompt per iteration, shared across models. Length = copies.

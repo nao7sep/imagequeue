@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { IMAGE_SEED_LIMITS, resolveImageSeed } from '../../../shared/image-seed'
 import { OPENAI_OUTPUT_FORMAT_LABELS, type FluxModelDef, type FluxOutputFormat } from '../../../shared/models'
 import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
@@ -19,7 +20,7 @@ export type FluxParams = {
   outputFormat: FluxOutputFormat
   steps: number
   guidance: number
-  /** Raw seed field text; parsed (or dropped) at enqueue time. */
+  /** Raw seed field text; validated in full before admission. */
   seed: string
   /** FLUX 3: a ratio and a resolution level in place of width and height. */
   aspectRatio: string
@@ -67,6 +68,7 @@ function outputFormat(saved: Record<string, unknown>, modelDef: FluxModelDef): F
 function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParams, FluxModelDef>): React.JSX.Element {
   const { t } = useI18n()
   const fieldId = useId()
+  const seedValid = resolveImageSeed(params.seed, 'flux').valid
   if (modelDef.aspectRatios) {
     return (
       <>
@@ -148,8 +150,9 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
       )}
       <div className="setting-row">
         <label htmlFor={`${fieldId}-seed`}>{t('backend.seed')}</label>
-        <input id={`${fieldId}-seed`} type="text" value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder={t('backend.seedPlaceholder')} />
+        <input id={`${fieldId}-seed`} type="text" aria-invalid={!seedValid} aria-describedby={!seedValid ? `${fieldId}-seed-error` : undefined} value={params.seed} onChange={(e) => onChange({ ...params, seed: e.target.value })} placeholder={t('backend.seedPlaceholder')} />
       </div>
+      {!seedValid && <div id={`${fieldId}-seed-error`} className="drawthings-save-error" role="alert">{t('backend.invalidSeed', IMAGE_SEED_LIMITS.flux)}</div>}
     </>
   )
 }
@@ -210,8 +213,9 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
     const result: Record<string, unknown> = { width: size.width, height: size.height, outputFormat: params.outputFormat }
     if (modelDef.stepsRange) result.steps = params.steps
     if (modelDef.guidanceRange) result.guidance = params.guidance
-    const parsedSeed = params.seed ? Number.parseInt(params.seed, 10) : NaN
-    result.seed = Number.isNaN(parsedSeed) ? null : parsedSeed
+    const seed = resolveImageSeed(params.seed, 'flux')
+    if (!seed.valid) return null
+    result.seed = seed.seed
     return result
   },
 

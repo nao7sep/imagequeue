@@ -51,7 +51,7 @@ function cheapestChoices(backend: CloudBackendId, row: ModelDef): Record<string,
 function enqueueParams(backend: CloudBackendId, row: ModelDef): Record<string, unknown> {
   const descriptor = CLOUD_BACKENDS[backend]
   const params = descriptor.toEnqueueParams(descriptor.fromSaved(cheapestChoices(backend, row), row), row)
-  return backend === 'flux' && row.id !== 'flux-3-image' ? { ...params, width: 512, height: 512 } : params
+  return backend === 'flux' && row.id !== 'flux-3-image' ? { ...params, width: 512, height: 512 } : params!
 }
 
 const ROWS = (['openai', 'nanobanana', 'grok', 'flux'] as const).flatMap((backend) =>

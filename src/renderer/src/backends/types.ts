@@ -39,12 +39,12 @@ export interface BackendParamModel<P extends Record<string, unknown>, M extends 
   fromSaved(saved: Record<string, unknown>, modelDef: M): P
 
   /**
-   * The request-shaped payload for enqueueing — also the canonical form the
+   * The request-shaped payload, or null while a field is invalid — also the canonical form the
    * defaults autosave serializes for its dirty comparison, so key order here is
    * load-bearing: it must be stable, and the saved-defaults path must produce
    * the identical serialization (see the descriptor round-trip tests).
    */
-  toEnqueueParams(params: P, modelDef: M): Record<string, unknown>
+  toEnqueueParams(params: P, modelDef: M): Record<string, unknown> | null
 
   /** The column's parameter rows for this backend (`.setting-row` markup). */
   Controls: (props: BackendControlsProps<P, M>) => React.JSX.Element

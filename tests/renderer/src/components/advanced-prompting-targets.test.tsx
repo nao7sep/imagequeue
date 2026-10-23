@@ -8,7 +8,7 @@ import { until } from '../../until'
 // request, and is a target here as from the column itself; its row warns that
 // the model is not in the list.
 
-const controls = vi.hoisted(() => ({ run: vi.fn(), append: vi.fn(), update: vi.fn(), fresh: false }))
+const controls = vi.hoisted(() => ({ run: vi.fn(), append: vi.fn(), update: vi.fn(), fresh: false, invalidParams: false, dt: false }))
 
 vi.mock('../../../../src/renderer/src/hooks/useBrainstormOperation', () => ({
   useBrainstormOperation: () => ({ progress: null, run: controls.run, cancel: vi.fn() }),
@@ -19,11 +19,14 @@ vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
     apiKeyPresence: { image: { openai: true, nanobanana: true, grok: true, flux: true }, geminiText: true, openaiText: true },
   }),
 }))
+vi.mock('../../../../src/renderer/src/hooks/useInstalledModels', () => ({
+  useInstalledModels: () => ({ status: 'ready', error: null, models: controls.dt ? [{ file: 'model.ckpt', name: 'Test model' }] : [] }),
+}))
 vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({ useConfirm: () => async () => true }))
 vi.mock('../../../../src/renderer/src/context/EnqueueConfigContext', () => ({
   useEnqueueConfigs: () => ({
     snapshots: {
-      openai: { model: 'gpt-image-1.5', params: {}, ready: true },
+      openai: { model: 'gpt-image-1.5', params: {}, ready: !controls.invalidParams, invalidParams: controls.invalidParams },
       grok: { model: 'grok-imagine-image-2.0', params: { aspectRatio: '1:1', resolution: '1k', quality: 'auto' }, ready: true },
     },
   }),
@@ -38,7 +41,7 @@ vi.mock('../../../../src/renderer/src/context/SessionDraftContext', () => ({
       count: controls.fresh ? 2 : 1,
       selectedCompositionElaboratorId: 'c1',
       selectedStyleElaboratorId: 's1',
-      targetScope: 'selected',
+      targetScope: controls.dt ? 'all-drawthings' : 'selected',
       selectedProprietary: { openai: true, nanobanana: false, grok: true, flux: false, drawthings: false },
     },
     update: controls.update,
@@ -52,6 +55,8 @@ let enqueueBatch: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   controls.fresh = false
+  controls.invalidParams = false
+  controls.dt = false
   controls.run.mockReset()
   controls.append.mockReset()
   controls.update.mockReset()
@@ -122,4 +127,25 @@ describe('fresh prompt delivery', () => {
     expect(controls.append).not.toHaveBeenCalled()
     expect(controls.update).toHaveBeenCalledWith({ elaboratedPrompts: complete })
   })
+})
+
+
+it.each(['cloud', 'drawthings'])('rejects an invalid %s image seed before paid prompt generation', async (backend) => {
+  controls.fresh = true
+  controls.invalidParams = backend === 'cloud'
+  controls.dt = backend === 'drawthings'
+  if (controls.dt) {
+    window.electronAPI.platform = 'darwin'
+    window.electronAPI.dtGetModelParams = vi.fn(async () => ({
+      width: 512, height: 512, steps: 4, guidance: 1, seed: '42.5', negativePrompt: '',
+    }))
+  }
+  render(<AdvancedPromptingModal onClose={vi.fn()} />)
+  const queue = await until(() => screen.getByRole('button', { name: /^Queue/ }))
+  await until(() => expect((queue as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(queue)
+  await screen.findByText('Correct the seed values for the selected image models before queueing.')
+  expect(controls.run).not.toHaveBeenCalled()
+  expect(enqueueBatch).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
 })

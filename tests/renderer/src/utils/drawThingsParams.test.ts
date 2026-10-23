@@ -37,16 +37,16 @@ describe('toDrawThingsTaskParams', () => {
   // Random intent is captured explicitly so later default changes cannot fix its seed.
   it('captures a fixed positive seed and represents random intent explicitly with zero', () => {
     const base = { width: 1, height: 1, steps: 1, guidance: 1, negativePrompt: '' }
-    expect(toDrawThingsTaskParams({ ...base, seed: '42' }).seed).toBe(42)
-    expect(toDrawThingsTaskParams({ ...base, seed: '0' }).seed).toBe(0)
-    expect(toDrawThingsTaskParams({ ...base, seed: '-3' }).seed).toBe(0)
-    expect(toDrawThingsTaskParams({ ...base, seed: '' }).seed).toBe(0)
-    expect(toDrawThingsTaskParams({ ...base, seed: 'random' }).seed).toBe(0)
+    expect(toDrawThingsTaskParams({ ...base, seed: '42' })!.seed).toBe(42)
+    expect(toDrawThingsTaskParams({ ...base, seed: '0' })!.seed).toBe(0)
+    expect(toDrawThingsTaskParams({ ...base, seed: '-3' })).toBeNull()
+    expect(toDrawThingsTaskParams({ ...base, seed: '' })!.seed).toBe(0)
+    expect(toDrawThingsTaskParams({ ...base, seed: 'random' })).toBeNull()
   })
 
   it('cleans the negative prompt as a scalar and drops it when empty', () => {
     const base = { width: 1, height: 1, steps: 1, guidance: 1, seed: '' }
-    expect(toDrawThingsTaskParams({ ...base, negativePrompt: 'a\nb' }).negativePrompt).toBe('a b')
+    expect(toDrawThingsTaskParams({ ...base, negativePrompt: 'a\nb' })!.negativePrompt).toBe('a b')
     expect(toDrawThingsTaskParams({ ...base, negativePrompt: '   ' })).not.toHaveProperty('negativePrompt')
   })
 })

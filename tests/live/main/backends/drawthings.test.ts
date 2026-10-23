@@ -120,7 +120,7 @@ describe.runIf(process.platform === 'darwin')('the live Draw Things backend', ()
           resolveDtParams(saved, recommendation, dtFallbacksFromSettings(settings as unknown as Record<string, unknown>)),
         )
 
-        const task = await app.generate({ prompt: PROMPT, backend: 'drawthings', model: LOCKED_MODEL, params })
+        const task = await app.generate({ prompt: PROMPT, backend: 'drawthings', model: LOCKED_MODEL, params: params! })
         const { metadata } = await readOutput(app, task)
         expect(task.imagePath?.endsWith('.png')).toBe(true)
         expect(metadata.model).toBe(LOCKED_MODEL)

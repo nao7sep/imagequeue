@@ -66,9 +66,9 @@ describe('resolveSavedImageBackendDefaults', () => {
       findModel('openai', 'gpt-image-2')
     )!
     // Invalid quality falls back to 'auto'; out-of-range dims clamp to the min edge.
-    expect(result.params.quality).toBe('auto')
-    expect(result.params.width).toBe(OPENAI_IMAGE_MIN_EDGE)
-    expect(result.params.height).toBe(OPENAI_IMAGE_MIN_EDGE)
+    expect(result.params!.quality).toBe('auto')
+    expect(result.params!.width).toBe(OPENAI_IMAGE_MIN_EDGE)
+    expect(result.params!.height).toBe(OPENAI_IMAGE_MIN_EDGE)
     // Moderation is no longer a field; a saved one is dropped.
     expect(result.params).not.toHaveProperty('moderation')
   })
@@ -81,7 +81,7 @@ describe('resolveSavedImageBackendDefaults', () => {
       FLUX_MODELS,
       flex
     )!
-    expect(result.params.steps).toBe(flex.stepsRange!.max)
+    expect(result.params!.steps).toBe(flex.stepsRange!.max)
   })
 
   // Nothing seeds steps/guidance into config: the model that declares the range is
@@ -95,8 +95,8 @@ describe('resolveSavedImageBackendDefaults', () => {
       FLUX_MODELS,
       flex
     )!
-    expect(result.params.steps).toBe(flex.stepsRange!.default)
-    expect(result.params.guidance).toBe(flex.guidanceRange!.default)
+    expect(result.params!.steps).toBe(flex.stepsRange!.default)
+    expect(result.params!.guidance).toBe(flex.guidanceRange!.default)
   })
 
   // A model without the ranges does not merely default them — the params do not

@@ -5,6 +5,7 @@ import type { DrawThingsParamsPersistenceState } from '../../../shared/electron-
 import { DRAWTHINGS_SIZE_PRESETS } from '../../../shared/models'
 import { serializeError } from '../../../shared/serialize-error'
 import { singleLine } from '../../../shared/textCleanup'
+import { IMAGE_SEED_LIMITS, resolveImageSeed } from '../../../shared/image-seed'
 import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from '../utils/drawThingsParams'
 import { localModelName } from '../utils/localModels'
 import { presentFailure } from '../utils/failurePresentation'
@@ -47,7 +48,7 @@ function buildDrawThingsParams(
 
 export interface DrawThingsColumn {
   /** The DT branch of the column's enqueue params (memo-stable). */
-  enqueueParams: Record<string, unknown>
+  enqueueParams: Record<string, unknown> | null
   paramsReady: boolean
   cliInstalled: boolean
   downloadedModelCount: number
@@ -345,7 +346,7 @@ export function useDrawThingsColumn({
       })
   }, [paramsReady, authored, model, currentDrawThingsParams])
 
-  const enqueueParams = useMemo<Record<string, unknown>>(() => {
+  const enqueueParams = useMemo<Record<string, unknown> | null>(() => {
     // Seed/negative gating shared with Advanced Prompting (drawThingsParams.ts).
     return toDrawThingsTaskParams(
       buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt)
@@ -397,6 +398,7 @@ export function useDrawThingsColumn({
 export function DrawThingsControls({ model, column }: { model: string; column: DrawThingsColumn }): React.JSX.Element {
   const fieldId = useId()
   const c = column.controls
+  const seedValid = resolveImageSeed(c.seed, 'drawthings').valid
   const { t } = useI18n()
   return (
     <>
@@ -475,8 +477,9 @@ export function DrawThingsControls({ model, column }: { model: string; column: D
           )}
           <div className="setting-row">
             <label htmlFor={`${fieldId}-seed`}>{t('backend.seed')}</label>
-            <input id={`${fieldId}-seed`} disabled={!column.paramsReady} type="text" value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
+            <input id={`${fieldId}-seed`} disabled={!column.paramsReady} type="text" aria-invalid={!seedValid} aria-describedby={!seedValid ? `${fieldId}-seed-error` : undefined} value={c.seed} onChange={(e) => c.setSeed(e.target.value)} placeholder={t('backend.seedPlaceholder')} />
           </div>
+          {!seedValid && <div id={`${fieldId}-seed-error`} className="drawthings-save-error" role="alert">{t('backend.invalidSeed', IMAGE_SEED_LIMITS.drawthings)}</div>}
           <div className="setting-row">
             <label htmlFor={`${fieldId}-negative`}>{t('drawThings.negative')}</label>
             <input id={`${fieldId}-negative`} disabled={!column.paramsReady} type="text" value={c.negativePrompt} onChange={(e) => c.setNegativePrompt(e.target.value)} placeholder={t('drawThings.negativePlaceholder')} />

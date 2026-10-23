@@ -1,3 +1,4 @@
+import { resolveImageSeed } from './image-seed'
 import type { DrawThingsModelParams } from './types'
 import { singleLine } from './textCleanup'
 import { DRAWTHINGS_FALLBACK_PARAMS } from './image-backend-defaults'
@@ -67,20 +68,22 @@ export function resolveDtParams(
 }
 
 /**
- * Form/model params → the task's enqueue params. One gate for both surfaces:
+ * Form/model params → the task's enqueue params, or null for an invalid seed.
+ * One gate for both surfaces:
  * a positive integer fixes the seed; zero explicitly captures random intent
  * so later global defaults cannot change the submitted task, and the negative prompt is
  * cleaned as a scalar and dropped when empty.
  */
-export function toDrawThingsTaskParams(params: DrawThingsModelParams): Record<string, unknown> {
+export function toDrawThingsTaskParams(params: DrawThingsModelParams): Record<string, unknown> | null {
+  const seed = resolveImageSeed(params.seed, 'drawthings')
+  if (!seed.valid) return null
   const task: Record<string, unknown> = {
     width: params.width,
     height: params.height,
     steps: params.steps,
     guidance: params.guidance,
   }
-  const parsedSeed = typeof params.seed === 'string' && params.seed ? Number.parseInt(params.seed, 10) : NaN
-  task.seed = Number.isFinite(parsedSeed) && parsedSeed > 0 ? parsedSeed : 0
+  task.seed = seed.seed
   const cleanedNegative = singleLine(params.negativePrompt ?? '')
   if (cleanedNegative) task.negativePrompt = cleanedNegative
   return task

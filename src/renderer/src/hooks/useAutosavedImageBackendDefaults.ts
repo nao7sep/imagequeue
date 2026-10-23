@@ -12,7 +12,7 @@ interface UseAutosavedImageBackendDefaultsOptions {
   settingsLoaded: boolean
   saved: SavedImageBackendDefaults | null
   currentModel: string
-  currentParams: Record<string, unknown>
+  currentParams: Record<string, unknown> | null
   applySaved: (saved: SavedImageBackendDefaults) => void
   saveDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<unknown>
 }
@@ -39,7 +39,9 @@ export function useAutosavedImageBackendDefaults({
   const applyingSavedRef = useRef(false)
   const saveAttemptRef = useRef(0)
   const [saveFailure, setSaveFailure] = useState<MessageKey | null>(null)
-  const currentSnapshot = currentModel
+  // Invalid drafts have no canonical payload. Keep them dirty even when the
+  // stored defaults were also invalid, so a settings refresh cannot erase edits.
+  const currentSnapshot = currentModel && currentParams
     ? serializeImageBackendDefaults(currentModel, currentParams)
     : ''
 
@@ -63,7 +65,7 @@ export function useAutosavedImageBackendDefaults({
     // applySaved schedules React state for the next render. Do not submit this
     // render's pre-hydration defaults while that update is still being applied.
     if (applyingSavedRef.current) { applyingSavedRef.current = false; return }
-    if (!backend || !settingsLoaded || !currentModel) return
+    if (!backend || !settingsLoaded || !currentModel || !currentParams) return
     if (!loadedRef.current) return
     if (currentSnapshot === submittedSnapshotRef.current) return
     submittedSnapshotRef.current = currentSnapshot

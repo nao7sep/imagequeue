@@ -19,11 +19,11 @@ export { normalizeOpenAiDimension, resolveOpenAiSize } from '../backends/openai'
 
 export interface SavedImageBackendDefaults {
   model: string
-  params: Record<string, unknown>
+  params: Record<string, unknown> | null
   ui: Record<string, unknown>
 }
 
-export function serializeImageBackendDefaults(model: string, params: Record<string, unknown>): string {
+export function serializeImageBackendDefaults(model: string, params: Record<string, unknown> | null): string {
   return JSON.stringify({ model, params })
 }
 
