@@ -497,6 +497,50 @@ describe('manual retry with pending publication evidence', () => {
     expect(fs.readFileSync(path.join(root, `${pending.baseName}.webp`))).toEqual(delivered)
   })
 
+  it.each(['retry', 'bulk'] as const)('publishes a verified retained stage on explicit %s without requeueing', async (mode) => {
+    const pending = { ...pendingOutput(), stageName: 'paid-known-stage.tmp' }
+    fs.writeFileSync(path.join(root, pending.stageName), delivered)
+    seed([makeTask('paid', 'interrupted', { pendingOutput: pending })])
+    mocks.persistActiveSession.mockImplementationOnce(async () => {
+      const task = queueManager.getTask('openai', 'paid')!
+      expect(task.pendingOutput).toEqual(pending)
+      expect(fs.existsSync(path.join(root, `${pending.baseName}.webp`))).toBe(false)
+    })
+    if (mode === 'retry') await invoke('queue:retryTask', 'openai', 'paid')
+    else expect(await invoke('queue:resumeInterrupted')).toBe(0)
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'completed', baseName: pending.baseName })
+    expect(fs.readFileSync(path.join(root, `${pending.baseName}.webp`))).toEqual(delivered)
+    expect(fs.existsSync(path.join(root, pending.stageName))).toBe(false)
+  })
+
+  it('records a new exclusive identity when a foreign image occupies the old name', async () => {
+    const pending = { ...pendingOutput(), stageName: 'paid-known-stage.tmp' }
+    fs.writeFileSync(path.join(root, pending.stageName), delivered)
+    fs.writeFileSync(path.join(root, `${pending.baseName}.webp`), 'foreign')
+    seed([makeTask('paid', 'failed', { pendingOutput: pending })])
+    mocks.persistActiveSession.mockImplementationOnce(async () => {
+      expect(queueManager.getTask('openai', 'paid')?.pendingOutput?.baseName).toBe(`${pending.baseName}-2`)
+      expect(fs.existsSync(path.join(root, `${pending.baseName}-2.webp`))).toBe(false)
+    })
+    await invoke('queue:retryTask', 'openai', 'paid')
+    expect(fs.readFileSync(path.join(root, `${pending.baseName}.webp`), 'utf8')).toBe('foreign')
+    expect(fs.readFileSync(path.join(root, `${pending.baseName}-2.webp`))).toEqual(delivered)
+    expect(queueManager.getTask('openai', 'paid')?.status).toBe('completed')
+  })
+
+  it('retains the stage and retry intent when the publication identity cannot be saved', async () => {
+    const pending = { ...pendingOutput(), stageName: 'paid-known-stage.tmp' }
+    fs.writeFileSync(path.join(root, pending.stageName), delivered)
+    seed([makeTask('paid', 'failed', { pendingOutput: pending })])
+    mocks.persistActiveSession.mockRejectedValueOnce(new Error('disk unavailable'))
+    await expect(invoke('queue:retryTask', 'openai', 'paid')).rejects.toThrow('disk unavailable')
+    expect(queueManager.getTask('openai', 'paid')).toMatchObject({ status: 'failed', pendingOutput: pending })
+    expect(fs.readFileSync(path.join(root, pending.stageName))).toEqual(delivered)
+    expect(fs.existsSync(path.join(root, `${pending.baseName}.webp`))).toBe(false)
+    await invoke('queue:retryTask', 'openai', 'paid')
+    expect(queueManager.getTask('openai', 'paid')?.status).toBe('completed')
+  })
+
   it('does not recover a task while its publishing attempt is still running', async () => {
     const pending = pendingOutput()
     fs.writeFileSync(path.join(root, `${pending.baseName}.webp`), delivered)

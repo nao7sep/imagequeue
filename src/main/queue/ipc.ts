@@ -1,7 +1,7 @@
 import { broadcastPresentation } from '../presentation'
 import { refreshMainWindowMinimumSize } from '../main-window-layout'
 import { getShowKeptImages, toggleShowKeptImages } from './view-state'
-import { recoverPublishedOutput } from '../session/output-recovery'
+import { recoverRetainedOutput } from '../session/output-recovery'
 import { handle } from '../ipc-boundary'
 import { queueManager, cloneTask } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult, ElaboratedPromptRecord } from '../../shared/types'
@@ -148,7 +148,10 @@ export function registerQueueIpc(): void {
     const pending = queueManager.getTask(backend, taskId)
     if (pending && (pending.status === 'failed' || pending.status === 'interrupted') && pending.pendingOutput) {
       const recovered = cloneTask(pending)
-      if (await recoverPublishedOutput(recovered, getSessionDir())) {
+      if (await recoverRetainedOutput(recovered, getSessionDir(), async (output) => {
+        queueManager.updateTask(pending, { pendingOutput: output })
+        await persistActiveSession()
+      })) {
         queueManager.updateTask(pending, { ...recovered, pendingOutput: undefined })
         await persistQueueChange()
         return
@@ -166,11 +169,14 @@ export function registerQueueIpc(): void {
     for (const tasks of Object.values(queueManager.getAllStoredTasks())) {
       for (const task of tasks) {
         if (task.status === 'interrupted' && task.pendingOutput &&
-          await recoverPublishedOutput(task, getSessionDir())) recovered.push(task)
+          await recoverRetainedOutput(task, getSessionDir(), async (output) => {
+            queueManager.updateTask(queueManager.getTask(task.backend, task.id)!, { pendingOutput: output })
+            await persistActiveSession()
+          })) recovered.push(task)
       }
     }
-    // Inspect every candidate before changing memory: inaccessible storage must
-    // leave the entire retry operation available to try again.
+    // Publication identities persist before each claim; completion and ordinary
+    // retries are applied only after every candidate has been inspected.
     for (const task of recovered) {
       const current = queueManager.getTask(task.backend, task.id)!
       queueManager.updateTask(current, { ...task, pendingOutput: undefined })

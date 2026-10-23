@@ -177,6 +177,8 @@ export interface PendingTaskOutput {
   baseName: string
   ext: 'png' | 'jpg' | 'webp'
   sha256: string
+  /** New outputs retain this exact stage identity until publication settles. */
+  stageName?: string
 }
 
 export interface Task {

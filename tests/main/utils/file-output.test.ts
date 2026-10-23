@@ -132,7 +132,7 @@ describe('writeImageOutput', () => {
     const writing = writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png', identity)
     await called
     try {
-      expect(identity).toHaveBeenCalledWith({ baseName: '20260604-093015-utc-cat-openai', ext: 'png', sha256: crypto.createHash('sha256').update(buf).digest('hex') })
+      expect(identity).toHaveBeenCalledWith({ baseName: '20260604-093015-utc-cat-openai', ext: 'png', sha256: crypto.createHash('sha256').update(buf).digest('hex'), stageName: expect.stringMatching(/\.tmp$/) })
       expect(fs.readdirSync(sessionDir).every((file) => file.endsWith('.tmp'))).toBe(true)
     } finally { release(); await writing }
     expect(fs.readFileSync(path.join(sessionDir, '20260604-093015-utc-cat-openai.png'))).toEqual(buf)
@@ -246,7 +246,7 @@ describe('writeImageOutput', () => {
   })
 
   it('returns the complete paid output after secondary directory sync failure', async () => {
-    vi.spyOn(fsync, 'syncDirectoryAsync').mockImplementationOnce(() => { throw new Error('directory sync failed') })
+    vi.spyOn(fsync, 'syncDirectoryAsync').mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('directory sync failed'))
     const base = (await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png'))
     expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
     expect(JSON.parse(fs.readFileSync(path.join(sessionDir, `${base}.json`), 'utf8')).format_version).toBe(FORMAT_VERSIONS.imageSidecar)

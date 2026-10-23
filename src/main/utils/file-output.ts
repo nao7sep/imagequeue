@@ -9,7 +9,7 @@ import { log, serializeError } from '../logger'
 import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
 import { claimFinalNameAsync, stageBesideAsync, stagingPathFor } from './atomic-write'
 import { syncDirectoryAsync } from './fsync'
-import { sha256File } from './sha256-file'
+import { createHash } from 'node:crypto'
 import { isSafeOutputBaseName } from '../../shared/output-name'
 
 export type ImageExt = 'png' | 'jpg' | 'webp'
@@ -173,11 +173,12 @@ export async function writeImageOutput(
   // (developer decision): the sidecar follows best effort, and nothing in the
   // app reads it back.
   const stagedImage = await stageBesideAsync(path.join(dir, `${baseName}.${ext}`), imageBuffer)
-  const digest = beforePublish ? await sha256File(stagedImage) : null
+  const digest = beforePublish ? createHash('sha256').update(imageBuffer).digest('hex') : null
   for (;;) {
     // Save this exact identity before each claim, including collision retries.
     // The digest distinguishes our bytes from a foreign file that wins the name.
-    if (beforePublish) await beforePublish({ baseName, ext, sha256: digest! })
+    if (beforePublish) await beforePublish({ baseName, ext, sha256: digest!, stageName: path.basename(stagedImage) })
+    await syncDirectoryAsync(dir)
     if (await claimFinalNameAsync(stagedImage, path.join(dir, `${baseName}.${ext}`))) break
     // Only an occupied final name advances the ordinal; I/O failures escape.
     attempt++

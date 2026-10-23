@@ -1041,6 +1041,18 @@ describe('recovering published output before resume normalization', () => {
     expect(sent('session:interruptedTasks')).toEqual([])
   })
 
+  it('retains the exact stage association through resume and publishes only on explicit Retry', async () => {
+    const pending = { ...pendingOutput(), stageName: 'known-delivered-stage.tmp' }
+    const target = stageSession(id, { tasks: withTasks([makeTask('paid', 'generating', { pendingOutput: pending })]) })
+    fs.writeFileSync(path.join(target, pending.stageName), bytes)
+    await resumeSession(id)
+    expect((await readManifest(target)).tasks.openai[0]).toMatchObject({ status: 'interrupted', pendingOutput: pending })
+    expect(fs.existsSync(path.join(target, `${pending.baseName}.png`))).toBe(false)
+    await handlers.get('queue:retryTask')!({}, 'openai', 'paid')
+    expect((await readManifest(target)).tasks.openai[0]).toMatchObject({ status: 'completed', imagePath: `${pending.baseName}.png` })
+    expect(fs.readFileSync(path.join(target, `${pending.baseName}.png`))).toEqual(bytes)
+  })
+
   it.each(['foreign bytes', 'missing final', 'directory'] as const)('keeps interrupted work and evidence when the final is %s', async problem => {
     const pending = pendingOutput()
     const target = stageSession(id, { tasks: withTasks([makeTask('paid', 'generating', { pendingOutput: pending })]) })
@@ -1076,6 +1088,8 @@ describe('recovering published output before resume normalization', () => {
     { baseName: 'safe', ext: 'svg', sha256: 'a'.repeat(64) },
     { baseName: 'safe', ext: 'png', sha256: 'A'.repeat(64) },
     { baseName: 'safe', ext: 'png', sha256: 'a'.repeat(63) },
+    { baseName: 'safe', ext: 'png', sha256: 'a'.repeat(64), stageName: '../escape.tmp' },
+    { baseName: 'safe', ext: 'png', sha256: 'a'.repeat(64), stageName: 'session.json' },
   ])('leaves malformed pending evidence unreadable and all bytes untouched: %j', async pending => {
     const task = makeTask('paid', 'generating', { pendingOutput: pending as unknown as Task['pendingOutput'] })
     const target = stageSession(id, { tasks: withTasks([task]) })
