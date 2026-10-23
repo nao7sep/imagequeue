@@ -290,7 +290,13 @@ type ElaboratorSets = Record<ElaboratorKind, Elaborator[]>
 const kinds: ElaboratorKind[] = ['composition', 'style']
 
 function isElaboratorSet(items: unknown, kind: ElaboratorKind): items is Elaborator[] {
-  return Array.isArray(items) && items.every((item) => isElaborator(item) && item.kind === kind)
+  if (!Array.isArray(items)) return false
+  const ids = new Set<string>()
+  return items.every((item) => {
+    if (!isElaborator(item) || item.kind !== kind || ids.has(item.id)) return false
+    ids.add(item.id)
+    return true
+  })
 }
 
 // An elaborator as it is compared and stored (text-cleanup-conventions): name

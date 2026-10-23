@@ -123,6 +123,21 @@ describe('elaborator sets', () => {
     const created = await createElaborator({ kind: 'composition', name: 'Mine', template: 'Mine' })
     expect(stored()).toEqual({ style: [{ kind: 'wrong' }], composition: expect.arrayContaining([created]) })
   })
+  it('keeps duplicate identities out of selection and mutations without rewriting their stored set', async () => {
+    const duplicates = [
+      { id: 'copied-style', kind: 'style', name: 'First', template: 'First template' },
+      { id: 'copied-style', kind: 'style', name: 'Second', template: 'Second template' },
+    ]
+    const bytes = JSON.stringify({ formatVersion: 1, style: duplicates })
+    fs.writeFileSync(file(), bytes)
+    expect(listElaborators().some(item => item.id === 'copied-style')).toBe(false)
+    expect(elaborators.getElaborator('copied-style')).toBeNull()
+    await expect(updateElaborator('copied-style', { template: 'Replacement' })).resolves.toBeNull()
+    await expect(deleteElaborator('copied-style')).resolves.toBe(false)
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    await createElaborator({ kind: 'composition', name: 'Composition', template: 'Scene' })
+    expect(stored().style).toEqual(duplicates)
+  })
   it('replaces a malformed kind once the user changes that kind', async () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, style: [{ kind: 'wrong' }] }))
     const created = await createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })
