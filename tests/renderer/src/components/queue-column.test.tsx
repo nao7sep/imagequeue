@@ -76,7 +76,26 @@ const MODEL_A: LocalModelInfo = { file: 'model-a.ckpt', name: 'Model A', source:
 const MODEL_B: LocalModelInfo = { file: 'model-b.ckpt', name: 'Model B', source: 'official', downloaded: true, huggingFace: null }
 const SAVED_DT_PARAMS: DrawThingsModelParams = { width: 768, height: 512, steps: 8, guidance: 3, seed: '42', negativePrompt: 'blurry' }
 
+let measuredThumbnailWidth = 320
+const thumbnailObservers: TestThumbnailObserver[] = []
+class TestThumbnailObserver {
+  private target: Element | null = null
+  constructor(private callback: ResizeObserverCallback) { thumbnailObservers.push(this) }
+  observe(target: Element): void {
+    this.target = target
+    this.resize(measuredThumbnailWidth)
+  }
+  resize(width: number): void {
+    this.callback([{ target: this.target, contentRect: { width } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+  disconnect = vi.fn()
+  unobserve(): void {}
+}
+
 beforeEach(() => {
+  measuredThumbnailWidth = 320
+  thumbnailObservers.length = 0
+  vi.stubGlobal('ResizeObserver', TestThumbnailObserver)
   settingsValue = {
     settings: null,
     apiKeyPresence: null,
@@ -149,6 +168,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
@@ -409,8 +429,51 @@ describe('task thumbnails', () => {
     const { container } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
     await flush()
     const thumbnail = container.querySelector<HTMLImageElement>('img.task-thumbnail')!
-    expect(thumbnail.getAttribute('src')).toBe('iq-image://sessions/current/image-1')
+    expect(thumbnail.getAttribute('src')).toBe('iq-image://sessions/current/image-1?thumbnail=320')
     expect(thumbnail.getAttribute('loading')).toBe('lazy')
+  })
+})
+
+describe('measured thumbnail requests', () => {
+  it('reserves the square frame without an original request, then requests its measured physical pixels', async () => {
+    measuredThumbnailWidth = 0
+    vi.stubGlobal('devicePixelRatio', 2)
+    queueValue.tasks.openai = [{ ...task('completed'), baseName: 'image-1', imagePath: 'image-1.png' }]
+    const { container, unmount } = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    expect(container.querySelector('.task-thumbnail-frame')).not.toBeNull()
+    expect(container.querySelector('.task-thumbnail')).toBeNull()
+    expect(thumbnailObservers).toHaveLength(1)
+    act(() => thumbnailObservers[0].resize(180.25))
+    expect(container.querySelector('.task-thumbnail')?.getAttribute('src')).toBe('iq-image://sessions/current/image-1?thumbnail=361')
+    act(() => thumbnailObservers[0].resize(240))
+    expect(container.querySelector('.task-thumbnail')?.getAttribute('src')).toBe('iq-image://sessions/current/image-1?thumbnail=480')
+    vi.stubGlobal('devicePixelRatio', 1)
+    fireEvent(window, new Event('resize'))
+    expect(container.querySelector('.task-thumbnail')?.getAttribute('src')).toBe('iq-image://sessions/current/image-1?thumbnail=240')
+    expect(container.querySelector('img[src="iq-image://sessions/current/image-1"]')).toBeNull()
+    unmount()
+    expect(thumbnailObservers[0].disconnect).toHaveBeenCalledOnce()
+  })
+
+  it('retains completion scrolling until the measured thumbnail loads', async () => {
+    const scroll = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scroll
+    measuredThumbnailWidth = 0
+    const generating = task('generating')
+    queueValue.tasks.openai = [generating]
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    queueValue.tasks.openai = [{ ...generating, status: 'completed', baseName: 'new-image' }]
+    view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    expect(scroll).not.toHaveBeenCalled()
+    act(() => thumbnailObservers[0].resize(320))
+    expect(scroll).not.toHaveBeenCalled()
+    fireEvent.load(view.container.querySelector('.task-thumbnail')!)
+    expect(scroll).toHaveBeenCalledOnce()
+    fireEvent.load(view.container.querySelector('.task-thumbnail')!)
+    expect(scroll).toHaveBeenCalledOnce()
   })
 })
 

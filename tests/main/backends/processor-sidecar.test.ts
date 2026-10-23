@@ -1,9 +1,11 @@
+import { tinyPng } from '../image-fixture'
+import sharp from 'sharp'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The sidecar records the seed the backend sent, and null when it sent none,
 // and its file_timestamp is the time in the file name.
 
-const generate = vi.hoisted(() => vi.fn(async (): Promise<{ buffer: Buffer; seed?: number }> => ({ buffer: Buffer.from([1]) })))
+const generate = vi.hoisted(() => vi.fn(async (): Promise<{ buffer: Buffer; seed?: number; mimeType?: string }> => ({ buffer: await tinyPng() })))
 const written = vi.hoisted(() => [] as Array<{ seed: number | null; file_timestamp: string }>)
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
@@ -54,7 +56,7 @@ async function runOne(): Promise<{ seed: number | null; file_timestamp: string }
 
 describe('the sidecar seed', () => {
   it('records the seed the backend sent', async () => {
-    generate.mockResolvedValueOnce({ buffer: Buffer.from([1]), seed: 7 })
+    generate.mockResolvedValueOnce({ buffer: await tinyPng(), seed: 7 })
     expect((await runOne()).seed).toBe(7)
   })
 
@@ -66,5 +68,23 @@ describe('the sidecar seed', () => {
 describe('the sidecar file_timestamp', () => {
   it('is the second the file is named after', async () => {
     expect((await runOne()).file_timestamp).toBe('2026-08-19T00:00:00.000Z')
+  })
+})
+
+
+describe('provider image admission', () => {
+  it('uses the decoded image type even when the provider hints a different MIME', async () => {
+    generate.mockResolvedValueOnce({ buffer: await sharp(await tinyPng()).webp().toBuffer(), mimeType: 'image/png' })
+    await runOne()
+    expect(queueManager.getAllStoredTasks().flux[0].imagePath).toBe('base.webp')
+  })
+
+  it('rejects HTML even when the provider claims an image MIME', async () => {
+    generate.mockResolvedValueOnce({ buffer: Buffer.from('<html>provider error</html>'), mimeType: 'image/png' })
+    queueManager.enqueue({ prompt: 'p', backend: 'flux', model: 'flux-2-pro', params: {}, count: 1 } as never)
+    processQueues()
+    await vi.waitFor(() => expect(queueManager.getAllStoredTasks().flux[0].status).toBe('failed'))
+    expect(written).toHaveLength(0)
+    expect(queueManager.getAllStoredTasks().flux[0].imagePath).toBeNull()
   })
 })

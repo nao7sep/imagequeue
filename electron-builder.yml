@@ -40,9 +40,11 @@ npmRebuild: false
 
 # node-pty ships a native addon (pty.node) and a plain executable (spawn-helper).
 # The .node is unpacked automatically, but spawn-helper must also be outside the
-# asar. Both live under prebuilds; compiled JavaScript remains in app.asar.
+# asar. PTY prebuilds and image codec native payloads stay unpacked; compiled
+# JavaScript remains in app.asar.
 asarUnpack:
   - '**/node_modules/node-pty/prebuilds/**'
+  - '**/node_modules/@img/**'
 
 # Tahoe "Liquid Glass" icon: ship the pre-compiled asset catalog (committed in
 # build/Assets.car; regeneration uses the private liquid-glass-icon tool) into Contents/Resources.

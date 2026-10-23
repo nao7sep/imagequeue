@@ -2,8 +2,8 @@ import { BACKEND_IDS_IN_UI_ORDER, BackendId, Task } from '../../shared/types'
 import { queueManager } from '../queue/queue-manager'
 import { loadConfig } from '../config'
 import { allocateOutputTimestamp, persistActiveSession, isSessionMutationPending } from '../session'
-import { writeImageOutput, ImageExt } from '../utils/file-output'
-import { detectImageExt } from '../utils/detect-image-type'
+import { writeImageOutput } from '../utils/file-output'
+import { validateImage } from '../image-processing'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
@@ -54,23 +54,6 @@ function totalActive(): number {
   return Object.values(activeCounts).reduce((sum, count) => sum + count, 0)
 }
 
-// Returns the per-backend default extension, used when both the MIME hint
-// and magic-byte detection fail to identify the image type: the format the
-// task chose where the backend takes one, else the backend's fixed format.
-function getFallbackExt(backend: BackendId, params: Task['params']): ImageExt {
-  if (backend === 'openai' || backend === 'flux') {
-    const fmt = params?.outputFormat as string | undefined
-    if (fmt === 'jpeg') return 'jpg'
-    if (fmt === 'webp') return 'webp'
-    return 'png'
-  }
-  const staticExts: Record<'nanobanana' | 'grok' | 'drawthings', ImageExt> = {
-    nanobanana: 'png',
-    grok: 'jpg',
-    drawthings: 'png'
-  }
-  return staticExts[backend]
-}
 
 // Starts the queue processor loop. Call once at app startup.
 export function startProcessor(): void {
@@ -174,13 +157,15 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
 
   try {
     controller.signal.throwIfAborted()
-    const { buffer: imageBuffer, mimeType, seed } = await generate(task, controller.signal)
+    const { buffer: imageBuffer, seed } = await generate(task, controller.signal)
     generated = true
     clearInFlight(task.id)
     const completedAt = new Date()
 
     task.completedAt = completedAt.toISOString()
     task.durationMs = completedAt.getTime() - new Date(task.startedAt!).getTime()
+
+    const ext = await validateImage(imageBuffer)
 
     // Generate slug and allocate timestamp
     const slug = await generateSlug(task.prompt, task.id, shutdownSignal())
@@ -202,8 +187,6 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       error: null
     }
 
-    const fallback = getFallbackExt(backend, task.params)
-    const ext = detectImageExt(imageBuffer, mimeType, fallback, { backend, model: task.model })
     let baseName: string
     try {
       baseName = await writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext)

@@ -47,6 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   listSessions.mockReset()
   resumeSession.mockClear()
   openSessionFolder.mockClear()
@@ -111,5 +112,18 @@ describe('SessionsModal', () => {
     act(() => readable.focus())
     await act(async () => { fireEvent.keyDown(readable, { key: 'Enter' }) })
     expect(resumeSession).toHaveBeenCalledExactlyOnceWith('20261003-120000-000-utc')
+  })
+})
+
+describe('session thumbnail requests', () => {
+  it('requests the 64 CSS pixel strip at display density without fetching originals', async () => {
+    vi.stubGlobal('devicePixelRatio', 2)
+    listSessions.mockResolvedValueOnce([{ ...session(1, '2026-10-04T12:00:00.000Z'), thumbnails: [{ baseName: 'image-one' }] }])
+    render(<SessionsModal onClose={vi.fn()} />)
+    const row = await screen.findByRole('option')
+    const image = row.querySelector<HTMLImageElement>('.session-preview-thumb')!
+    expect(image.getAttribute('src')).toBe('iq-image://sessions/session/20261004-120000/image-one?thumbnail=128')
+    expect(image.getAttribute('loading')).toBe('lazy')
+    expect(row.querySelector('img[src="iq-image://sessions/session/20261004-120000/image-one"]')).toBeNull()
   })
 })

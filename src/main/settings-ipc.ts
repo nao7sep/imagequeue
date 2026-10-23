@@ -1,5 +1,6 @@
+import { clipboardPng } from './image-processing'
 import { authorizedSoundFile, grantPickedSoundFile } from './sound-file-grants'
-import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard, nativeImage } from 'electron'
+import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard } from 'electron'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -377,10 +378,7 @@ export function registerSettingsIpc(
 
   handle('clipboard:copyImage', async (_event, baseName: string, ext: string) => {
     const filePath = path.join(getSessionDir(), `${assertSafeBaseName(baseName)}.${assertImageExt(ext)}`)
-    const buffer = await fs.promises.readFile(filePath)
-    const image = nativeImage.createFromBuffer(buffer)
-    if (image.isEmpty()) throw new Error(`Cannot copy unreadable image: ${filePath}`)
-    const png = new Uint8Array(image.toPNG())
+    const png = new Uint8Array(await clipboardPng(filePath))
     await clipboard.write([
       new ClipboardItem({
         'image/png': new Blob([png], { type: 'image/png' })

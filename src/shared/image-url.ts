@@ -44,3 +44,8 @@ export function parseImageUrl(url: string): ImageUrlTarget | null {
   }
   return null
 }
+
+/** Request only the physical pixels a thumbnail can display. */
+export function thumbnailUrl(url: string, cssPixels: number, pixelRatio = 1): string {
+  return `${url}?thumbnail=${Math.max(1, Math.ceil(cssPixels * pixelRatio))}`
+}

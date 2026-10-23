@@ -1,3 +1,4 @@
+import { tinyPng } from '../image-fixture'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -12,6 +13,7 @@ import { createDefaultConfig } from '../../../src/main/config/defaults'
 const fixture = vi.hoisted(() => ({ root: '', config: null as AppConfig | null, nextSession: Date.UTC(2026, 0, 1) }))
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>())
 const generate = vi.hoisted(() => vi.fn())
+const nameImage = vi.hoisted(() => vi.fn(async () => ({ parsed: { slug: 'delivered' } })))
 const send = vi.hoisted(() => vi.fn())
 vi.mock('../../../src/main/ipc-boundary', () => ({
   handle: (channel: string, handler: (...args: unknown[]) => unknown) => handlers.set(channel, handler),
@@ -34,7 +36,7 @@ vi.mock('../../../src/main/backends/grok', () => ({ generateGrok: generate }))
 vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
 vi.mock('../../../src/main/text-ai', () => ({
-  getLightProvider: () => ({ timeoutMs: 1_000, provider: { ask: async () => ({ parsed: { slug: 'delivered' } }) } }),
+  getLightProvider: () => ({ timeoutMs: 1_000, provider: { ask: nameImage } }),
 }))
 vi.mock('../../../src/main/session/session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/main/session/session')>()
@@ -49,7 +51,7 @@ const { getSessionDir, setSessionDir } = await import('../../../src/main/session
 const { setQueuePaused, isQueuePaused, cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
 const credentials = await import('../../../src/main/config/api-keys-store')
 
-const image = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+const image = await tinyPng()
 function manifest(): SessionManifest {
   return JSON.parse(fs.readFileSync(path.join(getSessionDir(), 'session.json'), 'utf8')) as SessionManifest
 }
@@ -161,4 +163,18 @@ it('keeps a delivered image when optional naming cannot refresh credentials', as
   await expect(drainSessionWrites()).resolves.toBeUndefined()
   const completed = manifest().tasks.openai[0]
   expect(fs.readFileSync(path.join(getSessionDir(), completed.imagePath!))).toEqual(image)
+})
+
+it('fails invalid delivered bytes without naming, publishing or automatically generating again', async () => {
+  generate.mockResolvedValue({ buffer: Buffer.from('<html>provider error</html>'), mimeType: 'image/png' })
+  const [task] = await handlers.get('queue:enqueue')!({}, { backend: 'openai', model: 'gpt-image-2', prompt: 'a cat', params: {}, count: 1 }) as Task[]
+  processQueues()
+  await vi.waitFor(() => expect(queueManager.getAllStoredTasks().openai[0].status).toBe('failed'))
+  await cancelAllInFlightAndWait(1_000)
+  await drainSessionWrites()
+  expect(manifest().tasks.openai[0]).toMatchObject({ id: task.id, status: 'failed', baseName: null, imagePath: null })
+  expect(nameImage).not.toHaveBeenCalled()
+  expect(fs.readdirSync(getSessionDir()).some(name => /\.(png|jpg|webp)$/.test(name))).toBe(false)
+  processQueues()
+  expect(generate).toHaveBeenCalledOnce()
 })

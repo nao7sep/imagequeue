@@ -1,3 +1,4 @@
+import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendId } from '../../../src/shared/types'
 
@@ -36,9 +37,10 @@ vi.mock('../../../src/main/backends/nanobanana', () => ({ generateNanoBanana: ge
 vi.mock('../../../src/main/backends/grok', () => ({ generateGrok: generate }))
 vi.mock('../../../src/main/backends/flux', () => ({ generateFlux: generate }))
 vi.mock('../../../src/main/backends/drawthings', () => ({ generateDrawThings: generate }))
-const slugState = vi.hoisted(() => ({ failNext: false, hangUntilAborted: false, sawAbort: false }))
+const slugState = vi.hoisted(() => ({ failNext: false, hangUntilAborted: false, sawAbort: false, entered: false }))
 vi.mock('../../../src/main/backends/slug', () => ({
   generateSlug: async (_prompt: string, _taskId: string, signal: AbortSignal) => {
+    slugState.entered = true
     if (slugState.failNext) {
       slugState.failNext = false
       throw new Error('slug service hiccup')
@@ -89,10 +91,9 @@ function statusOf(backend: BackendId): string {
   return queueManager.getAllStoredTasks()[backend][0].status
 }
 
-// The generator's rejection is handled one microtask later; a macrotask turn is
-// enough for processTask to finish its catch and finally.
-function settle(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 0))
+// Decoding and publication can settle on native workers, beyond a JS turn.
+async function settle(): Promise<void> {
+  await vi.waitFor(() => expect(Object.values(queueManager.getAllStoredTasks()).flat().some(task => task.status === 'generating')).toBe(false))
 }
 
 beforeEach(() => {
@@ -101,6 +102,7 @@ beforeEach(() => {
   slugState.failNext = false
   slugState.hangUntilAborted = false
   slugState.sawAbort = false
+  slugState.entered = false
   sentEvents.length = 0
   resetCancellationState()
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
@@ -112,7 +114,7 @@ beforeEach(() => {
 afterEach(async () => {
   if (captured) {
     captured.reject(new Error('test teardown'))
-    await settle()
+    await cancelAllInFlightAndWait(1_000)
   }
   resetCancellationState()
 })
@@ -156,9 +158,9 @@ describe('a stop cannot reach a task past its generation', () => {
     expect(inFlightCount()).toBe(1)
 
     slugState.failNext = true
-    captured!.resolve({ buffer: Buffer.from([1]) })
+    captured!.resolve({ buffer: await tinyPng() })
     // One microtask turn: generate settles, the registry entry is released,
-    // and processTask is now inside the slug call.
+    // while decoding and naming continue outside the cancellation registry.
     await Promise.resolve()
     expect(inFlightCount()).toBe(0)
     expect(cancelAllInFlight()).toBe(0)
@@ -182,7 +184,7 @@ describe('a stop cannot reach a task past its generation', () => {
     expect(captured!.signal.aborted).toBe(true)
 
     slugState.failNext = true
-    captured!.resolve({ buffer: Buffer.from([1]) })
+    captured!.resolve({ buffer: await tinyPng() })
     await settle()
     expect(statusOf('grok')).toBe('failed')
   })
@@ -198,10 +200,11 @@ describe('quitting while a finished image is being named', () => {
     queueOne('openai')
     processQueues()
     await Promise.resolve()
-    captured!.resolve({ buffer: Buffer.from([1]) })
+    captured!.resolve({ buffer: await tinyPng() })
     await Promise.resolve()
     expect(inFlightCount()).toBe(0)
 
+    await vi.waitFor(() => expect(slugState.entered).toBe(true))
     const result = await cancelAllInFlightAndWait(1_000)
     expect(result).toEqual({ signalled: 0, settled: true })
     expect(slugState.sawAbort).toBe(true)

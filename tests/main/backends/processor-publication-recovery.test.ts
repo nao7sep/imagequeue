@@ -1,3 +1,4 @@
+import { tinyPng } from '../image-fixture'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -91,7 +92,7 @@ it('warns once after a user pause and preserves delivered images through sidecar
     return link(source, destination)
   })
   const finalSaveFailure = vi.spyOn(fs.promises, 'rename').mockRejectedValue(new Error('session unavailable'))
-  const image = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+  const image = await tinyPng()
   deliver({ buffer: image })
   // The shutdown barrier waits for actual publication and final-save attempts,
   // including a delivered result that wins a race with cancellation.

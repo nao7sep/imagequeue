@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../src/main/config/types'
 import fs from 'fs'
+import os from 'node:os'
+import path from 'node:path'
+import sharp from 'sharp'
 
 type Handler = (...args: unknown[]) => unknown
 type ConfigSaved = (config: AppConfig) => Promise<void> | void
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
+  sessionDir: '',
   config: {
     general: { show_status_icon: true },
     notifications: { success_file: '', failure_file: '' },
@@ -19,10 +23,7 @@ const mocks = vi.hoisted(() => ({
   openExternal: vi.fn(),
   readClipboardText: vi.fn(async () => ''),
   writeClipboard: vi.fn(),
-  createFromBuffer: vi.fn((): { isEmpty: () => boolean; toPNG: () => Buffer } => ({
-    isEmpty: () => false,
-    toPNG: () => Buffer.from('png'),
-  })),
+
 }))
 
 vi.mock('electron', () => ({
@@ -33,7 +34,6 @@ vi.mock('electron', () => ({
   },
   clipboard: { readText: mocks.readClipboardText, write: mocks.writeClipboard },
   dialog: { showOpenDialog: vi.fn(), showSaveDialog: mocks.showSaveDialog },
-  nativeImage: { createFromPath: vi.fn(), createFromBuffer: mocks.createFromBuffer },
   shell: {
     openExternal: mocks.openExternal,
     showItemInFolder: mocks.showItemInFolder,
@@ -58,7 +58,7 @@ vi.mock('../../src/main/settings-changes', () => ({
 }))
 
 vi.mock('../../src/main/session', () => ({
-  getSessionDir: () => '/session',
+  getSessionDir: () => mocks.sessionDir,
 }))
 
 vi.mock('../../src/main/logger', () => ({
@@ -77,6 +77,7 @@ function registerAndGetSaveHandler(onConfigSaved: ConfigSaved): Handler {
 }
 
 beforeEach(() => {
+  mocks.sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-clipboard-'))
   mocks.saveConfig.mockReset()
   mocks.applyChangedFields.mockReset()
   mocks.log.mockReset()
@@ -85,14 +86,13 @@ beforeEach(() => {
   mocks.readClipboardText.mockReset()
   mocks.readClipboardText.mockResolvedValue('')
   mocks.writeClipboard.mockReset()
-  mocks.createFromBuffer.mockReset()
-  mocks.createFromBuffer.mockReturnValue({
-    isEmpty: () => false,
-    toPNG: () => Buffer.from('png'),
-  })
+
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  fs.rmSync(mocks.sessionDir, { recursive: true, force: true })
+})
 
 describe('prompt image action preconditions', () => {
   it('rejects Reveal when the selected image no longer exists', async () => {
@@ -107,22 +107,18 @@ describe('prompt image action preconditions', () => {
   })
 
   it('rejects Copy to Clipboard when the image bytes cannot be decoded', async () => {
-    vi.spyOn(fs.promises, 'readFile').mockResolvedValueOnce(Buffer.from('not an image'))
-    mocks.createFromBuffer.mockReturnValueOnce({
-      isEmpty: () => true,
-      toPNG: () => Buffer.from(''),
-    })
+    fs.writeFileSync(path.join(mocks.sessionDir, 'image.png'), 'not an image')
     mocks.handlers.clear()
     registerSettingsIpc()
     const handler = mocks.handlers.get('clipboard:copyImage')
     expect(handler).toBeTruthy()
 
-    await expect(handler?.({}, 'image', 'png')).rejects.toThrow('Cannot copy unreadable image')
+    await expect(handler?.({}, 'image', 'png')).rejects.toThrow()
     expect(mocks.writeClipboard).not.toHaveBeenCalled()
   })
 
   it('writes a copied image through the MIME-based clipboard API', async () => {
-    vi.spyOn(fs.promises, 'readFile').mockResolvedValueOnce(Buffer.from('source image'))
+    await sharp({ create: { width: 40, height: 24, channels: 3, background: '#123456' } }).webp().toFile(path.join(mocks.sessionDir, 'image.webp'))
     mocks.handlers.clear()
     registerSettingsIpc()
     const handler = mocks.handlers.get('clipboard:copyImage')
@@ -131,7 +127,9 @@ describe('prompt image action preconditions', () => {
     const [items] = mocks.writeClipboard.mock.calls[0] as [{ items: Record<string, Blob> }[]]
     const blob = items[0]?.items['image/png']
     expect(blob?.type).toBe('image/png')
-    await expect(blob?.text()).resolves.toBe('png')
+    const bytes = Buffer.from(await blob!.arrayBuffer())
+    expect(await sharp(bytes).metadata()).toMatchObject({ format: 'png', width: 40, height: 24 })
+    await expect(sharp(bytes).stats()).resolves.toBeDefined()
   })
 
   it('awaits clipboard text before deciding whether text is available', async () => {

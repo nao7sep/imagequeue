@@ -1,3 +1,4 @@
+import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The pause flag only matters if the POLLER honours it. The processor wakes
@@ -5,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // killing a generation from outside the app never helped: the next task simply
 // started. This pins the check that makes stopping stick.
 
-const generate = vi.fn(async () => ({ buffer: Buffer.from([1]) }))
+const generate = vi.fn(async () => ({ buffer: await tinyPng() }))
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 vi.mock('../../../src/main/backends/openai', () => ({ generateOpenAI: generate }))
@@ -35,7 +36,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { setQueuePaused, resetCancellationState } = await import(
+const { cancelAllInFlightAndWait, setQueuePaused, resetCancellationState } = await import(
   '../../../src/main/backends/cancellation'
 )
 
@@ -46,7 +47,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await cancelAllInFlightAndWait(1_000)
   resetCancellationState()
 })
 

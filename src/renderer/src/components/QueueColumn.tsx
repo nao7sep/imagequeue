@@ -5,7 +5,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import type { BackendId, CloudBackendId, Task } from '../../../shared/types'
 import { findModel, getDefaultModelForBackend, getModelsForBackend } from '../../../shared/ai-models'
-import { currentSessionImageUrl } from '../../../shared/image-url'
+import { currentSessionImageUrl, thumbnailUrl } from '../../../shared/image-url'
 import { CLOUD_BACKENDS } from '../backends'
 import { useDrawThingsColumn, DrawThingsControls } from './DrawThingsColumn'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
@@ -391,8 +391,32 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
 
   // The thumbnail streams from the app's image scheme and loads lazily, so only
   // rows on screen read and decode their image, off the main process's thread.
-  const thumbUrl = (task.status === 'completed' || task.status === 'kept') && task.baseName
-    ? currentSessionImageUrl(task.baseName)
+  const hasThumbnail = (task.status === 'completed' || task.status === 'kept') && !!task.baseName
+  const thumbnailFrameRef = useRef<HTMLDivElement>(null)
+  const [thumbnailSize, setThumbnailSize] = useState({ width: 0, pixelRatio: window.devicePixelRatio })
+  useEffect(() => {
+    const frame = thumbnailFrameRef.current
+    if (!frame) {
+      setThumbnailSize({ width: 0, pixelRatio: window.devicePixelRatio })
+      return
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setThumbnailSize({ width: entry.contentRect.width, pixelRatio: window.devicePixelRatio })
+    })
+    // Moving between displays can change physical density without changing the
+    // frame's CSS width; resize updates the request's pixel budget too.
+    const updateDensity = (): void => {
+      setThumbnailSize((current) => ({ ...current, pixelRatio: window.devicePixelRatio }))
+    }
+    observer.observe(frame)
+    window.addEventListener('resize', updateDensity)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateDensity)
+    }
+  }, [hasThumbnail])
+  const thumbUrl = hasThumbnail && thumbnailSize.width > 0
+    ? thumbnailUrl(currentSessionImageUrl(task.baseName!), thumbnailSize.width, thumbnailSize.pixelRatio)
     : null
 
   // Auto-scroll only on a real queued/generating -> completed transition, so a
@@ -500,9 +524,9 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
         data-task-id={task.id}
       />
       <div className="task-visual">
-        {thumbUrl && (
-          <div className="task-thumbnail-frame">
-            <img
+        {hasThumbnail && (
+          <div className="task-thumbnail-frame" ref={thumbnailFrameRef}>
+            {thumbUrl && <img
               className="task-thumbnail"
               src={thumbUrl}
               alt=""
@@ -517,7 +541,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
                 justCompletedRef.current = false
                 itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
               }}
-            />
+            />}
           </div>
         )}
         <div className="task-info">
@@ -535,7 +559,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
             </div>
             {/* Pointer-only affordances (tabIndex -1); keyboard commands
                 operate on the selected row via the cover button above. */}
-            <div className={`task-actions${thumbUrl ? ' task-actions-overlay' : ''}`}>
+            <div className={`task-actions${hasThumbnail ? ' task-actions-overlay' : ''}`}>
               {(task.status === 'failed' || task.status === 'interrupted') && (
                 <button tabIndex={-1} className="task-btn task-btn-retry" onClick={handleRetry} title={t('task.retry')} aria-label={t('task.retry')}>
                   <Icon name="retry" />
