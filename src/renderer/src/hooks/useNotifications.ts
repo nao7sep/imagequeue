@@ -55,9 +55,11 @@ export function useNotifications(): void {
 
     for (const task of allTasks) {
       const prevStatus = prev.get(task.id)
-      // Only fire for explicit status transitions of existing tasks.
+      // Restoring a kept image delivers no new generation result.
+      // Queued-to-completed still counts when intermediate updates coalesce.
       if (
         prevStatus !== undefined &&
+        prevStatus !== 'kept' &&
         prevStatus !== task.status &&
         (task.status === 'completed' || task.status === 'failed')
       ) {
