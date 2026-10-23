@@ -3,6 +3,7 @@ import path from 'path'
 import os from 'os'
 import crypto from 'node:crypto'
 import * as journalFile from '../../../src/main/session/journal-file'
+import * as sync from '../../../src/main/utils/fsync'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } from '../../../src/shared/types'
@@ -1278,5 +1279,105 @@ it('keeps a listing behind incoming session adoption while its checkpoint is hel
     checkpointRead.mockRestore()
     directoryRead.mockRestore()
     checkpoint.mockRestore()
+  }
+})
+
+it('persists active output while an unrelated archived manifest read is held', async () => {
+  const current = getSessionDir()
+  const archive = stageSession('20260201-000000-utc')
+  const originalRead = fs.promises.readFile.bind(fs.promises)
+  let release!: () => void
+  let entered!: () => void
+  const reached = new Promise<void>(resolve => { entered = resolve })
+  const held = new Promise<void>(resolve => { release = resolve })
+  const reader = vi.spyOn(fs.promises, 'readFile').mockImplementation(async (...args) => {
+    if (String(args[0]) === path.join(archive, 'session.json')) { entered(); await held }
+    return originalRead(...args)
+  })
+  const listing = listSessions()
+  await reached
+  try {
+    queueManager.enqueue({ backend: 'openai', model: 'm', prompt: 'new work', params: {}, count: 1 })
+    await persistActiveSession()
+    expect((await readManifest(current)).tasks.openai).toHaveLength(1)
+  } finally {
+    release()
+    await listing
+    reader.mockRestore()
+  }
+})
+
+it.each(['resume', 'delete'] as const)('waits only for the affected archive read before %s', async action => {
+  const id = '20260202-000000-utc'
+  const archive = stageSession(id, { tasks: withTasks([makeTask('retained', 'completed')]) })
+  const outgoing = getSessionId()
+  const originalRead = fs.promises.readFile.bind(fs.promises)
+  let release!: () => void
+  let entered!: () => void
+  const reached = new Promise<void>(resolve => { entered = resolve })
+  const held = new Promise<void>(resolve => { release = resolve })
+  let first = true
+  const reader = vi.spyOn(fs.promises, 'readFile').mockImplementation(async (...args) => {
+    if (first && String(args[0]) === path.join(archive, 'session.json')) { first = false; entered(); await held }
+    return originalRead(...args)
+  })
+  const listing = listSessions()
+  await reached
+  let settled = false
+  const mutation = (action === 'resume' ? resumeSession(id) : deleteSession(id)).then(() => { settled = true })
+  try {
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(settled).toBe(false)
+    expect(getSessionId()).toBe(outgoing)
+    expect(fs.existsSync(archive)).toBe(true)
+    release()
+    await Promise.all([listing, mutation])
+    if (action === 'resume') expect(getSessionId()).toBe(id)
+    else expect(fs.existsSync(archive)).toBe(false)
+  } finally {
+    release()
+    await Promise.allSettled([listing, mutation])
+    reader.mockRestore()
+  }
+})
+
+it('coalesces concurrent start saves at the confirmed journal revision', async () => {
+  queueManager.replaceAllTasks(withTasks(Array.from({ length: 20 }, (_, index) => makeTask(`start-${index}`, 'queued'))))
+  await persistActiveSession()
+  const append = vi.spyOn(journalFile, 'appendSessionTransition')
+  queueManager.updateTask(queueManager.getTask('openai', 'start-0')!, { status: 'generating' })
+  queueManager.updateTask(queueManager.getTask('openai', 'start-1')!, { status: 'generating' })
+  await Promise.all([persistActiveSession(), persistActiveSession()])
+  expect(append).toHaveBeenCalledOnce()
+  expect((await readManifest(getSessionDir())).tasks.openai.filter(task => task.status === 'generating')).toHaveLength(2)
+  append.mockRestore()
+})
+
+it('keeps the outgoing session adopted until its new sibling directory is durable', async () => {
+  const original = sync.syncDirectoryAsync
+  const outgoing = getSessionDir()
+  let reject!: (error: Error) => void
+  let entered!: () => void
+  const reached = new Promise<void>(resolve => { entered = resolve })
+  const held = new Promise<void>((_resolve, fail) => { reject = fail })
+  const parent = vi.spyOn(sync, 'syncDirectoryAsync').mockImplementation(async directory => {
+    if (directory === getSessionsDir()) { entered(); await held }
+    else await original(directory)
+  })
+  const creation = createSession()
+  const rejected = expect(creation).rejects.toThrow('parent sync failed')
+  await reached
+  try {
+    expect(getSessionDir()).toBe(outgoing)
+    expect(sent('session:changed')).toEqual([])
+    reject(new Error('parent sync failed'))
+    await rejected
+    expect(getSessionDir()).toBe(outgoing)
+    expect(sent('session:changed')).toEqual([])
+    expect(fs.readdirSync(getSessionsDir())).toEqual([path.basename(outgoing)])
+  } finally {
+    reject(new Error('parent sync failed'))
+    await Promise.allSettled([creation])
+    parent.mockRestore()
   }
 })

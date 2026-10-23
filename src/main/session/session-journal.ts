@@ -53,10 +53,9 @@ export class SessionJournal {
   private contentAt: string
   private confirmedBytes: number
   private taskBytes: number
-  private checkpointRequired = false
   private metadata: Omit<SessionManifest, 'tasks' | 'taskCounts'>
 
-  constructor(readonly directory: string, manifest: SessionManifest, journalBytes = 0) {
+  constructor(readonly directory: string, manifest: SessionManifest, journalBytes = 0, private checkpointRequired = false) {
     this.maps = taskMaps(manifest.tasks)
     this.observed = this.contentMaps(manifest.tasks)
     this.promptSource = manifest.elaboratedPrompts
@@ -117,8 +116,17 @@ export class SessionJournal {
   }
 
   async commit(save: CapturedSave): Promise<{ updatedAt: string }> {
-    const { changes } = save
+    // Captures can overlap while an earlier save is pending. Compare against
+    // the last confirmed state, including lifecycle fields, at commit time.
+    const changes = { ...save.changes,
+      upserts: save.changes.upserts.filter(task => JSON.stringify(task) !== JSON.stringify(this.maps.get(task.backend)!.get(task.id))),
+      removed: save.changes.removed.filter(item => this.maps.get(item.backend)!.has(item.id)),
+    }
+    if (changes.reset && JSON.stringify(changes.reset) === JSON.stringify(tasksFromMaps(this.maps))) delete changes.reset
     const promptsChanged = save.promptsKey !== this.savedPromptKey
+    if (!this.checkpointRequired && !changes.reset && !changes.upserts.length && !changes.removed.length && !promptsChanged) {
+      return { updatedAt: this.metadata.updatedAt }
+    }
     const changedContent = promptsChanged || (changes.reset
       ? sessionContentKey(save.prompts, changes.reset) !== sessionContentKey(this.metadata.elaboratedPrompts, tasksFromMaps(this.maps))
       : changes.removed.some(item => this.maps.get(item.backend)!.has(item.id)) ||
@@ -158,7 +166,14 @@ export class SessionJournal {
       this.checkpointRequired = false
       if (changes.reset) nextTaskBytes = Object.values(changes.reset).flat().reduce((sum, task) => sum + Buffer.byteLength(JSON.stringify(task)), 0)
     } else {
-      this.confirmedBytes = await appendSessionTransition(this.directory, this.confirmedBytes, transition)
+      try {
+        this.confirmedBytes = await appendSessionTransition(this.directory, this.confirmedBytes, transition)
+      } catch (error) {
+        // A rejected append can still be readable after restart. A later edit
+        // may revert to the old state, so even an empty retry must repair it.
+        this.checkpointRequired = true
+        throw error
+      }
       applyTransition(this.maps, transition)
     }
     this.taskBytes = nextTaskBytes

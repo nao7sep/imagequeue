@@ -9,7 +9,7 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 // history. The draft fields go to the main process as the user types, which
 // keeps each session's draft for the running app only, so switching sessions
 // restores it and a restart starts empty. elaboratedPrompts are committed
-// results, written to session.json immediately on each append/delete/clear.
+// results, persisted through the session journal on each append/delete/clear.
 // Both re-hydrate on session change.
 export interface SessionDraftState extends SessionDraft {
   elaboratedPrompts: ElaboratedPromptRecord[]
@@ -91,7 +91,7 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
     void hydrate()
 
     // New session / resume into another swaps the whole draft: re-hydrate from
-    // the now-active session's manifest.
+    // main's in-memory draft and durable prompt history for the active session.
     const unsubscribe = window.electronAPI.onSessionChanged(() => {
       void hydrate()
     })

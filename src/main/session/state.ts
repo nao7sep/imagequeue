@@ -12,7 +12,6 @@ import {
   SessionListEntry,
   SessionSummary,
   UnopenableSession,
-  SessionTaskCounts,
   SessionThumbnail,
   Task,
   TaskStatus,
@@ -60,6 +59,8 @@ let sessionMutationPending = false
 let sessionMutation: Promise<unknown> = Promise.resolve()
 let writes: Promise<unknown> = Promise.resolve()
 let writeFailure: unknown = null
+// Only adoption/deletion of this particular archive waits for its readers.
+const archiveReads = new Map<string, ReturnType<typeof readManifestFromDir>>()
 
 export function isSessionMutationPending(): boolean { return sessionMutationPending }
 
@@ -80,10 +81,6 @@ export async function mutateSession<T>(operation: () => Promise<T>): Promise<T> 
   } finally {
     sessionMutationPending = false
   }
-}
-
-export function createTaskCounts(tasksByBackend: Record<BackendId, Task[]>): SessionTaskCounts {
-  return countTasks(tasksByBackend)
 }
 
 function collectTasks(tasksByBackend: Record<BackendId, Task[]>): Task[] {
@@ -288,12 +285,12 @@ interface AdoptedSession {
 // The active-session state for a session holding `tasks` as it is adopted: the
 // content later writes are judged against. Built whole, so create/resume can't
 // set some fields and forget others.
-function sessionState(state: AdoptedSession, tasks: Record<BackendId, Task[]>, directory = getSessionDir(), journalBytes = 0): ActiveSessionState {
+function sessionState(state: AdoptedSession, tasks: Record<BackendId, Task[]>, directory = getSessionDir(), journalBytes = 0, checkpointRequired = false): ActiveSessionState {
   const manifest: SessionManifest = {
     ...state, formatVersion: FORMAT_VERSIONS.session, sessionId: path.basename(directory),
     tasks, taskCounts: countTasks(tasks),
   }
-  return { ...state, journal: new SessionJournal(directory, manifest, journalBytes) }
+  return { ...state, journal: new SessionJournal(directory, manifest, journalBytes, checkpointRequired) }
 }
 
 // A session that has just been made: nothing in it, updated when it was created.
@@ -327,7 +324,7 @@ async function ensureActiveSessionLoaded(): Promise<ActiveSessionState> {
           lastResumedAt: manifest.lastResumedAt,
           journalSequence: manifest.journalSequence,
         }, manifest.tasks, directory, read.manifest ? read.journalBytes : 0)
-      : sessionState(newSessionState(), createEmptyQueues(), directory)
+      : sessionState(newSessionState(), createEmptyQueues(), directory, 0, true)
     activeSession = session
     return session
   })()
@@ -507,25 +504,36 @@ async function dropPreviousSessionAfterSwitch(sessionDir: string, sessionId: str
 // Sessions it can open, most recently updated first, then those it cannot,
 // newest folder first.
 export async function listSessions(): Promise<SessionListEntry[]> {
-  // A checkpoint and its compacted journal are one logical read. Wait for a
-  // session switch, then share the physical writer queue for the listing; a
-  // new switch also waits on this read before adopting or compacting a session.
   while (sessionMutationPending) await sessionMutation
-  const reading = writes.then(() => listSessionsOwned())
-  writes = reading.catch(() => undefined)
-  return reading
+  await writes
+  return listSessionsOwned()
+}
+
+async function readListedSession(directory: string): ReturnType<typeof readManifestFromDir> {
+  while (sessionMutationPending) await sessionMutation
+  if (directory === getSessionDir()) {
+    // A checkpoint and its compacted journal are one read. Only this active
+    // read shares the writer chain; slow unrelated archives never hold it.
+    const reading = writes.then(() => readManifestFromDir(directory))
+    writes = reading.catch(() => undefined)
+    return reading
+  }
+  const existing = archiveReads.get(directory)
+  if (existing) return existing
+  const reading = readManifestFromDir(directory)
+  archiveReads.set(directory, reading)
+  try { return await reading } finally { archiveReads.delete(directory) }
 }
 
 async function listSessionsOwned(): Promise<SessionListEntry[]> {
   const sessionsDir = getSessionsDir()
-  const currentSessionId = getSessionId()
   const entries = await fs.promises.readdir(sessionsDir, { withFileTypes: true })
   const summaries: SessionSummary[] = []
   const unopenable: UnopenableSession[] = []
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const read = await readManifestFromDir(path.join(sessionsDir, entry.name))
+    const read = await readListedSession(path.join(sessionsDir, entry.name))
     if (!read.manifest) {
       if (read.problem !== 'missing') unopenable.push({ sessionId: entry.name, unopenable: read.problem })
       continue
@@ -545,10 +553,11 @@ async function listSessionsOwned(): Promise<SessionListEntry[]> {
       retryCount: displayCounts.retryCount,
       keptCount: displayCounts.keptCount,
       thumbnails: collectSessionThumbnails(manifest.tasks),
-      isCurrent: entry.name === currentSessionId,
+      isCurrent: false,
     })
   }
 
+  for (const summary of summaries) summary.isCurrent = summary.sessionId === getSessionId()
   summaries.sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     if (updatedDiff !== 0) return updatedDiff
@@ -576,6 +585,7 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
   if (!dropPrevious) await persistActiveSession()
 
   const sessionDir = resolveSessionDir(sessionId)
+  await archiveReads.get(sessionDir)
   const { manifest } = await readManifestFromDir(sessionDir)
   if (!manifest) {
     throw new Error('That session is missing a readable session.json file.')
@@ -622,6 +632,7 @@ async function deleteSessionOwned(sessionId: string): Promise<void> {
   }
 
   const sessionDir = resolveSessionDir(sessionId)
+  await archiveReads.get(sessionDir)
   await admitSessionManifest(sessionDir)
 
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)

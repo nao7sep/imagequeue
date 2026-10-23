@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectSessionThumbnails,
-  createTaskCounts,
   isSessionManifest,
   normalizeResumedQueues,
   sessionContentKey,
   toResumedTask
 } from '../../../src/main/session/state'
+import { countTasks } from '../../../src/main/session/session-journal'
 import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
 import { BackendId, Task, TaskStatus } from '../../../src/shared/types'
 
@@ -36,9 +36,9 @@ function queuesWith(tasks: Task[]): Record<BackendId, Task[]> {
   return q
 }
 
-describe('createTaskCounts', () => {
+describe('countTasks', () => {
   it('tallies totals and per-status counts', () => {
-    const counts = createTaskCounts(queuesWith([
+    const counts = countTasks(queuesWith([
       makeTask('a', 'queued'),
       makeTask('b', 'completed'),
       makeTask('c', 'completed'),
