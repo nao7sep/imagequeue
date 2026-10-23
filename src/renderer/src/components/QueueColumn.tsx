@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react'
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 import { useQueue } from '../context/QueueContext'
 import { useSelection } from '../context/SelectionContext'
 import { useSettings } from '../context/SettingsContext'
@@ -18,7 +19,7 @@ import {
   type SavedImageBackendDefaults,
 } from '../utils/imageBackendDefaults'
 import { hasApiKeyFor, isBackendReadyToEnqueue } from '../utils/enqueue'
-import { isFreshCompletion } from '../utils/taskScroll'
+import { isFreshCompletion, TASK_REVEAL_EVENT, type TaskRevealRequest } from '../utils/taskScroll'
 import { taskFailureText, taskStatusLabel } from '../utils/taskPresentation'
 import { useImeGuard } from '../utils/imeGuard'
 import { Icon } from './Icon'
@@ -258,6 +259,71 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
     ? selection.taskId
     : columnTasks[0]?.id ?? null
 
+  const listRef = useRef<HTMLDivElement>(null)
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
+  const [pendingCompletionId, setPendingCompletionId] = useState<string | null>(null)
+  const previousStatuses = useRef(new Map<string, Task['status']>())
+  // Observe the full collection: a row may finish while virtualization has it
+  // unmounted. Existing completed/kept rows never start a reveal on restoration.
+  useLayoutEffect(() => {
+    let completedId: string | null = null
+    const next = new Map<string, Task['status']>()
+    for (const task of columnTasks) {
+      const previous = previousStatuses.current.get(task.id)
+      if (previous !== undefined && isFreshCompletion(previous, task.status)) {
+        completedId = task.id
+      }
+      next.set(task.id, task.status)
+    }
+    previousStatuses.current = next
+    setPendingCompletionId((pending) => completedId ?? (pending && next.get(pending) === 'completed' ? pending : null))
+  }, [columnTasks])
+
+  const taskIndices = useMemo(() => new Map(columnTasks.map((task, index) => [task.id, index])), [columnTasks])
+  const getTaskKey = useCallback((index: number) => columnTasks[index].id, [columnTasks])
+  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: columnTasks.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 96,
+    paddingStart: 8,
+    paddingEnd: 8,
+    getItemKey: getTaskKey,
+    // Completion reveal runs in the image load handler, before ResizeObserver
+    // necessarily delivers its new height; read that final height synchronously.
+    measureElement: (element) => element.offsetHeight,
+    rangeExtractor: (range) => {
+      const indices = new Set(defaultRangeExtractor(range))
+      // Roving focus and the context's next-frame focus handoff need the row
+      // mounted even outside the viewport. Result controls retain focus too.
+      for (const id of [tabbableTaskId, focusedTaskId, pendingCompletionId]) {
+        const index = id === null ? undefined : taskIndices.get(id)
+        if (index !== undefined) indices.add(index)
+      }
+      return [...indices].sort((a, b) => a - b)
+    },
+  })
+  useEffect(() => {
+    const reveal = (event: Event): void => {
+      const request = (event as CustomEvent<TaskRevealRequest>).detail
+      if (request.backend !== backendId) return
+      const index = taskIndices.get(request.taskId)
+      if (index !== undefined) virtualizer.scrollToIndex(index, { align: 'auto' })
+    }
+    window.addEventListener(TASK_REVEAL_EVENT, reveal)
+    return () => window.removeEventListener(TASK_REVEAL_EVENT, reveal)
+  }, [backendId, taskIndices, virtualizer])
+  const finishCompletion = useCallback((taskId: string, reveal: boolean): void => {
+    if (taskId !== pendingCompletionId) return
+    if (reveal) {
+      const button = listRef.current?.querySelector<HTMLButtonElement>(`[data-task-id="${CSS.escape(taskId)}"]`)
+      const row = button?.closest<HTMLDivElement>('.task-virtual-row')
+      if (row) virtualizer.measureElement(row)
+      const index = taskIndices.get(taskId)
+      if (index !== undefined) virtualizer.scrollToIndex(index, { align: 'auto', behavior: 'smooth' })
+    }
+    setPendingCompletionId(null)
+  }, [pendingCompletionId, taskIndices, virtualizer])
+
   const actionTask = selection?.backend === backendId
     ? columnTasks.find((task) => task.id === selection.taskId) ?? null
     : null
@@ -341,11 +407,25 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       </SelectedActions>
 
       <div
+        ref={listRef}
         className="task-list"
         role="list"
         aria-label={t('column.queueLabel', { backend: label })}
         onKeyDown={handleListKeyDown}
-        onClick={(e) => { if (e.target === e.currentTarget) clear() }}
+        onFocusCapture={(event) => {
+          const entry = (event.target as HTMLElement).closest<HTMLElement>('[data-task-row-id]')
+          setFocusedTaskId(entry?.dataset.taskRowId ?? null)
+        }}
+        onBlurCapture={(event) => {
+          const entry = event.relatedTarget instanceof HTMLElement
+            ? event.relatedTarget.closest<HTMLElement>('[data-task-row-id]')
+            : null
+          setFocusedTaskId(entry?.dataset.taskRowId ?? null)
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget || (e.target instanceof HTMLElement &&
+            (e.target.classList.contains('task-virtual-space') || e.target.classList.contains('task-virtual-row')))) clear()
+        }}
       >
         {columnTasks.length === 0 ? (
           <div
@@ -359,16 +439,32 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
                 : t('column.noTasks')}
           </div>
         ) : (
-          columnTasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              backendId={backendId}
-              isSelected={selection?.backend === backendId && selection.taskId === task.id}
-              isTabbable={task.id === tabbableTaskId}
-              onSelect={() => select(backendId, task.id)}
-            />
-          ))
+          <div className="task-virtual-space" style={{ height: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((row) => {
+              const task = columnTasks[row.index]
+              return (
+                <div
+                  key={row.key}
+                  className="task-virtual-row"
+                  data-index={row.index}
+                  ref={virtualizer.measureElement}
+                  style={{ transform: `translateY(${row.start}px)` }}
+                >
+                  <TaskItem
+                    task={task}
+                    position={row.index + 1}
+                    total={columnTasks.length}
+                    pendingCompletion={task.id === pendingCompletionId}
+                    finishCompletion={finishCompletion}
+                    backendId={backendId}
+                    isSelected={selection?.backend === backendId && selection.taskId === task.id}
+                    isTabbable={task.id === tabbableTaskId}
+                    onSelect={() => select(backendId, task.id)}
+                  />
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -404,7 +500,7 @@ function retryQueueTask(backendId: BackendId, taskId: string, runTaskAction: Ret
   })
 }
 
-function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task: Task; backendId: BackendId; isSelected: boolean; isTabbable: boolean; onSelect: () => void }): React.JSX.Element {
+function TaskItem({ task, backendId, isSelected, isTabbable, onSelect, position, total, pendingCompletion, finishCompletion }: { task: Task; backendId: BackendId; isSelected: boolean; isTabbable: boolean; onSelect: () => void; position: number; total: number; pendingCompletion: boolean; finishCompletion: (taskId: string, reveal: boolean) => void }): React.JSX.Element {
   const {
     removeTask,
     restoreTask,
@@ -416,14 +512,6 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
   } = useSelection()
   const { t, text } = useI18n()
   const itemRef = useRef<HTMLButtonElement>(null)
-  // Seeded with the status at mount so an item that is *already* completed or
-  // kept when it first renders — app launch restoring stored tasks, or the user
-  // revealing kept images with ⌘⇧K — is not mistaken for a fresh completion.
-  const prevStatusRef = useRef(task.status)
-  // Armed on a genuine completion transition; consumed by the thumbnail's
-  // onLoad so the scroll runs against the item's final height.
-  const justCompletedRef = useRef(false)
-
   // The thumbnail streams from the app's image scheme and loads lazily, so only
   // rows on screen read and decode their image, off the main process's thread.
   const hasThumbnail = (task.status === 'completed' || task.status === 'kept') && !!task.baseName
@@ -454,21 +542,9 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     ? thumbnailUrl(currentSessionImageUrl(task.baseName!), thumbnailSize.width, thumbnailSize.pixelRatio)
     : null
 
-  // Auto-scroll only on a real queued/generating -> completed transition, so a
-  // freshly generated image reveals itself. Mounting an already-completed task
-  // or flipping kept items into the list must not move the viewport. A fresh
-  // completion always carries a baseName (set together in the processor), so we
-  // defer to the thumbnail's onLoad; the no-thumbnail branch is a safety net.
-  useEffect(() => {
-    const prevStatus = prevStatusRef.current
-    prevStatusRef.current = task.status
-    if (!isFreshCompletion(prevStatus, task.status)) return
-    if (task.baseName) {
-      justCompletedRef.current = true
-    } else {
-      itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-  }, [task.status, task.baseName])
+  useLayoutEffect(() => {
+    if (pendingCompletion && !task.baseName) finishCompletion(task.id, true)
+  }, [pendingCompletion, task.baseName, task.id, finishCompletion])
 
   const handleRemove = (e: React.MouseEvent): void => {
     e.stopPropagation()
@@ -529,7 +605,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
     // sits above the button wherever it overlaps — its buttons stay
     // clickable. The button's accessible name comes from aria-labelledby since
     // it no longer contains the prompt/status text itself.
-    <div className={`task-entry${task.status === 'kept' ? ' task-entry-kept' : ''}`} role="listitem">
+    <div className={`task-entry${task.status === 'kept' ? ' task-entry-kept' : ''}`} role="listitem" aria-posinset={position} aria-setsize={total} data-task-row-id={task.id}>
       <div className="task-row-owner">
       <button
         type="button"
@@ -559,16 +635,15 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect }: { task:
               className="task-thumbnail"
               src={thumbUrl}
               alt=""
-              loading="lazy"
+              loading={pendingCompletion ? 'eager' : 'lazy'}
               decoding="async"
               onError={() => {
+                finishCompletion(task.id, false)
                 reportTaskActionFailure(task.id, 'thumbnail', 'task.thumbnailFailed', 'Failed to load task thumbnail', new Error(`Thumbnail request failed for ${task.baseName}`))
               }}
               onLoad={() => {
                 clearTaskActionResult(task.id, 'thumbnail')
-                if (!justCompletedRef.current) return
-                justCompletedRef.current = false
-                itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                finishCompletion(task.id, true)
               }}
             />}
           </div>

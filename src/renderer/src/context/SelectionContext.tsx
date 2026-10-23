@@ -1,3 +1,4 @@
+import { requestTaskReveal } from '../utils/taskScroll'
 import { isStorageStillPending } from '../../../shared/storage-wait'
 import {
   createContext,
@@ -383,8 +384,8 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       const followFocus = focusIsInTaskList()
       requestAnimationFrame(() => {
         const el = getTaskElement(taskId)
-        el?.scrollIntoView({ block: 'nearest' })
-        if (followFocus) el?.focus()
+        requestTaskReveal(backend, taskId)
+        if (followFocus) el?.focus({ preventScroll: true })
       })
     }
 
@@ -426,8 +427,8 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     setSelectionInternal({ backend, taskId }, { userInitiated: true })
     requestAnimationFrame(() => {
       const el = getTaskElement(taskId)
-      el?.scrollIntoView({ block: 'nearest' })
-      el?.focus()
+      requestTaskReveal(backend, taskId)
+      el?.focus({ preventScroll: true })
     })
   }, [setSelectionInternal])
 
@@ -466,8 +467,9 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     }
     const el = getTaskElement(targetId)
     if (el) {
-      el.scrollIntoView({ block: 'nearest' })
-      el.focus()
+      const target = selectionRef.current
+      if (target) requestTaskReveal(target.backend, targetId)
+      el.focus({ preventScroll: true })
       pendingFocusIdRef.current = null
     }
   }, [tasks])

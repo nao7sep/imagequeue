@@ -5,6 +5,7 @@ import type { BackendId, CliStatus, DrawThingsModelParams, LocalModelInfo, Task 
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
 import { getDefaultModelForBackend, getModelsForBackend } from '../../../../src/shared/ai-models'
 import type { DrawThingsParamsPersistenceState } from '../../../../src/shared/electron-api'
+import { requestTaskReveal } from '../../../../src/renderer/src/utils/taskScroll'
 import type { Message } from '../../../../src/shared/i18n/translate'
 
 // The column under test drives everything through four contexts plus
@@ -80,9 +81,11 @@ let measuredThumbnailWidth = 320
 const thumbnailObservers: TestThumbnailObserver[] = []
 class TestThumbnailObserver {
   private target: Element | null = null
-  constructor(private callback: ResizeObserverCallback) { thumbnailObservers.push(this) }
+  constructor(private callback: ResizeObserverCallback) {}
   observe(target: Element): void {
+    if (!target.classList.contains('task-thumbnail-frame')) return
     this.target = target
+    thumbnailObservers.push(this)
     this.resize(measuredThumbnailWidth)
   }
   resize(width: number): void {
@@ -96,6 +99,24 @@ beforeEach(() => {
   measuredThumbnailWidth = 320
   thumbnailObservers.length = 0
   vi.stubGlobal('ResizeObserver', TestThumbnailObserver)
+  // jsdom has no layout. Give the real virtualizer a viewport and measured
+  // variable row heights; thumbnail observers keep their explicit test seam.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.classList.contains('task-list') ? 600 : 0
+  })
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 320)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+    if (!this.classList.contains('task-virtual-row')) return 0
+    return 80 + (this.querySelector('.task-thumbnail-frame') ? 320 : 0)
+      + this.querySelectorAll('.task-action-result').length * 40
+  })
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(() => 320)
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+    return Number.parseFloat(this.querySelector<HTMLElement>('.task-virtual-space')?.style.height ?? '0')
+  })
+  HTMLElement.prototype.scrollTo = vi.fn(function (this: HTMLElement, options?: ScrollToOptions | number) {
+    if (typeof options === 'object') this.scrollTop = options.top ?? this.scrollTop
+  })
   settingsValue = {
     settings: null,
     apiKeyPresence: null,
@@ -168,6 +189,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -457,12 +479,12 @@ describe('measured thumbnail requests', () => {
   })
 
   it('retains completion scrolling until the measured thumbnail loads', async () => {
-    const scroll = vi.fn()
-    HTMLElement.prototype.scrollIntoView = scroll
+    const scroll = vi.mocked(HTMLElement.prototype.scrollTo)
     measuredThumbnailWidth = 0
     const generating = task('generating')
     queueValue.tasks.openai = [generating]
     const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    vi.mocked(HTMLElement.prototype.scrollTo).mockClear()
     await flush()
     queueValue.tasks.openai = [{ ...generating, status: 'completed', baseName: 'new-image' }]
     view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
@@ -474,6 +496,126 @@ describe('measured thumbnail requests', () => {
     expect(scroll).toHaveBeenCalledOnce()
     fireEvent.load(view.container.querySelector('.task-thumbnail')!)
     expect(scroll).toHaveBeenCalledOnce()
+  })
+})
+
+describe('virtualized queue rows', () => {
+  function longQueue(): Task[] {
+    return Array.from({ length: 3000 }, (_, index) => ({ ...task('queued'), id: `row-${index}`, prompt: `Image ${index}` }))
+  }
+
+  it('bounds mounted rows while retaining complete positions and offscreen selection', async () => {
+    const scroll = vi.mocked(HTMLElement.prototype.scrollTo)
+    queueValue.tasks.openai = longQueue()
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    vi.mocked(HTMLElement.prototype.scrollTo).mockClear()
+    await flush()
+    expect(screen.getAllByRole('listitem').length).toBeLessThan(20)
+    expect(screen.getAllByRole('listitem')[0].getAttribute('aria-setsize')).toBe('3000')
+    expect(view.container.querySelector('[data-task-id="row-2999"]')).toBeNull()
+    selectionValue.selection = { backend: 'openai', taskId: 'row-2999' }
+    view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    const selected = view.container.querySelector<HTMLElement>('[data-task-id="row-2999"]')!
+    expect(selected.tabIndex).toBe(0)
+    expect(selected.closest('[role="listitem"]')?.getAttribute('aria-posinset')).toBe('3000')
+    expect(screen.getAllByRole('listitem').length).toBeLessThan(20)
+    expect(scroll).not.toHaveBeenCalled()
+    act(() => requestTaskReveal('openai', 'row-2999'))
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto', top: expect.any(Number) }))
+    expect(screen.getByRole('list').scrollTop).toBeGreaterThan(200000)
+    fireEvent.keyDown(screen.getByRole('list'), { key: 'End' })
+    expect(selectionValue.selectEdge).toHaveBeenCalledWith('openai', 'last')
+  })
+
+  it('corrects an offscreen reveal as destination rows replace estimated heights', async () => {
+    vi.useFakeTimers()
+    queueValue.tasks.openai = longQueue()
+    selectionValue.selection = { backend: 'openai', taskId: 'row-2999' }
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    const scroll = vi.mocked(HTMLElement.prototype.scrollTo)
+    scroll.mockClear()
+    act(() => requestTaskReveal('openai', 'row-2999'))
+    const list = screen.getByRole('list')
+    const firstOffset = list.scrollTop
+    fireEvent.scroll(list)
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    const row = view.container.querySelector<HTMLElement>('[data-task-id="row-2999"]')!.closest<HTMLElement>('.task-virtual-row')!
+    const start = Number(row.style.transform.match(/translateY\((.+)px\)/)![1])
+    expect(list.scrollTop).toBeLessThan(firstOffset)
+    expect(start).toBeGreaterThanOrEqual(list.scrollTop)
+    expect(start + row.offsetHeight).toBeLessThanOrEqual(list.scrollTop + list.clientHeight)
+    expect(Number.parseFloat(view.container.querySelector<HTMLElement>('.task-virtual-space')!.style.height))
+      .toBe(start + row.offsetHeight + 8)
+  })
+
+  it('eagerly mounts a fresh offscreen completion and reveals it only after thumbnail load', async () => {
+    const scroll = vi.mocked(HTMLElement.prototype.scrollTo)
+    queueValue.tasks.openai = longQueue()
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    vi.mocked(HTMLElement.prototype.scrollTo).mockClear()
+    queueValue.tasks.openai = queueValue.tasks.openai.map((entry, index) => index === 2500
+      ? { ...entry, status: 'completed', baseName: 'fresh-image' } : entry)
+    view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    const completed = view.container.querySelector('[data-task-row-id="row-2500"]')!
+    const thumbnail = completed.querySelector('img')!
+    expect(thumbnail.getAttribute('loading')).toBe('eager')
+    expect(scroll).not.toHaveBeenCalled()
+    fireEvent.load(thumbnail)
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth', top: expect.any(Number) }))
+    expect(view.container.querySelector('[data-task-row-id="row-2500"]')).toBeNull()
+    expect(screen.getAllByRole('listitem').length).toBeLessThan(20)
+  })
+
+  it('clears a failed completion reveal and leaves restored completed rows lazy', async () => {
+    const scroll = vi.mocked(HTMLElement.prototype.scrollTo)
+    queueValue.tasks.openai = longQueue()
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    vi.mocked(HTMLElement.prototype.scrollTo).mockClear()
+    queueValue.tasks.openai = queueValue.tasks.openai.map((entry, index) => index === 2500
+      ? { ...entry, status: 'completed', baseName: 'fresh-image' } : entry)
+    view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    fireEvent.error(view.container.querySelector('[data-task-row-id="row-2500"] img')!)
+    expect(view.container.querySelector('[data-task-row-id="row-2500"]')).toBeNull()
+    expect(scroll).not.toHaveBeenCalled()
+    queueValue.tasks.openai = [{ ...task('completed'), baseName: 'restored-image' }, ...queueValue.tasks.openai]
+    view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    const restored = view.container.querySelector('[data-task-row-id="task-completed"] img')!
+    expect(restored.getAttribute('loading')).toBe('lazy')
+    fireEvent.load(restored)
+    expect(scroll).not.toHaveBeenCalled()
+    fireEvent.click(view.container.querySelector('.task-virtual-space')!)
+    expect(selectionValue.clear).toHaveBeenCalledOnce()
+  })
+
+  it('reveals a fresh completion without an image after its row mounts', async () => {
+    const scroll = vi.mocked(HTMLElement.prototype.scrollTo)
+    queueValue.tasks.openai = longQueue()
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    vi.mocked(HTMLElement.prototype.scrollTo).mockClear()
+    queueValue.tasks.openai = queueValue.tasks.openai.map((entry, index) => index === 2500
+      ? { ...entry, status: 'completed' } : entry)
+    view.rerender(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    await flush()
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth', top: expect.any(Number) }))
+  })
+
+  it('retains focus in a result control when its row scrolls out of range', async () => {
+    queueValue.tasks.openai = longQueue()
+    selectionValue.taskActionResults = { 'row-2': { export: 'task.exportFailed' } }
+    const view = render(<QueueColumn backendId="openai" label="GPT Image" prompt="a cat" />)
+    vi.mocked(HTMLElement.prototype.scrollTo).mockClear()
+    const close = screen.getByRole('button', { name: 'Close export result' })
+    act(() => close.focus())
+    const list = screen.getByRole('list')
+    list.scrollTop = 100000
+    fireEvent.scroll(list)
+    await flush()
+    expect(close.isConnected).toBe(true)
+    expect(document.activeElement).toBe(close)
+    expect(view.container.querySelector('[data-task-id="row-2"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-task-id="row-10"]')).toBeNull()
+    expect(screen.getAllByRole('listitem').length).toBeLessThan(20)
   })
 })
 

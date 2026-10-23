@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, cleanup } from '@testing-library/react'
 import type { BackendId, Task } from '../../../../src/shared/types'
+import { TASK_REVEAL_EVENT } from '../../../../src/renderer/src/utils/taskScroll'
 import { OPERATIONAL_FAILURE_EVENT } from '../../../../src/renderer/src/utils/operationalFailure'
 
 // Drives the real SelectionContext against stubbed queue/settings/confirm, so the
@@ -93,7 +94,7 @@ beforeEach(() => {
   window.electronAPI = api as unknown as typeof window.electronAPI
 })
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 // Renders the provider and hands back the live context value.
 function mountSelection(): { ctx: () => Selection } {
@@ -320,5 +321,46 @@ describe('secondary view identity', () => {
     await act(async () => ctx().handleSurfaceListKey({ key, surface: 'fullscreen-view', taskId: 't-done' }))
     expect(confirmCalls).toHaveLength(1)
     expect(key === 'delete' ? api.deleteWithFiles : api.removeTask).toHaveBeenCalledWith('openai', 't-done')
+  })
+})
+
+
+describe('navigation reveal ownership', () => {
+  it('requests a measured reveal and follows queue focus without native scrolling', () => {
+    const frames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { frames.push(callback); return frames.length })
+    const reveal = vi.fn()
+    window.addEventListener(TASK_REVEAL_EVENT, reveal)
+    const { ctx } = mountSelection()
+    const rows = render(<div className="task-list"><button data-task-id="t-queued" /><button data-task-id="t-generating" /></div>)
+    const first = rows.container.querySelector<HTMLButtonElement>('[data-task-id="t-queued"]')!
+    const next = rows.container.querySelector<HTMLButtonElement>('[data-task-id="t-generating"]')!
+    first.focus()
+    const focus = vi.spyOn(next, 'focus')
+    act(() => ctx().select('openai', 't-queued'))
+    act(() => ctx().navigate('down'))
+    act(() => { frames.splice(0).forEach((callback) => callback(0)) })
+    expect(reveal).toHaveBeenCalledOnce()
+    expect((reveal.mock.calls[0][0] as CustomEvent).detail).toEqual({ backend: 'openai', taskId: 't-generating' })
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+    expect(document.activeElement).toBe(next)
+    window.removeEventListener(TASK_REVEAL_EVENT, reveal)
+  })
+
+  it('reveals navigation from another surface while leaving its focus in place', () => {
+    const frames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { frames.push(callback); return frames.length })
+    const reveal = vi.fn()
+    window.addEventListener(TASK_REVEAL_EVENT, reveal)
+    const { ctx } = mountSelection()
+    const controls = render(<><input aria-label="Prompt" /><button data-task-id="t-generating" /></>)
+    const prompt = controls.container.querySelector('input')!
+    prompt.focus()
+    act(() => ctx().select('openai', 't-queued'))
+    act(() => ctx().navigate('down'))
+    act(() => { frames.splice(0).forEach((callback) => callback(0)) })
+    expect(reveal).toHaveBeenCalledOnce()
+    expect(document.activeElement).toBe(prompt)
+    window.removeEventListener(TASK_REVEAL_EVENT, reveal)
   })
 })
