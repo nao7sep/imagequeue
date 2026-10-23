@@ -1,10 +1,8 @@
-// The shape of config.json.
-//
-// No api_key field appears anywhere in this type, and that is load-bearing: keys
-// live only in the separate 0600 api-keys.json (config/api-keys-store.ts). A type
-// that cannot hold a key needs no scrubbing on the way to disk, so there is no
-// carve list to keep in step with a new provider — config.json is key-free by
-// construction rather than by maintenance.
+// AppConfig is the complete effective settings snapshot used by the app.
+// config.json omits built-in sets, groups some values differently, and preserves
+// unknown keys and rejected stored sets outside this type. The known settings
+// fields exclude API keys, which live in the separate 0600 api-keys.json; this
+// type does not guarantee that the raw persisted map contains no keys.
 
 import { TextAIBackendId } from '../../shared/types'
 import type { TextRole } from '../../shared/ai-models'
@@ -111,17 +109,14 @@ export type { BrainstormConfig, BrainstormTemplates } from '../../shared/brainst
 import type { BrainstormConfig } from '../../shared/brainstorm-config'
 
 export interface GeneralConfig {
-  // The app theme: 'system', 'light', or 'dark'. A `string`, not ThemePreference:
-  // the store hands back whatever the file holds, and normalizeThemePreference
-  // (shared/theme) resolves a missing or unknown value to System at use.
+  // The store accepts 'system', 'light', or 'dark'; an invalid stored value
+  // reads as the built-in, while an invalid changed value rejects the save.
   theme: string
-  // The interface language: 'system' follows the computer's language on every
-  // launch; otherwise a supported language tag. A `string` for the same reason
-  // as theme: normalizeLanguagePreference (shared/i18n) resolves it at use.
+  // 'system' follows the computer's language; otherwise a supported language
+  // tag. The store validates loaded and changed values as it does theme.
   language: string
-  // The display zone: 'system' follows the computer's zone on every launch;
-  // otherwise an IANA zone. A `string` for the same reason as theme:
-  // normalizeTimeZonePreference (shared/time-zone) resolves it at use.
+  // 'system' follows the computer's zone; otherwise a valid IANA zone. The
+  // store validates loaded and changed values as it does theme.
   time_zone: string
   // The app's UI (chrome) font family. Family only; blank means the built-in default stack (the
   // renderer's `--font-ui` variable). Applied app-wide via that variable.

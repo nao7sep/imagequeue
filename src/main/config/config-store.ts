@@ -209,21 +209,6 @@ function carryUnknownKeys(stored: Record<string, unknown>, next: Record<string, 
  * wrong shape rejects the save. A result equal to the map last loaded or
  * written writes nothing, and so does an empty result while there is no file.
  */
-export function saveConfig(config: AppConfig): Promise<void> {
-  const snapshot = structuredClone(config)
-  const operation = () => persistConfig(snapshot)
-  const result = saving.catch(() => undefined).then(async () => {
-    if (retrySave) await retrySave()
-    retrySave = operation
-    return operation().then(() => { retrySave = null }, (error) => {
-      if (error?.name === 'InvalidConfigSetError') retrySave = null
-      throw error
-    })
-  })
-  saving = result
-  return result
-}
-
 async function persistConfig(config: AppConfig): Promise<void> {
   const before = loadConfig()
   const builtIns = configSetDefaults()

@@ -2,8 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadConfig, saveConfig, updateConfig, getConfigPath } from '../../../src/main/config'
-import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { loadConfig, updateConfig, getConfigPath } from '../../../src/main/config'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
 import { writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
@@ -31,12 +30,10 @@ describe('config store (atomic write of config.json)', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
   })
 
-  it('leaves no orphaned temp file after an explicit saveConfig', async () => {
+  it('leaves no orphaned temp file after an explicit updateConfig', async () => {
     const configPath = getConfigPath()
 
-    const config = createDefaultConfig()
-    config.general.export_dir = '/tmp/atomic-write-marker'
-    await saveConfig(config)
+    await updateConfig((draft) => { draft.general.export_dir = '/tmp/atomic-write-marker' })
 
     const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
     expect(parsed.general.export_dir).toBe('/tmp/atomic-write-marker')
@@ -47,9 +44,7 @@ describe('config store (atomic write of config.json)', () => {
 
   it('writes through a temp file named `<stem>-<nanoid>.tmp` in the same directory as config.json', async () => {
     const spy = vi.spyOn(fs.promises, 'open')
-    const config = createDefaultConfig()
-    config.general.language = 'ja'
-    await saveConfig(config)
+    await updateConfig((draft) => { draft.general.language = draft.general.language === 'ja' ? 'en' : 'ja' })
 
     const tempCall = spy.mock.calls.find((call) =>
       typeof call[0] === 'string' && (call[0] as string).endsWith('.tmp')

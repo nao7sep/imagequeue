@@ -3,8 +3,7 @@ import os from 'os'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { saveConfig, loadConfig } from '../../../src/main/config'
-import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { updateConfig } from '../../../src/main/config'
 import { createElaborator } from '../../../src/main/elaborators'
 import { drainPendingWrites, setModelParams } from '../../../src/main/model-params'
 import { updateDependenciesCache } from '../../../src/main/dependencies/store'
@@ -57,7 +56,7 @@ describe('record/no-record decisions at real write sites', () => {
   })
 
   it('records config.json on save', async () => {
-    await saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } })
+    await updateConfig((draft) => { draft.general.language = draft.general.language === 'ja' ? 'en' : 'ja' })
     await closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'config.json'))
   })
@@ -113,7 +112,7 @@ describe('record/no-record decisions at real write sites', () => {
   })
 
   it('store-file filter: backups.sqlite3 and its -wal/-shm sidecars are excludable when asserting root contents', async () => {
-    await saveConfig({ ...createDefaultConfig(), general: { ...createDefaultConfig().general, language: loadConfig().general.language === 'ja' ? 'en' : 'ja' } }) // triggers a recorded write → store file (+ WAL sidecars) appear
+    await updateConfig((draft) => { draft.general.language = draft.general.language === 'ja' ? 'en' : 'ja' }) // triggers a recorded write → store file (+ WAL sidecars) appear
     await closeBackupStore()
 
     const isStoreArtifact = (name: string) =>
