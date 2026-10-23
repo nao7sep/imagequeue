@@ -12,6 +12,26 @@ import { buildFluxBody } from './flux-request'
 
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
+// Credential destinations are the provider's documented global/regional API
+// origins. A response URL and every redirect are untrusted at this boundary.
+const API_ORIGINS = new Set(['https://api.bfl.ai', 'https://api.eu.bfl.ai', 'https://api.us.bfl.ai'])
+function checkedApiUrl(value: string): string {
+  const url = new URL(value)
+  if (!API_ORIGINS.has(url.origin) || url.username || url.password) throw new Error('FLUX returned an untrusted API destination')
+  return url.href
+}
+async function apiRequest(call: Parameters<typeof fetchRecorded>[0], url: string, init: RequestInit): ReturnType<typeof fetchRecorded> {
+  let current = checkedApiUrl(url)
+  for (let redirects = 0; ; redirects++) {
+    const result = await fetchRecorded({ ...call, request: { ...call.request as object, url: current } }, current, { ...init, redirect: 'manual' })
+    if (![301, 302, 303, 307, 308].includes(result.response.status)) return result
+    const location = result.response.headers.get('location')
+    if (!location || redirects >= 10) throw new Error('FLUX API redirect did not resolve')
+    // POST redirection could resubmit a paid operation with changed semantics.
+    if (init.method === 'POST' && ![307, 308].includes(result.response.status)) throw new Error('FLUX submission returned an unsupported redirect')
+    current = checkedApiUrl(new URL(location, current).href)
+  }
+}
 // BFL's final words for a job that made no image. Any other status is a job
 // still at work — FLUX 3 passes through Reasoning and Generating, words FLUX.2
 // never used — so an unknown one is polled on, within the request's timeout,
@@ -52,7 +72,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
     const submitUrl = `${BASE_URL}/${task.model}`
     const submitHeaders = { 'Content-Type': 'application/json', 'x-key': apiKey }
     const submitData = await withProviderRetry(async (attemptSignal) => {
-      const { response: submitResponse, text } = await fetchRecorded(
+      const { response: submitResponse, text } = await apiRequest(
         { ...call, request: { url: submitUrl, headers: submitHeaders, body } },
         submitUrl,
         { method: 'POST', headers: submitHeaders, body: JSON.stringify(body), signal: attemptSignal },
@@ -65,7 +85,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
 
       return JSON.parse(text) as { id: string; polling_url?: string }
     }, { signal: controller.signal })
-    const pollingUrl = submitData.polling_url || `${BASE_URL}/get_result?id=${submitData.id}`
+    const pollingUrl = checkedApiUrl(submitData.polling_url || `${BASE_URL}/get_result?id=${encodeURIComponent(submitData.id)}`)
 
     // Poll for result
     while (true) {
@@ -73,7 +93,7 @@ export async function generateFlux(task: Task, signal: AbortSignal): Promise<{ b
 
       const pollHeaders = { 'x-key': apiKey }
       const pollData = await withProviderRetry(async (attemptSignal) => {
-        const { response: pollResponse, text } = await fetchRecorded(
+        const { response: pollResponse, text } = await apiRequest(
           { ...call, request: { url: pollingUrl, headers: pollHeaders } },
           pollingUrl,
           { headers: pollHeaders, signal: attemptSignal },

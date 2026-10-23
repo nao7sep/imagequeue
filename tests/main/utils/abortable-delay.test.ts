@@ -20,6 +20,32 @@ describe('abortableDelay', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('does not shorten a wait larger than the platform timer limit', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const resolved = vi.fn()
+    const promise = abortableDelay(2_147_483_647 + 120_000, controller.signal).then(resolved)
+    await vi.advanceTimersByTimeAsync(2_147_483_647)
+    expect(resolved).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(119_999)
+    expect(resolved).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await promise
+    expect(resolved).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels a long wait after its first timer chunk', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const promise = abortableDelay(2_147_483_647 + 120_000, controller.signal)
+    const rejected = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.advanceTimersByTimeAsync(2_147_483_647)
+    controller.abort()
+    await rejected
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('does not install a timer for an already-aborted signal', async () => {
     vi.useFakeTimers()
     const controller = new AbortController()

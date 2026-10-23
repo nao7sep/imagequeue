@@ -269,18 +269,20 @@ export async function fetchRecorded(
   init: RequestInit,
   kept: (parsed: unknown) => unknown = (parsed) => parsed,
 ): Promise<{ response: Response; text: string }> {
-  return recordAiCall(call, async () => {
+  const record = startAiCall(call)
+  try {
     const response = await fetch(url, init)
-    return { response, text: await response.text() }
-  }, ({ response, text }) => {
+    const text = await response.text()
     let body: unknown
-    try {
-      body = kept(JSON.parse(text))
-    } catch {
-      body = text
-    }
-    return { status: response.status, headers: Object.fromEntries(response.headers), body }
-  })
+    try { body = kept(JSON.parse(text)) } catch { body = text }
+    const captured = { status: response.status, headers: Object.fromEntries(response.headers), body }
+    if (response.ok) record.finish(captured)
+    else record.fail(new Error(`HTTP request rejected (${response.status})`), captured)
+    return { response, text }
+  } catch (error) {
+    record.fail(error)
+    throw error
+  }
 }
 
 /** What a Draw Things CLI job was asked to run. */

@@ -41,8 +41,8 @@ describe('recorded image requests', () => {
   it('keep FLUX\'s submit and poll with the x-key masked and the result URL\'s signature masked', async () => {
     const dir = freshRecordsRoot()
     const sent = vi.fn(async (url: string, _init?: RequestInit) => {
-      if (url.endsWith('/flux-2-pro')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://poll.example/job' }))
-      if (url === 'https://poll.example/job') {
+      if (url.endsWith('/flux-2-pro')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://api.bfl.ai/v1/get_result?id=job' }))
+      if (url === 'https://api.bfl.ai/v1/get_result?id=job') {
         return new Response(JSON.stringify({ status: 'Ready', result: { sample: 'https://image.example/result.png?se=2026&sig=SIGNED' } }))
       }
       return new Response(new Uint8Array([1]))
@@ -52,7 +52,7 @@ describe('recorded image requests', () => {
 
     const [submit, poll] = calls(dir)
     expect(submit!.request).toMatchObject({ url: 'https://api.bfl.ai/v1/flux-2-pro', headers: { 'x-key': '[REDACTED]' }, body: { prompt: 'a fox' } })
-    expect(poll!.request).toEqual({ url: 'https://poll.example/job', headers: { 'x-key': '[REDACTED]' } })
+    expect(poll!.request).toEqual({ url: 'https://api.bfl.ai/v1/get_result?id=job', headers: { 'x-key': '[REDACTED]' } })
     expect(poll!.response).toMatchObject({ body: { result: { sample: 'https://image.example/result.png?se=2026&sig=[REDACTED]' } } })
     for (const call of [submit!, poll!]) expect(call.raw).not.toContain('test-key')
     expect(sent.mock.calls[0]![1]!.headers).toMatchObject({ 'x-key': 'test-key' })

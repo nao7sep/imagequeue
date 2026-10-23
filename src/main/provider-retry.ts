@@ -17,7 +17,7 @@ export function retryDelayMs(error: unknown, backoff: number, now = Date.now()):
   if (value !== null) {
     const seconds = Number(value)
     const milliseconds = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - now
-    if (Number.isFinite(milliseconds)) return Math.min(30000, Math.max(0, milliseconds))
+    if (Number.isFinite(milliseconds)) return Math.max(0, milliseconds)
   }
   return Math.max(0, backoff)
 }

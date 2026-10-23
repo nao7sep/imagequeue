@@ -138,8 +138,10 @@ describe('AI call records', () => {
       'https://example.test', {}, (parsed) => ({ error: (parsed as { error: string }).error }),
     )
     expect(response.status).toBe(400)
+    expect(response.headers.get('x-request-id')).toBe('abc')
     expect(text).toBe('{"error":"nope","b64":"x"}')
     const row = readRows(dir, 'ai_calls').at(-1)!
+    expect(JSON.parse(row.error as string)).toMatchObject({ message: 'HTTP request rejected (400)' })
     expect(JSON.parse(row.response as string)).toMatchObject({ status: 400, headers: { 'x-request-id': 'abc' }, body: { error: 'nope' } })
   })
 

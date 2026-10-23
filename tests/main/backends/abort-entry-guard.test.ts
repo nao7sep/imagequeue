@@ -59,7 +59,7 @@ describe('an already-aborted signal is answered at the door', () => {
 describe('FLUX polling cancellation', () => {
   it('wakes the poll delay immediately and starts no poll request', async () => {
     vi.useFakeTimers()
-    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'job-1', polling_url: 'https://poll.test/job-1' })))
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'job-1', polling_url: 'https://api.bfl.ai/v1/get_result?id=job-1' })))
     const controller = new AbortController()
     const generation = generateFlux(task, controller.signal)
     await vi.advanceTimersByTimeAsync(0)

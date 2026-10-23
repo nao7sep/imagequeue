@@ -11,7 +11,19 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
       fn()
     }
     const onAbort = (): void => finish(() => reject(aborted()))
-    const timer = setTimeout(() => finish(resolve), Math.max(0, ms))
+    // Node clamps overflowing timers to 1 ms; split long server-requested
+    // waits so they cannot cause an early retry.
+    let remaining = Math.max(0, ms)
+    let timer: ReturnType<typeof setTimeout>
+    const schedule = (): void => {
+      const chunk = Math.min(remaining, 2_147_483_647)
+      timer = setTimeout(() => {
+        remaining -= chunk
+        if (remaining > 0) schedule()
+        else finish(resolve)
+      }, chunk)
+    }
+    schedule()
     signal.addEventListener('abort', onAbort, { once: true })
   })
 }

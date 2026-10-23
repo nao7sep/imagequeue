@@ -31,7 +31,7 @@ const task: Task = {
 function stubPolls(statuses: string[]): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: string) => {
     if (url.endsWith('/flux-2-pro')) {
-      return new Response(JSON.stringify({ id: 'job', polling_url: 'https://poll.example/job' }))
+      return new Response(JSON.stringify({ id: 'job', polling_url: 'https://api.bfl.ai/v1/get_result?id=job' }))
     }
     return new Response(JSON.stringify({ status: statuses.shift() ?? 'Pending' }))
   })
@@ -61,8 +61,8 @@ describe('FLUX polling', () => {
   it('polls on through FLUX 3\'s Reasoning and Generating statuses to the image', async () => {
     const statuses = ['Reasoning', 'Generating', 'Ready']
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/flux-3-image')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://poll.example/job' }))
-      if (url === 'https://poll.example/job') {
+      if (url.endsWith('/flux-3-image')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://api.bfl.ai/v1/get_result?id=job' }))
+      if (url === 'https://api.bfl.ai/v1/get_result?id=job') {
         const status = statuses.shift()!
         return new Response(JSON.stringify(status === 'Ready' ? { status, result: { sample: 'https://image.example/result' } } : { status }))
       }
@@ -72,7 +72,7 @@ describe('FLUX polling', () => {
     const result = await generateFlux({ ...task, model: 'flux-3-image', params: { aspectRatio: '1:1', resolution: '1k' } }, new AbortController().signal)
     expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
     expect(result, 'FLUX 3 sends no seed').not.toHaveProperty('seed')
-    expect(fetchMock.mock.calls.filter(([url]) => url === 'https://poll.example/job')).toHaveLength(3)
+    expect(fetchMock.mock.calls.filter(([url]) => url === 'https://api.bfl.ai/v1/get_result?id=job')).toHaveLength(3)
   })
 })
 
@@ -80,8 +80,8 @@ describe('FLUX safe poll retry', () => {
   it('retries a 503 poll on the same submitted job', async () => {
     let polls = 0
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/flux-2-pro')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://poll.example/job' }))
-      if (url === 'https://poll.example/job') {
+      if (url.endsWith('/flux-2-pro')) return new Response(JSON.stringify({ id: 'job', polling_url: 'https://api.bfl.ai/v1/get_result?id=job' }))
+      if (url === 'https://api.bfl.ai/v1/get_result?id=job') {
         polls++
         return polls === 1
           ? new Response('{"detail":"busy"}', { status: 503, headers: { 'retry-after': '0' } })
@@ -93,6 +93,79 @@ describe('FLUX safe poll retry', () => {
     const result = await generateFlux(task, new AbortController().signal)
     expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
     expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/flux-2-pro'))).toHaveLength(1)
-    expect(fetchMock.mock.calls.filter(([url]) => url === 'https://poll.example/job')).toHaveLength(2)
+    expect(fetchMock.mock.calls.filter(([url]) => url === 'https://api.bfl.ai/v1/get_result?id=job')).toHaveLength(2)
+  })
+})
+
+
+describe('FLUX authenticated destination boundaries', () => {
+  const pollUrl = 'https://api.bfl.ai/v1/get_result?id=job'
+  const imageUrl = 'https://image.example/result'
+  const ready = () => new Response(JSON.stringify({ status: 'Ready', result: { sample: imageUrl } }))
+
+  it.each([
+    'https://attacker.example/job', 'http://api.bfl.ai/job', 'https://api.bfl.ai.attacker.example/job',
+    'https://sub.api.bfl.ai/job', 'https://api.bfl.ai:444/job',
+    'https://user:password@api.bfl.ai/job', 'https://user@api.eu.bfl.ai/job', 'file:///tmp/job',
+  ])('rejects hostile polling URL %s before any authenticated poll', async (polling_url) => {
+    const sent = vi.fn(async () => new Response(JSON.stringify({ id: 'job', polling_url })))
+    vi.stubGlobal('fetch', sent)
+    await expect(generateFlux(task, new AbortController().signal)).rejects.toThrow('untrusted API destination')
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0]).toMatchObject(['https://api.bfl.ai/v1/flux-2-pro', { redirect: 'manual', headers: { 'x-key': 'bfl-test' } }])
+  })
+
+  it.each(['https://api.bfl.ai', 'https://api.eu.bfl.ai', 'https://api.us.bfl.ai'])(
+    'allows authenticated polling at documented origin %s', async (origin) => {
+      const polling_url = `${origin}/v1/get_result?id=job`
+      const sent = vi.fn(async (url: string, _init?: RequestInit) => {
+        if (url.endsWith('/flux-2-pro')) return new Response(JSON.stringify({ id: 'job', polling_url }))
+        if (url === polling_url) return ready()
+        return new Response(new Uint8Array([1, 2, 3]))
+      })
+      vi.stubGlobal('fetch', sent)
+      expect((await generateFlux(task, new AbortController().signal)).buffer).toEqual(Buffer.from([1, 2, 3]))
+      expect(sent.mock.calls[1]).toMatchObject([polling_url, { redirect: 'manual', headers: { 'x-key': 'bfl-test' } }])
+      expect(sent.mock.calls[2]).toEqual([imageUrl, expect.not.objectContaining({ headers: expect.anything() })])
+    },
+  )
+
+  it.each(['submit', 'poll'])('does not forward credentials on a foreign %s redirect', async (phase) => {
+    const sent = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (phase === 'submit' || url === pollUrl) return new Response(null, { status: 307, headers: { location: 'https://attacker.example/collect' } })
+      return new Response(JSON.stringify({ id: 'job', polling_url: pollUrl }))
+    })
+    vi.stubGlobal('fetch', sent)
+    await expect(generateFlux(task, new AbortController().signal)).rejects.toThrow('untrusted API destination')
+    expect(sent).toHaveBeenCalledTimes(phase === 'submit' ? 1 : 2)
+    expect(sent.mock.calls.every(([url, init]) => new URL(url).origin === 'https://api.bfl.ai' && init?.redirect === 'manual')).toBe(true)
+  })
+
+  it.each([301, 302, 303])('rejects a submission redirect with status %s before resubmitting', async (status) => {
+    const sent = vi.fn(async () => new Response(null, { status, headers: { location: 'https://api.eu.bfl.ai/v1/flux-2-pro' } }))
+    vi.stubGlobal('fetch', sent)
+    await expect(generateFlux(task, new AbortController().signal)).rejects.toThrow('unsupported redirect')
+    expect(sent).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([307, 308])('preserves POST body and credentials across a trusted %s submission redirect', async (status) => {
+    const regional = 'https://api.eu.bfl.ai/v1/flux-2-pro'
+    const sent = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url === 'https://api.bfl.ai/v1/flux-2-pro') return new Response(null, { status, headers: { location: regional } })
+      if (url === regional) return new Response(JSON.stringify({ id: 'job', polling_url: pollUrl }))
+      if (url === pollUrl) return ready()
+      return new Response(new Uint8Array([1]))
+    })
+    vi.stubGlobal('fetch', sent)
+    await generateFlux(task, new AbortController().signal)
+    expect(sent.mock.calls[1]).toEqual([regional, sent.mock.calls[0][1]])
+    expect(sent.mock.calls[1][1]).toMatchObject({ method: 'POST', headers: { 'x-key': 'bfl-test' }, body: expect.any(String), redirect: 'manual' })
+  })
+
+  it('stops a trusted redirect loop after ten redirects', async () => {
+    const sent = vi.fn(async () => new Response(null, { status: 307, headers: { location: '/v1/flux-2-pro' } }))
+    vi.stubGlobal('fetch', sent)
+    await expect(generateFlux(task, new AbortController().signal)).rejects.toThrow('redirect did not resolve')
+    expect(sent).toHaveBeenCalledTimes(11)
   })
 })

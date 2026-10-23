@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import type { Task } from '../../../src/shared/types'
 import { columnParams } from './column-params'
+import { freshRecordsRoot, readRows, removeRecordsRoots } from '../records-fixture'
 
 // Each Gemini client passes `retryOptions: { attempts: 1 }`, so the SDK sends
 // one request per call and the app's own retry policy decides every resend:
@@ -34,6 +35,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+afterAll(removeRecordsRoots)
+
 const task: Task = {
   id: 't1', prompt: 'a cat', backend: 'nanobanana', model: 'gemini-3-pro-image', params: columnParams('nanobanana', 'gemini-3-pro-image'),
   status: 'generating', enqueuedAt: '2026-01-01T00:00:00.000Z', startedAt: null,
@@ -63,4 +66,50 @@ describe('Gemini request attempt ownership', () => {
     } as never)).rejects.toThrow()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+})
+
+
+it('records image response metadata without serializing the large inline image into a JSON copy', async () => {
+  const dir = freshRecordsRoot()
+  const data = 'AQID'.repeat(256 * 1024)
+  const metadata = {
+    modelVersion: 'gemini-image-test', responseId: 'response-1',
+    usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20, totalTokenCount: 30 },
+    candidates: [{
+      index: 0, finishReason: 'STOP',
+      safetyRatings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', probability: 'NEGLIGIBLE' }],
+      content: { role: 'model', parts: [
+        { text: 'A generated cat', thought: false },
+        { inlineData: { mimeType: 'image/png', data }, thoughtSignature: 'thought-signature' },
+      ] },
+    }],
+  }
+  const body = JSON.stringify(metadata)
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { headers: { 'content-type': 'application/json' } })))
+  const stringify = vi.spyOn(JSON, 'stringify')
+  let copiedImage = false
+  try {
+    const result = await generateNanoBanana(task, new AbortController().signal)
+    copiedImage = stringify.mock.calls.some(([value]) => {
+      const response = value as { candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[] } | null
+      return response?.candidates?.some((candidate) => candidate.content?.parts?.some((part) => part.inlineData?.data === data)) ?? false
+    })
+    expect(result.buffer.equals(Buffer.from(data, 'base64'))).toBe(true)
+    expect(result.mimeType).toBe('image/png')
+  } finally {
+    stringify.mockRestore()
+  }
+  expect(copiedImage).toBe(false)
+  const kept = JSON.parse(readRows(dir, 'ai_calls').at(-1)!.response as string)
+  expect(kept).toMatchObject({
+    modelVersion: metadata.modelVersion, responseId: metadata.responseId, usageMetadata: metadata.usageMetadata,
+    candidates: [{
+      index: 0, finishReason: 'STOP', safetyRatings: metadata.candidates[0].safetyRatings,
+      content: { role: 'model', parts: [
+        { text: 'A generated cat', thought: false },
+        { inlineData: { mimeType: 'image/png' }, thoughtSignature: 'thought-signature' },
+      ] },
+    }],
+  })
+  expect(kept.candidates[0].content.parts[1].inlineData).not.toHaveProperty('data')
 })

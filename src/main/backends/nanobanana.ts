@@ -83,11 +83,18 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
 
 // The response as recorded: the image bytes are the saved file's.
 function withoutImageBytes(response: GenerateContentResponse): unknown {
-  const copy = JSON.parse(JSON.stringify(response)) as GenerateContentResponse
-  for (const candidate of copy.candidates ?? []) {
-    for (const part of candidate.content?.parts ?? []) {
-      if (part.inlineData) delete part.inlineData.data
-    }
+  return {
+    ...response,
+    candidates: response.candidates?.map((candidate) => ({
+      ...candidate,
+      content: candidate.content && {
+        ...candidate.content,
+        parts: candidate.content.parts?.map((part) => {
+          if (!part.inlineData) return part
+          const { data: _data, ...metadata } = part.inlineData
+          return { ...part, inlineData: metadata }
+        }),
+      },
+    })),
   }
-  return copy
 }

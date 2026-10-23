@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { withProviderRetry, retryDelayMs } from '../../src/main/provider-retry'
 import { ProviderHttpError, ProviderTimeoutError } from '../../src/main/provider-errors'
 
-const delay = vi.hoisted(() => vi.fn(async (_ms: number, _signal: AbortSignal) => undefined))
+const delay = vi.hoisted(() => vi.fn(async (_ms: number, _signal: AbortSignal): Promise<void> => undefined))
 vi.mock('../../src/main/utils/abortable-delay', () => ({ abortableDelay: delay }))
 const signal = () => new AbortController().signal
 
@@ -12,18 +12,46 @@ describe('provider retry boundary', () => {
     const call = vi.fn(async () => { throw error })
     await expect(withProviderRetry(call, { signal: signal() })).rejects.toBe(error)
     expect(call).toHaveBeenCalledTimes(3)
-    expect(delay.mock.calls.slice(-2).map((args) => args[0])).toEqual([30000, 30000])
+    expect(delay.mock.calls.slice(-2).map((args) => args[0])).toEqual([60000, 60000])
   })
-  it('honors seconds and HTTP-date Retry-After, capped at 30 seconds', () => {
-    expect(retryDelayMs(new ProviderHttpError('busy', 429, null, '2'), 1000)).toBe(2000)
+  it('honors seconds and HTTP-date Retry-After without shortening server delays', () => {
+    expect(retryDelayMs(new ProviderHttpError('busy', 429, null, '120'), 1000)).toBe(120000)
+    expect(retryDelayMs(new ProviderHttpError('busy', 429, null, 'Thu, 01 Oct 2026 00:02:00 GMT'), 1000, Date.parse('2026-10-01T00:00:00Z'))).toBe(120000)
     expect(retryDelayMs(new ProviderHttpError('busy', 429, null, 'Thu, 01 Oct 2026 00:00:20 GMT'), 1000, Date.parse('2026-10-01T00:00:00Z'))).toBe(20000)
     expect(retryDelayMs(new ProviderHttpError('busy', 429, null, 'invalid'), 1500)).toBe(1500)
   })
   it('stops when cancellation lands during backoff', async () => {
     const controller = new AbortController()
-    const error = new ProviderHttpError('busy', 503)
-    const call = vi.fn(async () => { controller.abort(); throw error })
-    await expect(withProviderRetry(call, { signal: controller.signal })).rejects.toBe(error)
+    const error = new ProviderHttpError('busy', 503, null, '120')
+    const call = vi.fn(async () => { throw error })
+    let entered!: () => void
+    const waiting = new Promise<void>(resolve => { entered = resolve })
+    delay.mockImplementationOnce((_ms, attemptSignal) => new Promise<void>((_resolve, reject) => {
+      attemptSignal.addEventListener('abort', () => reject(attemptSignal.reason), { once: true })
+      entered()
+    }))
+    const result = withProviderRetry(call, { signal: controller.signal })
+    const rejected = expect(result).rejects.toMatchObject({ name: 'AbortError' })
+    await waiting
+    expect(delay.mock.calls.at(-1)?.[0]).toBe(120000)
+    controller.abort()
+    await rejected
+    expect(call).toHaveBeenCalledOnce()
+  })
+  it('applies the total deadline while waiting for a 120-second Retry-After', async () => {
+    const error = new ProviderHttpError('busy', 503, null, '120')
+    const call = vi.fn(async () => { throw error })
+    let entered!: () => void
+    const waiting = new Promise<void>(resolve => { entered = resolve })
+    delay.mockImplementationOnce((_ms, attemptSignal) => new Promise<void>((_resolve, reject) => {
+      attemptSignal.addEventListener('abort', () => reject(attemptSignal.reason), { once: true })
+      entered()
+    }))
+    const result = withProviderRetry(call, { signal: signal(), timeoutMs: 10 })
+    const rejected = expect(result).rejects.toBeInstanceOf(ProviderTimeoutError)
+    await waiting
+    expect(delay.mock.calls.at(-1)?.[0]).toBe(120000)
+    await rejected
     expect(call).toHaveBeenCalledOnce()
   })
   // The fleet rule, the same for an image as for text: a refused or unresolved
