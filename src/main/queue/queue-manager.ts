@@ -1,3 +1,4 @@
+import { isQueueTaskVisible } from '../../shared/queue-visibility'
 import { nanoid } from 'nanoid'
 import { BackendId, Task, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
 
@@ -27,9 +28,86 @@ export function cloneTask(task: Task): Task {
   return normalizeTaskRecord(task)
 }
 
+export type QueueChangeConsumer = 'presentation' | 'durability'
+export interface QueueChanges {
+  revision: number
+  reset?: Record<BackendId, Task[]>
+  upserts: Task[]
+  removed: { backend: BackendId; id: string }[]
+}
+interface PendingChange {
+  revision: number
+  task?: Task
+  removed?: { backend: BackendId; id: string }
+}
+interface ConsumerChanges {
+  resetRevision: number | null
+  changes: Map<string, PendingChange>
+}
+
 // In-memory queue manager. One ordered queue per backend.
 export class QueueManager {
   private queues: Record<BackendId, Task[]> = createEmptyQueues()
+  private tasksById = new Map<string, Task>()
+  private revision = 0
+  private consumers: Record<QueueChangeConsumer, ConsumerChanges> = {
+    presentation: { resetRevision: 0, changes: new Map() },
+    durability: { resetRevision: 0, changes: new Map() },
+  }
+
+  get currentRevision(): number { return this.revision }
+
+  private taskKey(backend: BackendId, id: string): string { return `${backend}:${id}` }
+
+  private recordTask(task: Task): void {
+    const revision = ++this.revision
+    const key = this.taskKey(task.backend, task.id)
+    for (const consumer of Object.values(this.consumers)) consumer.changes.set(key, { revision, task })
+  }
+
+  private recordRemoval(task: Task): void {
+    const revision = ++this.revision
+    const key = this.taskKey(task.backend, task.id)
+    this.tasksById.delete(key)
+    for (const consumer of Object.values(this.consumers)) {
+      consumer.changes.set(key, { revision, removed: { backend: task.backend, id: task.id } })
+    }
+  }
+
+  updateTask(task: Task, changes: Partial<Task>): void {
+    if (this.getTask(task.backend, task.id) !== task) throw new Error('Cannot update a task not owned by this queue')
+    if ((changes.id !== undefined && changes.id !== task.id) || (changes.backend !== undefined && changes.backend !== task.backend)) {
+      throw new Error('Cannot change a queue task identity')
+    }
+    Object.assign(task, changes)
+    this.recordTask(task)
+  }
+
+  captureChanges(consumer: QueueChangeConsumer): QueueChanges {
+    const pending = this.consumers[consumer]
+    if (pending.resetRevision !== null) {
+      return { revision: this.revision, reset: structuredClone(this.queues), upserts: [], removed: [] }
+    }
+    const upserts: Task[] = []
+    const removed: { backend: BackendId; id: string }[] = []
+    for (const change of pending.changes.values()) {
+      if (change.task) upserts.push(structuredClone(change.task))
+      else if (change.removed) removed.push({ ...change.removed })
+    }
+    return { revision: this.revision, upserts, removed }
+  }
+
+  ackChanges(consumer: QueueChangeConsumer, revision: number): void {
+    const pending = this.consumers[consumer]
+    if (pending.resetRevision !== null && pending.resetRevision <= revision) pending.resetRevision = null
+    for (const [key, change] of pending.changes) {
+      if (change.revision <= revision) pending.changes.delete(key)
+    }
+  }
+
+  hasVisibleTasks(backend: BackendId, showKept: boolean): boolean {
+    return this.queues[backend].some(task => isQueueTaskVisible(task, showKept))
+  }
 
   private createTask(request: EnqueueBatchUnit): Task {
     return {
@@ -52,6 +130,8 @@ export class QueueManager {
 
   private insertNewTask(task: Task): void {
     this.queues[task.backend].unshift(task)
+    this.tasksById.set(this.taskKey(task.backend, task.id), task)
+    this.recordTask(task)
   }
 
   private enqueueUnit(request: EnqueueBatchUnit): Task {
@@ -101,20 +181,20 @@ export class QueueManager {
   }
 
   getTask(backend: BackendId, taskId: string): Task | undefined {
-    return this.queues[backend].find((t) => t.id === taskId)
+    return this.tasksById.get(this.taskKey(backend, taskId))
   }
 
   keepTask(backend: BackendId, taskId: string): Task | undefined {
     const task = this.getTask(backend, taskId)
     if (!task || task.status !== 'completed') return undefined
-    task.status = 'kept'
+    this.updateTask(task, { status: 'kept' })
     return task
   }
 
   restoreTask(backend: BackendId, taskId: string): Task | undefined {
     const task = this.getTask(backend, taskId)
     if (!task || task.status !== 'kept') return undefined
-    task.status = 'completed'
+    this.updateTask(task, { status: 'completed' })
     return task
   }
 
@@ -122,19 +202,17 @@ export class QueueManager {
     const index = this.queues[backend].findIndex((task) => task.id === taskId)
     if (index < 0) return undefined
     const [task] = this.queues[backend].splice(index, 1)
+    this.recordRemoval(task)
     return task
   }
 
   // Resets a task back to 'queued' so the processor picks it up again, clearing
   // the per-attempt result fields. Shared by single retry and bulk resume.
   private requeueTask(task: Task): void {
-    task.status = 'queued'
-    delete task.pendingOutput
-    task.error = null
-    task.providerMessage = null
-    task.startedAt = null
-    task.completedAt = null
-    task.durationMs = null
+    this.updateTask(task, {
+      status: 'queued', pendingOutput: undefined, error: null, providerMessage: null,
+      startedAt: null, completedAt: null, durationMs: null,
+    })
   }
 
   retryTask(backend: BackendId, taskId: string): Task | undefined {
@@ -169,6 +247,15 @@ export class QueueManager {
       replaced[backend] = (nextQueues[backend] ?? []).map(cloneTask)
     }
     this.queues = replaced
+    this.tasksById.clear()
+    for (const tasks of Object.values(replaced)) {
+      for (const task of tasks) this.tasksById.set(this.taskKey(task.backend, task.id), task)
+    }
+    const revision = ++this.revision
+    for (const consumer of Object.values(this.consumers)) {
+      consumer.changes.clear()
+      consumer.resetRevision = revision
+    }
   }
 
   hasGeneratingTasks(): boolean {
@@ -189,14 +276,10 @@ export class QueueManager {
     for (const backend of Object.keys(this.queues) as BackendId[]) {
       for (const task of this.queues[backend]) {
         if (task.status === 'generating') {
-          task.status = 'interrupted'
-          task.startedAt = null
-          task.completedAt = null
-          task.durationMs = null
-          task.imagePath = null
-          task.baseName = null
-          task.error = null
-          task.providerMessage = null
+          this.updateTask(task, {
+            status: 'interrupted', startedAt: null, completedAt: null, durationMs: null,
+            imagePath: null, baseName: null, error: null, providerMessage: null,
+          })
           count++
         }
       }
@@ -213,9 +296,7 @@ export class QueueManager {
     for (const backend of Object.keys(this.queues) as BackendId[]) {
       for (const task of this.queues[backend]) {
         if (task.status === 'queued') {
-          task.status = 'interrupted'
-          task.error = null
-          task.providerMessage = null
+          this.updateTask(task, { status: 'interrupted', error: null, providerMessage: null })
           count++
         }
       }
@@ -232,9 +313,11 @@ export class QueueManager {
     let count = 0
     for (const backend of Object.keys(this.queues) as BackendId[]) {
       const before = this.queues[backend].length
-      this.queues[backend] = this.queues[backend].filter(
-        (task) => task.status !== 'queued' && task.status !== 'interrupted'
-      )
+      this.queues[backend] = this.queues[backend].filter(task => {
+        if (task.status !== 'queued' && task.status !== 'interrupted') return true
+        this.recordRemoval(task)
+        return false
+      })
       count += before - this.queues[backend].length
     }
     return count

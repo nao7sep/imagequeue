@@ -461,6 +461,7 @@ async function writeSessionManifest(
 export async function persistActiveSession(): Promise<SessionManifest> {
   const session = activeSession ?? await ensureActiveSessionLoaded()
   const sessionDir = getSessionDir()
+  const revision = queueManager.currentRevision
   const tasks = queueManager.getAllStoredTasks()
   const content = sessionContentKey(session.elaboratedPrompts, tasks)
   if (content !== session.seen.content) session.seen = { content, at: new Date().toISOString() }
@@ -471,6 +472,7 @@ export async function persistActiveSession(): Promise<SessionManifest> {
     const { manifest, saved } = await writeSessionManifest(sessionDir, snapshot, tasks)
     session.saved = saved.saved
     session.updatedAt = saved.updatedAt
+    queueManager.ackChanges('durability', revision)
     writeFailure = null
     return manifest
   })
@@ -484,6 +486,7 @@ export async function persistActiveSession(): Promise<SessionManifest> {
 function adoptSession(sessionDir: string, session: ActiveSessionState, tasks: Record<BackendId, Task[]>): void {
   setSessionDir(sessionDir)
   queueManager.replaceAllTasks(tasks)
+  queueManager.ackChanges('durability', queueManager.currentRevision)
   activeSession = session
   publishQueueState()
   broadcastSessionChanged(getSessionId())

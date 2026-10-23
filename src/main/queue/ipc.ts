@@ -3,7 +3,7 @@ import { refreshMainWindowMinimumSize } from '../main-window-layout'
 import { getShowKeptImages, toggleShowKeptImages } from './view-state'
 import { recoverPublishedOutput } from '../session/output-recovery'
 import { handle } from '../ipc-boundary'
-import { queueManager } from './queue-manager'
+import { queueManager, cloneTask } from './queue-manager'
 import { BackendId, EnqueueBatchUnit, EnqueueRequest, TaskDeletionResult } from '../../shared/types'
 import { deleteImageOutput, trashImageOutput, imageExtFromPath, imageOutputFileStates } from '../utils/file-output'
 import { loadConfig } from '../config'
@@ -12,7 +12,7 @@ import { getSessionDir, getSessionId, mutateSession, persistActiveSession } from
 import { shouldDeleteToTrash } from '../../shared/config'
 import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
-import { publishQueueState } from './publisher'
+import { publishQueueState, getQueueSnapshot, unsubscribeQueue } from './publisher'
 import { setQueuePausedAndPublish } from './control-actions'
 import { pauseForStorageFailure } from './storage-failure'
 
@@ -59,9 +59,8 @@ export function registerQueueIpc(): void {
     return tasks
   }))
 
-  handle('queue:getAllStoredTasks', () => {
-    return queueManager.getAllStoredTasks()
-  })
+  handle('queue:getSnapshot', (event) => getQueueSnapshot(event.sender))
+  handle('queue:unsubscribe', (event) => unsubscribeQueue(event.sender))
 
   handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
     const task = queueManager.getTask(backend, taskId)
@@ -146,10 +145,13 @@ export function registerQueueIpc(): void {
 
   handle('queue:retryTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
     const pending = queueManager.getTask(backend, taskId)
-    if (pending && (pending.status === 'failed' || pending.status === 'interrupted') &&
-      pending.pendingOutput && await recoverPublishedOutput(pending, getSessionDir())) {
-      await persistQueueChange()
-      return
+    if (pending && (pending.status === 'failed' || pending.status === 'interrupted') && pending.pendingOutput) {
+      const recovered = cloneTask(pending)
+      if (await recoverPublishedOutput(recovered, getSessionDir())) {
+        queueManager.updateTask(pending, { ...recovered, pendingOutput: undefined })
+        await persistQueueChange()
+        return
+      }
     }
     const task = queueManager.retryTask(backend, taskId)
     if (task) {
@@ -170,8 +172,7 @@ export function registerQueueIpc(): void {
     // leave the entire retry operation available to try again.
     for (const task of recovered) {
       const current = queueManager.getTask(task.backend, task.id)!
-      Object.assign(current, task)
-      delete current.pendingOutput
+      queueManager.updateTask(current, { ...task, pendingOutput: undefined })
     }
     const count = queueManager.retryAllInterrupted()
     if (count > 0 || recovered.length > 0) {

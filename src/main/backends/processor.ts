@@ -107,8 +107,7 @@ export function processQueues(): void {
       // for, so a crash leaves it interrupted rather than silently lost. If
       // that write fails, nothing starts: the task stays queued and the queue
       // pauses until the user resumes it.
-      task.status = 'generating'
-      task.startedAt = new Date().toISOString()
+      queueManager.updateTask(task, { status: 'generating', startedAt: new Date().toISOString() })
       drainTracker.begin(Date.now())
       activeCounts[backend]++
       logGenerationStart(task.id, backend, task.model)
@@ -140,8 +139,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   try {
     await persistActiveSession()
   } catch (error) {
-    task.status = 'queued'
-    task.startedAt = null
+    queueManager.updateTask(task, { status: 'queued', startedAt: null })
     pauseForStorageFailure('start', error)
     clearInFlight(task.id)
     resolveSettled()
@@ -162,8 +160,8 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     clearInFlight(task.id)
     const completedAt = new Date()
 
-    task.completedAt = completedAt.toISOString()
-    task.durationMs = completedAt.getTime() - new Date(task.startedAt!).getTime()
+    const durationMs = completedAt.getTime() - new Date(task.startedAt!).getTime()
+    queueManager.updateTask(task, { completedAt: completedAt.toISOString(), durationMs })
 
     const ext = await validateImage(imageBuffer)
 
@@ -180,9 +178,9 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       status: 'completed',
       enqueued_at: task.enqueuedAt,
       started_at: task.startedAt!,
-      completed_at: task.completedAt,
+      completed_at: completedAt.toISOString(),
       file_timestamp: utc,
-      duration_ms: task.durationMs,
+      duration_ms: durationMs,
       seed: seed ?? null,
       error: null
     }
@@ -190,7 +188,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     let baseName: string
     try {
       baseName = await writeImageOutput(timestamp, ordinal, slug, backend, imageBuffer, metadata, ext, async (output) => {
-        task.pendingOutput = output
+        queueManager.updateTask(task, { pendingOutput: output })
         await persistActiveSession()
       })
     } catch (writeErr) {
@@ -205,12 +203,9 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       throw writeErr
     }
 
-    task.status = 'completed'
-    delete task.pendingOutput
-    task.baseName = baseName
-    task.imagePath = `${baseName}.${ext}`
+    queueManager.updateTask(task, { status: 'completed', pendingOutput: undefined, baseName, imagePath: `${baseName}.${ext}` })
     drainTracker.recordOk()
-    logGenerationComplete(task.id, task.durationMs, task.baseName)
+    logGenerationComplete(task.id, durationMs, baseName)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     // A cancellation is not a failure: the user asked for it. It lands as
@@ -224,22 +219,18 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     // `failed`, never `interrupted` — retrying an interrupted task would buy
     // the already-bought image again.
     if (!generated && (message === CANCELLED_MESSAGE || controller.signal.aborted)) {
-      task.status = 'interrupted'
-      task.startedAt = null
-      task.completedAt = null
-      task.durationMs = null
-      task.error = null
-      task.providerMessage = null
+      queueManager.updateTask(task, {
+        status: 'interrupted', startedAt: null, completedAt: null, durationMs: null, error: null, providerMessage: null,
+      })
       drainTracker.recordFailed()
       log('info', 'Generation stopped by request', { taskId: task.id, backend })
     } else {
-      task.status = 'failed'
       // The task and manifest keep deliberately authored presentation copy. The
       // complete diagnostic (type, message, stack, cause) remains in the log.
-      task.error = generationFailurePresentation(backend, err, generated)
+      const error = generationFailurePresentation(backend, err, generated)
       // The provider's own words, kept beside the authored copy rather than in
       // it. A save failure after a successful generation is not its answer.
-      task.providerMessage = generated ? null : providerMessage(err)
+      queueManager.updateTask(task, { status: 'failed', error, providerMessage: generated ? null : providerMessage(err) })
       drainTracker.recordFailed()
       logGenerationFailed(task.id, err, {
         backend,

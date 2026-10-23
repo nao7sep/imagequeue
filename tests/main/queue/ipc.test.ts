@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   logEnqueue: vi.fn(),
   persistActiveSession: vi.fn(),
   publishQueueState: vi.fn(),
+  getQueueSnapshot: vi.fn(() => ({ kind: 'snapshot', revision: 0 })),
+  unsubscribeQueue: vi.fn(),
   publishAppNotice: vi.fn(),
   broadcastPresentation: vi.fn(),
   refreshMainWindowMinimumSize: vi.fn(),
@@ -56,7 +58,7 @@ vi.mock('../../../src/main/session', () => ({
 }))
 vi.mock('../../../src/main/presentation', () => ({ broadcastPresentation: mocks.broadcastPresentation }))
 vi.mock('../../../src/main/main-window-layout', () => ({ refreshMainWindowMinimumSize: mocks.refreshMainWindowMinimumSize }))
-vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState, publishAppNotice: mocks.publishAppNotice }))
+vi.mock('../../../src/main/queue/publisher', () => ({ publishQueueState: mocks.publishQueueState, getQueueSnapshot: mocks.getQueueSnapshot, unsubscribeQueue: mocks.unsubscribeQueue, publishAppNotice: mocks.publishAppNotice }))
 vi.mock('../../../src/main/queue/control-actions', () => ({
   setQueuePausedAndPublish: mocks.setQueuePausedAndPublish,
 }))
@@ -160,7 +162,7 @@ describe('queueing work', () => {
   it('hands back everything it holds', async () => {
     seed([makeTask('a', 'queued')])
 
-    expect((await invoke('queue:getAllStoredTasks'))).toEqual(queueManager.getAllStoredTasks())
+    expect((await invoke('queue:getSnapshot'))).toEqual({ kind: 'snapshot', revision: 0 })
   })
 })
 

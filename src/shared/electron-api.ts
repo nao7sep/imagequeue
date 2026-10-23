@@ -1,3 +1,4 @@
+import type { QueueSnapshot, QueueUpdate } from './queue-updates'
 import type { BrainstormConfig } from './brainstorm-config'
 import type { DraftSurface, QuitQuestion } from './quit'
 import {
@@ -89,7 +90,7 @@ export interface ElectronAPI {
   enqueueBatch: (units: EnqueueBatchUnit[]) => Promise<Task[]>
   getShowKeptImages: () => Promise<boolean>
   toggleShowKeptImages: () => Promise<boolean>
-  getAllStoredTasks: () => Promise<Record<BackendId, Task[]>>
+  getQueueSnapshot: () => Promise<QueueSnapshot>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
   deleteWithFiles: (backend: BackendId, taskId: string) => Promise<TaskDeletionResult | void>
@@ -233,7 +234,7 @@ export interface ElectronAPI {
   loadAudioFile: (filePath: string) => Promise<string | null>
 
   onShowKeptImagesChanged: (callback: (visible: boolean) => void) => (() => void)
-  onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void) => (() => void)
+  onQueueUpdated: (callback: (update: QueueUpdate) => void) => (() => void)
   onSessionChanged: (callback: (event: { sessionId: string }) => void) => (() => void)
   onInterruptedTasksOnResume: (callback: (event: { count: number }) => void) => (() => void)
 
