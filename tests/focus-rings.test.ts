@@ -25,12 +25,7 @@ const COVERING_STYLESHEET = "src/renderer/src/styles.css";
 // Focus sites the text alone cannot place, and why each is not a ringing container.
 // Each entry covers only the one kind of site it explains, so anything else added
 // to the same file is still placed on its own merits.
-const EXPLAINED: Record<string, { kind: Site["kind"]; reason: string }> = {
-  "src/renderer/src/components/ElaboratedPromptsModal.tsx": {
-    kind: "attribute",
-    reason: "a querySelector that finds the tabbable option, not an element",
-  },
-};
+const EXPLAINED: Record<string, { kind: Site["kind"]; reason: string }> = {};
 
 // A composite that owns its items, or a region that scrolls on their behalf.
 const CONTAINER_ROLES = [

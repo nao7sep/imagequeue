@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installVirtualListLayout } from '../../virtual-list-layout'
 import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
 import type { ConfirmOptions } from '../../../../src/shared/confirm'
 import type { BackendId, SessionListEntry, SessionSummary, Task } from '../../../../src/shared/types'
@@ -53,7 +54,9 @@ const listSessions = vi.fn<() => Promise<SessionListEntry[]>>()
 const resumeSession = vi.fn(async (_sessionId: string) => {})
 const openSessionFolder = vi.fn(async (_sessionId: string) => {})
 
+let restoreLayout: () => void
 beforeEach(() => {
+  restoreLayout = installVirtualListLayout()
   confirm.mockReset()
   confirm.mockResolvedValue(true)
   queueValue = { tasks: emptyTasks() }
@@ -66,6 +69,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  restoreLayout()
   vi.unstubAllGlobals()
   listSessions.mockReset()
   resumeSession.mockClear()
@@ -220,4 +224,47 @@ describe('session thumbnail requests', () => {
     expect(image.getAttribute('loading')).toBe('lazy')
     expect(row.querySelector('img[src="iq-image://sessions/session/20261004-120000/image-one"]')).toBeNull()
   })
+})
+
+
+it('bounds cards and thumbnails while navigating the entire archive and retaining the offscreen tab stop', async () => {
+  const sessions: SessionListEntry[] = Array.from({ length: 5000 }, (_, i) => ({
+    ...session(1, '2026-10-04T12:00:00.000Z'), sessionId: `archive-${i}`, isCurrent: false,
+    thumbnails: [{ baseName: `image-${i}` }],
+  }))
+  listSessions.mockResolvedValue(sessions)
+  render(<SessionsModal onClose={vi.fn()} />)
+  const first = (await screen.findByText('archive-0')).closest<HTMLElement>('[role="option"]')!
+  expect(screen.getAllByRole('option').length).toBeLessThan(20)
+  expect(document.querySelectorAll('img').length).toBeLessThan(20)
+  act(() => first.focus())
+  fireEvent.keyDown(first, { key: 'End' })
+  const last = (await screen.findByText('archive-4999')).closest<HTMLElement>('[role="option"]')!
+  expect(document.activeElement).toBe(last)
+  expect(last.getAttribute('aria-posinset')).toBe('5000')
+  expect(last.getAttribute('aria-setsize')).toBe('5000')
+  expect(resumeSession).not.toHaveBeenCalled()
+  const viewport = document.querySelector<HTMLElement>('.sessions-viewport')!
+  act(() => { viewport.scrollTop = 0; fireEvent.scroll(viewport) })
+  expect(last.isConnected).toBe(true)
+  expect(screen.getAllByRole('option').length).toBeLessThan(20)
+  fireEvent.keyDown(last, { key: 'ContextMenu' })
+  await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Open Folder' })) })
+  expect(openSessionFolder).toHaveBeenCalledWith('archive-4999')
+  act(() => last.focus())
+  await act(async () => { fireEvent.keyDown(last, { key: 'Enter' }) })
+  expect(resumeSession).toHaveBeenCalledWith('archive-4999')
+})
+
+it('finds a session by its label even when its card is not mounted', async () => {
+  listSessions.mockResolvedValue(Array.from({ length: 200 }, (_, index) => ({
+    sessionId: index === 199 ? 'zebra' : `archive-${index}`, unopenable: 'unreadable',
+  })))
+  render(<SessionsModal onClose={vi.fn()} />)
+  const first = (await screen.findByText('archive-0')).closest<HTMLElement>('[role="option"]')!
+  expect(screen.queryByText('zebra')).toBeNull()
+  act(() => first.focus())
+  fireEvent.keyDown(first, { key: 'z' })
+  const target = (await screen.findByText('zebra')).closest<HTMLElement>('[role="option"]')!
+  expect(document.activeElement).toBe(target)
 })

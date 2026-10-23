@@ -13,7 +13,7 @@ export interface ListboxItems {
   findPrefix?: (prefix: string, afterIndex: number) => Promise<number> | number
 }
 
-interface ListboxOptions {
+export interface ListboxOptions {
   // A paged consumer owns mounting/revealing the requested row before focus.
   onNavigate?: (id: string) => void
   // The committed selection (a projection target). May be null.

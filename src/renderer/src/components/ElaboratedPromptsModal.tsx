@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSessionDraft } from '../context/SessionDraftContext'
 import { useConfirm } from '../context/ConfirmContext'
-import { useListbox } from '../hooks/useListbox'
+import { useVirtualListbox } from '../hooks/useVirtualListbox'
 import './ElaboratedPromptsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -28,36 +28,35 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   // Rows newest-first, identified by text and its occurrence in this snapshot.
   // Deleting a duplicate can renumber occurrences; deletion selection is
   // recovered by display slot below, not by assuming these IDs stay unchanged.
-  const seen = new Map<string, number>()
-  const rows = [...elaboratedPrompts].reverse().map((record, index) => {
-    const occ = seen.get(record.text) ?? 0
-    seen.set(record.text, occ + 1)
-    return {
-      id: `${occ} ${record.text}`,
-      prompt: record.text,
-      concepts: record.concepts,
-      originalIndex: elaboratedPrompts.length - 1 - index,
-    }
-  })
+  const rows = useMemo(() => {
+    const seen = new Map<string, number>()
+    return [...elaboratedPrompts].reverse().map((record, index) => {
+      const occ = seen.get(record.text) ?? 0
+      seen.set(record.text, occ + 1)
+      return {
+        id: `${occ} ${record.text}`,
+        prompt: record.text,
+        concepts: record.concepts,
+        originalIndex: elaboratedPrompts.length - 1 - index,
+      }
+    })
+  }, [elaboratedPrompts])
+  const ids = useMemo(() => rows.map((row) => row.id), [rows])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // When a delete is initiated, the display slot to recover selection + focus to
   // (the neighbour that slides into it).
   const recoverIndexRef = useRef<number | null>(null)
 
-  const { listboxProps, getOptionProps } = useListbox<HTMLOListElement>({
-    ids: rows.map((r) => r.id),
+  const { listboxProps, getOptionProps, scrollRef, virtualizer, requestFocus, rowStyle } = useVirtualListbox<HTMLOListElement>({
+    ids,
+    estimateSize: 140,
+    padding: 16,
     selectedId,
     onSelect: setSelectedId,
     activation: 'follows-focus',
     typeAhead: false,
   })
-
-  const focusOption = (id: string): void => {
-    listboxProps.ref.current
-      ?.querySelector<HTMLElement>(`[data-listbox-option="${CSS.escape(id)}"]`)
-      ?.focus()
-  }
 
   // The one place selection (and, after a delete, focus) reconciles with the list.
   // On a delete: move both to the neighbour that took the slot. Otherwise (open, or
@@ -68,7 +67,10 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
     if (idx !== null) {
       const target = rows.length > 0 ? rows[Math.min(idx, rows.length - 1)] : null
       setSelectedId(target?.id ?? null)
-      if (target) focusOption(target.id)
+      if (document.activeElement === document.body || listboxProps.ref.current?.contains(document.activeElement)) {
+        if (target) requestFocus(target.id)
+        else listboxProps.ref.current?.focus()
+      }
       return
     }
     setSelectedId((prev) => (prev && rows.some((r) => r.id === prev) ? prev : rows[0]?.id ?? null))
@@ -79,11 +81,7 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
   // Focus the active row when the modal opens, so the arrow keys navigate
   // immediately — the modal shell would otherwise focus the header close button.
   useEffect(() => {
-    const list = listboxProps.ref.current
-    ;(
-      list?.querySelector<HTMLElement>('[data-listbox-option][tabindex="0"]') ??
-      list?.querySelector<HTMLElement>('[data-listbox-option]')
-    )?.focus()
+    if (rows[0]) requestFocus(rows[0].id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -137,11 +135,12 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
         </>
       }
     >
-      <div className="elaborated-prompts-body">
+      <div className="elaborated-prompts-body" ref={scrollRef}>
         <ol
           {...listboxProps}
           onKeyDown={onListKeyDown}
           className="elaborated-prompts-list"
+          style={{ height: rows.length ? virtualizer.getTotalSize() : undefined }}
           reversed
           start={elaboratedPrompts.length}
         >
@@ -150,10 +149,12 @@ export function ElaboratedPromptsModal({ onClose }: Props): React.JSX.Element {
               {t('elaborated.empty')}
             </li>
           )}
-            {rows.map((row, index) => {
+            {virtualizer.getVirtualItems().map((item) => {
+              const index = item.index
+              const row = rows[index]
               const displayNumber = elaboratedPrompts.length - index
               return (
-                <li key={row.id} className="elaborated-prompts-row" {...getOptionProps(row.id)}>
+                <li key={row.id} data-index={index} ref={virtualizer.measureElement} style={rowStyle(item.start)} className="elaborated-prompts-row" {...getOptionProps(row.id)}>
                   <div className="elaborated-prompts-number" aria-hidden="true">{t('elaborated.number', { number: displayNumber })}</div>
                   <div className="elaborated-prompts-main">
                     {/* The full prompt, unabridged: showing these is this modal's

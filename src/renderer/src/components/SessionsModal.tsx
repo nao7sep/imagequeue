@@ -5,7 +5,8 @@ import { SelectedActions, openSelectedActions } from './SelectedActions'
 import { useQueue } from '../context/QueueContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useSettings } from '../context/SettingsContext'
-import { useListbox, type OptionProps } from '../hooks/useListbox'
+import type { OptionProps } from '../hooks/useListbox'
+import { useVirtualListbox } from '../hooks/useVirtualListbox'
 import { useImeGuard } from '../utils/imeGuard'
 import { isUnopenableSession, shouldDeleteToTrash, type SessionListEntry, type SessionSummary, type SessionThumbnail, type UnopenableSession } from '../../../shared'
 import { useI18n, type Translator } from '../i18n/I18nContext'
@@ -278,8 +279,15 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
 
   // Manual activation: arrowing moves the active card; Enter resumes it. Resume
   // is a destructive queue replacement, so it never fires merely on focus.
-  const { activeId, listboxProps, getOptionProps } = useListbox({
-    ids: sessions.map((s) => s.sessionId),
+  const sessionIds = useMemo(() => sessions.map((session) => session.sessionId), [sessions])
+  const sessionLabel = useCallback((index: number) => {
+    const session = sessions[index]
+    return isUnopenableSession(session) ? session.sessionId : sessionDisplayName(session.sessionId, (time) => sessionTimeFormat.format(time))
+  }, [sessions, sessionTimeFormat])
+  const { activeId, listboxProps, getOptionProps, scrollRef, virtualizer, rowStyle } = useVirtualListbox<HTMLDivElement>({
+    ids: sessionIds,
+    getLabel: sessionLabel,
+    estimateSize: 220,
     selectedId: selectedSessionId,
     onSelect: setSelectedSessionId,
     activation: 'manual',
@@ -335,90 +343,97 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
             {t('task.delete')}
           </MenuItem>
         </SelectedActions>
-        <div className="sessions-list" aria-label={t('menu.sessions')} aria-busy={loading} {...listboxProps}
-          onKeyDown={(event) => {
-            if (!isComposing(event.nativeEvent) && openSelectedActions(event, actionsRef)) return
-            listboxProps.onKeyDown(event)
-          }}>
-          {sessions.length === 0 && (
-            <div className="sessions-modal-empty" role="presentation">
-              {loading
-                ? t('sessions.loading')
-                : loadError
-                  ? t('sessions.unavailable')
-                  : t('sessions.empty')}
-            </div>
-          )}
-          {sessions.length > 0 && (
-            <>
-            {sessions.map((session) => {
-              const busy = busySessionId === session.sessionId
-              const selected = selectedSessionId === session.sessionId
-              if (isUnopenableSession(session)) {
-                return (
-                  <UnopenableSessionCard
-                    key={session.sessionId}
-                    session={session}
-                    selected={selected}
-                    optionProps={getOptionProps(session.sessionId)}
-                    onOpenFolder={() => void handleOpenFolder(session)}
-                    openFolderDisabled={busy || creatingSession}
-                  />
-                )
-              }
-              return (
-                <div
-                  key={session.sessionId}
-                  className={`session-card${selected ? ' selected' : ''}`}
-                  {...getOptionProps(session.sessionId)}
-                >
-                  <div className="session-card-header">
-                    <div className="session-card-title-row">
-                      <div className="session-card-title">{sessionDisplayName(session.sessionId, sessionTime)}</div>
-                      {session.isCurrent && <span className="session-card-badge">{t('sessions.current')}</span>}
+        <div className="sessions-viewport" ref={scrollRef}>
+          <div style={{ height: sessions.length ? virtualizer.getTotalSize() : undefined }} className="sessions-list" aria-label={t('menu.sessions')} aria-busy={loading} {...listboxProps}
+            onKeyDown={(event) => {
+              if (!isComposing(event.nativeEvent) && openSelectedActions(event, actionsRef)) return
+              listboxProps.onKeyDown(event)
+            }}>
+            {sessions.length === 0 && (
+              <div className="sessions-modal-empty" role="presentation">
+                {loading
+                  ? t('sessions.loading')
+                  : loadError
+                    ? t('sessions.unavailable')
+                    : t('sessions.empty')}
+              </div>
+            )}
+            {sessions.length > 0 && (
+              <>
+              {virtualizer.getVirtualItems().map((item) => {
+                const session = sessions[item.index]
+                const busy = busySessionId === session.sessionId
+                const selected = selectedSessionId === session.sessionId
+                if (isUnopenableSession(session)) {
+                  return (
+                    <div key={session.sessionId} data-index={item.index} ref={virtualizer.measureElement} style={rowStyle(item.start)}>
+                    <UnopenableSessionCard
+                      session={session}
+                      selected={selected}
+                      optionProps={getOptionProps(session.sessionId)}
+                      onOpenFolder={() => void handleOpenFolder(session)}
+                      openFolderDisabled={busy || creatingSession}
+                    />
                     </div>
-                    <div className="session-card-summary">{summarizeSession(session, i18n)}</div>
+                  )
+                }
+                return (
+                  <div
+                    key={session.sessionId}
+                    data-index={item.index}
+                    ref={virtualizer.measureElement}
+                    style={rowStyle(item.start)}
+                    className={`session-card${selected ? ' selected' : ''}`}
+                    {...getOptionProps(session.sessionId)}
+                  >
+                    <div className="session-card-header">
+                      <div className="session-card-title-row">
+                        <div className="session-card-title">{sessionDisplayName(session.sessionId, sessionTime)}</div>
+                        {session.isCurrent && <span className="session-card-badge">{t('sessions.current')}</span>}
+                      </div>
+                      <div className="session-card-summary">{summarizeSession(session, i18n)}</div>
+                    </div>
+                    <div className="session-card-meta">
+                      <span>{t('sessions.updated', { date: date(session.updatedAt) })}</span>
+                      <span>{t('sessions.created', { date: date(session.createdAt) })}</span>
+                      {session.lastResumedAt && <span>{t('sessions.resumed', { date: date(session.lastResumedAt) })}</span>}
+                    </div>
+                    <SessionPreviewStrip sessionId={session.sessionId} thumbnails={session.thumbnails} />
+                    {/* Per-row actions are pointer-only (tabIndex -1), never tab
+                        stops inside the listbox: the card is the one focusable
+                        option, and Enter on it runs the primary (Resume). */}
+                    <div className="session-card-actions">
+                      <button
+                        tabIndex={-1}
+                        className="modal-btn"
+                        onClick={() => void handleOpenFolder(session)}
+                        disabled={busy || creatingSession}
+                      >
+                        {t('sessions.openFolder')}
+                      </button>
+                      <button
+                        tabIndex={-1}
+                        className="modal-btn modal-btn-primary"
+                        onClick={() => void handleResume(session)}
+                        disabled={busy || session.isCurrent || hasGeneratingTasks || creatingSession}
+                      >
+                        {t('sessions.resume')}
+                      </button>
+                      <button
+                        tabIndex={-1}
+                        className="modal-btn modal-btn-danger"
+                        onClick={() => void handleDelete(session)}
+                        disabled={busy || session.isCurrent || creatingSession}
+                      >
+                        {t('task.delete')}
+                      </button>
+                    </div>
                   </div>
-                  <div className="session-card-meta">
-                    <span>{t('sessions.updated', { date: date(session.updatedAt) })}</span>
-                    <span>{t('sessions.created', { date: date(session.createdAt) })}</span>
-                    {session.lastResumedAt && <span>{t('sessions.resumed', { date: date(session.lastResumedAt) })}</span>}
-                  </div>
-                  <SessionPreviewStrip sessionId={session.sessionId} thumbnails={session.thumbnails} />
-                  {/* Per-row actions are pointer-only (tabIndex -1), never tab
-                      stops inside the listbox: the card is the one focusable
-                      option, and Enter on it runs the primary (Resume). */}
-                  <div className="session-card-actions">
-                    <button
-                      tabIndex={-1}
-                      className="modal-btn"
-                      onClick={() => void handleOpenFolder(session)}
-                      disabled={busy || creatingSession}
-                    >
-                      {t('sessions.openFolder')}
-                    </button>
-                    <button
-                      tabIndex={-1}
-                      className="modal-btn modal-btn-primary"
-                      onClick={() => void handleResume(session)}
-                      disabled={busy || session.isCurrent || hasGeneratingTasks || creatingSession}
-                    >
-                      {t('sessions.resume')}
-                    </button>
-                    <button
-                      tabIndex={-1}
-                      className="modal-btn modal-btn-danger"
-                      onClick={() => void handleDelete(session)}
-                      disabled={busy || session.isCurrent || creatingSession}
-                    >
-                      {t('task.delete')}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-            </>
-          )}
+                )
+              })}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </Modal>
