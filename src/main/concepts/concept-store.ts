@@ -85,8 +85,6 @@ export const addConcepts = (...args: Parameters<typeof Database.addConcepts>): P
 export const drawConcept = (...args: Parameters<typeof Database.drawConcept>): Promise<ReturnType<typeof Database.drawConcept>> => request('drawConcept', args)
 export const recordUses = (...args: Parameters<typeof Database.recordUses>): Promise<void> => request('recordUses', args)
 export const listFacetsWithStats = (...args: Parameters<typeof Database.listFacetsWithStats>): Promise<ReturnType<typeof Database.listFacetsWithStats>> => request('listFacetsWithStats', args)
-export const listConceptRows = (...args: Parameters<typeof Database.listConceptRows>): Promise<ReturnType<typeof Database.listConceptRows>> => request('listConceptRows', args)
-export const listProbesWithStats = (...args: Parameters<typeof Database.listProbesWithStats>): Promise<ReturnType<typeof Database.listProbesWithStats>> => request('listProbesWithStats', args)
 export const deleteProbe = (...args: Parameters<typeof Database.deleteProbe>): Promise<ReturnType<typeof Database.deleteProbe>> => request('deleteProbe', args)
 export const deleteConcept = (...args: Parameters<typeof Database.deleteConcept>): Promise<ReturnType<typeof Database.deleteConcept>> => request('deleteConcept', args)
 export const deleteFacet = (...args: Parameters<typeof Database.deleteFacet>): Promise<ReturnType<typeof Database.deleteFacet>> => request('deleteFacet', args)

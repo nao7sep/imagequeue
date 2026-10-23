@@ -347,26 +347,6 @@ export function listFacetsWithStats(): ConceptFacetSummary[] {
   `).all() as unknown as ConceptFacetSummary[]
 }
 
-export function listConceptRows(facetId: number): ConceptRow[] {
-  return open().prepare(`
-    SELECT c.id, c.probe_id AS probeId, c.display, p.display AS probe,
-           c.use_count AS useCount, c.last_used_at AS lastUsedAt, c.created_at AS createdAt
-    FROM concepts c JOIN probes p ON p.id = c.probe_id
-    WHERE c.facet_id = ?
-    ORDER BY c.use_count DESC, c.display ASC
-  `).all(facetId) as unknown as ConceptRow[]
-}
-
-/** Domains of a facet with their cluster statistics, creation order. */
-export function listProbesWithStats(facetId: number): ConceptProbeSummary[] {
-  return open().prepare(`
-    SELECT p.id, p.display, p.expanded,
-      (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id) AS conceptCount,
-      (SELECT COUNT(*) FROM concepts c WHERE c.probe_id = p.id AND c.use_count = 0) AS unusedCount
-    FROM probes p WHERE p.facet_id = ? ORDER BY p.id
-  `).all(facetId) as unknown as ConceptProbeSummary[]
-}
-
 // One connection owns all reads and writes in the worker. total_changes includes
 // every mutation without maintaining a second invalidation counter.
 function libraryRevision(): string {

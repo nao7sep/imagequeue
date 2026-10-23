@@ -3,9 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readConceptRows, readProbeStats } from './read-concept-store'
 import {
   initializeConceptStore, closeConceptStore, ensureFacet, addProbes, addConcepts,
-  listProbesWithStats, listConceptRows, recordUses, deleteConcept,
+  recordUses, deleteConcept,
   queryConceptLibrary, readConceptLibraryPage, locateConceptLibraryItem, searchConceptLibraryPrefix,
 } from '../../../src/main/concepts/concept-database'
 import { CONCEPT_LIBRARY_PAGE_SIZE, type ConceptLibraryQuery } from '../../../src/shared/concept-library'
@@ -21,7 +22,7 @@ describe('paged concept library with real SQLite', () => {
   afterEach(() => { closeConceptStore(); fs.rmSync(root, { recursive: true, force: true }) })
   function domain(display: string, labels: string[] = []): number {
     addProbes(query.facetId, [display])
-    const id = listProbesWithStats(query.facetId).find((p) => p.display === display)!.id
+    const id = readProbeStats(root, query.facetId).find((p) => p.display === display)!.id
     addConcepts(query.facetId, id, labels)
     return id
   }
@@ -29,7 +30,7 @@ describe('paged concept library with real SQLite', () => {
   it('pages every concept in stable use/display/id order while transferring compact domain counts', () => {
     const first = domain('ports', Array.from({ length: 4097 }, (_, i) => `dock ${String(4097 - i).padStart(5, '0')}`))
     const second = domain('mountains', ['summit', 'ridge'])
-    const used = listConceptRows(query.facetId).filter((_, i) => i % 7 === 0).map((r) => r.id)
+    const used = readConceptRows(root, query.facetId).filter((_, i) => i % 7 === 0).map((r) => r.id)
     recordUses('uses', used, 'session')
     const index = queryConceptLibrary(query)
     expect(index.groups).toEqual([{ probeId: first, count: 4097 }, { probeId: second, count: 2 }])
@@ -43,7 +44,7 @@ describe('paged concept library with real SQLite', () => {
         expect(result.rows.length).toBeLessThanOrEqual(CONCEPT_LIBRARY_PAGE_SIZE)
         rows.push(...result.rows.map((r) => r.id))
       }
-      expect(rows).toEqual(listConceptRows(query.facetId).filter((r) => r.probeId === group.probeId).map((r) => r.id))
+      expect(rows).toEqual(readConceptRows(root, query.facetId).filter((r) => r.probeId === group.probeId).map((r) => r.id))
       expect(new Set(rows).size).toBe(group.count)
     }
   })
@@ -51,7 +52,7 @@ describe('paged concept library with real SQLite', () => {
   it('keeps empty domains only under the established text/use-filter rules and treats wildcards literally', () => {
     const empty = domain('Empty ÉTANG')
     const full = domain('ports', ['ÉCOLE', '100% proof', 'under_score', 'ordinary'])
-    const usedId = listConceptRows(query.facetId).find((r) => r.display === 'ordinary')!.id
+    const usedId = readConceptRows(root, query.facetId).find((r) => r.display === 'ordinary')!.id
     recordUses('used', [usedId], 's')
     const groups = (filter: string, useFilter: ConceptLibraryQuery['useFilter'] = 'all') => queryConceptLibrary({ ...query, filter, useFilter }).groups
     expect(groups('')).toEqual([{ probeId: empty, count: 0 }, { probeId: full, count: 4 }])
@@ -67,7 +68,7 @@ describe('paged concept library with real SQLite', () => {
 
   it('invalidates reads after use/delete/reopen and locates surviving identities in refreshed order', () => {
     const probeId = domain('ports', ['alpha', 'bravo', 'charlie'])
-    const [alpha, bravo] = listConceptRows(query.facetId)
+    const [alpha, bravo] = readConceptRows(root, query.facetId)
     const before = queryConceptLibrary(query)
     recordUses('used', [bravo.id], 's')
     expect(readConceptLibraryPage(query, before.revision, probeId, 0)).toEqual({ stale: true })

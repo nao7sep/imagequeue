@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readConceptRows, readProbeStats } from './read-concept-store'
 import {
   initializeConceptStore,
   addConcepts,
@@ -13,10 +14,8 @@ import {
   deleteFacet,
   deleteProbe,
   drainSetAsideConceptStorePaths,
-  listProbesWithStats,
   drawConcept,
   ensureFacet,
-  listConceptRows,
   listFacetsWithStats,
   listProbeDisplays,
   markProbeExpanded,
@@ -77,14 +76,15 @@ describe('concept store', () => {
     const [probe] = unexpandedProbes(facet.id, 1)
     addConcepts(facet.id, probe.id, ['dock', 'wharf'])
     recordUse(draw(facet.id)!.id, 'earlier')
-    const expected = listProbesWithStats(facet.id)
+    const expected = readProbeStats(tmpRoot, facet.id)
     closeConceptStore()
     const file = path.join(tmpRoot, 'concepts.sqlite3')
     const previous = new DatabaseSync(file)
     previous.exec('DROP INDEX IF EXISTS idx_concepts_probe')
     previous.close()
 
-    expect(listProbesWithStats(facet.id)).toEqual(expected)
+    listFacetsWithStats()
+    expect(readProbeStats(tmpRoot, facet.id)).toEqual(expected)
     const reopened = new DatabaseSync(file, { readOnly: true })
     try {
       expect(reopened.prepare("PRAGMA index_info('idx_concepts_probe')").all().map((row) => row.name)).toEqual(['probe_id', 'use_count'])
@@ -139,7 +139,7 @@ describe('concept store', () => {
     triggerDb.close()
 
     expect(() => addConcepts(facet.id, probe.id, ['harbor', 'rejected'])).toThrow('rejected concept')
-    expect(listConceptRows(facet.id)).toEqual([])
+    expect(readConceptRows(tmpRoot, facet.id)).toEqual([])
   })
 
   it('prefers a never-used value over a stale one', () => {
@@ -241,7 +241,7 @@ describe('concept store', () => {
     const c = draw(f.id)!
     recordUse(c.id, 's1')
     recordUse(c.id, 's1')
-    const rows = listConceptRows(f.id)
+    const rows = readConceptRows(tmpRoot, f.id)
     expect(rows[0].useCount).toBe(2)
     expect(rows[0].lastUsedAt).toBeTruthy()
     const stats = listFacetsWithStats()[0]
@@ -254,13 +254,13 @@ describe('concept store', () => {
     addProbes(facet.id, ['ports'])
     const [probe] = unexpandedProbes(facet.id, 1)
     addConcepts(facet.id, probe.id, ['dock', 'wharf'])
-    const ids = listConceptRows(facet.id).map((row) => row.id).reverse()
+    const ids = readConceptRows(tmpRoot, facet.id).map((row) => row.id).reverse()
     recordUses('delivered-run', ids, 'session-a')
-    const expected = listConceptRows(facet.id)
+    const expected = readConceptRows(tmpRoot, facet.id)
     expect(expected.map((row) => row.useCount)).toEqual([1, 1])
     closeConceptStore()
     recordUses('delivered-run', ids, 'session-a')
-    expect(listConceptRows(facet.id)).toEqual(expected)
+    expect(readConceptRows(tmpRoot, facet.id)).toEqual(expected)
     const database = new DatabaseSync(path.join(tmpRoot, 'concepts.sqlite3'), { readOnly: true })
     try {
       expect(database.prepare('SELECT concept_id, session_id FROM uses ORDER BY id').all()).toEqual(
@@ -271,7 +271,7 @@ describe('concept store', () => {
     expect(() => recordUses('delivered-run', [...ids].reverse(), 'session-a')).toThrow('different inputs')
     expect(() => recordUses('delivered-run', ids, 'session-b')).toThrow('different inputs')
     expect(() => recordUses('delivered-run', ids.slice(1), 'session-a')).toThrow('different inputs')
-    expect(listConceptRows(facet.id)).toEqual(expected)
+    expect(readConceptRows(tmpRoot, facet.id)).toEqual(expected)
   })
 
   it.each(['uses', 'use_batches'] as const)('rolls back all counters, uses and the operation when inserting into %s fails', (table) => {
@@ -279,7 +279,7 @@ describe('concept store', () => {
     addProbes(facet.id, ['ports'])
     const [probe] = unexpandedProbes(facet.id, 1)
     addConcepts(facet.id, probe.id, ['dock', 'wharf'])
-    const before = listConceptRows(facet.id)
+    const before = readConceptRows(tmpRoot, facet.id)
     const ids = before.map((row) => row.id)
     closeConceptStore()
     const file = path.join(tmpRoot, 'concepts.sqlite3')
@@ -290,7 +290,7 @@ describe('concept store', () => {
         BEGIN SELECT RAISE(ABORT, 'injected batch failure'); END;`)
     } finally { database.close() }
     expect(() => recordUses('retryable-run', ids, 'session-a')).toThrow('injected batch failure')
-    expect(listConceptRows(facet.id)).toEqual(before)
+    expect(readConceptRows(tmpRoot, facet.id)).toEqual(before)
     const inspect = new DatabaseSync(file)
     try {
       expect(inspect.prepare('SELECT COUNT(*) AS count FROM uses').get()?.count).toBe(0)
@@ -298,7 +298,7 @@ describe('concept store', () => {
       inspect.exec('DROP TRIGGER reject_use_batch')
     } finally { inspect.close() }
     recordUses('retryable-run', ids, 'session-a')
-    expect(listConceptRows(facet.id).map((row) => row.useCount)).toEqual([1, 1])
+    expect(readConceptRows(tmpRoot, facet.id).map((row) => row.useCount)).toEqual([1, 1])
   })
 
   it('marks probes expanded so they are not re-expanded', () => {
@@ -319,20 +319,20 @@ describe('concept store', () => {
     const c = draw(f.id, { excludeProbeIds: [forests.id] })!
     recordUse(c.id, 's1')
     deleteProbe(ports.id)
-    expect(listProbesWithStats(f.id).map((p) => p.display)).toEqual(['forests'])
-    expect(listConceptRows(f.id).map((r) => r.display)).toEqual(['clearing'])
+    expect(readProbeStats(tmpRoot, f.id).map((p) => p.display)).toEqual(['forests'])
+    expect(readConceptRows(tmpRoot, f.id).map((r) => r.display)).toEqual(['clearing'])
     // The deleted cluster's use is gone too, so the window no longer counts it.
     expect(listFacetsWithStats()[0].conceptCount).toBe(1)
   })
 
-  it('listProbesWithStats reports per-cluster counts', () => {
+  it('records per-cluster counts', () => {
     const f = ensureFacet('place')
     addProbes(f.id, ['ports'])
     const [ports] = unexpandedProbes(f.id, 1)
     addConcepts(f.id, ports.id, ['dock', 'wharf'])
     const c = draw(f.id)!
     recordUse(c.id, 's1')
-    const [stats] = listProbesWithStats(f.id)
+    const [stats] = readProbeStats(tmpRoot, f.id)
     expect(stats.conceptCount).toBe(2)
     expect(stats.unusedCount).toBe(1)
   })
@@ -345,7 +345,7 @@ describe('concept store', () => {
     const c = draw(f.id)!
     recordUse(c.id, 's1')
     deleteConcept(c.id)
-    expect(listConceptRows(f.id)).toHaveLength(1)
+    expect(readConceptRows(tmpRoot, f.id)).toHaveLength(1)
     deleteFacet(f.id)
     expect(listFacetsWithStats()).toHaveLength(0)
     expect(listProbeDisplays(f.id, 50)).toHaveLength(0)
@@ -360,8 +360,8 @@ describe('concept store', () => {
     addConcepts(facet.id, probes[0].id, ['a', 'b'])
     addConcepts(facet.id, probes[1].id, ['c'])
     addConcepts(other.id, unrelatedProbe.id, ['d'])
-    const targetRows = listConceptRows(facet.id)
-    const otherRows = listConceptRows(other.id)
+    const targetRows = readConceptRows(tmpRoot, facet.id)
+    const otherRows = readConceptRows(tmpRoot, other.id)
     for (const row of [...targetRows, ...otherRows]) recordUse(row.id, 's1')
     const removed = scope === 'facet' ? targetRows.map(row => row.id)
       : scope === 'probe' ? targetRows.filter(row => row.probeId === probes[0].id).map(row => row.id)

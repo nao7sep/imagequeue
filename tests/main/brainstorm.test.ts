@@ -2,9 +2,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readConceptRows, readProbeStats } from './concepts/read-concept-store'
 import { brainstormPrompts, cancelBrainstorm, hasActiveBrainstorms } from '../../src/main/brainstorm'
 import { PROVIDER_RETRY_BACKOFF_MS } from '../../src/main/provider-retry'
-import { listProbesWithStats, closeConceptStore, listConceptRows, listFacetsWithStats } from '../../src/main/concepts/concept-store'
+import { closeConceptStore, listFacetsWithStats } from '../../src/main/concepts/concept-store'
 import * as conceptStore from '../../src/main/concepts/concept-store'
 import * as acquisition from '../../src/main/concepts/acquisition'
 import { getElaborator } from '../../src/main/elaborators'
@@ -274,7 +275,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     const result = await brainstormPrompts(request({ requestId: 'ordered-batch', count: 3 }))
     const idsByCredit = new Map<string, number>()
     for (const facet of await listFacetsWithStats()) {
-      for (const row of await listConceptRows(facet.id)) idsByCredit.set(`${facet.display}:${row.display}`, row.id)
+      for (const row of readConceptRows(tmpRoot, facet.id)) idsByCredit.set(`${facet.display}:${row.display}`, row.id)
     }
     const expectedIds = result.prompts.flatMap((prompt) => prompt.concepts.map((credit) => idsByCredit.get(`${credit.facet}:${credit.concept}`)))
     expect(expectedIds.every((id) => id !== undefined)).toBe(true)
@@ -309,7 +310,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     expect(result.prompts).toHaveLength(2)
     expect(recorded).toHaveBeenCalledTimes(2)
     expect(recorded.mock.calls[1]).toEqual(recorded.mock.calls[0])
-    const rows = (await Promise.all((await listFacetsWithStats()).map((facet) => listConceptRows(facet.id)))).flat()
+    const rows = (await listFacetsWithStats()).flatMap((facet) => readConceptRows(tmpRoot, facet.id))
     expect(rows.filter((row) => row.useCount > 0)).toHaveLength(4)
     expect(rows.every((row) => row.useCount <= 1)).toBe(true)
   })
@@ -349,7 +350,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     installScriptedProvider({ probesPerGeneration: 1 })
     await brainstormPrompts(request({ requestId: 'rc', count: 2 }))
     for (const facet of (await listFacetsWithStats())) {
-      const used = (await listConceptRows(facet.id)).filter((r) => r.useCount > 0)
+      const used = readConceptRows(tmpRoot, facet.id).filter((r) => r.useCount > 0)
       expect(used).toHaveLength(2)
       expect(new Set(used.map((r) => r.probe)).size).toBe(2)
     }
@@ -496,7 +497,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     // with zero concepts. The fix retries the same batch instead, so every
     // expanded probe carries the concepts its (retried) call returned.
     for (const facet of (await listFacetsWithStats())) {
-      const burnt = (await listProbesWithStats(facet.id)).filter((probe) => probe.expanded && probe.conceptCount === 0)
+      const burnt = readProbeStats(tmpRoot, facet.id).filter((probe) => probe.expanded && probe.conceptCount === 0)
       expect(burnt).toEqual([])
     }
     expect(expansions).toBeGreaterThanOrEqual(2)
