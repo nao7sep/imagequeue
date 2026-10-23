@@ -73,6 +73,17 @@ const onRecordsChanged = vi.fn<ElectronAPI['onRecordsChanged']>((listener) => {
 // set here. By default the list is scrolled to the top and far from its end.
 const box = { scrollTop: 0, scrollHeight: 1000, clientHeight: 200, shellWidth: 2000 }
 const resizeCallbacks = new Set<() => void>()
+const capturedPointers = new Map<number, HTMLElement>()
+
+// jsdom has no pointer capture. Release dispatches loss synchronously so the
+// tests also exercise teardown before a capture-loss event can reenter it.
+function pointer(target: EventTarget, type: string, init: MouseEventInit & { pointerId?: number; pointerType?: string } = {}): void {
+  const { pointerId = 7, pointerType = 'mouse', ...mouseInit } = init
+  const event = new MouseEvent(type, { bubbles: true, ...mouseInit })
+  Object.defineProperties(event, { pointerId: { value: pointerId }, pointerType: { value: pointerType } })
+  target.dispatchEvent(event)
+}
+
 class TestResizeObserver {
   private readonly callback: () => void
   constructor(callback: () => void) {
@@ -108,8 +119,25 @@ beforeEach(() => {
   recordsChanged = null
   Object.assign(box, { scrollTop: 0, scrollHeight: 1000, clientHeight: 200, shellWidth: 2000 })
   resizeCallbacks.clear()
+  capturedPointers.clear()
   vi.stubGlobal('ResizeObserver', TestResizeObserver)
   Object.defineProperties(HTMLElement.prototype, {
+    setPointerCapture: {
+      configurable: true,
+      value(this: HTMLElement, pointerId: number) { capturedPointers.set(pointerId, this) },
+    },
+    hasPointerCapture: {
+      configurable: true,
+      value(this: HTMLElement, pointerId: number) { return capturedPointers.get(pointerId) === this },
+    },
+    releasePointerCapture: {
+      configurable: true,
+      value(this: HTMLElement, pointerId: number) {
+        if (!this.hasPointerCapture(pointerId)) return
+        capturedPointers.delete(pointerId)
+        pointer(this, 'lostpointercapture', { pointerId })
+      },
+    },
     scrollTop: {
       configurable: true,
       get(this: HTMLElement) { return isScroll(this) ? box.scrollTop : 0 },
@@ -134,9 +162,11 @@ afterEach(async () => {
   if (root !== null) await act(async () => root?.unmount())
   root = null
   document.body.innerHTML = ''
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  for (const name of ['scrollTop', 'scrollHeight', 'clientHeight', 'clientWidth']) {
+  for (const name of ['scrollTop', 'scrollHeight', 'clientHeight', 'clientWidth', 'setPointerCapture', 'hasPointerCapture', 'releasePointerCapture']) {
     delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name]
   }
 })
@@ -575,17 +605,112 @@ describe('RecordsWindow', () => {
     expect(splitter.getAttribute('aria-label')).toBe('Resize list pane')
 
     await act(async () => {
-      splitter.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 0 }))
-      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 100 }))
-      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 2000 }))
+      pointer(splitter, 'pointerdown', { clientX: 0 })
+      pointer(window, 'pointermove', { clientX: 100 })
+      pointer(window, 'pointermove', { clientX: 2000 })
     })
+    expect(splitter.hasPointerCapture(7)).toBe(true)
     expect(updateUiState).not.toHaveBeenCalled()
     await act(async () => {
-      window.dispatchEvent(new MouseEvent('pointerup'))
+      pointer(window, 'pointerup')
     })
 
     expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: RECORDS_LIST_WIDTH.max })
     expect(shell().style.getPropertyValue('--records-list-width')).toBe(`${RECORDS_LIST_WIDTH.max}px`)
+    expect(splitter.hasPointerCapture(7)).toBe(false)
+  })
+
+  it.each(['pointercancel', 'lostpointercapture', 'blur'] as const)('cancels a drag on %s, restores the body styles, and accepts the next gesture', async (ending) => {
+    document.body.style.cursor = 'crosshair'
+    document.body.style.userSelect = 'text'
+    await mount()
+    const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
+    await act(async () => {
+      pointer(splitter, 'pointerdown', { clientX: 10 })
+      pointer(window, 'pointermove', { clientX: 110 })
+    })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('480')
+    expect(document.body.style.cursor).toBe('col-resize')
+    expect(document.body.style.userSelect).toBe('none')
+    await act(async () => {
+      if (ending === 'lostpointercapture') splitter.releasePointerCapture(7)
+      else if (ending === 'blur') window.dispatchEvent(new Event('blur'))
+      else pointer(window, ending)
+    })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('380')
+    expect(splitter.hasPointerCapture(7)).toBe(false)
+    expect(document.body.style.cursor).toBe('crosshair')
+    expect(document.body.style.userSelect).toBe('text')
+    await act(async () => {
+      pointer(window, 'pointermove', { clientX: 1000 })
+      pointer(window, 'pointerup')
+      pointer(window, 'pointercancel')
+      pointer(splitter, 'lostpointercapture')
+    })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('380')
+    expect(updateUiState).not.toHaveBeenCalled()
+    await act(async () => {
+      pointer(splitter, 'pointerdown', { clientX: 20, pointerId: 8 })
+      pointer(window, 'pointermove', { clientX: 70, pointerId: 8 })
+      pointer(window, 'pointerup', { pointerId: 8 })
+    })
+    expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 430 })
+    expect(document.body.style.cursor).toBe('crosshair')
+    expect(document.body.style.userSelect).toBe('text')
+  })
+
+  it('ignores secondary mouse buttons and pointers other than the one resizing', async () => {
+    await mount()
+    const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
+    await act(async () => {
+      pointer(splitter, 'pointerdown', { button: 2 })
+      pointer(window, 'pointermove', { clientX: 100 })
+      pointer(window, 'pointerup')
+    })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('380')
+    expect(capturedPointers.size).toBe(0)
+    expect(updateUiState).not.toHaveBeenCalled()
+    await act(async () => {
+      pointer(splitter, 'pointerdown', { clientX: 10 })
+      pointer(window, 'pointermove', { clientX: 60 })
+      pointer(splitter, 'pointerdown', { clientX: 100, pointerId: 8 })
+      pointer(window, 'pointermove', { clientX: 1000, pointerId: 8 })
+      pointer(window, 'pointerup', { pointerId: 8 })
+      pointer(window, 'pointercancel', { pointerId: 8 })
+      pointer(splitter, 'lostpointercapture', { pointerId: 8 })
+    })
+    expect(splitter.getAttribute('aria-valuenow')).toBe('430')
+    expect(splitter.hasPointerCapture(7)).toBe(true)
+    expect(splitter.hasPointerCapture(8)).toBe(false)
+    expect(updateUiState).not.toHaveBeenCalled()
+    await act(async () => pointer(window, 'pointerup'))
+    expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 430 })
+  })
+
+  it('releases an active drag and restores the body styles when the window unmounts', async () => {
+    document.body.style.cursor = 'crosshair'
+    document.body.style.userSelect = 'text'
+    await mount()
+    const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
+    await act(async () => {
+      pointer(splitter, 'pointerdown')
+      pointer(window, 'pointermove', { clientX: 100 })
+    })
+    await act(async () => root?.unmount())
+    root = null
+    expect(splitter.hasPointerCapture(7)).toBe(false)
+    expect(document.body.style.cursor).toBe('crosshair')
+    expect(document.body.style.userSelect).toBe('text')
+    await act(async () => {
+      pointer(window, 'pointermove', { clientX: 1000 })
+      pointer(window, 'pointerup')
+      pointer(window, 'pointercancel')
+      pointer(splitter, 'lostpointercapture')
+      window.dispatchEvent(new Event('blur'))
+    })
+    expect(updateUiState).not.toHaveBeenCalled()
+    expect(document.body.style.cursor).toBe('crosshair')
+    expect(document.body.style.userSelect).toBe('text')
   })
 
   it('narrows the list when the window narrows, saving nothing', async () => {

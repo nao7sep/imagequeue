@@ -15,6 +15,10 @@ html:has(.records-shell) body {
   background: var(--pane-bg);
 }
 
+.records-shell .pane-splitter {
+  touch-action: none;
+}
+
 .records-list-pane,
 .records-detail-pane {
   display: flex;

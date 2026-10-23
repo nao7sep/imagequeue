@@ -109,6 +109,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const [available, setAvailable] = useState<number | null>(null)
   const keyboardWidth = useRef<number | null>(null)
+  const activeDrag = useRef<{ finish: (outcome: 'commit' | 'cancel' | 'unmount') => void } | null>(null)
   const listGeneration = useRef(0)
   // The busy claim for the next page (PLAYBOOK, Own the work in flight).
   const fetchingMore = useRef(false)
@@ -121,6 +122,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const liveSuspended = useRef(false)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => () => activeDrag.current?.finish('unmount'), [])
 
   // Pane sizing: window-conventions. The displayed width is the intent fitted
   // to the live window; only a finished drag changes the intent.
@@ -364,24 +367,51 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   }
 
   const onSplitterPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (activeDrag.current !== null || (event.pointerType === 'mouse' && event.button !== 0)) return
     event.preventDefault()
     finishKeyboardResize()
+    const target = event.currentTarget
+    const pointerId = event.pointerId
     const startX = event.clientX
     const startWidth = shownListWidth
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
     let latest = startWidth
     const move = (moveEvent: PointerEvent): void => {
+      if (moveEvent.pointerId !== pointerId) return
       latest = clampRecordsListWidth(startWidth + (moveEvent.clientX - startX))
       setDragWidth(latest)
     }
-    const up = (): void => {
+    const finish = (outcome: 'commit' | 'cancel' | 'unmount'): void => {
+      if (activeDrag.current?.finish !== finish) return
+      activeDrag.current = null
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      commitListWidth(latest)
+      window.removeEventListener('pointercancel', cancel)
+      window.removeEventListener('blur', blur)
+      target.removeEventListener('lostpointercapture', cancel)
+      // Releasing capture may dispatch lostpointercapture; teardown owns that
+      // event too, so listeners are removed before capture is released.
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId)
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+      if (outcome === 'commit') commitListWidth(latest)
+      else if (outcome === 'cancel') setDragWidth(null)
     }
+    const up = (upEvent: PointerEvent): void => {
+      if (upEvent.pointerId === pointerId) finish('commit')
+    }
+    const cancel = (cancelEvent: PointerEvent): void => {
+      if (cancelEvent.pointerId === pointerId) finish('cancel')
+    }
+    const blur = (): void => finish('cancel')
+    activeDrag.current = { finish }
+    target.setPointerCapture(pointerId)
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
+    window.addEventListener('blur', blur)
+    target.addEventListener('lostpointercapture', cancel)
     // Keep the resize cursor and suppress text selection everywhere for the drag.
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
