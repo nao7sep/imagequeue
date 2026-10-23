@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
+import type { ConfirmOptions } from '../../../../src/shared/confirm'
 import type { BackendId, SessionListEntry, SessionSummary, Task } from '../../../../src/shared/types'
 
 // The Sessions window follows the app's own jobs while it is open: each queue
 // change reads the sessions again, and only the latest read applies.
+
+const confirm = vi.fn<(options: ConfirmOptions) => Promise<boolean>>()
 
 let queueValue: { tasks: Record<BackendId, Task[]> }
 
@@ -15,7 +19,7 @@ vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
   useSettings: () => ({ settings: null }),
 }))
 vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({
-  useConfirm: () => async () => true,
+  useConfirm: () => confirm,
 }))
 
 
@@ -49,6 +53,8 @@ const resumeSession = vi.fn(async (_sessionId: string) => {})
 const openSessionFolder = vi.fn(async (_sessionId: string) => {})
 
 beforeEach(() => {
+  confirm.mockReset()
+  confirm.mockResolvedValue(true)
   queueValue = { tasks: emptyTasks() }
   window.electronAPI = { listSessions, resumeSession, openSessionFolder } as unknown as typeof window.electronAPI
 })
@@ -149,7 +155,9 @@ describe('session selected actions', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('uses the existing eligible deletion command and confirmation', async () => {
+  it.each([false, true])('waits for deletion confirmation and deletes only when accepted (%s)', async (accepted) => {
+    const decision = deferred<boolean>()
+    confirm.mockReturnValueOnce(decision.promise)
     const previous = { ...session(1, '2026-10-04T12:00:00.000Z'), isCurrent: false }
     listSessions.mockResolvedValue([previous])
     const deleteSession = vi.fn(async () => undefined)
@@ -159,7 +167,16 @@ describe('session selected actions', () => {
     act(() => row.focus())
     fireEvent.keyDown(row, { key: 'ContextMenu' })
     await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' })) })
-    expect(deleteSession).toHaveBeenCalledExactlyOnceWith(previous.sessionId)
+    expect(confirm).toHaveBeenCalledExactlyOnceWith({
+      title: ENGLISH['sessions.deleteTitle'],
+      message: ENGLISH['sessions.deleteTrashMessage'],
+      confirmLabel: ENGLISH['task.delete'],
+      danger: true,
+    })
+    expect(deleteSession).not.toHaveBeenCalled()
+    await act(async () => { decision.resolve(accepted) })
+    if (accepted) expect(deleteSession).toHaveBeenCalledExactlyOnceWith(previous.sessionId)
+    else expect(deleteSession).not.toHaveBeenCalled()
   })
 })
 

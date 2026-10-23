@@ -12,6 +12,8 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
+import { ModalLayerContext } from './ModalLayerContext'
+import { isAnyModalOpen, isTopmostModal } from './modalStack'
 import { nextIndex } from '../utils/compositeNav'
 import { useImeGuard } from '../utils/imeGuard'
 
@@ -145,7 +147,7 @@ function ownMenuItems(container: HTMLElement | null): HTMLElement[] {
 }
 
 function moveByArrow(items: HTMLElement[], e: KeyboardEvent, isComposing: ReturnType<typeof useImeGuard>): boolean {
-  if (items.length === 0) return false
+  if (isComposing(e.nativeEvent) || items.length === 0) return false
   const current = items.indexOf(document.activeElement as HTMLElement)
   if (e.key === 'ArrowDown') {
     e.preventDefault()
@@ -178,6 +180,8 @@ function moveByArrow(items: HTMLElement[], e: KeyboardEvent, isComposing: Return
 }
 
 export function Menu({ label, trigger, children, className }: Props): React.JSX.Element {
+  const modalLayer = useContext(ModalLayerContext)
+  const ownsKeyboard = (): boolean => modalLayer ? isTopmostModal(modalLayer.modalId) : !isAnyModalOpen()
   const isComposing = useImeGuard()
   const [open, setOpen] = useState(false)
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
@@ -215,11 +219,11 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
         triggerRef.current?.contains(t) ||
         isOwnedOverlayTarget(t, overlayOwner)
       ) return
-      setOpen(false)
+      close(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [open, overlayOwner])
+  }, [open, overlayOwner, close])
 
   // Escape closes from ANYWHERE, the symmetric half of the outside-click handler
   // above. The popup's own onKeyDown only sees keys aimed at the menu, so an open
@@ -241,14 +245,15 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
     if (!open) return
     const onKey = (e: globalThis.KeyboardEvent): void => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
-      if (isComposing()) return
-      setOpen(false)
+      if (!(modalLayer ? isTopmostModal(modalLayer.modalId) : !isAnyModalOpen()) || isComposing(e)) return
+      close(false)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, isComposing])
+  }, [open, isComposing, modalLayer, close])
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (!ownsKeyboard() || isComposing(e.nativeEvent)) return
     if (e.key === 'Escape' || e.key === 'Tab') {
       e.preventDefault()
       close()
@@ -267,11 +272,12 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
         'aria-expanded': open,
         onClick: () => {
           openingEdge.current = 'first'
-          setOpen((v) => !v)
+          if (open) close()
+          else setOpen(true)
         },
         onKeyDown: (event) => {
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-          if (isComposing(event.nativeEvent)) return
+          if (!ownsKeyboard() || isComposing(event.nativeEvent)) return
           event.preventDefault()
           openingEdge.current = event.key === 'ArrowUp' ? 'last' : 'first'
           setOpen(true)
@@ -298,7 +304,7 @@ export function Menu({ label, trigger, children, className }: Props): React.JSX.
             {children}
           </MenuContext.Provider>
         </div>,
-        document.body,
+        modalLayer?.boxRef.current ?? document.body,
       )}
     </div>
   )
@@ -387,17 +393,14 @@ export function Submenu({
   children: ReactNode
 }): React.JSX.Element {
   const ctx = useContext(MenuContext)
+  if (!ctx) throw new Error('Submenu must be rendered inside Menu')
+  const modalLayer = useContext(ModalLayerContext)
+  const ownsKeyboard = (): boolean => modalLayer ? isTopmostModal(modalLayer.modalId) : !isAnyModalOpen()
   const isComposing = useImeGuard()
   const id = useId()
-  // Openness is the PARENT menu's state, not this component's, so opening one
-  // submenu closes its siblings. The local flag is only the fallback for a
-  // Submenu rendered outside a Menu, where there are no siblings to conflict.
-  const [localOpen, setLocalOpen] = useState(false)
-  const open = ctx ? ctx.activeSubmenu === id : localOpen
-  const setOpen = (next: boolean): void => {
-    if (ctx) ctx.setActiveSubmenu(next ? id : null)
-    else setLocalOpen(next)
-  }
+  // The root menu owns openness so siblings cannot stay open together.
+  const open = ctx.activeSubmenu === id
+  const setOpen = (next: boolean): void => ctx.setActiveSubmenu(next ? id : null)
   const parentRef = useRef<HTMLButtonElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
   const position = usePopupPosition(open, parentRef, popupRef, submenuPosition)
@@ -413,8 +416,8 @@ export function Submenu({
   }
 
   const onParentKeyDown = (e: KeyboardEvent<HTMLButtonElement>): void => {
+    if (!ownsKeyboard() || isComposing(e.nativeEvent)) return
     if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
-      if ((e.key === 'Enter' || e.key === ' ') && isComposing(e.nativeEvent)) return
       e.preventDefault()
       e.stopPropagation()
       openSubmenu()
@@ -422,6 +425,7 @@ export function Submenu({
   }
 
   const onPopupKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (!ownsKeyboard() || isComposing(e.nativeEvent)) return
     if (e.key === 'ArrowLeft' || e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
@@ -432,7 +436,7 @@ export function Submenu({
     if (e.key === 'Tab') {
       e.preventDefault()
       e.stopPropagation()
-      ctx?.closeAll()
+      ctx.closeAll()
       return
     }
     // Keep arrow / type-ahead handling local so the parent menu's handler doesn't
@@ -465,7 +469,7 @@ export function Submenu({
           aria-label={label}
           className="menu-submenu"
           onKeyDown={onPopupKeyDown}
-          data-menu-overlay-owner={ctx?.overlayOwner}
+          data-menu-overlay-owner={ctx.overlayOwner}
           style={{
             position: 'fixed',
             left: position?.left,
@@ -475,7 +479,7 @@ export function Submenu({
         >
           {children}
         </div>,
-        document.body,
+        modalLayer?.boxRef.current ?? document.body,
       )}
     </div>
   )

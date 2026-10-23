@@ -296,36 +296,6 @@
   margin-top: var(--space-1);
 }
 
-.context-menu {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  z-index: 50;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.context-menu button {
-  display: block;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.context-menu button:hover {
-  background: var(--col-accent, var(--accent));
-  color: var(--text-on-accent);
-}
-
 /* A neutral state line among the settings, such as a load in progress. */
 .model-status {
   color: var(--text-secondary);

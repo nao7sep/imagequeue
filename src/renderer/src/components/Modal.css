@@ -9,6 +9,9 @@
   z-index: 300;
 }
 
+/* Keep this box and modal-backdrop free of transform, filter, perspective and
+   containment that establishes a fixed-position containing block. Owned menu
+   portals use viewport coordinates to escape the body's scroll clipping. */
 .modal-box {
   background: var(--bg-surface);
   border: 1px solid var(--border);

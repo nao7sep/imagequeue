@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { isTopmostModal, popModal, pushModal } from './modalStack'
 import { useImeGuard } from '../utils/imeGuard'
 import { useI18n } from '../i18n/I18nContext'
+import { ModalLayerContext } from './ModalLayerContext'
 import './Modal.css'
 
 interface ModalProps {
@@ -97,6 +98,12 @@ export function Modal({
       // the guard every other dispatch in the renderer carries.
       if (isImeComposing(e)) return
 
+      const box = boxRef.current
+      const ownedMenu = box?.querySelector('[data-menu-overlay-owner]')
+      if (e.key === 'Escape' && ownedMenu) return
+      if (e.key === 'Tab' && e.target instanceof Element &&
+          box?.contains(e.target) && e.target.closest('[data-menu-overlay-owner]')) return
+
       if (e.key === 'Escape' && dismissable) {
         e.preventDefault()
         e.stopPropagation()
@@ -153,8 +160,10 @@ export function Modal({
             {dismissable && <button className="modal-close" onClick={onClose} aria-label={t('common.close')}><Icon name="close" /></button>}
           </div>
         )}
-        {children}
-        {footer !== undefined && <div className="modal-footer">{footer}</div>}
+        <ModalLayerContext.Provider value={{ modalId, boxRef }}>
+          {children}
+          {footer !== undefined && <div className="modal-footer">{footer}</div>}
+        </ModalLayerContext.Provider>
       </div>
     </div>
   )
