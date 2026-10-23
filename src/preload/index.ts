@@ -131,6 +131,9 @@ const api = {
   createSession: (): Promise<void> =>
     ipcRenderer.invoke('session:create'),
 
+  getActiveSessionSummary: (): Promise<SessionSummary> =>
+    ipcRenderer.invoke('session:activeSummary'),
+
   listSessions: (): Promise<SessionListEntry[]> =>
     ipcRenderer.invoke('session:list'),
 

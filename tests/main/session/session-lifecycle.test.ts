@@ -59,6 +59,7 @@ const {
   dropCurrentSessionIfEmpty,
   drainSessionWrites,
   getActiveSessionDraft,
+  getActiveSessionSummary,
   appendActiveSessionElaboratedPrompts,
   clearActiveSessionElaboratedPrompts,
   deleteActiveSessionElaboratedPromptAt,
@@ -1380,4 +1381,28 @@ it('keeps the outgoing session adopted until its new sibling directory is durabl
     await Promise.allSettled([creation])
     parent.mockRestore()
   }
+})
+
+
+describe('active session summary', () => {
+  it('reads the active snapshot including kept images without archive or manifest I/O', async () => {
+    await createSession()
+    stageSession('archive')
+    queueManager.replaceAllTasks(withTasks([
+      makeTask('done', 'completed'), makeTask('kept', 'kept'), makeTask('retry', 'interrupted'),
+    ]))
+    await persistActiveSession()
+    const read = vi.spyOn(fs.promises, 'readFile')
+    const directories = vi.spyOn(fs.promises, 'readdir')
+    try {
+      const summary = await getActiveSessionSummary()
+      expect(summary).toMatchObject({ sessionId: getSessionId(), isCurrent: true,
+        completedCount: 1, keptCount: 1, retryCount: 1, taskCounts: { total: 3 },
+        thumbnails: [{ baseName: 'base-done' }],
+      })
+      expect(summary.updatedAt).toBeTruthy()
+      expect(read).not.toHaveBeenCalled()
+      expect(directories).not.toHaveBeenCalled()
+    } finally { read.mockRestore(); directories.mockRestore() }
+  })
 })

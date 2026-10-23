@@ -501,6 +501,25 @@ async function dropPreviousSessionAfterSwitch(sessionDir: string, sessionId: str
   }
 }
 
+// Queue refreshes need only the active in-memory snapshot, including kept rows
+// hidden by the renderer. They must never replay unrelated archive journals.
+export async function getActiveSessionSummary(): Promise<SessionSummary> {
+  while (sessionMutationPending) await sessionMutation
+  await writes
+  const session = await ensureActiveSessionLoaded()
+  const tasks = queueManager.getAllStoredTasks()
+  return {
+    sessionId: path.basename(session.journal.directory),
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    lastResumedAt: session.lastResumedAt,
+    taskCounts: countTasks(tasks),
+    ...createSessionDisplayCounts(tasks),
+    thumbnails: collectSessionThumbnails(tasks),
+    isCurrent: true,
+  }
+}
+
 // Sessions it can open, most recently updated first, then those it cannot,
 // newest folder first.
 export async function listSessions(): Promise<SessionListEntry[]> {

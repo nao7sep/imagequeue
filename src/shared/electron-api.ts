@@ -23,6 +23,7 @@ import {
   DependencyProgress,
   DrawThingsModelParams,
   SessionListEntry,
+  SessionSummary,
   SettingsCredentials,
   SecretId,
   QueueControlState,
@@ -104,6 +105,7 @@ export interface ElectronAPI {
   onQueueControlState: (callback: (state: QueueControlState) => void) => (() => void)
 
   createSession: () => Promise<void>
+  getActiveSessionSummary: () => Promise<SessionSummary>
   listSessions: () => Promise<SessionListEntry[]>
   resumeSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
