@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { currentRecordsContext, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
-import { readDetail, readPage, readSources, runRecordsRead } from '../../src/main/records-query'
+import { readDetail, readPage, readSources, readOutput, runRecordsRead } from '../../src/main/records-query'
 import { RECORDS_PAGE_SIZE, type RecordsQuery } from '../../src/shared/records'
 import { freshRecordsRoot, removeRecordsRoots } from './records-fixture'
 
@@ -223,8 +223,9 @@ describe('CLI job records', () => {
       kind: 'cli-job', level: 'error', title: 'draw-things-cli download', sessionId: '20260103-000000-000-utc',
       launch: currentRecordsContext().launch, jobId: 'j-failed', jobKind: 'download', target: 'failed.ckpt',
       cliPath: '/bin/draw-things-cli', startedAt: '2026-01-03T00:00:00.000Z', status: 'exited', exitCode: 1,
-      signal: null, stdout: '', stderr: 'checksum mismatch\n', error: null,
+      signal: null, hasStdout: false, hasStderr: true, outputError: null, error: null,
     })
+    expect(readOutput(db, failed!.id, 'stderr', 0)).toEqual({ text: 'checksum mismatch\n', nextOffset: null })
     expect(JSON.parse((detail as { args: string }).args)).toEqual(['models', 'ensure', '--model', 'failed.ckpt'])
     expect(readDetail(db, 'cli-job', 99_999)).toBeNull()
     db.close()

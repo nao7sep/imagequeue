@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CliJobRow } from '../../../../src/renderer/src/components/CliJobsPanel'
 import { CliJobsProvider, useCliJobs } from '../../../../src/renderer/src/context/CliJobsContext'
-import type { CliChunk, CliJobKind, CliJobStatus } from '../../../../src/shared/cli-jobs'
+import type { CliChunk, CliJobKind, CliJobSnapshot, CliJobStatus } from '../../../../src/shared/cli-jobs'
 import { until } from '../../until'
 
 const NOTE = 'Earlier output is not shown here. Records in the main menu has all of it.'
@@ -132,5 +132,62 @@ describe('coalesced CLI job displays', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add job' }))
     expect(document.querySelectorAll('.cli-job-row')).toHaveLength(1)
     expect(window.electronAPI.cliSubscribeJob).toHaveBeenCalledExactlyOnceWith('job-1')
+  })
+})
+
+
+function pendingSnapshot(): { promise: Promise<CliJobSnapshot>; resolve: (value: CliJobSnapshot) => void } {
+  let resolve!: (value: CliJobSnapshot) => void
+  const promise = new Promise<CliJobSnapshot>((done) => { resolve = done })
+  return { promise, resolve }
+}
+const snapshot = (chunks: CliChunk[]): CliJobSnapshot => ({
+  jobId: 'job-1', kind: 'download', target: 'alpha.ckpt', startedAtMs: 0,
+  status: 'running', exitCode: null, stalled: false, chunks,
+})
+
+describe('bounded live CLI output', () => {
+  it('caps initial snapshots at the recent tail', async () => {
+    installApi(Array.from({ length: 2100 }, (_, index) => chunk(index, `output ${index}`)))
+    render(<CliJobRow jobId="job-1" kind="download" target="alpha.ckpt" onDismiss={vi.fn()} />)
+    await until(() => screen.getByText('output 2099'))
+    expect(document.querySelectorAll('.cli-job-tail-line')).toHaveLength(2000)
+    expect(screen.queryByText('output 99')).toBeNull()
+    expect(screen.getByText('output 100')).toBeTruthy()
+  })
+
+  it('retains 2000 recent live lines and replacements across a late stale snapshot', async () => {
+    installApi([])
+    const delayed = pendingSnapshot()
+    vi.mocked(window.electronAPI.cliSubscribeJob).mockReturnValueOnce(delayed.promise)
+    render(<CliJobRow jobId="job-1" kind="download" target="alpha.ckpt" onDismiss={vi.fn()} />)
+    const onChunk = vi.mocked(window.electronAPI.onCliJobChunk).mock.calls[0][0]
+    const onStatus = vi.mocked(window.electronAPI.onCliJobStatus).mock.calls[0][0]
+    act(() => {
+      for (let index = 0; index < 2100; index++) onChunk({ jobId: 'job-1', chunk: chunk(index, `live ${index}`) })
+      onChunk({ jobId: 'job-1', chunk: chunk(2099, 'latest progress'), replace: true })
+      onStatus({ jobId: 'job-1', status: 'timed-out', exitCode: null, stalled: false })
+    })
+    await act(async () => delayed.resolve(snapshot(Array.from({ length: 2000 }, (_, index) => chunk(index, `snapshot ${index}`)))))
+    act(() => onChunk({ jobId: 'job-1', chunk: chunk(0, 'outdated replay'), replace: true }))
+    expect(document.querySelectorAll('.cli-job-tail-line')).toHaveLength(2000)
+    expect(screen.getByText('live 100')).toBeTruthy()
+    expect(screen.getByText('latest progress')).toBeTruthy()
+    expect(screen.queryByText('live 2099')).toBeNull()
+    expect(screen.queryByText('outdated replay')).toBeNull()
+    expect(screen.queryByText('snapshot 0')).toBeNull()
+    expect(screen.getByText('Failed: alpha.ckpt')).toBeTruthy()
+  })
+
+  it('fills a missing snapshot prefix without duplicating or reverting live lines', async () => {
+    installApi([])
+    const delayed = pendingSnapshot()
+    vi.mocked(window.electronAPI.cliSubscribeJob).mockReturnValueOnce(delayed.promise)
+    render(<CliJobRow jobId="job-1" kind="download" target="alpha.ckpt" onDismiss={vi.fn()} />)
+    const onChunk = vi.mocked(window.electronAPI.onCliJobChunk).mock.calls[0][0]
+    act(() => onChunk({ jobId: 'job-1', chunk: chunk(5, 'new live progress') }))
+    await act(async () => delayed.resolve(snapshot(Array.from({ length: 6 }, (_, index) => chunk(index, `snapshot ${index}`)))))
+    const lines = [...document.querySelectorAll('.cli-job-tail-line')].map((line) => line.textContent)
+    expect(lines).toEqual(['snapshot 0', 'snapshot 1', 'snapshot 2', 'snapshot 3', 'snapshot 4', 'new live progress'])
   })
 })

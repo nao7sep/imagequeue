@@ -54,6 +54,8 @@ interface JobState {
   retentionTimer: NodeJS.Timeout | null
   stdoutFragment: string
   stderrFragment: string
+  stdoutDelimiterCR: boolean
+  stderrDelimiterCR: boolean
   stdoutLastCR: boolean
   stderrLastCR: boolean
   finalized: boolean
@@ -62,12 +64,10 @@ interface JobState {
   cliPath: string
   args: string[]
   logContext: Record<string, unknown>
-  // The job's record in records.sqlite3: when its process started, and
-  // everything it wrote as received, kept whole until the record is written.
+  // The record owns streamed diagnostics; process settlement never waits for
+  // optional output storage to finish.
   record: CliJobRecord
   processStartedAt: string | null
-  stdoutReceived: string
-  stderrReceived: string
 }
 
 const jobs = new Map<string, JobState>()
@@ -114,6 +114,8 @@ export function startCliJob(opts: StartCliJobOpts): string {
     retentionTimer: null,
     stdoutFragment: '',
     stderrFragment: '',
+    stdoutDelimiterCR: false,
+    stderrDelimiterCR: false,
     stdoutLastCR: false,
     stderrLastCR: false,
     finalized: false,
@@ -124,8 +126,6 @@ export function startCliJob(opts: StartCliJobOpts): string {
     logContext: opts.logContext,
     record: startCliJobRecord({ jobId, kind: opts.kind, target: opts.target, cliPath: opts.cliPath, args: opts.args }),
     processStartedAt: null,
-    stdoutReceived: '',
-    stderrReceived: '',
   }
   jobs.set(jobId, state)
 
@@ -278,8 +278,12 @@ function launchPipeJob(state: JobState): void {
 
   stdout.setEncoding('utf8')
   stderr.setEncoding('utf8')
-  stdout.on('data', (chunk: string) => onData(state, 'stdout', chunk))
-  stderr.on('data', (chunk: string) => onData(state, 'stderr', chunk))
+  stdout.on('data', (chunk: string) => {
+    if (!onData(state, 'stdout', chunk, () => stdout.resume())) stdout.pause()
+  })
+  stderr.on('data', (chunk: string) => {
+    if (!onData(state, 'stderr', chunk, () => stderr.resume())) stderr.pause()
+  })
 
   child.on('error', (err) => {
     log('error', 'CLI job spawn error', { jobId: state.jobId, ...state.logContext, error: serializeError(err) })
@@ -338,7 +342,7 @@ function launchImportJob(state: JobState): void {
     state.stalled = false
 
     dataSubscription = ptyProcess.onData((chunk) => {
-      onData(state, 'stdout', chunk)
+      if (!onData(state, 'stdout', chunk, () => ptyProcess.resume())) ptyProcess.pause()
     })
     exitSubscription = ptyProcess.onExit(({ exitCode, signal }) => {
       dataSubscription?.dispose()
@@ -368,8 +372,9 @@ function resetDeadline(state: JobState): void {
     state.kind === 'download' ? CLI_DOWNLOAD_INACTIVITY_TIMEOUT_MS : CLI_IMPORT_TIMEOUT_MS)
 }
 
-function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string): void {
-  if (state.finalized) return
+function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string, resume: () => void): boolean {
+  if (state.finalized) return true
+  const accepted = state.record.append(kind, chunk, resume)
   if (state.kind === 'download' && state.status !== 'stopping') resetDeadline(state)
   state.lastOutputMs = Date.now()
   if (state.kind === 'download') {
@@ -379,21 +384,30 @@ function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string): void
       emitStatus(state)
     }
   }
-  if (kind === 'stdout') state.stdoutReceived += chunk
-  else state.stderrReceived += chunk
-
+  // Live presentation is bounded independently of the complete diagnostic
+  // stream. Scan once and split long logical lines rather than retaining them.
   const fragmentField = kind === 'stdout' ? 'stdoutFragment' : 'stderrFragment'
-  const data = state[fragmentField] + chunk
-  const re = /([^\r\n]*)(\r\n|\r|\n)/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = re.exec(data)) !== null) {
-    pushChunk(state, kind, stripAnsi(match[1]), match[2] === '\r')
-    lastIndex = re.lastIndex
+  const delimiterField = kind === 'stdout' ? 'stdoutDelimiterCR' : 'stderrDelimiterCR'
+  let fragment = state[fragmentField]
+  let previousCR = state[delimiterField]
+  for (let index = 0; index < chunk.length; index++) {
+    const char = chunk[index]
+    if (char === '\r' || char === '\n') {
+      if (!(char === '\n' && previousCR)) pushChunk(state, kind, stripAnsi(fragment), char === '\r')
+      fragment = ''
+      previousCR = char === '\r'
+    } else {
+      previousCR = false
+      fragment += char
+      if (fragment.length >= 16 * 1024 && !/[\uD800-\uDBFF]/.test(char)) {
+        pushChunk(state, kind, stripAnsi(fragment))
+        fragment = ''
+      }
+    }
   }
-
-  state[fragmentField] = data.slice(lastIndex)
+  state[fragmentField] = fragment
+  state[delimiterField] = previousCR
+  return accepted
 }
 
 function pushChunk(state: JobState, kind: 'stdout' | 'stderr', text: string, isCR = false): void {
@@ -528,13 +542,8 @@ function finalize(
     status,
     exitCode: code,
     signal,
-    stdout: state.stdoutReceived,
-    stderr: state.stderrReceived,
     error,
   })
-  // The record holds the output now; the toast keeps its own lines.
-  state.stdoutReceived = ''
-  state.stderrReceived = ''
 
   if (state.subscribers.size === 0) {
     scheduleRetentionTimer(state, CLI_JOB_RETENTION_WITHOUT_SUBSCRIBERS_MS)

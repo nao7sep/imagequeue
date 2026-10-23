@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CliChunk, CliJobKind, CliJobStatus } from '../../../shared/cli-jobs'
+import { CLI_JOB_BUFFER_MAX_LINES, type CliChunk, type CliJobKind, type CliJobStatus } from '../../../shared/cli-jobs'
 import { Icon, type IconName } from './Icon'
 import { serializeError } from '../../../shared/serialize-error'
 import './CliJobsPanel.css'
@@ -95,33 +95,43 @@ export function CliJobRow({ jobId, kind, target, onDismiss }: RowProps): React.J
 
   useEffect(() => {
     let cancelled = false
+    let liveStatusReceived = false
+    let recent: CliChunk[] = []
+    let discardedThrough = -1
+    // The subscription snapshot may arrive after live events. Keep the newest
+    // version of each line and never reintroduce a line already evicted here.
+    const mergeChunks = (incoming: CliChunk[], snapshot = false): void => {
+      const bySeq = new Map(recent.map((chunk) => [chunk.seq, chunk]))
+      for (const chunk of incoming) {
+        if (chunk.seq <= discardedThrough || (snapshot && bySeq.has(chunk.seq))) continue
+        bySeq.set(chunk.seq, chunk)
+      }
+      const ordered = [...bySeq.values()].sort((a, b) => a.seq - b.seq)
+      const removed = ordered.length - CLI_JOB_BUFFER_MAX_LINES
+      if (removed > 0) discardedThrough = ordered[removed - 1].seq
+      recent = removed > 0 ? ordered.slice(removed) : ordered
+      setChunks(recent)
+    }
 
     const offChunk = window.electronAPI.onCliJobChunk((e) => {
       if (e.jobId !== jobId) return
-      if (e.replace) {
-        setChunks((prev) => {
-          const idx = prev.findIndex((c) => c.seq === e.chunk.seq)
-          if (idx === -1) return [...prev, e.chunk]
-          const next = [...prev]
-          next[idx] = e.chunk
-          return next
-        })
-      } else {
-        setChunks((prev) => [...prev, e.chunk])
-      }
+      mergeChunks([e.chunk])
     })
 
     const offStatus = window.electronAPI.onCliJobStatus((e) => {
       if (e.jobId !== jobId) return
+      liveStatusReceived = true
       setStatus(e.status)
       setExitCode(e.exitCode)
     })
 
     void window.electronAPI.cliSubscribeJob(jobId).then((snap) => {
       if (cancelled || !snap) return
-      setChunks(snap.chunks)
-      setStatus(snap.status)
-      setExitCode(snap.exitCode)
+      mergeChunks(snap.chunks, true)
+      if (!liveStatusReceived) {
+        setStatus(snap.status)
+        setExitCode(snap.exitCode)
+      }
     }).catch((error) => {
       if (cancelled) return
       setRowError('cliJob.subscribeFailed')

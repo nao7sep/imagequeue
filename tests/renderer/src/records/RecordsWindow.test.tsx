@@ -47,7 +47,7 @@ const jobDetail: RecordDetail = {
   title: 'draw-things-cli download', jobId: 'job-abc', jobKind: 'download', target: 'flux.ckpt',
   cliPath: '/Users/someone/.imagequeue/bin/draw-things-cli', args: JSON.stringify(['models', 'ensure', '--model', 'flux.ckpt']),
   startedAt: '2026-10-02T08:00:10.000Z', endedAt: '2026-10-02T08:00:14.500Z', status: 'killed', exitCode: null,
-  signal: 'SIGTERM', stdout: 'Downloading 10%\rDownloading 40%\r', stderr: '\n', error: null,
+  signal: 'SIGTERM', hasStdout: true, hasStderr: false, outputError: null, error: null,
 }
 const newer: RecordSummary = {
   kind: 'log', id: 12, time: '2026-10-02T08:02:00.000Z', level: 'info', title: 'Arrived while open', text: null,
@@ -56,6 +56,7 @@ const newer: RecordSummary = {
 let root: Root | null = null
 const readRecordsPage = vi.fn<ElectronAPI['readRecordsPage']>()
 const readRecordDetail = vi.fn<ElectronAPI['readRecordDetail']>()
+const readRecordOutput = vi.fn<ElectronAPI['readRecordOutput']>()
 const readRecordSources = vi.fn<ElectronAPI['readRecordSources']>()
 const appLog = vi.fn<ElectronAPI['appLog']>()
 const updateUiState = vi.fn<ElectronAPI['updateUiState']>()
@@ -90,6 +91,8 @@ beforeEach(() => {
   zone = 'UTC'
   readRecordsPage.mockReset()
   readRecordsPage.mockResolvedValue({ records: [call, line], more: false } satisfies RecordsPage)
+  readRecordOutput.mockReset()
+  readRecordOutput.mockResolvedValue({ text: 'Downloading 10%\rDownloading 40%\r', nextOffset: null })
   readRecordDetail.mockReset()
   readRecordDetail.mockImplementation(async (kind) => (kind === 'log' ? lineDetail : callDetail))
   readRecordSources.mockReset()
@@ -122,7 +125,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'electronAPI', {
     configurable: true,
     value: {
-      readRecordsPage, readRecordDetail, readRecordSources, appLog, updateUiState, getUiState, onRecordsChanged,
+      readRecordsPage, readRecordDetail, readRecordOutput, readRecordSources, appLog, updateUiState, getUiState, onRecordsChanged,
     } satisfies Partial<ElectronAPI>,
   })
 })
@@ -242,7 +245,21 @@ describe('RecordsWindow', () => {
     expect(document.querySelector('.records-detail-body')!.textContent).toContain('gemini-x')
   })
 
-  it('shows everything a selected CLI job holds, its output as the terminal left it', async () => {
+  it('reads only flagged output streams and keeps archival failure details out of the interface', async () => {
+    readRecordsPage.mockResolvedValue({ records: [job], more: false })
+    readRecordDetail.mockResolvedValue({ ...jobDetail, hasStdout: false, hasStderr: true, outputError: 'EACCES /private/output-transcript' })
+    readRecordOutput.mockResolvedValue({ text: 'stderr page\n', nextOffset: null })
+    await mount()
+    await act(async () => options()[0]!.click())
+    expect(readRecordOutput).toHaveBeenCalledExactlyOnceWith(2, 'stderr', 0)
+    const labels = [...document.querySelectorAll('.records-block-label')].map((label) => label.textContent)
+    expect(labels).toContain('Error output')
+    expect(labels).not.toContain('Output')
+    expect(document.querySelector('.records-detail-body')?.textContent).toContain('Some output could not be recorded.')
+    expect(document.querySelector('.records-detail-body')?.textContent).not.toContain('/private/output-transcript')
+  })
+
+  it('shows everything a selected CLI job holds, its paged output exactly as received', async () => {
     readRecordsPage.mockResolvedValue({ records: [job], more: false })
     readRecordDetail.mockResolvedValue(jobDetail)
     await mount()
@@ -272,7 +289,7 @@ describe('RecordsWindow', () => {
     ])
     expect(blocks).toEqual([
       ['Arguments', JSON.stringify(['models', 'ensure', '--model', 'flux.ckpt'], null, 2)],
-      ['Output', 'Downloading 40%'],
+      ['Output', 'Downloading 10%\rDownloading 40%\r'],
     ])
   })
 

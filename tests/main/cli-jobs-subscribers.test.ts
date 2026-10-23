@@ -18,7 +18,7 @@ vi.mock('../../src/main/utils/owned-cli', () => ({
 }))
 vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: vi.fn() }))
-vi.mock('../../src/main/records', () => ({ startCliJobRecord: () => ({ finish: vi.fn() }) }))
+vi.mock('../../src/main/records', () => ({ startCliJobRecord: () => ({ append: vi.fn(() => true), finish: vi.fn() }) }))
 
 const start = (): string => startCliJob({
   kind: 'download', modelsDir: '/test/models', sourceIdentity: 'model.ckpt', cliPath: '/fake/cli', args: [], target: 'model', logContext: {},

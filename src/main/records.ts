@@ -1,5 +1,8 @@
 import type { Worker } from 'node:worker_threads'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { utcStampForFilename } from '../shared/utc-stamp'
+import { createCliOutputWriter } from './cli-output-writer'
 import createRecordsWorker from './records-writer-worker?nodeWorker'
 import { serializeError } from '../shared/serialize-error'
 
@@ -9,6 +12,8 @@ const launch = new Date().toISOString()
 let activeSessionId: string | null = null
 let worker: Worker | null = null
 let databaseFile: string | null = null
+let outputRoot: string | null = null
+const finishingOutputs = new Set<Promise<void>>()
 let storedListener: (() => void) | null = null
 let nextId = 0
 // A stalled disk must not accumulate unlimited diagnostic messages. Keep one
@@ -25,6 +30,7 @@ const pending = new Map<number, { worker: Worker; resolve: () => void }>()
 /** Diagnostics are ordered by the writer's mailbox; paid evidence belongs to session.json. */
 export function openRecords(dataDir: string): string {
   void closeRecords()
+  outputRoot = path.join(dataDir, 'records', 'cli')
   const file = path.join(dataDir, 'records.sqlite3')
   try {
     const started = createRecordsWorker({ workerData: { dataDir, launch } })
@@ -56,6 +62,7 @@ export function openRecords(dataDir: string): string {
 }
 
 export function flushRecords(): Promise<void> {
+  if (finishingOutputs.size > 0) return Promise.all([...finishingOutputs]).then(() => flushRecords())
   const current = worker
   if (!current) return Promise.resolve()
   const id = ++nextId
@@ -70,6 +77,7 @@ export async function closeRecords(): Promise<void> {
   const current = worker
   worker = null
   databaseFile = null
+  if (finishingOutputs.size > 0) await Promise.all([...finishingOutputs])
   if (!current) return
   const exited = new Promise<void>((resolve) => current.once('exit', () => resolve()))
   current.postMessage({ type: 'close' })
@@ -84,9 +92,9 @@ function json(value: unknown): string {
   try { return JSON.stringify(value) ?? 'null' }
   catch (error) { return JSON.stringify({ recordSerializeError: String(error) }) }
 }
-function write(table: Table, row: Row): void {
+function write(table: Table, row: Row, destination = worker): void {
   try {
-    if (worker) {
+    if (destination) {
       const bytes = Object.values(row).reduce<number>((total, value) => total + (typeof value === 'string' ? Buffer.byteLength(value) : 8), 0)
       if (queuedBytes > 0 && queuedBytes + bytes > MAX_QUEUED_BYTES) {
         if (!droppedNotice) console.error('[records] diagnostic writer is backed up; new records are being dropped until it catches up')
@@ -96,13 +104,13 @@ function write(table: Table, row: Row): void {
       const recordId = ++nextId
       queued.set(recordId, bytes)
       queuedBytes += bytes
-      try { worker.postMessage({ type: 'write', table, row, recordId }) }
+      try { destination.postMessage({ type: 'write', table, row, recordId }) }
       catch (error) { queued.delete(recordId); queuedBytes -= bytes; throw error }
       return
     }
   } catch (error) { console.error('[records] writer could not receive record', error) }
   const sink = row.level === 'error' || row.level === 'warn' || row.error ? console.error : console.log
-  const jsonColumns = new Set(['fields', 'request', 'response', 'error', 'args'])
+  const jsonColumns = new Set(['fields', 'request', 'response', 'error', 'output_error', 'args'])
   const members = Object.entries({ table, ...row }).map(([key, value]) =>
     `${JSON.stringify(key)}:${jsonColumns.has(key) && typeof value === 'string' ? value : JSON.stringify(value)}`)
   sink(`{${members.join(',')}}`)
@@ -300,33 +308,63 @@ export interface CliJobEnd {
   status: string
   exitCode: number | null
   signal: string | null
-  stdout: string
-  stderr: string
+  stdout?: string
+  stderr?: string
   // The error the process runner reported, such as a failed spawn; undefined when none.
   error?: unknown
 }
 
 export interface CliJobRecord {
+  append(kind: 'stdout' | 'stderr', text: string, resume: () => void): boolean
   finish(end: CliJobEnd): void
 }
 
 /** Starts one CLI job's record when the job is asked for; the record is written
  *  once, when the job first finishes. */
 export function startCliJobRecord(job: CliJobStart): CliJobRecord {
-  const base = {
-    time: new Date().toISOString(), launch, session_id: activeSessionId,
-    job_id: job.jobId, job_kind: job.kind, target: job.target, cli_path: job.cliPath, args: json(job.args),
+  const root = outputRoot
+  const destination = worker
+  const requested = new Date()
+  const uuid = `${utcStampForFilename(requested)}-${randomUUID()}`
+  const reportOutputFailure = (stream: 'stdout' | 'stderr') => (error: unknown): void => {
+    writeLogRecord(new Date().toISOString(), 'warn', 'CLI output could not be retained', { jobId: job.jobId, stream, error: serializeError(error) })
   }
+  const stdout = createCliOutputWriter(root, `${uuid}-stdout.log`, 'stdout', () => [...diagnosticCredentials], reportOutputFailure('stdout'))
+  const stderr = createCliOutputWriter(root, `${uuid}-stderr.log`, 'stderr', () => [...diagnosticCredentials], reportOutputFailure('stderr'))
+  const base = maskDiagnostic({
+    time: requested.toISOString(), launch, session_id: activeSessionId,
+    job_id: job.jobId, job_kind: job.kind, target: job.target, cli_path: job.cliPath, args: json(maskDiagnostic(job.args)),
+  }) as Row
   let written = false
+  let appended = false
   return {
+    append: (kind, text, resume) => {
+      if (written) return true
+      appended = true
+      return (kind === 'stdout' ? stdout : stderr).append(text, resume)
+    },
     finish: (end) => {
       if (written) return
       written = true
-      write('cli_jobs', {
-        ...base, started_at: end.startedAt, ended_at: new Date().toISOString(), status: end.status,
-        exit_code: end.exitCode, signal: end.signal, stdout: end.stdout, stderr: end.stderr,
-        error: end.error === undefined ? null : json(serializeError(end.error)),
-      })
+      const endedAt = new Date().toISOString()
+      const store = (): void => {
+        const outputErrors = [stdout.error, stderr.error].filter((error) => error !== undefined).map(serializeError)
+        write('cli_jobs', {
+          ...base, started_at: end.startedAt, ended_at: endedAt, status: end.status,
+          exit_code: end.exitCode, signal: end.signal,
+          stdout: appended ? '' : maskDiagnostic(end.stdout ?? '') as string,
+          stderr: appended ? '' : maskDiagnostic(end.stderr ?? '') as string,
+          stdout_file: stdout.file, stderr_file: stderr.file,
+          output_error: outputErrors.length ? json(maskDiagnostic(outputErrors)) : null,
+          error: end.error === undefined ? null : json(maskDiagnostic(serializeError(end.error))),
+        }, destination)
+      }
+      // Direct callers with legacy inline diagnostics remain compatible. Main
+      // jobs append as they run and never retain an entire process's output.
+      if (!appended) { store(); return }
+      const finishing = Promise.all([stdout.finish(), stderr.finish()]).then(store)
+      finishingOutputs.add(finishing)
+      void finishing.finally(() => finishingOutputs.delete(finishing))
     },
   }
 }

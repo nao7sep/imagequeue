@@ -1,5 +1,7 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import path from 'path'
+import fs from 'node:fs'
+import { flushRecords } from '../../src/main/records'
 import os from 'os'
 import type { WebContents } from 'electron'
 import { getCliJobSnapshot, killAllCliJobsAndWait, startCliJob, subscribeCliJob, unsubscribeCliJob } from '../../src/main/cli-jobs'
@@ -57,11 +59,14 @@ describe('CLI job records', () => {
     const jobId = startFixtureJob(script)
     await observeJob(jobId, ended)
 
+    await flushRecords()
     const [row] = readRows(dir, 'cli_jobs')
     expect(row).toMatchObject({
       job_id: jobId, job_kind: 'download', target: 'model.ckpt', cli_path: CLI,
-      status: 'exited', exit_code: 3, signal: null, stdout: '10%\r100%\r\nDone\n', stderr: 'careful\n', error: null,
+      status: 'exited', exit_code: 3, signal: null, stdout: '', stderr: '', error: null,
     })
+    expect(fs.readFileSync(path.join(dir, 'records/cli', row!.stdout_file as string), 'utf8')).toBe('10%\r100%\r\nDone\n')
+    expect(fs.readFileSync(path.join(dir, 'records/cli', row!.stderr_file as string), 'utf8')).toBe('careful\n')
     expect(JSON.parse(row!.args as string)).toEqual(['-e', script])
     const { time, started_at: startedAt, ended_at: endedAt } = row as { time: string; started_at: string; ended_at: string }
     expect(time <= startedAt && startedAt <= endedAt).toBe(true)
@@ -73,8 +78,10 @@ describe('CLI job records', () => {
     await observeJob(jobId, (snapshot) => snapshot.chunks.some((chunk) => chunk.text === 'ready'))
     await killAllCliJobsAndWait({ killGraceMs: 2_000, timeoutMs: 4_000 })
 
+    await flushRecords()
     const [row] = readRows(dir, 'cli_jobs')
-    expect(row).toMatchObject({ job_id: jobId, status: 'killed', exit_code: null, signal: 'SIGTERM', stdout: 'ready\n' })
+    expect(row).toMatchObject({ job_id: jobId, status: 'killed', exit_code: null, signal: 'SIGTERM', stdout: '' })
+    expect(fs.readFileSync(path.join(dir, 'records/cli', row!.stdout_file as string), 'utf8')).toBe('ready\n')
   })
 
   it('keep a job whose process could not be started, with the error', async () => {
@@ -82,6 +89,7 @@ describe('CLI job records', () => {
     const jobId = startFixtureJob('', path.join(os.tmpdir(), 'imagequeue-no-such-cli'))
     await observeJob(jobId, ended)
 
+    await flushRecords()
     const [row] = readRows(dir, 'cli_jobs')
     expect(row).toMatchObject({ job_id: jobId, status: 'exited', exit_code: null, stdout: '', stderr: '' })
     expect(JSON.parse(row!.error as string)).toMatchObject({ code: 'ENOENT' })

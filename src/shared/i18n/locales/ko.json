@@ -856,5 +856,8 @@
   "records.job": "작업",
   "records.arguments": "인수",
   "records.output": "출력",
+  "records.previousOutputPage": "이전 출력 페이지",
+  "records.nextOutputPage": "다음 출력 페이지",
+  "records.outputIncomplete": "일부 출력을 기록하지 못했습니다.",
   "records.errorOutput": "오류 출력"
 }

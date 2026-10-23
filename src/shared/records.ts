@@ -1,6 +1,6 @@
 // What the Records window reads from records.sqlite3: a filtered page of
-// summaries, newest first, and one record whole. JSON columns arrive as the
-// text the database holds; the window decides how to show them.
+// summaries, newest first, and record details. CLI output is read separately
+// in bounded pages. JSON columns arrive as stored text for the window to show.
 
 export type RecordKind = 'log' | 'ai-call' | 'cli-job'
 
@@ -17,6 +17,14 @@ export type RecordLevelFilter = 'attention' | RecordLevel
 export const RECORD_LEVEL_FILTERS: readonly RecordLevelFilter[] = ['attention', ...RECORD_LEVELS]
 
 export const RECORDS_PAGE_SIZE = 100
+
+export const RECORDS_OUTPUT_PAGE_SIZE = 64 * 1024
+export type RecordOutputStream = 'stdout' | 'stderr'
+export interface RecordsOutputPage {
+  text: string
+  /** Opaque UTF-8 byte cursor, ending at a character boundary. */
+  nextOffset: number | null
+}
 
 // Where the next page starts: the last summary of the page before it.
 export interface RecordCursor {
@@ -105,8 +113,9 @@ export interface CliJobRecordDetail {
   status: string
   exitCode: number | null
   signal: string | null
-  stdout: string
-  stderr: string
+  hasStdout: boolean
+  hasStderr: boolean
+  outputError: string | null
   error: string | null
 }
 
@@ -117,11 +126,13 @@ export type RecordsRead =
   | { op: 'page'; query: RecordsQuery }
   | { op: 'sources' }
   | { op: 'detail'; kind: RecordKind; id: number }
+  | { op: 'output'; id: number; stream: RecordOutputStream; offset: number }
 
 export interface RecordsReadResults {
   page: RecordsPage
   sources: { launches: string[]; sessions: string[] }
   detail: RecordDetail | null
+  output: RecordsOutputPage
 }
 
 // The values the filters offer: every launch and every session that has

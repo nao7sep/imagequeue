@@ -1,6 +1,8 @@
 import {
   RECORD_KINDS,
   RECORD_LEVEL_FILTERS,
+  type RecordsOutputPage,
+  type RecordOutputStream,
   type RecordDetail,
   type RecordKind,
   type RecordLevelFilter,
@@ -61,6 +63,12 @@ export function registerRecordsIpc(): void {
     assertRecordKind(kind)
     if (!Number.isInteger(id)) throw new Error('Invalid IPC parameter: id must be an integer.')
     return readRecords({ op: 'detail', kind, id: id as number })
+  })
+  handle('records:output', (_event, id: unknown, stream: unknown, offset: unknown): Promise<RecordsOutputPage> => {
+    if (!Number.isSafeInteger(id) || (id as number) <= 0) throw new Error('Invalid IPC parameter: id must be a positive safe integer.')
+    if (stream !== 'stdout' && stream !== 'stderr') throw new Error('Invalid IPC parameter: stream must be stdout or stderr.')
+    if (!Number.isSafeInteger(offset) || (offset as number) < 0) throw new Error('Invalid IPC parameter: offset must be a nonnegative safe integer.')
+    return readRecords({ op: 'output', id: id as number, stream: stream as RecordOutputStream, offset: offset as number })
   })
   handle('records:sources', () => readRecordSources())
 }

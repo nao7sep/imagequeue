@@ -902,5 +902,8 @@
   "records.job": "Opération",
   "records.arguments": "Arguments",
   "records.output": "Sortie",
+  "records.previousOutputPage": "Page de sortie précédente",
+  "records.nextOutputPage": "Page de sortie suivante",
+  "records.outputIncomplete": "Une partie de la sortie n’a pas pu être enregistrée.",
   "records.errorOutput": "Sortie d’erreur"
 }

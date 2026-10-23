@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fixtures = vi.hoisted(() => ({
   pipes: [] as Array<EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn> }>,
-  imports: [] as Array<{ kill: ReturnType<typeof vi.fn>; exit: (code?: number) => void }>,
+  imports: [] as Array<{ kill: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn>; data: (text: string) => void; exit: (code?: number) => void }>,
   records: [] as Array<{ jobId: string; finish: ReturnType<typeof vi.fn> }>,
   closeOnKill: false,
+  acceptOutput: true,
+  resumes: [] as Array<() => void>,
   importFails: false,
 }))
 vi.mock('node:os', () => ({ availableParallelism: () => 6 }))
@@ -22,11 +24,14 @@ vi.mock('../../src/main/utils/owned-cli', () => ({
 vi.mock('node-pty', () => ({
   spawn: () => {
     if (fixtures.importFails) throw new Error('PTY refused fixture')
+    let dataListener: (text: string) => void = () => {}
     let exitListener: (event: { exitCode: number; signal: number }) => void = () => {}
     const child = {
       kill: vi.fn(() => { if (fixtures.closeOnKill) child.exit() }),
       exit: (exitCode = 0) => exitListener({ exitCode, signal: 0 }),
-      onData: () => ({ dispose: vi.fn() }),
+      pause: vi.fn(), resume: vi.fn(),
+      data: (text: string) => dataListener(text),
+      onData: (listener: typeof dataListener) => { dataListener = listener; return { dispose: vi.fn() } },
       onExit: (listener: typeof exitListener) => { exitListener = listener; return { dispose: vi.fn() } },
     }
     fixtures.imports.push(child)
@@ -36,7 +41,10 @@ vi.mock('node-pty', () => ({
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../src/main/records', () => ({
   startCliJobRecord: ({ jobId }: { jobId: string }) => {
-    const record = { jobId, finish: vi.fn() }
+    const record = { jobId, append: vi.fn((_kind: string, _text: string, resume: () => void) => {
+      if (!fixtures.acceptOutput) fixtures.resumes.push(resume)
+      return fixtures.acceptOutput
+    }), finish: vi.fn() }
     fixtures.records.push(record)
     return record
   },
@@ -57,6 +65,8 @@ beforeEach(async () => {
   fixtures.imports.length = 0
   fixtures.records.length = 0
   fixtures.closeOnKill = false
+  fixtures.acceptOutput = true
+  fixtures.resumes.length = 0
   fixtures.importFails = false
   scheduler = await import('../../src/main/cli-jobs')
   quit = await import('../../src/main/quit-state')
@@ -203,6 +213,41 @@ describe('CLI job admission and settlement', () => {
     expect(status(first)).toBe('timed-out')
     expect(status(queued)).toBe('running')
     expect(fixtures.records[0]!.finish).toHaveBeenCalledWith(expect.objectContaining({ status: 'timed-out', error: expect.any(Error) }))
+  })
+
+  it('pauses and resumes each exact source independently and settles the process while output is still pending', () => {
+    const pipeJob = start('a')
+    const ptyJob = start('artifact', 'import', '/other')
+    fixtures.acceptOutput = false
+    const pipe = fixtures.pipes[0]!
+    pipe.stdout.write('stdout waiting\n')
+    pipe.stderr.write('stderr waiting\n')
+    fixtures.imports[0]!.data('pty waiting\n')
+    expect(pipe.stdout.isPaused()).toBe(true)
+    expect(pipe.stderr.isPaused()).toBe(true)
+    expect(fixtures.imports[0]!.pause).toHaveBeenCalledOnce()
+    fixtures.resumes[0]!()
+    expect(pipe.stdout.isPaused()).toBe(false)
+    expect(pipe.stderr.isPaused()).toBe(true)
+    closePipe(0)
+    fixtures.imports[0]!.exit()
+    expect(status(pipeJob)).toBe('exited')
+    expect(status(ptyJob)).toBe('exited')
+    expect(() => { fixtures.resumes[1]!(); fixtures.resumes[2]!() }).not.toThrow()
+    expect(fixtures.imports[0]!.resume).toHaveBeenCalledOnce()
+  })
+
+  it('bounds long newline-free presentation segments and retains only the live line ring', () => {
+    const job = start('a')
+    const pipe = fixtures.pipes[0]!
+    pipe.stdout.write('x'.repeat(1024 * 1024) + '\r\n')
+    expect(scheduler.getCliJobSnapshot(job)!.chunks.every((chunk) => chunk.text.length <= 16 * 1024)).toBe(true)
+    for (let index = 0; index < 2100; index++) pipe.stdout.write(`line ${index}\n`)
+    closePipe(0)
+    const snapshot = scheduler.getCliJobSnapshot(job)!
+    expect(snapshot.chunks).toHaveLength(2000)
+    expect(snapshot.chunks[0]!.text).toBe('line 100')
+    expect(snapshot.chunks.at(-1)!.text).toBe('line 2099')
   })
 
   it('allows quiet imports their absolute conversion budget, then releases the next only after exit', () => {

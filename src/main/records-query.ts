@@ -1,6 +1,12 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import {
   RECORDS_PAGE_SIZE,
+  RECORDS_OUTPUT_PAGE_SIZE,
+  type RecordOutputStream,
+  type RecordsOutputPage,
   type RecordDetail,
   type RecordKind,
   type RecordsPage,
@@ -10,8 +16,8 @@ import {
   type RecordSummary,
 } from '../shared/records'
 
-// The Records window's reads of records.sqlite3 (records.ts owns the schema and
-// every write). Pages are keyset-paged, newest first, across every table.
+// The Records window's reads of records.sqlite3 (records-storage.ts owns the
+// schema and the dedicated writer thread owns every write). Pages are keyset-paged, newest first, across every table.
 
 // An AI call has no level of its own; a failed one reads as an error.
 const CALL_LEVEL = "CASE WHEN error IS NULL THEN 'info' ELSE 'error' END"
@@ -30,6 +36,7 @@ function likePattern(search: string): string | null {
 
 export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
   const pattern = likePattern(query.search)
+  if (pattern !== null) registerOutputSearch(db)
   const candidates: RecordSummary[] = []
   const table = (kind: RecordKind, select: string, from: string, level: string, searched: string[]): void => {
     const params: SQLInputValue[] = []
@@ -49,8 +56,15 @@ export function readPage(db: DatabaseSync, query: RecordsQuery): RecordsPage {
       params.push(query.level)
     }
     if (pattern !== null) {
-      where.push(`(${searched.map((column) => `${column} LIKE ? ESCAPE '\\'`).join(' OR ')})`)
+      const terms = searched.map((column) => `${column} LIKE ? ESCAPE '\\'`)
       params.push(...searched.map(() => pattern))
+      if (kind === 'cli-job') {
+        for (const stream of ['stdout', 'stderr']) {
+          terms.push(`cli_output_contains(${stream}_file, ?, '${stream}')`)
+          params.push(query.search.trim())
+        }
+      }
+      where.push(`(${terms.join(' OR ')})`)
     }
     if (query.after) {
       const after = query.after
@@ -112,9 +126,13 @@ export function readDetail(db: DatabaseSync, kind: RecordKind, id: number): Reco
     const row = db.prepare(
       `SELECT 'cli-job' AS kind, id, time, launch, session_id AS sessionId, ${JOB_LEVEL} AS level, ${JOB_TITLE} AS title,
         job_id AS jobId, job_kind AS jobKind, target, cli_path AS cliPath, args, started_at AS startedAt,
-        ended_at AS endedAt, status, exit_code AS exitCode, signal, stdout, stderr, error FROM cli_jobs WHERE id = ?`,
+        ended_at AS endedAt, status, exit_code AS exitCode, signal,
+        (stdout_file IS NOT NULL OR LENGTH(CAST(stdout AS BLOB)) > 0) AS hasStdout,
+        (stderr_file IS NOT NULL OR LENGTH(CAST(stderr AS BLOB)) > 0) AS hasStderr,
+        output_error AS outputError, error FROM cli_jobs WHERE id = ?`,
     ).get(id)
-    return (row as unknown as RecordDetail | undefined) ?? null
+    if (!row) return null
+    return { ...row, hasStdout: Boolean(row.hasStdout), hasStderr: Boolean(row.hasStderr) } as unknown as RecordDetail
   }
   const row = db.prepare(
     `SELECT 'ai-call' AS kind, id, time, launch, session_id AS sessionId, task_id AS taskId, request_id AS requestId,
@@ -126,5 +144,80 @@ export function readDetail(db: DatabaseSync, kind: RecordKind, id: number): Reco
 export function runRecordsRead(db: DatabaseSync, read: RecordsRead): RecordsReadResults[RecordsRead['op']] {
   if (read.op === 'page') return readPage(db, read.query)
   if (read.op === 'sources') return readSources(db)
+  if (read.op === 'output') return readOutput(db, read.id, read.stream, read.offset)
   return readDetail(db, read.kind, read.id)
+}
+
+function outputDirectory(db: DatabaseSync): string {
+  const main = (db.prepare('PRAGMA database_list').all() as { name: string; file: string }[]).find((entry) => entry.name === 'main')!
+  return path.join(path.dirname(main.file), 'records', 'cli')
+}
+
+function outputPath(directory: string, reference: string, stream: RecordOutputStream): string {
+  // Only writer-owned basenames belong here; validation prevents path
+  // traversal through a modified reference.
+  const match = /^(\d{8}-\d{6}-utc)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(stdout|stderr)\.log$/.exec(reference)
+  if (!match || match[2] !== stream) throw new Error('Invalid CLI output file reference.')
+  return path.join(directory, reference)
+}
+
+/** Off-thread reader only: one bounded UTF-8 chunk, ending at a character boundary. */
+export function readOutput(db: DatabaseSync, id: number, stream: RecordOutputStream, offset: number): RecordsOutputPage {
+  const row = db.prepare(`SELECT ${stream}_file AS file FROM cli_jobs WHERE id = ?`).get(id) as { file: string | null } | undefined
+  if (!row) throw new Error('The CLI job record no longer exists.')
+  if (row.file === null) {
+    // BLOB substr uses byte offsets and preserves embedded NULs in historical
+    // SQLite TEXT. TEXT length/substr would stop at the first NUL.
+    const legacy = db.prepare(`SELECT substr(CAST(${stream} AS BLOB), ?, ?) AS bytes FROM cli_jobs WHERE id = ?`)
+      .get(offset + 1, RECORDS_OUTPUT_PAGE_SIZE + 4, id) as { bytes: Uint8Array | null }
+    // SQLite returns NULL for an empty BLOB substring, including empty output.
+    return outputChunk(legacy.bytes === null ? Buffer.alloc(0) : Buffer.from(legacy.bytes), offset)
+  }
+  const file = fs.openSync(outputPath(outputDirectory(db), row.file, stream), 'r')
+  try {
+    // Three continuation bytes may finish the final code point; one more byte
+    // establishes whether another page exists without decoding the whole file.
+    const buffer = Buffer.allocUnsafe(RECORDS_OUTPUT_PAGE_SIZE + 4)
+    let length = 0
+    while (length < buffer.length) {
+      const count = fs.readSync(file, buffer, length, buffer.length - length, offset + length)
+      if (count === 0) break
+      length += count
+    }
+    return outputChunk(buffer.subarray(0, length), offset)
+  } finally { fs.closeSync(file) }
+}
+
+function outputChunk(buffer: Buffer, offset: number): RecordsOutputPage {
+  if (buffer.length > 0 && (buffer[0] & 0xc0) === 0x80) throw new Error('Invalid CLI output cursor: not a UTF-8 character boundary.')
+  let end = Math.min(RECORDS_OUTPUT_PAGE_SIZE, buffer.length)
+  while (end < buffer.length && (buffer[end] & 0xc0) === 0x80) end++
+  return { text: buffer.toString('utf8', 0, end), nextOffset: end < buffer.length ? offset + end : null }
+}
+
+const searchConnections = new WeakSet<DatabaseSync>()
+const asciiLower = (value: string): string => value.replace(/[A-Z]/g, (character) => character.toLowerCase())
+function registerOutputSearch(db: DatabaseSync): void {
+  if (searchConnections.has(db)) return
+  const directory = outputDirectory(db)
+  // Search runs in the existing reader worker and carries only a chunk and
+  // the possible match tail. Failed capture may still settle a pending write.
+  db.function('cli_output_contains', (reference, needle, stream) => {
+    if (reference === null) return 0
+    const file = fs.openSync(outputPath(directory, String(reference), stream as RecordOutputStream), 'r')
+    try {
+      const wanted = asciiLower(String(needle))
+      const decoder = new StringDecoder('utf8')
+      const buffer = Buffer.allocUnsafe(RECORDS_OUTPUT_PAGE_SIZE)
+      let tail = ''
+      for (;;) {
+        const length = fs.readSync(file, buffer, 0, buffer.length, null)
+        const chunk = tail + asciiLower(length ? decoder.write(buffer.subarray(0, length)) : decoder.end())
+        if (chunk.includes(wanted)) return 1
+        if (!length) return 0
+        tail = wanted.length > 1 ? chunk.slice(-(wanted.length - 1)) : ''
+      }
+    } finally { fs.closeSync(file) }
+  })
+  searchConnections.add(db)
 }

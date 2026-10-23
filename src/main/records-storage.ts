@@ -55,11 +55,14 @@ CREATE TABLE IF NOT EXISTS cli_jobs (
   args       TEXT NOT NULL,  -- JSON array: the arguments as passed
   started_at TEXT,           -- when the process was started; null when it never was
   ended_at   TEXT NOT NULL,
-  status     TEXT NOT NULL,  -- exited, or killed when stopped
+  status     TEXT NOT NULL,  -- terminal outcome: exited, killed, or timed-out
   exit_code  INTEGER,
   signal     TEXT,           -- as the process runner reported it
-  stdout     TEXT NOT NULL,  -- as received, whole
+  stdout     TEXT NOT NULL,  -- legacy inline output; new jobs keep file references
   stderr     TEXT NOT NULL,
+  stdout_file TEXT,          -- basename under records/cli
+  stderr_file TEXT,
+  output_error TEXT,         -- capture failure, separate from the process result
   error      TEXT            -- JSON: the error the process runner reported, null when none
 );
 CREATE INDEX IF NOT EXISTS cli_jobs_session ON cli_jobs (session_id);
@@ -116,10 +119,16 @@ export function openRecords(dataDir: string, context?: { launch: string }): stri
     const result = openOrReplace(file)
     opened = result.opened
     movedTo = result.movedTo
+    // Supported ledgers keep their original inline output. New capture columns
+    // are additive so opening a store never rewrites its historical records.
+    const columns = new Set((opened.prepare('PRAGMA table_info(cli_jobs)').all() as { name: string }[]).map((column) => column.name))
+    for (const column of ['stdout_file', 'stderr_file', 'output_error']) {
+      if (!columns.has(column)) opened.exec(`ALTER TABLE cli_jobs ADD COLUMN ${column} TEXT`)
+    }
     inserts = {
       log_records: insertStatement(opened, 'log_records', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'level', 'message', 'fields']),
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),
-      cli_jobs: insertStatement(opened, 'cli_jobs', ['time', 'launch', 'session_id', 'job_id', 'job_kind', 'target', 'cli_path', 'args', 'started_at', 'ended_at', 'status', 'exit_code', 'signal', 'stdout', 'stderr', 'error']),
+      cli_jobs: insertStatement(opened, 'cli_jobs', ['time', 'launch', 'session_id', 'job_id', 'job_kind', 'target', 'cli_path', 'args', 'started_at', 'ended_at', 'status', 'exit_code', 'signal', 'stdout', 'stderr', 'stdout_file', 'stderr_file', 'output_error', 'error']),
     }
     db = opened
     databaseFile = file
@@ -169,7 +178,7 @@ function json(value: unknown): string {
   }
 }
 
-const JSON_COLUMNS: ReadonlySet<string> = new Set(['fields', 'request', 'response', 'error', 'args'])
+const JSON_COLUMNS: ReadonlySet<string> = new Set(['fields', 'request', 'response', 'error', 'args', 'output_error'])
 
 // A failed write keeps the entry in the launch's plain text file, then the console,
 // as one JSON line with its JSON columns inline.
@@ -202,7 +211,7 @@ export function write(table: Table, row: Row): void {
   activeSessionId = typeof row.session_id === 'string' ? row.session_id : null
   if (inserts) {
     try {
-      inserts[table].run(row)
+      inserts[table].run(table === 'cli_jobs' ? { stdout_file: null, stderr_file: null, output_error: null, ...row } : row)
     } catch (error) {
       reportFailure('Records database write failed', error)
       writeFallback(table, row)

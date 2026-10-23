@@ -879,5 +879,8 @@
   "records.job": "Auftrag",
   "records.arguments": "Argumente",
   "records.output": "Ausgabe",
+  "records.previousOutputPage": "Vorherige Ausgabeseite",
+  "records.nextOutputPage": "Nächste Ausgabeseite",
+  "records.outputIncomplete": "Ein Teil der Ausgabe konnte nicht aufgezeichnet werden.",
   "records.errorOutput": "Fehlerausgabe"
 }

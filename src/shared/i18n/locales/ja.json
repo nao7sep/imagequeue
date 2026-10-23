@@ -856,5 +856,8 @@
   "records.job": "ジョブ",
   "records.arguments": "引数",
   "records.output": "出力",
+  "records.previousOutputPage": "前の出力ページ",
+  "records.nextOutputPage": "次の出力ページ",
+  "records.outputIncomplete": "出力の一部を記録できませんでした。",
   "records.errorOutput": "エラー出力"
 }

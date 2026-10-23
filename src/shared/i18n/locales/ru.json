@@ -925,5 +925,8 @@
   "records.job": "Задание",
   "records.arguments": "Аргументы",
   "records.output": "Вывод",
+  "records.previousOutputPage": "Предыдущая страница вывода",
+  "records.nextOutputPage": "Следующая страница вывода",
+  "records.outputIncomplete": "Не удалось записать часть вывода.",
   "records.errorOutput": "Вывод ошибок"
 }

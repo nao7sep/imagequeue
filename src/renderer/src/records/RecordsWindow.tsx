@@ -13,6 +13,7 @@ import {
   RECORD_KINDS,
   RECORD_LEVEL_FILTERS,
   type RecordDetail,
+  type RecordOutputStream,
   type RecordKind,
   type RecordLevel,
   type RecordLevelFilter,
@@ -33,9 +34,9 @@ import {
   cursorAfter,
   jsonBlockText,
   mergeNewestPage,
-  outputBlockText,
   recordKey,
 } from './record-format'
+import { CliOutputBlock } from './CliOutputBlock'
 import './RecordsWindow.css'
 
 // The Records window opens with its list pane at the saved width, so the first
@@ -618,7 +619,7 @@ function RecordDetailView({
   add(t('records.launch'), launchLabel(record.launch))
 
   // A block with nothing in it is left out.
-  const blocks: { label: string; text: string }[] = []
+  const blocks: ({ label: string; text: string } | { label: string; stream: RecordOutputStream })[] = []
   const addBlock = (label: string, text: string | null): void => {
     if (text !== null) blocks.push({ label, text })
   }
@@ -630,8 +631,8 @@ function RecordDetailView({
     addBlock(t('records.error'), jsonBlockText(record.error))
   } else {
     addBlock(t('records.arguments'), jsonBlockText(record.args))
-    addBlock(t('records.output'), outputBlockText(record.stdout))
-    addBlock(t('records.errorOutput'), outputBlockText(record.stderr))
+    if (record.hasStdout) blocks.push({ label: t('records.output'), stream: 'stdout' })
+    if (record.hasStderr) blocks.push({ label: t('records.errorOutput'), stream: 'stderr' })
     addBlock(t('records.error'), jsonBlockText(record.error))
   }
 
@@ -655,7 +656,12 @@ function RecordDetailView({
             </div>
           ))}
         </dl>
-        {blocks.map((block) => (
+        {record.kind === 'cli-job' && record.outputError !== null && (
+          <p className="records-note records-note--error" role="alert">{t('records.outputIncomplete')}</p>
+        )}
+        {blocks.map((block) => 'stream' in block ? (
+          <CliOutputBlock key={`${record.id}:${block.stream}`} recordId={record.id} stream={block.stream} label={block.label} />
+        ) : (
           <section key={block.label} className="records-block">
             <h3 className="records-block-label">{block.label}</h3>
             <pre className="records-block-text">{block.text}</pre>

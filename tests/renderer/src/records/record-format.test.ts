@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLI_JOB_STATUS_LABELS, cursorAfter, jsonBlockText, mergeNewestPage, outputBlockText, recordKey } from '../../../../src/renderer/src/records/record-format'
+import { CLI_JOB_STATUS_LABELS, cursorAfter, jsonBlockText, mergeNewestPage, recordKey } from '../../../../src/renderer/src/records/record-format'
 import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
 import type { RecordSummary } from '../../../../src/shared/records'
 
@@ -54,16 +54,6 @@ describe('record formatting', () => {
     for (const empty of [null, '', '  \n', '{}', ' { } ', 'null', '[]', '""', '"  "']) {
       expect(jsonBlockText(empty)).toBeNull()
     }
-  })
-
-  it("shows a CLI job's output as a terminal would have left it", () => {
-    expect(outputBlockText('Downloading 10%\rDownloading 55%\rDownloading 100%\r\nDone\n')).toBe('Downloading 100%\nDone')
-    expect(outputBlockText('\x1B[32mImported\x1B[0m model\r\n')).toBe('Imported model')
-    expect(outputBlockText('50%\r\n  indented\n\nlast')).toBe('50%\n  indented\n\nlast')
-  })
-
-  it("leaves out a CLI job's output that is only whitespace", () => {
-    for (const empty of ['', ' \n', '\r\n\r\n', '\x1B[0m\n']) expect(outputBlockText(empty)).toBeNull()
   })
 
   it('continues after the last row shown', () => {

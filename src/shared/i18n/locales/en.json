@@ -879,5 +879,8 @@
   "records.job": "Job",
   "records.arguments": "Arguments",
   "records.output": "Output",
+  "records.previousOutputPage": "Previous output page",
+  "records.nextOutputPage": "Next output page",
+  "records.outputIncomplete": "Some output could not be recorded.",
   "records.errorOutput": "Error output"
 }
