@@ -3,6 +3,7 @@ import { net, protocol } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { pathToFileURL } from 'url'
+import { AUDIO_SCHEME } from '../shared/audio-url'
 import { IMAGE_SCHEME, parseImageUrl } from '../shared/image-url'
 import { getSessionDir, resolveSessionDir } from './session'
 import { assertSafeBaseName } from './utils/file-output'
@@ -10,11 +11,12 @@ import { log, serializeError } from './logger'
 
 const IMAGE_EXTS = ['png', 'jpg', 'webp'] as const
 
-/** Must run before the app is ready. `standard` + `secure` let <img> load it
- *  under the renderer's CSP; `stream` serves the file without buffering it. */
-export function registerImageSchemeAsPrivileged(): void {
+/** Electron accepts one registration before readiness. Both media schemes
+ *  remain under CSP, and `stream` prevents whole-resource media buffering. */
+export function registerMediaSchemesAsPrivileged(): void {
   protocol.registerSchemesAsPrivileged([
     { scheme: IMAGE_SCHEME, privileges: { standard: true, secure: true, stream: true } },
+    { scheme: AUDIO_SCHEME, privileges: { standard: true, secure: true, stream: true } },
   ])
 }
 

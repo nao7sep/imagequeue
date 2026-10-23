@@ -1,4 +1,5 @@
 import { session } from 'electron'
+import { AUDIO_SCHEME } from '../shared/audio-url'
 import { IMAGE_SCHEME } from '../shared/image-url'
 
 // Content-Security-Policy for the app renderer, set as a response header so it
@@ -23,6 +24,7 @@ export function installContentSecurityPolicy(isProductionRenderer: boolean): voi
           "script-src 'self'",
           "style-src 'self' 'unsafe-inline'",
           `img-src 'self' data: blob: ${IMAGE_SCHEME}:`,
+          `media-src 'self' ${AUDIO_SCHEME}:`,
           "font-src 'self'",
           "connect-src 'self'",
           "object-src 'none'",
@@ -34,6 +36,7 @@ export function installContentSecurityPolicy(isProductionRenderer: boolean): voi
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
           `img-src 'self' data: blob: ${IMAGE_SCHEME}:`,
+          `media-src 'self' ${AUDIO_SCHEME}:`,
           "font-src 'self' data:",
           "connect-src 'self' ws: http: https:",
           "object-src 'none'",

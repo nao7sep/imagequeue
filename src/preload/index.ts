@@ -491,6 +491,8 @@ const api = {
 
   loadAudioFile: (filePath: string): Promise<string | null> =>
     ipcRenderer.invoke('notification:loadAudioFile', filePath),
+  releaseAudioFile: (url: string): Promise<void> =>
+    ipcRenderer.invoke('notification:releaseAudioFile', url),
 
   onShowKeptImagesChanged: (callback: (visible: boolean) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, visible: boolean): void => callback(visible)

@@ -28,6 +28,7 @@ vi.mock('electron', () => ({
 }))
 
 import { installContentSecurityPolicy } from '../../src/main/csp'
+import { AUDIO_SCHEME } from '../../src/shared/audio-url'
 import { IMAGE_SCHEME } from '../../src/shared/image-url'
 
 // Drives the registered handler for a production file:// document and returns the
@@ -73,4 +74,23 @@ describe('production Content-Security-Policy', () => {
     expect(scriptSrc).not.toContain("'unsafe-inline'")
   })
 
+})
+
+it('restricts every production resource directive, including authorized streamed audio', () => {
+  const directives = Object.fromEntries(installedProductionPolicy().split(';').map((part) => {
+    const [name, ...sources] = part.trim().split(/\s+/)
+    return [name, sources]
+  }))
+  expect(directives).toEqual({
+    'default-src': ["'self'"],
+    'script-src': ["'self'"],
+    'style-src': ["'self'", "'unsafe-inline'"],
+    'img-src': ["'self'", 'data:', 'blob:', `${IMAGE_SCHEME}:`],
+    'media-src': ["'self'", `${AUDIO_SCHEME}:`],
+    'font-src': ["'self'"],
+    'connect-src': ["'self'"],
+    'object-src': ["'none'"],
+    'base-uri': ["'none'"],
+    'frame-src': ["'none'"],
+  })
 })

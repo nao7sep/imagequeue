@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 // session and a base name, and neither may step outside it.
 
 const dirs = vi.hoisted(() => ({ sessions: '' }))
-vi.mock('electron', () => ({ net: {}, protocol: {} }))
+vi.mock('electron', () => ({ net: {}, protocol: { registerSchemesAsPrivileged: vi.fn() } }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (e: unknown) => e }))
 vi.mock('../../src/main/session', () => ({
   getSessionDir: () => path.join(dirs.sessions, 'current-session'),
@@ -17,7 +17,7 @@ vi.mock('../../src/main/session', () => ({
   },
 }))
 
-const { resolveImageRequest } = await import('../../src/main/image-protocol')
+const { resolveImageRequest, registerMediaSchemesAsPrivileged } = await import('../../src/main/image-protocol')
 
 beforeAll(() => {
   dirs.sessions = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-image-'))
@@ -44,4 +44,13 @@ describe('resolveImageRequest', () => {
     expect(await resolveImageRequest('iq-image://sessions/session/..%2F..%2Fetc/passwd')).toBeNull()
     expect(await resolveImageRequest('iq-image://sessions/session/..%2Fold-session/b')).toBeNull()
   })
+})
+
+it('registers image and audio streaming together without bypassing content security', async () => {
+  const { protocol } = await import('electron')
+  registerMediaSchemesAsPrivileged()
+  expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledExactlyOnceWith([
+    { scheme: 'iq-image', privileges: { standard: true, secure: true, stream: true } },
+    { scheme: 'iq-audio', privileges: { standard: true, secure: true, stream: true } },
+  ])
 })

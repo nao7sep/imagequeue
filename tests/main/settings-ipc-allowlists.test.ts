@@ -102,7 +102,7 @@ const { CLOUD_BACKEND_IDS_IN_UI_ORDER, IMAGE_BACKEND_SECRET, SECRET_IDS } = awai
 async function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = mocks.handlers.get(channel)
   if (!handler) throw new Error(`${channel} was not registered`)
-  return handler({ sender: {} }, ...args)
+  return handler({ sender: { once: vi.fn(), on: vi.fn(), removeListener: vi.fn(), isDestroyed: () => false } }, ...args)
 }
 
 beforeEach(() => {
@@ -292,7 +292,7 @@ describe('notification settings', () => {
     mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] })
     await expect(invoke('dialog:openFile', [])).resolves.toBe(file)
     await expect(invoke('settings:saveNotificationField', 'success_file', file)).resolves.toEqual({ success: true })
-    await expect(invoke('notification:loadAudioFile', file)).resolves.toBe(`data:audio/wav;base64,${Buffer.from('sound').toString('base64')}`)
+    await expect(invoke('notification:loadAudioFile', file)).resolves.toMatch(/^iq-audio:\/\/sound\//)
     expect(mocks.showMessageBox).not.toHaveBeenCalled()
   })
 

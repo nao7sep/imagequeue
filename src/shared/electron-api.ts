@@ -235,7 +235,9 @@ export interface ElectronAPI {
   onSurfaceConfirm: (callback: (request: SurfaceConfirmRequest) => void) => (() => void)
   onSurfaceConfirmDismissed: (callback: (id: number) => void) => (() => void)
   showNotification: (type: 'success' | 'failure') => Promise<void>
+  // One ephemeral authorized stream URL; callers release it after playback.
   loadAudioFile: (filePath: string) => Promise<string | null>
+  releaseAudioFile: (url: string) => Promise<void>
 
   onShowKeptImagesChanged: (callback: (visible: boolean) => void) => (() => void)
   onQueueUpdated: (callback: (update: QueueUpdate) => void) => (() => void)

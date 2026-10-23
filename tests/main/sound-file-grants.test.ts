@@ -26,7 +26,7 @@ beforeEach(() => {
   fs.writeFileSync(first, 'first sound')
   fs.writeFileSync(second, 'second sound')
 })
-afterEach(() => fs.rmSync(mocks.root, { recursive: true, force: true }))
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); fs.rmSync(mocks.root, { recursive: true, force: true }) })
 
 describe('native sound file grants', () => {
   it('returns no authorization or persisted grant after Cancel', async () => {
@@ -87,4 +87,39 @@ describe('native sound file grants', () => {
     expect(await (await grants()).authorizedSoundFile(path.join(mocks.root, 'missing.wav'), sender)).toBeNull()
     expect(mocks.showMessageBox).not.toHaveBeenCalled()
   })
+})
+
+
+it('bounds and coalesces a stalled file check without showing consent after timeout', async () => {
+  const module = await grants()
+  let finish!: (value: string) => void
+  const canonical = fs.realpathSync(first)
+  const realpath = vi.spyOn(fs.promises, 'realpath').mockReturnValue(new Promise<string>((resolve) => { finish = resolve }))
+  vi.useFakeTimers()
+  const firstRead = module.authorizedSoundFile(first, sender)
+  const firstFailed = expect(firstRead).rejects.toThrow()
+  await vi.advanceTimersByTimeAsync(30_000)
+  await firstFailed
+  const retry = module.authorizedSoundFile(first, sender)
+  const retryFailed = expect(retry).rejects.toThrow()
+  await vi.advanceTimersByTimeAsync(30_000)
+  await retryFailed
+  expect(realpath).toHaveBeenCalledOnce()
+  finish(canonical)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.showMessageBox).not.toHaveBeenCalled()
+})
+
+it('does not charge native consent time against the file wait deadline', async () => {
+  const module = await grants()
+  let answer!: (value: { response: number }) => void
+  let entered!: () => void
+  const entering = new Promise<void>((resolve) => { entered = resolve })
+  mocks.showMessageBox.mockImplementationOnce(() => { entered(); return new Promise((resolve) => { answer = resolve }) })
+  vi.useFakeTimers()
+  const pending = module.authorizedSoundFile(first, sender)
+  await entering
+  await vi.advanceTimersByTimeAsync(120_000)
+  answer({ response: 1 })
+  await expect(pending).resolves.toBe(fs.realpathSync(first))
 })

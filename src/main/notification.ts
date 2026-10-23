@@ -1,11 +1,7 @@
-import { authorizedSoundFile } from './sound-file-grants'
+import { loadAudioFile, releaseAudioFile } from './audio-protocol'
 import { BrowserWindow, screen } from 'electron'
-import path from 'path'
-import os from 'os'
-import fs from 'fs'
 import { handle } from './ipc-boundary'
 import { loadConfig } from './config'
-import { resolveSettingsPath } from './utils/user-path'
 import { log, serializeError } from './logger'
 import { hardenWindow } from './utils/harden-window'
 import { mainTranslator } from './i18n'
@@ -216,29 +212,6 @@ export function registerNotificationIpc(): void {
     showNotification(type)
   })
 
-  handle('notification:loadAudioFile', async (event, filePath: string) => {
-    // Settings narrow which sound is requested; a separate main-owned native
-    // grant authorizes returning its bytes across the renderer boundary.
-    const notifications = loadConfig().notifications
-    const allowed = [notifications.success_file, notifications.failure_file].filter(Boolean).map((p) => resolveSettingsPath(p, os.homedir()))
-    if (!filePath) return null
-    const requested = resolveSettingsPath(filePath, os.homedir())
-    if (!allowed.includes(requested)) return null
-    const granted = await authorizedSoundFile(requested, event.sender)
-    if (!granted) return null
-    const data = await fs.promises.readFile(granted).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return null
-      throw error
-    })
-    if (!data) return null
-    const ext = path.extname(requested).slice(1).toLowerCase()
-    const mimeMap: Record<string, string> = {
-      mp3: 'audio/mpeg',
-      wav: 'audio/wav',
-      ogg: 'audio/ogg',
-      m4a: 'audio/mp4'
-    }
-    const mime = mimeMap[ext] ?? 'audio/mpeg'
-    return `data:${mime};base64,${data.toString('base64')}`
-  })
+  handle('notification:loadAudioFile', (event, filePath: string) => loadAudioFile(filePath, event.sender))
+  handle('notification:releaseAudioFile', (event, url: string) => releaseAudioFile(url, event.sender))
 }

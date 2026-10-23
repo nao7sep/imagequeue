@@ -8,7 +8,8 @@ import { notifySettingsChanged } from './settings-changed'
 import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, drainSessionWrites, registerSessionIpc, resetOutputTimestampAllocators } from './session'
 import { queueManager, registerQueueIpc } from './queue'
 import { startProcessor, stopProcessor } from './backends'
-import { registerImageProtocol, registerImageSchemeAsPrivileged } from './image-protocol'
+import { registerAudioProtocol } from './audio-protocol'
+import { registerImageProtocol, registerMediaSchemesAsPrivileged } from './image-protocol'
 import { registerSettingsIpc } from './settings-ipc'
 import { registerStateIpc } from './state-ipc'
 import { registerDependenciesIpc } from './dependencies-ipc'
@@ -217,7 +218,7 @@ export function runPrimaryInstance(): void {
   installLastResortHooks()
 
   // Scheme privileges can only be granted before the app is ready.
-  registerImageSchemeAsPrivileged()
+  registerMediaSchemesAsPrivileged()
 
   app.whenReady().then(async () => {
     try {
@@ -342,6 +343,7 @@ async function startUp(): Promise<void> {
   // the strict policy.
   installContentSecurityPolicy(!process.env['ELECTRON_RENDERER_URL'])
   registerImageProtocol()
+  registerAudioProtocol()
   ensureDataDir()
   // Records open immediately after the storage root exists and before any other
   // startup step, so a failure in one of them is logged rather than lost to the
