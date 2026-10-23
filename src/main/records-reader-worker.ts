@@ -20,7 +20,7 @@ parentPort?.on('message', ({ id, read }: RecordsReaderRequest) => {
   try {
     db ??= new DatabaseSync(databasePath, { readOnly: true })
     // One read transaction, so a read's several queries see one snapshot while
-    // the main process keeps writing on its own connection.
+    // the dedicated writer worker keeps writing on its own connection.
     db.exec('BEGIN')
     try {
       response = { id, ok: true, value: runRecordsRead(db, read) }

@@ -19,9 +19,22 @@ let nextId = 0
 // A stalled disk must not accumulate unlimited diagnostic messages. Keep one
 // oversized provider record intact when alone; otherwise bound queued bytes.
 const MAX_QUEUED_BYTES = 16 * 1024 * 1024
-let queuedBytes = 0
-let droppedNotice = false
-const queued = new Map<number, number>()
+interface DiagnosticGap {
+  count: number
+  firstDroppedAt: string
+  lastDroppedAt: string
+  tables: Partial<Record<Table, number>>
+}
+interface WriterMailbox {
+  queuedBytes: number
+  queued: Map<number, number>
+  gap: DiagnosticGap | null
+  gapRevision: number
+  ended: boolean
+}
+// A retiring writer can still acknowledge records after its replacement opens.
+// Its budget and gap belong to that writer, never to the replacement's history.
+const mailboxes = new WeakMap<Worker, WriterMailbox>()
 // Calls may fail long after a key rotates; retain masking knowledge for this
 // process so downstream diagnostic and fallback sinks mask the same values.
 const diagnosticCredentials = new Set<string>()
@@ -34,14 +47,16 @@ export function openRecords(dataDir: string): string {
   const file = path.join(dataDir, 'records.sqlite3')
   try {
     const started = createRecordsWorker({ workerData: { dataDir, launch } })
+    const mailbox: WriterMailbox = { queuedBytes: 0, queued: new Map(), gap: null, gapRevision: 0, ended: false }
+    mailboxes.set(started, mailbox)
     worker = started
     databaseFile = file
     started.on('message', (message: { type: string; id?: number; available?: boolean; recordId?: number }) => {
       if (message.type === 'opened' && worker === started && !message.available) databaseFile = null
       if (message.type === 'written' && message.recordId !== undefined) {
-        queuedBytes -= queued.get(message.recordId) ?? 0
-        queued.delete(message.recordId)
-        if (queuedBytes === 0) droppedNotice = false
+        mailbox.queuedBytes -= mailbox.queued.get(message.recordId) ?? 0
+        mailbox.queued.delete(message.recordId)
+        if (mailbox.queuedBytes === 0) publishGap(started, mailbox)
       }
       if (message.type === 'stored') {
         try { storedListener?.() } catch (error) { console.error('[records] stored-record listener failed', error) }
@@ -49,7 +64,8 @@ export function openRecords(dataDir: string): string {
       if (message.id !== undefined) { pending.get(message.id)?.resolve(); pending.delete(message.id) }
     })
     const ended = (): void => {
-      if (worker === started) { worker = null; databaseFile = null; queued.clear(); queuedBytes = 0 }
+      mailbox.ended = true
+      if (worker === started) { worker = null; databaseFile = null }
       for (const [id, request] of pending) {
         if (request.worker === started) { request.resolve(); pending.delete(id) }
       }
@@ -61,16 +77,23 @@ export function openRecords(dataDir: string): string {
   return file
 }
 
-export function flushRecords(): Promise<void> {
-  if (finishingOutputs.size > 0) return Promise.all([...finishingOutputs]).then(() => flushRecords())
+export async function flushRecords(): Promise<void> {
+  while (finishingOutputs.size > 0) await Promise.all([...finishingOutputs])
   const current = worker
-  if (!current) return Promise.resolve()
-  const id = ++nextId
-  return new Promise((resolve) => {
-    pending.set(id, { worker: current, resolve })
-    try { current.postMessage({ type: 'flush', id }) }
-    catch { pending.delete(id); resolve() }
-  })
+  if (!current) return
+  const mailbox = mailboxes.get(current)!
+  // Acknowledging the old backlog may enqueue its gap after our first barrier.
+  // Include that warning before exposing the flushed history to a reader.
+  let revision: number
+  do {
+    revision = mailbox.gapRevision
+    const id = ++nextId
+    await new Promise<void>((resolve) => {
+      pending.set(id, { worker: current, resolve })
+      try { current.postMessage({ type: 'flush', id }) }
+      catch { pending.delete(id); resolve() }
+    })
+  } while (!mailbox.ended && mailbox.gapRevision !== revision)
 }
 
 export async function closeRecords(): Promise<void> {
@@ -80,6 +103,9 @@ export async function closeRecords(): Promise<void> {
   if (finishingOutputs.size > 0) await Promise.all([...finishingOutputs])
   if (!current) return
   const exited = new Promise<void>((resolve) => current.once('exit', () => resolve()))
+  // No later recovery acknowledgement can enqueue behind the close message.
+  // One bounded summary goes after admitted records and before writer shutdown.
+  publishGap(current, mailboxes.get(current)!)
   current.postMessage({ type: 'close' })
   await exited
 }
@@ -92,20 +118,49 @@ function json(value: unknown): string {
   try { return JSON.stringify(value) ?? 'null' }
   catch (error) { return JSON.stringify({ recordSerializeError: String(error) }) }
 }
+function rowBytes(row: Row): number {
+  return Object.values(row).reduce<number>((total, value) => total + (typeof value === 'string' ? Buffer.byteLength(value) : 8), 0)
+}
+
+function postRecord(destination: Worker, mailbox: WriterMailbox, table: Table, row: Row, bytes = rowBytes(row)): void {
+  const recordId = ++nextId
+  mailbox.queued.set(recordId, bytes)
+  mailbox.queuedBytes += bytes
+  try { destination.postMessage({ type: 'write', table, row, recordId }) }
+  catch (error) { mailbox.queued.delete(recordId); mailbox.queuedBytes -= bytes; throw error }
+}
+
+function publishGap(destination: Worker, mailbox: WriterMailbox): void {
+  const gap = mailbox.gap
+  if (!gap) return
+  try {
+    postRecord(destination, mailbox, 'log_records', {
+      time: new Date().toISOString(), launch, session_id: null, task_id: null, request_id: null,
+      level: 'warn', message: 'Diagnostic records were dropped while the writer was backed up',
+      fields: json(gap),
+    })
+    mailbox.gap = null
+    mailbox.gapRevision++
+  } catch (error) { console.error('[records] diagnostic gap could not be retained', gap, error) }
+}
+
 function write(table: Table, row: Row, destination = worker): void {
   try {
     if (destination) {
-      const bytes = Object.values(row).reduce<number>((total, value) => total + (typeof value === 'string' ? Buffer.byteLength(value) : 8), 0)
-      if (queuedBytes > 0 && queuedBytes + bytes > MAX_QUEUED_BYTES) {
-        if (!droppedNotice) console.error('[records] diagnostic writer is backed up; new records are being dropped until it catches up')
-        droppedNotice = true
+      const mailbox = mailboxes.get(destination)!
+      const bytes = rowBytes(row)
+      if (mailbox.queuedBytes > 0 && mailbox.queuedBytes + bytes > MAX_QUEUED_BYTES) {
+        const now = new Date().toISOString()
+        if (!mailbox.gap) {
+          console.error('[records] diagnostic writer is backed up; new records are being dropped until it catches up')
+          mailbox.gap = { count: 0, firstDroppedAt: now, lastDroppedAt: now, tables: {} }
+        }
+        mailbox.gap.count++
+        mailbox.gap.lastDroppedAt = now
+        mailbox.gap.tables[table] = (mailbox.gap.tables[table] ?? 0) + 1
         return
       }
-      const recordId = ++nextId
-      queued.set(recordId, bytes)
-      queuedBytes += bytes
-      try { destination.postMessage({ type: 'write', table, row, recordId }) }
-      catch (error) { queued.delete(recordId); queuedBytes -= bytes; throw error }
+      postRecord(destination, mailbox, table, row, bytes)
       return
     }
   } catch (error) { console.error('[records] writer could not receive record', error) }
