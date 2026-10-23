@@ -29,11 +29,11 @@ describe('models directory follows IMAGEQUEUE_DATA_DIR', () => {
     process.env[ENV_VAR] = tmpRoot
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     // resolveModelsDir()'s fallback path calls loadConfig(), which seeds config.json on a fresh root —
     // a recorded managed-text write. Close the store singleton so the next test re-opens it against its
     // own throwaway root rather than the previous, now-deleted one.
-    closeBackupStore()
+    await closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })
@@ -108,9 +108,9 @@ describe('checkCli platform gate', () => {
     process.env[ENV_VAR] = tmpRoot
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     Object.defineProperty(process, 'platform', platform)
-    closeBackupStore()
+    await closeBackupStore()
     if (originalHome === undefined) delete process.env[ENV_VAR]
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })
@@ -135,16 +135,18 @@ describe('checkCli platform gate', () => {
     expect(vi.mocked(log).mock.calls.filter(([, event]) => event.startsWith('draw-things-cli'))).toEqual([])
   })
 
-  it.skipIf(process.platform === 'win32')('still logs a CLI that is present but will not run', async () => {
+  it.skipIf(process.platform === 'win32')('rejects and logs a CLI that is present but will not run', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     fs.mkdirSync(path.dirname(getCliBinaryPath()), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'not a program', { mode: 0o600 })
     vi.mocked(log).mockClear()
-    await expect(checkCli()).resolves.toMatchObject({ installed: false })
-    await listDownloadedModels()
+    await expect(checkCli()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(listDownloadedModels()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(listAvailableModels()).rejects.toMatchObject({ code: 'EACCES' })
     expect(vi.mocked(log).mock.calls.map(([level, event]) => [level, event])).toEqual([
       ['warn', 'draw-things-cli check failed'],
       ['error', 'draw-things-cli models list (downloaded) failed'],
+      ['error', 'draw-things-cli models list (all) failed'],
     ])
   })
 })

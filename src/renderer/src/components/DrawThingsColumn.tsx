@@ -97,6 +97,9 @@ export function useDrawThingsColumn({
   setModel: (updater: string | ((current: string) => string)) => void
   settings: Record<string, unknown> | null
 }): DrawThingsColumn {
+  const [authored, setAuthored] = useState(false)
+  const modelsDirectory = (settings?.image_backends as { drawthings?: { models_dir?: string } } | undefined)?.drawthings?.models_dir ?? ''
+  const refreshRevision = useRef(0)
   const [localWidth, setLocalWidth] = useState(1024)
   const [localHeight, setLocalHeight] = useState(1024)
   const [localSteps, setLocalSteps] = useState(4)
@@ -119,6 +122,7 @@ export function useDrawThingsColumn({
     model: string
     fallbacks: DrawThingsModelParams
     recommendationRevision: number
+    modelsDirectory: string
   } | null>(null)
   const persistenceRevision = useRef(0)
 
@@ -157,6 +161,7 @@ export function useDrawThingsColumn({
   const paramsReady = active && loadedParams?.model === model
     && loadedParams.fallbacks === fallbacks
     && loadedParams.recommendationRevision === recommendationRevision
+    && loadedParams.modelsDirectory === modelsDirectory
   const currentDrawThingsParams = useMemo(
     () => buildDrawThingsParams(localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt),
     [localWidth, localHeight, localSteps, localGuidance, localSeed, negativePrompt]
@@ -187,16 +192,19 @@ export function useDrawThingsColumn({
     if (value === CUSTOM_DRAWTHINGS_SIZE) return
     const preset = DRAWTHINGS_SIZE_PRESETS.find((s) => `${s.width}x${s.height}` === value)
     if (!preset) return
+    setAuthored(true)
     setLocalWidth(preset.width)
     setLocalHeight(preset.height)
   }, [])
 
   const refreshDrawThingsModels = useCallback(async (isInitial = false): Promise<void> => {
     if (!active) return
+    const revision = ++refreshRevision.current
     if (isInitial) setModelsLoadState('loading')
     setModelsLoadError(null)
     try {
       const status = await window.electronAPI.localCheckCli()
+      if (revision !== refreshRevision.current) return
       setCliStatus(status)
       if (!status.installed) {
         setDrawThingsReady(false)
@@ -205,6 +213,7 @@ export function useDrawThingsColumn({
         return
       }
       const list = await window.electronAPI.localListDownloadedModels()
+      if (revision !== refreshRevision.current) return
       setDrawThingsReady(list.length > 0)
       const sortedList = sortLocalModels(list)
       setDownloadedModels((prev) => {
@@ -218,13 +227,16 @@ export function useDrawThingsColumn({
       })
       setModelsLoadState('ready')
     } catch (error) {
+      if (revision !== refreshRevision.current) return
+      setDrawThingsReady(false)
       setModelsLoadError(presentFailure('drawthings-models-poll', error))
       setModelsLoadState('failed')
     }
-  }, [active, setModel])
+  }, [active, setModel, modelsDirectory])
 
   const onRestoreRecommended = useCallback((): void => {
     if (!effectiveRecommendation) return
+    setAuthored(true)
     setLocalWidth(effectiveRecommendation.width)
     setLocalHeight(effectiveRecommendation.height)
     setLocalSteps(effectiveRecommendation.steps)
@@ -304,12 +316,17 @@ export function useDrawThingsColumn({
     if (!active || !model) return
     let cancelled = false
     setLoadedParams(null)
+    setAuthored(false)
     setParamsLoadError(null)
 
-    Promise.all([
-      window.electronAPI.dtGetModelParams(model),
-      window.electronAPI.resolveRecommendation(model),
-    ]).then(([saved, recommendation]) => {
+    window.electronAPI.dtGetModelParams(model).then(async (saved) => {
+      const recommendation = await window.electronAPI.resolveRecommendation(model).catch((error) => {
+        if (!saved) throw error
+        logSaveError('load optional Draw Things recommendation', error, { model })
+        return null
+      })
+      return { saved, recommendation }
+    }).then(({ saved, recommendation }) => {
       if (cancelled) return
       setSelectedRecommendation(recommendation)
       const resolved = resolveDtParams(saved, recommendation, fallbacks)
@@ -319,7 +336,7 @@ export function useDrawThingsColumn({
       setLocalGuidance(resolved.guidance)
       setLocalSeed(resolved.seed)
       setNegativePrompt(resolved.negativePrompt)
-      setLoadedParams({ model, fallbacks, recommendationRevision })
+      setLoadedParams({ model, fallbacks, recommendationRevision, modelsDirectory })
       setParamsLoadError(null)
     }).catch((error) => {
       if (cancelled) return
@@ -329,7 +346,7 @@ export function useDrawThingsColumn({
     })
 
     return () => { cancelled = true }
-  }, [active, model, fallbacks, recommendationRevision])
+  }, [active, model, fallbacks, recommendationRevision, modelsDirectory])
 
   // Check CLI status and load models on mount (local backend only)
   useEffect(() => {
@@ -339,6 +356,7 @@ export function useDrawThingsColumn({
     const handleFocus = (): void => { void refreshDrawThingsModels(false) }
     window.addEventListener('focus', handleFocus)
     return () => {
+      refreshRevision.current += 1
       window.clearInterval(id)
       window.removeEventListener('focus', handleFocus)
     }
@@ -372,18 +390,19 @@ export function useDrawThingsColumn({
     }
   }, [active, refreshDrawThingsModels])
 
-  // Autosave Draw Things params on every change. The main process coalesces
+  // Persist only authored edits; resolving defaults is not authorship. The main process coalesces
   // rapid writes and drains pending writes on `before-quit`, so we don't
   // debounce here. The resolved-owner gate also covers recommendation/default
   // reloads, so stale values cannot be written or used for generation.
   useEffect(() => {
-    if (!paramsReady) return
+    if (!paramsReady || !authored) return
+    setAuthored(false)
     window.electronAPI.dtSaveModelParams(model, currentDrawThingsParams)
       .catch((err) => {
         logSaveError('autosave Draw Things model parameters', err, { model })
         setParamsSaveError('drawThings.paramsSaveFailed')
       })
-  }, [paramsReady, model, currentDrawThingsParams])
+  }, [paramsReady, authored, model, currentDrawThingsParams])
 
   const enqueueParams = useMemo<Record<string, unknown>>(() => {
     // Seed/negative gating shared with Advanced Prompting (drawThingsParams.ts).
@@ -422,12 +441,12 @@ export function useDrawThingsColumn({
       canApplyToAllModels,
       onModelChange,
       onSizeChange,
-      setWidth: setLocalWidth,
-      setHeight: setLocalHeight,
-      setSteps: setLocalSteps,
-      setGuidance: setLocalGuidance,
-      setSeed: setLocalSeed,
-      setNegativePrompt,
+      setWidth: (value) => { setAuthored(true); setLocalWidth(value) },
+      setHeight: (value) => { setAuthored(true); setLocalHeight(value) },
+      setSteps: (value) => { setAuthored(true); setLocalSteps(value) },
+      setGuidance: (value) => { setAuthored(true); setLocalGuidance(value) },
+      setSeed: (value) => { setAuthored(true); setLocalSeed(value) },
+      setNegativePrompt: (value) => { setAuthored(true); setNegativePrompt(value) },
       onRestoreRecommended,
       onApplyToAllModels,
     },

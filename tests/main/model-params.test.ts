@@ -21,7 +21,7 @@ describe('params.json format version', () => {
   })
   afterEach(async () => {
     const { closeBackupStore } = await import('../../src/main/backup/backup-store')
-    closeBackupStore()
+    await closeBackupStore()
     vi.unstubAllEnvs()
     fs.rmSync(root, { recursive: true, force: true })
   })
@@ -141,7 +141,7 @@ describe('params.json format version', () => {
       expect(Object.hasOwn(structuredClone(reloaded.getAllModelParams()), name)).toBe(true)
     }
     const patch = { width: 512, height: 512, steps: 8, guidance: 1 }
-    reloaded.applyDimensionsToModels([...names, 'toString'], patch)
+    await reloaded.applyDimensionsToModels([...names, 'toString'], patch)
     await reloaded.drainPendingWrites()
     vi.resetModules()
     const applied = await import('../../src/main/model-params')
@@ -149,6 +149,74 @@ describe('params.json format version', () => {
     expect(applied.getModelParams('toString')).toEqual({ ...patch, seed: '', negativePrompt: '' })
     expect(JSON.parse(fs.readFileSync(file(), 'utf8')).formatVersion).toBe(1)
     expect(setAsideCopies()).toEqual([])
+  })
+
+  it('preserves configured seed and negative prompt when applying dimensions to unsaved targets', async () => {
+    const { updateConfig } = await import('../../src/main/config')
+    await updateConfig((draft) => {
+      draft.image_backends.drawthings.default_params.seed = 123
+      draft.image_backends.drawthings.default_params.fallback_negative_prompt = 'configured negative'
+    })
+    const api = await import('../../src/main/model-params')
+    const patch = { width: 512, height: 768, steps: 12, guidance: 3 }
+    await api.applyDimensionsToModels(['unsaved.ckpt'], patch)
+    await api.drainPendingWrites()
+    expect(api.getModelParams('unsaved.ckpt')).toEqual({ ...patch, seed: '123', negativePrompt: 'configured negative' })
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).models['unsaved.ckpt']).toEqual(api.getModelParams('unsaved.ckpt'))
+  })
+
+  it('retains recommended negative prompt and configured seed for an unsaved target', async () => {
+    const { updateConfig } = await import('../../src/main/config')
+    await updateConfig((draft) => {
+      draft.image_backends.drawthings.default_params.seed = 456
+      draft.image_backends.drawthings.default_params.fallback_negative_prompt = 'configured negative'
+    })
+    fs.mkdirSync(path.join(root, 'models'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'models', 'configs.json'), JSON.stringify([
+      { name: 'target', negative: 'recommended negative', configuration: { model: 'unsaved.ckpt' } },
+    ]))
+    const api = await import('../../src/main/model-params')
+    const patch = { width: 512, height: 768, steps: 12, guidance: 3 }
+    await api.applyDimensionsToModels(['unsaved.ckpt'], patch)
+    expect(api.getModelParams('unsaved.ckpt')).toEqual({ ...patch, seed: '456', negativePrompt: 'recommended negative' })
+    await api.drainPendingWrites()
+  })
+
+  it('resolves all unsaved targets from one recommendation-file read', async () => {
+    const api = await import('../../src/main/model-params')
+    const read = vi.spyOn(fs.promises, 'readFile')
+    try {
+      await api.applyDimensionsToModels(['one.ckpt', 'two.ckpt', 'three.ckpt'], { width: 512, height: 512, steps: 8, guidance: 1 })
+      expect(read.mock.calls.filter(([file]) => String(file).endsWith('configs.json'))).toHaveLength(1)
+      await api.drainPendingWrites()
+    } finally { read.mockRestore() }
+  })
+
+  it('does not partially apply dimensions when an unsaved target cannot resolve recommendations', async () => {
+    const api = await import('../../src/main/model-params')
+    api.setModelParams('saved.ckpt', params)
+    await api.drainPendingWrites()
+    const bytes = fs.readFileSync(file())
+    fs.mkdirSync(path.join(root, 'models'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'models', 'configs.json'), '{ malformed')
+    await expect(api.applyDimensionsToModels(['saved.ckpt', 'unsaved.ckpt'], {
+      width: 512, height: 512, steps: 8, guidance: 1,
+    })).rejects.toBeInstanceOf(Error)
+    await api.drainPendingWrites()
+    expect(api.getAllModelParams()).toEqual({ 'saved.ckpt': params })
+    expect(fs.readFileSync(file())).toEqual(bytes)
+  })
+
+  it('applies to full saved sets even when optional recommendations are malformed', async () => {
+    const api = await import('../../src/main/model-params')
+    api.setModelParams('saved.ckpt', { ...params, seed: '123', negativePrompt: 'authored negative' })
+    await api.drainPendingWrites()
+    fs.mkdirSync(path.join(root, 'models'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'models', 'configs.json'), '{ malformed')
+    const patch = { width: 512, height: 512, steps: 8, guidance: 1 }
+    await api.applyDimensionsToModels(['saved.ckpt'], patch)
+    await api.drainPendingWrites()
+    expect(api.getModelParams('saved.ckpt')).toEqual({ ...patch, seed: '123', negativePrompt: 'authored negative' })
   })
 
   it('refuses every request on a file from a newer version and leaves its bytes as they were', async () => {
@@ -160,7 +228,7 @@ describe('params.json format version', () => {
     expect(() => getModelParams('model.ckpt')).toThrow(NewerFormatError)
     expect(() => getAllModelParams()).toThrow(NewerFormatError)
     expect(() => setModelParams('model.ckpt', params)).toThrow(NewerFormatError)
-    expect(() => applyDimensionsToModels(['model.ckpt'], { width: 512, height: 512, steps: 8, guidance: 1 })).toThrow(NewerFormatError)
+    await expect(applyDimensionsToModels(['model.ckpt'], { width: 512, height: 512, steps: 8, guidance: 1 })).rejects.toThrow(NewerFormatError)
     await drainPendingWrites()
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
   })

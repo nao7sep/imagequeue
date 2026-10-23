@@ -45,7 +45,10 @@ export function getRecommendationsPath(): string {
 
 export async function getRecommendationsStatus(): Promise<RecommendationStatus> {
   const filePath = getRecommendationsPath()
-  if (!await fs.promises.stat(filePath).then(() => true, () => false)) {
+  if (!await fs.promises.stat(filePath).then(() => true, (error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return false
+    throw error
+  })) {
     return { exists: false, valid: false, entryCount: 0, updatedAt: null }
   }
 
@@ -108,11 +111,18 @@ export function lastModifiedOf(headers: IncomingHttpHeaders): string | null {
 }
 
 export async function resolveRecommendedParams(model: string): Promise<RecommendedParams | null> {
+  return (await resolveRecommendedParamsForModels([model])).get(model) ?? null
+}
+
+/** Resolve a batch from one file snapshot, rather than rereading it per model. */
+export async function resolveRecommendedParamsForModels(models: string[]): Promise<Map<string, RecommendedParams | null>> {
+  if (models.length === 0) return new Map()
   const parsed = await parseRecommendationFile(getRecommendationsPath())
-  if (parsed.error !== null || parsed.specs.length === 0) return null
-  const match = findRecommendedSettings(model, parsed.specs)
-  if (!match) return null
-  return recommendedParamsFromMatch(match)
+  if (parsed.error !== null) throw parsed.error
+  return new Map(models.map((model) => {
+    const match = findRecommendedSettings(model, parsed.specs)
+    return [model, match ? recommendedParamsFromMatch(match) : null]
+  }))
 }
 
 function validateRecommendationBytes(data: Buffer): void {
@@ -121,11 +131,12 @@ function validateRecommendationBytes(data: Buffer): void {
   }
 }
 
-async function parseRecommendationFile(filePath: string): Promise<{ specs: RecommendationSpec[]; error: string | null }> {
+async function parseRecommendationFile(filePath: string): Promise<{ specs: RecommendationSpec[]; error: Error | null }> {
   try {
     const specs = parseRecommendationBytes(await fs.promises.readFile(filePath))
-    return { specs, error: specs.length === 0 ? 'No recommendation entries found' : null }
+    return { specs, error: specs.length === 0 ? new Error('No recommendation entries found') : null }
   } catch (err) {
-    return { specs: [], error: (err as Error).message }
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { specs: [], error: null }
+    return { specs: [], error: err instanceof Error ? err : new Error('Unable to read recommendations', { cause: err }) }
   }
 }

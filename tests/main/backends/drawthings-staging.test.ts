@@ -1,3 +1,4 @@
+import { toDrawThingsTaskParams } from '../../../src/shared/draw-things-params'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -22,7 +23,7 @@ vi.mock('child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeP
 
 // The generation timeout is read from config, which caches per process — the
 // mock gives each test its own knob.
-const configKnobs = vi.hoisted(() => ({ timeoutMs: 60_000 }))
+const configKnobs = vi.hoisted(() => ({ timeoutMs: 60_000, seed: null as number | null }))
 vi.mock('../../../src/main/config', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   loadConfig: () => ({
@@ -32,7 +33,7 @@ vi.mock('../../../src/main/config', async (importOriginal) => ({
         models_dir: '',
         default_params: {
           fallback_width: 1024, fallback_height: 1024, fallback_steps: 4,
-          fallback_guidance: 1, fallback_negative_prompt: '', seed: null,
+          fallback_guidance: 1, fallback_negative_prompt: '', seed: configKnobs.seed,
         },
       },
     },
@@ -111,6 +112,7 @@ describe('Draw Things output staging', () => {
     recorded.failures.length = 0
     recorded.finished.length = 0
     configKnobs.timeoutMs = 60_000
+    configKnobs.seed = null
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-dt-'))
     process.env[ENV_VAR] = tmpRoot
   })
@@ -120,6 +122,19 @@ describe('Draw Things output staging', () => {
     else process.env[ENV_VAR] = originalHome
     fs.rmSync(tmpRoot, { recursive: true, force: true })
     vi.resetModules()
+  })
+
+  it.each(['', '42'])('keeps submitted seed intent %j when global defaults change and on retry', async (seed) => {
+    const { generateDrawThings } = await import('../../../src/main/backends/drawthings')
+    const params = toDrawThingsTaskParams({ width: 512, height: 512, steps: 4, guidance: 1, negativePrompt: '', seed })
+    const task = { id: 'seed', prompt: 'cat', model: 'm.ckpt', params }
+    for (const globalSeed of [999, 888]) {
+      configKnobs.seed = globalSeed
+      await generateDrawThings(task as never, new AbortController().signal)
+      const args = spawnCalls.at(-1)!.args
+      if (seed) expect(args[args.indexOf('--seed') + 1]).toBe(seed)
+      else expect(args).not.toContain('--seed')
+    }
   })
 
   it('answers an already-aborted signal at the door, before any spawn', async () => {

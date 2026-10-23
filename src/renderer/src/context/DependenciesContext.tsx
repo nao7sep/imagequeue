@@ -74,8 +74,9 @@ function mergeSnapshot(
 ): DependenciesState {
   if (!current) return next
   switch (operation) {
-    case 'cli':
     case 'check':
+      return { ...current, cli: next.cli, recommendations: next.recommendations, platformSupported: next.platformSupported }
+    case 'cli':
       return { ...current, cli: next.cli, platformSupported: next.platformSupported }
     case 'recommendations':
       return {
@@ -238,6 +239,8 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
     invoke: () => Promise<DependenciesState | CliInstallResult>,
   ): Promise<void> => {
     if (active.current.has(operation)) return
+    if (operation === 'check' && (active.current.has('cli') || active.current.has('recommendations'))) return
+    if ((operation === 'cli' || operation === 'recommendations') && active.current.has('check')) return
     active.current.add(operation)
     operationRevision.current += 1
     dispatch({ type: 'start', operation })

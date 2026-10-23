@@ -1,7 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import type { DrawThingsModelParams } from '../shared/types'
-import { getDataDir } from './config'
+import { getDataDir, loadConfig } from './config'
+import { dtFallbacksFromSettings, resolveDtParams } from '../shared/draw-things-params'
+import { resolveRecommendedParamsForModels } from './recommendations'
 import { log, serializeError } from './logger'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { createCoalescedWriter } from './utils/coalesced-writer'
@@ -151,14 +153,23 @@ export function setModelParams(modelFile: string, params: DrawThingsModelParams)
 
 export type DrawThingsDimensionPatch = Pick<DrawThingsModelParams, 'width' | 'height' | 'steps' | 'guidance'>
 
-export function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): void {
+export async function applyDimensionsToModels(modelFiles: string[], patch: DrawThingsDimensionPatch): Promise<void> {
   if (modelFiles.length === 0) return
   const s = ensureLoaded()
-  for (const modelFile of modelFiles) {
+  const fallbacks = dtFallbacksFromSettings(loadConfig() as unknown as Record<string, unknown>)
+  // Resolve all required inputs before mutating any set. A failed optional
+  // recommendation never blocks a complete authored set.
+  const recommendations = await resolveRecommendedParamsForModels(modelFiles.filter(modelFile => !Object.hasOwn(s, modelFile)))
+  const resolved = modelFiles.map(modelFile => resolveDtParams(
+    Object.hasOwn(s, modelFile) ? s[modelFile]! : null,
+    recommendations.get(modelFile) ?? null,
+    fallbacks,
+  ))
+  for (const [index, modelFile] of modelFiles.entries()) {
     const existing = Object.hasOwn(s, modelFile) ? s[modelFile] : undefined
     s[modelFile] = existing
       ? { ...existing, ...patch }
-      : { ...patch, seed: '', negativePrompt: '' }
+      : { ...resolved[index]!, ...patch }
     delete rejectedSets[modelFile]
   }
   log('info', 'Applied dimensions to all Draw Things models', {

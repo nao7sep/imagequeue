@@ -215,16 +215,34 @@ export function registerSettingsIpc(
 
   // --- Draw Things CLI integration ---
 
+  // Both readiness observations share one generation. An older completion or
+  // a result from a changed models directory cannot overwrite newer readiness.
+  let readinessRevision = 0
+  const modelsSource = (): string => loadConfig().image_backends.drawthings.models_dir
   handle('local:checkCli', async () => {
-    const status = await checkCli()
-    if (!status.installed) setDrawThingsReady(false)
-    return status
+    const revision = ++readinessRevision
+    const source = modelsSource()
+    try {
+      const status = await checkCli()
+      if (revision === readinessRevision && source === modelsSource() && !status.installed) setDrawThingsReady(false)
+      return status
+    } catch (error) {
+      if (revision === readinessRevision && source === modelsSource()) setDrawThingsReady(false)
+      throw error
+    }
   })
 
   handle('local:listDownloadedModels', async () => {
-    const models = await listDownloadedModels()
-    setDrawThingsReady(models.length > 0)
-    return models
+    const revision = ++readinessRevision
+    const source = modelsSource()
+    try {
+      const models = await listDownloadedModels()
+      if (revision === readinessRevision && source === modelsSource()) setDrawThingsReady(models.length > 0)
+      return models
+    } catch (error) {
+      if (revision === readinessRevision && source === modelsSource()) setDrawThingsReady(false)
+      throw error
+    }
   })
 
   handle('local:listAvailableModels', async () => {
@@ -423,6 +441,6 @@ export function registerSettingsIpc(
   })
 
   handle('drawthings:applyParamsToAll', (event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
-    withParamsRecovery(event, () => applyDimensionsToModels(modelFiles, patch))
+    return withParamsRecovery(event, () => applyDimensionsToModels(modelFiles, patch))
   })
 }

@@ -56,10 +56,14 @@ export async function checkCli(): Promise<CliStatus> {
 
   const cliPath = resolveCliPath()
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     execFile(cliPath, ['--version'], { timeout: 5000 }, (error, stdout, stderr) => {
       if (error) {
-        if (!isCliAbsent(error)) log('warn', 'draw-things-cli check failed', { cliPath, error: serializeError(error), stderr })
+        if (!isCliAbsent(error)) {
+          log('warn', 'draw-things-cli check failed', { cliPath, error: serializeError(error), stderr })
+          reject(error)
+          return
+        }
         resolve({ installed: false, version: null, path: null, platform: 'darwin' })
       } else {
         const version = stdout.trim() || null
@@ -127,10 +131,14 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   const cliPath = resolveCliPath()
   const args = ['models', 'list', '--downloaded-only', ...await modelsDirArgs()]
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     execFile(cliPath, args, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error) {
-        if (!isCliAbsent(error)) log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, error: serializeError(error), stderr })
+        if (!isCliAbsent(error)) {
+          log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, error: serializeError(error), stderr })
+          reject(error)
+          return
+        }
         resolve([])
       } else {
         resolve(parseModelList(stdout))
@@ -144,10 +152,14 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   const cliPath = resolveCliPath()
   const args = ['models', 'list', ...await modelsDirArgs()]
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
       if (error) {
-        if (!isCliAbsent(error)) log('error', 'draw-things-cli models list (all) failed', { cliPath, args, error: serializeError(error), stderr })
+        if (!isCliAbsent(error)) {
+          log('error', 'draw-things-cli models list (all) failed', { cliPath, args, error: serializeError(error), stderr })
+          reject(error)
+          return
+        }
         resolve([])
       } else {
         resolve(parseModelList(stdout))

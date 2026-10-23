@@ -34,15 +34,14 @@ describe('resolveDtParams', () => {
 })
 
 describe('toDrawThingsTaskParams', () => {
-  // Seed 0 and blanks mean "random" — matching main's own seed > 0 guard. The
-  // column used to enqueue seed 0; the divergence lived exactly here.
-  it('includes a seed only when it parses to a positive integer', () => {
+  // Random intent is captured explicitly so later default changes cannot fix its seed.
+  it('captures a fixed positive seed and represents random intent explicitly with zero', () => {
     const base = { width: 1, height: 1, steps: 1, guidance: 1, negativePrompt: '' }
     expect(toDrawThingsTaskParams({ ...base, seed: '42' }).seed).toBe(42)
-    expect(toDrawThingsTaskParams({ ...base, seed: '0' })).not.toHaveProperty('seed')
-    expect(toDrawThingsTaskParams({ ...base, seed: '-3' })).not.toHaveProperty('seed')
-    expect(toDrawThingsTaskParams({ ...base, seed: '' })).not.toHaveProperty('seed')
-    expect(toDrawThingsTaskParams({ ...base, seed: 'random' })).not.toHaveProperty('seed')
+    expect(toDrawThingsTaskParams({ ...base, seed: '0' }).seed).toBe(0)
+    expect(toDrawThingsTaskParams({ ...base, seed: '-3' }).seed).toBe(0)
+    expect(toDrawThingsTaskParams({ ...base, seed: '' }).seed).toBe(0)
+    expect(toDrawThingsTaskParams({ ...base, seed: 'random' }).seed).toBe(0)
   })
 
   it('cleans the negative prompt as a scalar and drops it when empty', () => {

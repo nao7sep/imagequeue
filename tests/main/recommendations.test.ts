@@ -39,8 +39,8 @@ beforeEach(() => {
   modelsDir = path.join(home, 'models')
 })
 
-afterEach(() => {
-  closeBackupStore()
+afterEach(async () => {
+  await closeBackupStore()
   if (prevHome === undefined) delete process.env.IMAGEQUEUE_DATA_DIR
   else process.env.IMAGEQUEUE_DATA_DIR = prevHome
   fs.rmSync(home, { recursive: true, force: true })
@@ -75,6 +75,27 @@ describe('resolveRecommendedParams', () => {
   it('returns null when no configs.json is present', async () => {
     expect(await resolveRecommendedParams('any-model.ckpt')).toBeNull()
   })
+
+  it.each(['{ broken', '{}', '[]', '[{"name":"bad","configuration":{"width":"wide"}}]'])(
+    'rejects malformed recommendations and preserves their exact bytes: %s', async (bytes) => {
+      fs.mkdirSync(modelsDir, { recursive: true })
+      fs.writeFileSync(configsPath(), bytes)
+      await expect(resolveRecommendedParams('any-model.ckpt')).rejects.toBeInstanceOf(Error)
+      expect(fs.readFileSync(configsPath(), 'utf8')).toBe(bytes)
+      expect(fs.readdirSync(modelsDir)).toEqual(['configs.json'])
+    },
+  )
+
+  it('propagates read failures instead of treating them as absence', async () => {
+    const error = Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    const read = vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(error)
+    try {
+      await expect(resolveRecommendedParams('any-model.ckpt')).rejects.toBe(error)
+    } finally {
+      read.mockRestore()
+    }
+  })
+
 })
 
 describe('lastModifiedOf', () => {

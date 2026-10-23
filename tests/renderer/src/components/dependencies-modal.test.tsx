@@ -85,6 +85,22 @@ describe('DependenciesModal cancellation', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('refreshes recommendation facts as well as CLI facts after Check all', async () => {
+    const checked: DependenciesState = {
+      ...initialState,
+      recommendations: { ...initialState.recommendations, state: 'installed-unchecked', entryCount: 7 },
+    }
+    window.electronAPI = {
+      getDependenciesState: vi.fn(async () => initialState),
+      checkDependencies: vi.fn(async () => checked),
+      cancelDependencyOperation: vi.fn(async () => undefined),
+      onDependencyProgress: vi.fn(() => () => undefined),
+    } as unknown as typeof window.electronAPI
+    renderModal()
+    fireEvent.click(await until(() => screen.getByRole('button', { name: 'Check for updates' })))
+    await until(() => expect(screen.getByText('7 entries')).toBeTruthy())
+  })
+
   it('emphasizes required absence without coloring optional absence as a warning', async () => {
     window.electronAPI = {
       getDependenciesState: vi.fn(async () => initialState),

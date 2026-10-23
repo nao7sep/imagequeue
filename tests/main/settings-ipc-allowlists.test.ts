@@ -13,6 +13,7 @@ type Handler = (...args: unknown[]) => unknown
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
+  setDrawThingsReady: vi.fn(),
   root: '',
   showMessageBox: vi.fn(),
   showOpenDialog: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock('../../src/main/i18n', () => ({ mainTranslator: () => ({ t: (key: string
 vi.mock('../../src/main/settings-changes', () => ({ applyChangedFields: vi.fn() }))
 vi.mock('../../src/main/main-window-layout', () => ({
   refreshMainWindowMinimumSize: mocks.refreshMainWindowMinimumSize,
+  setDrawThingsReady: mocks.setDrawThingsReady,
 }))
 vi.mock('../../src/main/session', () => ({ getSessionDir: () => '/session' }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => ({ error }) }))
@@ -112,6 +114,7 @@ beforeEach(() => {
     image_backends: {
       openai: { model: 'gpt-image-2', default_params: { size: '1024x1024', quality: 'high' } },
       nanobanana: { model: 'nano-banana-2', default_params: {} },
+      drawthings: { models_dir: '/models' },
     },
   } as unknown as AppConfig
   mocks.handlers.clear()
@@ -321,4 +324,30 @@ it('keeps a native absolute model source literal', async () => {
   const source = path.join(os.homedir(), ' $HOME%MODEL% .ckpt ')
   await invoke('cli-job:startImport', source)
   expect(mocks.startCliJob).toHaveBeenCalledWith(expect.objectContaining({ args: ['models', 'import', source, '--models-dir', '/models'] }))
+})
+
+describe('authoritative local readiness', () => {
+  it('ignores an older inventory result after a newer failed check', async () => {
+    const cli = await import('../../src/main/local-cli')
+    let finish!: (value: Awaited<ReturnType<typeof cli.listDownloadedModels>>) => void
+    vi.mocked(cli.listDownloadedModels).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const older = invoke('local:listDownloadedModels')
+    vi.mocked(cli.checkCli).mockRejectedValueOnce(new Error('CLI failed'))
+    await expect(invoke('local:checkCli')).rejects.toThrow('CLI failed')
+    expect(mocks.setDrawThingsReady).toHaveBeenCalledExactlyOnceWith(false)
+    finish([{ file: 'model.ckpt' } as Awaited<ReturnType<typeof cli.listDownloadedModels>>[number]])
+    await older
+    expect(mocks.setDrawThingsReady).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a completed inventory from the previous models directory', async () => {
+    const cli = await import('../../src/main/local-cli')
+    let finish!: (value: Awaited<ReturnType<typeof cli.listDownloadedModels>>) => void
+    vi.mocked(cli.listDownloadedModels).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const older = invoke('local:listDownloadedModels')
+    mocks.config.image_backends.drawthings.models_dir = '/other-models'
+    finish([])
+    await older
+    expect(mocks.setDrawThingsReady).not.toHaveBeenCalled()
+  })
 })

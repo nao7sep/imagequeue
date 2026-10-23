@@ -68,8 +68,8 @@ export interface DrawThingsBackendConfig {
   // Where the app-owned CLI looks for models. Empty uses the app's private dir;
   // a Draw Things user can point it at the GUI app's models to reuse downloads.
   models_dir: string
-  // Launch-time metadata check for the managed CLI. On by default; it never
-  // downloads the binary, and versionless configs.json is not part of the check.
+  // Launch-time metadata check for the managed CLI and installed recommendations.
+  // On by default; it never downloads the binary.
   check_updates_at_launch: boolean
 }
 
