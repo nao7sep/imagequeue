@@ -97,14 +97,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 // Renders the provider and hands back the live context value.
-function mountSelection(): { ctx: () => Selection } {
+function mountSelection(): { ctx: () => Selection; rerender: () => void } {
   let latest!: Selection
   function Probe(): null {
     latest = useSelection()
     return null
   }
-  render(<SelectionProvider><Probe /></SelectionProvider>)
-  return { ctx: () => latest }
+  const view = render(<SelectionProvider><Probe /></SelectionProvider>)
+  return { ctx: () => latest, rerender: () => view.rerender(<SelectionProvider><Probe /></SelectionProvider>) }
 }
 
 async function deleteById(taskId: string): Promise<void> {
@@ -226,6 +226,61 @@ describe('deleteTask', () => {
 })
 
 describe('task action attempt ownership', () => {
+  it.each(['remove', 'delete'] as const)('rolls back failed %s only while its selection still owns the view', async (action) => {
+    settingsValue = { settings: { general: { confirm_delete: false, confirm_remove: false } } }
+    const { ctx } = mountSelection()
+    for (const navigate of [false, true]) {
+      const pending = deferred()
+      const boundary = action === 'remove' ? api.removeTask : api.deleteWithFiles
+      boundary.mockImplementationOnce(() => pending.promise)
+      act(() => ctx().select('openai', 't-failed'))
+      let outcome!: Promise<void>
+      act(() => { outcome = action === 'remove' ? ctx().removeTask('openai', 't-failed') : ctx().deleteTask('openai', 't-failed') })
+      expect(ctx().selection?.taskId).not.toBe('t-failed')
+      if (navigate) act(() => ctx().select('openai', 't-queued'))
+      await act(async () => { pending.reject(new Error('rejected')); await outcome })
+      expect(ctx().selection?.taskId).toBe(navigate ? 't-queued' : 't-failed')
+    }
+  })
+
+  it('keeps a third attempt owned after the second settles and the first fails late', async () => {
+    const { ctx } = mountSelection()
+    const first = deferred()
+    const third = deferred()
+    const start = (invoke: () => Promise<void>): Promise<string> => ctx().runTaskAction({
+      taskId: 't-failed', action: 'retry', message: 'task.retryFailed', diagnosticMessage: 'retry', invoke,
+    })
+    let firstOutcome!: Promise<string>
+    let thirdOutcome!: Promise<string>
+    act(() => { firstOutcome = start(() => first.promise) })
+    await act(async () => { expect(await start(async () => {})).toBe('succeeded') })
+    act(() => { thirdOutcome = start(() => third.promise) })
+    await act(async () => { first.reject(new Error('old')); expect(await firstOutcome).toBe('superseded') })
+    expect(ctx().taskActionResults['t-failed']).toBeUndefined()
+    await act(async () => { third.reject(new Error('current')); expect(await thirdOutcome).toBe('failed') })
+    expect(ctx().taskActionResults['t-failed']).toEqual({ retry: 'task.retryFailed' })
+  })
+
+  it('prunes departed task results and rejects old attempts even after returning to that session', async () => {
+    const { ctx, rerender } = mountSelection()
+    const pending = deferred()
+    let outcome!: Promise<string>
+    await act(async () => {
+      await ctx().runTaskAction({ taskId: 't-done', action: 'export', message: 'task.exportFailed', diagnosticMessage: 'export', invoke: async () => { throw new Error('export') } })
+    })
+    act(() => {
+      outcome = ctx().runTaskAction({ taskId: 't-failed', action: 'retry', message: 'task.retryFailed', diagnosticMessage: 'retry', invoke: () => pending.promise })
+    })
+    const original = queueValue
+    queueValue = { tasks: emptyTasks() }
+    act(rerender)
+    expect(ctx().taskActionResults).toEqual({})
+    queueValue = original
+    act(rerender)
+    await act(async () => { pending.reject(new Error('late')); expect(await outcome).toBe('superseded') })
+    expect(ctx().taskActionResults).toEqual({})
+  })
+
   it('does not let an older failure overwrite a newer successful retry', async () => {
     const older = deferred()
     const newer = deferred()

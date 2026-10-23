@@ -95,7 +95,8 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [taskActionResults, setTaskActionResults] = useState<TaskActionResults>({})
-  const taskActionAttemptsRef = useRef(new Map<string, number>())
+  const taskActionAttemptsRef = useRef(new Map<string, { taskId: string }>())
+  const selectionRevisionRef = useRef(0)
   const selectionRef = useRef<Selection | null>(null)
   selectionRef.current = selection
 
@@ -129,6 +130,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     (next: Selection | null, opts: { userInitiated: boolean }): void => {
       if (opts.userInitiated) lastActionRef.current = Date.now()
       // A second IPC key can arrive before React renders the first navigation.
+      selectionRevisionRef.current++
       selectionRef.current = next
       setSelection(next)
     },
@@ -189,7 +191,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     // task-scoped owner because remove/restore/delete can race each other and an
     // older mutation must not restore selection or present over the newer one.
     const key = `${taskId}:${ownershipKey ?? action}`
-    const attempt = (taskActionAttemptsRef.current.get(key) ?? 0) + 1
+    const attempt = { taskId }
     taskActionAttemptsRef.current.set(key, attempt)
     try {
       await invoke()
@@ -206,6 +208,10 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
         [taskId]: { ...current[taskId], [action]: isStorageStillPending(error) ? 'storage.stillPending' : message },
       }))
       return 'failed'
+    } finally {
+      // A settled attempt releases only its own entry; a newer attempt may
+      // already own this task/action while the older boundary is finishing.
+      if (taskActionAttemptsRef.current.get(key) === attempt) taskActionAttemptsRef.current.delete(key)
     }
   }, [clearTaskActionResult])
 
@@ -251,6 +257,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     // `kept` and computeNextAfterRemoval still picks the correct neighbor
     // because it runs before the IPC against the pre-update task list.
     const movedSelection = transitionSelectionForRemoval(backend, taskId)
+    const selectionRevision = selectionRevisionRef.current
     const outcome = await runTaskAction({
       taskId,
       action: 'remove',
@@ -259,7 +266,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       diagnosticMessage: 'Failed to remove selected task',
       invoke: () => window.electronAPI.removeTask(backend, taskId),
     })
-    if (outcome === 'failed' && movedSelection) {
+    if (outcome === 'failed' && movedSelection && selectionRevisionRef.current === selectionRevision) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
     }
   }, [confirm, settings, setSelectionInternal, runTaskAction, t])
@@ -292,6 +299,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     }
 
     const movedSelection = transitionSelectionForRemoval(backend, taskId)
+    const selectionRevision = selectionRevisionRef.current
     const outcome = await runTaskAction({
       taskId,
       action: 'delete',
@@ -321,7 +329,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
         } }))
       },
     })
-    if (outcome === 'failed' && movedSelection) {
+    if (outcome === 'failed' && movedSelection && selectionRevisionRef.current === selectionRevision) {
       setSelectionInternal({ backend, taskId }, { userInitiated: false })
     }
   }, [confirm, settings, setSelectionInternal, runTaskAction, t])
@@ -434,15 +442,31 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
 
   // ---- Reconcile selection when tasks change ----------------------------
 
+  useEffect(() => {
+    const live = new Set(Object.values(tasks).flatMap((list) => list.map((task) => task.id)))
+    for (const [key, attempt] of taskActionAttemptsRef.current) {
+      if (!live.has(attempt.taskId)) taskActionAttemptsRef.current.delete(key)
+    }
+    setTaskActionResults((current) => {
+      const removed = Object.keys(current).filter((id) => !live.has(id))
+      if (!removed.length) return current
+      const next = { ...current }
+      for (const id of removed) delete next[id]
+      return next
+    })
+  }, [tasks])
+
+  useEffect(() => () => { taskActionAttemptsRef.current.clear() }, [])
+
   // If the selected task has disappeared (e.g. removed externally), clear it.
   // Don't bump lastActionRef — the user didn't do anything.
   useEffect(() => {
     if (!selection) return
     const list = tasks[selection.backend]
     if (!list?.some((t) => t.id === selection.taskId)) {
-      setSelection(null)
+      setSelectionInternal(null, { userInitiated: false })
     }
-  }, [tasks, selection])
+  }, [tasks, selection, setSelectionInternal])
 
   // After a keyboard remove/delete re-renders the list, the focused row is gone
   // and focus dropped to the page body. Reclaim the column's tab stop by focusing
