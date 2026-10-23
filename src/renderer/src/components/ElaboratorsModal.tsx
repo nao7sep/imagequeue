@@ -79,7 +79,12 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const [items, setItems] = useState<Elaborator[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<MessageKey | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusyState] = useState(false)
+  const busyRef = useRef(false)
+  const setBusy = useCallback((value: boolean): void => {
+    busyRef.current = value
+    setBusyState(value)
+  }, [])
   const [message, setMessage] = useState<MessageKey | null>(null)
   const [selectedIds, setSelectedIds] = useState<Record<ElaboratorKind, string | null>>({
     composition: null,
@@ -132,14 +137,14 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   useUnsavedDraftReport('elaborators', dirty)
 
   const startNew = (kind: ElaboratorKind): void => {
-    if (busy || draftTarget) return
+    if (busyRef.current || draftTarget) return
     setDraftTarget({ kind, mode: 'new', id: `elab-${nanoid(10)}` })
     setDraft({ ...EMPTY_DRAFT })
     setMessage(null)
   }
 
   const startEdit = (kind: ElaboratorKind): void => {
-    if (busy || draftTarget) return
+    if (busyRef.current || draftTarget) return
     const selectedId = selectedIds[kind]
     const item = selectedId ? items.find((candidate) => candidate.id === selectedId) : null
     if (!item) return
@@ -153,13 +158,14 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   }
 
   const cancelDraft = (): void => {
+    if (busyRef.current) return
     setDraftTarget(null)
     setDraft(EMPTY_DRAFT)
     setMessage(null)
   }
 
   const saveDraft = useCallback(async (): Promise<void> => {
-    if (!draftTarget) return
+    if (!draftTarget || busyRef.current) return
     if (!draft.name.trim()) {
       setMessage('elaborators.nameRequired')
       return
@@ -209,22 +215,23 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [draft, draftTarget, refresh])
+  }, [draft, draftTarget, refresh, setBusy])
 
   const handleDelete = useCallback(async (kind: ElaboratorKind): Promise<void> => {
+    if (busyRef.current || draftTarget) return
     const selectedId = selectedIds[kind]
     const item = selectedId ? items.find((candidate) => candidate.id === selectedId) : null
     if (!item) return
-    const ok = await confirm({
-      title: t(KIND_PHRASES[kind].deleteTitle),
-      message: t('elaborators.deleteMessage', { name: item.name }),
-      confirmLabel: t('task.delete'),
-      danger: true,
-    })
-    if (!ok) return
     setBusy(true)
-    setMessage(null)
     try {
+      const ok = await confirm({
+        title: t(KIND_PHRASES[kind].deleteTitle),
+        message: t('elaborators.deleteMessage', { name: item.name }),
+        confirmLabel: t('task.delete'),
+        danger: true,
+      })
+      if (!ok) return
+      setMessage(null)
       await window.electronAPI.deleteElaborator(item.id)
       await refresh()
     } catch (error) {
@@ -232,42 +239,48 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [confirm, items, refresh, selectedIds, t])
+  }, [confirm, items, refresh, selectedIds, t, draftTarget, setBusy])
 
   const handleReset = useCallback(async (kind: ElaboratorKind): Promise<void> => {
-    const ok = await confirm({
-      title: t(KIND_PHRASES[kind].resetTitle),
-      message: t(KIND_PHRASES[kind].resetMessage),
-      confirmLabel: t('settings.reset'),
-      danger: true,
-    })
-    if (!ok) return
+    if (busyRef.current || draftTarget) return
     setBusy(true)
-    setMessage(null)
     try {
+      const ok = await confirm({
+        title: t(KIND_PHRASES[kind].resetTitle),
+        message: t(KIND_PHRASES[kind].resetMessage),
+        confirmLabel: t('settings.reset'),
+        danger: true,
+      })
+      if (!ok) return
+      setMessage(null)
       await window.electronAPI.resetElaborators(kind)
-      if (draftTarget?.kind === kind) cancelDraft()
       await refresh()
     } catch (error) {
       setMessage(presentFailure('elaborators-change', error))
     } finally {
       setBusy(false)
     }
-  }, [confirm, draftTarget, refresh, t])
+  }, [confirm, draftTarget, refresh, t, setBusy])
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
-    if (dirty) {
-      const ok = await confirm({
-        title: t('elabSettings.discardTitle'),
-        message: t('elaborators.discardMessage'),
-        confirmLabel: t('settings.discard'),
-        cancelLabel: t('settings.keepEditing'),
-        danger: true,
-      })
-      if (!ok) return
+    if (busyRef.current) return
+    setBusy(true)
+    try {
+      if (dirty) {
+        const ok = await confirm({
+          title: t('elabSettings.discardTitle'),
+          message: t('elaborators.discardMessage'),
+          confirmLabel: t('settings.discard'),
+          cancelLabel: t('settings.keepEditing'),
+          danger: true,
+        })
+        if (!ok) return
+      }
+      onClose()
+    } finally {
+      setBusy(false)
     }
-    onClose()
-  }, [dirty, confirm, onClose, t])
+  }, [dirty, confirm, onClose, t, setBusy])
 
   const renderEditor = (kind: ElaboratorKind): React.JSX.Element => (
     <div className="elaborator-editor" ref={editorRef}>
@@ -277,6 +290,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       <label className="elaborator-field">
         <span>{t('elaborators.name')}</span>
         <input
+          disabled={busy}
           type="text"
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -286,6 +300,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       <label className="elaborator-field">
         <span>{t('elaborators.description')}</span>
         <input
+          disabled={busy}
           type="text"
           value={draft.description}
           onChange={(e) => setDraft({ ...draft, description: e.target.value })}
@@ -295,6 +310,7 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       <label className="elaborator-field">
         <span>{t('elaborators.template')}</span>
         <textarea
+          disabled={busy}
           rows={10}
           value={draft.template}
           onChange={(e) => setDraft({ ...draft, template: e.target.value })}
@@ -378,8 +394,9 @@ export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
       title={t('menu.elaborators')}
       className="elaborators-modal-box"
       onClose={() => void handleRequestClose()}
+      dismissable={!busy}
       footer={
-        <button className="modal-btn" onClick={() => void handleRequestClose()}>
+        <button className="modal-btn" onClick={() => void handleRequestClose()} disabled={busy}>
           {t('common.close')}
         </button>
       }

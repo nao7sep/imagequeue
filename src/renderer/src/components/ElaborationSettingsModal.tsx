@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -100,7 +100,12 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   const { t, text, rich } = useI18n()
   const [form, setForm] = useState<BrainstormForm | null>(null)
   const [baseForm, setBaseForm] = useState<BrainstormForm | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusyState] = useState(false)
+  const busyRef = useRef(false)
+  const setBusy = useCallback((value: boolean): void => {
+    busyRef.current = value
+    setBusyState(value)
+  }, [])
   const [message, setMessage] = useState<Message | null>(null)
 
   // Initialize the form from settings.brainstorm. Only run once per modal
@@ -121,16 +126,17 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   useUnsavedDraftReport('elaborationSettings', dirty)
 
   const handleReset = useCallback(async (): Promise<void> => {
-    const ok = await confirm({
-      title: t('elabSettings.resetTitle'),
-      message: t('elabSettings.resetMessage'),
-      confirmLabel: t('settings.reset'),
-      danger: true,
-    })
-    if (!ok) return
+    if (busyRef.current) return
     setBusy(true)
-    setMessage(null)
     try {
+      const ok = await confirm({
+        title: t('elabSettings.resetTitle'),
+        message: t('elabSettings.resetMessage'),
+        confirmLabel: t('settings.reset'),
+        danger: true,
+      })
+      if (!ok) return
+      setMessage(null)
       const defaults = await window.electronAPI.brainstormGetDefaults()
       setForm(fromConfig(defaults))
     } catch (error) {
@@ -138,10 +144,10 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     } finally {
       setBusy(false)
     }
-  }, [confirm, t])
+  }, [confirm, t, setBusy])
 
   const handleSave = useCallback(async (): Promise<void> => {
-    if (!form) return
+    if (!form || busyRef.current) return
     const outside = (key: keyof typeof BRAINSTORM_LIMITS): boolean => {
       const { min, max } = BRAINSTORM_LIMITS[key]
       return form[key] < min || form[key] > max || !Number.isInteger(form[key])
@@ -154,19 +160,18 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       setMessage(msg('elabSettings.concurrencyRange', BRAINSTORM_LIMITS.concurrency))
       return
     }
-    const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
-    if (warn) {
-      const ok = await confirm({
-        title: t('elabSettings.saveAnywayTitle'),
-        message: t('elabSettings.saveAnywayMessage', { warning: warn }),
-        confirmLabel: t('common.save'),
-      })
-      if (!ok) return
-    }
-
     setBusy(true)
-    setMessage(null)
     try {
+      const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
+      if (warn) {
+        const ok = await confirm({
+          title: t('elabSettings.saveAnywayTitle'),
+          message: t('elabSettings.saveAnywayMessage', { warning: warn }),
+          confirmLabel: t('common.save'),
+        })
+        if (!ok) return
+      }
+      setMessage(null)
       // Clean at this commit point: templates are multiline bodies (tidy
       // edges/trailing whitespace, keep interior structure); format and length
       // directives are scalar sentences (single-line — flatten pasted line
@@ -189,21 +194,27 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     } finally {
       setBusy(false)
     }
-  }, [form, saveBrainstormSettings, onClose, confirm, t])
+  }, [form, saveBrainstormSettings, onClose, confirm, t, setBusy])
 
   const handleCancel = useCallback(async (): Promise<void> => {
-    if (dirty) {
-      const ok = await confirm({
-        title: t('elabSettings.discardTitle'),
-        message: t('elabSettings.discardMessage'),
-        confirmLabel: t('settings.discard'),
-        cancelLabel: t('settings.keepEditing'),
-        danger: true,
-      })
-      if (!ok) return
+    if (busyRef.current) return
+    setBusy(true)
+    try {
+      if (dirty) {
+        const ok = await confirm({
+          title: t('elabSettings.discardTitle'),
+          message: t('elabSettings.discardMessage'),
+          confirmLabel: t('settings.discard'),
+          cancelLabel: t('settings.keepEditing'),
+          danger: true,
+        })
+        if (!ok) return
+      }
+      onClose()
+    } finally {
+      setBusy(false)
     }
-    onClose()
-  }, [dirty, confirm, onClose, t])
+  }, [dirty, confirm, onClose, t, setBusy])
 
   if (!form) {
     return (
@@ -229,6 +240,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       title={t('elabSettings.title')}
       className="elaboration-settings-modal-box"
       onClose={handleCancel}
+      dismissable={!busy}
       footer={
         <>
           <button className="modal-btn" onClick={handleCancel} disabled={busy}>{t('common.cancel')}</button>
@@ -243,6 +255,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.batchSize')}</label>
             <input
+              disabled={busy}
               type="number"
               min={BRAINSTORM_LIMITS.batch_size.min}
               max={BRAINSTORM_LIMITS.batch_size.max}
@@ -254,6 +267,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           <div className="elaboration-settings-row">
             <label>{t('settings.concurrency')}</label>
             <input
+              disabled={busy}
               type="number"
               min={BRAINSTORM_LIMITS.concurrency.min}
               max={BRAINSTORM_LIMITS.concurrency.max}
@@ -265,6 +279,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.preferNew')}</label>
             <input
+              disabled={busy}
               type="checkbox"
               checked={form.prefer_new_concepts}
               onChange={(e) => setForm({ ...form, prefer_new_concepts: e.target.checked })}
@@ -290,6 +305,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <span>{t('elabSettings.expansion')}</span>
             <span className="elaboration-settings-tags">{EXPANSION_PLACEHOLDERS.map(placeholderTag).join(' ')}</span>
             <textarea
+              disabled={busy}
               rows={8}
               value={form.templates.expansion}
               onChange={(e) => setForm({ ...form, templates: { ...form.templates, expansion: e.target.value } })}
@@ -306,6 +322,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <label className="elaboration-settings-template" key={`format-${format}`}>
               <span>{t('elabSettings.formatPart', { part: t(PROMPT_FORMAT_LABELS[format]) })}</span>
               <textarea
+                disabled={busy}
                 rows={3}
                 value={form.format_directives.formats[format]}
                 onChange={(e) => setForm(setFormatPart(form, format, e.target.value))}
@@ -316,6 +333,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
             <label className="elaboration-settings-template" key={`length-${length}`}>
               <span>{t('elabSettings.lengthPart', { part: t(PROMPT_LENGTH_LABELS[length]) })}</span>
               <textarea
+                disabled={busy}
                 rows={3}
                 value={form.format_directives.lengths[length]}
                 onChange={(e) => setForm(setLengthPart(form, length, e.target.value))}
