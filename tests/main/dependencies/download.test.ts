@@ -11,6 +11,7 @@ import {
   withWholeOperationTimeout,
 } from '../../../src/main/dependencies/download'
 
+import { runDependencyOperation, hasActiveDependencyOperations } from '../../../src/main/dependencies/operations'
 import { sha256File } from '../../../src/main/utils/sha256-file'
 
 const tempDirs: string[] = []
@@ -116,4 +117,54 @@ describe('sha256File', () => {
     await expect(sha256File(writeTemp(crypto.randomBytes(64 * 1024)), controller.signal))
       .rejects.toThrow('cancelled by caller')
   })
+})
+
+
+it.each(['success', 'failure'] as const)('retains a download reservation through a timed-out file sync and late %s', async (outcome) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iq-dl-pending-'))
+  tempDirs.push(dir)
+  const dest = path.join(dir, 'download.bin')
+  let finish!: () => void
+  let fail!: (error: Error) => void
+  let entered!: () => void
+  const syncing = new Promise<void>((resolve) => { entered = resolve })
+  const open = fs.promises.open.bind(fs.promises)
+  vi.spyOn(fs.promises, 'open').mockImplementation(async (name, flags, mode) => {
+    const handle = await open(name, flags, mode)
+    if (name === dest) {
+      const sync = handle.sync.bind(handle)
+      vi.spyOn(handle, 'sync').mockImplementation(async () => {
+        entered()
+        await new Promise<void>((resolve, reject) => { finish = resolve; fail = reject })
+        await sync()
+      })
+    }
+    return handle
+  })
+  vi.useFakeTimers()
+  const stream = Object.assign(new PassThrough(), { statusCode: 200, headers: { 'content-length': '5' } })
+  const owner = {}
+  let signal!: AbortSignal
+  let settled = false
+  const physical = runDependencyOperation(owner, ['cli'], (parent) =>
+    withWholeOperationTimeout(parent, 100, 'Test download', (bounded) => {
+      signal = bounded
+      return writeDownloadResponse(stream as unknown as IncomingMessage, dest,
+        { maxBytes: 5, idleTimeoutMs: 100, wholeTimeoutMs: 100 }, bounded)
+    }))
+  const result = physical.then(() => { settled = true; return 'success' }, () => { settled = true; return 'failure' })
+  stream.end('bytes')
+  await syncing
+  await vi.advanceTimersByTimeAsync(100)
+  expect(signal.aborted).toBe(true)
+  expect(settled).toBe(false)
+  expect(hasActiveDependencyOperations()).toBe(true)
+  await expect(runDependencyOperation({}, ['cli'], async () => {})).rejects.toThrow('already running')
+  await expect(runDependencyOperation({}, ['recommendations'], async () => 'independent')).resolves.toBe('independent')
+  if (outcome === 'success') finish()
+  else fail(new Error('file sync failed'))
+  expect(await result).toBe(outcome)
+  expect(hasActiveDependencyOperations()).toBe(false)
+  if (outcome === 'success') expect(fs.readFileSync(dest, 'utf8')).toBe('bytes')
+  else expect(fs.existsSync(dest)).toBe(false)
 })

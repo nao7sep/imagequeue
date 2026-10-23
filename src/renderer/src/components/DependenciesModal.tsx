@@ -85,6 +85,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
   const {
     state,
     busy,
+    pending,
     progress,
     error,
     terminalOutcomes,
@@ -124,6 +125,7 @@ export function DependenciesModal({ onClose }: Props): React.JSX.Element {
       <div className="dependencies-body">
         <p className="dependencies-intro">{t('dependencies.intro')}</p>
 
+        {pending.size > 0 && <div className="dependencies-intro" role="status">{t('dependencies.completionPending')}</div>}
         {error && <div className="dependencies-error" role="alert">{i18n.text(error)}</div>}
 
         {!state && !error && <div className="dependencies-intro">{t('dependencies.loading')}</div>}

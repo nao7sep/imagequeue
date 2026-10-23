@@ -3,6 +3,7 @@ import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import https from 'node:https'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { DEPENDENCY_WAIT_MS } from '../../shared/dependency-wait'
 import { APP_NAME } from '../../shared/app-identity'
 
 const MAX_REDIRECTS = 5
@@ -18,7 +19,7 @@ export const CLI_DOWNLOAD_LIMITS: TransferLimits = {
   idleTimeoutMs: 30_000,
   // The CLI is currently about 170 MB. Four hours keeps a healthy very-slow
   // connection viable while ensuring that a trickling peer cannot run forever.
-  wholeTimeoutMs: 4 * 60 * 60 * 1000,
+  wholeTimeoutMs: DEPENDENCY_WAIT_MS.cli,
 }
 
 export const RELEASE_METADATA_LIMITS: TransferLimits = {
@@ -42,7 +43,8 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error('Operation cancelled')
 }
 
-/** Run one complete operation under a deadline while preserving caller cancellation. */
+/** Request cancellation at the deadline, retaining physical ownership until
+ * settlement. The persistent renderer controller bounds its caller separately. */
 export async function withWholeOperationTimeout<T>(
   parentSignal: AbortSignal | undefined,
   timeoutMs: number,
