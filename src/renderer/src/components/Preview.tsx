@@ -10,7 +10,7 @@ interface Props {
   task: SelectedImage | null
   /** Told whether the task's image loaded, each time a load settles. */
   onImageLoad?: (taskId: string, loaded: boolean) => void
-  /** The task whose image or placeholder has finished replacing the previous one. */
+  /** The task whose image or no-image placeholder is ready; null while loading or on image failure. */
   onReadyToAct?: (task: SelectedImage | null) => void
 }
 
@@ -21,6 +21,7 @@ export function Preview({ task, onImageLoad, onReadyToAct }: Props): React.JSX.E
   const { t } = i18n
   const url = task && canShowImage(task) ? currentSessionImageUrl(task.baseName!) : null
   const image = useDecodedImage(url)
+  const loading = url !== null && image.settled !== url
   const failureText = task ? taskFailureText(i18n, task) : null
 
   const onImageLoadRef = useRef(onImageLoad)
@@ -31,7 +32,7 @@ export function Preview({ task, onImageLoad, onReadyToAct }: Props): React.JSX.E
   }, [image, url, taskId])
 
   useEffect(() => {
-    onReadyToAct?.(!url || image.settled === url ? task : null)
+    onReadyToAct?.(!url || (image.settled === url && !image.failed) ? task : null)
   }, [task, url, image, onReadyToAct])
 
   return (
@@ -51,6 +52,7 @@ export function Preview({ task, onImageLoad, onReadyToAct }: Props): React.JSX.E
             <p className="preview-placeholder-hint">{t('prompt.noImageHint')}</p>
           </div>
         )}
+        {loading && <div className="preview-loading">{t('common.loading')}</div>}
       </div>
 
       {failureText !== null && (

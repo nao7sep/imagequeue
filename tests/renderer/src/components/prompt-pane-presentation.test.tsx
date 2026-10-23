@@ -125,10 +125,10 @@ describe('PromptPane presentation', () => {
     expect(container.querySelector('.preview-placeholder')?.textContent).toBe('This image could not be loaded.')
   })
 
-  it('says nothing in the preview while a selected image is still loading', () => {
+  it('shows loading while a selected image is decoding', () => {
     decode.mockImplementationOnce(() => new Promise<void>(() => {}))
     const { container } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={vi.fn()} />)
-    expect(container.querySelector('.preview-area')?.textContent).toBe('')
+    expect(container.querySelector('.preview-loading')?.textContent).toBe('Loading…')
   })
 
   it('keeps the usual placeholder for a selected task that has no image', () => {
@@ -170,6 +170,86 @@ describe('PromptPane presentation', () => {
     )
     expect(container.querySelector('.preview-failure')?.textContent).toContain('OpenAI could not generate this image')
     expect(container.querySelector('.preview-failure-provider')).toBeNull()
+  })
+
+
+  it('retains the metadata toggle and keyboard focus across expansion and collapse', () => {
+    const { container } = render(<PromptPane selectedTask={selectedTask} prompt="" onPromptChange={vi.fn()} />)
+    const toggle = container.querySelector<HTMLButtonElement>('.metadata-toggle')!
+    toggle.focus()
+    expect(toggle.tagName).toBe('BUTTON')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    // Native button keyboard activation dispatches click; jsdom does not synthesize it.
+    fireEvent.click(toggle, { detail: 0 })
+    expect(container.querySelector('.metadata-toggle')).toBe(toggle)
+    expect(document.activeElement).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    const details = screen.getByRole('region', { name: 'Task details' })
+    expect(toggle.getAttribute('aria-controls')).toBe(details.id)
+    expect(details.tabIndex).toBe(0)
+    details.focus()
+    fireEvent.click(details)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    toggle.focus()
+    fireEvent.click(toggle, { detail: 0 })
+    expect(document.activeElement).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('keeps A visible and image actions disabled until B has decoded, while prompt copy remains usable', async () => {
+    const change = vi.fn()
+    const { container, rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    await act(async () => {})
+    let finish!: () => void
+    decode.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+    const next = { ...completedTask, id: 'B', baseName: 'image-b', prompt: 'B prompt' }
+    rerender(<PromptPane selectedTask={next} prompt="" onPromptChange={change} />)
+    expect(container.querySelector('.preview-image')?.getAttribute('src')).toBe('iq-image://sessions/current/image')
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    const names = ['Reveal', 'Copy to Clipboard', 'Export', 'Save As']
+    for (const name of names) {
+      const button = screen.getByRole('button', { name }) as HTMLButtonElement
+      expect(button.disabled).toBe(true)
+      fireEvent.click(button)
+    }
+    expect(window.electronAPI.revealFile).not.toHaveBeenCalled()
+    expect(window.electronAPI.copyImageToClipboard).not.toHaveBeenCalled()
+    expect(window.electronAPI.exportImage).not.toHaveBeenCalled()
+    expect(window.electronAPI.exportImageAs).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Prompt' }))
+    expect(clipboardWriteText).toHaveBeenCalledWith('B prompt')
+    await act(async () => finish())
+    expect(container.querySelector('.preview-image')?.getAttribute('src')).toBe('iq-image://sessions/current/image-b')
+    expect(screen.queryByText('Loading…')).toBeNull()
+    for (const name of names) {
+      const button = screen.getByRole('button', { name }) as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+      fireEvent.click(button)
+    }
+    for (const method of ['revealFile', 'copyImageToClipboard', 'exportImage', 'exportImageAs'] as const) {
+      expect(window.electronAPI[method]).toHaveBeenCalledWith('image-b', 'png')
+    }
+    await act(async () => {})
+  })
+
+  it('does not enable image actions for a stale decode or a failed current image', async () => {
+    let finishOld!: () => void
+    let failCurrent!: (error: Error) => void
+    decode.mockImplementationOnce(() => new Promise<void>((resolve) => { finishOld = resolve }))
+    const change = vi.fn()
+    const { container, rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    decode.mockImplementationOnce(() => new Promise<void>((_, reject) => { failCurrent = reject }))
+    rerender(<PromptPane selectedTask={{ ...completedTask, id: 'B', baseName: 'image-b' }} prompt="" onPromptChange={change} />)
+    await act(async () => finishOld())
+    expect(container.querySelector('.preview-image')).toBeNull()
+    expect((screen.getByRole('button', { name: 'Export' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => failCurrent(new Error('decode failed')))
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.getByText('This image could not be loaded.')).toBeTruthy()
+    for (const name of ['Reveal', 'Copy to Clipboard', 'Export', 'Save As']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    }
   })
 
   it('renders metadata, parameter, and task-state labels in sentence case', () => {
@@ -244,6 +324,7 @@ describe('PromptPane presentation', () => {
       />
     )
 
+    await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: 'Reveal' }))
     expect((await screen.findByRole('alert')).textContent).toContain('The image could not be revealed')
 
@@ -276,6 +357,7 @@ describe('PromptPane presentation', () => {
       />
     )
 
+    await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: 'Copy Prompt' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save As' }))
@@ -299,6 +381,7 @@ describe('export selection ownership', () => {
     window.electronAPI[method] = vi.fn(() => new Promise<string>((_resolve, rejectPromise) => { reject = rejectPromise }))
     const change = vi.fn()
     const { rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: method === 'exportImage' ? 'Export' : 'Save As' }))
     rerender(<PromptPane selectedTask={{ ...completedTask, id: 'B' }} prompt="" onPromptChange={change} />)
     rerender(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
@@ -311,6 +394,7 @@ describe('export selection ownership', () => {
     window.electronAPI.exportImage = vi.fn(() => new Promise<string>((done) => { resolve = done }))
     const change = vi.fn()
     const { rerender } = render(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)
+    await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
     rerender(<PromptPane selectedTask={{ ...completedTask, id: 'B' }} prompt="" onPromptChange={change} />)
     rerender(<PromptPane selectedTask={completedTask} prompt="" onPromptChange={change} />)

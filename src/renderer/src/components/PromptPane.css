@@ -207,6 +207,10 @@
   color: var(--text-secondary);
 }
 
+.metadata-toggle[aria-expanded="true"] .metadata-toggle-chevron {
+  transform: rotate(90deg);
+}
+
 .metadata-toggle-chevron {
   flex-shrink: 0;
   font-size: 13px;
@@ -252,7 +256,6 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  cursor: pointer;
 }
 
 .preview-toolbar {
@@ -281,25 +284,30 @@
     color var(--motion) ease;
 }
 
-.preview-btn-neutral:hover {
+.preview-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.preview-btn-neutral:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--bg-surface);
 }
 
-.preview-btn-neutral:active {
+.preview-btn-neutral:active:not(:disabled) {
   background: var(--accent);
   color: var(--text-on-accent);
   border-color: var(--accent);
 }
 
-.preview-btn-export:hover {
+.preview-btn-export:hover:not(:disabled) {
   color: var(--success);
   border-color: var(--success);
   background: var(--bg-surface);
 }
 
-.preview-btn-export:active {
+.preview-btn-export:active:not(:disabled) {
   background: var(--success);
   color: var(--text-on-accent);
   border-color: var(--success);

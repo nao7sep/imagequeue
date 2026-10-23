@@ -1,5 +1,5 @@
 import { isStorageStillPending } from '../../../shared/storage-wait'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
 import { useUiState } from '../context/UiStateContext'
@@ -11,7 +11,7 @@ import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textClea
 import { isEditableTarget, shadowsMacTextBinding, windowCommandFor } from '../utils/shortcuts'
 import { isAnyModalOpen } from './modalStack'
 import { taskParameterLabel, taskStatusLabel } from '../utils/taskPresentation'
-import { selectedImageOf, type WindowCommand } from '../../../shared/viewing'
+import { selectedImageOf, type SelectedImage, type WindowCommand } from '../../../shared/viewing'
 import { useSelection } from '../context/SelectionContext'
 import { Preview } from './Preview'
 import { serializeError } from '../../../shared/serialize-error'
@@ -120,6 +120,8 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const detailsRef = useRef<HTMLDivElement>(null)
+  const detailsId = useId()
+  const [readyImage, setReadyImage] = useState<SelectedImage | null>(null)
 
   // A details row: its label in bold with the language's own punctuation, then
   // the value. Values are the task's own data, shown as stored.
@@ -177,6 +179,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
   // thumbnail's does, until a later load of it succeeds.
   const { reportTaskActionFailure, clearTaskActionResult } = useSelection()
   const selectedImage = useMemo(() => selectedImageOf(selectedTask), [selectedTask])
+  const imageActionsReady = selectedImage !== null && readyImage === selectedImage
   const handleImageLoad = useCallback((taskId: string, loaded: boolean): void => {
     if (loaded) clearTaskActionResult(taskId, 'preview')
     else reportTaskActionFailure(taskId, 'preview', 'task.previewFailed', 'Failed to load selected image', new Error(`The image of task ${taskId} did not load`))
@@ -204,7 +207,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
   }, [selectedTask, clearActionFailure, reportActionFailure])
 
   const handleReveal = useCallback((): void => {
-    if (!selectedTask?.baseName) return
+    if (!imageActionsReady || !selectedTask?.baseName) return
     void window.electronAPI.revealFile(selectedTask.baseName, getExt())
       .then(() => clearActionFailure('reveal-image'))
       .catch((error) => reportActionFailure(
@@ -212,10 +215,10 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
         'prompt.revealFailed',
         error,
       ))
-  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
+  }, [selectedTask, imageActionsReady, getExt, clearActionFailure, reportActionFailure])
 
   const handleCopyImage = useCallback((): void => {
-    if (!selectedTask?.baseName) return
+    if (!imageActionsReady || !selectedTask?.baseName) return
     void window.electronAPI.copyImageToClipboard(selectedTask.baseName, getExt())
       .then(() => {
         clearActionFailure('copy-image')
@@ -230,10 +233,10 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
         'prompt.copyImageFailed',
         error,
       ))
-  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
+  }, [selectedTask, imageActionsReady, getExt, clearActionFailure, reportActionFailure])
 
   const handleExport = useCallback((): void => {
-    if (!selectedTask?.baseName) return
+    if (!imageActionsReady || !selectedTask?.baseName) return
     const generation = exportSelection.current.generation
     const attempt = ++exportAttempts.current.export
     const current = (): boolean => exportSelection.current.generation === generation && exportAttempts.current.export === attempt
@@ -249,10 +252,10 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
         'task.exportFailed',
         error,
       ) : logActionFailure('export-image', error))
-  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
+  }, [selectedTask, imageActionsReady, getExt, clearActionFailure, reportActionFailure])
 
   const handleSaveAs = useCallback((): void => {
-    if (!selectedTask?.baseName) return
+    if (!imageActionsReady || !selectedTask?.baseName) return
     const generation = exportSelection.current.generation
     const attempt = ++exportAttempts.current.saveAs
     const current = (): boolean => exportSelection.current.generation === generation && exportAttempts.current.saveAs === attempt
@@ -265,7 +268,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
         'prompt.saveAsFailed',
         error,
       ) : logActionFailure('save-image-as', error))
-  }, [selectedTask, getExt, clearActionFailure, reportActionFailure])
+  }, [selectedTask, imageActionsReady, getExt, clearActionFailure, reportActionFailure])
 
   const refreshClipboardTextAvailable = useCallback((): void => {
     void window.electronAPI.hasClipboardText()
@@ -405,15 +408,15 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
           </button>
         </div>
 
-        <Preview task={selectedImage} onImageLoad={handleImageLoad} />
+        <Preview task={selectedImage} onImageLoad={handleImageLoad} onReadyToAct={setReadyImage} />
 
         {(selectedTask?.status === 'completed' || selectedTask?.status === 'kept') && selectedTask?.baseName && (
           <div className="preview-toolbar">
             <button className="preview-btn preview-btn-neutral" onClick={handleCopyPrompt}>{promptCopied ? <><Icon name="check" /> {t('prompt.copied')}</> : t('prompt.copyPrompt')}</button>
-            <button className="preview-btn preview-btn-neutral" onClick={handleReveal}>{t('prompt.reveal')}</button>
-            <button className="preview-btn preview-btn-neutral" onClick={handleCopyImage}>{imageCopied ? <><Icon name="check" /> {t('prompt.copied')}</> : t('prompt.copyImage')}</button>
-            <button className="preview-btn preview-btn-export" onClick={handleExport}>{exported ? <><Icon name="check" /> {t('prompt.exported')}</> : t('prompt.export')}</button>
-            <button className="preview-btn preview-btn-export" onClick={handleSaveAs}>{t('prompt.saveAs')}</button>
+            <button className="preview-btn preview-btn-neutral" disabled={!imageActionsReady} onClick={handleReveal}>{t('prompt.reveal')}</button>
+            <button className="preview-btn preview-btn-neutral" disabled={!imageActionsReady} onClick={handleCopyImage}>{imageCopied ? <><Icon name="check" /> {t('prompt.copied')}</> : t('prompt.copyImage')}</button>
+            <button className="preview-btn preview-btn-export" disabled={!imageActionsReady} onClick={handleExport}>{exported ? <><Icon name="check" /> {t('prompt.exported')}</> : t('prompt.export')}</button>
+            <button className="preview-btn preview-btn-export" disabled={!imageActionsReady} onClick={handleSaveAs}>{t('prompt.saveAs')}</button>
           </div>
         )}
         <ActionFailures
@@ -431,20 +434,25 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
 
       {selectedTask && (
         <div ref={detailsRef} className="metadata-section">
-          {!detailsOpen ? (
-            <button className="metadata-toggle" onClick={() => setDetailsOpen(true)}>
-              <Icon name="chevron-right" className="metadata-toggle-chevron" />
-              <span className="metadata-toggle-model">{selectedTask.model}</span>
-              <span className="metadata-toggle-sep"> · </span>
-              {/* One-line prompt preview: flatten + cap to a generous budget; CSS
-                  clamps visually, the full prompt lives in the title tooltip. */}
-              <span className="metadata-toggle-prompt" title={selectedTask.prompt}>
-                {truncate(selectedTask.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
-              </span>
-            </button>
-          ) : (
+          <button
+            type="button"
+            className="metadata-toggle"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            onClick={() => setDetailsOpen((open) => !open)}
+          >
+            <Icon name="chevron-right" className="metadata-toggle-chevron" />
+            <span className="metadata-toggle-model">{selectedTask.model}</span>
+            <span className="metadata-toggle-sep"> · </span>
+            {/* One-line prompt preview: flatten + cap to a generous budget; CSS
+                clamps visually, the full prompt lives in the title tooltip. */}
+            <span className="metadata-toggle-prompt" title={selectedTask.prompt}>
+              {truncate(selectedTask.prompt, PROMPT_PREVIEW_MIN_GRAPHEMES).text}
+            </span>
+          </button>
+          {detailsOpen && (
             // Focusable so the keyboard can scroll a long prompt.
-            <div className="preview-metadata" role="region" tabIndex={0} aria-label={t('details.region')} onClick={() => setDetailsOpen(false)}>
+            <div id={detailsId} className="preview-metadata" role="region" tabIndex={0} aria-label={t('details.region')}>
               <div>{detailRow(t('details.model'), selectedTask.model)}</div>
               <div>{detailRow(t('details.status'), taskStatusLabel(t, selectedTask.status))}</div>
               <div>{detailRow(t('details.prompt'), selectedTask.prompt)}</div>
