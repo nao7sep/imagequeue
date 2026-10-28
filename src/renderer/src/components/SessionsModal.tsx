@@ -14,7 +14,7 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { sessionDisplayName } from '../utils/sessionName'
 import { presentFailure } from '../utils/failurePresentation'
-import { sessionImageUrl, thumbnailUrl } from '../../../shared/image-url'
+import { sessionImageUrl } from '../../../shared/image-url'
 import './SessionsModal.css'
 
 interface Props {
@@ -47,7 +47,7 @@ function SessionPreviewStrip({ sessionId, thumbnails }: { sessionId: string; thu
         <img
           key={baseName}
           className="session-preview-thumb"
-          src={thumbnailUrl(sessionImageUrl(sessionId, baseName), 64, window.devicePixelRatio)}
+          src={sessionImageUrl(sessionId, baseName)}
           alt=""
           loading="lazy"
           decoding="async"

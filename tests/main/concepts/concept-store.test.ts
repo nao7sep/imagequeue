@@ -40,13 +40,13 @@ describe('concept library serial owner', () => {
     expect(worker.terminate).toHaveBeenCalledOnce()
   })
 
-  it('forwards a delivered batch as one ordered request with its operation and session identity', async () => {
+  it('forwards a delivered batch as one ordered request with its session identity', async () => {
     const worker = thread()
     mocks.create.mockReturnValue(worker)
     const ids = [12, 3, 19]
-    const pending = recordUses('operation-a', ids, 'session-a')
+    const pending = recordUses(ids, 'session-a')
     expect(worker.posted).toHaveLength(1)
-    expect(worker.posted[0]).toMatchObject({ op: 'recordUses', args: ['operation-a', ids, 'session-a'] })
+    expect(worker.posted[0]).toMatchObject({ op: 'recordUses', args: [ids, 'session-a'] })
     worker.emit('message', { id: worker.posted[0].id, value: undefined, paths: [] })
     await pending
     const closing = closeConceptStore()

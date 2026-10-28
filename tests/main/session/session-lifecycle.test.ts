@@ -1,6 +1,4 @@
-import { thumbnailFile } from '../../../src/main/image-processing'
 import { tinyPng } from '../image-fixture'
-import * as thumbnailWrite from '../../../src/main/utils/atomic-write'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -1284,31 +1282,3 @@ it.each(['resume', 'delete'] as const)('waits only for the affected archive read
 })
 
 
-
-it('waits for thumbnail publication before permanently deleting an archived session', async () => {
-  const id = '20260111-000000-utc'
-  const directory = stageSession(id)
-  const source = path.join(directory, 'image.png')
-  fs.writeFileSync(source, await tinyPng())
-  const write = thumbnailWrite.writeFileAtomicAsync
-  let release!: () => void
-  let entered!: () => void
-  const hold = new Promise<void>((resolve) => { release = resolve })
-  const reached = new Promise<void>((resolve) => { entered = resolve })
-  vi.spyOn(thumbnailWrite, 'writeFileAtomicAsync').mockImplementation(async (...args) => {
-    entered()
-    await hold
-    return write(...args)
-  })
-  const thumbnail = thumbnailFile(source, 120)
-  await reached
-  let deleted = false
-  const deletion = deleteSession(id).then(() => { deleted = true })
-  await new Promise<void>((resolve) => setImmediate(resolve))
-  expect(deleted).toBe(false)
-  release()
-  const variant = await thumbnail
-  await deletion
-  expect(fs.existsSync(directory)).toBe(false)
-  expect(fs.existsSync(variant)).toBe(false)
-})

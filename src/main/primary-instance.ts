@@ -1,4 +1,3 @@
-import { clearObsoleteThumbnailCache } from './image-processing'
 import { drainExports } from './utils/storage-wait'
 import { handle } from './ipc-boundary'
 import { app, BrowserWindow, Menu, powerMonitor, dialog } from 'electron'
@@ -370,7 +369,6 @@ async function startUp(): Promise<void> {
   // startup step, so a failure in one of them is logged rather than lost to the
   // console.
   openRecords(getDataDir())
-  await clearObsoleteThumbnailCache()
   // The Records window, when open, follows each record the database stores.
   onRecordStored(notifyRecordsChanged)
   // Created before store initialization so quit owns the whole startup lifetime.

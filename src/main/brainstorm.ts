@@ -195,13 +195,14 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
   const startTime = performance.now()
   const sessionId = getSessionId()
   const collected: ElaboratedPromptRecord[] = []
-  // Commit credits before delivering full or partial results. The request ID
-  // makes a retry after an uncertain store acknowledgement idempotent.
+  // Commit credits before delivering full or partial results. A batch is
+  // submitted once, so a failed commit is never repeated over the same uses.
   const pendingUses: number[][] = []
   const commitUses = async (): Promise<void> => {
     if (pendingUses.length === 0) return
-    await recordUses(req.requestId, pendingUses.flat(), sessionId)
+    const conceptIds = pendingUses.flat()
     pendingUses.length = 0
+    await recordUses(conceptIds, sessionId)
   }
   let turn = 0
 

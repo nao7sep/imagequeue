@@ -1,4 +1,3 @@
-import { deleteImageWithThumbnails } from '../image-processing'
 import type { Translator } from '../../shared/i18n/translate'
 import fs from 'fs'
 import path from 'path'
@@ -228,10 +227,8 @@ export async function deleteImageOutput(baseName: string, ext: ImageExt): Promis
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
-  await deleteImageWithThumbnails(imagePath, async () => {
-    await fs.promises.rm(imagePath, { force: true })
-    await fs.promises.rm(metaPath, { force: true })
-  })
+  await fs.promises.rm(imagePath, { force: true })
+  await fs.promises.rm(metaPath, { force: true })
 }
 
 // Moves the image and metadata files for a given base filename to the OS trash.
@@ -242,8 +239,6 @@ export async function trashImageOutput(baseName: string, ext: ImageExt): Promise
   const imagePath = path.join(dir, `${baseName}.${ext}`)
   const metaPath = path.join(dir, `${baseName}.json`)
 
-  await deleteImageWithThumbnails(imagePath, async () => {
-    if (await fs.promises.stat(imagePath).then(() => true, (error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return false; throw error })) await shell.trashItem(imagePath)
-    if (await fs.promises.stat(metaPath).then(() => true, (error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return false; throw error })) await shell.trashItem(metaPath)
-  })
+  if (await fs.promises.stat(imagePath).then(() => true, (error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return false; throw error })) await shell.trashItem(imagePath)
+  if (await fs.promises.stat(metaPath).then(() => true, (error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return false; throw error })) await shell.trashItem(metaPath)
 }

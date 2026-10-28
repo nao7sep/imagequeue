@@ -160,12 +160,6 @@ function indexedItems(): ListboxItems {
   }
 }
 
-function deferredIndex(): { promise: Promise<number>; resolve: (index: number) => void } {
-  let resolve!: (index: number) => void
-  const promise = new Promise<number>((done) => { resolve = done })
-  return { promise, resolve }
-}
-
 function focusIndexed(container: HTMLElement): HTMLElement {
   const option = container.querySelector<HTMLElement>('[role="option"]')!
   act(() => option.focus())
@@ -202,76 +196,6 @@ describe('indexed listbox collections', () => {
     expect(onSelect).not.toHaveBeenCalled()
     fireEvent.keyDown(list, { key: 'Enter' })
     expect(onPrimary).toHaveBeenCalledExactlyOnceWith('item-99999')
-  })
-
-  it('uses asynchronous full-collection prefix search without walking unloaded ids', async () => {
-    const result = deferredIndex()
-    const items = { ...indexedItems(), findPrefix: vi.fn(() => result.promise) }
-    const onNavigate = vi.fn()
-    const onSelect = vi.fn()
-    const { container } = render(<IndexedHarness items={items} onNavigate={onNavigate} onSelect={onSelect} />)
-    const list = focusIndexed(container)
-    vi.mocked(items.idAt).mockClear()
-    fireEvent.keyDown(list, { key: 'z' })
-    expect(items.findPrefix).toHaveBeenCalledExactlyOnceWith('z', 0)
-    expect(onNavigate).not.toHaveBeenCalled()
-    await act(async () => result.resolve(87654))
-    expect(onNavigate).toHaveBeenCalledExactlyOnceWith('item-87654')
-    expect(onSelect).toHaveBeenCalledExactlyOnceWith('item-87654')
-    expect(items.idAt).toHaveBeenCalledExactlyOnceWith(87654)
-  })
-
-  it('applies only the latest typeahead result and ignores no match', async () => {
-    const first = deferredIndex()
-    const second = deferredIndex()
-    const third = deferredIndex()
-    const items = { ...indexedItems(), findPrefix: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise) }
-    const onNavigate = vi.fn()
-    const { container } = render(<IndexedHarness items={items} onNavigate={onNavigate} />)
-    const list = focusIndexed(container)
-    fireEvent.keyDown(list, { key: 'z' })
-    fireEvent.keyDown(list, { key: 'e' })
-    await act(async () => first.resolve(50))
-    expect(onNavigate).not.toHaveBeenCalled()
-    await act(async () => second.resolve(90))
-    expect(onNavigate).toHaveBeenCalledExactlyOnceWith('item-90')
-    fireEvent.keyDown(list, { key: 'r' })
-    await act(async () => third.resolve(-1))
-    expect(onNavigate).toHaveBeenCalledOnce()
-  })
-
-  it.each(['navigation', 'blur', 'model', 'unmount'] as const)('invalidates an outstanding search on %s', async (action) => {
-    const result = deferredIndex()
-    const items = { ...indexedItems(), findPrefix: vi.fn(() => result.promise) }
-    const onNavigate = vi.fn()
-    const view = render(<IndexedHarness items={items} onNavigate={onNavigate} />)
-    const list = focusIndexed(view.container)
-    fireEvent.keyDown(list, { key: 'z' })
-    if (action === 'navigation') fireEvent.keyDown(list, { key: 'End' })
-    if (action === 'blur') {
-      act(() => view.container.querySelector('input')!.focus())
-      // Returning before the request finishes still must not revive the search.
-      act(() => list.querySelector<HTMLElement>('[role="option"]')!.focus())
-    }
-    if (action === 'model') view.rerender(<IndexedHarness items={{ ...items }} onNavigate={onNavigate} />)
-    if (action === 'unmount') view.unmount()
-    onNavigate.mockClear()
-    await act(async () => result.resolve(500))
-    expect(onNavigate).not.toHaveBeenCalled()
-  })
-
-  it('uses the current navigation handler when a pending search resolves', async () => {
-    const result = deferredIndex()
-    const items = { ...indexedItems(), findPrefix: () => result.promise }
-    const original = vi.fn()
-    const latest = vi.fn()
-    const view = render(<IndexedHarness items={items} onNavigate={original} />)
-    const list = focusIndexed(view.container)
-    fireEvent.keyDown(list, { key: 'z' })
-    view.rerender(<IndexedHarness items={items} onNavigate={latest} />)
-    await act(async () => result.resolve(500))
-    expect(original).not.toHaveBeenCalled()
-    expect(latest).toHaveBeenCalledExactlyOnceWith('item-500')
   })
 
   it('accepts synchronous indexed prefix search', () => {

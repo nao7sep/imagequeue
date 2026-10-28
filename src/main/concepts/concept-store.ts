@@ -84,15 +84,9 @@ export const markProbeExpanded = (...args: Parameters<typeof Database.markProbeE
 export const addConcepts = (...args: Parameters<typeof Database.addConcepts>): Promise<ReturnType<typeof Database.addConcepts>> => request('addConcepts', args)
 export const drawConcept = (...args: Parameters<typeof Database.drawConcept>): Promise<ReturnType<typeof Database.drawConcept>> => request('drawConcept', args)
 export const recordUses = (...args: Parameters<typeof Database.recordUses>): Promise<void> => request('recordUses', args)
+export const listConceptRows = (...args: Parameters<typeof Database.listConceptRows>): Promise<ReturnType<typeof Database.listConceptRows>> => request('listConceptRows', args)
+export const listProbesWithStats = (...args: Parameters<typeof Database.listProbesWithStats>): Promise<ReturnType<typeof Database.listProbesWithStats>> => request('listProbesWithStats', args)
 export const listFacetsWithStats = (...args: Parameters<typeof Database.listFacetsWithStats>): Promise<ReturnType<typeof Database.listFacetsWithStats>> => request('listFacetsWithStats', args)
 export const deleteProbe = (...args: Parameters<typeof Database.deleteProbe>): Promise<ReturnType<typeof Database.deleteProbe>> => request('deleteProbe', args)
 export const deleteConcept = (...args: Parameters<typeof Database.deleteConcept>): Promise<ReturnType<typeof Database.deleteConcept>> => request('deleteConcept', args)
 export const deleteFacet = (...args: Parameters<typeof Database.deleteFacet>): Promise<ReturnType<typeof Database.deleteFacet>> => request('deleteFacet', args)
-
-export const queryConceptLibrary = (...args: Parameters<typeof Database.queryConceptLibrary>): Promise<ReturnType<typeof Database.queryConceptLibrary>> => request('queryConceptLibrary', args)
-
-export const readConceptLibraryPage = (...args: Parameters<typeof Database.readConceptLibraryPage>): Promise<ReturnType<typeof Database.readConceptLibraryPage>> => request('readConceptLibraryPage', args)
-
-export const locateConceptLibraryItem = (...args: Parameters<typeof Database.locateConceptLibraryItem>): Promise<ReturnType<typeof Database.locateConceptLibraryItem>> => request('locateConceptLibraryItem', args)
-
-export const searchConceptLibraryPrefix = (...args: Parameters<typeof Database.searchConceptLibraryPrefix>): Promise<ReturnType<typeof Database.searchConceptLibraryPrefix>> => request('searchConceptLibraryPrefix', args)

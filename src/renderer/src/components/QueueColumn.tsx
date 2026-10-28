@@ -6,7 +6,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import type { BackendId, CloudBackendId, Task } from '../../../shared/types'
 import { findModel, getDefaultModelForBackend, getModelsForBackend } from '../../../shared/ai-models'
-import { currentSessionImageUrl, thumbnailUrl } from '../../../shared/image-url'
+import { currentSessionImageUrl } from '../../../shared/image-url'
 import { CLOUD_BACKENDS } from '../backends'
 import { useDrawThingsColumn, DrawThingsControls } from './DrawThingsColumn'
 import { DrawThingsModelsModal } from './DrawThingsModelsModal'
@@ -517,32 +517,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect, position,
   // The thumbnail streams from the app's image scheme and loads lazily, so only
   // rows on screen read and decode their image, off the main process's thread.
   const hasThumbnail = (task.status === 'completed' || task.status === 'kept') && !!task.baseName
-  const thumbnailFrameRef = useRef<HTMLDivElement>(null)
-  const [thumbnailSize, setThumbnailSize] = useState({ width: 0, pixelRatio: window.devicePixelRatio })
-  useEffect(() => {
-    const frame = thumbnailFrameRef.current
-    if (!frame) {
-      setThumbnailSize({ width: 0, pixelRatio: window.devicePixelRatio })
-      return
-    }
-    const observer = new ResizeObserver(([entry]) => {
-      setThumbnailSize({ width: entry.contentRect.width, pixelRatio: window.devicePixelRatio })
-    })
-    // Moving between displays can change physical density without changing the
-    // frame's CSS width; resize updates the request's pixel budget too.
-    const updateDensity = (): void => {
-      setThumbnailSize((current) => ({ ...current, pixelRatio: window.devicePixelRatio }))
-    }
-    observer.observe(frame)
-    window.addEventListener('resize', updateDensity)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', updateDensity)
-    }
-  }, [hasThumbnail])
-  const thumbUrl = hasThumbnail && thumbnailSize.width > 0
-    ? thumbnailUrl(currentSessionImageUrl(task.baseName!), thumbnailSize.width, thumbnailSize.pixelRatio)
-    : null
+  const thumbUrl = hasThumbnail ? currentSessionImageUrl(task.baseName!) : null
 
   useLayoutEffect(() => {
     if (pendingCompletion && !task.baseName) finishCompletion(task.id, true)
@@ -632,7 +607,7 @@ function TaskItem({ task, backendId, isSelected, isTabbable, onSelect, position,
       />
       <div className="task-visual">
         {hasThumbnail && (
-          <div className="task-thumbnail-frame" ref={thumbnailFrameRef}>
+          <div className="task-thumbnail-frame">
             {thumbUrl && <img
               className="task-thumbnail"
               src={thumbUrl}

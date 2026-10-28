@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -249,32 +248,24 @@ describe('concept store', () => {
     expect(stats.unusedCount).toBe(0)
   })
 
-  it('records one ordered batch once, including after reopening the ledger', () => {
+  it('records one ordered batch', () => {
     const facet = ensureFacet('place')
     addProbes(facet.id, ['ports'])
     const [probe] = unexpandedProbes(facet.id, 1)
     addConcepts(facet.id, probe.id, ['dock', 'wharf'])
     const ids = readConceptRows(tmpRoot, facet.id).map((row) => row.id).reverse()
-    recordUses('delivered-run', ids, 'session-a')
-    const expected = readConceptRows(tmpRoot, facet.id)
-    expect(expected.map((row) => row.useCount)).toEqual([1, 1])
+    recordUses(ids, 'session-a')
+    expect(readConceptRows(tmpRoot, facet.id).map((row) => row.useCount)).toEqual([1, 1])
     closeConceptStore()
-    recordUses('delivered-run', ids, 'session-a')
-    expect(readConceptRows(tmpRoot, facet.id)).toEqual(expected)
     const database = new DatabaseSync(path.join(tmpRoot, 'concepts.sqlite3'), { readOnly: true })
     try {
       expect(database.prepare('SELECT concept_id, session_id FROM uses ORDER BY id').all()).toEqual(
         ids.map((id) => ({ concept_id: id, session_id: 'session-a' })),
       )
-      expect(database.prepare('SELECT COUNT(*) AS count FROM use_batches').get()?.count).toBe(1)
     } finally { database.close() }
-    expect(() => recordUses('delivered-run', [...ids].reverse(), 'session-a')).toThrow('different inputs')
-    expect(() => recordUses('delivered-run', ids, 'session-b')).toThrow('different inputs')
-    expect(() => recordUses('delivered-run', ids.slice(1), 'session-a')).toThrow('different inputs')
-    expect(readConceptRows(tmpRoot, facet.id)).toEqual(expected)
   })
 
-  it.each(['uses', 'use_batches'] as const)('rolls back all counters, uses and the operation when inserting into %s fails', (table) => {
+  it('rolls back all counters and uses when one insert fails', () => {
     const facet = ensureFacet('place')
     addProbes(facet.id, ['ports'])
     const [probe] = unexpandedProbes(facet.id, 1)
@@ -285,19 +276,18 @@ describe('concept store', () => {
     const file = path.join(tmpRoot, 'concepts.sqlite3')
     const database = new DatabaseSync(file)
     try {
-      database.exec(`CREATE TRIGGER reject_use_batch BEFORE INSERT ON ${table}
-        ${table === 'uses' ? `WHEN NEW.concept_id = ${ids[1]}` : ''}
+      database.exec(`CREATE TRIGGER reject_use_batch BEFORE INSERT ON uses
+        WHEN NEW.concept_id = ${ids[1]}
         BEGIN SELECT RAISE(ABORT, 'injected batch failure'); END;`)
     } finally { database.close() }
-    expect(() => recordUses('retryable-run', ids, 'session-a')).toThrow('injected batch failure')
+    expect(() => recordUses(ids, 'session-a')).toThrow('injected batch failure')
     expect(readConceptRows(tmpRoot, facet.id)).toEqual(before)
     const inspect = new DatabaseSync(file)
     try {
       expect(inspect.prepare('SELECT COUNT(*) AS count FROM uses').get()?.count).toBe(0)
-      expect(inspect.prepare('SELECT COUNT(*) AS count FROM use_batches').get()?.count).toBe(0)
       inspect.exec('DROP TRIGGER reject_use_batch')
     } finally { inspect.close() }
-    recordUses('retryable-run', ids, 'session-a')
+    recordUses(ids, 'session-a')
     expect(readConceptRows(tmpRoot, facet.id).map((row) => row.useCount)).toEqual([1, 1])
   })
 
@@ -480,5 +470,5 @@ describe('concept store format version', () => {
 })
 
 function recordUse(conceptId: number, sessionId: string): void {
-  recordUses(randomUUID(), [conceptId], sessionId)
+  recordUses([conceptId], sessionId)
 }

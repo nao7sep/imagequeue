@@ -279,7 +279,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     }
     const expectedIds = result.prompts.flatMap((prompt) => prompt.concepts.map((credit) => idsByCredit.get(`${credit.facet}:${credit.concept}`)))
     expect(expectedIds.every((id) => id !== undefined)).toBe(true)
-    expect(recorded).toHaveBeenCalledExactlyOnceWith('ordered-batch', expectedIds, 'test-session')
+    expect(recorded).toHaveBeenCalledExactlyOnceWith(expectedIds, 'test-session')
   })
 
   it('delivers committed prompts even when optional completion statistics fail', async () => {
@@ -295,24 +295,6 @@ describe('brainstormPrompts (concept-driven)', () => {
     const used = (await listFacetsWithStats()).reduce((count, facet) => count + facet.conceptCount - facet.unusedCount, 0)
     expect(used).toBe(4)
     expect(hasActiveBrainstorms()).toBe(false)
-  })
-
-  it('repeats an uncertain committed batch on cancellation without counting its concepts twice', async () => {
-    installScriptedProvider()
-    const actualRecord = conceptStore.recordUses
-    const recorded = vi.spyOn(conceptStore, 'recordUses')
-    recorded.mockImplementationOnce(async (...args) => {
-      await actualRecord(...args)
-      cancelBrainstorm('uncertain-commit')
-      throw new DOMException('Acknowledgment interrupted', 'AbortError')
-    })
-    const result = await brainstormPrompts(request({ requestId: 'uncertain-commit', count: 2 }))
-    expect(result.prompts).toHaveLength(2)
-    expect(recorded).toHaveBeenCalledTimes(2)
-    expect(recorded.mock.calls[1]).toEqual(recorded.mock.calls[0])
-    const rows = (await listFacetsWithStats()).flatMap((facet) => readConceptRows(tmpRoot, facet.id))
-    expect(rows.filter((row) => row.useCount > 0)).toHaveLength(4)
-    expect(rows.every((row) => row.useCount <= 1)).toBe(true)
   })
 
   it('sends every prose call with a FRESH context: one user message, no history', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { nextIndex } from '../utils/compositeNav'
 
 // Roughly one viewport of rows for PageUp/PageDown. The listbox panels here are
@@ -10,11 +10,11 @@ export interface ListboxItems {
   count: number
   idAt: (index: number) => string
   indexOf: (id: string) => number
-  findPrefix?: (prefix: string, afterIndex: number) => Promise<number> | number
+  findPrefix?: (prefix: string, afterIndex: number) => number
 }
 
 export interface ListboxOptions {
-  // A paged consumer owns mounting/revealing the requested row before focus.
+  // A virtualized consumer owns mounting/revealing the requested row before focus.
   onNavigate?: (id: string) => void
   // The committed selection (a projection target). May be null.
   selectedId: string | null
@@ -62,7 +62,6 @@ interface UseListboxResult<T extends HTMLElement> {
     role: 'listbox'
     tabIndex: 0 | -1
     onKeyDown: (e: KeyboardEvent) => void
-    onBlurCapture: (e: FocusEvent) => void
   }
   getOptionProps: (id: string) => OptionProps
 }
@@ -103,22 +102,9 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
     return initial
   })
   const typeAheadRef = useRef<{ buffer: string; at: number }>({ buffer: '', at: 0 })
-  const searchVersion = useRef(0)
-  const mounted = useRef(false)
-  const modelRef = useRef(model)
-  modelRef.current = model
-  const invalidateSearch = useCallback((): void => { searchVersion.current++ }, [])
-  useEffect(() => {
-    mounted.current = true
-    invalidateSearch()
-    return () => {
-      mounted.current = false
-      invalidateSearch()
-    }
-  }, [model, invalidateSearch])
 
   // Membership and the tab stop use the full indexed collection even when only
-  // a page of options has DOM nodes.
+  // some options have DOM nodes.
   const selectedInList = selectedId && model.indexOf(selectedId) >= 0 ? selectedId : null
   const tabbableId = activeId && model.indexOf(activeId) >= 0
     ? activeId : selectedInList ?? (model.count ? model.idAt(0) : null)
@@ -140,11 +126,8 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
 
   // Track the committed selection as the active cursor too (so Tab returns to it).
   useEffect(() => {
-    if (selectedInList && selectedInList !== activeIdRef.current) {
-      invalidateSearch()
-      setActiveId(selectedInList)
-    }
-  }, [selectedInList, setActiveId, invalidateSearch])
+    if (selectedInList && selectedInList !== activeIdRef.current) setActiveId(selectedInList)
+  }, [selectedInList, setActiveId])
 
   const focusedId = (): string | null => {
     const active = document.activeElement
@@ -154,7 +137,6 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
   // Move the cursor (and DOM focus) to an index; commit only when activation
   // follows focus.
   const moveTo = (index: number): void => {
-    invalidateSearch()
     if (index < 0 || index >= model.count) return
     const id = model.idAt(index)
     setActiveId(id)
@@ -163,12 +145,9 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
     if (activation === 'follows-focus') onSelect(id)
   }
 
-  const moveToRef = useRef(moveTo)
-  moveToRef.current = moveTo
-
   const onKeyDown = (e: KeyboardEvent): void => {
     if (model.count === 0) return
-    // A paged consumer can still be mounting the last requested target. Keep
+    // A virtualized consumer can still be mounting the last requested target. Keep
     // successive keys moving from the cursor instead of the previous DOM row.
     let current = -1
     for (const id of [onNavigate ? activeIdRef.current : focusedId(), activeIdRef.current, selectedId]) {
@@ -209,7 +188,6 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
     }
 
     if ((e.key === 'Enter' || e.key === ' ')) {
-      invalidateSearch()
       if (isComposing?.(e.nativeEvent as unknown as { isComposing?: boolean; keyCode?: number })) return
       const targetId = onNavigate ? activeIdRef.current : focusedId() ?? activeIdRef.current
       if (!targetId) return
@@ -232,19 +210,12 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
       ta.at = now
       if (model.findPrefix) {
         e.preventDefault()
-        const version = ++searchVersion.current
-        const apply = (index: number): void => {
-          if (!mounted.current || version !== searchVersion.current || modelRef.current !== model ||
-            !ref.current?.contains(document.activeElement)) return
-          if (index >= 0 && index < model.count) moveToRef.current(index)
-        }
-        const result = model.findPrefix(ta.buffer, current)
-        if (typeof result === 'number') apply(result)
-        else void result.then(apply)
+        const index = model.findPrefix(ta.buffer, current)
+        if (index >= 0 && index < model.count) moveTo(index)
         return
       }
-      // The array consumer searches visible labels synchronously. Indexed
-      // collections supply findPrefix so searching never walks unloaded ids.
+      // The array consumer searches visible labels. Indexed collections supply
+      // findPrefix so searching also reaches rows that are not mounted.
       if (!ids) return
       for (let distance = 1; distance <= model.count; distance++) {
         const index = (current + distance) % model.count
@@ -261,15 +232,14 @@ export function useListbox<T extends HTMLElement = HTMLDivElement>(params: UseLi
 
   return {
     activeId: tabbableId,
-    listboxProps: { ref, role: 'listbox', tabIndex: model.count === 0 ? 0 : -1, onKeyDown, onBlurCapture: invalidateSearch },
+    listboxProps: { ref, role: 'listbox', tabIndex: model.count === 0 ? 0 : -1, onKeyDown },
     getOptionProps: (id: string) => ({
       role: 'option',
       'aria-selected': id === selectedId,
       tabIndex: id === tabbableId ? 0 : -1,
       'data-listbox-option': id,
-      onFocus: () => { invalidateSearch(); setActiveId(id) },
+      onFocus: () => { setActiveId(id) },
       onClick: () => {
-        invalidateSearch()
         setActiveId(id)
         onSelect(id)
       },

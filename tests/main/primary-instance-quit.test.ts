@@ -68,7 +68,6 @@ vi.mock('../../src/main/session', () => ({
 }))
 vi.mock('../../src/main/queue', () => ({ registerQueueIpc: vi.fn(), queueManager: { generatingCount: vi.fn(() => 0) } }))
 vi.mock('../../src/main/backends', () => ({ startProcessor: vi.fn(), stopProcessor: vi.fn() }))
-vi.mock('../../src/main/image-processing', () => ({ clearObsoleteThumbnailCache: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/audio-protocol', () => ({ registerAudioProtocol: vi.fn() }))
 vi.mock('../../src/main/image-protocol', () => ({ registerImageProtocol: vi.fn(), registerMediaSchemesAsPrivileged: vi.fn() }))
 vi.mock('../../src/main/settings-ipc', () => ({ registerSettingsIpc: vi.fn() }))

@@ -1,4 +1,3 @@
-import type { ConceptLibraryQuery, ConceptLibraryIndex, ConceptLibraryPage, ConceptLibraryItem, ConceptLibraryLocation, ConceptLibraryLocationResult } from './concept-library'
 import type { BrainstormConfig } from './brainstorm-config'
 import type { DraftSurface, QuitQuestion } from './quit'
 import {
@@ -27,6 +26,8 @@ import {
   SecretId,
   QueueControlState,
   ConceptFacetSummary,
+  ConceptProbeSummary,
+  ConceptRow,
 } from './types'
 import type { SessionDraft, PromptFormat, PromptLength, FormatDirectives } from './session-draft'
 import type { UiState } from './ui-state'
@@ -134,10 +135,8 @@ export interface ElectronAPI {
   brainstormGetDefaults: () => Promise<BrainstormConfig>
   // Concept ledger (the Concept Library modal)
   listConceptFacets: () => Promise<ConceptFacetSummary[]>
-  queryConceptLibrary: (query: ConceptLibraryQuery) => Promise<ConceptLibraryIndex>
-  readConceptLibraryPage: (query: ConceptLibraryQuery, revision: string, probeId: number, offset: number) => Promise<ConceptLibraryPage>
-  locateConceptLibraryItem: (query: ConceptLibraryQuery, revision: string, item: ConceptLibraryItem) => Promise<ConceptLibraryLocationResult>
-  searchConceptLibraryPrefix: (query: ConceptLibraryQuery, revision: string, prefix: string, after: ConceptLibraryLocation | null) => Promise<ConceptLibraryLocationResult>
+  listConceptProbes: (facetId: number) => Promise<ConceptProbeSummary[]>
+  listConceptRows: (facetId: number) => Promise<ConceptRow[]>
   deleteConceptProbe: (probeId: number) => Promise<void>
   deleteConceptRow: (conceptId: number) => Promise<void>
   deleteConceptFacet: (facetId: number) => Promise<void>

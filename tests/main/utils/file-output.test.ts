@@ -1,4 +1,3 @@
-import { thumbnailFile } from '../../../src/main/image-processing'
 import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
@@ -304,13 +303,3 @@ describe('deleting an output', () => {
   })
 })
 
-
-it.each([false, true])('deletes all derived variants through the output deletion owner (Trash: %s)', async (toTrash) => {
-  const image = path.join(sessionDir, 'image.png')
-  fs.writeFileSync(image, await tinyPng())
-  const variants = await Promise.all([thumbnailFile(image, 120), thumbnailFile(image, 240)])
-  if (toTrash) await trashImageOutput('image', 'png')
-  else await deleteImageOutput('image', 'png')
-  expect(fs.existsSync(image)).toBe(false)
-  for (const variant of variants) expect(fs.existsSync(variant)).toBe(false)
-})

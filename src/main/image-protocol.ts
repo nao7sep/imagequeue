@@ -1,4 +1,3 @@
-import { thumbnailFile } from './image-processing'
 import { net, protocol } from 'electron'
 import fs from 'fs'
 import path from 'path'
@@ -49,16 +48,8 @@ export async function resolveImageRequest(url: string): Promise<string | null> {
 export function registerImageProtocol(): void {
   protocol.handle(IMAGE_SCHEME, async (request) => {
     try {
-      let file = await resolveImageRequest(request.url)
+      const file = await resolveImageRequest(request.url)
       if (!file) return new Response(null, { status: 404 })
-      const requestedSize = new URL(request.url).searchParams.get('thumbnail')
-      if (requestedSize !== null) {
-        const size = Number(requestedSize)
-        // Thumbnail variants describe the display's physical-pixel requirement;
-        // originals remain available through the URL without this parameter.
-        if (!Number.isSafeInteger(size) || size <= 0) return new Response(null, { status: 400 })
-        file = await thumbnailFile(file, size)
-      }
       return await net.fetch(pathToFileURL(file).toString())
     } catch (err) {
       log('warn', 'Output image could not be served', { error: serializeError(err) })
