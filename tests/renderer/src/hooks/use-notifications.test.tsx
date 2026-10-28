@@ -3,12 +3,11 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { TaskStatus } from '../../../../src/shared/types'
 
-const state = vi.hoisted(() => ({ volume: 1, tasks: { openai: [] as { id: string; status: TaskStatus }[] }, notifications: { notifications_enabled: true, success_file: '', failure_file: '' } }))
+const state = vi.hoisted(() => ({ tasks: { openai: [] as { id: string; status: TaskStatus }[] }, notifications: { notifications_enabled: true, volume: 1, success_file: '', failure_file: '' } }))
 vi.mock('../../../../src/renderer/src/context/QueueContext', () => ({ useQueue: () => state }))
 vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
   useSettings: () => ({ settings: { notifications: state.notifications } }),
 }))
-vi.mock('../../../../src/renderer/src/context/UiStateContext', () => ({ useUiState: () => ({ uiState: { notificationVolume: state.volume } }) }))
 const { useNotifications } = await import('../../../../src/renderer/src/hooks/useNotifications')
 
 let play: ReturnType<typeof vi.fn<() => Promise<void>>>
@@ -24,7 +23,7 @@ class TestAudio extends EventTarget {
 }
 beforeEach(() => {
   audios.length = 0
-  state.volume = 1
+  state.notifications.volume = 1
   state.notifications.success_file = ''
   state.notifications.failure_file = ''
   vi.spyOn(document, 'hasFocus').mockReturnValue(false)
@@ -44,7 +43,7 @@ it('keeps a restored image silent while another view has focus', () => {
 })
 
 it('shows the notification but plays no sound at zero volume', () => {
-  state.volume = 0
+  state.notifications.volume = 0
   state.tasks = { openai: [{ id: 'image', status: 'generating' }] }
   const { rerender } = renderHook(useNotifications)
   state.tasks = { openai: [{ id: 'image', status: 'completed' }] }

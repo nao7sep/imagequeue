@@ -8,7 +8,6 @@ import { multiline } from '../../../shared/textCleanup'
 import { TextProviderSettings } from './TextProviderSettings'
 import { TEXT_PROVIDERS } from '../../../shared/ai-models'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
-import { useUiState } from '../context/UiStateContext'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
 import { presentFailure } from '../utils/failurePresentation'
 import { rebaseSettingsDraft } from '../utils/settingsDraft'
@@ -108,9 +107,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     onSelect: setActiveTab,
     idBase: 'settings',
   })
-  // Volume is state, not config: it lives in state.json and is shared with the
-  // prompt pane's slider through the one context, so the two never disagree.
-  const { uiState, patchUiState } = useUiState()
   // Settings that change while the form is open reach it, the main process's
   // own changes included (closing the preview window turns its setting off);
   // the user's edits stay, and Save diffs against what is now stored.
@@ -241,17 +237,19 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
     setConfig({ ...config, notifications: { ...notificationCfg, [key]: value } })
   }
 
-  // Notification toggles save immediately (bypass staged config). Volume is not
-  // among them — it is state, and patchUiState persists it on its own channel.
-  const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<void> => {
+  // The notification toggle and the volume save immediately (bypass staged config),
+  // as their prompt-pane twins do.
+  const saveNotificationImmediate = useCallback(async (key: string, value: unknown): Promise<boolean> => {
     setErrorMessage(null)
     try {
       await saveNotificationField(key, value)
       // Immediate settings are no longer dirty once the main process accepts them.
       setConfig((prev) => withNotificationField(prev, key, value))
       setBaseConfig((prev) => withNotificationField(prev, key, value))
+      return true
     } catch (error) {
       setErrorMessage(presentFailure('settings-save', error))
+      return false
     }
   }, [saveNotificationField])
 
@@ -534,8 +532,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           <div className="settings-field">
             <label htmlFor="settings-volume">{t('settings.volume')}</label>
             <NotificationVolumeSlider id="settings-volume"
-              value={uiState.notificationVolume}
-              onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
+              value={notificationCfg.volume as number}
+              onCommit={(volume) => saveNotificationImmediate('volume', volume)}
             />
             <p className="settings-hint">{t('settings.volumeHint')}</p>
           </div>

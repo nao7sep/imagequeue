@@ -85,6 +85,7 @@ const cloudBackendIds = new Set<string>(CLOUD_BACKEND_IDS_IN_UI_ORDER)
 const secretIds = new Set<string>(SECRET_IDS)
 const notificationFields = new Set<string>([
   'notifications_enabled',
+  'volume',
   'success_file',
   'failure_file',
 ])
@@ -206,6 +207,9 @@ export function registerSettingsIpc(
 
     if (field === 'success_file' || field === 'failure_file') {
       if (typeof value !== 'string') throw new Error('Invalid sound file path')
+    }
+    if (field === 'volume' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1)) {
+      throw new Error('Invalid notification volume')
     }
     await updateConfig((draft) => {
       const notifications = draft.notifications as unknown as Record<string, unknown>

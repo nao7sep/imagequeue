@@ -87,6 +87,8 @@ const BRAINSTORM_LIMIT_SETS = new Map<string, { min: number; max: number }>(
 function meetsAppLimits(key: string, value: number): boolean {
   const limits = BRAINSTORM_LIMIT_SETS.get(key)
   if (limits) return Number.isInteger(value) && value >= limits.min && value <= limits.max
+  // An <audio> volume outside 0–1 throws.
+  if (key === 'notifications.volume') return value >= 0 && value <= 1
   if (key.endsWith('.concurrency')) return value >= 1
   if (key.endsWith('.timeout_ms')) return value > 0
   return true

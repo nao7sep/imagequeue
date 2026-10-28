@@ -5,7 +5,7 @@
 //
 // The file is:
 //   - not recorded in the data-backup store (see writeUiState) — it is volatile
-//     state (column width, volume), so no history is kept;
+//     state (column and splitter widths), so no history is kept;
 //   - materialized lazily — a missing file reads as defaults and is not written
 //     until a view adjustment needs recording;
 //   - self-healing — a malformed file falls back to defaults rather than failing;
@@ -42,12 +42,6 @@ export async function readUiState(): Promise<UiState> {
         typeof parsed.columnWidth === 'number' && Number.isFinite(parsed.columnWidth)
           ? parsed.columnWidth
           : base.columnWidth,
-      // Clamped, not just type-checked: this drives an <audio> volume, which
-      // throws on a value outside 0–1, and the file is hand-editable.
-      notificationVolume:
-        typeof parsed.notificationVolume === 'number' && Number.isFinite(parsed.notificationVolume)
-          ? Math.min(1, Math.max(0, parsed.notificationVolume))
-          : base.notificationVolume,
       recordsListWidth: clampRecordsListWidth(parsed.recordsListWidth),
     }
   } catch (err) {
@@ -69,7 +63,7 @@ export function validateUiStatePatch(value: unknown): Partial<UiState> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid UI state patch.')
   const patch: Partial<UiState> = {}
   for (const key of Reflect.ownKeys(value)) {
-    if (key !== 'columnWidth' && key !== 'notificationVolume' && key !== 'recordsListWidth') {
+    if (key !== 'columnWidth' && key !== 'recordsListWidth') {
       throw new Error('Invalid UI state patch field.')
     }
     const field = (value as Record<string, unknown>)[key]
@@ -79,7 +73,6 @@ export function validateUiStatePatch(value: unknown): Partial<UiState> {
     }
     if (typeof field !== 'number' || !Number.isFinite(field)) throw new Error('Invalid UI state patch value.')
     if (key === 'columnWidth') patch.columnWidth = field
-    else if (key === 'notificationVolume') patch.notificationVolume = Math.min(1, Math.max(0, field))
     else patch.recordsListWidth = clampRecordsListWidth(field)
   }
   return patch

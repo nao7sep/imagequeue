@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
-import { useUiState } from '../context/UiStateContext'
+import { useNotificationVolume } from '../hooks/useNotificationVolume'
 import { useEnqueueConfigs } from '../context/EnqueueConfigContext'
 import { useVisiblePanes } from '../hooks/useVisiblePanes'
 import { Icon } from './Icon'
@@ -100,9 +100,8 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
 
   const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
-  // Volume is state, not config — it lives in state.json beside the pane width;
-  // zero mutes the completion sounds.
-  const { uiState, patchUiState } = useUiState()
+  // Zero mutes the completion sounds.
+  const { volume, commitVolume } = useNotificationVolume()
 
   const handleSendToAll = useCallback(() => {
     enqueueToAll(prompt)
@@ -398,8 +397,8 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
             {t('prompt.notify')}
           </label>
           <NotificationVolumeSlider
-            value={uiState.notificationVolume}
-            onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
+            value={volume}
+            onCommit={commitVolume}
           />
           <button className="send-all" disabled={!prompt.trim()} onClick={handleSendToAll}>
             {t('prompt.sendToAll')}

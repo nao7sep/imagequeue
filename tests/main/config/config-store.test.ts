@@ -259,6 +259,15 @@ describe('settings by set', () => {
     expect(loadConfig().general.language).toBe('ja')
     expect(loadConfig().general.theme).toBe('system')
   })
+  it('stores the completion-sound volume only while it differs from its built-in, within 0 to 1', async () => {
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    await updateConfig((draft) => { draft.notifications.volume = 0 })
+    expect(stored()).toEqual({ notifications: { volume: 0 } })
+    await updateConfig((draft) => { draft.notifications.volume = createDefaultConfig().notifications.volume })
+    expect(stored()).toEqual({})
+    await expect(updateConfig((draft) => { draft.notifications.volume = 1.5 })).rejects.toThrow('notifications.volume')
+    expect(loadConfig().notifications.volume).toBe(createDefaultConfig().notifications.volume)
+  })
   it('reads a concurrency below one or a timeout not above zero as its built-in, and will not save one', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 0 }
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm, gemini: { timeout_ms: 0 }, image_backends: { flux: { concurrency: 0, timeout_ms: -1 } } }))

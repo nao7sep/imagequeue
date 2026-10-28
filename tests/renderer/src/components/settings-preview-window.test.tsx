@@ -18,7 +18,7 @@ vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({
   useConfirm: () => async () => true,
 }))
 vi.mock('../../../../src/renderer/src/context/UiStateContext', () => ({
-  useUiState: () => ({ uiState: { columnWidth: null, notificationVolume: 0.7 }, patchUiState: vi.fn() }),
+  useUiState: () => ({ uiState: { columnWidth: null }, patchUiState: vi.fn() }),
 }))
 
 const { SettingsModal } = await import('../../../../src/renderer/src/components/SettingsModal')

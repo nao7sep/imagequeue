@@ -169,8 +169,8 @@ export interface ElectronAPI {
   onCliJobChunk: (callback: (e: CliChunkEvent) => void) => (() => void)
   onCliJobStatus: (callback: (e: CliStatusEvent) => void) => (() => void)
 
-  // Ephemeral UI state (state.json): queue-column width, Records splitter width
-  // and completion-sound volume. Hydrated on mount; committed adjustments persist.
+  // Ephemeral UI state (state.json): queue-column width and Records splitter
+  // width. Hydrated on mount; committed adjustments persist.
   getUiState: () => Promise<UiState>
   updateUiState: (patch: Partial<UiState>) => Promise<UiState>
 

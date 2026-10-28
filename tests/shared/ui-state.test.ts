@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   defaultUiState,
   displayedColumnWidth,
-  NOTIFICATION_VOLUME_DEFAULT,
   maxColumnWidthForContainer,
 } from '../../src/shared/ui-state'
 import {
@@ -22,14 +21,6 @@ import {
 describe('defaultUiState', () => {
   it('starts with no remembered column width (columns use their default)', () => {
     expect(defaultUiState().columnWidth).toBeNull()
-  })
-
-  // The one home for this default. It used to be restated at four call sites as
-  // `?? 0.7`, which is four chances to drift apart.
-  it('starts at the default notification volume', () => {
-    expect(defaultUiState().notificationVolume).toBe(NOTIFICATION_VOLUME_DEFAULT)
-    expect(NOTIFICATION_VOLUME_DEFAULT).toBeGreaterThan(0)
-    expect(NOTIFICATION_VOLUME_DEFAULT).toBeLessThanOrEqual(1)
   })
 })
 

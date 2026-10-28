@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { UiStateProvider, useUiState } from '../../../../src/renderer/src/context/UiStateContext'
-import { defaultUiState } from '../../../../src/shared/ui-state'
+const settings = vi.hoisted(() => ({ save: vi.fn() }))
+vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
+  useSettings: () => ({ settings: { notifications: { volume: 0.7 } }, saveNotificationField: settings.save }),
+}))
+import { useNotificationVolume } from '../../../../src/renderer/src/hooks/useNotificationVolume'
 import { OPERATIONAL_FAILURE_EVENT } from '../../../../src/renderer/src/utils/operationalFailure'
 import { NotificationVolumeSlider } from '../../../../src/renderer/src/components/NotificationVolumeSlider'
 
@@ -73,26 +76,25 @@ it('retains a failed draft and allows retry without another adjustment', async (
 })
 
 
-it('uses the real UI-state writer acknowledgement and retains its failed-save notice', async () => {
+it('saves the volume as a notification setting and retains its failed-save notice', async () => {
   const failure = vi.fn()
   window.addEventListener(OPERATIONAL_FAILURE_EVENT, failure)
-  const update = vi.fn().mockRejectedValueOnce(new Error('save failed')).mockResolvedValueOnce(defaultUiState)
-  window.electronAPI = {
-    getUiState: vi.fn(async () => defaultUiState), updateUiState: update, appLog: vi.fn(async () => {}),
-  } as unknown as typeof window.electronAPI
+  settings.save.mockRejectedValueOnce(new Error('save failed')).mockResolvedValueOnce({})
+  window.electronAPI = { appLog: vi.fn(async () => {}) } as unknown as typeof window.electronAPI
   function Volume(): React.JSX.Element {
-    const { uiState, patchUiState } = useUiState()
-    return <NotificationVolumeSlider value={uiState.notificationVolume} onCommit={(notificationVolume) => patchUiState({ notificationVolume })} />
+    const { volume, commitVolume } = useNotificationVolume()
+    return <NotificationVolumeSlider value={volume} onCommit={commitVolume} />
   }
   try {
-    await act(async () => { render(<UiStateProvider><Volume /></UiStateProvider>) })
+    render(<Volume />)
     const slider = screen.getByRole('slider') as HTMLInputElement
+    expect(slider.value).toBe('0.7')
     fireEvent.change(slider, { target: { value: '0.4' } })
     await act(async () => fireEvent.pointerUp(slider))
     expect(failure).toHaveBeenCalledOnce()
     expect(slider.value).toBe('0.4')
     await act(async () => fireEvent.pointerUp(slider))
-    expect(update.mock.calls).toEqual([[{ notificationVolume: 0.4 }], [{ notificationVolume: 0.4 }]])
+    expect(settings.save.mock.calls).toEqual([['volume', 0.4], ['volume', 0.4]])
     expect(slider.value).toBe('0.4')
   } finally { window.removeEventListener(OPERATIONAL_FAILURE_EVENT, failure) }
 })

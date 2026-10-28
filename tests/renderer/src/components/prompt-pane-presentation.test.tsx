@@ -13,7 +13,7 @@ vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
   }),
 }))
 vi.mock('../../../../src/renderer/src/context/UiStateContext', () => ({
-  useUiState: () => ({ uiState: { notificationVolume: 1 }, patchUiState: vi.fn() }),
+  useUiState: () => ({ uiState: {}, patchUiState: vi.fn() }),
 }))
 vi.mock('../../../../src/renderer/src/context/EnqueueConfigContext', () => ({
   useEnqueueConfigs: () => ({ enqueueToBackend: vi.fn(), enqueueToAll: vi.fn() }),

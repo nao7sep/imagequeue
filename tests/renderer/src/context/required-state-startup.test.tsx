@@ -18,7 +18,7 @@ const credentialsSnapshot: SettingsCredentials = {
   presence: { image: { openai: true, nanobanana: false, grok: true, flux: false }, geminiText: true, openaiText: false },
   keys: { 'gemini.text': 'stored-gemini', 'openai.text': '', 'openai.image': 'stored-openai', 'gemini.nanobanana': '', xai: 'stored-xai', bfl: '' },
 }
-const uiSnapshot: UiState = { ...defaultUiState(), columnWidth: 420, notificationVolume: 0.25, recordsListWidth: 360 }
+const uiSnapshot: UiState = { ...defaultUiState(), columnWidth: 420, recordsListWidth: 360 }
 
 function SettingsChild(): React.JSX.Element {
   const { settings, apiKeyPresence, apiKeys } = useSettings()

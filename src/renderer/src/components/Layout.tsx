@@ -82,8 +82,8 @@ export function Layout(): React.JSX.Element {
   )
 
   // Adopt the persisted column width. It arrives through the one UI-state
-  // context (hydrated once for the window), so this and the volume sliders share
-  // a single reader and a single writer for state.json. A drag updates the local
+  // context (hydrated once for the window), so every state.json value shares
+  // a single reader and a single writer. A drag updates the local
   // intent live and only lands in the context on release, so this re-runs with a
   // value it already has.
   useEffect(() => {

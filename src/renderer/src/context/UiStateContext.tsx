@@ -6,10 +6,9 @@ import { clearOperationalFailure, recordOperationalDiagnostic, reportOperational
 import { useI18n } from '../i18n/I18nContext'
 
 // The renderer's view of state.json — the adjustments the app remembers on the
-// user's behalf (column width, notification volume), as opposed to the settings
+// user's behalf (column and Records splitter widths), as opposed to the settings
 // it saves for them. One hydration and one writer for the whole window, so two
-// surfaces showing the same value (the volume slider appears in both the prompt
-// pane and Settings) cannot drift apart.
+// surfaces showing the same value cannot drift apart.
 //
 // The state starts at its defaults rather than null: every field has a real
 // default, so there is nothing a consumer could usefully do with "not yet

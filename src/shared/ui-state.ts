@@ -3,7 +3,7 @@
 // Persisted to ~/.imagequeue/state.json, its own store and type per the
 // persisted-store-separation conventions: a settings reset must not touch it, and
 // its splitter-drag churn must never rewrite the config file. Disposable — losing
-// it restores default queue-column width, Records splitter width and sound volume.
+// it restores default queue-column width and Records splitter width.
 
 import {
   COLUMN_DEFAULT_PX,
@@ -26,14 +26,6 @@ export interface UiState {
    */
   columnWidth: number | null
   /**
-   * Playback volume for the completion sounds, 0–1. State rather than config: the
-   * persisted-store-separation conventions draw that line at
-   * presentation-versus-setting and name volume on the state side, beside zoom and
-   * pane width. Whether sounds play at all IS a setting and stays in config; how
-   * loud this machine plays them is an adjustment to the here and now.
-   */
-  notificationVolume: number
-  /**
    * The Records window's list pane width the user dragged to, in CSS px (the
    * INTENT), kept within the pane's bounds. The displayed width is derived from it
    * and the live window (displayedRecordsListWidth), the same way as columnWidth.
@@ -41,12 +33,9 @@ export interface UiState {
   recordsListWidth: number
 }
 
-export const NOTIFICATION_VOLUME_DEFAULT = 0.7
-
 export function defaultUiState(): UiState {
   return {
     columnWidth: null,
-    notificationVolume: NOTIFICATION_VOLUME_DEFAULT,
     recordsListWidth: RECORDS_LIST_WIDTH.default,
   }
 }

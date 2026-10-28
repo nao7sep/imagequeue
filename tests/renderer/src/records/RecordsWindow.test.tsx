@@ -114,7 +114,7 @@ beforeEach(() => {
   appLog.mockReset()
   appLog.mockResolvedValue()
   updateUiState.mockReset()
-  updateUiState.mockImplementation(async (patch) => ({ columnWidth: null, notificationVolume: 0.7, recordsListWidth: RECORDS_LIST_WIDTH.default, ...patch }))
+  updateUiState.mockImplementation(async (patch) => ({ columnWidth: null, recordsListWidth: RECORDS_LIST_WIDTH.default, ...patch }))
   getUiState.mockReset()
   onRecordsChanged.mockClear()
   recordsChanged = null
@@ -752,7 +752,7 @@ describe('RecordsWindow', () => {
 
 describe('RecordsApp', () => {
   it('opens with the list at its saved width from the first frame', async () => {
-    getUiState.mockResolvedValue({ columnWidth: null, notificationVolume: 0.7, recordsListWidth: 512 })
+    getUiState.mockResolvedValue({ columnWidth: null, recordsListWidth: 512 })
     await mount(React.createElement(RecordsApp))
     expect(shell().style.getPropertyValue('--records-list-width')).toBe('512px')
   })

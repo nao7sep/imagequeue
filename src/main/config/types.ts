@@ -136,8 +136,8 @@ export interface GeneralConfig {
 
 export interface NotificationsConfig {
   notifications_enabled: boolean
-  // No volume here: how loud completion sounds play, zero muting them, is a
-  // presentation adjustment and lives in state.json (shared/ui-state).
+  // How loud completion sounds play, 0–1; zero mutes them.
+  volume: number
   success_file: string
   failure_file: string
 }

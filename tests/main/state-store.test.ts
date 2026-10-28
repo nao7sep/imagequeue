@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { readUiState, updateUiState, getUiStatePath } from '../../src/main/state-store'
-import { defaultUiState, NOTIFICATION_VOLUME_DEFAULT } from '../../src/shared/ui-state'
+import { defaultUiState } from '../../src/shared/ui-state'
 import { RECORDS_LIST_WIDTH } from '../../src/shared/records-layout'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 import { FORMAT_VERSIONS } from '../../src/main/store-format'
@@ -56,24 +56,6 @@ describe('ui state store', async () => {
     expect((await readUiState())).toEqual({ ...defaultUiState(), columnWidth: 288 })
   })
 
-  it('persists and reads back the notification volume', async () => {
-    expect((await updateUiState({ notificationVolume: 0.25 })).notificationVolume).toBe(0.25)
-    expect((await readUiState()).notificationVolume).toBe(0.25)
-  })
-
-  // The value drives an <audio> element's volume, which THROWS on anything
-  // outside 0-1, and state.json is hand-editable — so read clamps rather than
-  // merely type-checking.
-  it('clamps a stored volume into the playable range', async () => {
-    fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, notificationVolume: 4 }))
-    expect((await readUiState()).notificationVolume).toBe(1)
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, notificationVolume: -2 }))
-    expect((await readUiState()).notificationVolume).toBe(0)
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, notificationVolume: 'loud' }))
-    expect((await readUiState()).notificationVolume).toBe(NOTIFICATION_VOLUME_DEFAULT)
-  })
-
   it('keeps the Records list width beside the other adjustments, healed to its bounds on read', async () => {
     expect((await readUiState()).recordsListWidth).toBe(RECORDS_LIST_WIDTH.default)
     await updateUiState({ columnWidth: 240 })
@@ -111,7 +93,7 @@ describe('ui state format version', async () => {
 it('serializes independent view adjustments without lost fields', async () => {
   await Promise.all([
     updateUiState({ columnWidth: 270 }),
-    updateUiState({ notificationVolume: 0.3 }),
+    updateUiState({ recordsListWidth: 400 }),
   ])
-  expect(await readUiState()).toMatchObject({ columnWidth: 270, notificationVolume: 0.3 })
+  expect(await readUiState()).toMatchObject({ columnWidth: 270, recordsListWidth: 400 })
 })
