@@ -77,6 +77,15 @@ let mainRendererLoaded = false
 let mainRendererGone = false
 
 function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void {
+  // A quit that arrives while startup or the first page load is still running
+  // ends that work: exiting destroys a window mid-load, which rejects its load.
+  // The process is ending, so nothing is presented. A failure surface opened
+  // now would load into the same teardown, fail, and fall back to a native
+  // modal alert that blocks the exit and every later quit request.
+  if (isQuitting()) {
+    log('info', 'Startup ended by quit', { error: serializeError(error) })
+    return
+  }
   log('error', 'ImageQueue startup failed', { error: serializeError(error) })
   if (startupFailureWindow && !startupFailureWindow.isDestroyed()) {
     if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy()

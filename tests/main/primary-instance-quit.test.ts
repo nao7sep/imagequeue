@@ -428,4 +428,24 @@ it('reloads a gone primary view on the next restore without restarting work', as
   expect(h.app.exit).not.toHaveBeenCalled()
 })
 
+// A failure surface opened during exit loads into the same teardown and falls
+// back to a native modal alert, which blocks the exit and later quit requests.
+it('a quit during the first page load exits without presenting a startup failure', async () => {
+  const { createWindowWithUsablePersistedBounds } = await import('../../src/main/window-state-recovery')
+  const { loadMainWindowContent } = await import('../../src/main/main-window-content')
+  let failLoad!: (error: Error) => void
+  vi.mocked(loadMainWindowContent).mockReturnValueOnce(new Promise<void>((_, reject) => { failLoad = reject }))
+  const webContents = Object.assign(new EventEmitter(), { send: vi.fn() })
+  const win = Object.assign(new EventEmitter(), { webContents, isDestroyed: () => false })
+  vi.mocked(createWindowWithUsablePersistedBounds).mockReturnValueOnce(win as unknown as Electron.BrowserWindow)
+  h.createPrimary.value = true
+  await launch()
+  beforeQuit()
+  await vi.waitFor(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
+  // Exiting destroys the window while its page is still loading.
+  failLoad(new Error("ERR_FAILED (-2) loading 'index.html'"))
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(createStartupFailureWindow).not.toHaveBeenCalled()
+})
+
 
