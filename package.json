@@ -32,7 +32,6 @@
   "dependencies": {
     "@google/genai": "^2.30.0",
     "@tanstack/react-virtual": "^3.14.22",
-    "koffi": "^3.3.3",
     "nanoid": "^6.0.2",
     "node-pty": "^1.1.0",
     "openai": "^7.41.0",
@@ -62,7 +61,6 @@
     "electron-winstaller@5.4.0": true,
     "fsevents@2.3.3": false,
     "node-pty@1.1.0": true,
-    "protobufjs@7.6.6": false,
-    "koffi@3.3.3": false
+    "protobufjs@7.6.6": false
   }
 }

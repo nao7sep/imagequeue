@@ -3,7 +3,6 @@ import path from 'path'
 import { getDataDir } from '../config'
 import { utcStampForFilename } from '../../shared/utc-stamp'
 import { setRecordsSession } from '../records'
-import { syncDirectoryAsync } from '../utils/fsync'
 
 
 let sessionDir: string | null = null
@@ -32,21 +31,10 @@ async function renameOutputFolder(): Promise<void> {
 // the session-operation guard leave one creator, so the mkdir is the claim: a
 // name already taken in that second fails rather than adopt or overwrite it.
 export async function createSessionDir(date = new Date()): Promise<string> {
-  const root = getDataDir()
   const sessionsDir = getSessionsDir()
   const nextDir = path.join(sessionsDir, utcStampForFilename(date))
   await fs.promises.mkdir(sessionsDir, { recursive: true })
-  // An earlier attempt may have created sessions/ without durably linking it.
-  await syncDirectoryAsync(root)
   await fs.promises.mkdir(nextDir)
-  try {
-    await syncDirectoryAsync(sessionsDir)
-  } catch (error) {
-    // Only this attempt's empty claim can be removed; cleanup must not hide
-    // the durability failure or remove work that appeared in the directory.
-    await fs.promises.rmdir(nextDir).catch(() => undefined)
-    throw error
-  }
   return nextDir
 }
 

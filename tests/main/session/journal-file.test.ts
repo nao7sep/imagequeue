@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   appendSessionTransition, JOURNAL_FILENAME, readSessionJournal, type SessionTransition,
 } from '../../../src/main/session/journal-file'
-import * as sync from '../../../src/main/utils/fsync'
 
 let root: string
 beforeEach(async () => { root = await fs.mkdtemp(path.join(os.tmpdir(), 'imagequeue-journal-')) })
@@ -149,25 +148,4 @@ describe('durable session journal append', () => {
     expect(await fs.readFile(file(), 'utf8')).toBe(encode(entry(1)))
   })
 
-  it('does not acknowledge an append while the directory sync is pending', async () => {
-    let release!: () => void
-    let entered!: () => void
-    const held = new Promise<void>(resolve => { release = resolve })
-    const syncing = new Promise<void>(resolve => { entered = resolve })
-    const original = sync.syncDirectoryAsync
-    vi.spyOn(sync, 'syncDirectoryAsync').mockImplementationOnce(async dir => {
-      entered()
-      await held
-      await original(dir)
-    })
-    let acknowledged = false
-    const writing = appendSessionTransition(root, 0, entry(1)).then(offset => { acknowledged = true; return offset })
-    await syncing
-    try {
-      expect(await fs.readFile(file(), 'utf8')).toBe(encode(entry(1)))
-      expect(acknowledged).toBe(false)
-    } finally { release() }
-    expect(await writing).toBe(Buffer.byteLength(encode(entry(1))))
-    expect(acknowledged).toBe(true)
-  })
 })

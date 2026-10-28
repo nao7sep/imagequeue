@@ -158,7 +158,6 @@
   "dependencies.completionPending": "The managed-tool operation is taking longer than expected. Its result is not confirmed yet. You can close this window and check back later.",
   "dependencies.cliIdentityNotSaved": "Draw Things CLI was installed, but its version is unavailable.",
   "dependencies.cliCheckNotSaved": "Draw Things CLI was installed, but its update-check information could not be saved.",
-  "dependencies.cliSyncIncomplete": "Draw Things CLI was installed, but syncing its saved files could not be completed.",
   "dependencies.state.notInstalled": "Not installed",
   "dependencies.state.upToDate": "Up to date",
   "dependencies.state.updateAvailable": "Update available",

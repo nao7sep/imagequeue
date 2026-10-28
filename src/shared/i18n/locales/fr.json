@@ -162,7 +162,6 @@
   "dependencies.completionPending": "L’opération des outils gérés prend plus de temps que prévu. Son résultat n’est pas encore confirmé. Vous pouvez fermer cette fenêtre et revenir vérifier plus tard.",
   "dependencies.cliIdentityNotSaved": "Draw Things CLI a été installé, mais sa version est indisponible.",
   "dependencies.cliCheckNotSaved": "Draw Things CLI a été installé, mais les informations de recherche de mises à jour n’ont pas pu être enregistrées.",
-  "dependencies.cliSyncIncomplete": "Draw Things CLI a été installé, mais la synchronisation de ses fichiers enregistrés n’a pas pu être terminée.",
   "dependencies.state.notInstalled": "Non installé",
   "dependencies.state.upToDate": "À jour",
   "dependencies.state.updateAvailable": "Mise à jour disponible",

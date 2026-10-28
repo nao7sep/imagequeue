@@ -9,7 +9,6 @@ import { ImageMetadata } from './image-metadata'
 import { log, serializeError } from '../logger'
 import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
 import { claimFinalNameAsync, stageBesideAsync, stagingPathFor } from './atomic-write'
-import { syncDirectoryAsync } from './fsync'
 import { createHash } from 'node:crypto'
 import { isSafeOutputBaseName } from '../../shared/output-name'
 
@@ -179,7 +178,6 @@ export async function writeImageOutput(
     // Save this exact identity before each claim, including collision retries.
     // The digest distinguishes our bytes from a foreign file that wins the name.
     if (beforePublish) await beforePublish({ baseName, ext, sha256: digest!, stageName: path.basename(stagedImage) })
-    await syncDirectoryAsync(dir)
     if (await claimFinalNameAsync(stagedImage, path.join(dir, `${baseName}.${ext}`))) break
     // Only an occupied final name advances the ordinal; I/O failures escape.
     attempt++
@@ -202,14 +200,6 @@ export async function writeImageOutput(
     }
   } catch (error) {
     log('warn', 'Generated image was saved but its metadata sidecar could not be written', { baseName, error: serializeError(error) })
-  }
-
-  try {
-    await syncDirectoryAsync(dir)
-  } catch (error) {
-    // The image is already published. A secondary durability warning must not
-    // mark the paid output failed and invite another generation.
-    log('warn', 'Generated image was saved but directory sync failed', { baseName, error: serializeError(error) })
   }
 
   return baseName

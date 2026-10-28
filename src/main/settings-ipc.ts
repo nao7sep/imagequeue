@@ -16,7 +16,6 @@ import { refreshMainWindowMinimumSize, setDrawThingsReady } from './main-window-
 import { getSessionDir } from './session'
 import { assertSafeBaseName, assertImageExt, exportPathForFormat, imageFormatFilter, stageExportCopy } from './utils/file-output'
 import { claimFinalNameAsync } from './utils/atomic-write'
-import { syncDirectoryAsync } from './utils/fsync'
 import { AppConfig } from './config/types'
 import { openSessionsFolder } from './session/open-sessions-folder'
 import { log, serializeError } from './logger'
@@ -351,7 +350,6 @@ export function registerSettingsIpc(
         for (let n = 2; !await claimFinalNameAsync(staging, destPath); n++) {
           destPath = path.join(exportDir, `${safeBase}-${n}.${safeExt}`)
         }
-        await syncDirectoryAsync(exportDir)
       } finally {
         await fs.promises.rm(staging, { force: true }).catch(() => undefined)
       }
@@ -380,7 +378,6 @@ export function registerSettingsIpc(
       const staging = await stageExportCopy(src, destPath)
       try {
         await fs.promises.rename(staging, destPath)
-        await syncDirectoryAsync(path.dirname(destPath))
       } finally {
         await fs.promises.rm(staging, { force: true }).catch(() => undefined)
       }

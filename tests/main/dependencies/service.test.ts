@@ -16,7 +16,6 @@ vi.mock('../../../src/main/recommendations', async (importOriginal) => ({
 
 import { resolveLatestCliRelease } from '../../../src/main/dependencies/cli-release'
 import * as cliBinary from '../../../src/main/dependencies/cli-binary'
-import * as fsync from '../../../src/main/utils/fsync'
 import { fetchLatestRecommendationsModified } from '../../../src/main/recommendations'
 import {
   checkAllDependencies,
@@ -55,25 +54,6 @@ afterEach(() => {
 })
 
 describe('checkAllDependencies — CLI check honesty (invariant I3)', () => {
-  it('reports a secondary sync warning when check facts were published before their sync failed', async () => {
-    const tag = 'v1.20261004.0'
-    resolveMock.mockResolvedValue({ tag, assetUrl: 'https://fixture.invalid/cli', sha256: 'a'.repeat(64) })
-    vi.spyOn(cliBinary, 'installCliRelease').mockImplementation(async () => {
-      const staged = path.join(home, 'verified-cli')
-      fs.writeFileSync(staged, 'verified fixture')
-      return cliBinary.publishCliBinary(staged, tag)
-    })
-    const sync = fsync.syncDirectoryAsync
-    vi.spyOn(fsync, 'syncDirectoryAsync').mockImplementation(async (directory) => {
-      if (directory === home) throw new Error('check-cache sync failed')
-      await sync(directory)
-    })
-    const result = await installOrUpdateCli()
-    expect(result.warnings).toEqual(['sync-incomplete'])
-    expect(result.state.cli).toMatchObject({ state: 'up-to-date', installedLabel: tag, latestLabel: tag })
-    expect((await readDependenciesCache()).cli.lastKnownLatest).toBe(tag)
-  })
-
   it('returns the physically installed CLI with a warning when secondary check-cache persistence fails', async () => {
     const tag = 'v1.20261004.0'
     resolveMock.mockResolvedValue({ tag, assetUrl: 'https://fixture.invalid/cli', sha256: 'a'.repeat(64) })

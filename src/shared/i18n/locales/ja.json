@@ -154,7 +154,6 @@
   "dependencies.completionPending": "管理ツールの操作に予想より時間がかかっています。結果はまだ確認されていません。このウインドウを閉じて、後でもう一度確認できます。",
   "dependencies.cliIdentityNotSaved": "Draw Things CLI はインストールされましたが、バージョンは不明です。",
   "dependencies.cliCheckNotSaved": "Draw Things CLI はインストールされましたが、更新確認の情報を保存できませんでした。",
-  "dependencies.cliSyncIncomplete": "Draw Things CLI はインストールされましたが、保存したファイルの同期を完了できませんでした。",
   "dependencies.state.notInstalled": "未インストール",
   "dependencies.state.upToDate": "最新",
   "dependencies.state.updateAvailable": "更新あり",

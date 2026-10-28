@@ -346,7 +346,6 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   // Several failures stack line by line through one entry, never a joined string.
   const warningKeys: Record<InstallWarning, MessageKey> = {
     'identity-unavailable': 'dependencies.cliIdentityNotSaved',
-    'sync-incomplete': 'dependencies.cliSyncIncomplete',
     'check-not-saved': 'dependencies.cliCheckNotSaved',
     'time-not-saved': 'dependencies.recommendationsTimeNotSaved',
   }

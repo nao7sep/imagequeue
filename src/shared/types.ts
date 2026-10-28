@@ -77,7 +77,7 @@ export interface DependenciesState {
   platformSupported: boolean
 }
 
-export type CliInstallWarning = 'identity-unavailable' | 'sync-incomplete' | 'check-not-saved'
+export type CliInstallWarning = 'identity-unavailable' | 'check-not-saved'
 export interface CliInstallResult {
   state: DependenciesState
   warnings: CliInstallWarning[]

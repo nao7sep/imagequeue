@@ -13,7 +13,6 @@ import {
   getCliMetaPath,
 } from '../../../src/main/dependencies/paths'
 import { FORMAT_VERSIONS } from '../../../src/main/store-format'
-import * as fsync from '../../../src/main/utils/fsync'
 
 let home: string
 let previousHome: string | undefined
@@ -32,17 +31,6 @@ afterEach(() => {
 })
 
 describe('publishCliBinary', () => {
-  it('returns installed with a secondary warning after postcommit directory sync fails', async () => {
-    fs.mkdirSync(getBinDir(), { recursive: true })
-    fs.writeFileSync(getCliBinaryPath(), 'old binary')
-    const staged = path.join(home, 'new-cli')
-    fs.writeFileSync(staged, 'new binary')
-    vi.spyOn(fsync, 'syncDirectoryAsync').mockImplementationOnce(() => { throw new Error('sync failed') })
-    expect(await publishCliBinary(staged, 'v1.20260822.0')).toEqual(['sync-incomplete'])
-    expect(fs.readFileSync(getCliBinaryPath(), 'utf8')).toBe('new binary')
-    expect(await readInstalledCliTag()).toBe('v1.20260822.0')
-  })
-
   it('publishes the binary and its matching identity', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     const staged = path.join(home, 'new-cli')

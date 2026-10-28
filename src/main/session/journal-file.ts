@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { TextDecoder } from 'node:util'
 import type { BackendId, ElaboratedPromptRecord, Task } from '../../shared/types'
-import { syncDirectoryAsync } from '../utils/fsync'
 
 export const JOURNAL_FILENAME = 'session-changes.jsonl'
 
@@ -97,6 +96,5 @@ export async function appendSessionTransition(
     }
     await handle.sync()
   } finally { await handle.close() }
-  await syncDirectoryAsync(dir)
   return confirmedBytes + bytes.length
 }

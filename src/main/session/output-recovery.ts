@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { claimFinalNameAsync } from '../utils/atomic-write'
-import { syncDirectoryAsync } from '../utils/fsync'
 import { log, serializeError } from '../logger'
 import type { PendingTaskOutput, Task } from '../../shared/types'
 import { isSafeOutputBaseName } from '../../shared/output-name'
@@ -69,13 +68,11 @@ export async function recoverRetainedOutput(
     // claim is recovered by the ordinary final-file verification on next launch.
     await beforePublish(next)
     task.pendingOutput = next
-    await syncDirectoryAsync(sessionDir)
     if (await claimFinalNameAsync(stage, path.join(sessionDir, `${baseName}.${output.ext}`))) break
     baseName = `${stem}-${++ordinal}`
   }
   // Once published, a secondary cleanup failure cannot invite regeneration.
   try {
-    await syncDirectoryAsync(sessionDir)
     await fs.rm(stage, { force: true })
   } catch (error) {
     log('warn', 'Recovered image was published but staging cleanup failed', { error: serializeError(error) })

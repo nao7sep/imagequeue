@@ -17,7 +17,6 @@ import {
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
 import { FORMAT_VERSIONS } from '../../../src/main/store-format'
-import * as fsync from '../../../src/main/utils/fsync'
 
 // writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
 // test. The closure reads `sessionDir` only when getSessionDir() is called, by
@@ -247,13 +246,6 @@ describe('writeImageOutput', () => {
     expect(fs.readdirSync(sessionDir)).toHaveLength(2)
   })
 
-  it('returns the complete paid output after secondary directory sync failure', async () => {
-    vi.spyOn(fsync, 'syncDirectoryAsync').mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('directory sync failed'))
-    const base = (await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, meta, 'png'))
-    expect(fs.readFileSync(path.join(sessionDir, `${base}.png`))).toEqual(buf)
-    expect(JSON.parse(fs.readFileSync(path.join(sessionDir, `${base}.json`), 'utf8')).format_version).toBe(FORMAT_VERSIONS.imageSidecar)
-    expect(fs.readdirSync(sessionDir)).toHaveLength(2)
-  })
 })
 
 describe('assertSafeBaseName', () => {

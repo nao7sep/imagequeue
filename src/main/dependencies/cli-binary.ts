@@ -15,7 +15,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
-import { syncDirectoryAsync, syncFileAsync } from '../utils/fsync'
+import { syncFileAsync } from '../utils/fsync'
 import { getBinDir, getCliBinaryPath, getCliMetaPath, allocateTempPath, discardTempPath } from './paths'
 import { downloadToFile, type DownloadProgress } from './download'
 import { sha256File } from '../utils/sha256-file'
@@ -84,14 +84,9 @@ export async function publishCliBinary(tempPath: string, tag: string): Promise<C
     // An orphan sidecar has no artifact to preserve and must not label the first
     // binary published into this location.
     await fs.promises.rm(getCliMetaPath(), { force: true })
-    await syncDirectoryAsync(getBinDir())
   }
   await fs.promises.rename(tempPath, getCliBinaryPath())
   const warnings: CliInstallWarning[] = []
-  try { await syncDirectoryAsync(getBinDir()) } catch (error) {
-    warnings.push('sync-incomplete')
-    log('warn', 'Draw Things CLI was published but directory sync failed', { error: serializeError(error) })
-  }
   try {
     const meta: CliMeta = { tag, binaryId: await cliBinaryId() }
     // not recorded: draw-things-cli.json is a sidecar colocated in the binary-bearing bin/ directory,
@@ -101,8 +96,7 @@ export async function publishCliBinary(tempPath: string, tag: string): Promise<C
     // colocated in a binary-bearing directory").
     await writeFileAtomicAsync(getCliMetaPath(), JSON.stringify(markFormat(meta, FORMAT_VERSIONS.cliSidecar), null, 2), false)
   } catch (error) {
-    const warning = await readInstalledCliTag() === tag ? 'sync-incomplete' : 'identity-unavailable'
-    if (!warnings.includes(warning)) warnings.push(warning)
+    warnings.push('identity-unavailable')
     log('warn', 'Draw Things CLI was published but identity persistence failed', { error: serializeError(error) })
   }
   return warnings
@@ -111,8 +105,8 @@ export async function publishCliBinary(tempPath: string, tag: string): Promise<C
 /**
  * Download, verify, arch-gate, and install the given release into bin/, recording
  * its tag. Reports progress while the body streams. Pre-publication failures
- * reject and discard staging. After publication, identity or directory-sync
- * failures retain the installed binary and return secondary warnings.
+ * reject and discard staging. After publication, an identity failure retains
+ * the installed binary and returns a secondary warning.
  */
 export async function installCliRelease(
   release: CliRelease,

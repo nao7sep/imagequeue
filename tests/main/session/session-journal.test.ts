@@ -6,7 +6,6 @@ import type { SessionManifest } from '../../../src/shared/types'
 import { SessionJournal, applyTransition, countTasks, taskMaps, tasksFromMaps } from '../../../src/main/session/session-journal'
 import { readSessionJournal, type SessionTransition } from '../../../src/main/session/journal-file'
 import { createEmptyQueues, QueueManager } from '../../../src/main/queue/queue-manager'
-import * as sync from '../../../src/main/utils/fsync'
 import { FORMAT_VERSIONS } from '../../../src/main/store-format'
 
 vi.mock('../../../src/main/backup/backup-store', () => ({ record: vi.fn() }))
@@ -59,21 +58,6 @@ it('writes small transitions and amortizes checkpoints across a large batch with
   expect(recovered.tasks.openai.map(task => task.id)).toEqual([...rows].reverse().map(task => task.id))
   expect(recovered.tasks.openai.every(task => task.status === 'completed')).toBe(true)
   expect(recovered.journalSequence).toBe(rows.length * 2)
-})
-
-it('preserves observed edit time and required pending output through an uncertain append and retry', async () => {
-  const { queue, rows, save } = await fixture()
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-02-01T00:00:00.000Z'))
-  const pendingOutput = { baseName: 'paid', ext: 'png' as const, sha256: 'a'.repeat(64) }
-  queue.updateTask(rows[0], { prompt: 'new authored prompt', pendingOutput })
-  vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('sync uncertain'))
-  await expect(save()).rejects.toThrow('sync uncertain')
-  vi.setSystemTime(new Date('2026-03-01T00:00:00.000Z'))
-  expect((await save()).updatedAt).toBe('2026-02-01T00:00:00.000Z')
-  const recovered = await read()
-  expect(recovered.tasks.openai.find(task => task.id === rows[0].id)).toMatchObject({ prompt: 'new authored prompt', pendingOutput })
-  expect(recovered.journalSequence).toBe(1)
 })
 
 it('retries an uncertain checkpoint as a checkpoint before allowing later appends', async () => {
@@ -143,25 +127,5 @@ it('skips unchanged and already-covered captures without changing durable sequen
   await save()
   expect(open).not.toHaveBeenCalled()
   expect(rename).not.toHaveBeenCalled()
-  expect((await read()).journalSequence).toBe(1)
-})
-
-it('repairs an uncertain append even when a later edit returns to the confirmed state', async () => {
-  const { queue, rows, save } = await fixture()
-  queue.updateTask(rows[0], { status: 'generating' })
-  vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('uncertain append'))
-  await expect(save()).rejects.toThrow('uncertain append')
-  queue.updateTask(rows[0], { status: 'queued' })
-  await save()
-  expect((await read()).tasks.openai.find(task => task.id === rows[0].id)?.status).toBe('queued')
-})
-
-it('repairs an uncertain checkpoint even when no content changes remain', async () => {
-  const { store, save } = await fixture()
-  vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('uncertain checkpoint'))
-  await expect(store.checkpoint()).rejects.toThrow('uncertain checkpoint')
-  const rename = vi.spyOn(fs, 'rename')
-  await save()
-  expect(rename).toHaveBeenCalledOnce()
   expect((await read()).journalSequence).toBe(1)
 })

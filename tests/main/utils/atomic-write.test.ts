@@ -1,11 +1,9 @@
 import * as backup from '../../../src/main/backup/backup-store'
-import * as sync from '../../../src/main/utils/fsync'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stageBesideAsync, claimFinalNameAsync, writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
-import * as exclusiveRename from '../../../src/main/utils/rename-exclusive'
 
 // A replacement made through a temp file and a rename keeps what the file had:
 // its permission mode (content-lifecycle conventions). Its times are the new
@@ -31,22 +29,19 @@ function existing(name: string, mode: number): string {
 }
 
 describe('atomic replacement', () => {
-  it('records protected text after a same-byte retry establishes publication durability', async () => {
+  it('records protected text when a retried save finds its bytes already in place', async () => {
     const file = path.join(dir, 'settings.json')
+    fs.writeFileSync(file, 'authored text')
+    fs.utimesSync(file, OLD_TIME, OLD_TIME)
     const record = vi.spyOn(backup, 'record').mockImplementation(() => {})
-    const directorySync = vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('sync failed'))
     try {
-      await expect(writeFileAtomicAsync(file, 'authored text', true)).rejects.toThrow('sync failed')
-      expect(record).not.toHaveBeenCalled()
-      const published = fs.statSync(file)
       await writeFileAtomicAsync(file, 'authored text', true)
       expect(record).toHaveBeenCalledWith(file, Buffer.from('authored text'))
-      expect(fs.statSync(file).mtimeMs).toBe(published.mtimeMs)
-      expect(directorySync.mock.invocationCallOrder.at(-1)).toBeLessThan(record.mock.invocationCallOrder[0]!)
-    } finally { directorySync.mockRestore(); record.mockRestore() }
+      expect(fs.statSync(file).mtimeMs).toBe(OLD_TIME.getTime())
+    } finally { record.mockRestore() }
   })
 
-  it('falls back from unsupported links to native exclusive rename without copying or overwriting a collision', async () => {
+  it('falls back from unsupported links to a rename that never copies or overwrites a collision', async () => {
     const occupied = path.join(dir, 'occupied.png')
     const available = path.join(dir, 'available.png')
     const bytes = Buffer.alloc(64 * 1024, 0x71)
@@ -54,16 +49,16 @@ describe('atomic replacement', () => {
     const stage = await stageBesideAsync(available, bytes)
     const stageMetadata = fs.statSync(stage)
     const link = vi.spyOn(fs.promises, 'link').mockRejectedValue(Object.assign(new Error('Links unsupported'), { code: 'EPERM' }))
-    const rename = vi.spyOn(exclusiveRename, 'renameExclusive')
+    const rename = vi.spyOn(fs.promises, 'rename')
     const copy = vi.spyOn(fs.promises, 'copyFile')
     try {
       expect(await claimFinalNameAsync(stage, occupied)).toBe(false)
       expect(fs.readFileSync(occupied, 'utf8')).toBe('existing image')
       expect(fs.readFileSync(stage)).toEqual(bytes)
-      expect(rename).toHaveBeenNthCalledWith(1, stage, occupied)
+      expect(rename).not.toHaveBeenCalled()
 
       expect(await claimFinalNameAsync(stage, available)).toBe(true)
-      expect(rename).toHaveBeenNthCalledWith(2, stage, available)
+      expect(rename).toHaveBeenCalledExactlyOnceWith(stage, available)
       expect(fs.existsSync(stage)).toBe(false)
       expect(fs.readFileSync(available)).toEqual(bytes)
       expect(fs.statSync(available).ino).toBe(stageMetadata.ino)
@@ -117,21 +112,6 @@ describe('atomic replacement', () => {
     await writeFileAtomicAsync(path.join(dir, 'fresh.json'), 'one', false)
     expect(fs.readFileSync(path.join(dir, 'fresh.json'), 'utf-8')).toBe('one')
     expect(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
-  })
-
-  it('retries durability after a published rename loses its acknowledgment without rewriting identical bytes', async () => {
-    const filePath = existing('uncertain.json', 0o644)
-    const directorySync = vi.spyOn(sync, 'syncDirectoryAsync').mockRejectedValueOnce(new Error('directory unavailable'))
-    const rename = vi.spyOn(fs.promises, 'rename')
-    try {
-      await expect(writeFileAtomicAsync(filePath, 'new', false)).rejects.toThrow('directory unavailable')
-      expect(fs.readFileSync(filePath, 'utf8')).toBe('new')
-      const modified = fs.statSync(filePath).mtimeMs
-      await writeFileAtomicAsync(filePath, 'new', false)
-      expect(directorySync).toHaveBeenCalledTimes(2)
-      expect(rename).toHaveBeenCalledOnce()
-      expect(fs.statSync(filePath).mtimeMs).toBe(modified)
-    } finally { directorySync.mockRestore(); rename.mockRestore() }
   })
 
   it('skips a write whose bytes the file already holds', async () => {

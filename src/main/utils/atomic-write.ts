@@ -2,9 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
 import { record } from '../backup/backup-store'
-import { syncDirectoryAsync, syncFileAsync } from './fsync'
 import { holdsBytesAsync } from './holds-bytes'
-import { renameExclusive } from './rename-exclusive'
 
 // Writes data to filePath atomically via temp file + rename. On POSIX the
 // rename is atomic; on Windows it is atomic as long as the target file
@@ -53,7 +51,7 @@ export function stagingPathFor(filePath: string): string {
 
 /** Async managed-text publication for user-waiting acquisition paths. Writes in
  * cancellable chunks, syncs staged bytes, checks cancellation immediately before
- * rename, syncs the destination directory, and removes staging on every unwind. */
+ * rename, and removes staging on every unwind. */
 export async function writeFileAtomicAsync(
   filePath: string,
   data: string | NodeJS.ArrayBufferView,
@@ -71,11 +69,8 @@ export async function writeFileAtomicAsync(
   try {
     signal?.throwIfAborted()
     if (await holdsBytesAsync(filePath, bytes)) {
-      // A retry can observe bytes from a rename whose directory sync failed.
-      // Preserve timestamps, but re-establish durability before
-      // acknowledging that same content as saved.
-      await syncFileAsync(filePath)
-      await syncDirectoryAsync(dir)
+      // Equal content keeps the file's timestamps; a retried save is still a
+      // save, so it is recorded like any other.
       if (records) record(filePath, bytes)
       return
     }
@@ -100,7 +95,6 @@ export async function writeFileAtomicAsync(
     await fs.promises.chmod(tempPath, target ? keptMode(target) : 0o666 & ~process.umask())
     signal?.throwIfAborted()
     await fs.promises.rename(tempPath, filePath)
-    await syncDirectoryAsync(dir)
     if (records) record(filePath, bytes)
   } finally {
     await handle?.close().catch(() => undefined)
@@ -134,7 +128,15 @@ export async function claimFinalNameAsync(staging: string, destination: string):
     if (code === 'EEXIST') return false
     if (!['ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV'].includes(code)) throw error
   }
-  // The stage is already complete and synced beside the destination. Native
-  // no-replace rename retains those bytes and metadata on volumes without links.
-  return renameExclusive(staging, destination)
+  // Volumes without links: the stage is complete beside the destination, so a
+  // rename after one existence check publishes it whole and never over a file
+  // that was already there.
+  try {
+    await fs.promises.lstat(destination)
+    return false
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  await fs.promises.rename(staging, destination)
+  return true
 }

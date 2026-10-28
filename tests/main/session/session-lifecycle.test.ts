@@ -6,7 +6,6 @@ import path from 'path'
 import os from 'os'
 import crypto from 'node:crypto'
 import * as journalFile from '../../../src/main/session/journal-file'
-import * as sync from '../../../src/main/utils/fsync'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } from '../../../src/shared/types'
@@ -1355,35 +1354,6 @@ it('coalesces concurrent start saves at the confirmed journal revision', async (
   expect(append).toHaveBeenCalledOnce()
   expect((await readManifest(getSessionDir())).tasks.openai.filter(task => task.status === 'generating')).toHaveLength(2)
   append.mockRestore()
-})
-
-it('keeps the outgoing session adopted until its new sibling directory is durable', async () => {
-  const original = sync.syncDirectoryAsync
-  const outgoing = getSessionDir()
-  let reject!: (error: Error) => void
-  let entered!: () => void
-  const reached = new Promise<void>(resolve => { entered = resolve })
-  const held = new Promise<void>((_resolve, fail) => { reject = fail })
-  const parent = vi.spyOn(sync, 'syncDirectoryAsync').mockImplementation(async directory => {
-    if (directory === getSessionsDir()) { entered(); await held }
-    else await original(directory)
-  })
-  const creation = createSession()
-  const rejected = expect(creation).rejects.toThrow('parent sync failed')
-  await reached
-  try {
-    expect(getSessionDir()).toBe(outgoing)
-    expect(sent('session:changed')).toEqual([])
-    reject(new Error('parent sync failed'))
-    await rejected
-    expect(getSessionDir()).toBe(outgoing)
-    expect(sent('session:changed')).toEqual([])
-    expect(fs.readdirSync(getSessionsDir())).toEqual([path.basename(outgoing)])
-  } finally {
-    reject(new Error('parent sync failed'))
-    await Promise.allSettled([creation])
-    parent.mockRestore()
-  }
 })
 
 

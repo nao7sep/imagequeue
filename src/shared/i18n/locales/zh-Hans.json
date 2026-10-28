@@ -154,7 +154,6 @@
   "dependencies.completionPending": "托管工具操作所需时间超出预期。结果尚未确认。你可以关闭此窗口，稍后再查看。",
   "dependencies.cliIdentityNotSaved": "Draw Things CLI 已安装，但版本信息不可用。",
   "dependencies.cliCheckNotSaved": "Draw Things CLI 已安装，但无法保存更新检查信息。",
-  "dependencies.cliSyncIncomplete": "Draw Things CLI 已安装，但无法完成已保存文件的同步。",
   "dependencies.state.notInstalled": "未安装",
   "dependencies.state.upToDate": "已是最新",
   "dependencies.state.updateAvailable": "有可用更新",

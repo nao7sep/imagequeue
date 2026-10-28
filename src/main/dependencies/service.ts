@@ -197,10 +197,7 @@ export async function installOrUpdateCli(
         cache.cli.lastKnownLatest = release.tag
         cache.cli.lastCheckedAtUtc = checkedAt
       }) } catch (error) {
-        const saved = await (await readDependenciesCache()).cli
-        const warning = saved.lastKnownLatest === release.tag && saved.lastCheckedAtUtc === checkedAt
-          ? 'sync-incomplete' : 'check-not-saved'
-        if (!warnings.includes(warning)) warnings.push(warning)
+        warnings.push('check-not-saved')
         log('warn', 'Draw Things CLI was installed but update-check information was not saved', { error: serializeError(error) })
       }
       return { state: await getDependenciesState(), warnings }
