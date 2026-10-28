@@ -1,5 +1,4 @@
 import type { ConceptLibraryQuery, ConceptLibraryIndex, ConceptLibraryPage, ConceptLibraryItem, ConceptLibraryLocation, ConceptLibraryLocationResult } from './concept-library'
-import type { QueueSnapshot, QueueUpdate } from './queue-updates'
 import type { BrainstormConfig } from './brainstorm-config'
 import type { DraftSurface, QuitQuestion } from './quit'
 import {
@@ -91,7 +90,7 @@ export interface ElectronAPI {
   enqueueBatch: (units: EnqueueBatchUnit[], prompts?: ElaboratedPromptRecord[]) => Promise<Task[]>
   getShowKeptImages: () => Promise<boolean>
   toggleShowKeptImages: () => Promise<boolean>
-  getQueueSnapshot: () => Promise<QueueSnapshot>
+  getAllStoredTasks: () => Promise<Record<BackendId, Task[]>>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
   deleteWithFiles: (backend: BackendId, taskId: string) => Promise<TaskDeletionResult | void>
@@ -105,7 +104,6 @@ export interface ElectronAPI {
   onQueueControlState: (callback: (state: QueueControlState) => void) => (() => void)
 
   createSession: () => Promise<void>
-  getActiveSessionSummary: () => Promise<SessionSummary>
   listSessions: () => Promise<SessionListEntry[]>
   resumeSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
@@ -240,7 +238,7 @@ export interface ElectronAPI {
   releaseAudioFile: (url: string) => Promise<void>
 
   onShowKeptImagesChanged: (callback: (visible: boolean) => void) => (() => void)
-  onQueueUpdated: (callback: (update: QueueUpdate) => void) => (() => void)
+  onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void) => (() => void)
   onSessionChanged: (callback: (event: { sessionId: string }) => void) => (() => void)
   onInterruptedTasksOnResume: (callback: (event: { count: number }) => void) => (() => void)
 

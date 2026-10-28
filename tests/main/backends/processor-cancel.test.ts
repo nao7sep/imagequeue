@@ -1,7 +1,5 @@
 import * as logger from '../../../src/main/logger'
 import { startAiCall } from '../../../src/main/records'
-import { EventEmitter } from 'node:events'
-import type { WebContents } from 'electron'
 import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendId } from '../../../src/shared/types'
@@ -80,9 +78,6 @@ vi.mock('../../../src/main/config', () => ({
 }))
 
 const { processQueues } = await import('../../../src/main/backends/processor')
-const { getQueueSnapshot } = await import('../../../src/main/queue/publisher')
-const queueSender = Object.assign(new EventEmitter(), { send: (channel: string, payload: unknown) => { sentEvents.push({ channel, payload }) } }) as unknown as WebContents
-getQueueSnapshot(queueSender)
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
 const { cancelAllInFlight, cancelAllInFlightAndWait, inFlightCount, resetCancellationState } = await import(
   '../../../src/main/backends/cancellation'

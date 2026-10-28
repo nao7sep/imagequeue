@@ -13,6 +13,7 @@ import {
   SessionListEntry,
   SessionSummary,
   UnopenableSession,
+  SessionTaskCounts,
   SessionThumbnail,
   Task,
   TaskStatus,
@@ -28,26 +29,34 @@ import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from '.
 import { publishQueueState } from '../queue/publisher'
 import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
 
-import { SessionJournal, taskMaps, applyTransition, tasksFromMaps, countTasks } from './session-journal'
-import { readSessionJournal, type SessionTransition } from './journal-file'
-export { sessionContentKey } from './session-journal'
-
+import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { isStoredTaskParams } from './stored-task-params'
 import { isPendingTaskOutput, recoverPublishedOutput } from './output-recovery'
 
 const SESSION_MANIFEST_FILENAME = 'session.json'
 
-// One active session owns prompt content, times and its ordered durable journal.
-// Captured writes retain the time an edit was first observed across retries.
+// Single source of truth for the active session's manifest fields: the
+// elaborated prompts plus the session's times. null until loaded; replaced as a
+// whole unit on create/resume (via adoptSession) or filled lazily from disk
+// (ensureActiveSessionLoaded), so persistActiveSession never re-reads
+// session.json just to preserve them. Grouping the fields means every session
+// transition sets them all together — a new field can't be wired into one
+// transition and silently forgotten in another.
+//
+// updatedAt follows the content-lifecycle-conventions' Modified rule, at the
+// time of the edit. saved is the content last saved, which persistActiveSession
+// judges each write against; content is saved by the call that changed it, so
+// seen keeps when a save first found it as it is, and a failed write does not
+// move that time to a later save.
 interface ActiveSessionState {
   elaboratedPrompts: ElaboratedPromptRecord[]
   createdAt: string
   updatedAt: string
   lastResumedAt: string | null
-  journal: SessionJournal
+  saved: string
+  seen: { content: string; at: string }
 }
 let activeSession: ActiveSessionState | null = null
-let activeSessionLoad: { directory: string; promise: Promise<ActiveSessionState> } | null = null
 
 // Each session's prompt draft, kept for the running app only. The prompt pane
 // has no save action and enqueuing copies its text, so the draft is uncommitted
@@ -82,6 +91,27 @@ export async function mutateSession<T>(operation: () => Promise<T>): Promise<T> 
   } finally {
     sessionMutationPending = false
   }
+}
+
+export function countTasks(tasksByBackend: Record<BackendId, Task[]>): SessionTaskCounts {
+  const counts: SessionTaskCounts = {
+    total: 0,
+    queued: 0,
+    generating: 0,
+    completed: 0,
+    kept: 0,
+    failed: 0,
+    interrupted: 0,
+  }
+
+  for (const backend of BACKEND_IDS_IN_UI_ORDER) {
+    for (const task of tasksByBackend[backend] ?? []) {
+      counts.total++
+      counts[task.status]++
+    }
+  }
+
+  return counts
 }
 
 function collectTasks(tasksByBackend: Record<BackendId, Task[]>): Task[] {
@@ -178,7 +208,6 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<StoredSessionManifest>
   if (typeof candidate.sessionId !== 'string') return false
-  if (candidate.journalSequence !== undefined && (!Number.isSafeInteger(candidate.journalSequence) || candidate.journalSequence < 0)) return false
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
   if (!(candidate.lastResumedAt === null || typeof candidate.lastResumedAt === 'string')) return false
@@ -196,28 +225,10 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
   })
 }
 
-function isSessionTransition(value: unknown): value is SessionTransition {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const row = value as Partial<SessionTransition>
-  if (typeof row.updatedAt !== 'string' || !Array.isArray(row.upserts) || !Array.isArray(row.removed)) return false
-  if (row.elaboratedPrompts !== undefined && (!Array.isArray(row.elaboratedPrompts) || !row.elaboratedPrompts.every(isElaboratedPromptEntry))) return false
-  const ids = new Set<string>()
-  for (const task of row.upserts) {
-    if (!isStoredTask(task) || ids.has(task.id)) return false
-    ids.add(task.id)
-  }
-  for (const task of row.removed) {
-    if (!task || typeof task !== 'object' || typeof task.id !== 'string' || !task.id ||
-      !BACKEND_IDS_IN_UI_ORDER.includes(task.backend) || ids.has(task.id)) return false
-    ids.add(task.id)
-  }
-  return true
-}
-
 // A folder with no session.json is not a session; one whose session.json cannot
 // be opened is, and says why.
 type ManifestRead =
-  | { manifest: StoredSessionManifest; journalBytes: number }
+  | { manifest: StoredSessionManifest }
   | { manifest: null; problem: 'missing' | UnopenableSession['unopenable']; error?: unknown }
 
 export async function readManifestFromDir(sessionDir: string): Promise<ManifestRead> {
@@ -230,26 +241,13 @@ export async function readManifestFromDir(sessionDir: string): Promise<ManifestR
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
-    const checkpointSequence = parsed.journalSequence ?? 0
-    const maps = taskMaps(parsed.tasks)
-    const owners = new Map(Object.values(parsed.tasks).flat().map(task => [task.id, task.backend]))
-    const journal = await readSessionJournal(sessionDir, checkpointSequence, isSessionTransition, transition => {
-      for (const task of transition.upserts) {
-        if (owners.has(task.id) && owners.get(task.id) !== task.backend) throw new Error('Journal task changes backend')
-        owners.set(task.id, task.backend)
-      }
-      for (const task of transition.removed) {
-        if (owners.has(task.id) && owners.get(task.id) !== task.backend) throw new Error('Journal removal changes backend')
-        owners.delete(task.id)
-      }
-      applyTransition(maps, transition)
-      parsed.updatedAt = transition.updatedAt
-      if (transition.elaboratedPrompts) parsed.elaboratedPrompts = transition.elaboratedPrompts
-    })
-    const tasks = tasksFromMaps(maps)
-    return { manifest: { ...parsed, tasks, taskCounts: countTasks(tasks), journalSequence: journal.sequence },
-      journalBytes: journal.sequence === checkpointSequence ? 0 : journal.validBytes }
-
+    return { manifest: {
+      ...parsed,
+      elaboratedPrompts: parsed.elaboratedPrompts.map((record) => ({
+        text: record.text,
+        concepts: record.concepts.map((credit) => ({ ...credit })),
+      })),
+    } }
   } catch (error) {
     // An unreadable or newer manifest is listed, never opened, so nothing
     // writes over it.
@@ -275,8 +273,22 @@ async function admitSessionManifest(sessionDir: string): Promise<void> {
   })
 }
 
+// The part of a session the Modified rule counts as content: the elaborated
+// prompts, and each task's request and saved image. A task's status, timing and
+// failure are its lifecycle, not content.
+export function sessionContentKey(
+  elaboratedPrompts: ElaboratedPromptRecord[],
+  tasksByBackend: Record<BackendId, Task[]>,
+): string {
+  return JSON.stringify({
+    elaboratedPrompts,
+    tasks: BACKEND_IDS_IN_UI_ORDER.map((backend) =>
+      (tasksByBackend[backend] ?? []).map((task) => [task.id, task.prompt, task.model, task.params, task.baseName])
+    ),
+  })
+}
+
 interface AdoptedSession {
-  journalSequence?: number
   elaboratedPrompts: ElaboratedPromptRecord[]
   createdAt: string
   updatedAt: string
@@ -286,12 +298,9 @@ interface AdoptedSession {
 // The active-session state for a session holding `tasks` as it is adopted: the
 // content later writes are judged against. Built whole, so create/resume can't
 // set some fields and forget others.
-function sessionState(state: AdoptedSession, tasks: Record<BackendId, Task[]>, directory = getSessionDir(), journalBytes = 0, checkpointRequired = false): ActiveSessionState {
-  const manifest: SessionManifest = {
-    ...state, formatVersion: FORMAT_VERSIONS.session, sessionId: path.basename(directory),
-    tasks, taskCounts: countTasks(tasks),
-  }
-  return { ...state, journal: new SessionJournal(directory, manifest, journalBytes, checkpointRequired) }
+function sessionState(state: AdoptedSession, tasks: Record<BackendId, Task[]>): ActiveSessionState {
+  const saved = sessionContentKey(state.elaboratedPrompts, tasks)
+  return { ...state, saved, seen: { content: saved, at: state.updatedAt } }
 }
 
 // A session that has just been made: nothing in it, updated when it was created.
@@ -308,30 +317,43 @@ function newSessionState(): AdoptedSession {
 // Returns the active-session state, loading it from disk on first use. Skipped
 // entirely once create/resume have adopted state directly.
 async function ensureActiveSessionLoaded(): Promise<ActiveSessionState> {
+  if (activeSession) return activeSession
   const directory = getSessionDir()
-  if (activeSession?.journal.directory === directory) return activeSession
-  if (activeSessionLoad?.directory === directory) return activeSessionLoad.promise
-  const promise = (async () => {
-    const read = await readManifestFromDir(directory)
-    if (!read.manifest && read.problem !== 'missing') {
-      throw new StoreLeftInPlaceError(getManifestPath(directory), { cause: read.error })
-    }
-    const { manifest } = read
-    const session = manifest
-      ? sessionState({
-          elaboratedPrompts: [...manifest.elaboratedPrompts],
-          createdAt: manifest.createdAt,
-          updatedAt: manifest.updatedAt,
-          lastResumedAt: manifest.lastResumedAt,
-          journalSequence: manifest.journalSequence,
-        }, manifest.tasks, directory, read.manifest ? read.journalBytes : 0)
-      : sessionState(newSessionState(), createEmptyQueues(), directory, 0, true)
-    activeSession = session
-    return session
-  })()
-  activeSessionLoad = { directory, promise }
-  try { return await promise } finally {
-    if (activeSessionLoad?.promise === promise) activeSessionLoad = null
+  const read = await readManifestFromDir(directory)
+  // A manifest that cannot be opened is refused, never replaced by an empty
+  // session that the next save would write over it.
+  if (!read.manifest && read.problem !== 'missing') {
+    throw new StoreLeftInPlaceError(getManifestPath(directory), { cause: read.error })
+  }
+  const { manifest } = read
+  activeSession = manifest
+    ? sessionState({
+        elaboratedPrompts: [...manifest.elaboratedPrompts],
+        createdAt: manifest.createdAt,
+        updatedAt: manifest.updatedAt,
+        lastResumedAt: manifest.lastResumedAt,
+      }, manifest.tasks)
+    : sessionState(newSessionState(), createEmptyQueues())
+  return activeSession
+}
+
+function buildManifest(
+  sessionId: string,
+  session: ActiveSessionState,
+  updatedAt: string,
+  tasksByBackend: Record<BackendId, Task[]>,
+): SessionManifest {
+  return {
+    formatVersion: FORMAT_VERSIONS.session,
+    sessionId,
+    createdAt: session.createdAt,
+    updatedAt,
+    lastResumedAt: session.lastResumedAt,
+    taskCounts: countTasks(tasksByBackend),
+    elaboratedPrompts: [...session.elaboratedPrompts],
+    // tasksByBackend is already a fresh clone (getAllStoredTasks maps cloneTask),
+    // and every save owns this snapshot, so we do not re-clone it here.
+    tasks: tasksByBackend,
   }
 }
 
@@ -427,20 +449,42 @@ export function resolveSessionDir(sessionId: string): string {
   return path.join(getSessionsDir(), safeSessionId)
 }
 
-export async function persistActiveSession(): Promise<{ updatedAt: string }> {
+// Writes `session` as the manifest of the session in `sessionDir` and returns
+// the manifest with the session as saved: the content it now holds and when
+// that content last changed.
+async function writeSessionManifest(
+  sessionDir: string,
+  session: ActiveSessionState,
+  tasks: Record<BackendId, Task[]>,
+): Promise<{ manifest: SessionManifest; saved: ActiveSessionState }> {
+  const content = sessionContentKey(session.elaboratedPrompts, tasks)
+  const updatedAt = content === session.saved ? session.updatedAt : session.seen.at
+  await fs.promises.mkdir(sessionDir, { recursive: true })
+  const manifest = buildManifest(path.basename(sessionDir), session, updatedAt, tasks)
+  // not recorded: a session, its images and its elaborated prompts are transient
+  // work the user exports what they keep from (data-backup-conventions; the
+  // developer's classification), so session.json has no backup history.
+  await writeFileAtomicAsync(getManifestPath(sessionDir), JSON.stringify(manifest, null, 2), false)
+  return { manifest, saved: { ...session, saved: content, updatedAt } }
+}
+
+export async function persistActiveSession(): Promise<SessionManifest> {
   const session = await ensureActiveSessionLoaded()
-  const changes = queueManager.captureChanges('durability')
-  const snapshot = session.journal.capture(changes, session.elaboratedPrompts)
-  // Capture before I/O and acknowledge only this revision after physical
-  // settlement. Newer mutations survive an older successful write.
+  const sessionDir = getSessionDir()
+  const tasks = queueManager.getAllStoredTasks()
+  const content = sessionContentKey(session.elaboratedPrompts, tasks)
+  if (content !== session.seen.content) session.seen = { content, at: new Date().toISOString() }
+  const snapshot = structuredClone(session)
+  // Ordered physical writes keep an older acknowledgement from replacing newer
+  // work. Each submission captures its session and complete content before I/O.
   const write = writes.catch(() => undefined).then(async () => {
-    const result = await session.journal.commit(snapshot)
-    session.updatedAt = result.updatedAt
-    queueManager.ackChanges('durability', changes.revision)
+    const { manifest, saved } = await writeSessionManifest(sessionDir, snapshot, tasks)
+    session.saved = saved.saved
+    session.updatedAt = saved.updatedAt
     writeFailure = null
-    return result
+    return manifest
   })
-  writes = write.catch(error => { writeFailure = error })
+  writes = write.catch((error) => { writeFailure = error })
   return write
 }
 
@@ -450,7 +494,6 @@ export async function persistActiveSession(): Promise<{ updatedAt: string }> {
 function adoptSession(sessionDir: string, session: ActiveSessionState, tasks: Record<BackendId, Task[]>): void {
   setSessionDir(sessionDir)
   queueManager.replaceAllTasks(tasks)
-  queueManager.ackChanges('durability', queueManager.currentRevision)
   activeSession = session
   publishQueueState()
   broadcastSessionChanged(getSessionId())
@@ -474,8 +517,7 @@ async function createSessionOwned(): Promise<void> {
   const tasks = createEmptyQueues()
   let session: ActiveSessionState
   try {
-    session = sessionState(newSessionState(), tasks, sessionDir)
-    await session.journal.checkpoint()
+    session = (await writeSessionManifest(sessionDir, sessionState(newSessionState(), tasks), tasks)).saved
   } catch (error) {
     // The new folder holds no session yet; removing it keeps the list clean.
     try { await fs.promises.rm(sessionDir, { recursive: true, force: true }) } catch { /* The write failure is the one to report. */ }
@@ -501,25 +543,6 @@ async function dropPreviousSessionAfterSwitch(sessionDir: string, sessionId: str
   }
 }
 
-// Queue refreshes need only the active in-memory snapshot, including kept rows
-// hidden by the renderer. They must never replay unrelated archive journals.
-export async function getActiveSessionSummary(): Promise<SessionSummary> {
-  while (sessionMutationPending) await sessionMutation
-  await writes
-  const session = await ensureActiveSessionLoaded()
-  const tasks = queueManager.getAllStoredTasks()
-  return {
-    sessionId: path.basename(session.journal.directory),
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    lastResumedAt: session.lastResumedAt,
-    taskCounts: countTasks(tasks),
-    ...createSessionDisplayCounts(tasks),
-    thumbnails: collectSessionThumbnails(tasks),
-    isCurrent: true,
-  }
-}
-
 // Sessions it can open, most recently updated first, then those it cannot,
 // newest folder first.
 export async function listSessions(): Promise<SessionListEntry[]> {
@@ -530,13 +553,6 @@ export async function listSessions(): Promise<SessionListEntry[]> {
 
 async function readListedSession(directory: string): ReturnType<typeof readManifestFromDir> {
   while (sessionMutationPending) await sessionMutation
-  if (directory === getSessionDir()) {
-    // A checkpoint and its compacted journal are one read. Only this active
-    // read shares the writer chain; slow unrelated archives never hold it.
-    const reading = writes.then(() => readManifestFromDir(directory))
-    writes = reading.catch(() => undefined)
-    return reading
-  }
   const existing = archiveReads.get(directory)
   if (existing) return existing
   const reading = readManifestFromDir(directory)
@@ -620,14 +636,12 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
   }
   const resumedQueues = normalizeResumedQueues(manifest.tasks)
   // Judged against the resumed queues: lifecycle changes are not content edits.
-  const session = sessionState({
+  const { saved: session } = await writeSessionManifest(sessionDir, sessionState({
     elaboratedPrompts: [...manifest.elaboratedPrompts],
     createdAt: manifest.createdAt,
     updatedAt: recoveredUpdatedAt,
     lastResumedAt: new Date().toISOString(),
-    journalSequence: manifest.journalSequence,
-  }, resumedQueues, sessionDir)
-  await session.journal.checkpoint()
+  }, resumedQueues), resumedQueues)
   resetOutputTimestampAllocators()
   seedOutputTimestampAllocators(manifest.tasks)
   adoptSession(sessionDir, session, resumedQueues)
@@ -678,7 +692,7 @@ export async function getActiveSessionElaboratedPrompts(): Promise<ElaboratedPro
 }
 
 /** Called inside the queue command's session mutation. Capture task intent and
- * its prompt provenance before that command takes one journal snapshot. */
+ * its prompt provenance before that command takes one session save. */
 export async function enqueueActiveSessionBatch(units: EnqueueBatchUnit[], prompts: ElaboratedPromptRecord[]): Promise<Task[]> {
   const session = await ensureActiveSessionLoaded()
   const tasks = queueManager.enqueueBatch(units)

@@ -13,7 +13,7 @@ import { getSessionDir, getSessionId, mutateSession, persistActiveSession } from
 import { shouldDeleteToTrash } from '../../shared/config'
 import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
-import { publishQueueState, getQueueSnapshot, unsubscribeQueue } from './publisher'
+import { publishQueueState } from './publisher'
 import { setQueuePausedAndPublish } from './control-actions'
 import { pauseForStorageFailure } from './storage-failure'
 
@@ -60,8 +60,9 @@ export function registerQueueIpc(): void {
     return tasks
   }))
 
-  handle('queue:getSnapshot', (event) => getQueueSnapshot(event.sender))
-  handle('queue:unsubscribe', (event) => unsubscribeQueue(event.sender))
+  handle('queue:getAllStoredTasks', () => {
+    return queueManager.getAllStoredTasks()
+  })
 
   handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
     const task = queueManager.getTask(backend, taskId)

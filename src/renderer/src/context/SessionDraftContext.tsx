@@ -9,7 +9,7 @@ import type { MessageKey } from '../../../shared/i18n/catalogues'
 // history. The draft fields go to the main process as the user types, which
 // keeps each session's draft for the running app only, so switching sessions
 // restores it and a restart starts empty. elaboratedPrompts are committed
-// results, persisted through the session journal on each append/delete/clear.
+// results, saved to the session manifest on each append/delete/clear.
 // Both re-hydrate on session change.
 export interface SessionDraftState extends SessionDraft {
   elaboratedPrompts: ElaboratedPromptRecord[]

@@ -1,5 +1,3 @@
-import { EventEmitter } from 'node:events'
-import type { WebContents } from 'electron'
 import { tinyPng } from '../image-fixture'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -53,8 +51,6 @@ const { getSessionDir, setSessionDir } = await import('../../../src/main/session
 const { setQueuePaused, isQueuePaused, cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
 const credentials = await import('../../../src/main/config/api-keys-store')
 
-const { getQueueSnapshot } = await import('../../../src/main/queue/publisher')
-const queueSender = Object.assign(new EventEmitter(), { send }) as unknown as WebContents
 const image = await tinyPng()
 async function manifest() {
   const read = await readManifestFromDir(getSessionDir())
@@ -73,7 +69,6 @@ beforeEach(async () => {
   fixture.config.general.drop_empty_sessions = false
   handlers.clear()
   registerQueueIpc()
-  getQueueSnapshot(queueSender)
   processQueues()
   send.mockClear()
 })
@@ -112,7 +107,7 @@ it.each(['queue:enqueue', 'queue:enqueueBatch'])('%s acknowledges retained tasks
   expect((await manifest()).tasks.openai).toEqual([])
   await expect(drainSessionWrites()).rejects.toThrow('session unavailable')
   expect(isQueuePaused()).toBe(true)
-  expect(send.mock.calls.filter(([name]) => name === 'queue:updated').at(-1)?.[1]).toMatchObject({ kind: 'delta', upserts: tasks })
+  expect(send.mock.calls.filter(([name]) => name === 'queue:updated').at(-1)?.[1]).toEqual(queueManager.getAllStoredTasks())
   expect(send.mock.calls.filter(([name]) => name === 'app:notice')).toHaveLength(1)
   processQueues()
   expect(generate).not.toHaveBeenCalled()

@@ -9,7 +9,6 @@ import {
   deleteActiveSessionElaboratedPromptAt,
   deleteSession,
   getActiveSessionDraft,
-  getActiveSessionSummary,
   getActiveSessionElaboratedPrompts,
   listSessions,
   resolveSessionDir,
@@ -22,7 +21,6 @@ export function registerSessionIpc(): void {
     await createSession()
   })
 
-  handle('session:activeSummary', () => getActiveSessionSummary())
 
   handle('session:list', () => {
     return listSessions()

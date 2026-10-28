@@ -130,133 +130,20 @@ describe('QueueManager', () => {
   })
 })
 
-describe('queue changes by consumer', () => {
+describe('task index', () => {
   let qm: QueueManager
-  const acknowledge = (consumer: 'presentation' | 'durability'): void => {
-    qm.ackChanges(consumer, qm.captureChanges(consumer).revision)
-  }
   beforeEach(() => {
     qm = new QueueManager()
-    acknowledge('presentation')
-    acknowledge('durability')
   })
 
-  it('captures an initial reset and only resets again when all tasks are replaced', () => {
-    const fresh = new QueueManager()
-    expect(fresh.captureChanges('presentation')).toEqual({ revision: 0, reset: createEmptyQueues(), upserts: [], removed: [] })
-    seed(qm, [makeTask('replacement', 'queued')])
-    const captured = qm.captureChanges('presentation')
-    expect(captured.reset?.openai.map(task => task.id)).toEqual(['replacement'])
-    qm.ackChanges('presentation', captured.revision)
-    expect(qm.captureChanges('presentation')).toEqual({ revision: qm.currentRevision, upserts: [], removed: [] })
-    qm.updateTask(qm.getTask('openai', 'replacement')!, { prompt: 'edited' })
-    expect(qm.captureChanges('presentation').reset).toBeUndefined()
-    expect(qm.captureChanges('presentation').upserts[0].prompt).toBe('edited')
-    expect(qm.captureChanges('durability').reset?.openai[0].prompt).toBe('edited')
-  })
-
-  it('detaches captured reset and delta records including nested values from later changes', () => {
-    seed(qm, [makeTask('a', 'failed')])
-    const reset = qm.captureChanges('presentation')
-    const task = qm.getTask('openai', 'a')!
-    qm.updateTask(task, { params: { dimensions: { width: 512 } } })
-    expect(reset.reset?.openai[0].params).toEqual({})
-    acknowledge('presentation')
-    qm.updateTask(task, { error: { key: 'taskFailure.generic', values: { name: 'before' } } })
-    const captured = qm.captureChanges('presentation')
-    qm.updateTask(task, { params: { dimensions: { width: 1024 } }, error: { key: 'taskFailure.generic', values: { name: 'after' } } })
-    expect(captured.upserts[0].params).toEqual({ dimensions: { width: 512 } })
-    expect(captured.upserts[0].error?.values?.name).toBe('before')
-    const capturedDimensions = captured.upserts[0].params.dimensions as { width: number }
-    capturedDimensions.width = 99
-    expect(task.params).toEqual({ dimensions: { width: 1024 } })
-  })
-
-  it('acknowledges each consumer separately and retains a mutation newer than the captured revision', () => {
-    const [task] = qm.enqueue({ prompt: 'first', backend: 'openai', model: 'm', params: {}, count: 1 })
-    const first = qm.captureChanges('presentation')
-    qm.updateTask(task, { prompt: 'second' })
-    qm.ackChanges('presentation', first.revision)
-    expect(qm.captureChanges('presentation').upserts.map(task => task.prompt)).toEqual(['second'])
-    expect(qm.captureChanges('durability').upserts.map(task => task.prompt)).toEqual(['second'])
-    acknowledge('presentation')
-    expect(qm.captureChanges('presentation').upserts).toEqual([])
-    expect(qm.captureChanges('durability').upserts).toHaveLength(1)
-    acknowledge('durability')
-    expect(qm.captureChanges('durability').upserts).toEqual([])
-  })
-
-  it('does not acknowledge a newer replacement with an older snapshot revision', () => {
-    seed(qm, [makeTask('old', 'failed')])
-    const old = qm.captureChanges('presentation')
-    seed(qm, [makeTask('new', 'queued')])
-    qm.ackChanges('presentation', old.revision)
-    expect(qm.captureChanges('presentation').reset?.openai.map(task => task.id)).toEqual(['new'])
-    expect(qm.getTask('openai', 'old')).toBeUndefined()
-  })
-
-  it('keeps first insertion order across repeated updates so new rows reconstruct newest-first', () => {
-    const created = qm.enqueue({ prompt: 'p', backend: 'openai', model: 'm', params: {}, count: 3 })
-    qm.updateTask(created[0], { status: 'generating' })
-    qm.updateTask(created[1], { prompt: 'edited' })
-    const changes = qm.captureChanges('presentation')
-    expect(changes.upserts.map(task => task.id)).toEqual(created.map(task => task.id))
-    const reconstructed: Task[] = []
-    for (const task of changes.upserts) reconstructed.unshift(task)
-    expect(reconstructed.map(task => task.id)).toEqual(qm.getAllStoredTasks().openai.map(task => task.id))
-  })
-
-  it('retains a newer deletion when an older upsert is acknowledged', () => {
-    const [task] = qm.enqueue({ prompt: 'p', backend: 'openai', model: 'm', params: {}, count: 1 })
-    const old = qm.captureChanges('presentation')
-    qm.removeTask(task.backend, task.id)
-    qm.ackChanges('presentation', old.revision)
-    expect(qm.getTask(task.backend, task.id)).toBeUndefined()
-    expect(qm.captureChanges('presentation')).toEqual({ revision: qm.currentRevision, upserts: [], removed: [{ backend: task.backend, id: task.id }] })
-    acknowledge('presentation')
-    expect(qm.captureChanges('presentation').removed).toEqual([])
-  })
-
-  it.each([
-    { status: 'completed', operation: 'keepTask', expected: 'kept' },
-    { status: 'kept', operation: 'restoreTask', expected: 'completed' },
-    { status: 'failed', operation: 'retryTask', expected: 'queued' },
-  ] as const)('tracks $operation as a single owned update', ({ status, operation, expected }) => {
-    seed(qm, [makeTask('a', status)])
-    acknowledge('presentation')
-    qm[operation]('openai', 'a')
-    expect(qm.captureChanges('presentation').upserts).toEqual([expect.objectContaining({ id: 'a', status: expected })])
-  })
-
-  it('tracks bulk transitions and deletions across backend indexes', () => {
+  it('forgets removed tasks across backend indexes', () => {
     seed(qm, [makeTask('queued', 'queued'), makeTask('other', 'queued', 'flux'), makeTask('done', 'completed')])
-    acknowledge('presentation')
-    expect(qm.interruptQueuedTasks()).toBe(2)
-    expect(qm.captureChanges('presentation').upserts.map(task => [task.id, task.status])).toEqual([
-      ['queued', 'interrupted'], ['other', 'interrupted'],
-    ])
-    acknowledge('presentation')
-    expect(qm.retryAllInterrupted()).toBe(2)
-    expect(qm.captureChanges('presentation').upserts).toHaveLength(2)
-    acknowledge('presentation')
     expect(qm.removePendingTasks()).toBe(2)
-    expect(qm.captureChanges('presentation').removed).toEqual([{ backend: 'openai', id: 'queued' }, { backend: 'flux', id: 'other' }])
     expect(qm.getTask('openai', 'queued')).toBeUndefined()
     expect(qm.getTask('flux', 'other')).toBeUndefined()
     expect(qm.getTask('openai', 'done')?.status).toBe('completed')
-  })
-
-  it('records clearing pending output and omits undefined evidence from serialized capture', () => {
-    seed(qm, [makeTask('a', 'failed')])
-    acknowledge('durability')
-    const task = qm.getTask('openai', 'a')!
-    qm.updateTask(task, { pendingOutput: { baseName: 'output', ext: 'png', sha256: 'a'.repeat(64) } })
-    const pending = qm.captureChanges('durability')
-    qm.updateTask(task, { pendingOutput: undefined })
-    qm.ackChanges('durability', pending.revision)
-    const cleared = qm.captureChanges('durability')
-    expect(cleared.upserts).toHaveLength(1)
-    expect(JSON.parse(JSON.stringify(cleared)).upserts[0]).not.toHaveProperty('pendingOutput')
+    qm.removeTask('openai', 'done')
+    expect(qm.getTask('openai', 'done')).toBeUndefined()
   })
 
   it('rejects foreign or retired references and changes to indexed identity', () => {

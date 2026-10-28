@@ -104,9 +104,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
   )
   const sessionTime = (time: Date): string => sessionTimeFormat.format(time)
   const { settings } = useSettings()
-  const [archives, setArchives] = useState<SessionListEntry[]>([])
-  const [activeSession, setActiveSession] = useState<SessionSummary | null>(null)
-  const [summaryError, setSummaryError] = useState<MessageKey | null>(null)
+  const [sessions, setSessions] = useState<SessionListEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<MessageKey | null>(null)
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
@@ -140,7 +138,7 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     setLoadError(null)
     try {
       const next = await window.electronAPI.listSessions()
-      if (read === latestRead.current) setArchives(next)
+      if (read === latestRead.current) setSessions(next)
     } catch (error) {
       if (read === latestRead.current) setLoadError(presentFailure('sessions-load', error))
     } finally {
@@ -148,46 +146,12 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
     }
   }, [])
 
-  // Archive membership changes on session mutations and on reopening. Queue
-  // deltas refresh only the active snapshot; coalesce a burst behind one read.
+  // Read when the window opens and again whenever the queue changes while it
+  // is open: the app's own jobs move the current session's counts and updated
+  // date, and main writes the session before it publishes the queue.
   useEffect(() => {
     void refreshSessions()
-    const unsubscribe = window.electronAPI.onSessionChanged(() => { void refreshSessions() })
-    return () => { latestRead.current++; unsubscribe() }
-  }, [refreshSessions])
-
-  const requestSummary = useRef<() => void>(() => {})
-  useEffect(() => {
-    let disposed = false
-    let pending = false
-    let dirty = false
-    const refresh = (): void => {
-      if (disposed) return
-      if (pending) { dirty = true; return }
-      pending = true
-      void window.electronAPI.getActiveSessionSummary().then((summary) => {
-        if (!disposed && !dirty) { setActiveSession(summary); setSummaryError(null) }
-      }).catch((error) => {
-        if (!disposed && !dirty) setSummaryError(presentFailure('sessions-load', error))
-      }).finally(() => {
-        pending = false
-        if (dirty && !disposed) { dirty = false; refresh() }
-      })
-    }
-    requestSummary.current = refresh
-    const unsubscribe = window.electronAPI.onSessionChanged(() => { setActiveSession(null); refresh() })
-    return () => { disposed = true; unsubscribe() }
-  }, [])
-  useEffect(() => { requestSummary.current() }, [tasks])
-
-  const sessions = useMemo(() => {
-    if (!activeSession) return archives
-    const others = archives.filter((entry) => entry.sessionId !== activeSession.sessionId)
-      .map((entry) => isUnopenableSession(entry) ? entry : { ...entry, isCurrent: false })
-    const readable = [activeSession, ...others.filter((entry): entry is SessionSummary => !isUnopenableSession(entry))]
-    readable.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || Date.parse(b.createdAt) - Date.parse(a.createdAt))
-    return [...readable, ...others.filter(isUnopenableSession)]
-  }, [archives, activeSession])
+  }, [refreshSessions, tasks])
 
   // Keep the active row pointing at a live session: default to the first, and
   // recover to the first when the selected session disappears (after a delete).
@@ -331,8 +295,8 @@ export function SessionsModal({ onClose }: Props): React.JSX.Element {
           </div>
         )}
         {message && <div className="sessions-modal-message" role="alert">{t(message)}</div>}
-        {(loadError || summaryError) && (
-          <div className="sessions-modal-message" role="alert">{t('sessions.refreshFailed', { reason: t((loadError || summaryError)!) })}</div>
+        {loadError && (
+          <div className="sessions-modal-message" role="alert">{t('sessions.refreshFailed', { reason: t(loadError) })}</div>
         )}
         <SelectedActions triggerRef={actionsRef} disabled={!actionSession}>
           <MenuItem disabled={!actionSession || actionBusy} onSelect={() => { if (actionSession) void handleOpenFolder(actionSession) }}>

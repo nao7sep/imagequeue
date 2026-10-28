@@ -1,4 +1,3 @@
-import { applyQueueDelta, type QueueUpdate } from '../../../shared/queue-updates'
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react'
 import type { BackendId, Task, EnqueueRequest, EnqueueBatchUnit } from '../../../shared/types'
 import { isQueueTaskVisible } from '../../../shared/queue-visibility'
@@ -44,48 +43,32 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
 
   useEffect(() => {
     let disposed = false
-    let revision = -1
-    let wantedRevision = -1
-    let pending = false
-    let current = createEmptyTaskMap()
+    let receivedLiveUpdate = false
 
-    const receive = (update: QueueUpdate): void => {
-      if (disposed || update.revision <= revision) return
-      wantedRevision = Math.max(wantedRevision, update.revision)
-      if (update.kind === 'delta' && update.baseRevision !== revision) {
-        requestSnapshot()
-        return
-      }
-      current = update.kind === 'snapshot' ? update.tasks : applyQueueDelta(current, update)
-      revision = update.revision
-      setStoredTasks(current)
-      setLoadState('ready')
-    }
-    const requestSnapshot = (): void => {
-      if (pending || disposed) return
-      pending = true
-      void window.electronAPI.getQueueSnapshot().then((snapshot) => {
-        pending = false
-        receive(snapshot)
-        // An update can race an in-flight initial/resync response. Ask again
-        // only when that response predates an observed change; never buffer an
-        // unbounded stream of deltas while a renderer is loading.
-        if (!disposed && revision < wantedRevision) requestSnapshot()
-      }).catch((error) => {
-        pending = false
-        if (disposed) return
-        if (revision < wantedRevision || revision < 0) setLoadState('failed')
+    // Loading and failure are not empty queues. Keep that distinction explicit
+    // until either the initial snapshot or a live update supplies real state.
+    void window.electronAPI.getAllStoredTasks()
+      .then((initial) => {
+        if (disposed || receivedLiveUpdate) return
+        setStoredTasks(initial)
+        setLoadState('ready')
+      })
+      .catch((error) => {
+        if (!disposed && !receivedLiveUpdate) setLoadState('failed')
         try {
-          const logging = window.electronAPI.appLog?.('error', 'Failed to load queue snapshot', { error: serializeError(error) })
+          const logging = window.electronAPI.appLog?.('error', 'Failed to load the initial queue snapshot', { error: serializeError(error) })
           void logging?.catch((logError) => console.error('Failed to record queue hydration diagnostic', logError))
         } catch (logError) {
           console.error('Failed to record queue hydration diagnostic', logError)
         }
       })
-    }
-    // Listen before requesting the snapshot that registers this consumer.
-    const unsubscribe = window.electronAPI.onQueueUpdated(receive)
-    requestSnapshot()
+
+    // Subscribe to updates from main process
+    const unsubscribe = window.electronAPI.onQueueUpdated((updated) => {
+      receivedLiveUpdate = true
+      setStoredTasks(updated)
+      setLoadState('ready')
+    })
 
     return () => {
       disposed = true

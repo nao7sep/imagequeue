@@ -3,10 +3,10 @@ import {
   collectSessionThumbnails,
   isSessionManifest,
   normalizeResumedQueues,
+  countTasks,
   sessionContentKey,
   toResumedTask
 } from '../../../src/main/session/state'
-import { countTasks } from '../../../src/main/session/session-journal'
 import { createEmptyQueues } from '../../../src/main/queue/queue-manager'
 import { BackendId, Task, TaskStatus } from '../../../src/shared/types'
 

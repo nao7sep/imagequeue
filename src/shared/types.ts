@@ -252,7 +252,6 @@ export interface SessionTaskCounts {
 
 export interface SessionManifest {
   formatVersion: number
-  journalSequence?: number
   sessionId: string
   createdAt: string
   updatedAt: string

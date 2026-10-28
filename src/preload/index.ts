@@ -1,5 +1,4 @@
 import type { ConceptLibraryQuery, ConceptLibraryIndex, ConceptLibraryPage, ConceptLibraryItem, ConceptLibraryLocation, ConceptLibraryLocationResult } from '../shared/concept-library'
-import type { QueueSnapshot, QueueUpdate } from '../shared/queue-updates'
 import type { BrainstormConfig } from '../shared/brainstorm-config'
 import type { DraftSurface, QuitQuestion } from '../shared/quit'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -99,8 +98,8 @@ const api = {
   getShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:getShowKeptImages'),
   toggleShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:toggleShowKeptImages'),
 
-  getQueueSnapshot: (): Promise<QueueSnapshot> =>
-    ipcRenderer.invoke('queue:getSnapshot'),
+  getAllStoredTasks: (): Promise<Record<BackendId, Task[]>> =>
+    ipcRenderer.invoke('queue:getAllStoredTasks'),
 
   removeTask: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:removeTask', backend, taskId),
@@ -133,8 +132,6 @@ const api = {
   createSession: (): Promise<void> =>
     ipcRenderer.invoke('session:create'),
 
-  getActiveSessionSummary: (): Promise<SessionSummary> =>
-    ipcRenderer.invoke('session:activeSummary'),
 
   listSessions: (): Promise<SessionListEntry[]> =>
     ipcRenderer.invoke('session:list'),
@@ -512,15 +509,12 @@ const api = {
   },
 
   // Event listener for queue updates pushed from main process
-  onQueueUpdated: (callback: (update: QueueUpdate) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: QueueUpdate): void => {
+  onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: Record<BackendId, Task[]>): void => {
       callback(data)
     }
     ipcRenderer.on('queue:updated', handler)
-    return () => {
-      ipcRenderer.removeListener('queue:updated', handler)
-      void ipcRenderer.invoke('queue:unsubscribe').catch((error) => console.error('Queue unsubscribe failed', error))
-    }
+    return () => { ipcRenderer.removeListener('queue:updated', handler) }
   },
 
   // Fired when the active session changes (new session, resume into another).

@@ -405,7 +405,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
       // can't be raced.
       if (cancelledRef.current) return
       await window.electronAPI.enqueueBatch(units, brainstormed ? records : undefined)
-      // Main captured tasks and their provenance in the same journal transition.
+      // Main captured tasks and their provenance in the same session save.
       if (brainstormed) update({ elaboratedPrompts: [...elaboratedPrompts, ...records] })
       setPartialBatch(null)
       // Let the finish be SEEN before the modal goes: a receipt with the final

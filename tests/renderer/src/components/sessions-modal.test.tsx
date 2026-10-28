@@ -6,7 +6,8 @@ import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
 import type { ConfirmOptions } from '../../../../src/shared/confirm'
 import type { BackendId, SessionListEntry, SessionSummary, Task } from '../../../../src/shared/types'
 
-// Queue changes refresh the active snapshot without scanning saved archives.
+// The Sessions window follows the app's own jobs while it is open: each queue
+// change reads the sessions again, and only the latest read applies.
 
 const confirm = vi.fn<(options: ConfirmOptions) => Promise<boolean>>()
 
@@ -48,8 +49,6 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve }
 }
 
-const getActiveSessionSummary = vi.fn<() => Promise<SessionSummary>>()
-const changed = new Set<() => void>()
 const listSessions = vi.fn<() => Promise<SessionListEntry[]>>()
 const resumeSession = vi.fn(async (_sessionId: string) => {})
 const openSessionFolder = vi.fn(async (_sessionId: string) => {})
@@ -60,11 +59,7 @@ beforeEach(() => {
   confirm.mockReset()
   confirm.mockResolvedValue(true)
   queueValue = { tasks: emptyTasks() }
-  getActiveSessionSummary.mockReset().mockImplementation(() => new Promise(() => {}))
-  changed.clear()
-  window.electronAPI = { listSessions, resumeSession, openSessionFolder, getActiveSessionSummary,
-    onSessionChanged: (callback: () => void) => { changed.add(callback); return () => { changed.delete(callback) } },
-  } as unknown as typeof window.electronAPI
+  window.electronAPI = { listSessions, resumeSession, openSessionFolder } as unknown as typeof window.electronAPI
 })
 
 afterEach(() => {
@@ -77,55 +72,32 @@ afterEach(() => {
 })
 
 describe('SessionsModal', () => {
-  it('updates only the active summary for queue changes, retaining archives', async () => {
-    const archive = { ...session(3, '2026-10-03T12:00:00.000Z'), sessionId: 'archive', isCurrent: false }
-    listSessions.mockResolvedValue([session(1, '2026-10-04T12:00:00.000Z'), archive])
-    getActiveSessionSummary.mockResolvedValueOnce(session(1, '2026-10-04T12:00:00.000Z'))
+  it('reads the sessions again when the queue changes while it is open', async () => {
+    listSessions.mockResolvedValueOnce([session(1, '2026-10-04T12:00:00.000Z')])
     const view = render(<SessionsModal onClose={() => undefined} />)
     await screen.findByText(/1 complete/)
-    getActiveSessionSummary.mockResolvedValueOnce(session(2, '2026-10-04T12:05:00.000Z'))
+
+    listSessions.mockResolvedValueOnce([session(2, '2026-10-04T12:05:00.000Z')])
+    queueValue = { tasks: emptyTasks() }
+    view.rerender(<SessionsModal onClose={() => undefined} />)
+
+    await screen.findByText(/2 complete/)
+    expect(listSessions).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the newer list when an earlier read lands after it', async () => {
+    const earlier = deferred<SessionSummary[]>()
+    listSessions.mockReturnValueOnce(earlier.promise)
+    const view = render(<SessionsModal onClose={() => undefined} />)
+
+    listSessions.mockResolvedValueOnce([session(2, '2026-10-04T12:05:00.000Z')])
     queueValue = { tasks: emptyTasks() }
     view.rerender(<SessionsModal onClose={() => undefined} />)
     await screen.findByText(/2 complete/)
-    expect(screen.getByText(/3 complete/)).toBeTruthy()
-    expect(listSessions).toHaveBeenCalledTimes(1)
-  })
 
-  it('coalesces queue bursts and keeps a delayed archive read from replacing the active summary', async () => {
-    const archiveRead = deferred<SessionSummary[]>()
-    const activeRead = deferred<SessionSummary>()
-    listSessions.mockReturnValueOnce(archiveRead.promise)
-    getActiveSessionSummary.mockReturnValueOnce(activeRead.promise)
-      .mockResolvedValueOnce(session(2, '2026-10-04T12:05:00.000Z'))
-    const view = render(<SessionsModal onClose={() => undefined} />)
-    for (let i = 0; i < 10; i++) {
-      queueValue = { tasks: emptyTasks() }
-      view.rerender(<SessionsModal onClose={() => undefined} />)
-    }
-    expect(getActiveSessionSummary).toHaveBeenCalledTimes(1)
-    await act(async () => { activeRead.resolve(session(1, '2026-10-04T12:00:00.000Z')) })
-    await screen.findByText(/2 complete/)
-    await act(async () => { archiveRead.resolve([session(1, '2026-10-04T12:00:00.000Z')]) })
-    expect(screen.queryByText(/1 complete/)).toBeNull()
-    expect(screen.getByText(/2 complete/)).toBeTruthy()
-    expect(getActiveSessionSummary).toHaveBeenCalledTimes(2)
-    expect(listSessions).toHaveBeenCalledTimes(1)
-  })
-
-  it('reloads archives after a session switch and reopening, and ignores an obsolete archive read', async () => {
-    const earlier = deferred<SessionSummary[]>()
-    listSessions.mockReturnValueOnce(earlier.promise)
-      .mockResolvedValue([session(2, '2026-10-04T12:05:00.000Z')])
-    const view = render(<SessionsModal onClose={() => undefined} />)
-    await act(async () => { for (const callback of changed) callback() })
-    await screen.findByText(/2 complete/)
     await act(async () => { earlier.resolve([session(1, '2026-10-04T12:00:00.000Z')]) })
     expect(screen.queryByText(/1 complete/)).toBeNull()
-    view.unmount()
-    expect(changed.size).toBe(0)
-    render(<SessionsModal onClose={() => undefined} />)
-    await screen.findByText(/2 complete/)
-    expect(listSessions).toHaveBeenCalledTimes(3)
+    expect(screen.getByText(/2 complete/)).toBeTruthy()
   })
 
   it('lists a session it cannot open in place, by folder and reason, offering only Open Folder', async () => {
