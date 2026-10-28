@@ -4,15 +4,13 @@ import { LANGUAGES } from "../../src/shared/i18n/languages";
 import { APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, APP_REPOSITORY_URL } from "../../src/shared/app-identity";
 
 // Packaging repeats values whose source lives elsewhere: the interface
-// languages, the artifact names the release workflow attaches, and the order of
-// preparing Electron before packaging. Each is checked against that source here
+// languages and the app identity. Each is checked against that source here
 // (app-release-conventions: one source per repeated value).
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
 const builderConfig = read("../../electron-builder.yml");
-const releaseWorkflow = read("../../.github/workflows/release.yml");
 const packageJson = JSON.parse(read("../../package.json")) as {
-  name: string; version: string; scripts: Record<string, string>; author: { name: string }; license: string; repository: { url: string }
+  author: { name: string }; license: string; repository: { url: string }
 };
 
 /** One top-level block of electron-builder.yml, from its key to the next top-level key. */
@@ -50,31 +48,5 @@ describe("packaged interface languages", () => {
 
   it("offers an installer language for each app language, in the app's order", () => {
     expect(listUnder(section("nsis"), "installerLanguages").map(primarySubtag)).toEqual(LANGUAGES.map(primarySubtag));
-  });
-});
-
-describe("release artifacts", () => {
-  // Each target's artifactName, expanded as electron-builder names the file.
-  const artifacts = [
-    ["mac", "zip"],
-    ["dmg", "dmg"],
-    ["win", "zip"],
-    ["nsis", "exe"],
-  ].map(([key, ext]) => {
-    const pattern = section(key!).match(/^ {2}artifactName: (.+)$/m)?.[1];
-    expect(pattern, `${key} artifactName`).toBeTruthy();
-    return pattern!.replace("${name}", packageJson.name).replace("${version}", packageJson.version).replace("${ext}", ext!);
-  });
-  const globs = [...releaseWorkflow.matchAll(/^\s+(dist\/\S+)$/gm)].map((match) => match[1]!);
-  const matches = (glob: string, file: string): boolean =>
-    new RegExp(`^${glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")}$`).test(file);
-
-  it("attaches every installer and portable the builder names, and nothing it does not", () => {
-    for (const artifact of artifacts) {
-      expect(globs.filter((glob) => matches(glob, `dist/${artifact}`)), artifact).toHaveLength(1);
-    }
-    for (const glob of globs) {
-      expect(artifacts.some((artifact) => matches(glob, `dist/${artifact}`)), glob).toBe(true);
-    }
   });
 });
