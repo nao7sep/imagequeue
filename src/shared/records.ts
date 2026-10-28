@@ -4,11 +4,6 @@
 
 export type RecordKind = 'log' | 'ai-call' | 'cli-job'
 
-export interface RecordIdentity {
-  kind: RecordKind
-  id: number
-}
-
 export type RecordLevel = 'debug' | 'info' | 'warn' | 'error'
 
 export const RECORD_KINDS: readonly RecordKind[] = ['log', 'ai-call', 'cli-job']
@@ -132,13 +127,11 @@ export type RecordDetail = LogRecordDetail | AiCallRecordDetail | CliJobRecordDe
 export type RecordsRead =
   | { op: 'page'; query: RecordsQuery }
   | { op: 'sources' }
-  | { op: 'summaries'; identities: RecordIdentity[] }
   | { op: 'detail'; kind: RecordKind; id: number }
   | { op: 'output'; id: number; stream: RecordOutputStream; offset: number }
 
 export interface RecordsReadResults {
   page: RecordsPage
-  summaries: RecordSummary[]
   sources: { launches: string[]; sessions: string[] }
   detail: RecordDetail | null
   output: RecordsOutputPage

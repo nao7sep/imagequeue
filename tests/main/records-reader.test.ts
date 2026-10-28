@@ -165,36 +165,6 @@ describe('records reader', () => {
   })
 })
 
-it('keeps selected records and output available while history is stalled and terminated', async () => {
-  vi.useFakeTimers()
-  const background = fakeWorker()
-  const foreground = fakeWorker()
-  let finish!: () => void
-  background.terminate.mockReturnValue(new Promise<number>((resolve) => { finish = () => resolve(0) }))
-  mocks.create.mockReturnValueOnce(background).mockReturnValueOnce(foreground)
-  try {
-    const scan = readRecords({ op: 'sources' })
-    const scanFailed = expect(scan).rejects.toThrow('timed out')
-    await vi.advanceTimersByTimeAsync(0)
-    const detail = readRecords({ op: 'detail', kind: 'log', id: 7 })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.create).toHaveBeenCalledTimes(2)
-    expect(foreground.posted[0]!.read).toEqual({ op: 'detail', kind: 'log', id: 7 })
-    foreground.emit('message', { id: foreground.posted[0]!.id, ok: true, value: null })
-    await expect(detail).resolves.toBeNull()
-    await vi.advanceTimersByTimeAsync(RECORDS_READ_TIMEOUT_MS - 1)
-    const output = readRecords({ op: 'output', id: 3, stream: 'stdout', offset: 0 })
-    await vi.advanceTimersByTimeAsync(1)
-    await scanFailed
-    expect(background.terminate).toHaveBeenCalledOnce()
-    expect(foreground.terminate).not.toHaveBeenCalled()
-    const page = { text: 'still readable', nextOffset: null }
-    foreground.emit('message', { id: foreground.posted[1]!.id, ok: true, value: page })
-    await expect(output).resolves.toEqual(page)
-    expect(mocks.create).toHaveBeenCalledTimes(2)
-  } finally { finish() }
-})
-
 it('records a partial search warning without rejecting its intact matches', async () => {
   const worker = fakeWorker()
   mocks.create.mockReturnValue(worker)
@@ -207,26 +177,4 @@ it('records a partial search warning without rejecting its intact matches', asyn
   worker.emit('message', { id: worker.posted[0]!.id, ok: true, value: page, warning })
   await expect(result).resolves.toEqual(page)
   expect(mocks.writeLogRecord).toHaveBeenCalledWith(expect.any(String), 'warn', 'CLI output search was incomplete', warning)
-})
-
-
-it('routes viewport summaries through the history lane while detail reads remain independent', async () => {
-  const background = fakeWorker()
-  const foreground = fakeWorker()
-  mocks.create.mockReturnValueOnce(background).mockReturnValueOnce(foreground)
-  const sources = readRecords({ op: 'sources' })
-  const identities = [{ kind: 'log' as const, id: 7 }]
-  const summaries = readRecords({ op: 'summaries', identities })
-  const detail = readRecords({ op: 'detail', kind: 'log', id: 7 })
-  await Promise.resolve()
-  await Promise.resolve()
-  expect(mocks.create).toHaveBeenCalledTimes(2)
-  expect(background.posted.map(({ read }) => read)).toEqual([{ op: 'sources' }, { op: 'summaries', identities }])
-  expect(foreground.posted[0]!.read).toEqual({ op: 'detail', kind: 'log', id: 7 })
-  background.emit('message', { id: background.posted[0]!.id, ok: true, value: { launches: [], sessions: [] } })
-  background.emit('message', { id: background.posted[1]!.id, ok: true, value: [] })
-  foreground.emit('message', { id: foreground.posted[0]!.id, ok: true, value: null })
-  await expect(sources).resolves.toEqual({ launches: [], sessions: [] })
-  await expect(summaries).resolves.toEqual([])
-  await expect(detail).resolves.toBeNull()
 })

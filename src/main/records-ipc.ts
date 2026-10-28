@@ -1,12 +1,9 @@
 import {
   RECORD_KINDS,
-  RECORDS_PAGE_SIZE,
   RECORD_LEVEL_FILTERS,
   type RecordsOutputPage,
   type RecordOutputStream,
   type RecordDetail,
-  type RecordIdentity,
-  type RecordSummary,
   type RecordKind,
   type RecordLevelFilter,
   type RecordSources,
@@ -61,21 +58,6 @@ export function registerRecordsIpc(): void {
   handle('records:page', (_event, query: unknown): Promise<RecordsPage> => {
     assertRecordsQuery(query)
     return readRecords({ op: 'page', query })
-  })
-  handle('records:summaries', (_event, identities: unknown): Promise<RecordSummary[]> => {
-    if (!Array.isArray(identities) || identities.length > RECORDS_PAGE_SIZE) {
-      throw new Error(`Invalid IPC parameter: identities must be an array of at most ${RECORDS_PAGE_SIZE} records.`)
-    }
-    for (const identity of identities) {
-      if (typeof identity !== 'object' || identity === null) {
-        throw new Error('Invalid IPC parameter: each identity must be an object.')
-      }
-      assertRecordKind(identity.kind)
-      if (!Number.isSafeInteger(identity.id) || identity.id <= 0) {
-        throw new Error('Invalid IPC parameter: identity.id must be a positive safe integer.')
-      }
-    }
-    return readRecords({ op: 'summaries', identities: identities as RecordIdentity[] })
   })
   handle('records:detail', (_event, kind: unknown, id: unknown): Promise<RecordDetail | null> => {
     assertRecordKind(kind)

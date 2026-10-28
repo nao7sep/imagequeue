@@ -37,7 +37,7 @@ import type { AppNotice } from './app-notice'
 import type { StartupFailureMeasurement } from './startup-failure'
 import type { Message } from './i18n/translate'
 import type { LanguageEnvironment } from './i18n/languages'
-import type { RecordDetail, RecordIdentity, RecordSummary, RecordKind, RecordSources, RecordsPage, RecordsQuery, RecordOutputStream, RecordsOutputPage } from './records'
+import type { RecordDetail, RecordKind, RecordSources, RecordsPage, RecordsQuery, RecordOutputStream, RecordsOutputPage } from './records'
 import type { ConfirmOptions } from './confirm'
 import type { ListKey, SurfaceListKey, SelectedImage, SelectionSnapshot, SurfaceConfirmRequest, ViewingSurface, WindowCommand } from './viewing'
 
@@ -244,7 +244,6 @@ export interface ElectronAPI {
   // The Records window: opened from the main menu, it reads records.sqlite3.
   openRecordsWindow: () => Promise<void>
   readRecordsPage: (query: RecordsQuery) => Promise<RecordsPage>
-  readRecordSummaries: (identities: RecordIdentity[]) => Promise<RecordSummary[]>
   readRecordDetail: (kind: RecordKind, id: number) => Promise<RecordDetail | null>
   readRecordOutput: (id: number, stream: RecordOutputStream, offset: number) => Promise<RecordsOutputPage>
   readRecordSources: () => Promise<RecordSources>

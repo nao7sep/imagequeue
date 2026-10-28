@@ -1,68 +1,65 @@
 import type { RecordCursor, RecordsPage, RecordSummary } from '../../../shared/records'
 import { recordKey } from './record-format'
 
-/** Visited history keeps only identity/order metadata. Full display payloads
- * belong to the viewport; stable ordinals avoid reindexing history on prepend. */
+/** Loaded history in display order. Stable ordinals avoid reindexing history
+ * on prepend. */
 export class RecordHistory {
   private first = 0
   private end = 0
-  private readonly cursors = new Map<number, RecordCursor>()
+  private readonly records = new Map<number, RecordSummary>()
   private readonly positions = new Map<string, number>()
-  readonly summaries = new Map<string, RecordSummary>()
   more = false
 
   get count(): number { return this.end - this.first }
-  at(index: number): RecordCursor { return this.cursors.get(this.first + index)! }
+  at(index: number): RecordSummary { return this.records.get(this.first + index)! }
   idAt(index: number): string { return recordKey(this.at(index)) }
   indexOf(key: string): number {
     const position = this.positions.get(key)
     return position === undefined ? -1 : position - this.first
   }
-  get after(): RecordCursor | null { return this.count ? this.at(this.count - 1) : null }
+  get after(): RecordCursor | null {
+    if (!this.count) return null
+    const { time, kind, id } = this.at(this.count - 1)
+    return { time, kind, id }
+  }
 
-  private insert(position: number, record: RecordCursor): void {
-    const cursor = { time: record.time, kind: record.kind, id: record.id }
-    this.cursors.set(position, cursor)
-    this.positions.set(recordKey(cursor), position)
+  private insert(position: number, record: RecordSummary): void {
+    this.records.set(position, record)
+    this.positions.set(recordKey(record), position)
   }
   append(page: RecordsPage): void {
     for (const record of page.records) {
       if (this.indexOf(recordKey(record)) < 0) this.insert(this.end++, record)
-      this.summaries.set(recordKey(record), record)
     }
     this.more = page.more
   }
-  prepend(cursors: readonly RecordCursor[], visible: readonly RecordSummary[]): void {
-    for (let index = cursors.length - 1; index >= 0; index--) {
-      const cursor = cursors[index]!
-      if (this.indexOf(recordKey(cursor)) < 0) this.insert(--this.first, cursor)
+  prepend(records: readonly RecordSummary[]): void {
+    for (let index = records.length - 1; index >= 0; index--) {
+      const record = records[index]!
+      if (this.indexOf(recordKey(record)) < 0) this.insert(--this.first, record)
     }
-    for (const record of visible) this.summaries.set(recordKey(record), record)
-  }
-  retain(keys: ReadonlySet<string>): void {
-    for (const key of this.summaries.keys()) if (!keys.has(key)) this.summaries.delete(key)
   }
 }
 
 /** A burst can span many pages. Do not join disconnected ranges: read through
- * the first known identity, keeping only compact cursors beyond the first page.
- * A failed/interrupted bridge leaves the previously admitted history intact. */
+ * the first known identity. A failed/interrupted bridge leaves the previously
+ * admitted history intact. */
 export async function readHistoryPrefix(
   history: RecordHistory,
   read: (after: RecordCursor | null) => Promise<RecordsPage>,
   current: () => boolean,
-): Promise<{ cursors: RecordCursor[]; first: RecordsPage; incomplete: boolean } | null> {
+): Promise<{ records: RecordSummary[]; first: RecordsPage; incomplete: boolean } | null> {
   const first = await read(null)
   if (!current()) return null
-  const cursors: RecordCursor[] = []
+  const records: RecordSummary[] = []
   let page = first
   let incomplete = first.searchIncomplete === true
   while (true) {
     for (const record of page.records) {
-      if (history.indexOf(recordKey(record)) >= 0) return { cursors, first, incomplete }
-      cursors.push({ time: record.time, kind: record.kind, id: record.id })
+      if (history.indexOf(recordKey(record)) >= 0) return { records, first, incomplete }
+      records.push(record)
     }
-    if (!history.count || !page.more || !page.records.length) return { cursors, first, incomplete }
+    if (!history.count || !page.more || !page.records.length) return { records, first, incomplete }
     const last = page.records.at(-1)!
     page = await read({ time: last.time, kind: last.kind, id: last.id })
     if (!current()) return null

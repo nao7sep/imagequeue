@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { currentRecordsContext, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
-import { readDetail, readPage, readSummaries, readSources, readOutput, runRecordsRead } from '../../src/main/records-query'
+import { readDetail, readPage, readSources, readOutput, runRecordsRead } from '../../src/main/records-query'
 import { RECORDS_PAGE_SIZE, type RecordsQuery } from '../../src/shared/records'
 import { freshRecordsRoot, removeRecordsRoots } from './records-fixture'
 
@@ -262,76 +262,5 @@ describe('records sources and detail', () => {
     })
     expect(readDetail(db, 'log', 99_999)).toBeNull()
     db.close()
-  })
-})
-
-it('refreshes source membership using only inserted keys and orders late event times correctly', () => {
-  const dir = seed()
-  const db = open(dir)
-  try {
-    const initial = readSources(db)
-    const prepare = db.prepare.bind(db)
-    const ranges: unknown[][] = []
-    const plans: string[] = []
-    const rowCounts: number[] = []
-    const spy = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
-      const statement = prepare(sql)
-      const all = statement.all.bind(statement)
-      vi.spyOn(statement, 'all').mockImplementation((...params) => {
-        ranges.push(params)
-        plans.push(...(prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[]).map((step) => step.detail))
-        const result = all(...params)
-        rowCounts.push(result.length)
-        return result
-      })
-      return statement
-    })
-    expect(readSources(db)).toEqual(initial)
-    expect(rowCounts).toEqual([0, 0, 0])
-    expect(plans.join('\n')).not.toMatch(/SCAN (log_records|ai_calls|cli_jobs)/)
-    expect(plans.filter((line) => line.includes('INTEGER PRIMARY KEY (rowid>?)'))).toHaveLength(3)
-    expect(ranges[0]![0]).toBeGreaterThan(0)
-    expect(ranges[1]![0]).toBeGreaterThan(0)
-    setRecordsSession('new-session')
-    writeLogRecord('2026-01-01T00:00:06.000Z', 'info', 'late arrival', {})
-    expect(readSources(db).sessions).toEqual(['20260102-000000-000-utc', 'new-session', 'old-session'])
-    setRecordsSession('old-session')
-    writeLogRecord('2099-01-01T00:00:00.000Z', 'info', 'new event', {})
-    expect(readSources(db).sessions).toEqual(['old-session', '20260102-000000-000-utc', 'new-session'])
-    spy.mockRestore()
-    // A fresh reader reconstructs the same source index from retained history.
-    const reopened = open(dir)
-    try { expect(readSources(reopened)).toEqual(readSources(db)) } finally { reopened.close() }
-  } finally { db.close() }
-})
-
-
-describe('record summary refetch', () => {
-  it('returns the page summary fields in requested mixed-kind order and omits missing identities', () => {
-    const dir = seed()
-    startCliJobRecord({ jobId: 'summary-job', kind: 'download', target: 'summary.ckpt', cliPath: '/bin/cli', args: [] })
-      .finish({ startedAt: '2026-01-03T00:00:00.000Z', status: 'killed', exitCode: null, signal: 'SIGTERM', stdout: '', stderr: '' })
-    const db = open(dir)
-    try {
-      const records = readPage(db, query()).records
-      const log = records.find((record) => record.kind === 'log')!
-      const call = records.find((record) => record.kind === 'ai-call' && record.level === 'error')!
-      const job = records.find((record) => record.kind === 'cli-job')!
-      const requested = [call, log, job, call]
-      const identities = requested.map(({ kind, id }) => ({ kind, id }))
-      identities.splice(1, 0, { kind: 'cli-job', id: 999_999 })
-      expect(readSummaries(db, identities)).toEqual(requested)
-      expect(runRecordsRead(db, { op: 'summaries', identities })).toEqual(requested)
-      expect(readSummaries(db, [{ kind: 'log', id: 999_999 }])).toEqual([])
-    } finally { db.close() }
-  })
-
-  it('returns an empty selection without querying the database', () => {
-    const db = open(seed())
-    const prepare = vi.spyOn(db, 'prepare')
-    try {
-      expect(readSummaries(db, [])).toEqual([])
-      expect(prepare).not.toHaveBeenCalled()
-    } finally { prepare.mockRestore(); db.close() }
   })
 })

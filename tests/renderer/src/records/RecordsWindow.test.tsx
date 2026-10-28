@@ -55,7 +55,6 @@ const newer: RecordSummary = {
 
 let root: Root | null = null
 const readRecordsPage = vi.fn<ElectronAPI['readRecordsPage']>()
-const readRecordSummaries = vi.fn<ElectronAPI['readRecordSummaries']>()
 const readRecordDetail = vi.fn<ElectronAPI['readRecordDetail']>()
 const readRecordOutput = vi.fn<ElectronAPI['readRecordOutput']>()
 const readRecordSources = vi.fn<ElectronAPI['readRecordSources']>()
@@ -104,8 +103,6 @@ beforeEach(() => {
   zone = 'UTC'
   readRecordsPage.mockReset()
   readRecordsPage.mockResolvedValue({ records: [call, line], more: false } satisfies RecordsPage)
-  readRecordSummaries.mockReset()
-  readRecordSummaries.mockImplementation(async (ids) => ids.flatMap((id) => [call, line, job, newer].filter((record) => record.kind === id.kind && record.id === id.id)))
   readRecordOutput.mockReset()
   readRecordOutput.mockResolvedValue({ text: 'Downloading 10%\rDownloading 40%\r', nextOffset: null })
   readRecordDetail.mockReset()
@@ -163,7 +160,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'electronAPI', {
     configurable: true,
     value: {
-      readRecordsPage, readRecordSummaries, readRecordDetail, readRecordOutput, readRecordSources, appLog, updateUiState, getUiState, onRecordsChanged,
+      readRecordsPage, readRecordDetail, readRecordOutput, readRecordSources, appLog, updateUiState, getUiState, onRecordsChanged,
     } satisfies Partial<ElectronAPI>,
   })
 })
@@ -892,7 +889,7 @@ it('queues live refresh behind initial hydration and keeps the newer partial-res
   expect(titles()).toEqual(['Arrived while open', 'gemini brainstorm'])
 })
 
-it('virtualizes visited history and refetches evicted rows while preserving offscreen keyboard selection', async () => {
+it('virtualizes loaded history while preserving offscreen keyboard selection', async () => {
   const rows: RecordSummary[] = Array.from({ length: 300 }, (_, index) => ({
     kind: 'log', id: 300 - index, time: new Date((300 - index) * 1000).toISOString(),
     level: 'info', title: `History row ${300 - index}`, text: null,
@@ -901,7 +898,6 @@ it('virtualizes visited history and refetches evicted rows while preserving offs
     const start = after ? rows.findIndex((row) => row.id === after.id) + 1 : 0
     return { records: rows.slice(start, start + 100), more: start + 100 < rows.length }
   })
-  readRecordSummaries.mockImplementation(async (ids) => ids.map(({ id }) => rows.find((row) => row.id === id)!))
   box.scrollHeight = 300 * 78
   await mount()
   expect(options().length).toBeLessThan(20)
@@ -912,9 +908,7 @@ it('virtualizes visited history and refetches evicted rows while preserving offs
   expect(document.activeElement?.getAttribute('data-listbox-option')).toBe('log:1')
   expect(readRecordDetail).toHaveBeenLastCalledWith('log', 1)
   expect(options().length).toBeLessThan(20)
-  readRecordSummaries.mockClear()
   await scrollTo(50 * 78)
-  expect(readRecordSummaries).toHaveBeenCalled()
   expect(titles()).toContain('History row 250')
   expect(options().find((row) => row.dataset.listboxOption === 'log:1')?.tabIndex).toBe(0)
   await scrollTo(0)
@@ -931,7 +925,6 @@ it('bridges a burst larger than a page and retains the selected old record', asy
     const end = after ? after.id - 1 : newestId
     return { records: Array.from({ length: Math.min(100, end) }, (_, i) => makeRow(end - i)), more: end > 100 }
   })
-  readRecordSummaries.mockImplementation(async (ids) => ids.map(({ id }) => makeRow(id)))
   box.scrollHeight = 40000
   await mount()
   await act(async () => options()[1]!.click())
@@ -943,23 +936,6 @@ it('bridges a burst larger than a page and retains the selected old record', asy
   await scrollTo(200 * 78)
   expect(titles()).toContain('Burst row 152')
   expect(options().length).toBeLessThan(20)
-})
-
-it('keeps cache-refetch failure visible and retries the missing viewport explicitly', async () => {
-  const rows: RecordSummary[] = Array.from({ length: 100 }, (_, index) => ({
-    kind: 'log', id: 100 - index, time: new Date((100 - index) * 1000).toISOString(), level: 'info', title: `Cached row ${100 - index}`, text: null,
-  }))
-  readRecordsPage.mockResolvedValue({ records: rows, more: false })
-  readRecordSummaries.mockRejectedValueOnce(new Error('unavailable')).mockImplementation(async (ids) => ids.map(({ id }) => rows.find((row) => row.id === id)!))
-  box.scrollHeight = 7800
-  await mount()
-  await scrollTo(50 * 78)
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain('paused')
-  expect(readRecordSummaries).toHaveBeenCalledTimes(1)
-  const retry = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Retry')!
-  await act(async () => retry.click())
-  expect(titles()).toContain('Cached row 50')
-  expect(document.querySelector('.records-refresh-failure')).toBeNull()
 })
 
 it('keeps an empty or loading history reachable as the same listbox', async () => {

@@ -11,7 +11,6 @@ import {
 } from 'react'
 import {
   RECORD_KINDS,
-  RECORDS_PAGE_SIZE,
   RECORD_LEVEL_FILTERS,
   type RecordDetail,
   type RecordOutputStream,
@@ -119,9 +118,9 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const newestPending = useRef(false)
   // A failed read is itself logged as a record, whose signal would start the
   // next read; live reads resume only after each failed read owner recovers.
-  const failuresRef = useRef({ records: false, sources: false, summaries: false })
+  const failuresRef = useRef({ records: false, sources: false })
   const [liveFailures, setLiveFailures] = useState(failuresRef.current)
-  const setLiveFailure = useCallback((owner: 'records' | 'sources' | 'summaries', failed: boolean): void => {
+  const setLiveFailure = useCallback((owner: 'records' | 'sources', failed: boolean): void => {
     if (failuresRef.current[owner] === failed) return
     failuresRef.current = { ...failuresRef.current, [owner]: failed }
     setLiveFailures(failuresRef.current)
@@ -130,8 +129,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const [refreshing, setRefreshing] = useState(false)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const historyRef = useRef(new RecordHistory())
-  const summaryRead = useRef<number | null>(null)
-  const summaryFailed = useRef(false)
 
   useEffect(() => () => activeDrag.current?.finish('unmount'), [])
 
@@ -210,7 +207,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
       (prefix) => {
         if (!prefix || generation !== listGeneration.current) return
         if (!history.count) history.append(prefix.first)
-        else history.prepend(prefix.cursors, prefix.first.records)
+        else history.prepend(prefix.records)
         incompleteSearch.current ||= prefix.incomplete
         setLiveFailure('records', incompleteSearch.current)
         setSearchIncomplete(incompleteSearch.current)
@@ -231,7 +228,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         newestRead.current = null
         if (generation !== listGeneration.current) return
         setRefreshing(false)
-        if (newestPending.current && !document.hidden && !failuresRef.current.records && !failuresRef.current.sources && !failuresRef.current.summaries && (!scrollRef.current || atTop(scrollRef.current))) {
+        if (newestPending.current && !document.hidden && !failuresRef.current.records && !failuresRef.current.sources && (!scrollRef.current || atTop(scrollRef.current))) {
           newestPending.current = false
           readNewest()
         }
@@ -246,7 +243,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     const generation = ++listGeneration.current
     fetchingMore.current = false
     historyRef.current = new RecordHistory()
-    summaryFailed.current = false
     newestPending.current = false
     setList({ status: 'loading' })
     incompleteSearch.current = false
@@ -262,13 +258,13 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     let timer: ReturnType<typeof setTimeout> | null = null
     let hiddenPending = false
     const schedule = (): void => {
-      if (failuresRef.current.records || failuresRef.current.sources || failuresRef.current.summaries) return
+      if (failuresRef.current.records || failuresRef.current.sources) return
       if (document.hidden) { hiddenPending = true; return }
       if (timer !== null) return
       timer = setTimeout(() => {
         timer = null
         if (document.hidden) { hiddenPending = true; return }
-        if (failuresRef.current.records || failuresRef.current.sources || failuresRef.current.summaries) return
+        if (failuresRef.current.records || failuresRef.current.sources) return
         hiddenPending = false
         refreshSources()
         const scroll = scrollRef.current
@@ -359,7 +355,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const onListScroll = (): void => {
     const scroll = scrollRef.current
     if (scroll === null) return
-    if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && !failuresRef.current.summaries && atTop(scroll)) {
+    if (newestPending.current && !failuresRef.current.records && !failuresRef.current.sources && atTop(scroll)) {
       newestPending.current = false
       readNewest()
     }
@@ -388,41 +384,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     typeAhead: false,
   })
   const visibleRows = virtualizer.getVirtualItems()
-  const wantedKeys = new Set(visibleRows.map((row) => history.idAt(row.index)))
-  if (activeId && history.indexOf(activeId) >= 0) wantedKeys.add(activeId)
-  const wantedRef = useRef(wantedKeys)
-  wantedRef.current = wantedKeys
-  const visibleKey = [...wantedKeys].join('|')
-
-  // Evict text, never navigation identities. Exact-identity reads can rehydrate
-  // any visited viewport without replaying filters or keeping earlier payloads.
-  useEffect(() => {
-    if (list.status !== 'ready') return
-    history.retain(wantedRef.current)
-    const generation = listGeneration.current
-    if (summaryRead.current === generation || summaryFailed.current) return
-    const missing = [...wantedRef.current].filter((key) => !history.summaries.has(key)).slice(0, RECORDS_PAGE_SIZE)
-    if (!missing.length) { setLiveFailure('summaries', false); return }
-    summaryRead.current = generation
-    void window.electronAPI.readRecordSummaries(missing.map((key) => history.at(history.indexOf(key)))).then(
-      (records) => {
-        if (generation !== listGeneration.current) return
-        if (records.length !== missing.length) throw new Error('A visited record summary is unavailable')
-        for (const record of records) {
-          const key = recordKey(record)
-          if (wantedRef.current.has(key)) history.summaries.set(key, record)
-        }
-      },
-    ).catch((error: unknown) => {
-      if (generation !== listGeneration.current) return
-      summaryFailed.current = true
-      setLiveFailure('summaries', true)
-      recordOperationalDiagnostic('Records summaries read failed', error)
-    }).finally(() => {
-      if (summaryRead.current === generation) summaryRead.current = null
-      if (generation === listGeneration.current) setList((current) => ({ ...current }))
-    })
-  }, [list, history, visibleKey, setLiveFailure])
 
   const onListKeyDown = (event: KeyboardEvent): void => {
     listboxProps.onKeyDown(event)
@@ -576,13 +537,11 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
             />
           </div>
         </div>
-        {liveFailures.records || liveFailures.sources || liveFailures.summaries ? (
+        {liveFailures.records || liveFailures.sources ? (
           <div className="records-refresh-failure">
             <p role="alert">{t(searchIncomplete ? 'records.searchIncomplete' : 'records.livePaused')}</p>
             <button className="modal-btn" disabled={refreshing || refreshingSources} onClick={() => {
-              summaryFailed.current = false
-              setList((current) => ({ ...current }))
-              refreshSources()
+                refreshSources()
               if (searchIncomplete) setFilters((current) => ({ ...current }))
               else readNewest()
             }}>{t('common.retry')}</button>
@@ -605,18 +564,17 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
           ) : (
             <>
               {visibleRows.map((row) => {
-                const key = history.idAt(row.index)
-                const record = history.summaries.get(key)
+                const record = history.at(row.index)
+                const key = recordKey(record)
                 return (
                   <div
                     key={key}
                     data-index={row.index}
-                    ref={record ? virtualizer.measureElement : undefined}
-                    style={{ ...rowStyle(row.start), ...(!record ? { height: row.size } : {}) }}
+                    ref={virtualizer.measureElement}
+                    style={rowStyle(row.start)}
                     {...getOptionProps(key)}
                     className={`records-row${key === selectedKey ? ' selected' : ''}`}
                   >
-                    {record ? <>
                     <div className="records-row-meta">
                       <span>{timeFormat.format(new Date(record.time))}</span>
                       <LevelPill level={record.level} />
@@ -624,7 +582,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
                     </div>
                     <div className={`records-row-title${record.kind !== 'log' ? ' records-code' : ''}`}>{record.title}</div>
                     {record.text ? <div className="records-row-text">{record.text}</div> : null}
-                    </> : <span>{t(summaryFailed.current ? 'records.loadFailed' : 'records.loading')}</span>}
                   </div>
                 )
               })}

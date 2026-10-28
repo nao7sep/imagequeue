@@ -9,7 +9,6 @@ vi.mock('../../src/main/records', () => ({
 }))
 import { handle } from '../../src/main/ipc-boundary'
 import type { IpcMainInvokeEvent } from 'electron'
-import { RECORDS_PAGE_SIZE } from '../../src/shared/records'
 import { assertRecordKind, assertRecordsQuery, readRecordSources, registerRecordsIpc } from '../../src/main/records-ipc'
 
 const valid = { launch: null, session: null, kind: null, level: null, search: '', after: null }
@@ -74,40 +73,6 @@ describe('record output IPC boundary', () => {
     }
     for (const offset of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Infinity, '0', undefined]) {
       expect(() => output(event, 4, 'stderr', offset)).toThrow('Invalid IPC parameter')
-    }
-    expect(mocks.read).not.toHaveBeenCalled()
-  })
-})
-
-
-describe('record summaries IPC boundary', () => {
-  it('passes ordered mixed identities and empty selections to the history reader', async () => {
-    registerRecordsIpc()
-    const summaries = vi.mocked(handle).mock.calls.find(([channel]) => channel === 'records:summaries')![1]
-    const identities = [{ kind: 'cli-job', id: 3 }, { kind: 'log', id: 1 }, { kind: 'ai-call', id: 2 }]
-    const result = [{ kind: 'log', id: 1, time: 't', level: 'info', title: 'retained', text: null }]
-    mocks.read.mockReset().mockResolvedValueOnce(result).mockResolvedValue([])
-    await expect(summaries({} as IpcMainInvokeEvent, identities)).resolves.toEqual(result)
-    expect(mocks.read).toHaveBeenLastCalledWith({ op: 'summaries', identities })
-    await expect(summaries({} as IpcMainInvokeEvent, [])).resolves.toEqual([])
-    expect(mocks.read).toHaveBeenLastCalledWith({ op: 'summaries', identities: [] })
-    const maximum = Array.from({ length: RECORDS_PAGE_SIZE }, (_, i) => ({ kind: 'log', id: i + 1 }))
-    await expect(summaries({} as IpcMainInvokeEvent, maximum)).resolves.toEqual([])
-    expect(mocks.read).toHaveBeenLastCalledWith({ op: 'summaries', identities: maximum })
-  })
-
-  it('rejects malformed, oversized or unsafe identities before dispatch', () => {
-    registerRecordsIpc()
-    const summaries = vi.mocked(handle).mock.calls.find(([channel]) => channel === 'records:summaries')![1]
-    mocks.read.mockReset()
-    for (const invalid of [
-      null, {}, 'log', undefined,
-      Array.from({ length: RECORDS_PAGE_SIZE + 1 }, () => ({ kind: 'log', id: 1 })),
-      [null], [undefined], ['log'], [{}], [{ kind: 'unknown', id: 1 }],
-      ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN, '1', null, undefined]
-        .map((id) => [{ kind: 'log', id }]),
-    ]) {
-      expect(() => summaries({} as IpcMainInvokeEvent, invalid)).toThrow('Invalid IPC parameter')
     }
     expect(mocks.read).not.toHaveBeenCalled()
   })
