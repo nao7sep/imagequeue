@@ -3,7 +3,6 @@ import path from 'node:path'
 import type { Writable } from 'node:stream'
 import { createCliOutputMask } from './cli-output-mask'
 
-export const CLI_OUTPUT_WRITE_TIMEOUT_MS = 5_000
 const HIGH_WATER_MARK = 64 * 1024
 
 /** An optional diagnostic sink can pause its source, but cannot own its lifetime. */
@@ -21,7 +20,6 @@ export function createCliOutputWriter(
   let disabled = false
   let ended = false
   let pendingWrites = 0
-  let timer: ReturnType<typeof setTimeout> | undefined
   let resumeSource: (() => void) | undefined
   let finishPromise: Promise<void> | undefined
   let resolveFinish: (() => void) | undefined
@@ -42,7 +40,6 @@ export function createCliOutputWriter(
     if (disabled) return
     disabled = true
     failure = error
-    clearTimeout(timer)
     // Native fs.WriteStream owns pending IO and closes only after it settles.
     // Resolving this optional sink does not close its descriptor underneath IO.
     if (root !== null) stream?.destroy()
@@ -50,10 +47,6 @@ export function createCliOutputWriter(
     detach()
     reportFailure(error)
     resolveFinish?.()
-  }
-  const watchdog = (): void => {
-    clearTimeout(timer)
-    timer = setTimeout(() => disable(new Error('CLI diagnostic output write made no progress for 5 seconds')), CLI_OUTPUT_WRITE_TIMEOUT_MS)
   }
   const ensureStream = (): Writable => {
     if (stream) return stream
@@ -78,7 +71,6 @@ export function createCliOutputWriter(
     if (root !== null) stream.once('close', () => {
       if (disabled) return
       if (!ended) { disable(new Error('CLI diagnostic output closed before completion')); return }
-      clearTimeout(timer)
       resume()
       complete()
     })
@@ -89,13 +81,10 @@ export function createCliOutputWriter(
     try {
       const target = ensureStream()
       pendingWrites++
-      if (pendingWrites === 1) watchdog()
       const accepted = target.write(text, 'utf8', (error?: Error | null) => {
         pendingWrites--
         if (error) { disable(error); return }
         if (disabled) return
-        if (pendingWrites > 0 || ended) watchdog()
-        else clearTimeout(timer)
         if (root === null && ended && pendingWrites === 0) complete()
       })
       if (!accepted && onResume) resumeSource = onResume
@@ -118,9 +107,7 @@ export function createCliOutputWriter(
       else if (root === null) {
         // Never end or destroy the process's own standard streams.
         if (pendingWrites === 0) complete()
-        else watchdog()
       } else {
-        watchdog()
         stream.end()
       }
       return finishPromise

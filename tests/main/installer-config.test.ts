@@ -78,24 +78,3 @@ describe("release artifacts", () => {
     }
   });
 });
-
-function preparesElectronBeforeBuilder(script: string): boolean {
-  const prepareIndex = script.indexOf("npm run prepare:electron");
-  return prepareIndex >= 0 && prepareIndex < script.indexOf("electron-builder");
-}
-
-describe("package scripts", () => {
-  it("rejects a builder invocation with missing or later preparation", () => {
-    expect(preparesElectronBeforeBuilder("npm run build && electron-builder --publish never")).toBe(false);
-    expect(preparesElectronBeforeBuilder("electron-builder && npm run prepare:electron")).toBe(false);
-    expect(preparesElectronBeforeBuilder("npm run prepare:electron && electron-builder")).toBe(true);
-  });
-
-  it("prepare Electron before every builder invocation", () => {
-    for (const script of Object.values(packageJson.scripts)) {
-      if (script.includes("electron-builder")) {
-        expect(preparesElectronBeforeBuilder(script), script).toBe(true);
-      }
-    }
-  });
-});

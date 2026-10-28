@@ -12,10 +12,8 @@ const fixtures = vi.hoisted(() => ({
   resumes: [] as Array<() => void>,
   importFails: false,
 }))
-vi.mock('node:os', () => ({ availableParallelism: () => 6 }))
-vi.mock('../../src/main/utils/owned-cli', () => ({
-  CLI_HARD_KILL_DELAY_MS: 500,
-  spawnOwnedCli: () => {
+vi.mock('node:child_process', () => ({
+  spawn: () => {
     const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn() })
     child.kill.mockImplementation(() => { if (fixtures.closeOnKill) child.emit('close', null, 'SIGTERM') })
     fixtures.pipes.push(child)
@@ -84,14 +82,13 @@ afterEach(async () => {
 })
 
 describe('CLI job admission and settlement', () => {
-  it('bounds downloads by half the available CPU capacity and promotes in FIFO order', () => {
-    expect(scheduler.CLI_DOWNLOAD_CONCURRENCY).toBe(3)
-    const ids = ['a', 'b', 'c', 'd', 'e'].map((source) => start(source))
-    expect(ids.map(status)).toEqual(['running', 'running', 'running', 'queued', 'queued'])
-    closePipe(0)
-    expect(ids.map(status)).toEqual(['exited', 'running', 'running', 'running', 'queued'])
-    closePipe(1)
-    expect(status(ids[4]!)).toBe('running')
+  it('starts downloads at once and runs imports one at a time in arrival order', () => {
+    const downloads = ['a', 'b', 'c', 'd'].map((source) => start(source))
+    expect(downloads.map(status)).toEqual(['running', 'running', 'running', 'running'])
+    const imports = ['x', 'y'].map((source) => start(source, 'import'))
+    expect(imports.map(status)).toEqual(['running', 'queued'])
+    fixtures.imports[0]!.exit()
+    expect(imports.map(status)).toEqual(['exited', 'running'])
   })
 
   it.each(['append', 'replace', 'terminal'] as const)('isolates a failed %s notification from capture, promotion and settlement', async (phase) => {
@@ -122,50 +119,27 @@ describe('CLI job admission and settlement', () => {
   it('coalesces exact active, queued and stopping work, then admits a fresh job after close', () => {
     const first = start('a')
     expect(start('a')).toBe(first)
-    start('b'); start('c')
-    const queued = start('d')
-    expect(start('d')).toBe(queued)
+    start('artifact', 'import')
+    const queued = start('second', 'import')
+    expect(start('second', 'import')).toBe(queued)
     scheduler.killCliJob(first)
     expect(status(first)).toBe('stopping')
     expect(start('a')).toBe(first)
-    expect(status(queued)).toBe('queued')
     expect(scheduler.hasRunningCliJobs()).toBe(true)
     closePipe(0)
     expect(status(first)).toBe('killed')
-    expect(status(queued)).toBe('running')
     expect(start('a')).not.toBe(first)
     expect(start('a', 'download', '/other')).not.toBe(first)
   })
 
-  it('holds an import directory exclusively and prevents later same-directory downloads overtaking it', () => {
-    const download = start('a')
-    const waitingImport = start('artifact', 'import')
-    const laterDownload = start('b')
-    const independent = start('c', 'download', '/other')
-    expect([download, waitingImport, laterDownload, independent].map(status)).toEqual(['running', 'queued', 'queued', 'running'])
-    closePipe(0)
-    expect(status(waitingImport)).toBe('running')
-    expect(status(laterDownload)).toBe('queued')
-    expect(start('another-artifact', 'import', '/third')).toBeTruthy()
-    expect(fixtures.imports).toHaveLength(1)
-    scheduler.killCliJob(waitingImport)
-    expect(status(laterDownload)).toBe('queued')
-    fixtures.imports[0]!.exit()
-    expect(status(laterDownload)).toBe('running')
-    expect(fixtures.imports).toHaveLength(2)
-  })
-
-  it('preserves a physical slot after a pipe error until its actual close', () => {
+  it('keeps a job after a pipe error until its actual close', () => {
     const first = start('a')
-    start('b'); start('c')
-    const queued = start('d')
     const failure = Object.assign(new Error('spawn refused'), { code: 'ENOENT' })
     fixtures.pipes[0]!.emit('error', failure)
     expect(status(first)).toBe('running')
-    expect(status(queued)).toBe('queued')
     expect(fixtures.records[0]!.finish).not.toHaveBeenCalled()
     closePipe(0)
-    expect(status(queued)).toBe('running')
+    expect(status(first)).toBe('exited')
     expect(fixtures.records[0]!.finish).toHaveBeenCalledWith(expect.objectContaining({ exitCode: null, error: failure }))
   })
 
@@ -182,6 +156,7 @@ describe('CLI job admission and settlement', () => {
     const queued = start('second-artifact', 'import', '/second')
     const download = start('d', 'download', '/third')
     fixtures.closeOnKill = true
+    quit.setQuitting(true)
     await expect(scheduler.killAllCliJobsAndWait()).resolves.toEqual({ signalled: 3, settled: true })
     expect([active, queued, download].map(status)).toEqual(['killed', 'killed', 'killed'])
     expect(fixtures.imports).toHaveLength(1)
@@ -217,8 +192,6 @@ describe('CLI job admission and settlement', () => {
 
   it('resets download inactivity from either stream, independently of the stall indicator', () => {
     const first = start('a')
-    start('b'); start('c')
-    const queued = start('d')
     vi.advanceTimersByTime(60_000)
     expect(status(first)).toBe('stalled')
     fixtures.pipes[0]!.stderr.write('activity\n')
@@ -230,14 +203,12 @@ describe('CLI job admission and settlement', () => {
     expect(status(first)).toBe('stalled')
     vi.advanceTimersByTime(1)
     expect(status(first)).toBe('stopping')
-    expect(status(queued)).toBe('queued')
     expect(fixtures.pipes[0]!.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
     vi.advanceTimersByTime(500)
     expect(fixtures.pipes[0]!.kill).toHaveBeenLastCalledWith('SIGKILL')
     expect(status(first)).toBe('stopping')
     closePipe(0)
     expect(status(first)).toBe('timed-out')
-    expect(status(queued)).toBe('running')
     expect(fixtures.records[0]!.finish).toHaveBeenCalledWith(expect.objectContaining({ status: 'timed-out', error: expect.any(Error) }))
   })
 
@@ -263,11 +234,9 @@ describe('CLI job admission and settlement', () => {
     expect(fixtures.imports[0]!.resume).toHaveBeenCalledOnce()
   })
 
-  it('bounds long newline-free presentation segments and retains only the live line ring', () => {
+  it('retains only the live line ring', () => {
     const job = start('a')
     const pipe = fixtures.pipes[0]!
-    pipe.stdout.write('x'.repeat(1024 * 1024) + '\r\n')
-    expect(scheduler.getCliJobSnapshot(job)!.chunks.every((chunk) => chunk.text.length <= 16 * 1024)).toBe(true)
     for (let index = 0; index < 2100; index++) pipe.stdout.write(`line ${index}\n`)
     closePipe(0)
     const snapshot = scheduler.getCliJobSnapshot(job)!

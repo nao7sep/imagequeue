@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { getCliJobSnapshot, killAllCliJobsAndWait, startCliJob } from '../../src/main/cli-jobs'
 import { closeRecords, flushRecords } from '../../src/main/records'
-import { CLI_OUTPUT_WRITE_TIMEOUT_MS } from '../../src/main/cli-output-writer'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
 
 const start = (script: string) => startCliJob({ kind: 'download', cliPath: process.execPath, args: ['-e', script], target: 'fixture', modelsDir: '/fixture/models', sourceIdentity: 'fixture', logContext: {} })
@@ -17,8 +16,8 @@ async function hashFile(file: string): Promise<string> {
   return hash.digest('hex')
 }
 
-describe('acquisition CLI output streaming through the real guardian', () => {
-  it('retains output larger than the metadata mailbox budget with bounded live presentation and a tiny metadata row', async () => {
+describe('acquisition CLI output streaming from a real child', () => {
+  it('retains output larger than the metadata mailbox budget with a bounded live line ring and a tiny metadata row', async () => {
     const root = freshRecordsRoot()
     const job = start(`
       const { once } = require('node:events');
@@ -44,40 +43,7 @@ describe('acquisition CLI output streaming through the real guardian', () => {
     expect(await hashFile(file)).toBe(expected.digest('hex'))
     const snapshot = getCliJobSnapshot(job)!
     expect(snapshot.chunks.length).toBeLessThanOrEqual(2000)
-    expect(snapshot.chunks.every((chunk) => chunk.text.length <= 16 * 1024)).toBe(true)
     expect(snapshot.chunks.at(-1)!.text).toBe('final-stream-sentinel')
   })
 
-  it('releases a real job paused by stalled diagnostic IO after the optional deadline, while retaining the pending FD until settlement', async () => {
-    const root = freshRecordsRoot()
-    const originalWrite = fs.write
-    const held: Array<() => void> = []
-    vi.spyOn(fs, 'write').mockImplementation(((...args: unknown[]) => {
-      held.push(() => Reflect.apply(originalWrite, fs, args))
-    }) as typeof fs.write)
-    const close = vi.spyOn(fs, 'close')
-    const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.useFakeTimers()
-    try {
-      const job = start("process.stdout.write('x'.repeat(65536))")
-      await vi.waitFor(() => expect(held).toHaveLength(1))
-      await vi.waitFor(() => expect(getCliJobSnapshot(job)?.status).toBe('exited'))
-      let flushed = false
-      const flush = flushRecords().then(() => { flushed = true })
-      await Promise.resolve()
-      expect(flushed).toBe(false)
-      vi.advanceTimersByTime(CLI_OUTPUT_WRITE_TIMEOUT_MS)
-      await flush
-      const row = readRows(root, 'cli_jobs')[0]!
-      expect(row).toMatchObject({ status: 'exited', exit_code: 0, error: null })
-      expect(JSON.parse(row.output_error as string)).toEqual([expect.objectContaining({ message: expect.stringContaining('no progress') })])
-      expect(reported).not.toHaveBeenCalled()
-      expect(readRows(root, 'log_records').some((entry) => entry.message === 'CLI output could not be retained' && entry.level === 'warn')).toBe(true)
-      expect(close).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-      for (const release of held.splice(0)) release()
-      await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
-    }
-  })
 })

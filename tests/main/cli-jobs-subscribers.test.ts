@@ -6,9 +6,8 @@ import { getCliJobSnapshot, startCliJob, subscribeCliJob, unsubscribeCliJob } fr
 import { CLI_JOB_RETENTION_AFTER_EXIT_MS } from '../../src/shared/cli-jobs'
 
 const children: EventEmitter[] = []
-vi.mock('../../src/main/utils/owned-cli', () => ({
-  CLI_HARD_KILL_DELAY_MS: 500,
-  spawnOwnedCli: () => {
+vi.mock('node:child_process', () => ({
+  spawn: () => {
     const child = Object.assign(new EventEmitter(), {
       stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn(),
     })

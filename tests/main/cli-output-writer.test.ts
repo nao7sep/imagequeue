@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCliOutputWriter, CLI_OUTPUT_WRITE_TIMEOUT_MS } from '../../src/main/cli-output-writer'
+import { createCliOutputWriter } from '../../src/main/cli-output-writer'
 
 const roots: string[] = []
 const root = () => {
@@ -47,55 +47,6 @@ describe('streamed CLI diagnostic sink', () => {
     expect(resume).toHaveBeenCalledOnce()
     expect(report).toHaveBeenCalledOnce()
     expect(writer.append('later output', vi.fn())).toBe(true)
-  })
-
-  it('bounds a stalled actual file write and keeps its descriptor open until the write settles', async () => {
-    const dir = root()
-    const originalWrite = fs.write
-    const held: Array<() => void> = []
-    vi.spyOn(fs, 'write').mockImplementation(((...args: unknown[]) => {
-      held.push(() => Reflect.apply(originalWrite, fs, args))
-    }) as typeof fs.write)
-    const close = vi.spyOn(fs, 'close')
-    const report = vi.fn()
-    const resume = vi.fn()
-    vi.useFakeTimers()
-    const writer = createCliOutputWriter(dir, 'slow.log', 'stdout', () => [], report)
-    expect(writer.append('x'.repeat(64 * 1024), resume)).toBe(false)
-    await vi.waitFor(() => expect(held).toHaveLength(1))
-    const finishing = writer.finish()
-    vi.advanceTimersByTime(CLI_OUTPUT_WRITE_TIMEOUT_MS)
-    await finishing
-    expect(writer.error).toBeInstanceOf(Error)
-    expect(report).toHaveBeenCalledOnce()
-    expect(resume).toHaveBeenCalledOnce()
-    expect(close).not.toHaveBeenCalled()
-    vi.useRealTimers()
-    held.shift()!()
-    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
-    expect(fs.readFileSync(path.join(dir, 'slow.log'), 'utf8')).toBe('x'.repeat(64 * 1024))
-  })
-
-  it('bounds stalled construction before the stream can emit an error and resumes its source', async () => {
-    const dir = root()
-    const originalMkdir = fs.mkdir
-    let release!: () => void
-    vi.spyOn(fs, 'mkdir').mockImplementation(((...args: unknown[]) => {
-      release = () => Reflect.apply(originalMkdir, fs, args)
-    }) as typeof fs.mkdir)
-    const close = vi.spyOn(fs, 'close')
-    const resume = vi.fn()
-    vi.useFakeTimers()
-    const writer = createCliOutputWriter(dir, 'construct.log', 'stdout', () => [])
-    expect(writer.append('x'.repeat(64 * 1024), resume)).toBe(false)
-    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
-    vi.advanceTimersByTime(CLI_OUTPUT_WRITE_TIMEOUT_MS)
-    await writer.finish()
-    expect(resume).toHaveBeenCalledOnce()
-    expect(close).not.toHaveBeenCalled()
-    vi.useRealTimers()
-    release()
-    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
   })
 
   it('detaches console fallback listeners after a masked streamed write completes', async () => {

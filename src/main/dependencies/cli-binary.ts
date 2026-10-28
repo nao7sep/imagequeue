@@ -133,7 +133,7 @@ export async function installCliRelease(
     if (actual !== release.sha256) {
       throw new Error(`Checksum mismatch: expected ${release.sha256}, got ${actual}`)
     }
-    if (!(await hasArm64Slice(tempPath, signal))) {
+    if (!(await hasArm64Slice(tempPath))) {
       throw new Error('Downloaded binary is not native arm64; refusing to install')
     }
 

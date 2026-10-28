@@ -86,9 +86,6 @@ it('reads only architecture metadata from a large executable', async () => {
   expect(await hasArm64Slice(file)).toBe(true)
   expect(lengths).toEqual([32])
 })
-it('preserves cancellation and file-access failures', async () => {
-  const controller = new AbortController()
-  controller.abort(new Error('cancelled'))
-  await expect(hasArm64Slice(path.join(root, 'absent'), controller.signal)).rejects.toThrow('cancelled')
+it('preserves file-access failures', async () => {
   await expect(hasArm64Slice(path.join(root, 'absent'))).rejects.toMatchObject({ code: 'ENOENT' })
 })

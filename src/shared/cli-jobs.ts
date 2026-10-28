@@ -47,3 +47,6 @@ export interface CliStatusEvent {
 export const CLI_JOB_STALL_THRESHOLD_MS = 60_000
 export const CLI_JOB_BUFFER_MAX_LINES = 2_000
 export const CLI_JOB_RETENTION_AFTER_EXIT_MS = 10 * 60 * 1_000
+
+/** Grace between asking a CLI to stop and forcing it. */
+export const CLI_HARD_KILL_DELAY_MS = 500

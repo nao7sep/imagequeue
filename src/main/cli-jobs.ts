@@ -1,5 +1,4 @@
-import { availableParallelism } from 'node:os'
-import { spawnOwnedCli, CLI_HARD_KILL_DELAY_MS } from './utils/owned-cli'
+import { spawn } from 'node:child_process'
 import { assertNotQuitting, isQuitting } from './quit-state'
 import type { WebContents } from 'electron'
 import { nanoid } from 'nanoid'
@@ -18,6 +17,7 @@ import {
   CLI_JOB_BUFFER_MAX_LINES,
   CLI_JOB_RETENTION_AFTER_EXIT_MS,
   CLI_JOB_STALL_THRESHOLD_MS,
+  CLI_HARD_KILL_DELAY_MS,
 } from '../shared/cli-jobs'
 
 interface StartCliJobOpts {
@@ -73,9 +73,6 @@ interface JobState {
 const jobs = new Map<string, JobState>()
 const pendingJobIds: string[] = []
 let draining = false
-let drainDepth = 0
-// Keep half the available CPU capacity for image generation and the interface.
-export const CLI_DOWNLOAD_CONCURRENCY = Math.max(1, Math.floor(availableParallelism() / 2))
 // Ten successive stall windows bound a silent download without treating each
 // slow transfer as a failure. Imports can be quiet during heavy native work.
 export const CLI_DOWNLOAD_INACTIVITY_TIMEOUT_MS = 10 * CLI_JOB_STALL_THRESHOLD_MS
@@ -191,15 +188,7 @@ export async function killAllCliJobsAndWait(options: {
   const timeoutMs = options.timeoutMs ?? killGraceMs + 2_000
   const active = [...jobs.values()].filter((state) => !state.finalized)
 
-  // Queue cancellation can settle synchronously. Freeze promotion across the
-  // whole snapshot so shutdown never launches work it has not signalled yet.
-  drainDepth++
-  try {
-    for (const state of active) killCliJob(state.jobId, killGraceMs)
-  } finally {
-    drainDepth--
-    drainPendingJobs()
-  }
+  for (const state of active) killCliJob(state.jobId, killGraceMs)
 
   return {
     signalled: active.length,
@@ -217,24 +206,16 @@ export function hasRunningCliJobs(): boolean {
   return [...jobs.values()].some((state) => !state.finalized)
 }
 
+// Downloads start at once; imports, which are heavy native conversions, run
+// one at a time in arrival order. Nothing new starts once quit has begun.
 function drainPendingJobs(): void {
-  if (draining || drainDepth > 0 || isQuitting()) return
+  if (draining || isQuitting()) return
   draining = true
   try {
     for (let index = 0; index < pendingJobIds.length;) {
       const state = jobs.get(pendingJobIds[index])!
-      const active = [...jobs.values()].filter((job) => !job.finalized && job.status !== 'queued')
-      const sameDirectory = active.filter((job) => job.modelsDir === state.modelsDir)
-      const blockedByImport = pendingJobIds.slice(0, index).some((id) => {
-        const earlier = jobs.get(id)!
-        return earlier.kind === 'import' && earlier.modelsDir === state.modelsDir
-      })
-      const canStart = state.kind === 'import'
-        ? !active.some((job) => job.kind === 'import') && sameDirectory.length === 0
-        : active.filter((job) => job.kind === 'download').length < CLI_DOWNLOAD_CONCURRENCY
-          && !sameDirectory.some((job) => job.kind === 'import' || job.sourceIdentity === state.sourceIdentity)
-          && !blockedByImport
-      if (!canStart) { index++; continue }
+      const importRunning = [...jobs.values()].some((job) => !job.finalized && job.status !== 'queued' && job.kind === 'import')
+      if (state.kind === 'import' && importRunning) { index++; continue }
       pendingJobIds.splice(index, 1)
       state.status = 'running'
       launchJob(state)
@@ -264,7 +245,7 @@ function launchJob(state: JobState): void {
 }
 
 function launchPipeJob(state: JobState): void {
-  const child = spawnOwnedCli(state.cliPath, state.args)
+  const child = spawn(state.cliPath, state.args, { stdio: ['ignore', 'pipe', 'pipe'] })
   const { stdout, stderr } = child
 
   state.child = {
@@ -384,8 +365,7 @@ function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string, resum
       emitStatus(state)
     }
   }
-  // Live presentation is bounded independently of the complete diagnostic
-  // stream. Scan once and split long logical lines rather than retaining them.
+  // Scan each chunk once; CRLF is one delimiter.
   const fragmentField = kind === 'stdout' ? 'stdoutFragment' : 'stderrFragment'
   const delimiterField = kind === 'stdout' ? 'stdoutDelimiterCR' : 'stderrDelimiterCR'
   let fragment = state[fragmentField]
@@ -399,10 +379,6 @@ function onData(state: JobState, kind: 'stdout' | 'stderr', chunk: string, resum
     } else {
       previousCR = false
       fragment += char
-      if (fragment.length >= 16 * 1024 && !/[\uD800-\uDBFF]/.test(char)) {
-        pushChunk(state, kind, stripAnsi(fragment))
-        fragment = ''
-      }
     }
   }
   state[fragmentField] = fragment

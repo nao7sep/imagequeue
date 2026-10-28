@@ -13,24 +13,17 @@ import { buildFluxBody } from './flux-request'
 const BASE_URL = 'https://api.bfl.ai/v1'
 const POLL_INTERVAL_MS = 2000
 // Credential destinations are the provider's documented global/regional API
-// origins. A response URL and every redirect are untrusted at this boundary.
+// origins; a response URL is untrusted at this boundary. Redirects are refused
+// rather than followed, so the key never reaches an unchecked destination.
 const API_ORIGINS = new Set(['https://api.bfl.ai', 'https://api.eu.bfl.ai', 'https://api.us.bfl.ai'])
 function checkedApiUrl(value: string): string {
   const url = new URL(value)
   if (!API_ORIGINS.has(url.origin) || url.username || url.password) throw new Error('FLUX returned an untrusted API destination')
   return url.href
 }
-async function apiRequest(call: Parameters<typeof fetchRecorded>[0], url: string, init: RequestInit): ReturnType<typeof fetchRecorded> {
-  let current = checkedApiUrl(url)
-  for (let redirects = 0; ; redirects++) {
-    const result = await fetchRecorded({ ...call, request: { ...call.request as object, url: current } }, current, { ...init, redirect: 'manual' })
-    if (![301, 302, 303, 307, 308].includes(result.response.status)) return result
-    const location = result.response.headers.get('location')
-    if (!location || redirects >= 10) throw new Error('FLUX API redirect did not resolve')
-    // POST redirection could resubmit a paid operation with changed semantics.
-    if (init.method === 'POST' && ![307, 308].includes(result.response.status)) throw new Error('FLUX submission returned an unsupported redirect')
-    current = checkedApiUrl(new URL(location, current).href)
-  }
+function apiRequest(call: Parameters<typeof fetchRecorded>[0], url: string, init: RequestInit): ReturnType<typeof fetchRecorded> {
+  const checked = checkedApiUrl(url)
+  return fetchRecorded({ ...call, request: { ...call.request as object, url: checked } }, checked, { ...init, redirect: 'error' })
 }
 // BFL's final words for a job that made no image. Any other status is a job
 // still at work — FLUX 3 passes through Reasoning and Generating, words FLUX.2

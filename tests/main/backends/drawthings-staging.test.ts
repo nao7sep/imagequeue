@@ -21,10 +21,7 @@ let ignoreTerm = false
 // How the fake CLI ends after writing its (possibly partial) output.
 let exit: { code: number | null; signal: string | null; stderr: string } = { code: 0, signal: null, stderr: '' }
 
-vi.mock('../../../src/main/utils/owned-cli', () => ({
-  CLI_HARD_KILL_DELAY_MS: 500,
-  spawnOwnedCli: (_cmd: string, args: string[]) => makeProc(args),
-}))
+vi.mock('node:child_process', () => ({ spawn: (_cmd: string, args: string[]) => makeProc(args) }))
 
 // The generation timeout is read from config, which caches per process — the
 // mock gives each test its own knob.

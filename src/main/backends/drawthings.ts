@@ -1,4 +1,5 @@
-import { CLI_HARD_KILL_DELAY_MS, spawnOwnedCli } from '../utils/owned-cli'
+import { spawn } from 'node:child_process'
+import { CLI_HARD_KILL_DELAY_MS } from '../../shared/cli-jobs'
 import fs from 'fs'
 import path from 'path'
 import { nanoid } from 'nanoid'
@@ -95,7 +96,7 @@ async function generateDrawThingsCli(task: Task, signal: AbortSignal): Promise<{
   const removePartial = (): Promise<void> => fs.promises.rm(outputPath, { force: true }).catch(() => undefined)
   try {
     await new Promise<void>((resolve, reject) => {
-      const proc = spawnOwnedCli(cliPath, args)
+      const proc = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
       let stdout = ''
       let stderr = ''
       let cancelled = false

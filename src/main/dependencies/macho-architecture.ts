@@ -7,8 +7,7 @@ const MAX_ARCH_TABLE_BYTES = 64 * 1024
 
 /** Inspect native architecture headers without requiring Apple developer tools.
  * Checks architecture and slice bounds; the published digest verifies content. */
-export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Promise<boolean> {
-  signal?.throwIfAborted()
+export async function hasArm64Slice(filePath: string): Promise<boolean> {
   const file = await fs.open(filePath, 'r')
   try {
     const { size } = await file.stat()
@@ -16,12 +15,10 @@ export async function hasArm64Slice(filePath: string, signal?: AbortSignal): Pro
       const bytes = Buffer.alloc(length)
       let filled = 0
       while (filled < length) {
-        signal?.throwIfAborted()
         const { bytesRead } = await file.read(bytes, filled, length - filled, position + filled)
         if (!bytesRead) return null
         filled += bytesRead
       }
-      signal?.throwIfAborted()
       return bytes
     }
     function nativeHeader(bytes: Buffer, sliceSize: number): boolean {
