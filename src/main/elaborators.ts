@@ -428,11 +428,11 @@ async function createElaboratorNow(input: {
     return (await updateElaboratorNow(input.id, { ...input, description: input.description ?? '' }))!
   }
   // The renderer commit path (ElaboratorsModal.saveDraft) already cleans these
-  // via textCleanup; here we only guard the no-content edge cases.
+  // via textCleanup, and createElaborator has checked the name.
   const created: Elaborator = {
     id: input.id ?? `elab-${nanoid(10)}`,
     kind: input.kind,
-    name: input.name || 'Untitled',
+    name: input.name,
     description: input.description || undefined,
     template: input.template,
   }
@@ -454,11 +454,11 @@ async function updateElaboratorNow(
   const index = items.findIndex((item) => item.id === id)
   if (index < 0) return null
   const current = items[index]
-  // Patch values arrive already cleaned from the renderer commit path; guard
-  // only the no-content edge cases (empty name falls back to the current one).
+  // Patch values arrive already cleaned from the renderer commit path, and
+  // updateElaborator has checked a patched name.
   const next: Elaborator = {
     ...current,
-    name: patch.name !== undefined ? patch.name || current.name : current.name,
+    name: patch.name ?? current.name,
     description: patch.description !== undefined ? (patch.description || undefined) : current.description,
     template: patch.template !== undefined ? patch.template : current.template,
   }
@@ -500,6 +500,12 @@ export async function retryElaboratorSaves(): Promise<void> {
   }
 }
 
+// An elaborator always has a name; a missing one is refused before the save
+// chain, so it never becomes a failed save that quit would retry.
+function requireName(name: unknown): void {
+  if (typeof name !== 'string' || name.trim() === '') throw new Error('An elaborator needs a name.')
+}
+
 function ordered<T>(operation: () => Promise<T>): Promise<T> {
   const result = saving.catch(() => undefined).then(async () => {
     if (retrySave) await retrySave()
@@ -509,13 +515,15 @@ function ordered<T>(operation: () => Promise<T>): Promise<T> {
   saving = result
   return result
 }
-export function createElaborator(input: Parameters<typeof createElaboratorNow>[0]): Promise<Elaborator> {
+export async function createElaborator(input: Parameters<typeof createElaboratorNow>[0]): Promise<Elaborator> {
+  requireName(input.name)
   // The form keeps this ID across failed saves and revised drafts; quit also
   // retries the captured identity, never a fresh anonymous creation.
   const captured = { ...input, id: input.id ?? `elab-${nanoid(10)}` }
   return ordered(() => createElaboratorNow(captured))
 }
-export function updateElaborator(id: string, patch: Parameters<typeof updateElaboratorNow>[1]): Promise<Elaborator | null> {
+export async function updateElaborator(id: string, patch: Parameters<typeof updateElaboratorNow>[1]): Promise<Elaborator | null> {
+  if (patch.name !== undefined) requireName(patch.name)
   return ordered(() => updateElaboratorNow(id, patch))
 }
 export function deleteElaborator(id: string): Promise<boolean> { return ordered(() => deleteElaboratorNow(id)) }

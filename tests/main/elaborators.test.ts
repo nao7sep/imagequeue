@@ -67,6 +67,15 @@ describe('elaborator sets', () => {
     await deleteElaborator(item.id)
     expect(stored().composition.some((row: { id: string }) => row.id === item.id)).toBe(false)
   })
+  it('refuses a missing name on create and update without writing or leaving a save to retry', async () => {
+    const item = listElaborators().find((row) => row.kind === 'style')!
+    await expect(createElaborator({ kind: 'style', name: '', template: 'My template' })).rejects.toThrow('needs a name')
+    await expect(createElaborator({ kind: 'style', name: '  ', template: 'My template' })).rejects.toThrow('needs a name')
+    await expect(updateElaborator(item.id, { name: '' })).rejects.toThrow('needs a name')
+    expect(fs.existsSync(file())).toBe(false)
+    await expect(elaborators.retryElaboratorSaves()).resolves.toBeUndefined()
+    expect(fs.existsSync(file())).toBe(false)
+  })
   it('resets a kind by deleting its copy and preserves the other kind', async () => {
     const initial = listElaborators()
     await createElaborator({ kind: 'style', name: 'My style', template: 'My template' })
