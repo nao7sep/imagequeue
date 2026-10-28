@@ -1,194 +1,210 @@
-import { spawn } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { createConnection, createServer } from 'node:net';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+/**
+ * One ImageQueue runtime per repository, for the launchers of both platforms.
+ * The launcher that starts ImageQueue records its process ID and executable
+ * under .git; the next launcher asks that process to quit only while it still
+ * runs that executable, and stops with a message rather than force-closing it
+ * when it stays open. ImageQueue started any other way is left to its
+ * single-instance behavior, which brings its window forward instead of opening
+ * a second one.
+ */
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { readFile, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listProcesses, liveRecorded, processIdentity, retainProcessTree } from './launcher-processes.mjs';
+import { promisify } from 'node:util';
 
+const execFileAsync = promisify(execFile);
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const RENDERER_HOST = '127.0.0.1';
 export const RENDERER_PORT = 20641;
-const namespace = `imagequeue-launcher-${createHash('sha256').update(REPO_ROOT).digest('hex').slice(0, 20)}`;
-const delay = (ms) => new Promise((done) => setTimeout(done, ms));
-export const handshakePath = (token, directory = tmpdir()) => join(directory, `imagequeue-launch-${token}.json`);
+const RECORD_FILE = join(REPO_ROOT, '.git', 'launcher-runtime-process');
+const windows = process.platform === 'win32';
+const delay = (milliseconds) => new Promise((done) => setTimeout(done, milliseconds));
 
-async function readJson(file) {
-  try { return JSON.parse(await readFile(file, 'utf8')); }
-  catch (error) { if (error.code === 'ENOENT') return null; throw error; }
-}
-async function writeJson(file, value) {
-  const stage = `${file}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(stage, JSON.stringify(value), { mode: 0o600, flag: 'wx' });
-    await rename(stage, file);
-  } finally { await rm(stage, { force: true }); }
-}
-
-export function requestControl(endpoint, command) {
-  return new Promise((resolveRequest, reject) => {
-    const socket = createConnection({ host: '127.0.0.1', port: endpoint.port });
-    let text = '';
-    let settled = false;
-    const finish = (error, value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.destroy();
-      error ? reject(error) : resolveRequest(value);
-    };
-    const timer = setTimeout(() => finish(new Error('The owned app did not answer its launcher.')), 5000);
-    socket.once('error', (error) => finish(error));
-    socket.once('connect', () => socket.write(`${JSON.stringify({ token: endpoint.token, command })}\n`));
-    socket.on('data', (chunk) => {
-      text += chunk.toString('utf8');
-      if (text.length > 1024) { finish(new Error('Invalid launcher control response.')); return; }
-      const end = text.indexOf('\n');
-      if (end < 0) return;
-      try {
-        const value = JSON.parse(text.slice(0, end));
-        if (value.token !== endpoint.token || value.pid !== endpoint.pid || !['starting', 'ready', 'failed', 'quitting'].includes(value.status)) {
-          throw new Error('The launcher endpoint belongs to a different app generation.');
-        }
-        finish(null, value);
-      } catch (error) { finish(error); }
-    });
-    socket.once('end', () => finish(new Error('The owned app closed its launcher connection before answering.')));
+async function powershell(script) {
+  const { stdout } = await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
   });
+  return stdout.trim();
 }
 
-/** One owner covers replacement/build/start. The runtime record outlives this
- * helper; old dev cleanup can request closure only for its exact generation. */
-export class LauncherRuntime {
-  constructor({ directory = tmpdir(), processes = listProcesses, control = requestControl, now = () => performance.now(), sleep = delay } = {}) {
-    this.directory = directory;
-    this.file = join(directory, `${namespace}.json`);
-    this.lock = `${this.file}.lock`;
-    this.processes = processes;
-    this.control = control;
-    this.now = now;
-    this.sleep = sleep;
+async function osascript(script, ...args) {
+  const { stdout } = await execFileAsync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, ...args], { encoding: 'utf8' });
+  return stdout.trim();
+}
+
+function sameExecutable(left, right) {
+  return windows ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/** The executable a process runs, or "" when no such process exists. */
+async function executableOf(pid) {
+  if (windows) return powershell(`(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).Path`);
+  // ps shows the path a process was started with, which wrappers can give
+  // relatively; lsof names the file it runs.
+  try {
+    const { stdout } = await execFileAsync('lsof', ['-a', '-p', String(pid), '-d', 'txt', '-Fn'], { encoding: 'utf8' });
+    return stdout.split('\n').find((line) => line.startsWith('n'))?.slice(1) ?? '';
+  } catch (error) {
+    if (error?.code === 1) return ''; // lsof lists nothing for an ended process
+    throw error;
   }
-  async exclusive(operation) {
-    try { await mkdir(this.lock, { mode: 0o700 }); }
-    catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      throw new Error(`Another ImageQueue launch/build is in progress, or its launcher was interrupted. Close that launcher first. If no launcher is running, remove only ${this.lock} and retry.`);
+}
+
+async function record(pid, executable) {
+  await writeFile(RECORD_FILE, `${pid}\n${executable}\n`, 'utf8');
+}
+
+/** The recorded process ID, returned only while that process still runs the recorded executable. */
+async function recordedPid() {
+  let text;
+  try {
+    text = await readFile(RECORD_FILE, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined;
+    throw error;
+  }
+  const [pidText, executable] = text.split(/\r?\n/);
+  const pid = Number(pidText);
+  if (!Number.isInteger(pid) || pid <= 0 || !executable) return undefined;
+  return sameExecutable(await executableOf(pid), executable) ? pid : undefined;
+}
+
+/** Ask the process to quit as a user would, so it can still finish or ask about running work. */
+async function requestClose(pid) {
+  if (windows) {
+    await powershell(`$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($p) { $null = $p.CloseMainWindow() }`);
+    return;
+  }
+  await osascript(`ObjC.import('AppKit');
+function run(args) {
+  var application = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(args[0]));
+  if (application) application.terminate;
+}`, String(pid));
+}
+
+/** Ask the recorded runtime to quit; with onlyPid, only while that is the recorded one. */
+export async function stopRecorded(onlyPid) {
+  const pid = await recordedPid();
+  if (pid === undefined || (onlyPid !== undefined && pid !== onlyPid)) return;
+  process.stdout.write(`Asking the running ImageQueue (pid ${pid}) to quit.\n`);
+  await requestClose(pid);
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (await recordedPid() !== pid) return;
+    await delay(100);
+  }
+  throw new Error('ImageQueue is still open, perhaps finishing or asking about running work. Close it, then run this launcher again.');
+}
+
+const singleInstanceNote = 'If ImageQueue was already running outside these launchers, its window is brought forward instead.\n';
+
+/** Open a new instance of the bundle through Launch Services, which gives it its bundle identity. */
+export async function launchBundle(bundle) {
+  const pid = Number(await osascript(`ObjC.import('AppKit');
+function run(args) {
+  var application = $.NSWorkspace.sharedWorkspace.launchApplicationAtURLOptionsConfigurationError(
+    $.NSURL.fileURLWithPath(args[0]), $.NSWorkspaceLaunchNewInstance, $({}), null);
+  return application.isNil() ? '' : String(application.processIdentifier);
+}`, resolve(bundle)));
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error('ImageQueue could not be opened.');
+  await record(pid, await executableOf(pid));
+  process.stdout.write(singleInstanceNote);
+}
+
+export async function launchExecutable(executable) {
+  const child = spawn(resolve(executable), [], { detached: true, stdio: 'ignore' });
+  await once(child, 'spawn');
+  child.unref();
+  await record(child.pid, resolve(executable));
+  process.stdout.write(singleInstanceNote);
+}
+
+async function listProcesses() {
+  if (!windows) {
+    const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,comm='], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    return stdout.split('\n').map((line) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)).filter(Boolean)
+      .map((match) => ({ pid: Number(match[1]), parentPid: Number(match[2]), executable: match[3].trim() }));
+  }
+  const decoded = JSON.parse(await powershell(
+    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,ExecutablePath | ConvertTo-Json -Compress',
+  ) || '[]');
+  return (Array.isArray(decoded) ? decoded : [decoded]).map((row) => ({
+    pid: Number(row.ProcessId),
+    parentPid: Number(row.ParentProcessId),
+    executable: row.ExecutablePath ?? '',
+  }));
+}
+
+/**
+ * Record the app process that the wrapper (electron-vite) starts, once it
+ * appears: the topmost descendant running the executable, since Electron's own
+ * child processes can share it. Fails when the wrapper ends first, as it does
+ * when the build fails. Returns the recorded process ID.
+ */
+export async function recordWrapped(wrapperPid, executable) {
+  const expected = resolve(executable);
+  for (;;) {
+    const processes = await listProcesses();
+    if (!processes.some((item) => item.pid === wrapperPid)) {
+      throw new Error('The ImageQueue development runtime ended before the app started.');
     }
-    try {
-      await writeJson(join(this.lock, 'owner.json'), { pid: process.pid });
-      return await operation();
-    } finally { await rm(this.lock, { recursive: true, force: true }); }
-  }
-  read() { return readJson(this.file); }
-  save(record) { return writeJson(this.file, record); }
-  async endpoint(token) {
-    const endpoint = await readJson(handshakePath(token, this.directory));
-    if (endpoint && (endpoint.token !== token || !Number.isSafeInteger(endpoint.pid) || endpoint.pid <= 0 || !Number.isInteger(endpoint.port) || endpoint.port <= 0 || endpoint.port > 65535)) {
-      throw new Error('The owned app has an invalid launcher handshake. Close it normally and retry.');
-    }
-    return endpoint;
-  }
-  async stopCurrent(expectedToken, timeout = 30000) {
-    const record = await this.read();
-    if (!record || (expectedToken !== undefined && record.token !== expectedToken)) return;
-    let current = await this.processes();
-    const endpoint = await this.endpoint(record.token);
-    // A startup interrupted before its main PID was recorded can still prove
-    // ownership through the generation's authenticated, live service.
-    const endpointProcess = endpoint && current.find((item) => item.pid === endpoint.pid);
-    if (endpoint && !record.processes.some((item) => item.pid === endpointProcess?.pid && item.created === endpointProcess.created)) {
-      let authenticated = false;
-      try {
-        await this.control(endpoint, 'status');
-        authenticated = true;
-      } catch (error) {
-        if (record.phase !== 'ready') throw new Error('The interrupted app launch cannot be confirmed closed. Close it normally before removing its launcher record.', { cause: error });
-      }
-      if (authenticated) {
-        // A dev reload may have published its new handshake after our snapshot.
-        current = await this.processes();
-        const main = current.find((item) => item.pid === endpoint.pid);
-        if (!main) throw new Error('The owned app answered but its process identity could not be observed. Retry ordinary closure.');
-        record.processes.push(processIdentity(main));
-      }
-    }
-    record.processes = retainProcessTree(record.processes, current);
-    await this.save(record);
-    if (liveRecorded(record.processes, current).length) {
-      if (!endpoint) throw new Error('The owned app is still starting and cannot accept Quit yet. Close it normally or wait, then retry.');
-      let requestError;
-      try { await this.control(endpoint, 'quit'); } catch (error) { requestError = error; }
-      const deadline = this.now() + timeout;
-      while (true) {
-        current = await this.processes();
-        const retained = retainProcessTree(record.processes, current);
-        if (retained.length !== record.processes.length) { record.processes = retained; await this.save(record); }
-        if (!liveRecorded(record.processes, current).length) break;
-        if (requestError) throw new Error('The owned app could not receive ordinary Quit. Close it normally and retry; no process was forced to exit.', { cause: requestError });
-        if (this.now() >= deadline) throw new Error('ImageQueue or its recorded child processes are still running. Finish or cancel work and quit normally, then retry. Nothing was force-closed.');
-        await this.sleep(100);
-      }
-    } else if (record.phase === 'starting' && !endpoint) {
-      throw new Error('An interrupted launch has an unknown outcome. Close any app it opened before removing its launcher record.');
-    }
-    await rm(this.file, { force: true });
-    await rm(handshakePath(record.token, this.directory), { force: true });
-  }
-  async stopIfOwner(token, timeout) {
-    return this.exclusive(() => this.stopCurrent(token, timeout));
-  }
-  async start(executable, args, { development = false, timeout = 60000 } = {}) {
-    const record = { token: randomUUID(), phase: 'starting', processes: [] };
-    await this.save(record);
-    const child = spawn(executable, args, {
-      cwd: REPO_ROOT, detached: true, windowsHide: true,
-      stdio: development ? 'inherit' : 'ignore',
-      env: { ...process.env, IMAGEQUEUE_LAUNCH_TOKEN: record.token },
-    });
-    let spawnError;
-    const exited = new Promise((done) => {
-      child.once('error', (error) => { spawnError = error; done(1); });
-      child.once('exit', (code) => done(code ?? 1));
-    });
-    const deadline = this.now() + timeout;
-    let ready = false;
-    try {
-      while (true) {
-        if (spawnError) { record.phase = 'failed'; await this.save(record); throw spawnError; }
-        const current = await this.processes();
-        if (!record.processes.length && child.pid) {
-          const root = current.find((item) => item.pid === child.pid);
-          if (root) record.processes.push(processIdentity(root));
+    const descendants = new Set([wrapperPid]);
+    for (let grown = true; grown;) {
+      grown = false;
+      for (const item of processes) {
+        if (descendants.has(item.parentPid) && !descendants.has(item.pid)) {
+          descendants.add(item.pid);
+          grown = true;
         }
-        record.processes = retainProcessTree(record.processes, current);
-        const endpoint = await this.endpoint(record.token);
-        if (endpoint) {
-          const status = await this.control(endpoint, 'status');
-          const main = current.find((item) => item.pid === status.pid);
-          if (main && !record.processes.some((item) => item.pid === main.pid && item.created === main.created)) record.processes.push(processIdentity(main));
-          record.processes = retainProcessTree(record.processes, current);
-          if (status.status === 'failed') throw new Error('ImageQueue reported a startup failure. See its recovery window.');
-          if (status.status === 'ready' && main) {
-            record.phase = 'ready';
-            await this.save(record);
-            ready = true;
-            return { token: record.token, exited };
-          }
-        }
-        await this.save(record);
-        if (this.now() >= deadline) throw new Error('The selected ImageQueue generation did not become ready. An independently opened instance or an older build may be active. Quit it normally, or use rebuild to create the current launcher-aware package.');
-        await this.sleep(100);
       }
-    } finally { if (!development || !ready) child.unref(); }
+    }
+    const candidates = processes.filter((item) => item.pid !== wrapperPid && descendants.has(item.pid)
+      && sameExecutable(basename(item.executable), basename(expected)));
+    const matches = [];
+    for (const item of candidates) {
+      const running = windows ? item.executable : await executableOf(item.pid);
+      if (sameExecutable(running, expected)) matches.push({ ...item, executable: running });
+    }
+    const app = matches.find((item) => !matches.some((other) => other.pid === item.parentPid));
+    if (app) {
+      await record(app.pid, app.executable);
+      return app.pid;
+    }
+    await delay(200);
   }
 }
 
 export async function assertEndpointAvailable(host = RENDERER_HOST, port = RENDERER_PORT) {
-  await new Promise((done, reject) => {
+  await new Promise((resolveProbe, rejectProbe) => {
     const probe = createServer();
-    probe.once('error', (error) => reject(new Error(`Cannot bind ${host}:${port}: ${error.code ?? error.message}. The unknown listener was left running.`)));
-    probe.listen({ host, port, exclusive: true }, () => probe.close((error) => error ? reject(error) : done()));
+    probe.unref();
+    probe.once('error', (error) => {
+      rejectProbe(new Error(
+        `Cannot bind ${host}:${port}: ${error.code ?? error.message}. The listener was left running because its app identity is unknown.`,
+      ));
+    });
+    probe.listen({ host, port, exclusive: true }, () => {
+      probe.close((error) => error ? rejectProbe(error) : resolveProbe());
+    });
   });
+}
+
+export async function waitForHttp(url, timeoutMilliseconds) {
+  const deadline = Date.now() + timeoutMilliseconds;
+  let lastError = 'no response';
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
+      if (response.ok) return;
+      lastError = `HTTP ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await delay(200);
+  }
+  throw new Error(`${url} did not become ready within ${timeoutMilliseconds} ms (${lastError}).`);
 }
