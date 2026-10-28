@@ -1,4 +1,3 @@
-import { isStorageStillPending } from '../../../shared/storage-wait'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { type Task } from '../../../shared/types'
 import { useSettings } from '../context/SettingsContext'
@@ -162,7 +161,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
     error: unknown,
   ): void => {
     logActionFailure(action, error)
-    setActionFailures((current) => ({ ...current, [action]: isStorageStillPending(error) ? 'storage.stillPending' : message }))
+    setActionFailures((current) => ({ ...current, [action]: message }))
   }, [])
 
   const clearActionFailure = useCallback((action: PromptPaneAction): void => {

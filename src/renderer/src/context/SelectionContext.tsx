@@ -1,5 +1,4 @@
 import { requestTaskReveal } from '../utils/taskScroll'
-import { isStorageStillPending } from '../../../shared/storage-wait'
 import {
   createContext,
   useCallback,
@@ -168,7 +167,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
     recordOperationalDiagnostic(diagnosticMessage, error, { taskId, action })
     setTaskActionResults((current) => ({
       ...current,
-      [taskId]: { ...current[taskId], [action]: isStorageStillPending(error) ? 'storage.stillPending' : message },
+      [taskId]: { ...current[taskId], [action]: message },
     }))
   }, [])
 
@@ -205,7 +204,7 @@ export function SelectionProvider({ children }: { children: ReactNode }): React.
       if (taskActionAttemptsRef.current.get(key) !== attempt) return 'superseded'
       setTaskActionResults((current) => ({
         ...current,
-        [taskId]: { ...current[taskId], [action]: isStorageStillPending(error) ? 'storage.stillPending' : message },
+        [taskId]: { ...current[taskId], [action]: message },
       }))
       return 'failed'
     } finally {

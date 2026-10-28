@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ create: vi.fn() }))
 vi.mock('../../../src/main/concepts/concept-worker?nodeWorker', () => ({ default: mocks.create }))
-import { closeConceptStore, CONCEPT_REQUEST_TIMEOUT_MS, ensureFacet, listFacetDisplays, recordUses } from '../../../src/main/concepts/concept-store'
+import { closeConceptStore, ensureFacet, listFacetDisplays, recordUses } from '../../../src/main/concepts/concept-store'
 
 type Message = { id: number; op: string; args: unknown[] }
 function thread() {
@@ -14,17 +14,13 @@ function thread() {
     terminate: vi.fn().mockResolvedValue(0),
   })
 }
-afterEach(() => { vi.useRealTimers(); mocks.create.mockReset() })
+afterEach(() => { mocks.create.mockReset() })
 
 describe('concept library serial owner', () => {
-  it('keeps the same physical owner after a caller deadline and drains before closing', async () => {
-    vi.useFakeTimers()
+  it('drains admitted requests in order before closing', async () => {
     const worker = thread()
     mocks.create.mockReturnValue(worker)
     const first = ensureFacet('place')
-    const failed = expect(first).rejects.toThrow('may still finish')
-    await vi.advanceTimersByTimeAsync(CONCEPT_REQUEST_TIMEOUT_MS)
-    await failed
     const second = listFacetDisplays()
     expect(mocks.create).toHaveBeenCalledOnce()
     expect(worker.terminate).not.toHaveBeenCalled()
@@ -33,6 +29,7 @@ describe('concept library serial owner', () => {
     expect(worker.posted.map((message) => message.op)).toEqual(['ensureFacet', 'listFacetDisplays', 'closeConceptStore'])
     worker.emit('message', { id: worker.posted[0].id, value: { id: 1, display: 'place' }, paths: [] })
     worker.emit('message', { id: worker.posted[1].id, value: ['place'], paths: [] })
+    await expect(first).resolves.toEqual({ id: 1, display: 'place' })
     await expect(second).resolves.toEqual(['place'])
     expect(worker.terminate).not.toHaveBeenCalled()
     worker.emit('message', { id: worker.posted[2].id, value: undefined, paths: [] })

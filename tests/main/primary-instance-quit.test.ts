@@ -47,7 +47,6 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn(),
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn() },
 }))
-vi.mock('../../src/main/utils/storage-wait', () => ({ drainExports: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/config', () => ({
   loadConfig: vi.fn(() => ({ general: { theme: 'system', show_status_icon: false, show_preview_window: false } })),
   ensureDataDir: vi.fn(),
@@ -69,7 +68,7 @@ vi.mock('../../src/main/queue', () => ({ registerQueueIpc: vi.fn(), queueManager
 vi.mock('../../src/main/backends', () => ({ startProcessor: vi.fn(), stopProcessor: vi.fn() }))
 vi.mock('../../src/main/audio-protocol', () => ({ registerAudioProtocol: vi.fn() }))
 vi.mock('../../src/main/image-protocol', () => ({ registerImageProtocol: vi.fn(), registerMediaSchemesAsPrivileged: vi.fn() }))
-vi.mock('../../src/main/settings-ipc', () => ({ registerSettingsIpc: vi.fn() }))
+vi.mock('../../src/main/settings-ipc', () => ({ registerSettingsIpc: vi.fn(), drainExports: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/settings-changed', () => ({ notifySettingsChanged: vi.fn() }))
 vi.mock('../../src/main/state-ipc', () => ({ registerStateIpc: vi.fn() }))
 vi.mock('../../src/main/dependencies-ipc', () => ({ registerDependenciesIpc: vi.fn() }))

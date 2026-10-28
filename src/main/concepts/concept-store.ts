@@ -10,9 +10,8 @@ let worker: Worker | null = null
 let failed: Error | null = null
 let nextId = 0
 let closing: Promise<void> | null = null
-export const CONCEPT_REQUEST_TIMEOUT_MS = 10_000
 const paths: string[] = []
-const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer?: ReturnType<typeof setTimeout> }>()
+const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
 export function drainSetAsideConceptStorePaths(): string[] { return paths.splice(0) }
 function owner(): Worker {
   if (failed) throw failed
@@ -26,7 +25,6 @@ function owner(): Worker {
     const request = pending.get(message.id)
     if (!request) return
     pending.delete(message.id)
-    clearTimeout(request.timer)
     if (message.error) {
       const e = message.error
       const error = e.name === 'NewerFormatError' ? new NewerFormatError(e.path, e.found, e.supported)
@@ -38,7 +36,7 @@ function owner(): Worker {
   const stop = (error: Error): void => {
     if (worker !== started) return
     failed = error
-    for (const request of pending.values()) { clearTimeout(request.timer); request.reject(error) }
+    for (const request of pending.values()) request.reject(error)
     pending.clear()
   }
   started.on('error', stop)
@@ -50,18 +48,13 @@ function request<T>(op: string, args: unknown[]): Promise<T> {
     if (closing) { reject(new Error('The concept library is closing.')); return }
     const current = owner()
     const id = ++nextId
-    // A caller deadline does not release the serial writer or cancel its SQL.
-    // Later operations stay behind the actual completion in the same mailbox.
-    const timer = op === 'closeConceptStore' ? undefined : setTimeout(() => {
-      pending.delete(id)
-      reject(new Error('The concept library did not respond in time. Its current operation may still finish.'))
-    }, CONCEPT_REQUEST_TIMEOUT_MS)
-    pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer })
+    // Local storage work gets no deadline; requests settle in mailbox order.
+    pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
     try { current.postMessage({ id, op, args }) }
-    catch (error) { clearTimeout(timer); pending.delete(id); reject(error) }
+    catch (error) { pending.delete(id); reject(error) }
   })
 }
-/** Ordered after every admitted ledger operation, including ones whose caller was cancelled. */
+/** Ordered after every admitted ledger operation. */
 export function closeConceptStore(): Promise<void> {
   if (closing) return closing
   if (!worker) return Promise.resolve()

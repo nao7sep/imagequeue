@@ -5,7 +5,7 @@ import type { RecordsReaderRequest } from '../../src/main/records-reader'
 const mocks = vi.hoisted(() => ({ create: vi.fn(), writeLogRecord: vi.fn(), databasePath: '/disposable/records.sqlite3' as string | null }))
 vi.mock('../../src/main/records-reader-worker?nodeWorker', () => ({ default: mocks.create }))
 vi.mock('../../src/main/records', () => ({ flushRecords: async () => {}, writeLogRecord: mocks.writeLogRecord, recordsDatabasePath: () => mocks.databasePath }))
-import { RECORDS_READ_TIMEOUT_MS, closeRecordsReader, readRecords } from '../../src/main/records-reader'
+import { closeRecordsReader, readRecords } from '../../src/main/records-reader'
 
 type FakeWorker = EventEmitter & {
   posted: RecordsReaderRequest[]
@@ -58,73 +58,6 @@ describe('records reader', () => {
     await expect(first).rejects.toThrow('no such table')
   })
 
-  it('ends a worker whose read outlasts its bound, and starts a fresh one for the next read', async () => {
-    vi.useFakeTimers()
-    const stalled = fakeWorker()
-    const fresh = fakeWorker()
-    mocks.create.mockReturnValueOnce(stalled).mockReturnValueOnce(fresh)
-    const read = readRecords({ op: 'sources' })
-    const failed = expect(read).rejects.toThrow('timed out')
-    await vi.advanceTimersByTimeAsync(RECORDS_READ_TIMEOUT_MS)
-    await failed
-    expect(stalled.terminate).toHaveBeenCalledOnce()
-
-    const next = readRecords({ op: 'sources' })
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(mocks.create).toHaveBeenCalledTimes(2)
-    fresh.emit('message', { id: fresh.posted[0]!.id, ok: true, value: { launches: [], sessions: [] } })
-    await expect(next).resolves.toEqual({ launches: [], sessions: [] })
-    // A late answer from the ended worker changes nothing.
-    stalled.emit('message', { id: 1, ok: true, value: PAGE })
-  })
-
-  it('waits for native termination before replacement, even across another read deadline and close', async () => {
-    vi.useFakeTimers()
-    const stalled = fakeWorker()
-    const fresh = fakeWorker()
-    let finishTermination!: () => void
-    stalled.terminate.mockReturnValue(new Promise<number>((resolve) => { finishTermination = () => resolve(0) }))
-    mocks.create.mockReturnValueOnce(stalled).mockReturnValueOnce(fresh)
-    try {
-      const first = readRecords({ op: 'sources' })
-      const firstFailed = expect(first).rejects.toThrow('timed out')
-      await vi.advanceTimersByTimeAsync(RECORDS_READ_TIMEOUT_MS)
-      await firstFailed
-      expect(stalled.terminate).toHaveBeenCalledOnce()
-
-      const second = readRecords({ op: 'sources' })
-      const secondFailed = expect(second).rejects.toThrow('timed out')
-      await vi.advanceTimersByTimeAsync(RECORDS_READ_TIMEOUT_MS)
-      await secondFailed
-      expect(mocks.create).toHaveBeenCalledOnce()
-      expect(stalled.terminate).toHaveBeenCalledOnce()
-
-      const third = readRecords({ op: 'sources' })
-      const thirdFailed = expect(third).rejects.toThrow('closed')
-      const closing = closeRecordsReader()
-      await thirdFailed
-      let closed = false
-      void closing.then(() => { closed = true })
-      await vi.advanceTimersByTimeAsync(RECORDS_READ_TIMEOUT_MS)
-      expect(closed).toBe(false)
-      expect(mocks.create).toHaveBeenCalledOnce()
-
-      finishTermination()
-      await closing
-      await vi.advanceTimersByTimeAsync(0)
-      // Timed-out and closed reads must not become late replacement requests.
-      expect(mocks.create).toHaveBeenCalledOnce()
-      const next = readRecords({ op: 'sources' })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(mocks.create).toHaveBeenCalledTimes(2)
-      fresh.emit('message', { id: fresh.posted[0]!.id, ok: true, value: { launches: [], sessions: [] } })
-      await expect(next).resolves.toEqual({ launches: [], sessions: [] })
-    } finally {
-      finishTermination()
-    }
-  })
-
   it('fails the reads waiting on a worker that stops', async () => {
     const worker = fakeWorker()
     mocks.create.mockReturnValue(worker)
@@ -133,6 +66,26 @@ describe('records reader', () => {
     await Promise.resolve()
     worker.emit('exit', 1)
     await expect(read).rejects.toThrow('exited')
+  })
+
+  it('starts a new worker for the next read after one errors', async () => {
+    const failed = fakeWorker()
+    const fresh = fakeWorker()
+    mocks.create.mockReturnValueOnce(failed).mockReturnValueOnce(fresh)
+    const read = readRecords({ op: 'sources' })
+    await Promise.resolve()
+    await Promise.resolve()
+    failed.emit('error', new Error('native crash'))
+    await expect(read).rejects.toThrow('native crash')
+
+    const next = readRecords({ op: 'sources' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.create).toHaveBeenCalledTimes(2)
+    // The failed worker's later exit does not fail the new worker's read.
+    failed.emit('exit', 1)
+    fresh.emit('message', { id: fresh.posted[0]!.id, ok: true, value: { launches: [], sessions: [] } })
+    await expect(next).resolves.toEqual({ launches: [], sessions: [] })
   })
 
   it('refuses to read while the records database is not open', async () => {

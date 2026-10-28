@@ -1,6 +1,5 @@
 {
   "common.actions": "Azioni",
-  "storage.stillPending": "L’operazione di archiviazione richiede più tempo del previsto e potrebbe ancora completarsi. Controlla il risultato prima di riprovare.",
   "quit.title": "Impossibile salvare prima di uscire",
   "quit.message": "Non è stato possibile salvare alcune modifiche. Riprova, esci senza salvarle oppure annulla la chiusura.",
   "quit.quitAnyway": "Esci comunque",

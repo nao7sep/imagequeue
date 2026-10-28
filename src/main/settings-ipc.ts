@@ -3,7 +3,6 @@ import { BrowserWindow, ClipboardItem, shell, dialog, app, clipboard } from 'ele
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
-import { ownExportDestination, waitForStorage } from './utils/storage-wait'
 import { assertNotQuitting } from './quit-state'
 import { handle } from './ipc-boundary'
 import { saveImageBackendDefaults } from './backend-defaults'
@@ -95,6 +94,22 @@ function validateKeyChanges(changes: Record<string, string>): void {
   for (const [id, value] of Object.entries(changes ?? {})) {
     if (!secretIds.has(id) || typeof value !== 'string') throw new Error(`Cannot save unsupported api key: ${id}`)
   }
+}
+
+// An export the user started before quitting finishes its copy before the app exits.
+const runningExports = new Set<Promise<unknown>>()
+function trackExport<T>(operation: () => Promise<T>): Promise<T> {
+  const copy = operation()
+  runningExports.add(copy)
+  void copy.finally(() => runningExports.delete(copy)).catch(() => undefined)
+  return copy
+}
+
+/** Ordinary quit joins export copies still running. */
+export async function drainExports(): Promise<void> {
+  const results = await Promise.allSettled(runningExports)
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') throw failure.reason
 }
 
 // IPC handlers for reading/writing settings.
@@ -329,7 +344,7 @@ export function registerSettingsIpc(
     const exportDir = configuredExportDir()
     const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
     const requestedDestination = path.join(exportDir, `${safeBase}.${safeExt}`)
-    return ownExportDestination(requestedDestination, async () => {
+    return trackExport(async () => {
       await fs.promises.mkdir(exportDir, { recursive: true })
       let destPath = requestedDestination
       const staging = await stageExportCopy(src, destPath)
@@ -359,7 +374,7 @@ export function registerSettingsIpc(
     if (result.canceled || !result.filePath) return null
     assertNotQuitting()
     const destPath = exportPathForFormat(result.filePath, safeExt)
-    return waitForStorage(ownExportDestination(destPath, async () => {
+    return trackExport(async () => {
       await fs.promises.mkdir(path.dirname(destPath), { recursive: true })
       // The user chose this name, replacing any file there; it is replaced only
       // once the complete copy is in place beside it.
@@ -370,7 +385,7 @@ export function registerSettingsIpc(
         await fs.promises.rm(staging, { force: true }).catch(() => undefined)
       }
       return destPath
-    }))
+    })
   })
 
   handle('clipboard:readText', () => {
