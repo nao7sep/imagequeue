@@ -18,7 +18,6 @@ import type {
   DependencyId,
   DependencyProgress,
 } from '../../../shared/types'
-import { DEPENDENCY_WAIT_MS, DEPENDENCY_CANCEL_WAIT_MS } from '../../../shared/dependency-wait'
 import { presentFailure } from '../utils/failurePresentation'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
@@ -27,12 +26,10 @@ import { message, type Message } from '../../../shared/i18n/translate'
 export type DependencyOperation = DependencyId | 'check' | 'toggle'
 export type CancellableDependencyOperation = Exclude<DependencyOperation, 'toggle'>
 export type DependencyTerminalOutcome = 'cancelled'
-export type DependencyWaitOutcome = 'settled' | 'pending'
 type InstallWarning = CliInstallWarning | RecommendationsInstallWarning
 
 interface ControllerState {
   snapshot: DependenciesState | null
-  pending: ReadonlySet<DependencyOperation>
   busy: ReadonlySet<DependencyOperation>
   progress: DependencyProgress | null
   errors: Partial<Record<DependencyOperation | 'load' | 'cancel', MessageKey>>
@@ -44,7 +41,6 @@ type Action =
   | { type: 'load-success'; snapshot: DependenciesState }
   | { type: 'load-failure'; error: MessageKey }
   | { type: 'start'; operation: DependencyOperation }
-  | { type: 'pending'; operation: DependencyOperation }
   | {
       type: 'settle'
       operation: DependencyOperation
@@ -59,7 +55,6 @@ type Action =
 const INITIAL_STATE: ControllerState = {
   snapshot: null,
   busy: new Set(),
-  pending: new Set(),
   progress: null,
   errors: {},
   terminalOutcomes: {},
@@ -132,11 +127,7 @@ function reducer(state: ControllerState, action: Action): ControllerState {
       }
       return { ...state, busy, errors, terminalOutcomes }
     }
-    case 'pending':
-      return { ...state, pending: new Set([...state.pending, action.operation]) }
     case 'settle': {
-      const pending = new Set(state.pending)
-      pending.delete(action.operation)
       const busy = new Set(state.busy)
       busy.delete(action.operation)
       const errors = withoutError(state.errors, action.operation)
@@ -157,7 +148,6 @@ function reducer(state: ControllerState, action: Action): ControllerState {
           ? mergeSnapshot(state.snapshot, action.snapshot, action.operation)
           : state.snapshot,
         busy,
-        pending,
         progress: action.operation === 'cli' ? null : state.progress,
         errors,
         terminalOutcomes,
@@ -173,7 +163,6 @@ function reducer(state: ControllerState, action: Action): ControllerState {
 
 interface DependenciesController {
   state: DependenciesState | null
-  pending: ReadonlySet<DependencyOperation>
   busy: ReadonlySet<DependencyOperation>
   progress: DependencyProgress | null
   error: Message | null
@@ -182,10 +171,10 @@ interface DependenciesController {
   // work in progress once that view closes without repeating it behind the view.
   viewOpen: boolean
   registerView: () => () => void
-  check: () => Promise<DependencyWaitOutcome>
-  installCli: () => Promise<DependencyWaitOutcome>
-  installRecommendations: () => Promise<DependencyWaitOutcome>
-  setCheckAtLaunch: (value: boolean) => Promise<DependencyWaitOutcome>
+  check: () => Promise<void>
+  installCli: () => Promise<void>
+  installRecommendations: () => Promise<void>
+  setCheckAtLaunch: (value: boolean) => Promise<void>
   cancel: (operation: CancellableDependencyOperation) => Promise<void>
 }
 
@@ -194,7 +183,6 @@ const DependenciesContext = createContext<DependenciesController | null>(null)
 export function DependenciesProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [controller, dispatch] = useReducer(reducer, INITIAL_STATE)
   const active = useRef(new Set<DependencyOperation>())
-  const waits = useRef(new Map<DependencyOperation, { timer: ReturnType<typeof setTimeout>; expire: () => void }>())
   const cancelled = useRef(new Set<DependencyOperation>())
   const operationRevision = useRef(0)
   const refreshSequence = useRef(0)
@@ -252,71 +240,57 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   const run = useCallback(async (
     operation: DependencyOperation,
     invoke: () => Promise<DependenciesState | CliInstallResult | RecommendationsInstallResult>,
-  ): Promise<DependencyWaitOutcome> => {
-    if (active.current.has(operation)) return 'pending'
-    if (operation === 'check' && (active.current.has('cli') || active.current.has('recommendations'))) return 'pending'
-    if ((operation === 'cli' || operation === 'recommendations') && active.current.has('check')) return 'pending'
+  ): Promise<void> => {
+    if (active.current.has(operation)) return
+    if (operation === 'check' && (active.current.has('cli') || active.current.has('recommendations'))) return
+    if ((operation === 'cli' || operation === 'recommendations') && active.current.has('check')) return
     active.current.add(operation)
     operationRevision.current += 1
     dispatch({ type: 'start', operation })
-    const deadline = new Promise<DependencyWaitOutcome>((resolve) => {
-      const expire = (): void => {
-        dispatch({ type: 'pending', operation })
-        resolve('pending')
-      }
-      waits.current.set(operation, { expire, timer: setTimeout(expire, DEPENDENCY_WAIT_MS[operation]) })
-    })
-    // This continuation, not the caller race, owns exclusion and terminal state.
-    const physical = (async (): Promise<DependencyWaitOutcome> => {
-      let snapshot: DependenciesState | null = null
-      let error: MessageKey | null = null
-      let warnings: InstallWarning[] = []
-      let committed = false
+    let snapshot: DependenciesState | null = null
+    let error: MessageKey | null = null
+    let warnings: InstallWarning[] = []
+    let committed = false
+    try {
+      const result = await invoke()
+      committed = true
+      snapshot = 'warnings' in result ? result.state : result
+      if ('warnings' in result) warnings = result.warnings
+    } catch (operationError) {
+      if (!cancelled.current.has(operation)) error = presentFailure('dependencies-change', operationError)
       try {
-        const result = await invoke()
-        committed = true
-        snapshot = 'warnings' in result ? result.state : result
-        if ('warnings' in result) warnings = result.warnings
-      } catch (operationError) {
-        if (!cancelled.current.has(operation)) error = presentFailure('dependencies-change', operationError)
-        try {
-          snapshot = await window.electronAPI.getDependenciesState()
-        } catch (reconciliationError) {
-          recordOperationalDiagnostic('Failed to reconcile managed-tool state after an operation', reconciliationError, { operation })
-          // Retain the operation error and the prior snapshot. The operation itself
-          // remains the actionable failure when reconciliation is unavailable.
-        }
-      } finally {
-        clearTimeout(waits.current.get(operation)?.timer)
-        waits.current.delete(operation)
-        const wasCancelled = cancelled.current.has(operation)
-        active.current.delete(operation)
-        cancelled.current.delete(operation)
-        dispatch({ type: 'settle', operation, snapshot, error, warnings, cancelled: wasCancelled && !committed })
-        if (snapshot) announceChange()
+        snapshot = await window.electronAPI.getDependenciesState()
+      } catch (reconciliationError) {
+        recordOperationalDiagnostic('Failed to reconcile managed-tool state after an operation', reconciliationError, { operation })
+        // Retain the operation error and the prior snapshot. The operation itself
+        // remains the actionable failure when reconciliation is unavailable.
       }
-      return 'settled'
-    })()
-    return Promise.race([physical, deadline])
+    } finally {
+      const wasCancelled = cancelled.current.has(operation)
+      active.current.delete(operation)
+      cancelled.current.delete(operation)
+      dispatch({ type: 'settle', operation, snapshot, error, warnings, cancelled: wasCancelled && !committed })
+      if (snapshot) announceChange()
+    }
   }, [announceChange])
 
   const check = useCallback(
-    (): Promise<DependencyWaitOutcome> => run('check', () => window.electronAPI.checkDependencies()),
+    (): Promise<void> => run('check', () => window.electronAPI.checkDependencies()),
     [run],
   )
   const installCli = useCallback(
-    (): Promise<DependencyWaitOutcome> => run('cli', () => window.electronAPI.installCli()),
+    (): Promise<void> => run('cli', () => window.electronAPI.installCli()),
     [run],
   )
   const installRecommendations = useCallback(
-    (): Promise<DependencyWaitOutcome> => run(
+    (): Promise<void> => run(
       'recommendations',
       () => window.electronAPI.downloadRecommendations(),
     ),
     [run],
   )
   const setCheckAtLaunch = useCallback(
-    (value: boolean): Promise<DependencyWaitOutcome> => run(
+    (value: boolean): Promise<void> => run(
       'toggle',
       () => window.electronAPI.setCheckUpdatesAtLaunch(value),
     ),
@@ -327,13 +301,7 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   // only its own Cancel stops it.
   const cancel = useCallback(async (operation: CancellableDependencyOperation): Promise<void> => {
     if (!active.current.has(operation)) return
-    if (cancelled.current.has(operation)) return
     cancelled.current.add(operation)
-    const wait = waits.current.get(operation)
-    if (wait) {
-      clearTimeout(wait.timer)
-      wait.timer = setTimeout(wait.expire, DEPENDENCY_CANCEL_WAIT_MS)
-    }
     try {
       // A check holds both tools' slots, so the CLI's slot names it.
       await window.electronAPI.cancelDependencyOperation(operation === 'check' ? 'cli' : operation)
@@ -360,7 +328,6 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   const value = useMemo<DependenciesController>(() => ({
     state: controller.snapshot,
     busy: controller.busy,
-    pending: controller.pending,
     progress: controller.progress,
     error,
     terminalOutcomes: controller.terminalOutcomes,
@@ -374,7 +341,6 @@ export function DependenciesProvider({ children }: { children: ReactNode }): Rea
   }), [
     controller.snapshot,
     controller.busy,
-    controller.pending,
     controller.progress,
     controller.terminalOutcomes,
     error,

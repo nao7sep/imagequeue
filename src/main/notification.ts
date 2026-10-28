@@ -1,4 +1,4 @@
-import { loadAudioFile, releaseAudioFile } from './audio-protocol'
+import { loadAudioFile } from './audio-protocol'
 import { BrowserWindow, screen } from 'electron'
 import { handle } from './ipc-boundary'
 import { loadConfig } from './config'
@@ -212,6 +212,5 @@ export function registerNotificationIpc(): void {
     showNotification(type)
   })
 
-  handle('notification:loadAudioFile', (event, filePath: string) => loadAudioFile(filePath, event.sender))
-  handle('notification:releaseAudioFile', (event, url: string) => releaseAudioFile(url, event.sender))
+  handle('notification:loadAudioFile', (_event, filePath: string) => loadAudioFile(filePath))
 }

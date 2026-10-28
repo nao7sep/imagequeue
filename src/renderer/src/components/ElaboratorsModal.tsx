@@ -12,8 +12,10 @@ import './ElaboratorsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
-import { useModalOperation } from '../hooks/useModalOperation'
-import type { RetainedModalProps } from './RetainedModal'
+
+interface Props {
+  onClose: () => void
+}
 
 interface DraftState {
   name: string
@@ -71,14 +73,18 @@ function groupElaborators(items: Elaborator[]): Record<ElaboratorKind, Elaborato
   }
 }
 
-export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element | null {
-  const { visible = true } = props
-  const { busy, busyRef, pending, run, hide } = useModalOperation(props)
+export function ElaboratorsModal({ onClose }: Props): React.JSX.Element {
   const confirm = useConfirm()
   const { t } = useI18n()
   const [items, setItems] = useState<Elaborator[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<MessageKey | null>(null)
+  const [busy, setBusyState] = useState(false)
+  const busyRef = useRef(false)
+  const setBusy = useCallback((value: boolean): void => {
+    busyRef.current = value
+    setBusyState(value)
+  }, [])
   const [message, setMessage] = useState<MessageKey | null>(null)
   const [selectedIds, setSelectedIds] = useState<Record<ElaboratorKind, string | null>>({
     composition: null,
@@ -168,9 +174,9 @@ export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element |
       setMessage('elaborators.templateRequired')
       return
     }
+    setBusy(true)
     setMessage(null)
-    await run(async (startWait) => {
-      startWait()
+    try {
       // Clean at this commit point: name/description are scalar single-line
       // fields (flatten pasted line breaks, keep horizontal spacing); the
       // template is a multiline body (tidy edges/trailing whitespace, keep
@@ -204,15 +210,20 @@ export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element |
       if (savedId) {
         setSelectedIds((prev) => ({ ...prev, [draftTarget.kind]: savedId }))
       }
-    }, (error) => setMessage(presentFailure('elaborators-change', error)))
-  }, [draft, draftTarget, refresh, run, busyRef])
+    } catch (error) {
+      setMessage(presentFailure('elaborators-change', error))
+    } finally {
+      setBusy(false)
+    }
+  }, [draft, draftTarget, refresh, setBusy])
 
   const handleDelete = useCallback(async (kind: ElaboratorKind): Promise<void> => {
     if (busyRef.current || draftTarget) return
     const selectedId = selectedIds[kind]
     const item = selectedId ? items.find((candidate) => candidate.id === selectedId) : null
     if (!item) return
-    await run(async (startWait) => {
+    setBusy(true)
+    try {
       const ok = await confirm({
         title: t(KIND_PHRASES[kind].deleteTitle),
         message: t('elaborators.deleteMessage', { name: item.name }),
@@ -221,15 +232,19 @@ export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element |
       })
       if (!ok) return
       setMessage(null)
-      startWait()
       await window.electronAPI.deleteElaborator(item.id)
       await refresh()
-    }, (error) => setMessage(presentFailure('elaborators-change', error)))
-  }, [confirm, items, refresh, selectedIds, t, draftTarget, run, busyRef])
+    } catch (error) {
+      setMessage(presentFailure('elaborators-change', error))
+    } finally {
+      setBusy(false)
+    }
+  }, [confirm, items, refresh, selectedIds, t, draftTarget, setBusy])
 
   const handleReset = useCallback(async (kind: ElaboratorKind): Promise<void> => {
     if (busyRef.current || draftTarget) return
-    await run(async (startWait) => {
+    setBusy(true)
+    try {
       const ok = await confirm({
         title: t(KIND_PHRASES[kind].resetTitle),
         message: t(KIND_PHRASES[kind].resetMessage),
@@ -238,15 +253,19 @@ export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element |
       })
       if (!ok) return
       setMessage(null)
-      startWait()
       await window.electronAPI.resetElaborators(kind)
       await refresh()
-    }, (error) => setMessage(presentFailure('elaborators-change', error)))
-  }, [confirm, draftTarget, refresh, t, run, busyRef])
+    } catch (error) {
+      setMessage(presentFailure('elaborators-change', error))
+    } finally {
+      setBusy(false)
+    }
+  }, [confirm, draftTarget, refresh, t, setBusy])
 
   const handleRequestClose = useCallback(async (): Promise<void> => {
-    if (busyRef.current) { if (pending) hide(); return }
-    await run(async () => {
+    if (busyRef.current) return
+    setBusy(true)
+    try {
       if (dirty) {
         const ok = await confirm({
           title: t('elabSettings.discardTitle'),
@@ -257,9 +276,11 @@ export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element |
         })
         if (!ok) return
       }
-      return 'close'
-    }, (error) => setMessage(presentFailure('modal-close', error)))
-  }, [dirty, confirm, t, busyRef, pending, hide, run])
+      onClose()
+    } finally {
+      setBusy(false)
+    }
+  }, [dirty, confirm, onClose, t, setBusy])
 
   const renderEditor = (kind: ElaboratorKind): React.JSX.Element => (
     <div className="elaborator-editor" ref={editorRef}>
@@ -368,22 +389,19 @@ export function ElaboratorsModal(props: RetainedModalProps): React.JSX.Element |
     )
   }
 
-  if (!visible) return null
-
   return (
     <Modal
       title={t('menu.elaborators')}
       className="elaborators-modal-box"
       onClose={() => void handleRequestClose()}
-      dismissable={!busy || pending}
+      dismissable={!busy}
       footer={
-        <button className="modal-btn" onClick={() => void handleRequestClose()} disabled={busy && !pending}>
+        <button className="modal-btn" onClick={() => void handleRequestClose()} disabled={busy}>
           {t('common.close')}
         </button>
       }
     >
       <div className="elaborators-body">
-        {pending && <p role="status">{t('settings.savePending')}</p>}
         {/* The one rule that decides whether an elaborator works. Measured, not
             style advice: prose guidance scored 5.9/10 for how differently the
             resulting images looked, concrete specifics 8.1. */}

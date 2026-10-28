@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { PromptPane } from './PromptPane'
 import { QueueColumn } from './QueueColumn'
-import { RetainedModal } from './RetainedModal'
 import { SettingsModal } from './SettingsModal'
 import { SessionsModal } from './SessionsModal'
 import { ElaboratorsModal } from './ElaboratorsModal'
@@ -54,7 +53,7 @@ export function Layout(): React.JSX.Element {
   // The main prompt lives in the session draft: kept per session while the app
   // runs and re-hydrated on session change (new/resume), alongside the Advanced
   // Prompting state. No local reset is needed — the context handles it.
-  const { state: draft, update: updateDraft, draftUnavailable, draftLoading, retryDraftHydration } = useSessionDraft()
+  const { state: draft, update: updateDraft, draftUnavailable, retryDraftHydration } = useSessionDraft()
   const { uiState, patchUiState } = useUiState()
   const prompt = draft.prompt
   const setPrompt = useCallback((value: string): void => updateDraft({ prompt: value }), [updateDraft])
@@ -257,22 +256,31 @@ export function Layout(): React.JSX.Element {
       ref={layoutRef}
       style={{ '--iq-column-width': `${displayedColumn}px`, minWidth: computeWindowMinWidth(visibleColumnCount), minHeight: computeWindowMinHeight() } as React.CSSProperties}
     >
-      {(draftLoading || draftUnavailable) && (
+      {draftUnavailable && (
         <Modal
-          title={t(draftLoading ? 'common.loading' : 'draft.reloadTitle')}
+          title={t('draft.reloadTitle')}
           onClose={retryDraftHydration}
           dismissable={false}
           closeOnBackdropClick={false}
-          footer={draftUnavailable ? <button className="modal-btn" autoFocus onClick={retryDraftHydration}>{t('common.retry')}</button> : undefined}
+          footer={<button className="modal-btn" autoFocus onClick={retryDraftHydration}>{t('common.retry')}</button>}
         >
-          <div className="modal-body">{draftUnavailable ? <p role="alert">{t(draftUnavailable)}</p> : <p role="status">{t('common.loading')}</p>}</div>
+          <div className="modal-body"><p role="alert">{t(draftUnavailable)}</p></div>
         </Modal>
+      )}
+      {overlay === 'settings' && (
+        <SettingsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'shortcuts' && (
         <ShortcutsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'sessions' && (
         <SessionsModal onClose={() => setOverlay(null)} />
+      )}
+      {overlay === 'elaborators' && (
+        <ElaboratorsModal onClose={() => setOverlay(null)} />
+      )}
+      {overlay === 'elaboration-settings' && (
+        <ElaborationSettingsModal onClose={() => setOverlay(null)} />
       )}
       {overlay === 'elaborated-prompts' && (
         <ElaboratedPromptsModal onClose={() => setOverlay(null)} />
@@ -334,21 +342,6 @@ export function Layout(): React.JSX.Element {
           </Menu>
           </div>
         </div>
-        <RetainedModal open={overlay === 'settings'} titleKey="settings.title"
-          onOpen={() => setOverlay('settings')}
-          onClose={() => setOverlay((current) => current === 'settings' ? null : current)}>
-          {(props) => <SettingsModal {...props} />}
-        </RetainedModal>
-        <RetainedModal open={overlay === 'elaborators'} titleKey="menu.elaborators"
-          onOpen={() => setOverlay('elaborators')}
-          onClose={() => setOverlay((current) => current === 'elaborators' ? null : current)}>
-          {(props) => <ElaboratorsModal {...props} />}
-        </RetainedModal>
-        <RetainedModal open={overlay === 'elaboration-settings'} titleKey="elabSettings.title"
-          onOpen={() => setOverlay('elaboration-settings')}
-          onClose={() => setOverlay((current) => current === 'elaboration-settings' ? null : current)}>
-          {(props) => <ElaborationSettingsModal {...props} />}
-        </RetainedModal>
         <PromptPane
             selectedTask={selectedTask}
             prompt={prompt}

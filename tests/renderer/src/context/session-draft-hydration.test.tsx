@@ -67,7 +67,6 @@ function fixture(): { context: () => ReturnType<typeof useSessionDraft>; changed
 
 it('gates edits throughout hydration and session switching, then sends admitted typing', async () => {
   const { context, changed } = fixture()
-  expect(context().draftLoading).toBe(true)
   act(() => context().update({ prompt: 'not admitted' }))
   await act(async () => {})
   expect(context().state.prompt).toBe('saved')
@@ -77,10 +76,8 @@ it('gates edits throughout hydration and session switching, then sends admitted 
   const pending = deferred<ReturnType<typeof createEmptySessionDraft>>()
   vi.mocked(window.electronAPI.getSessionDraft).mockReturnValueOnce(pending.promise)
   act(changed)
-  expect(context().draftLoading).toBe(true)
   act(() => context().update({ prompt: 'not admitted in next session' }))
   await act(async () => pending.resolve({ ...createEmptySessionDraft(), prompt: 'next session' }))
-  expect(context().draftLoading).toBe(false)
   expect(context().state.prompt).toBe('next session')
   expect(window.electronAPI.saveSessionDraft).toHaveBeenCalledTimes(1)
 })
@@ -94,7 +91,6 @@ it('recovers from a failed hydration through Retry without echoing its snapshot'
   act(() => context().update({ prompt: 'blocked' }))
   await act(async () => context().retryDraftHydration())
   expect(context().draftUnavailable).toBeNull()
-  expect(context().draftLoading).toBe(false)
   expect(context().state.prompt).toBe('saved')
   expect(window.electronAPI.saveSessionDraft).not.toHaveBeenCalled()
 })
@@ -132,6 +128,5 @@ it('keeps a previous session mutation failure out of the newly hydrated session'
   await act(async () => changed())
   await act(async () => pending.reject(new Error('previous session write failed')))
   expect(context().draftUnavailable).toBeNull()
-  expect(context().draftLoading).toBe(false)
   expect(window.electronAPI.appLog).toHaveBeenCalled()
 })

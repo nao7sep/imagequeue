@@ -149,7 +149,7 @@ export interface ElectronAPI {
 
   // Settings operations
   getSettings: () => Promise<Record<string, unknown>>
-  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[], onWriteStarted?: () => void) => Promise<{ success: boolean }>
+  saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]) => Promise<{ success: boolean }>
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<{ success: boolean }>
   // Stored values and resolved presence share one refresh, separate from config.
   getCredentials: () => Promise<SettingsCredentials>
@@ -234,7 +234,6 @@ export interface ElectronAPI {
   showNotification: (type: 'success' | 'failure') => Promise<void>
   // One ephemeral authorized stream URL; callers release it after playback.
   loadAudioFile: (filePath: string) => Promise<string | null>
-  releaseAudioFile: (url: string) => Promise<void>
 
   onShowKeptImagesChanged: (callback: (visible: boolean) => void) => (() => void)
   onQueueUpdated: (callback: (tasks: Record<BackendId, Task[]>) => void) => (() => void)

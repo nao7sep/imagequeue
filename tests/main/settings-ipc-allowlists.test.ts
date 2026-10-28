@@ -129,7 +129,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  vi.useRealTimers()
   fs.rmSync(mocks.root, { recursive: true, force: true })
 })
 
@@ -275,32 +274,14 @@ describe('notification settings', () => {
     },
   )
 
-  it.each(['success_file', 'failure_file'])('requires native consent before saving a typed %s', async (field) => {
-    const file = path.join(mocks.root, 'typed.wav')
-    fs.writeFileSync(file, 'sound')
-    await expect(invoke('settings:saveNotificationField', field, file)).rejects.toThrow('Sound file access was not granted')
-    expect(mocks.saveConfig).not.toHaveBeenCalled()
-    expect(fs.existsSync(path.join(mocks.root, 'sound-file-grants.json'))).toBe(false)
-    mocks.showMessageBox.mockResolvedValueOnce({ response: 1 })
-    await expect(invoke('settings:saveNotificationField', field, file)).resolves.toEqual({ success: true })
-    expect((mocks.config.notifications as unknown as Record<string, unknown>)[field]).toBe(file)
-    expect(mocks.saveConfig).toHaveBeenCalledOnce()
-  })
-
-  it('grants a native Browse selection for later use without a second question', async () => {
+  it('plays a Browse selection once it is saved, without asking', async () => {
     const file = path.join(mocks.root, 'picked.wav')
     fs.writeFileSync(file, 'sound')
     mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [file] })
     await expect(invoke('dialog:openFile', [])).resolves.toBe(file)
     await expect(invoke('settings:saveNotificationField', 'success_file', file)).resolves.toEqual({ success: true })
-    await expect(invoke('notification:loadAudioFile', file)).resolves.toMatch(/^iq-audio:\/\/sound\//)
+    await expect(invoke('notification:loadAudioFile', file)).resolves.toBe('iq-audio://sound/success')
     expect(mocks.showMessageBox).not.toHaveBeenCalled()
-  })
-
-  it('does not grant a canceled Browse selection', async () => {
-    mocks.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
-    await expect(invoke('dialog:openFile', [])).resolves.toBeNull()
-    expect(fs.existsSync(path.join(mocks.root, 'sound-file-grants.json'))).toBe(false)
   })
 
   it('refuses a field outside that set', async () => {
@@ -438,43 +419,4 @@ describe('authoritative local readiness', () => {
     await older
     expect(mocks.setDrawThingsReady).not.toHaveBeenCalled()
   })
-})
-
-
-it('starts the correlated settings write wait only after native consent, retaining both stores until settlement', async () => {
-  const base = structuredClone(mocks.config)
-  const next = structuredClone(base)
-  next.notifications.success_file = path.join(mocks.root, 'chosen.wav')
-  fs.writeFileSync(next.notifications.success_file, 'sound')
-  let answer!: (value: { response: number }) => void
-  let entered!: () => void
-  const consent = new Promise<void>((resolve) => { entered = resolve })
-  mocks.showMessageBox.mockImplementationOnce(() => { entered(); return new Promise((resolve) => { answer = resolve }) })
-  let configDone!: () => void
-  let keysDone!: () => void
-  mocks.saveConfig.mockImplementationOnce(() => new Promise<void>((resolve) => { configDone = resolve }))
-  mocks.setStoredApiKeys.mockImplementationOnce(() => new Promise<void>((resolve) => { keysDone = resolve }))
-  let writeStarted!: () => void
-  const starting = new Promise<void>((resolve) => { writeStarted = resolve })
-  const send = vi.fn(() => writeStarted())
-  vi.useFakeTimers()
-  let settled = false
-  const saving = Promise.resolve(mocks.handlers.get('settings:saveChangedFields')!(
-    { sender: { isDestroyed: () => false, send } }, base, next, { 'openai.image': 'changed' }, [], 42,
-  )).then(() => { settled = true })
-  await consent
-  await vi.advanceTimersByTimeAsync(60_000)
-  expect(send).not.toHaveBeenCalled()
-  expect(mocks.saveConfig).not.toHaveBeenCalled()
-  answer({ response: 1 })
-  await starting
-  expect(send).toHaveBeenCalledExactlyOnceWith('settings:writeStarted', 42)
-  await vi.advanceTimersByTimeAsync(30_000)
-  expect(settled).toBe(false)
-  configDone()
-  await vi.advanceTimersByTimeAsync(0)
-  expect(settled).toBe(false)
-  keysDone()
-  await saving
-  expect(settled).toBe(true)
 })

@@ -9,7 +9,6 @@
 // path reads it via resolveRecommendedParams; everything else is dependency
 // management.
 
-import { DEPENDENCY_WAIT_MS } from '../shared/dependency-wait'
 import fs from 'fs'
 import path from 'path'
 import { writeFileAtomicAsync } from './utils/atomic-write'
@@ -70,13 +69,13 @@ export async function getRecommendationsStatus(): Promise<RecommendationStatus> 
   }
 }
 
-/** Explicitly install or refresh configs.json. Cancellation reaches durable
- * staging; issued filesystem work remains owned through its actual settlement. */
+/** Explicitly install or refresh configs.json. The whole transaction is bounded,
+ * cancellable through durable staging, and never runs from launch or Check. */
 export function downloadLatestRecommendations(signal?: AbortSignal): Promise<InstalledRecommendations> {
   const filePath = getRecommendationsPath()
   return withWholeOperationTimeout(
     signal,
-    DEPENDENCY_WAIT_MS.recommendations,
+    3 * 60 * 1000,
     'Recommendations acquisition',
     async (boundedSignal) => {
       const { body: data, headers } = await fetchBytesWithHeaders(

@@ -1,15 +1,13 @@
 // @vitest-environment jsdom
 import { useState } from 'react'
-import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
-import { DependenciesProvider, useDependencies, type DependencyWaitOutcome } from '../../../../src/renderer/src/context/DependenciesContext'
+import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
 import type { DependenciesState, RecommendationsInstallResult } from '../../../../src/shared/types'
-import { DEPENDENCY_WAIT_MS, DEPENDENCY_CANCEL_WAIT_MS } from '../../../../src/shared/dependency-wait'
-import { DependencyPanePointer } from '../../../../src/renderer/src/components/DependencyPanePointer'
 import { until } from '../../until'
 
-afterEach(() => { cleanup(); vi.useRealTimers() })
+afterEach(cleanup)
 
 const initialState: DependenciesState = {
   cli: {
@@ -537,97 +535,5 @@ describe('DependenciesModal checking', () => {
     expect(within(updates).getByText('Never')).toBeTruthy()
     expect(within(updates).getByRole('button', { name: 'Check for updates' })).toBeTruthy()
     expect(within(updates).getByRole('checkbox', { name: 'Check for updates at launch' })).toBeTruthy()
-  })
-})
-
-
-describe('managed-tool caller deadlines', () => {
-  it.each(['success', 'failure'] as const)('returns pending while retaining ownership, then adopts late %s', async (outcome) => {
-    let finish!: (state: RecommendationsInstallResult) => void
-    let fail!: (error: Error) => void
-    window.electronAPI = {
-      getDependenciesState: vi.fn(async () => initialState),
-      downloadRecommendations: vi.fn(() => new Promise<RecommendationsInstallResult>((resolve, reject) => { finish = resolve; fail = reject })),
-      installCli: vi.fn(async () => ({ state: initialState, warnings: [] })),
-      onDependencyProgress: vi.fn(() => () => undefined),
-      appLog: vi.fn(async () => undefined),
-    } as unknown as typeof window.electronAPI
-    const { result } = renderHook(useDependencies, { wrapper: DependenciesProvider })
-    await act(async () => {})
-    vi.useFakeTimers()
-    let caller!: Promise<DependencyWaitOutcome>
-    act(() => { caller = result.current.installRecommendations() })
-    await act(async () => vi.advanceTimersByTimeAsync(DEPENDENCY_WAIT_MS.recommendations))
-    await expect(caller).resolves.toBe('pending')
-    expect(result.current.busy.has('recommendations')).toBe(true)
-    expect(result.current.pending.has('recommendations')).toBe(true)
-    expect(result.current.terminalOutcomes.recommendations).toBeUndefined()
-    await act(async () => { await result.current.installRecommendations(); await result.current.installCli() })
-    expect(window.electronAPI.downloadRecommendations).toHaveBeenCalledOnce()
-    expect(window.electronAPI.installCli).toHaveBeenCalledOnce()
-    expect(result.current.pending.has('recommendations')).toBe(true)
-    const installed = { ...initialState, recommendations: { ...initialState.recommendations, entryCount: 9 } }
-    await act(async () => {
-      if (outcome === 'success') finish({ state: installed, warnings: [] })
-      else fail(new Error('PRIVATE_PATH_SENTINEL'))
-    })
-    expect(result.current.busy.size).toBe(0)
-    expect(result.current.pending.size).toBe(0)
-    if (outcome === 'success') expect(result.current.state?.recommendations.entryCount).toBe(9)
-    else expect(result.current.error).not.toBeNull()
-  })
-
-  it('bounds the wait after Cancel without claiming cancellation of a late committed install', async () => {
-    let finish!: (state: DependenciesState) => void
-    window.electronAPI = {
-      getDependenciesState: vi.fn(async () => initialState),
-      installCli: vi.fn(() => new Promise<DependenciesState>((resolve) => { finish = resolve })),
-      cancelDependencyOperation: vi.fn(async () => undefined),
-      onDependencyProgress: vi.fn(() => () => undefined),
-    } as unknown as typeof window.electronAPI
-    const { result } = renderHook(useDependencies, { wrapper: DependenciesProvider })
-    await act(async () => {})
-    vi.useFakeTimers()
-    let caller!: Promise<DependencyWaitOutcome>
-    act(() => { caller = result.current.installCli() })
-    await act(async () => result.current.cancel('cli'))
-    await act(async () => vi.advanceTimersByTimeAsync(DEPENDENCY_CANCEL_WAIT_MS))
-    await expect(caller).resolves.toBe('pending')
-    expect(result.current.busy.has('cli')).toBe(true)
-    expect(result.current.terminalOutcomes.cli).toBeUndefined()
-    await act(async () => finish(initialState))
-    expect(result.current.busy.size).toBe(0)
-    expect(result.current.pending.size).toBe(0)
-    expect(result.current.terminalOutcomes.cli).toBeUndefined()
-  })
-
-  it('keeps the pending notice across view replacement and shows it in the surviving pane', async () => {
-    let finish!: (state: RecommendationsInstallResult) => void
-    window.electronAPI = {
-      getDependenciesState: vi.fn(async () => initialState),
-      downloadRecommendations: vi.fn(() => new Promise<RecommendationsInstallResult>((resolve) => { finish = resolve })),
-      onDependencyProgress: vi.fn(() => () => undefined),
-    } as unknown as typeof window.electronAPI
-    function Harness(): React.JSX.Element {
-      const [open, setOpen] = useState(true)
-      return <DependenciesProvider>
-        <button onClick={() => setOpen(true)}>Reopen</button>
-        <DependencyPanePointer />
-        {open && <DependenciesModal onClose={() => setOpen(false)} />}
-      </DependenciesProvider>
-    }
-    render(<Harness />)
-    await until(() => screen.getAllByRole('button', { name: 'Install' }))
-    vi.useFakeTimers()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[1])
-    await act(async () => vi.advanceTimersByTimeAsync(DEPENDENCY_WAIT_MS.recommendations))
-    expect(screen.getByRole('status').textContent).toContain('result is not confirmed yet')
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
-    expect(screen.getByRole('button', { name: 'Managed-tool completion is not confirmed yet. Open Managed tools.' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
-    expect(screen.getByRole('status').textContent).toContain('result is not confirmed yet')
-    expect(window.electronAPI.downloadRecommendations).toHaveBeenCalledOnce()
-    await act(async () => finish({ state: initialState, warnings: [] }))
-    expect(screen.queryByRole('status')).toBeNull()
   })
 })

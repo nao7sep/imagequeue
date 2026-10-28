@@ -1,2 +1,2 @@
-/** A short-lived main-owned resource; URLs contain no filesystem path. */
+/** Configured notification sounds, named by slot; URLs contain no filesystem path. */
 export const AUDIO_SCHEME = 'iq-audio'

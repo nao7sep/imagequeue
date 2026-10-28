@@ -24,13 +24,11 @@ vi.mock('../../../../src/renderer/src/context/SelectionContext', () => ({
 vi.mock('../../../../src/renderer/src/context/QueueContext', () => ({
   useQueue: () => ({ showKeptImages: false, toggleShowKeptImages: vi.fn() }),
 }))
-const draftStatus = vi.hoisted(() => ({ loading: false }))
 vi.mock('../../../../src/renderer/src/context/SessionDraftContext', () => ({
   useSessionDraft: () => ({
     state: { prompt: '' },
     update: vi.fn(),
     draftUnavailable: null,
-    draftLoading: draftStatus.loading,
     retryDraftHydration: vi.fn(),
   }),
 }))
@@ -42,7 +40,6 @@ const { Layout } = await import('../../../../src/renderer/src/components/Layout'
 let forwarded: (command: string) => void = () => {}
 
 beforeEach(() => {
-  draftStatus.loading = false
   vi.stubGlobal('ResizeObserver', class { observe(): void {} disconnect(): void {} unobserve(): void {} })
 })
 afterEach(() => {
@@ -114,18 +111,3 @@ describe('shortcuts handed on by the preview window', () => {
 })
 
 
-
-it('holds a nondismissable loading dialog until the draft snapshot is ready', () => {
-  const view = openMainMenu('darwin')
-  fireEvent.keyDown(document, { key: 'Escape' })
-  draftStatus.loading = true
-  view.rerender(<Layout />)
-  expect(screen.getByRole('dialog', { name: 'Loading…' })).toBeTruthy()
-  expect(screen.getByRole('status').textContent).toBe('Loading…')
-  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-  fireEvent.keyDown(document, { key: 'Escape' })
-  expect(screen.getByRole('dialog', { name: 'Loading…' })).toBeTruthy()
-  draftStatus.loading = false
-  view.rerender(<Layout />)
-  expect(screen.queryByRole('dialog', { name: 'Loading…' })).toBeNull()
-})

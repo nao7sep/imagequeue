@@ -77,7 +77,7 @@ describe('Settings Browse context', () => {
     expect(input.value).toBe(picked)
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenLastCalledWith(
-      expect.any(Object), expect.any(Object), {}, [], expect.any(Function),
+      expect.any(Object), expect.any(Object), {}, [],
     ))
   })
 
@@ -87,7 +87,7 @@ describe('Settings Browse context', () => {
     fireEvent.change(input, { target: { value: '/exports/$HOME' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledWith(
-      expect.any(Object), expect.any(Object), {}, ['export_dir'], expect.any(Function),
+      expect.any(Object), expect.any(Object), {}, ['export_dir'],
     ))
   })
 
@@ -98,7 +98,7 @@ describe('Settings Browse context', () => {
     fireEvent.change(input, { target: { value: '/sounds/%SOUND%.wav' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenCalledWith(
-      expect.any(Object), expect.any(Object), {}, [field], expect.any(Function),
+      expect.any(Object), expect.any(Object), {}, [field],
     ))
   })
 
@@ -118,7 +118,7 @@ describe('Settings Browse context', () => {
     expect(input.value).toBe(picked)
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await until(() => expect(settingsValue.saveChangedSettings).toHaveBeenLastCalledWith(
-      expect.any(Object), expect.any(Object), {}, [], expect.any(Function),
+      expect.any(Object), expect.any(Object), {}, [],
     ))
   })
 })

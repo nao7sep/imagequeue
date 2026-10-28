@@ -28,7 +28,6 @@ interface SessionDraftContextValue {
   state: SessionDraftState
   // A catalogue key, rendered where it is shown.
   draftUnavailable: MessageKey | null
-  draftLoading: boolean
   retryDraftHydration: () => void
   // Partial edits are admitted only after the active session snapshot is ready.
   update: (patch: Partial<SessionDraftState>) => void
@@ -54,7 +53,6 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
   const [state, setState] = useState<SessionDraftState>(emptyState)
   const [draftFailure, setDraftFailure] = useState<DraftFailure | null>(null)
   const [hydrateRetry, setHydrateRetry] = useState(0)
-  const [draftLoading, setDraftLoading] = useState(true)
   const generationRef = useRef(0)
   const draftUnavailable = draftFailure?.message ?? null
   // Guards the send effect: stays false until the first hydrate completes, and
@@ -71,7 +69,6 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
       const revision = ++hydrateRevision
       loadedRef.current = false
       generationRef.current++
-      setDraftLoading(true)
       setDraftFailure(null)
       try {
         const [draft, elaboratedPrompts] = await Promise.all([
@@ -89,8 +86,6 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
         lastSentDraftRef.current = ''
         setDraftFailure({ message: 'draft.hydrationFailed' })
         logDraftFailure('Failed to hydrate the active session draft', error)
-      } finally {
-        if (!cancelled && revision === hydrateRevision) setDraftLoading(false)
       }
     }
 
@@ -167,7 +162,6 @@ export function SessionDraftProvider({ children }: { children: ReactNode }): Rea
       value={{
         state,
         draftUnavailable,
-        draftLoading,
         retryDraftHydration,
         update,
         appendElaboratedPrompts,

@@ -72,11 +72,10 @@ function workInProgress(busy: ReadonlySet<DependencyOperation>): MessageKey | nu
 }
 
 export function DependencyPanePointer(): React.JSX.Element | null {
-  const { state, busy, pending, viewOpen } = useDependencies()
+  const { state, busy, viewOpen } = useDependencies()
   const { t } = useI18n()
 
-  const workLabel = pending.size > 0 ? 'dependencyPointer.completionPending' : workInProgress(busy)
-  const working = state?.platformSupported && !viewOpen ? workLabel : null
+  const working = state?.platformSupported && !viewOpen ? workInProgress(busy) : null
   const severity = working ? 'info' : state?.platformSupported ? severityFor(state) : null
   if (!state || !severity) return null
 

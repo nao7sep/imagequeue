@@ -406,15 +406,14 @@ describe('primary instance quit routes', () => {
 
 
 
-it.each([true, false])('recovers the existing primary view without restarting work (visible: %s)', async (visible) => {
+it('reloads a gone primary view on the next restore without restarting work', async () => {
   await launch()
   const { createWindowWithUsablePersistedBounds } = await import('../../src/main/window-state-recovery')
   const { loadMainWindowContent } = await import('../../src/main/main-window-content')
-  const { dialog } = await import('electron')
   const { startProcessor } = await import('../../src/main/backends')
   const webContents = Object.assign(new EventEmitter(), { send: vi.fn() })
   const win = Object.assign(new EventEmitter(), {
-    webContents, isDestroyed: () => false, isVisible: () => visible,
+    webContents, isDestroyed: () => false, isVisible: () => true,
     isMinimized: () => false,
   }) as unknown as Electron.BrowserWindow
   vi.mocked(createWindowWithUsablePersistedBounds).mockReturnValueOnce(win)
@@ -423,7 +422,6 @@ it.each([true, false])('recovers the existing primary view without restarting wo
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(loadMainWindowContent).toHaveBeenCalledOnce()
   webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 7 })
-  expect(dialog.showMessageBox).toHaveBeenCalledTimes(visible ? 1 : 0)
   expect(loadMainWindowContent).toHaveBeenCalledOnce()
   const restore = options.prepareWindow as (win: Electron.BrowserWindow) => Promise<boolean>
   await expect(restore(win)).resolves.toBe(true)
@@ -432,7 +430,6 @@ it.each([true, false])('recovers the existing primary view without restarting wo
   expect(session.initSession).toHaveBeenCalledOnce()
   expect(createStartupFailureWindow).not.toHaveBeenCalled()
   expect(h.app.exit).not.toHaveBeenCalled()
-  if (visible) expect(dialog.showMessageBox).toHaveBeenCalledWith(win, expect.objectContaining({ message: 'mainWindow.recoveryFailed' }))
 })
 
 

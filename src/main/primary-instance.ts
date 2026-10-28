@@ -1,6 +1,6 @@
 import { drainExports } from './utils/storage-wait'
 import { handle } from './ipc-boundary'
-import { app, BrowserWindow, Menu, powerMonitor, dialog } from 'electron'
+import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, onConfigSaved, summarizeConfig, updateConfig } from './config'
 import { notifySettingsChanged } from './settings-changed'
@@ -65,7 +65,6 @@ import { StatusIconController } from './status-icon'
 import { openSessionsFolder } from './session/open-sessions-folder'
 import { setQueuePausedAndPublish } from './queue/control-actions'
 import { loadMainWindowContent } from './main-window-content'
-import { PrimaryRendererRecovery } from './primary-renderer-recovery'
 import { applyLocalePreferences, mainTranslator, onLanguageChanged, registerLanguageIpc, settleLanguage } from './i18n'
 import { buildAppMenuTemplate, buildTextContextMenuTemplate } from './app-menu'
 import { PRELOAD_PATH } from './renderer-surface'
@@ -74,7 +73,10 @@ import { startLauncherControl } from './launcher-control'
 let mainWindowController: MainWindowController<BrowserWindow> | null = null
 let statusIconController: StatusIconController | null = null
 let startupFailureWindow: BrowserWindow | null = null
-const primaryRenderers = new WeakMap<BrowserWindow, PrimaryRendererRecovery>()
+// A main-window renderer that went away is reloaded on the next explicit
+// restore; queues, session drafts and admitted work stay in main.
+let mainRendererLoaded = false
+let mainRendererGone = false
 
 function enterStartupFailure(error: unknown, failedWindow?: BrowserWindow): void {
   log('error', 'ImageQueue startup failed', { error: serializeError(error) })
@@ -224,7 +226,7 @@ export function runPrimaryInstance(): void {
     status: () => {
       if (startupFailureWindow) return 'failed'
       const main = mainWindowController?.getWindow()
-      return sessionStarted && main && !main.isDestroyed() && primaryRenderers.get(main)?.isReady() === true
+      return sessionStarted && main && !main.isDestroyed() && mainRendererLoaded && !mainRendererGone
         ? 'ready' : 'starting'
     },
     quit: () => app.quit(),
@@ -295,34 +297,40 @@ function createWindow(): BrowserWindow {
     if (template) Menu.buildFromTemplate(template).popup({ window: win })
   })
 
-  let failureNoticePending = false
-  const renderer = new PrimaryRendererRecovery({
-    load: () => loadMainWindowContent(win, process.env['ELECTRON_RENDERER_URL'], path.join(__dirname, '../renderer/index.html')),
-    isDestroyed: () => win.isDestroyed(),
-    onStartupFailure: (cause) => enterStartupFailure(new Error('ImageQueue could not load its main window.', { cause }), win),
-    onRuntimeFailure: (error) => {
-      log('error', 'The primary window needs recovery', { error: serializeError(error) })
-      // Native UI does not depend on the failed renderer. A background failure
-      // never reveals a window; explicit restore will attempt recovery instead.
-      if (!win.isVisible() || win.isMinimized() || isQuitting() || failureNoticePending) return
-      failureNoticePending = true
-      const { t } = mainTranslator()
-      void dialog.showMessageBox(win, {
-        type: 'error', title: 'ImageQueue', message: t('mainWindow.recoveryFailed'),
-        buttons: [t('common.close')], noLink: true,
-      }).catch((cause) => {
-        log('error', 'The primary window recovery notice could not open', { error: serializeError(cause) })
-      }).finally(() => { failureNoticePending = false })
-    },
-  })
-  primaryRenderers.set(win, renderer)
+  mainRendererLoaded = false
+  mainRendererGone = false
   win.webContents.on('render-process-gone', (_event, details) => {
     mainDialogOpen = false
     applyAppMenu()
-    renderer.rendererGone(details)
+    if (!mainRendererLoaded) {
+      enterStartupFailure(new Error('ImageQueue could not load its main window.', { cause: details }), win)
+      return
+    }
+    log('error', 'The main window renderer went away; it reloads when the window is restored', { details })
+    mainRendererGone = true
   })
-  renderer.start()
+  void loadMainWindow(win)
   return win
+}
+
+function loadMainWindow(win: BrowserWindow): Promise<boolean> {
+  return loadMainWindowContent(win, process.env['ELECTRON_RENDERER_URL'], path.join(__dirname, '../renderer/index.html')).then(
+    () => { mainRendererLoaded = true; return true },
+    (cause) => {
+      if (!mainRendererLoaded) enterStartupFailure(new Error('ImageQueue could not load its main window.', { cause }), win)
+      else {
+        log('error', 'The main window could not reload', { error: serializeError(cause) })
+        mainRendererGone = true
+      }
+      return false
+    },
+  )
+}
+
+function reloadGoneRenderer(win: BrowserWindow): Promise<boolean> {
+  if (!mainRendererGone || win.isDestroyed()) return Promise.resolve(!win.isDestroyed())
+  mainRendererGone = false
+  return loadMainWindow(win)
 }
 
 // Settings opens in the main window, brought forward first; a dialog in front
@@ -333,7 +341,7 @@ let applyAppMenu = (): void => {}
 function openSettingsFromMenu(): void {
   void mainWindowController?.restoreOrCreate().then(() => {
     const main = mainWindowController?.getWindow()
-    if (main && !main.isDestroyed() && primaryRenderers.get(main)?.isReady() !== false) main.webContents.send(WINDOW_COMMAND_CHANNEL, 'settings')
+    if (main && !main.isDestroyed() && !mainRendererGone) main.webContents.send(WINDOW_COMMAND_CHANNEL, 'settings')
   })
 }
 
@@ -375,7 +383,7 @@ async function startUp(): Promise<void> {
   mainWindowController = new MainWindowController({
     platform: process.platform,
     createWindow,
-    prepareWindow: (win) => primaryRenderers.get(win)!.restore(),
+    prepareWindow: reloadGoneRenderer,
     isStatusIconAvailable: () => statusIconController?.isAvailable() ?? false,
     // Background mode: every window goes with the main window to the icon and
     // returns only with it (window-conventions, Background mode).

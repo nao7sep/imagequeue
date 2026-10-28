@@ -3,7 +3,7 @@ import { serializeError } from '../../../shared/serialize-error'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
 export type FailureOperation =
-  | 'settings-save' | 'modal-close'
+  | 'settings-save'
   | 'sessions-load' | 'session-resume' | 'session-create' | 'session-delete' | 'session-folder'
   | 'concepts-load' | 'concept-details-load' | 'concepts-change'
   | 'elaborators-load' | 'elaborators-change'
@@ -16,7 +16,6 @@ export type FailureOperation =
 // Each operation's authored copy is the catalogue entry failure.<operation in
 // camel case>, rendered where it is shown.
 const COPY: Record<FailureOperation, MessageKey> = {
-  'modal-close': 'failure.modalClose',
   'settings-save': 'failure.settingsSave',
   'sessions-load': 'failure.sessionsLoad',
   'session-resume': 'failure.sessionResume',

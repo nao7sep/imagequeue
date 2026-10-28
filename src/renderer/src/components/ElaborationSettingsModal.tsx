@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -18,8 +18,10 @@ import { useI18n } from '../i18n/I18nContext'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
 import { BRAINSTORM_LIMITS, EXPANSION_PLACEHOLDERS, REQUIRED_EXPANSION_PLACEHOLDERS, placeholderTag, type BrainstormConfig } from '../../../shared/brainstorm-config'
-import { useModalOperation } from '../hooks/useModalOperation'
-import type { RetainedModalProps } from './RetainedModal'
+
+interface Props {
+  onClose: () => void
+}
 
 // The form edits the settings as they are stored.
 type BrainstormForm = BrainstormConfig
@@ -92,14 +94,18 @@ function setLengthPart(form: BrainstormForm, length: PromptLength, value: string
   }
 }
 
-export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.Element | null {
-  const { visible = true } = props
-  const { busy, busyRef, pending, run, hide, close: onClose } = useModalOperation(props)
+export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element {
   const { settings, saveBrainstormSettings } = useSettings()
   const confirm = useConfirm()
   const { t, text, rich } = useI18n()
   const [form, setForm] = useState<BrainstormForm | null>(null)
   const [baseForm, setBaseForm] = useState<BrainstormForm | null>(null)
+  const [busy, setBusyState] = useState(false)
+  const busyRef = useRef(false)
+  const setBusy = useCallback((value: boolean): void => {
+    busyRef.current = value
+    setBusyState(value)
+  }, [])
   const [message, setMessage] = useState<Message | null>(null)
 
   // Initialize the form from settings.brainstorm. Only run once per modal
@@ -120,7 +126,9 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
   useUnsavedDraftReport('elaborationSettings', dirty)
 
   const handleReset = useCallback(async (): Promise<void> => {
-    await run(async () => {
+    if (busyRef.current) return
+    setBusy(true)
+    try {
       const ok = await confirm({
         title: t('elabSettings.resetTitle'),
         message: t('elabSettings.resetMessage'),
@@ -131,8 +139,12 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
       setMessage(null)
       const defaults = await window.electronAPI.brainstormGetDefaults()
       setForm(fromConfig(defaults))
-    }, (error) => setMessage(msg(presentFailure('elaboration-defaults-load', error))))
-  }, [confirm, t, run])
+    } catch (error) {
+      setMessage(msg(presentFailure('elaboration-defaults-load', error)))
+    } finally {
+      setBusy(false)
+    }
+  }, [confirm, t, setBusy])
 
   const handleSave = useCallback(async (): Promise<void> => {
     if (!form || busyRef.current) return
@@ -148,7 +160,8 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
       setMessage(msg('elabSettings.concurrencyRange', BRAINSTORM_LIMITS.concurrency))
       return
     }
-    await run(async (startWait) => {
+    setBusy(true)
+    try {
       const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
       if (warn) {
         const ok = await confirm({
@@ -174,15 +187,19 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
       }
       // Main logs `Config saved` whenever the config file is rewritten, so
       // there's nothing extra to record from the renderer side here.
-      startWait()
       await saveBrainstormSettings(next)
-      return 'close'
-    }, (error) => setMessage(msg(presentFailure('elaboration-save', error))))
-  }, [form, saveBrainstormSettings, confirm, t, run, busyRef])
+      onClose()
+    } catch (error) {
+      setMessage(msg(presentFailure('elaboration-save', error)))
+    } finally {
+      setBusy(false)
+    }
+  }, [form, saveBrainstormSettings, onClose, confirm, t, setBusy])
 
   const handleCancel = useCallback(async (): Promise<void> => {
-    if (busyRef.current) { if (pending) hide(); return }
-    await run(async () => {
+    if (busyRef.current) return
+    setBusy(true)
+    try {
       if (dirty) {
         const ok = await confirm({
           title: t('elabSettings.discardTitle'),
@@ -193,11 +210,11 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
         })
         if (!ok) return
       }
-      return 'close'
-    }, (error) => setMessage(msg(presentFailure('modal-close', error))))
-  }, [dirty, confirm, t, busyRef, pending, hide, run])
-
-  if (!visible) return null
+      onClose()
+    } finally {
+      setBusy(false)
+    }
+  }, [dirty, confirm, onClose, t, setBusy])
 
   if (!form) {
     return (
@@ -223,10 +240,10 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
       title={t('elabSettings.title')}
       className="elaboration-settings-modal-box"
       onClose={handleCancel}
-      dismissable={!busy || pending}
+      dismissable={!busy}
       footer={
         <>
-          <button className="modal-btn" onClick={handleCancel} disabled={busy && !pending}>{t(pending ? 'common.close' : 'common.cancel')}</button>
+          <button className="modal-btn" onClick={handleCancel} disabled={busy}>{t('common.cancel')}</button>
           <button className="modal-btn modal-btn-primary" onClick={() => void handleSave()} disabled={busy || !dirty}>
             {t('common.save')}
           </button>
@@ -234,7 +251,6 @@ export function ElaborationSettingsModal(props: RetainedModalProps): React.JSX.E
       }
     >
       <div className="elaboration-settings-body">
-        {pending && <p role="status">{t('settings.savePending')}</p>}
         <div className="elaboration-settings-section elaboration-settings-fields">
           <div className="elaboration-settings-row">
             <label>{t('elabSettings.batchSize')}</label>

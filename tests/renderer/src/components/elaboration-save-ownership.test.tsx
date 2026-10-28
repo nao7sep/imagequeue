@@ -1,7 +1,4 @@
 // @vitest-environment jsdom
-import { useState } from 'react'
-import { RetainedModal } from '../../../../src/renderer/src/components/RetainedModal'
-import { MODAL_OPERATION_WAIT_MS } from '../../../../src/renderer/src/hooks/useModalOperation'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultConfig } from '../../../../src/main/config/defaults'
@@ -35,7 +32,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  vi.useRealTimers()
   vi.restoreAllMocks()
   if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScroll)
   else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
@@ -145,52 +141,4 @@ describe('elaboration editor save ownership', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(onClose).not.toHaveBeenCalled()
   })
-})
-
-
-it.each(['settings', 'elaborators'] as const)('retains the %s draft after the caller deadline, close and late failure', async (kind) => {
-  const writing = deferred<Elaborator>()
-  const item: Elaborator = { id: 'one', kind: 'composition', name: 'Composition fixture', template: 'Original' }
-  mocks.save.mockReturnValue(writing.promise)
-  window.electronAPI.listElaborators = vi.fn(async () => [item])
-  window.electronAPI.updateElaborator = vi.fn(() => writing.promise)
-  function Harness(): React.JSX.Element {
-    const [open, setOpen] = useState(true)
-    return <RetainedModal open={open} titleKey={kind === 'settings' ? 'elabSettings.title' : 'menu.elaborators'}
-      onOpen={() => setOpen(true)} onClose={() => setOpen(false)}>
-      {(props) => kind === 'settings' ? <ElaborationSettingsModal {...props} /> : <ElaboratorsModal {...props} />}
-    </RetainedModal>
-  }
-  render(<Harness />)
-  if (kind === 'elaborators') {
-    await until(() => screen.getByRole('option', { name: /Composition fixture/ }))
-    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0])
-  }
-  const template = (await until(() => screen.getAllByRole('textbox'))).at(-1)! as HTMLTextAreaElement
-  const submitted = template.value + ' Submitted edit'
-  fireEvent.change(template, { target: { value: submitted } })
-  vi.useFakeTimers()
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
-  await act(async () => vi.advanceTimersByTimeAsync(MODAL_OPERATION_WAIT_MS))
-  expect(screen.getByRole('status').textContent).toContain('Completion is not confirmed')
-  fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
-  expect(screen.queryByRole('dialog')).toBeNull()
-  await act(async () => writing.reject(new Error('PRIVATE_SENTINEL')))
-  fireEvent.click(screen.getByRole('button', { name: /needs attention/ }))
-  expect((screen.getAllByRole('textbox').at(-1)! as HTMLTextAreaElement).value).toBe(submitted)
-  expect(screen.getByRole('alert').textContent).not.toContain('PRIVATE_SENTINEL')
-  expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false)
-})
-
-
-it('keeps edited text and safe copy when the close confirmation cannot be shown', async () => {
-  mocks.confirm.mockRejectedValueOnce(new Error('SECRET_SENTINEL confirmation failed'))
-  const onClose = vi.fn()
-  render(<ElaborationSettingsModal onClose={onClose} />)
-  const template = (await until(() => screen.getAllByRole('textbox')))[0] as HTMLTextAreaElement
-  fireEvent.change(template, { target: { value: 'Authored draft' } })
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' })))
-  expect(onClose).not.toHaveBeenCalled()
-  expect(template.value).toBe('Authored draft')
-  expect(screen.getByRole('alert').textContent).toBe('The dialog could not be closed. Your edits are still here. Try closing it again.')
 })
