@@ -58,7 +58,7 @@ function baseConfig(): Record<string, unknown> {
       drop_empty_sessions: true, keep_awake_during_work: true, show_status_icon: true,
     },
     notifications: {
-      notifications_enabled: true, sounds_enabled: true,
+      notifications_enabled: true,
       success_file: '', failure_file: '',
     },
     image_backends: {

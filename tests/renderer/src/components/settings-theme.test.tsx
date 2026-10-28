@@ -32,7 +32,7 @@ function baseConfig(theme: unknown): Record<string, unknown> {
       confirm_remove: false, confirm_delete: false, delete_to_trash: true,
       drop_empty_sessions: true, keep_awake_during_work: true, show_status_icon: true,
     },
-    notifications: { notifications_enabled: true, sounds_enabled: true, success_file: '', failure_file: '' },
+    notifications: { notifications_enabled: true, success_file: '', failure_file: '' },
     image_backends: {
       openai: backend(), nanobanana: backend(), grok: backend(), flux: backend(),
       drawthings: { timeout_ms: 1800000, default_params: {}, models_dir: '', check_updates_at_launch: true },

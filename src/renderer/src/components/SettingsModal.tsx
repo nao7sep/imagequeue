@@ -529,17 +529,6 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
                   <span className="settings-panel-check-desc">{t('settings.showNotificationsHint')}</span>
                 </span>
               </label>
-              <label className="settings-panel-check">
-                <input
-                  type="checkbox"
-                  checked={(notificationCfg.sounds_enabled as boolean) ?? true}
-                  onChange={(e) => { void saveNotificationImmediate('sounds_enabled', e.target.checked) }}
-                />
-                <span className="settings-panel-check-copy">
-                  <span>{t('settings.playSounds')}</span>
-                  <span className="settings-panel-check-desc">{t('settings.playSoundsHint')}</span>
-                </span>
-              </label>
             </div>
           </div>
           <div className="settings-field">
@@ -548,6 +537,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
               value={uiState.notificationVolume}
               onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
             />
+            <p className="settings-hint">{t('settings.volumeHint')}</p>
           </div>
           <div className="settings-field">
             <label htmlFor="settings-successSound">{t('settings.successSound')}</label>

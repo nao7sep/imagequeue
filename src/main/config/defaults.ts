@@ -70,7 +70,6 @@ export function createDefaultConfig(): AppConfig {
     },
     notifications: {
       notifications_enabled: true,
-      sounds_enabled: true,
       success_file: '',
       failure_file: ''
     },

@@ -34,6 +34,14 @@ describe('NotificationVolumeSlider', () => {
     rerender(<NotificationVolumeSlider value={0.2} onCommit={async () => true} />)
     expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('0.2')
   })
+
+  it('shows the speaker muted at zero and audible again once raised', () => {
+    const { container } = render(<NotificationVolumeSlider value={0} onCommit={async () => true} />)
+    const control = container.querySelector('.notification-volume')!
+    expect(control.classList.contains('notification-volume-muted')).toBe(true)
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '0.5' } })
+    expect(control.classList.contains('notification-volume-muted')).toBe(false)
+  })
 })
 
 

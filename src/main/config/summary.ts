@@ -49,7 +49,6 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
     },
     notifications: {
       enabled: config.notifications.notifications_enabled,
-      soundsEnabled: config.notifications.sounds_enabled,
     },
   }
 }

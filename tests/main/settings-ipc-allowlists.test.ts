@@ -115,7 +115,7 @@ beforeEach(() => {
   mocks.config = {
     general: {},
     brainstorm: { aspects: ['light'] },
-    notifications: { notifications_enabled: false, sounds_enabled: false, success_file: '', failure_file: '' },
+    notifications: { notifications_enabled: false, success_file: '', failure_file: '' },
     image_backends: {
       openai: { model: 'gpt-image-2', default_params: { size: '1024x1024', quality: 'high' } },
       nanobanana: { model: 'nano-banana-2', default_params: {} },
@@ -264,7 +264,7 @@ describe('image backend defaults', () => {
 })
 
 describe('notification settings', () => {
-  it.each(['notifications_enabled', 'sounds_enabled'])(
+  it.each(['notifications_enabled'])(
     'saves %s',
     async (field) => {
       expect(await invoke('settings:saveNotificationField', field, 'value')).toEqual({ success: true })

@@ -28,7 +28,6 @@ interface Props {
 
 type PromptPaneAction =
   | 'notifications_enabled'
-  | 'sounds_enabled'
   | 'paste-text'
   | 'copy-prompt'
   | 'reveal-image'
@@ -36,7 +35,7 @@ type PromptPaneAction =
   | 'export-image'
   | 'save-image-as'
 
-const PROMPT_ACTIONS: readonly PromptPaneAction[] = ['paste-text', 'notifications_enabled', 'sounds_enabled']
+const PROMPT_ACTIONS: readonly PromptPaneAction[] = ['paste-text', 'notifications_enabled']
 const PREVIEW_ACTIONS: readonly PromptPaneAction[] = [
   'copy-prompt',
   'reveal-image',
@@ -101,8 +100,8 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
 
   const notificationCfg = ((settings?.notifications ?? {}) as Record<string, unknown>)
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
-  const soundsEnabled = (notificationCfg.sounds_enabled as boolean) ?? true
-  // Volume is state, not config — it lives in state.json beside the pane width.
+  // Volume is state, not config — it lives in state.json beside the pane width;
+  // zero mutes the completion sounds.
   const { uiState, patchUiState } = useUiState()
 
   const handleSendToAll = useCallback(() => {
@@ -173,7 +172,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
     })
   }, [])
 
-  const persistNotificationField = useCallback((field: 'notifications_enabled' | 'sounds_enabled', value: boolean): void => {
+  const persistNotificationField = useCallback((field: 'notifications_enabled', value: boolean): void => {
     setNotificationSaving(true)
     void saveNotificationField(field, value)
       .then(() => clearActionFailure(field))
@@ -398,17 +397,7 @@ export function PromptPane({ selectedTask, prompt, onPromptChange }: Props): Rea
             />
             {t('prompt.notify')}
           </label>
-          <label className="notification-check">
-            <input
-              type="checkbox"
-              checked={soundsEnabled}
-              disabled={notificationSaving}
-              onChange={(e) => persistNotificationField('sounds_enabled', e.target.checked)}
-            />
-            {t('prompt.sound')}
-          </label>
           <NotificationVolumeSlider
-            className="notification-volume"
             value={uiState.notificationVolume}
             onCommit={(notificationVolume) => patchUiState({ notificationVolume })}
           />

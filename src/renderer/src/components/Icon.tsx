@@ -25,6 +25,10 @@ export type IconName =
   | 'plus'
   | 'menu'
   | 'alert-triangle'
+  | 'volume-0'
+  | 'volume-1'
+  | 'volume-2'
+  | 'volume-3'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   'chevron-right': <polyline points="9 5 17 12 9 19" />,
@@ -49,6 +53,11 @@ const PATHS: Record<IconName, React.ReactNode> = {
   plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
   menu: <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>,
   'alert-triangle': <><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /><line x1="12" y1="8" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
+  // A speaker whose waves show the level; at zero it is crossed out (muted).
+  'volume-0': <><path d="M11 5 L6 9 H3 V15 H6 L11 19 Z" fill="currentColor" stroke="none" /><line x1="14" y1="9.5" x2="19" y2="14.5" /><line x1="19" y1="9.5" x2="14" y2="14.5" /></>,
+  'volume-1': <><path d="M11 5 L6 9 H3 V15 H6 L11 19 Z" fill="currentColor" stroke="none" /><path d="M14 9.5 a3 3 0 0 1 0 5" /></>,
+  'volume-2': <><path d="M11 5 L6 9 H3 V15 H6 L11 19 Z" fill="currentColor" stroke="none" /><path d="M14 9.5 a3 3 0 0 1 0 5" /><path d="M16.5 7.5 a6 6 0 0 1 0 9" /></>,
+  'volume-3': <><path d="M11 5 L6 9 H3 V15 H6 L11 19 Z" fill="currentColor" stroke="none" /><path d="M14 9.5 a3 3 0 0 1 0 5" /><path d="M16.5 7.5 a6 6 0 0 1 0 9" /><path d="M19 5.5 a9 9 0 0 1 0 13" /></>,
 }
 
 export function Icon({ name, className }: { name: IconName; className?: string }): React.JSX.Element {

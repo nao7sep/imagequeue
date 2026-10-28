@@ -1,0 +1,22 @@
+.notification-volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+
+.notification-volume-muted {
+  color: var(--text-muted);
+}
+
+.notification-volume-icon {
+  flex: none;
+  font-size: 18px;
+}
+
+.notification-volume input[type="range"] {
+  width: 80px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

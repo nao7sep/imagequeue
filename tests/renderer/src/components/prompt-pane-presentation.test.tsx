@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pushModal, popModal } from '../../../../src/renderer/src/components/modalStack'
 import type { Task } from '../../../../src/shared/types'
 
-const notificationSettings = vi.hoisted(() => ({ save: vi.fn(), values: { notifications_enabled: true, sounds_enabled: true } }))
+const notificationSettings = vi.hoisted(() => ({ save: vi.fn(), values: { notifications_enabled: true } }))
 
 vi.mock('../../../../src/renderer/src/context/SettingsContext', () => ({
   useSettings: () => ({
@@ -75,7 +75,7 @@ let clipboardWriteText: ReturnType<typeof vi.fn>
 let decode: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  notificationSettings.values = { notifications_enabled: true, sounds_enabled: true }
+  notificationSettings.values = { notifications_enabled: true }
   notificationSettings.save.mockReset().mockResolvedValue({})
   HTMLElement.prototype.scrollIntoView = vi.fn()
   selection.reportTaskActionFailure.mockClear()
@@ -440,7 +440,7 @@ it('polls clipboard availability only while usable and refreshes on return', asy
 })
 
 
-it.each([['Notify', 'notifications_enabled'], ['Sound', 'sounds_enabled']] as const)('retains a rejected %s save and clears it after a successful retry', async (name, field) => {
+it.each([['Notify', 'notifications_enabled']] as const)('retains a rejected %s save and clears it after a successful retry', async (name, field) => {
   let reject!: (error: Error) => void
   notificationSettings.save.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
   const view = render(<PromptPane selectedTask={null} prompt="" onPromptChange={vi.fn()} />)

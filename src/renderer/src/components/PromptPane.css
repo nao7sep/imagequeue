@@ -176,12 +176,6 @@
   accent-color: var(--accent);
 }
 
-.notification-volume {
-  width: 80px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
 .metadata-section {
   border-top: 1px solid var(--border);
   background: var(--pane-bg-strong);

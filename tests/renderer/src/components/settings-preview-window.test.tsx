@@ -35,7 +35,7 @@ function baseConfig(previewWindow: boolean | undefined): Record<string, unknown>
       drop_empty_sessions: true, keep_awake_during_work: true, show_status_icon: true,
       ...(previewWindow === undefined ? {} : { show_preview_window: previewWindow }),
     },
-    notifications: { notifications_enabled: true, sounds_enabled: true, success_file: '', failure_file: '' },
+    notifications: { notifications_enabled: true, success_file: '', failure_file: '' },
     image_backends: {
       openai: backend(), nanobanana: backend(), grok: backend(), flux: backend(),
       drawthings: { timeout_ms: 1800000, default_params: {}, models_dir: '', check_updates_at_launch: true },

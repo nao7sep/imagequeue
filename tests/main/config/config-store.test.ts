@@ -118,21 +118,21 @@ describe('settings by set', () => {
     const first = updateConfig((draft) => { draft.general.language = 'ja' })
     await started
     let appliedSecond = false
-    const second = updateConfig((draft) => { appliedSecond = true; draft.notifications.sounds_enabled = false })
+    const second = updateConfig((draft) => { appliedSecond = true; draft.notifications.notifications_enabled = false })
     await Promise.resolve()
     expect(appliedSecond).toBe(false)
     expect(loadConfig().general.language).not.toBe('ja')
     release()
     await Promise.all([first, second])
-    expect(stored()).toMatchObject({ general: { language: 'ja' }, notifications: { sounds_enabled: false } })
+    expect(stored()).toMatchObject({ general: { language: 'ja' }, notifications: { notifications_enabled: false } })
   })
   it('retries failed physical save intent before applying a later unrelated edit', async () => {
     const { updateConfig, retryConfigSaves } = await import('../../../src/main/config/config-store')
     vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(new Error('disk unavailable'))
     await expect(updateConfig((draft) => { draft.general.language = 'ja' })).rejects.toThrow('disk unavailable')
-    await updateConfig((draft) => { draft.notifications.sounds_enabled = false })
+    await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
     await retryConfigSaves()
-    expect(stored()).toMatchObject({ general: { language: 'ja' }, notifications: { sounds_enabled: false } })
+    expect(stored()).toMatchObject({ general: { language: 'ja' }, notifications: { notifications_enabled: false } })
   })
   it('writes exactly one changed scalar set', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
@@ -150,9 +150,9 @@ describe('settings by set', () => {
   it('keeps keys it does not know, top-level and within its own sections, on the next save', async () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] } }))
     const { updateConfig } = await import('../../../src/main/config/config-store')
-    await updateConfig((draft) => { draft.notifications.sounds_enabled = false })
+    await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
     expect(stored()).toEqual({
-      version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] }, notifications: { sounds_enabled: false },
+      version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] }, notifications: { notifications_enabled: false },
     })
   })
   it('does not write on an unchanged save', async () => {
@@ -210,9 +210,9 @@ describe('settings by set', () => {
   })
   it('removes a key saved back to its built-in and keeps the others', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
-    await updateConfig((draft) => { draft.general.language = 'ja'; draft.notifications.sounds_enabled = false })
+    await updateConfig((draft) => { draft.general.language = 'ja'; draft.notifications.notifications_enabled = false })
     await updateConfig((draft) => { draft.general.language = 'system' })
-    expect(stored()).toEqual({ notifications: { sounds_enabled: false } })
+    expect(stored()).toEqual({ notifications: { notifications_enabled: false } })
   })
   it('stores nothing for a text that differs from its built-in only in line endings or trailing spaces', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
@@ -450,8 +450,8 @@ describe('settings by set', () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     loadConfig()
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { language: 'ja' } }))
-    await updateConfig((draft) => { draft.notifications.sounds_enabled = false })
-    expect(stored()).toEqual({ notifications: { sounds_enabled: false } })
+    await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
+    expect(stored()).toEqual({ notifications: { notifications_enabled: false } })
   })
   // Which parameters a model takes is the column's to judge, so a record saved
   // before a field was added or removed (v0.1.0's moderation) still loads whole.

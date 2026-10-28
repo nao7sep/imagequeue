@@ -27,7 +27,7 @@ function logNotificationFailure(message: string, error: unknown): void {
 export function useNotifications(): void {
   const { tasks } = useQueue()
   const { settings } = useSettings()
-  // Whether sounds play is a setting (config); how loud is an adjustment (state).
+  // The completion-sound volume is an adjustment (state); zero mutes.
   const { uiState } = useUiState()
 
   // null = not yet initialized (first render); after first render holds previous statuses.
@@ -81,7 +81,6 @@ function triggerEvent(
 ): void {
   const notificationCfg = (settings?.notifications ?? {}) as Record<string, unknown>
   const notificationsEnabled = (notificationCfg.notifications_enabled as boolean) ?? true
-  const soundsEnabled = (notificationCfg.sounds_enabled as boolean) ?? true
   const successFile = (notificationCfg.success_file as string) ?? ''
   const failureFile = (notificationCfg.failure_file as string) ?? ''
 
@@ -90,7 +89,7 @@ function triggerEvent(
       .catch((error) => logNotificationFailure('Failed to show completion notification', error))
   }
 
-  if (soundsEnabled) {
+  if (volume > 0) {
     const customFile = type === 'success' ? successFile : failureFile
     const bundledUrl = type === 'success' ? successUrl : failureUrl
     soundRef.current?.audio?.pause()

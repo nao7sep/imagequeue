@@ -85,7 +85,6 @@ const cloudBackendIds = new Set<string>(CLOUD_BACKEND_IDS_IN_UI_ORDER)
 const secretIds = new Set<string>(SECRET_IDS)
 const notificationFields = new Set<string>([
   'notifications_enabled',
-  'sounds_enabled',
   'success_file',
   'failure_file',
 ])
