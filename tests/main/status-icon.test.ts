@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../renderer/until'
 
 const mocks = vi.hoisted(() => {
   class FakeImage {
@@ -303,7 +304,7 @@ describe('notices from the icon', () => {
     ;(clicked.click as () => void)()
     expect(item().checked).toBe(false)
     reject(failure)
-    await vi.waitFor(() => expect(item().checked).toBe(true))
+    await until(() => expect(item().checked).toBe(true))
     expect(mocks.notice).toHaveBeenCalledOnce()
     expect(mocks.notice.mock.calls[0]).toEqual([{
       title: { key: 'statusIcon.notifications' }, message: { key: 'failure.settingsSave' },
@@ -333,7 +334,7 @@ describe('notices from the icon', () => {
     const item = () => tray.menu.find((entry) => entry.label === 'Notifications')!
     expect(item()).toMatchObject({ type: 'checkbox', checked: true })
     ;(item().click as () => void)()
-    await vi.waitFor(() => expect(setEnabled).toHaveBeenCalledWith(false))
+    await until(() => expect(setEnabled).toHaveBeenCalledWith(false))
     expect(item().checked).toBe(false)
     enabled = true
     changed()

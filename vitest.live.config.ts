@@ -14,7 +14,8 @@ export default defineConfig({
     include: ['tests/live/**/*.test.ts'],
     exclude: configDefaults.exclude,
     fileParallelism: false,
-    testTimeout: 15 * 60_000,
-    hookTimeout: 60 * 60_000,
+    // Tests carry no timeouts: a live call ends at the app's own deadlines.
+    testTimeout: 0,
+    hookTimeout: 0,
   },
 })

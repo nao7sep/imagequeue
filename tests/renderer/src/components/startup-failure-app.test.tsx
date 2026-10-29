@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StartupFailureApp } from '../../../../src/renderer/src/components/StartupFailureApp'
+import { until } from '../../until'
 
 const reportMeasurement = vi.fn()
 const getStartupFailureMessage = vi.fn()
@@ -40,9 +41,9 @@ describe('StartupFailureApp measurement handshake', () => {
     render(<StartupFailureApp />)
     expect(reportMeasurement).not.toHaveBeenCalled()
 
-    await screen.findByText(/stopped before opening its main window/)
+    await until(() => screen.getByText(/stopped before opening its main window/))
     // The measurement runs in an effect after the text commits.
-    await waitFor(() => expect(reportMeasurement).toHaveBeenCalledOnce())
+    await until(() => expect(reportMeasurement).toHaveBeenCalledOnce())
     expect(reportMeasurement).toHaveBeenCalledWith({
       naturalHeight: 200,
       minimumHeight: 174,
@@ -57,7 +58,7 @@ describe('StartupFailureApp measurement handshake', () => {
   it('waits for production stylesheets before reporting the committed geometry', async () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
     render(<StartupFailureApp />)
-    await screen.findByText(/stopped before opening its main window/)
+    await until(() => screen.getByText(/stopped before opening its main window/))
     // The text can commit before its passive measurement effect runs. In the
     // browser a load in that gap leaves readyState 'complete', which the effect
     // handles; here readyState stays mocked as 'loading', so let the effect
@@ -79,9 +80,9 @@ describe('StartupFailureApp measurement handshake', () => {
     getStartupFailureMessage.mockResolvedValue({ key: 'startupFailure.settingsFileMessage', values: { path: '/Users/me/.imagequeue/config.json' } })
     render(<StartupFailureApp />)
 
-    const details = await screen.findByText(/settings file at/)
+    const details = await until(() => screen.getByText(/settings file at/))
     expect(details.textContent).toBe('ImageQueue couldn’t use its settings file at /Users/me/.imagequeue/config.json and left it unchanged. Check its permissions or move it aside, then start ImageQueue again.')
-    await waitFor(() => expect(reportMeasurement).toHaveBeenCalledOnce())
+    await until(() => expect(reportMeasurement).toHaveBeenCalledOnce())
   })
 
   it('keeps the general copy when main cannot say what stopped startup', async () => {
@@ -89,7 +90,7 @@ describe('StartupFailureApp measurement handshake', () => {
     getStartupFailureMessage.mockRejectedValue(new Error('Error invoking remote method'))
     render(<StartupFailureApp />)
 
-    await screen.findByText(/stopped before opening its main window/)
-    await waitFor(() => expect(reportMeasurement).toHaveBeenCalledOnce())
+    await until(() => screen.getByText(/stopped before opening its main window/))
+    await until(() => expect(reportMeasurement).toHaveBeenCalledOnce())
   })
 })

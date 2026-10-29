@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQuitOwner, type QuitChoice } from '../../src/main/quit-handler'
+import { until } from '../renderer/until'
 
 afterEach(() => vi.useRealTimers())
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
@@ -16,10 +17,10 @@ describe('quit ownership', () => {
     const quit = setup(save)
     quit.request(); quit.request()
     expect(quit.begin).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce())
+    await until(() => expect(save).toHaveBeenCalledOnce())
     expect(quit.exit).not.toHaveBeenCalled()
     pending.resolve()
-    await vi.waitFor(() => expect(quit.exit).toHaveBeenCalledOnce())
+    await until(() => expect(quit.exit).toHaveBeenCalledOnce())
     quit.request()
     expect(quit.begin).toHaveBeenCalledOnce()
   })
@@ -28,19 +29,19 @@ describe('quit ownership', () => {
     const save = vi.fn().mockRejectedValueOnce(new Error('full')).mockResolvedValue(undefined)
     const question = vi.fn(() => choice.promise), quit = setup(save, question)
     quit.request()
-    await vi.waitFor(() => expect(question).toHaveBeenCalledOnce())
+    await until(() => expect(question).toHaveBeenCalledOnce())
     expect(quit.exit).not.toHaveBeenCalled(); expect(quit.cleanup).not.toHaveBeenCalled()
     choice.resolve('retry')
-    await vi.waitFor(() => expect(quit.exit).toHaveBeenCalledOnce())
+    await until(() => expect(quit.exit).toHaveBeenCalledOnce())
     expect(save).toHaveBeenCalledTimes(2)
   })
   it('cancels quit when its question cannot be shown, allowing another quit', async () => {
     const quit = setup(async () => { throw new Error('disk') }, async () => { throw new Error('window') })
     quit.request()
-    await vi.waitFor(() => expect(quit.cancel).toHaveBeenCalledOnce())
+    await until(() => expect(quit.cancel).toHaveBeenCalledOnce())
     expect(quit.exit).not.toHaveBeenCalled()
     quit.request()
-    await vi.waitFor(() => expect(quit.cancel).toHaveBeenCalledTimes(2))
+    await until(() => expect(quit.cancel).toHaveBeenCalledTimes(2))
   })
   it('asks when a save is still running at the exit deadline, and Retry saves again under a fresh one', async () => {
     vi.useFakeTimers()
@@ -114,12 +115,12 @@ describe('quit ownership', () => {
     quit.request()
     expect(quit.begin).not.toHaveBeenCalled()
     answer.resolve(false)
-    await vi.waitFor(() => expect(quit.declined).toHaveBeenCalledOnce())
+    await until(() => expect(quit.declined).toHaveBeenCalledOnce())
     expect(quit.begin).not.toHaveBeenCalled()
     expect(quit.exit).not.toHaveBeenCalled()
     quit.confirm.mockImplementation(() => Promise.resolve(true))
     quit.request()
-    await vi.waitFor(() => expect(quit.exit).toHaveBeenCalledOnce())
+    await until(() => expect(quit.exit).toHaveBeenCalledOnce())
     expect(quit.begin).toHaveBeenCalledOnce()
   })
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AskOptions, TextAIProvider } from '../../../src/main/text-ai/types'
 
 // Every elaboration attempt is paid, and the user waits on it. Only a failure that
@@ -12,6 +12,21 @@ vi.mock('../../../src/main/utils/abortable-delay', () => ({ abortableDelay: dela
 const { askJsonWithRetry } = await import('../../../src/main/text-ai/retry-json')
 const { ProviderRefusalError, ProviderTruncationError, ProviderStatusError, ProviderHttpError } =
   await import('../../../src/main/provider-errors')
+
+// Product deadlines run on the fake clock. Vitest does not fake
+// AbortSignal.timeout, so it is replaced with a faked timer.
+function fakeDeadlines(): void {
+  vi.useFakeTimers()
+  vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+    const deadline = new AbortController()
+    setTimeout(() => deadline.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms)
+    return deadline.signal
+  })
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 function failingProvider(error: unknown): { provider: TextAIProvider; ask: ReturnType<typeof vi.fn> } {
   const ask = vi.fn(async () => { throw error })
@@ -70,6 +85,7 @@ describe('askJsonWithRetry', () => {
   })
 
   it('keeps all attempts inside the shared timeout', async () => {
+    fakeDeadlines()
     const error = new ProviderHttpError('busy', 503)
     const ask = vi.fn(async (opts: AskOptions) => {
       await new Promise<void>((resolve, reject) => {
@@ -79,8 +95,12 @@ describe('askJsonWithRetry', () => {
       if (ask.mock.calls.length === 1) throw error
       return { text: '{}', parsed: {} }
     })
-    await expect(run({ ask } as unknown as TextAIProvider, 500)).rejects.toMatchObject({ name: 'TimeoutError' })
-    expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
+    {
+      const failed = expect(run({ ask } as unknown as TextAIProvider, 500)).rejects.toMatchObject({ name: 'TimeoutError' })
+      await vi.advanceTimersByTimeAsync(500)
+      await failed
+      expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
+    }
   })
 
   it('reports a reply with no usable payload at once', async () => {
@@ -94,7 +114,10 @@ it('ends a long server cooldown at the text deadline without another request', a
   const actual = await vi.importActual<typeof import('../../../src/main/utils/abortable-delay')>('../../../src/main/utils/abortable-delay')
   delay.mockImplementationOnce(actual.abortableDelay)
   const { provider, ask } = failingProvider(new ProviderHttpError('busy', 503, null, '120'))
-  await expect(run(provider, 10)).rejects.toMatchObject({ name: 'TimeoutError' })
+  fakeDeadlines()
+  const failed = expect(run(provider, 10)).rejects.toMatchObject({ name: 'TimeoutError' })
+  await vi.advanceTimersByTimeAsync(10)
+  await failed
   expect(ask).toHaveBeenCalledOnce()
 })
 
@@ -106,8 +129,10 @@ it('retains ownership of an admitted request until a late successful answer sett
     return new Promise<{ text: string; parsed: object }>(resolve => { finish = resolve })
   })
   let settled = false
+  fakeDeadlines()
   const pending = run({ ask }, 10).finally(() => { settled = true })
-  await vi.waitFor(() => expect(signal.aborted).toBe(true))
+  await vi.advanceTimersByTimeAsync(10)
+  expect(signal.aborted).toBe(true)
   expect(settled).toBe(false)
   finish({ text: '{}', parsed: {} })
   await expect(pending).resolves.toEqual({})

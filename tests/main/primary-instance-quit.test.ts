@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../renderer/until'
 
 // Delivers the operating system's quit signals into the primary instance's own
 // handlers: macOS logout, restart and shutdown arrive as powerMonitor
@@ -192,8 +193,8 @@ beforeEach(() => {
 async function launch(): Promise<void> {
   const { runPrimaryInstance } = await import('../../src/main/primary-instance')
   runPrimaryInstance()
-  if (h.startUpFails.value) await vi.waitFor(() => expect(createStartupFailureWindow).toHaveBeenCalledOnce())
-  else await vi.waitFor(() => expect(h.controllers[0]?.markStartupComplete).toHaveBeenCalledOnce())
+  if (h.startUpFails.value) await until(() => expect(createStartupFailureWindow).toHaveBeenCalledOnce())
+  else await until(() => expect(h.controllers[0]?.markStartupComplete).toHaveBeenCalledOnce())
 }
 
 function beforeQuit(): { preventDefault: ReturnType<typeof vi.fn> } {
@@ -211,7 +212,7 @@ describe('primary instance quit routes', () => {
     h.emit(h.powerListeners, 'shutdown', shutdown)
     const quit = beforeQuit()
 
-    await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
+    await until(() => expect(forceExit).toHaveBeenCalledOnce())
     expect(stopAllCliJobs).toHaveBeenCalled()
     expect(shutdown.preventDefault).not.toHaveBeenCalled()
     expect(quit.preventDefault).toHaveBeenCalledOnce()
@@ -228,7 +229,7 @@ describe('primary instance quit routes', () => {
     vi.mocked(session.persistActiveSession).mockRejectedValue(new Error('disk full'))
     h.emit(h.powerListeners, 'shutdown')
 
-    await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
+    await until(() => expect(forceExit).toHaveBeenCalledOnce())
     expect(showQuitFailure).not.toHaveBeenCalled()
   })
 
@@ -238,7 +239,7 @@ describe('primary instance quit routes', () => {
     expect(onSessionEnd).toBe(h.powerListeners.get('shutdown')![0])
     onSessionEnd()
 
-    await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
+    await until(() => expect(forceExit).toHaveBeenCalledOnce())
     expect(session.persistActiveSession).toHaveBeenCalledTimes(2)
     expect(showQuitFailure).not.toHaveBeenCalled()
   })
@@ -247,7 +248,7 @@ describe('primary instance quit routes', () => {
     await launch()
     const quit = beforeQuit()
 
-    await vi.waitFor(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
+    await until(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
     expect(quit.preventDefault).toHaveBeenCalledOnce()
     expect(session.persistActiveSession).toHaveBeenCalledTimes(2)
     expect(records.closeRecords).toHaveBeenCalledOnce()
@@ -259,7 +260,7 @@ describe('primary instance quit routes', () => {
     await launch()
     beforeQuit()
 
-    await vi.waitFor(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
+    await until(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
     expect(showQuitFailure).not.toHaveBeenCalled()
     expect(session.persistActiveSession).not.toHaveBeenCalled()
   })
@@ -285,13 +286,13 @@ describe('primary instance quit routes', () => {
     h.iconAvailable.value = false
     vi.mocked(queueManager.generatingCount).mockReturnValue(2)
     const quit = beforeQuit()
-    await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
+    await until(() => expect(showQuitFailure).toHaveBeenCalledOnce())
     expect(quit.preventDefault).toHaveBeenCalledOnce()
     const [question, , , owner] = vi.mocked(showQuitFailure).mock.calls[0]!
     expect(question).toEqual({ kind: 'confirm', work: { generating: 2, elaborating: false, tools: false, drafts: [] }, platform: process.platform })
     // The controller stand-in has no window; the question stands alone.
     expect(owner).toBeUndefined()
-    await vi.waitFor(() => expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalled())
+    await until(() => expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalled())
     expect(h.controllers[0]!.beginShutdown).not.toHaveBeenCalled()
     expect(h.app.exit).not.toHaveBeenCalled()
   })
@@ -300,7 +301,7 @@ describe('primary instance quit routes', () => {
     await launch()
     vi.mocked(hasActiveBrainstorms).mockReturnValue(true)
     beforeQuit()
-    await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
+    await until(() => expect(showQuitFailure).toHaveBeenCalledOnce())
     expect(vi.mocked(showQuitFailure).mock.calls[0]![0]).toMatchObject({
       kind: 'confirm', work: { generating: 0, elaborating: true, tools: false, drafts: [] },
     })
@@ -313,7 +314,7 @@ describe('primary instance quit routes', () => {
     await launch()
     vi.mocked(hasActiveBrainstorms).mockReturnValue(true)
     h.emit(h.powerListeners, 'shutdown')
-    await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
+    await until(() => expect(forceExit).toHaveBeenCalledOnce())
     expect(cancelAllBrainstorms).toHaveBeenCalledOnce()
     expect(showQuitFailure).not.toHaveBeenCalled()
   })
@@ -323,7 +324,7 @@ describe('primary instance quit routes', () => {
     vi.mocked(queueManager.generatingCount).mockReturnValue(1)
     vi.mocked(showQuitFailure).mockImplementation(async () => 'quit')
     beforeQuit()
-    await vi.waitFor(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
+    await until(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
     expect(h.controllers[0]!.beginShutdown).toHaveBeenCalledOnce()
   })
 
@@ -331,7 +332,7 @@ describe('primary instance quit routes', () => {
     await launch()
     vi.mocked(queueManager.generatingCount).mockReturnValue(1)
     beforeQuit()
-    await vi.waitFor(() => expect(showQuitFailure).toHaveBeenCalledOnce())
+    await until(() => expect(showQuitFailure).toHaveBeenCalledOnce())
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(h.controllers[0]!.restoreOrCreate).not.toHaveBeenCalled()
   })
@@ -372,7 +373,7 @@ describe('primary instance quit routes', () => {
     expect(state.dialogOpen).toBe(false)
     state.openSettings()
     expect(h.controllers[0]!.restoreOrCreate).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(send).toHaveBeenCalledWith('window:command', 'settings'))
+    await until(() => expect(send).toHaveBeenCalledWith('window:command', 'settings'))
   })
 
   // About and Settings wait while a dialog is in front (app-chrome-conventions).
@@ -438,7 +439,7 @@ it('a quit during the first page load exits without presenting a startup failure
   h.createPrimary.value = true
   await launch()
   beforeQuit()
-  await vi.waitFor(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
+  await until(() => expect(h.app.exit).toHaveBeenCalledExactlyOnceWith(0))
   // Exiting destroys the window while its page is still loading.
   failLoad(new Error("ERR_FAILED (-2) loading 'index.html'"))
   await new Promise<void>((resolve) => setImmediate(resolve))

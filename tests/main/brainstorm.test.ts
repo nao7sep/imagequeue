@@ -12,6 +12,7 @@ import { getElaborator } from '../../src/main/elaborators'
 import { getMainProvider } from '../../src/main/text-ai'
 import type { AskOptions, AskResult, TextAIProvider } from '../../src/main/text-ai'
 import type { Elaborator, ElaboratorKind } from '../../src/shared/types'
+import { until } from '../renderer/until'
 
 // Integration tests: the real orchestrator against the REAL concept store (a
 // throwaway IMAGEQUEUE_DATA_DIR) and a scripted provider that answers each planning
@@ -85,7 +86,9 @@ interface ScriptOptions {
   /** Probes yielded per generation ask; default 12. */
   probesPerGeneration?: number
   /** Per-prose-call artificial latency in ms (drives the concurrency tests). */
-  proseDelayMs?: (call: number) => number
+  // Turns of the event loop a prose call takes before it answers, so turns
+  // overlap or finish out of order without any real delay.
+  proseDelayTurns?: (call: number) => number
   /** Replaces a prose reply outright — used to stage an unusable payload. */
   proseReplacement?: (call: number) => AskResult
   /** When it returns true for an expansion call, every cluster comes back empty. */
@@ -142,8 +145,8 @@ function installScriptedProvider(opts: ScriptOptions = {}): Script {
     proseCalls.push({ messages: options.messages, text })
     proseInFlight++
     maxInFlight = Math.max(maxInFlight, proseInFlight)
-    const delay = opts.proseDelayMs?.(call) ?? 0
-    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
+    const turns = opts.proseDelayTurns?.(call) ?? 0
+    for (let turn = 0; turn < turns; turn++) await new Promise((resolve) => setImmediate(resolve))
     proseInFlight--
     const replaced = opts.proseReplacement?.(call)
     if (replaced) return replaced
@@ -340,7 +343,7 @@ describe('brainstormPrompts (concept-driven)', () => {
 
   it('runs a wave of prose calls concurrently when concurrency allows', async () => {
     mockKnobs.concurrency = 3
-    const script = installScriptedProvider({ proseDelayMs: () => 5 })
+    const script = installScriptedProvider({ proseDelayTurns: () => 5 })
     await brainstormPrompts(request({ requestId: 'rw', count: 6 }))
     // count 6 at batch 2 = 3 turns; all fired in one wave.
     expect(script.proseCalls).toHaveLength(3)
@@ -351,7 +354,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     mockKnobs.concurrency = 2
     // Turn 1 resolves SLOWER than turn 2; the collected list must still carry
     // turn 1's prompts first, because prompts map to assignments by position.
-    installScriptedProvider({ proseDelayMs: (call) => (call === 1 ? 30 : 1) })
+    installScriptedProvider({ proseDelayTurns: (call) => (call === 1 ? 30 : 1) })
     const result = await brainstormPrompts(request({ requestId: 'ro', count: 4 }))
     expect(result.prompts.map((p) => p.text)).toEqual(['prompt 1-1', 'prompt 1-2', 'prompt 2-1', 'prompt 2-2'])
   })
@@ -512,7 +515,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     })
 
     const pending = brainstormPrompts(request({ requestId: 'backoff-cancel', count: 1 }))
-    await vi.waitFor(() => expect(logged('Brainstorm call failed, retrying')).not.toHaveLength(0))
+    await until(() => expect(logged('Brainstorm call failed, retrying')).not.toHaveLength(0))
     cancelBrainstorm('backoff-cancel')
 
     await expect(pending).resolves.toEqual({ prompts: [] })
@@ -707,7 +710,7 @@ describe('brainstormPrompts (concept-driven)', () => {
     try {
       expect(hasActiveBrainstorms()).toBe(true)
     } finally {
-      await vi.waitFor(() => expect(hung).toHaveBeenCalled())
+      await until(() => expect(hung).toHaveBeenCalled())
       cancelBrainstorm('busy')
       release()
       await pending

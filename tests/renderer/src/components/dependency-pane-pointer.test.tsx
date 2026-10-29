@@ -6,6 +6,7 @@ import { DependencyPanePointer } from '../../../../src/renderer/src/components/D
 import { DependenciesModal } from '../../../../src/renderer/src/components/DependenciesModal'
 import { DependenciesProvider } from '../../../../src/renderer/src/context/DependenciesContext'
 import type { DependenciesState, DependencyInfo, RecommendationsInstallResult } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 afterEach(cleanup)
 
@@ -44,7 +45,7 @@ describe('DependencyPanePointer', () => {
       platformSupported: true,
     })
 
-    const pointer = await screen.findByRole('button')
+    const pointer = await until(() => screen.getByRole('button'))
     expect(pointer.textContent).toBe('A Draw Things CLI update is available. Open Managed tools.')
     expect(pointer.textContent).not.toMatch(/[—–]/)
   })
@@ -74,14 +75,14 @@ describe('DependencyPanePointer', () => {
     }
     render(<Harness />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
-    await screen.findByRole('button', { name: 'Cancel' })
+    fireEvent.click(await until(() => screen.getByRole('button', { name: 'Refresh' })))
+    await until(() => screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByText(/being installed or updated/)).toBeNull()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!)
-    expect((await screen.findByRole('button')).textContent).toBe('The Draw Things tools are being installed or updated. Open Managed tools.')
+    expect((await until(() => screen.getByRole('button'))).textContent).toBe('The Draw Things tools are being installed or updated. Open Managed tools.')
 
     finishRefresh?.({ state: current, warnings: [] })
-    await vi.waitFor(() => expect(screen.queryByRole('button')).toBeNull())
+    await until(() => expect(screen.queryByRole('button')).toBeNull())
   })
 })

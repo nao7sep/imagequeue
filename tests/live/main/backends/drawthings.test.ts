@@ -35,10 +35,9 @@ const TOOL_HOME = join(CACHE, 'drawthings')
 // and its smallest real download, locked so the lane always runs the same one.
 const LOCKED_MODEL = 'sd_v1.5_f16.ckpt'
 const LOCKED_MODEL_BYTES = 1_721_266_176
-const MODEL_DOWNLOAD_TIMEOUT_MS = 60 * 60_000
 
 async function waitForCliJob(app: App, jobId: string): Promise<CliStatusEvent> {
-  const deadline = Date.now() + MODEL_DOWNLOAD_TIMEOUT_MS
+  // Ends when the job settles; the CLI job's own silence bound ends a stall.
   for (;;) {
     const status = app.contents.sent
       .filter((message) => message.channel === 'cli-job:status')
@@ -46,10 +45,6 @@ async function waitForCliJob(app: App, jobId: string): Promise<CliStatusEvent> {
       .filter((event) => event.jobId === jobId)
       .at(-1)
     if (status && (status.status === 'exited' || status.status === 'killed')) return status
-    if (Date.now() > deadline) {
-      await app.invoke('cli-job:kill', jobId)
-      throw new Error(`The ${LOCKED_MODEL} download was still running after ${MODEL_DOWNLOAD_TIMEOUT_MS} ms.`)
-    }
     await delay(500)
   }
 }

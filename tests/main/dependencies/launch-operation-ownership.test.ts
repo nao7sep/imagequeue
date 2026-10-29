@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { until } from '../../renderer/until'
 
 type Handler = (event: { sender: FakeSender }, ...args: unknown[]) => unknown
 
@@ -100,7 +101,7 @@ describe('launch and manual dependency operation ownership', () => {
     )
 
     const launchCheck = checkDependenciesAtLaunch()
-    await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
+    await until(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
     const recommendations = invoke('dependencies:downloadRecommendations', new FakeSender())
 
     await expect(recommendations).resolves.toBeTruthy()
@@ -122,7 +123,7 @@ describe('launch and manual dependency operation ownership', () => {
     )
 
     const launchCheck = checkDependenciesAtLaunch()
-    await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
+    await until(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
     await expect(invoke('dependencies:installCli', new FakeSender())).rejects.toThrow(
       'Dependency cli operation is already running'
     )
@@ -151,15 +152,22 @@ describe('launch and manual dependency operation ownership', () => {
     )
 
     const launchCheck = checkDependenciesAtLaunch()
-    await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
-    await vi.waitFor(() => expect(mocks.fetchLatestRecommendationsModified).toHaveBeenCalledTimes(1))
+    await until(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalled())
+    await until(() => expect(mocks.fetchLatestRecommendationsModified).toHaveBeenCalledTimes(1))
     await expect(invoke('dependencies:downloadRecommendations', new FakeSender())).rejects.toThrow(
       'Dependency recommendations operation is already running'
     )
 
     // Once the file's check settles, its slot frees while the CLI's is still held.
     finishFileCheck()
-    await vi.waitFor(() => invoke('dependencies:downloadRecommendations', new FakeSender()))
+    // The slot frees when the check's own settlement reaches it; retry each turn until then.
+    for (;;) {
+      try { await invoke('dependencies:downloadRecommendations', new FakeSender()); break }
+      catch (error) {
+        if (!String(error).includes('already running')) throw error
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+    }
     expect(mocks.downloadLatestRecommendations).toHaveBeenCalledTimes(1)
     await expect(invoke('dependencies:installCli', new FakeSender())).rejects.toThrow(
       'Dependency cli operation is already running'
@@ -177,7 +185,7 @@ it('does not acquire new launch work after quit while recommendations existence 
   mocks.heldStatus = new Promise((resolve) => { release = resolve })
   mocks.resolveLatestCliRelease.mockResolvedValue({ tag: 'v26.0910.1', assetUrl: 'https://example.com/cli', sha256: 'abc' })
   const launched = checkDependenciesAtLaunch()
-  await vi.waitFor(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalledOnce())
+  await until(() => expect(mocks.resolveLatestCliRelease).toHaveBeenCalledOnce())
   setQuitting(true)
   cancelAllDependencyOperations()
   release({ exists: true })

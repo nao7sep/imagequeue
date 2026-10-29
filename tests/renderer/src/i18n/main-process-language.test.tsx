@@ -4,6 +4,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { MainProcessLanguage, useI18n } from '../../../../src/renderer/src/i18n/I18nContext'
 import { loadTranslator } from '../../../../src/shared/i18n/translate'
 import type { LanguageEnvironment } from '../../../../src/shared/i18n/languages'
+import { until } from '../../until'
 
 vi.mock('../../../../src/shared/i18n/translate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../src/shared/i18n/translate')>()
@@ -27,7 +28,7 @@ describe('MainProcessLanguage', () => {
       appLog,
     }
     render(<MainProcessLanguage><Probe /></MainProcessLanguage>)
-    expect(await screen.findByText('Language')).toBeTruthy()
+    expect(await until(() => screen.getByText('Language'))).toBeTruthy()
     expect(appLog).toHaveBeenCalledWith('warn', expect.any(String), expect.objectContaining({
       language: 'ja', error: expect.objectContaining({ message: error.message }),
     }))
@@ -42,7 +43,7 @@ describe('MainProcessLanguage', () => {
     }
     const expected = (await loadTranslator('ja')).t('settings.language')
     render(<MainProcessLanguage><Probe /></MainProcessLanguage>)
-    expect(await screen.findByText(expected)).toBeTruthy()
+    expect(await until(() => screen.getByText(expected))).toBeTruthy()
     vi.mocked(loadTranslator).mockRejectedValueOnce(new Error('missing German'))
     await act(async () => change({ language: 'de', locale: 'de', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }))
     expect(screen.getByText(expected)).toBeTruthy()
@@ -61,7 +62,7 @@ describe('MainProcessLanguage', () => {
     await act(async () => {})
     await act(async () => change({ language: 'ja', locale: 'ja', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }))
     const expected = (await loadTranslator('ja')).t('settings.language')
-    expect(await screen.findByText(expected)).toBeTruthy()
+    expect(await until(() => screen.getByText(expected))).toBeTruthy()
     await act(async () => reject(new Error('older catalogue failed')))
     expect(screen.getByText(expected)).toBeTruthy()
   })
@@ -77,6 +78,6 @@ describe('MainProcessLanguage', () => {
 
     await act(async () => resolve({ language: 'ja', locale: 'ja', timeZone: 'UTC', systemLanguage: 'en', systemTimeZone: 'UTC' }))
     const expected = (await loadTranslator('ja')).t('settings.language')
-    expect(await screen.findByText(expected)).toBeTruthy()
+    expect(await until(() => screen.getByText(expected))).toBeTruthy()
   })
 })

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UiFont } from '../../../../src/renderer/src/components/UiFont'
+import { until } from '../../until'
 
 const font = () => document.documentElement.style.getPropertyValue('--font-ui')
 afterEach(() => { cleanup(); document.documentElement.style.removeProperty('--font-ui') })
@@ -20,7 +21,7 @@ describe('shared window font', () => {
   it('hydrates without credentials, follows saved changes, and clears a custom font', async () => {
     const b = boundary(async () => ({ general: { ui_font_family: ' Custom Font ' } }))
     const view = render(<UiFont />)
-    await waitFor(() => expect(font()).toBe('Custom Font'))
+    await until(() => expect(font()).toBe('Custom Font'))
     b.change('Another Font')
     expect(font()).toBe('Another Font')
     b.change('')

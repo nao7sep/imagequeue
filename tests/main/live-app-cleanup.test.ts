@@ -14,7 +14,6 @@ it('checks remaining resources even when live-app shutdown fails', async () => {
 it('retains both child and server leaks alongside the original close failure', async () => {
   const failure = new Error('store close failed')
   vi.spyOn(process, 'getActiveResourcesInfo').mockReturnValue(['ProcessWrap', 'TCPServerWrap'])
-  vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(3_000)
   const app = { shutdown: vi.fn().mockRejectedValue(failure) } as unknown as App
   const outcome = await stopApp(app).catch((error: unknown) => error)
   expect(outcome).toBeInstanceOf(AggregateError)

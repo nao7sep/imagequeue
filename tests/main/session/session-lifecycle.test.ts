@@ -6,6 +6,7 @@ import crypto from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } from '../../../src/shared/types'
+import { until } from '../../renderer/until'
 
 // Sessions are folders of the user's generated images with a manifest beside
 // them, so these paths are exercised against a real output directory: what the
@@ -463,7 +464,7 @@ describe('session operations awaiting Trash', () => {
       settle = () => { fs.rmSync(dir, { recursive: true, force: true }); resolve() }
     }))
     const mutation = operation === 'resume' ? resumeSession(targetId) : createSession()
-    await vi.waitFor(() => expect(settle).toBeTypeOf('function'))
+    await until(() => expect(settle).toBeTypeOf('function'))
     const adoptedDir = getSessionDir()
     try {
       expect(adoptedDir).not.toBe(previousDir)
@@ -491,7 +492,7 @@ describe('session operations awaiting Trash', () => {
       settle = () => { fs.rmSync(dir, { recursive: true, force: true }); resolve() }
     }))
     const deletion = deleteSession(targetId)
-    await vi.waitFor(() => expect(settle).toBeTypeOf('function'))
+    await until(() => expect(settle).toBeTypeOf('function'))
     try {
       await expect(resumeSession(targetId)).rejects.toThrow(/current session operation/)
       expect(getSessionDir()).toBe(currentDir)
@@ -521,7 +522,7 @@ describe('session operations awaiting Trash', () => {
       }
     }))
     const deletion = handlers.get('queue:deleteWithFiles')!({}, 'openai', 'same')
-    await vi.waitFor(() => expect(settle).toBeTypeOf('function'))
+    await until(() => expect(settle).toBeTypeOf('function'))
     try {
       await expect(resumeSession(targetId)).rejects.toThrow(/current session operation/)
       expect(getSessionDir()).toBe(originalDir)

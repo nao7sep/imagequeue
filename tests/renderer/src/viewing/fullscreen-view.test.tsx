@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SelectionSnapshot, SurfaceConfirmRequest } from '../../../../src/shared/viewing'
+import { until } from '../../until'
 
 const { FullscreenViewApp } = await import('../../../../src/renderer/src/viewing/FullscreenView')
 
@@ -39,7 +40,7 @@ const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(d
 describe('fullscreen view page', () => {
   it('ignores destructive keys while B is loading over A, then identifies B', async () => {
     render(<FullscreenViewApp />)
-    await waitFor(() => expect(document.querySelector('img')?.getAttribute('src')).toBe('iq-image://sessions/current/a'))
+    await until(() => expect(document.querySelector('img')?.getAttribute('src')).toBe('iq-image://sessions/current/a'))
     let finish!: () => void
     vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     act(() => pushSnapshot({ version: 8, task: image('b') }))
@@ -55,30 +56,30 @@ describe('fullscreen view page', () => {
 
   it('draws the selected image once decoded and reports that snapshot painted', async () => {
     const { container } = render(<FullscreenViewApp />)
-    await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
+    await until(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
     expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/a')
   })
 
   it('keeps the current image up until the next one has decoded', async () => {
     let finish: () => void = () => {}
     const { container } = render(<FullscreenViewApp />)
-    await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
+    await until(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
     decode.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     act(() => pushSnapshot({ version: 4, task: image('b') }))
     expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/a')
     await act(async () => finish())
-    await waitFor(() => expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/b'))
+    await until(() => expect(container.querySelector('.fullscreen-view-image')?.getAttribute('src')).toBe('iq-image://sessions/current/b'))
     expect(api.reportFullscreenViewPainted).toHaveBeenLastCalledWith(4, true)
   })
 
   it('reports a snapshot it cannot paint: no image to show, or one that did not load', async () => {
     render(<FullscreenViewApp />)
-    await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
+    await until(() => expect(api.reportFullscreenViewPainted).toHaveBeenCalledWith(3, true))
     act(() => pushSnapshot({ version: 4, task: { ...image('q'), status: 'queued' } }))
-    await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenLastCalledWith(4, false))
+    await until(() => expect(api.reportFullscreenViewPainted).toHaveBeenLastCalledWith(4, false))
     decode.mockRejectedValueOnce(new Error('EncodingError'))
     act(() => pushSnapshot({ version: 5, task: image('missing') }))
-    await waitFor(() => expect(api.reportFullscreenViewPainted).toHaveBeenLastCalledWith(5, false))
+    await until(() => expect(api.reportFullscreenViewPainted).toHaveBeenLastCalledWith(5, false))
   })
 
   it('closes on Space or Escape and hands list keys to the main window', async () => {
@@ -103,7 +104,7 @@ describe('fullscreen view page', () => {
   it('shows a confirmation asked of it over the image, answers it, and leaves keys to it while open', async () => {
     render(<FullscreenViewApp />)
     act(() => askConfirm({ id: 7, options: { title: 'Delete image?', message: 'It goes to the Trash.', confirmLabel: 'Delete', danger: true } }))
-    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(await until(() => screen.getByRole('dialog'))).toBeTruthy()
     expect(screen.getByText('It goes to the Trash.')).toBeTruthy()
     press('ArrowLeft')
     press(' ')
@@ -112,15 +113,15 @@ describe('fullscreen view page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(api.answerSurfaceConfirm).toHaveBeenCalledWith(7, true)
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await until(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('drops a confirmation the main process withdraws', async () => {
     render(<FullscreenViewApp />)
     act(() => askConfirm({ id: 8, options: { message: 'Remove?' } }))
-    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(await until(() => screen.getByRole('dialog'))).toBeTruthy()
     act(() => dismissConfirm(8))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await until(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(api.answerSurfaceConfirm).not.toHaveBeenCalled()
   })
 })

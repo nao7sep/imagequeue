@@ -1,6 +1,7 @@
 import { tinyPng } from '../image-fixture'
 import sharp from 'sharp'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../../renderer/until'
 
 // The sidecar records the seed the backend sent, and null when it sent none,
 // and its file_timestamp is the time in the file name.
@@ -50,7 +51,7 @@ beforeEach(() => {
 async function runOne(): Promise<{ seed: number | null; file_timestamp: string }> {
   queueManager.enqueue({ prompt: 'p', backend: 'flux', model: 'flux-2-pro', params: { seed: 7 }, count: 1 } as never)
   processQueues()
-  await vi.waitFor(() => expect(written).toHaveLength(1))
+  await until(() => expect(written).toHaveLength(1))
   return written[0]!
 }
 
@@ -83,7 +84,7 @@ describe('provider image admission', () => {
     generate.mockResolvedValueOnce({ buffer: Buffer.from('<html>provider error</html>'), mimeType: 'image/png' })
     queueManager.enqueue({ prompt: 'p', backend: 'flux', model: 'flux-2-pro', params: {}, count: 1 } as never)
     processQueues()
-    await vi.waitFor(() => expect(queueManager.getAllStoredTasks().flux[0].status).toBe('failed'))
+    await until(() => expect(queueManager.getAllStoredTasks().flux[0].status).toBe('failed'))
     expect(written).toHaveLength(0)
     expect(queueManager.getAllStoredTasks().flux[0].imagePath).toBeNull()
   })

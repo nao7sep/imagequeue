@@ -42,8 +42,9 @@ describe('built SQLite workers', () => {
         time: new Date().toISOString(), launch: 'launch', session_id: null, task_id: null, request_id: null,
         level: 'info', message: 'after lock', fields: '{}',
       } })
-      // This timer could not run while a synchronous main-process insert waited.
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      // This turn of the event loop could not run while a synchronous
+      // main-process insert waited.
+      await new Promise((resolve) => setImmediate(resolve))
       expect(completed).toBe(false)
       other.exec('COMMIT')
       const exited = once(worker, 'exit')
@@ -73,7 +74,7 @@ describe('built SQLite workers', () => {
       worker.postMessage({ id: 2, op: 'ensureFacet', args: ['second'] })
       const listing = response(worker, (message) => message.id === 3)
       worker.postMessage({ id: 3, op: 'listFacetDisplays', args: [] })
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await new Promise((resolve) => setImmediate(resolve))
       expect(completed).toBe(false)
       other.exec('COMMIT')
       expect(await mutation).not.toHaveProperty('error')

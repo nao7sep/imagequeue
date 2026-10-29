@@ -20,7 +20,6 @@ export const REPO = fileURLToPath(new URL('../../../', import.meta.url))
 export const CACHE = join(REPO, 'node_modules', '.cache', 'imagequeue-live')
 export const PROMPT = 'A red apple on a white table.'
 
-const TASK_TIMEOUT_MS = 10 * 60_000
 const TEXT_KEYS: Record<TextAIBackendId, string> = { gemini: 'GEMINI_TEXT_API_KEY', openai: 'OPENAI_TEXT_API_KEY' }
 
 /** The renderer's web contents as the IPC handlers see it: it keeps what main sends it. */
@@ -138,17 +137,13 @@ export async function startApp(home: string) {
     /** Enqueues one image and waits for its task to settle as completed. */
     generate: async (request: Omit<EnqueueRequest, 'count'>): Promise<Task> => {
       const [queued] = await invoke<Task[]>('queue:enqueue', { ...request, count: 1 })
-      const deadline = Date.now() + TASK_TIMEOUT_MS
+      // Ends when the task settles; the provider's own timeout bounds a call.
       for (;;) {
         const current = await task(request.backend, queued!.id)
         if (current.status === 'completed') return current
         if (current.status === 'failed' || current.status === 'interrupted') {
           throw new Error(`The ${request.backend} task ended ${current.status}: ${JSON.stringify(current.error)}`
             + `\nThe provider said: ${current.providerMessage ?? '(nothing)'}\nIts calls: ${recordedCalls(queued!.id)}`)
-        }
-        if (Date.now() > deadline) {
-          await invoke('queue:stopAll')
-          throw new Error(`The ${request.backend} task was still ${current.status} after ${TASK_TIMEOUT_MS} ms.`)
         }
         await delay(500)
       }
@@ -187,16 +182,11 @@ export async function stopApp(app: App): Promise<void> {
 /**
  * The process's open resources once pending closes finish: an exited child
  * releases its handle a turn of the event loop after its exit callback, so a
- * handle still open after two seconds really outlived its owner.
+ * handle still open two turns later really outlived its owner.
  */
 async function openAfterClosing(): Promise<string[]> {
-  const deadline = Date.now() + 2_000
-  for (;;) {
-    const open = process.getActiveResourcesInfo()
-    const settled = !open.includes('ProcessWrap') && !open.includes('TCPServerWrap')
-    if (settled || Date.now() > deadline) return open
-    await delay(20)
-  }
+  for (let turn = 0; turn < 2; turn++) await new Promise((resolve) => setImmediate(resolve))
+  return process.getActiveResourcesInfo()
 }
 
 /** A task's recorded provider calls, so a failed paid call can be read without sending it again. */

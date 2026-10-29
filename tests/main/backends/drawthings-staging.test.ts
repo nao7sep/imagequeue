@@ -5,6 +5,7 @@ import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../../renderer/until'
 
 // Draw Things is the ONE backend where an external process owns the output file:
 // the CLI writes it, the app reads it in and deletes it. That file must be staged
@@ -276,7 +277,7 @@ describe('Draw Things output staging', () => {
     hangUntilKilled = true
     const controller = new AbortController()
     const running = generateDrawThings(task(), controller.signal).catch((error: unknown) => error)
-    await vi.waitFor(() => expect(spawnCalls).toHaveLength(1))
+    await until(() => expect(spawnCalls).toHaveLength(1))
     controller.abort()
     const failure = await running
     expect(failure).not.toBeInstanceOf(DrawThingsOutOfMemoryError)
@@ -293,7 +294,7 @@ describe('Draw Things output staging', () => {
     let settled = false
     const running = generateDrawThings(task(), controller.signal).catch((error: unknown) => error)
     void running.then(() => { settled = true })
-    await vi.waitFor(() => expect(spawnCalls).toHaveLength(1))
+    await until(() => expect(spawnCalls).toHaveLength(1))
     controller.abort()
     expect(settled).toBe(false)
     expect(killSignals).toEqual(['SIGTERM'])

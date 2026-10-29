@@ -5,6 +5,7 @@ import { SessionDraftProvider, useSessionDraft } from '../../../../src/renderer/
 import { createEmptySessionDraft } from '../../../../src/shared/session-draft'
 import type { ElaboratedPromptRecord } from '../../../../src/shared/types'
 import { useI18n } from '../../../../src/renderer/src/i18n/I18nContext'
+import { until } from '../../until'
 
 function Probe(): React.JSX.Element {
   const { draftUnavailable, retryDraftHydration } = useSessionDraft()
@@ -27,7 +28,7 @@ describe('session draft hydration boundary', () => {
 
     render(<SessionDraftProvider><Probe /></SessionDraftProvider>)
 
-    const alert = await screen.findByRole('alert')
+    const alert = await until(() => screen.getByRole('alert'))
     expect(alert.textContent).toContain('no saved session data was changed')
     expect(alert.textContent).not.toContain('IMAGEQUEUE_DRAFT_SENTINEL')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()

@@ -144,7 +144,7 @@ it.each(['cloud', 'drawthings'])('rejects an invalid %s image seed before paid p
   const queue = await until(() => screen.getByRole('button', { name: /^Queue/ }))
   await until(() => expect((queue as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(queue)
-  await screen.findByText('Correct the seed values for the selected image models before queueing.')
+  await until(() => screen.getByText('Correct the seed values for the selected image models before queueing.'))
   expect(controls.run).not.toHaveBeenCalled()
   expect(enqueueBatch).not.toHaveBeenCalled()
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()

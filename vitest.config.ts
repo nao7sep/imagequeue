@@ -20,6 +20,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // Tests carry no timeouts (tests-folder-conventions): each waits for the
+    // event it needs, and the runner reports how long it took.
+    testTimeout: 0,
+    hookTimeout: 0,
     // No test reaches the developer's real home; every test that mounts the
     // interface also fails if a catalogue key, not its words, reaches the
     // screen (localization-conventions, Gates); and a file's one-time renderer

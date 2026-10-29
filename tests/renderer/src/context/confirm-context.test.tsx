@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmProvider, useConfirm, type Confirm } from '../../../../src/renderer/src/context/ConfirmContext'
 import { message } from '../../../../src/shared/i18n/translate'
+import { until } from '../../until'
 
 afterEach(cleanup)
 
@@ -16,7 +17,7 @@ describe('ConfirmProvider', () => {
       }]),
     } as unknown as typeof window.electronAPI
     render(<ConfirmProvider><div /></ConfirmProvider>)
-    expect(await screen.findByText('Settings were reset')).toBeTruthy()
+    expect(await until(() => screen.getByText('Settings were reset'))).toBeTruthy()
     expect(screen.getByText(/\/data\/config-x\.invalid/)).toBeTruthy()
   })
 
@@ -49,7 +50,7 @@ describe('ConfirmProvider', () => {
       render(<ConfirmProvider><Capture /></ConfirmProvider>)
       let answer: Promise<boolean> = Promise.resolve(false)
       await act(async () => { answer = confirm({ message: 'Remove?', confirmLabel: 'Remove' }, 'preview-window') })
-      expect(await screen.findByRole('dialog')).toBeTruthy()
+      expect(await until(() => screen.getByRole('dialog'))).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
       await expect(answer).resolves.toBe(true)
     })

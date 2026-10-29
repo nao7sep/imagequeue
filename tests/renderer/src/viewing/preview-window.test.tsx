@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SelectionSnapshot, SurfaceConfirmRequest } from '../../../../src/shared/viewing'
+import { until } from '../../until'
 
 const { PreviewWindowApp } = await import('../../../../src/renderer/src/viewing/PreviewWindow')
 
@@ -44,7 +45,7 @@ describe('preview window page', () => {
 
   it('ignores destructive keys while B is loading over A, then identifies B', async () => {
     render(<PreviewWindowApp />)
-    await waitFor(() => expect(document.querySelector('img')?.getAttribute('src')).toBe('iq-image://sessions/current/a'))
+    await until(() => expect(document.querySelector('img')?.getAttribute('src')).toBe('iq-image://sessions/current/a'))
     let finish!: () => void
     vi.mocked(HTMLImageElement.prototype.decode).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
     act(() => pushSnapshot({ version: 8, task: image('b') }))
@@ -60,9 +61,9 @@ describe('preview window page', () => {
 
   it('shows the selected image and follows the selection', async () => {
     const { container } = render(<PreviewWindowApp />)
-    await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/a'))
+    await until(() => expect(src(container)).toBe('iq-image://sessions/current/a'))
     act(() => pushSnapshot({ version: 3, task: image('b') }))
-    await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/b'))
+    await until(() => expect(src(container)).toBe('iq-image://sessions/current/b'))
   })
 
   it('ignores a snapshot older than the one shown, such as a late answer to its first request', async () => {
@@ -70,7 +71,7 @@ describe('preview window page', () => {
     latest = new Promise((resolve) => { answer = resolve })
     const { container } = render(<PreviewWindowApp />)
     act(() => pushSnapshot({ version: 5, task: image('new') }))
-    await waitFor(() => expect(src(container)).toBe('iq-image://sessions/current/new'))
+    await until(() => expect(src(container)).toBe('iq-image://sessions/current/new'))
     await act(async () => answer({ version: 4, task: image('old') }))
     expect(src(container)).toBe('iq-image://sessions/current/new')
   })
@@ -78,7 +79,7 @@ describe('preview window page', () => {
   it('shows why a failed task failed, as the main window does', async () => {
     latest = Promise.resolve({ version: 1, task: { taskId: 'f', status: 'failed', baseName: null, error: { key: 'taskFailure.unknown' }, providerMessage: 'blocked' } })
     const { container } = render(<PreviewWindowApp />)
-    await waitFor(() => expect(container.querySelector('.preview-failure-provider')?.textContent).toBe('blocked'))
+    await until(() => expect(container.querySelector('.preview-failure-provider')?.textContent).toBe('blocked'))
     expect(container.querySelector('.preview-placeholder')).not.toBeNull()
   })
 
@@ -125,7 +126,7 @@ describe('preview window page', () => {
   it('shows a confirmation asked of it and keeps keys from the lists while it is open', async () => {
     render(<PreviewWindowApp />)
     act(() => askConfirm({ id: 3, options: { title: 'Remove?', message: 'It stays on disk.', confirmLabel: 'Remove' } }))
-    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(await until(() => screen.getByRole('dialog'))).toBeTruthy()
     fireEvent.keyDown(document, { key: 'ArrowDown' })
     expect(api.sendListKey).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PREVIEW_WINDOW_MIN_HEIGHT, PREVIEW_WINDOW_MIN_WIDTH } from '../../src/shared/viewing'
 import { SETTINGS_CHANGED_CHANNEL } from '../../src/main/settings-changed'
+import { until } from '../renderer/until'
 
 const mocks = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
@@ -153,7 +154,7 @@ describe('the setting', () => {
     expect(previews()[0]!.isDestroyed()).toBe(true)
     if (succeeds) resolve()
     else reject(new Error('disk unavailable'))
-    await vi.waitFor(() => expect(succeeds ? main.sent.length : mocks.notice.mock.calls.length).toBe(1))
+    await until(() => expect(succeeds ? main.sent.length : mocks.notice.mock.calls.length).toBe(1))
     preview.showPreviewWindow()
     expect(previews()).toHaveLength(1)
   })
@@ -218,7 +219,7 @@ describe('the setting', () => {
     previews()[0]!.userClose()
     await Promise.resolve()
     expect(mocks.saved).toHaveBeenCalledWith({ general: { show_preview_window: false } })
-    await vi.waitFor(() => expect(main.sent).toEqual([SETTINGS_CHANGED_CHANNEL]))
+    await until(() => expect(main.sent).toEqual([SETTINGS_CHANGED_CHANNEL]))
   })
 
   it('leaves the setting on when a Windows logoff or restart closes the window', async () => {
@@ -335,7 +336,7 @@ describe('Close Window in the preview', () => {
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(win!.destroyed).toBe(true)
     expect(main.destroyed).toBe(false)
-    await vi.waitFor(() => expect(mocks.saved).toHaveBeenCalledWith(expect.objectContaining({ general: expect.objectContaining({ show_preview_window: false }) })))
+    await until(() => expect(mocks.saved).toHaveBeenCalledWith(expect.objectContaining({ general: expect.objectContaining({ show_preview_window: false }) })))
   })
 
   it.each([
@@ -360,7 +361,7 @@ describe('failed preview navigation', () => {
     const failure = new Error('EACCES /private/preview-secret SENTINEL')
     mocks.load.mockRejectedValueOnce(failure)
     preview.syncPreviewWindow(true, { focus: true })
-    await vi.waitFor(() => expect(mocks.notice).toHaveBeenCalledOnce())
+    await until(() => expect(mocks.notice).toHaveBeenCalledOnce())
     expect(previews()[0]!.destroyed).toBe(true)
     expect(mocks.config.general.show_preview_window).toBe(true)
     expect(mocks.saved).not.toHaveBeenCalled()
@@ -372,7 +373,7 @@ describe('failed preview navigation', () => {
     snapshots.publishSelection(null)
     expect(previews()).toHaveLength(1)
     preview.showPreviewWindow()
-    await vi.waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(2))
+    await until(() => expect(mocks.load).toHaveBeenCalledTimes(2))
     expect(previews()[1]!.destroyed).toBe(false)
     expect(mocks.notice).toHaveBeenCalledOnce()
   })

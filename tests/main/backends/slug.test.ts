@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // On quit the finished image must be written within the exit deadline, so
 // an aborted signal skips the text-AI call (or cuts it short) and the image is
@@ -15,8 +15,24 @@ vi.mock('../../../src/main/text-ai', () => ({
   getLightProvider: () => ({ provider: { ask }, timeoutMs: handle.timeoutMs }),
 }))
 vi.mock('../../../src/main/logger', () => ({ log: vi.fn(), serializeError: (e: unknown) => e }))
+vi.mock('../../../src/main/config/api-keys-store', () => ({ refreshApiKeys: async () => undefined }))
 
 const { generateSlug } = await import('../../../src/main/backends/slug')
+
+// Product deadlines run on the fake clock. Vitest does not fake
+// AbortSignal.timeout, so it is replaced with a faked timer.
+function fakeDeadlines(): void {
+  vi.useFakeTimers()
+  vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+    const deadline = new AbortController()
+    setTimeout(() => deadline.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms)
+    return deadline.signal
+  })
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
   ask.mockReset()
@@ -44,6 +60,7 @@ describe('generateSlug', () => {
   })
 
   it('falls back when retries exceed the shared naming deadline', async () => {
+    fakeDeadlines()
     handle.timeoutMs = 500
     ask.mockImplementation(async (opts: { signal: AbortSignal }) => {
       await new Promise<void>((resolve, reject) => {
@@ -53,8 +70,12 @@ describe('generateSlug', () => {
       if (ask.mock.calls.length === 1) throw Object.assign(new Error('unavailable'), { status: 503 })
       return { text: '{"slug":"Red Fox"}', parsed: { slug: 'Red Fox' } }
     })
-    await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
-    expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
+    {
+      const named = expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
+      await vi.advanceTimersByTimeAsync(500)
+      await named
+      expect(ask.mock.calls.map(([opts]) => opts.timeoutMs)).toEqual([500, 500])
+    }
   })
 
   it('falls back to a random name when the answer carries no slug', async () => {
@@ -87,6 +108,9 @@ it('publishes with a fallback name when server cooldown exceeds the naming deadl
   handle.timeoutMs = 10
   const { ProviderHttpError } = await import('../../../src/main/provider-errors')
   ask.mockRejectedValue(new ProviderHttpError('busy', 503, null, '120'))
-  await expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
+  fakeDeadlines()
+  const named = expect(generateSlug('a fox', 'task-1', new AbortController().signal)).resolves.toMatch(/^[\w-]{10}$/)
+  await vi.advanceTimersByTimeAsync(10)
+  await named
   expect(ask).toHaveBeenCalledOnce()
 })

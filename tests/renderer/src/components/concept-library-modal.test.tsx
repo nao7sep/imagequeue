@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../../../src/shared/types'
 
 const confirm = vi.hoisted(() => vi.fn(async () => true))
 vi.mock('../../../../src/renderer/src/context/ConfirmContext', () => ({ useConfirm: () => confirm }))
 import { ConceptLibraryModal } from '../../../../src/renderer/src/components/ConceptLibraryModal'
+import { until } from '../../until'
 
 // jsdom omits the CSSOM escape used by the real listbox focus lookup.
 if (typeof globalThis.CSS === 'undefined' || typeof globalThis.CSS.escape !== 'function') {
@@ -82,8 +83,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 async function mountDetails(): Promise<HTMLElement> {
   render(<ConceptLibraryModal onClose={vi.fn()} />)
-  const list = await screen.findByRole('listbox', { name: 'place' })
-  await within(list).findByText('dock')
+  const list = await until(() => screen.getByRole('listbox', { name: 'place' }))
+  await until(() => within(list).getByText('dock'))
   return list
 }
 
@@ -104,7 +105,7 @@ describe('concept library detail actions', () => {
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
     act(() => options[0].focus())
     fireEvent.keyDown(options[0], { key: 'ArrowDown' })
-    await waitFor(() => expect(document.activeElement).toBe(options[1]))
+    await until(() => expect(document.activeElement).toBe(options[1]))
     expect(options[1].getAttribute('aria-selected')).toBe('true')
     expect(options[1].classList.contains('selected')).toBe(true)
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
@@ -124,9 +125,9 @@ describe('concept library detail actions', () => {
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Delete Concept', message: expect.stringContaining('dock'), danger: true }))
     expect(window.electronAPI.deleteConceptRow).toHaveBeenCalledExactlyOnceWith(100)
     expect(window.electronAPI.deleteConceptProbe).not.toHaveBeenCalled()
-    await waitFor(() => expect(within(list).queryByText('dock')).toBeNull())
+    await until(() => expect(within(list).queryByText('dock')).toBeNull())
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions' }))
-    await within(list).findByText('wharf')
+    await until(() => within(list).getByText('wharf'))
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     await menuDelete()
     expect(window.electronAPI.deleteConceptProbe).toHaveBeenCalledExactlyOnceWith(10)
@@ -138,15 +139,15 @@ describe('concept library detail actions', () => {
     const dock = within(list).getByText('dock').closest<HTMLElement>('[role="option"]')!
     fireEvent.click(dock)
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'tree' } })
-    await waitFor(() => expect(within(list).queryByText('dock')).toBeNull())
-    await within(list).findByText('tree')
+    await until(() => expect(within(list).queryByText('dock')).toBeNull())
+    await until(() => within(list).getByText('tree'))
     expect(within(list).getAllByRole('option').map((option) => option.dataset.listboxOption)).toEqual(['p:20', 'c:200'])
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     await menuDelete()
     expect(window.electronAPI.deleteConceptProbe).toHaveBeenCalledExactlyOnceWith(20)
     expect(window.electronAPI.deleteConceptRow).not.toHaveBeenCalled()
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Actions' }) as HTMLButtonElement).disabled).toBe(true))
+    await until(() => expect((screen.getByRole('button', { name: 'Actions' }) as HTMLButtonElement).disabled).toBe(true))
   })
 
   it('retains the pointer delete buttons and honors cancelled confirmation', async () => {
@@ -166,7 +167,7 @@ describe('concept library detail actions', () => {
     let reject!: (error: Error) => void
     vi.mocked(window.electronAPI.listConceptRows).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
     render(<ConceptLibraryModal onClose={vi.fn()} />)
-    const trigger = await screen.findByRole('button', { name: 'Actions' }) as HTMLButtonElement
+    const trigger = await until(() => screen.getByRole('button', { name: 'Actions' })) as HTMLButtonElement
     expect(trigger.disabled).toBe(true)
     await act(async () => reject(new Error('unreadable details')))
     expect(trigger.disabled).toBe(true)
@@ -178,8 +179,8 @@ describe('concept library detail actions', () => {
     const list = await mountDetails()
     fireEvent.click(within(list).getByText('dock').closest('[role="option"]')!)
     fireEvent.click(screen.getByRole('option', { name: /occupation/ }))
-    const next = await screen.findByRole('listbox', { name: 'occupation' })
-    await within(next).findByText('dock')
+    const next = await until(() => screen.getByRole('listbox', { name: 'occupation' }))
+    await until(() => within(next).getByText('dock'))
     expect(within(next).getAllByRole('option').every((option) => option.getAttribute('aria-selected') === 'false')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
     await menuDelete()
@@ -199,8 +200,8 @@ describe('large concept library', () => {
   async function mountLarge(): Promise<HTMLElement> {
     largeFacet()
     render(<ConceptLibraryModal onClose={vi.fn()} />)
-    const list = await screen.findByRole('listbox', { name: 'place' })
-    await within(list).findByText('dock 0000')
+    const list = await until(() => screen.getByRole('listbox', { name: 'place' }))
+    await until(() => within(list).getByText('dock 0000'))
     return list
   }
   function option(list: HTMLElement, key: string): HTMLElement | null {
@@ -208,7 +209,7 @@ describe('large concept library', () => {
   }
   async function key(list: HTMLElement, value: string, expected: string): Promise<HTMLElement> {
     fireEvent.keyDown(list, { key: value })
-    await waitFor(() => expect(document.activeElement).toBe(option(list, expected)))
+    await until(() => expect(document.activeElement).toBe(option(list, expected)))
     const target = option(list, expected)!
     expect(target.getAttribute('aria-selected')).toBe('true')
     return target
@@ -223,7 +224,7 @@ describe('large concept library', () => {
     expect(list.querySelectorAll('.concept-library-row').length).toBeLessThan(150)
     await key(list, 'Home', 'p:10')
     act(() => { for (let i = 0; i < 32; i++) fireEvent.keyDown(list, { key: 'ArrowDown' }) })
-    await waitFor(() => expect(document.activeElement).toBe(option(list, 'c:10031')))
+    await until(() => expect(document.activeElement).toBe(option(list, 'c:10031')))
     await key(list, 'ArrowDown', 'c:10032')
     await key(list, 'ArrowUp', 'c:10031')
     expect(list.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
@@ -238,6 +239,6 @@ describe('large concept library', () => {
     await menuDelete()
     expect(window.electronAPI.deleteConceptRow).toHaveBeenCalledExactlyOnceWith(50000)
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('zebra destination') }))
-    await waitFor(() => expect(within(list).queryByText('zebra destination')).toBeNull())
+    await until(() => expect(within(list).queryByText('zebra destination')).toBeNull())
   })
 })

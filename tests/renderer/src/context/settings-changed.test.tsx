@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsProvider, useSettings } from '../../../../src/renderer/src/context/SettingsContext'
+import { until } from '../../until'
 
 // Closing the preview window turns its setting off in the main process, which
 // tells the main window; its settings are read again so Settings shows it off.
@@ -25,10 +26,10 @@ describe('settings changed by the main process', () => {
       appLog: vi.fn(async () => undefined),
     } as unknown as typeof window.electronAPI
     render(<SettingsProvider><Probe /></SettingsProvider>)
-    expect(await screen.findByText('on')).toBeTruthy()
+    expect(await until(() => screen.getByText('on'))).toBeTruthy()
 
     stored = false
     act(() => changed())
-    await waitFor(() => expect(screen.getByText('off')).toBeTruthy())
+    await until(() => expect(screen.getByText('off')).toBeTruthy())
   })
 })

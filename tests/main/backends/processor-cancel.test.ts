@@ -3,6 +3,7 @@ import { startAiCall } from '../../../src/main/records'
 import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendId } from '../../../src/shared/types'
+import { until } from '../../renderer/until'
 
 // "Stop generating" used to reach exactly one backend. Draw Things registered
 // its own child-process killer; the four cloud backends registered nothing, so
@@ -52,8 +53,8 @@ vi.mock('../../../src/main/backends/slug', () => ({
       // falls back to a random name as the real generateSlug does.
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
       slugState.sawAbort = true
-      // The SDK's rejection lands a little after the abort.
-      await new Promise((r) => setTimeout(r, 20))
+      // The SDK's rejection lands a turn of the event loop after the abort.
+      await new Promise((r) => setImmediate(r))
       return 'random-name'
     }
     return 'slug'
@@ -95,7 +96,7 @@ function statusOf(backend: BackendId): string {
 
 // Decoding and publication can settle on native workers, beyond a JS turn.
 async function settle(): Promise<void> {
-  await vi.waitFor(() => expect(Object.values(queueManager.getAllStoredTasks()).flat().some(task => task.status === 'generating')).toBe(false))
+  await until(() => expect(Object.values(queueManager.getAllStoredTasks()).flat().some(task => task.status === 'generating')).toBe(false))
 }
 
 beforeEach(() => {
@@ -208,7 +209,7 @@ describe('quitting while a finished image is being named', () => {
     await Promise.resolve()
     expect(generatingCount()).toBe(0)
 
-    await vi.waitFor(() => expect(slugState.entered).toBe(true))
+    await until(() => expect(slugState.entered).toBe(true))
     expect(sentEvents.filter((event) => event.channel === 'queue:controlState').at(-1)?.payload).toMatchObject({ generating: 0 })
     await stopAllRuns()
     expect(slugState.sawAbort).toBe(true)

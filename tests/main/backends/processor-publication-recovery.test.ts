@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../../src/main/config/types'
 import type { SessionManifest } from '../../../src/shared/types'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { until } from '../../renderer/until'
 
 // Keep the processor, queue, session writer and output publication real. Only
 // providers, native presentation and the optional diagnostic sinks are faked.
@@ -182,7 +183,7 @@ it('records delivered identity before publication and recovers it after the fina
     await link(source, destination)
   })
   processQueues()
-  await vi.waitFor(() => expect(queueManager.getTask('openai', task.id)?.status).toBe('completed'))
+  await until(() => expect(queueManager.getTask('openai', task.id)?.status).toBe('completed'))
   await stopAllRuns()
   const completed = queueManager.getTask('openai', task.id)!
   expect(completed.pendingOutput).toBeUndefined()

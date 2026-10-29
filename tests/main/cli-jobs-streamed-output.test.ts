@@ -5,6 +5,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { getCliJobSnapshot, stopAllCliJobs, startCliJob } from '../../src/main/cli-jobs'
 import { closeRecords, flushRecords } from '../../src/main/records'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
+import { until } from '../renderer/until'
 
 const start = (script: string) => startCliJob({ kind: 'download', cliPath: process.execPath, args: ['-e', script], target: 'fixture', modelsDir: '/fixture/models', sourceIdentity: 'fixture', logContext: {} })
 afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); await stopAllCliJobs() })
@@ -29,7 +30,7 @@ describe('acquisition CLI output streaming from a real child', () => {
         process.stdout.write('\\rfinal-stream-sentinel\\n');
       })();
     `)
-    await vi.waitFor(() => expect(getCliJobSnapshot(job)?.status).toBe('exited'), { timeout: 5000 })
+    await until(() => expect(getCliJobSnapshot(job)?.status).toBe('exited'))
     await flushRecords()
     const row = readRows(root, 'cli_jobs')[0]!
     expect(row).toMatchObject({ exit_code: 0, stdout: '', stderr: '', error: null, output_error: null })

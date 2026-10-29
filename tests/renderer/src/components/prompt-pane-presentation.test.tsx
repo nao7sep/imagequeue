@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pushModal, popModal } from '../../../../src/renderer/src/components/modalStack'
 import type { Task } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 const notificationSettings = vi.hoisted(() => ({ save: vi.fn(), values: { notifications_enabled: true } }))
 
@@ -298,11 +299,11 @@ describe('PromptPane presentation', () => {
       />
     )
 
-    const paste = await screen.findByRole('button', { name: 'Paste Text' })
-    await waitFor(() => expect(paste.hasAttribute('disabled')).toBe(false))
+    const paste = await until(() => screen.getByRole('button', { name: 'Paste Text' }))
+    await until(() => expect(paste.hasAttribute('disabled')).toBe(false))
     fireEvent.click(paste)
 
-    expect((await screen.findByRole('alert')).textContent).toContain('The clipboard text could not be read')
+    expect((await until(() => screen.getByRole('alert'))).textContent).toContain('The clipboard text could not be read')
     expect(appLog).toHaveBeenCalledWith(
       'error',
       'Prompt pane action failed',
@@ -310,7 +311,7 @@ describe('PromptPane presentation', () => {
     )
 
     fireEvent.click(paste)
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    await until(() => expect(screen.queryByRole('alert')).toBeNull())
     expect(onPromptChange).toHaveBeenCalledWith('recovered prompt')
   })
 
@@ -331,20 +332,20 @@ describe('PromptPane presentation', () => {
 
     await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: 'Reveal' }))
-    expect((await screen.findByRole('alert')).textContent).toContain('The image could not be revealed')
+    expect((await until(() => screen.getByRole('alert'))).textContent).toContain('The image could not be revealed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
-    await waitFor(() => expect(exportImage).toHaveBeenCalledTimes(1))
+    await until(() => expect(exportImage).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('alert').textContent).toContain('The image could not be revealed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Reveal' }))
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    await until(() => expect(screen.queryByRole('alert')).toBeNull())
 
     window.electronAPI.copyImageToClipboard = vi.fn(async () => {
       throw new Error('clipboard image denied')
     })
     fireEvent.click(screen.getByRole('button', { name: 'Copy to Clipboard' }))
-    const copyFailure = await screen.findByRole('alert')
+    const copyFailure = await until(() => screen.getByRole('alert'))
     expect(copyFailure.textContent).toContain('The image could not be copied')
     fireEvent.click(screen.getByRole('button', { name: /Close result: The image could not be copied/ }))
     expect(screen.queryByRole('alert')).toBeNull()
@@ -367,7 +368,7 @@ describe('PromptPane presentation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save As' }))
 
-    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(3))
+    await until(() => expect(screen.getAllByRole('alert')).toHaveLength(3))
     expect(screen.getByText(/The prompt could not be copied/)).toBeTruthy()
     expect(screen.getByText(/The image could not be exported/)).toBeTruthy()
     expect(screen.getByText(/The image could not be saved/)).toBeTruthy()

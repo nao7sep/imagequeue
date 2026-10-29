@@ -3,6 +3,7 @@ import path from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { closeRecords, flushRecords, startAiCall, startCliJobRecord } from '../../src/main/records'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
+import { until } from '../renderer/until'
 
 const job = { jobId: 'streamed', kind: 'download', target: 'model.ckpt', cliPath: '/cli', args: [] }
 const end = { startedAt: '2026-01-01T00:00:00.000Z', status: 'exited', exitCode: 0, signal: null }
@@ -44,7 +45,7 @@ describe('CLI records with streamed diagnostics', () => {
       const record = startCliJobRecord(job)
       const resumed = vi.fn()
       record.append('stdout', 'x'.repeat(64 * 1024), resumed)
-      await vi.waitFor(() => expect(resumed).toHaveBeenCalledOnce())
+      await until(() => expect(resumed).toHaveBeenCalledOnce())
       expect(readRows(root, 'log_records')[0]).toMatchObject({ level: 'warn', message: 'CLI output could not be retained' })
       expect(report).not.toHaveBeenCalled()
       record.finish(end)

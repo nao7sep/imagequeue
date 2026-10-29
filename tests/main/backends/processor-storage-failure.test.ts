@@ -1,5 +1,6 @@
 import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../../renderer/until'
 
 // A full or unavailable disk makes the session manifest write throw. At task
 // start that throw used to escape the scheduler as an uncaught exception, and
@@ -120,7 +121,7 @@ describe('a manifest write failure while the queue runs', () => {
     queueOne()
     processQueues()
     persist.fail = true
-    await vi.waitFor(() => expect(queueManager.getAllStoredTasks().openai[0].status).toBe('completed'))
+    await until(() => expect(queueManager.getAllStoredTasks().openai[0].status).toBe('completed'))
     expect(isQueuePaused()).toBe(true)
     expect(notices()).toHaveLength(1)
   })

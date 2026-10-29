@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../../src/main/config/types'
 import type { Task } from '../../../src/shared/types'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
+import { until } from '../../renderer/until'
 
 // Exercise admission and delivered-image settlement with the real queue,
 // session, credential writer, naming and output owners. Providers and native
@@ -178,7 +179,7 @@ it('keeps a delivered image when optional naming cannot refresh credentials', as
   const [task] = await handlers.get('queue:enqueue')!({}, { backend: 'openai', model: 'gpt-image-2', prompt: 'a cat', params: {}, count: 1 }) as Task[]
   vi.spyOn(credentials, 'refreshApiKeys').mockRejectedValue(new Error('credentials unavailable'))
   processQueues()
-  await vi.waitFor(() => expect(queueManager.getTask('openai', task.id)?.status).toBe('completed'))
+  await until(() => expect(queueManager.getTask('openai', task.id)?.status).toBe('completed'))
   await expect(drainSessionWrites()).resolves.toBeUndefined()
   const completed = (await manifest()).tasks.openai[0]
   expect(fs.readFileSync(path.join(getSessionDir(), completed.imagePath!))).toEqual(image)
@@ -188,7 +189,7 @@ it('fails invalid delivered bytes without naming, publishing or automatically ge
   generate.mockResolvedValue({ buffer: Buffer.from('<html>provider error</html>'), mimeType: 'image/png' })
   const [task] = await handlers.get('queue:enqueue')!({}, { backend: 'openai', model: 'gpt-image-2', prompt: 'a cat', params: {}, count: 1 }) as Task[]
   processQueues()
-  await vi.waitFor(() => expect(queueManager.getAllStoredTasks().openai[0].status).toBe('failed'))
+  await until(() => expect(queueManager.getAllStoredTasks().openai[0].status).toBe('failed'))
   await stopAllRuns()
   await drainSessionWrites()
   expect((await manifest()).tasks.openai[0]).toMatchObject({ id: task.id, status: 'failed', baseName: null, imagePath: null })

@@ -5,6 +5,7 @@ import { installVirtualListLayout } from '../../virtual-list-layout'
 import { ENGLISH } from '../../../../src/shared/i18n/catalogues'
 import type { ConfirmOptions } from '../../../../src/shared/confirm'
 import type { BackendId, SessionListEntry, SessionSummary, Task } from '../../../../src/shared/types'
+import { until } from '../../until'
 
 // The Sessions window follows the app's own jobs while it is open: each queue
 // change reads the sessions again, and only the latest read applies.
@@ -75,13 +76,13 @@ describe('SessionsModal', () => {
   it('reads the sessions again when the queue changes while it is open', async () => {
     listSessions.mockResolvedValueOnce([session(1, '2026-10-04T12:00:00.000Z')])
     const view = render(<SessionsModal onClose={() => undefined} />)
-    await screen.findByText(/1 complete/)
+    await until(() => screen.getByText(/1 complete/))
 
     listSessions.mockResolvedValueOnce([session(2, '2026-10-04T12:05:00.000Z')])
     queueValue = { tasks: emptyTasks() }
     view.rerender(<SessionsModal onClose={() => undefined} />)
 
-    await screen.findByText(/2 complete/)
+    await until(() => screen.getByText(/2 complete/))
     expect(listSessions).toHaveBeenCalledTimes(2)
   })
 
@@ -93,7 +94,7 @@ describe('SessionsModal', () => {
     listSessions.mockResolvedValueOnce([session(2, '2026-10-04T12:05:00.000Z')])
     queueValue = { tasks: emptyTasks() }
     view.rerender(<SessionsModal onClose={() => undefined} />)
-    await screen.findByText(/2 complete/)
+    await until(() => screen.getByText(/2 complete/))
 
     await act(async () => { earlier.resolve([session(1, '2026-10-04T12:00:00.000Z')]) })
     expect(screen.queryByText(/1 complete/)).toBeNull()
@@ -109,7 +110,7 @@ describe('SessionsModal', () => {
     ])
     render(<SessionsModal onClose={() => undefined} />)
 
-    const newer = (await screen.findByText('20261003-090000-123-utc')).closest('[role="option"]') as HTMLElement
+    const newer = (await until(() => screen.getByText('20261003-090000-123-utc'))).closest('[role="option"]') as HTMLElement
     const unreadable = screen.getByText('20261002-090000-123-utc copy').closest('[role="option"]') as HTMLElement
     expect(within(newer).getByText(/A newer version of ImageQueue wrote this session’s session.json/)).toBeTruthy()
     expect(within(unreadable).getByText(/ImageQueue can’t read this session’s session.json/)).toBeTruthy()
@@ -141,8 +142,8 @@ describe('session selected actions', () => {
       { sessionId: 'other-session', unopenable },
     ])
     render(<SessionsModal onClose={vi.fn()} />)
-    const list = await screen.findByRole('listbox')
-    const rows = await within(list).findAllByRole('option')
+    const list = await until(() => screen.getByRole('listbox'))
+    const rows = await until(() => within(list).getAllByRole('option'))
     act(() => rows[0].focus())
     fireEvent.keyDown(rows[0], { key: 'ArrowDown' })
     expect(document.activeElement).toBe(rows[1])
@@ -167,7 +168,7 @@ describe('session selected actions', () => {
     const deleteSession = vi.fn(async () => undefined)
     window.electronAPI.deleteSession = deleteSession
     render(<SessionsModal onClose={vi.fn()} />)
-    const row = await screen.findByRole('option')
+    const row = await until(() => screen.getByRole('option'))
     act(() => row.focus())
     fireEvent.keyDown(row, { key: 'ContextMenu' })
     await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' })) })
@@ -189,7 +190,7 @@ describe('session thumbnail requests', () => {
   it('loads strip images lazily from the image scheme', async () => {
     listSessions.mockResolvedValueOnce([{ ...session(1, '2026-10-04T12:00:00.000Z'), thumbnails: [{ baseName: 'image-one' }] }])
     render(<SessionsModal onClose={vi.fn()} />)
-    const row = await screen.findByRole('option')
+    const row = await until(() => screen.getByRole('option'))
     const image = row.querySelector<HTMLImageElement>('.session-preview-thumb')!
     expect(image.getAttribute('src')).toBe('iq-image://sessions/session/20261004-120000/image-one')
     expect(image.getAttribute('loading')).toBe('lazy')
@@ -204,12 +205,12 @@ it('bounds cards and thumbnails while navigating the entire archive and retainin
   }))
   listSessions.mockResolvedValue(sessions)
   render(<SessionsModal onClose={vi.fn()} />)
-  const first = (await screen.findByText('archive-0')).closest<HTMLElement>('[role="option"]')!
+  const first = (await until(() => screen.getByText('archive-0'))).closest<HTMLElement>('[role="option"]')!
   expect(screen.getAllByRole('option').length).toBeLessThan(20)
   expect(document.querySelectorAll('img').length).toBeLessThan(20)
   act(() => first.focus())
   fireEvent.keyDown(first, { key: 'End' })
-  const last = (await screen.findByText('archive-4999')).closest<HTMLElement>('[role="option"]')!
+  const last = (await until(() => screen.getByText('archive-4999'))).closest<HTMLElement>('[role="option"]')!
   expect(document.activeElement).toBe(last)
   expect(last.getAttribute('aria-posinset')).toBe('5000')
   expect(last.getAttribute('aria-setsize')).toBe('5000')
@@ -231,10 +232,10 @@ it('finds a session by its label even when its card is not mounted', async () =>
     sessionId: index === 199 ? 'zebra' : `archive-${index}`, unopenable: 'unreadable',
   })))
   render(<SessionsModal onClose={vi.fn()} />)
-  const first = (await screen.findByText('archive-0')).closest<HTMLElement>('[role="option"]')!
+  const first = (await until(() => screen.getByText('archive-0'))).closest<HTMLElement>('[role="option"]')!
   expect(screen.queryByText('zebra')).toBeNull()
   act(() => first.focus())
   fireEvent.keyDown(first, { key: 'z' })
-  const target = (await screen.findByText('zebra')).closest<HTMLElement>('[role="option"]')!
+  const target = (await until(() => screen.getByText('zebra'))).closest<HTMLElement>('[role="option"]')!
   expect(document.activeElement).toBe(target)
 })
