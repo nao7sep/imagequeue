@@ -201,16 +201,19 @@ export function hasRunningCliJobs(): boolean {
   return [...jobs.values()].some((state) => !state.finalized)
 }
 
-// Downloads start at once; imports, which are heavy native conversions, run
-// one at a time in arrival order. Nothing new starts once quit has begun.
+// Downloads run one at a time in arrival order, and so do imports, which are
+// heavy native conversions. The CLI's downloader writes each model file
+// through fixed partial names beside it in the models folder, so two downloads
+// of models that share a file, such as a common text encoder, would write the
+// same partial file at once. Nothing new starts once quit has begun.
 function drainPendingJobs(): void {
   if (draining || isQuitting()) return
   draining = true
   try {
     for (let index = 0; index < pendingJobIds.length;) {
       const state = jobs.get(pendingJobIds[index])!
-      const importRunning = [...jobs.values()].some((job) => !job.finalized && job.status !== 'queued' && job.kind === 'import')
-      if (state.kind === 'import' && importRunning) { index++; continue }
+      const sameKindRunning = [...jobs.values()].some((job) => !job.finalized && job.status !== 'queued' && job.kind === state.kind)
+      if (sameKindRunning) { index++; continue }
       pendingJobIds.splice(index, 1)
       state.status = 'running'
       launchJob(state)

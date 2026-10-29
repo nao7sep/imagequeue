@@ -82,18 +82,20 @@ afterEach(async () => {
 })
 
 describe('CLI job admission and settlement', () => {
-  it('starts downloads at once and runs imports one at a time in arrival order', () => {
-    const downloads = ['a', 'b', 'c', 'd'].map((source) => start(source))
-    expect(downloads.map(status)).toEqual(['running', 'running', 'running', 'running'])
+  // Two downloads of models sharing a file would write its partial file at once.
+  it('runs downloads one at a time and imports one at a time, each in arrival order', () => {
+    const downloads = ['a', 'b', 'c'].map((source) => start(source))
+    expect(downloads.map(status)).toEqual(['running', 'queued', 'queued'])
     const imports = ['x', 'y'].map((source) => start(source, 'import'))
     expect(imports.map(status)).toEqual(['running', 'queued'])
+    closePipe(0)
+    expect(downloads.map(status)).toEqual(['exited', 'running', 'queued'])
     fixtures.imports[0]!.exit()
     expect(imports.map(status)).toEqual(['exited', 'running'])
   })
 
   it.each(['append', 'replace', 'terminal'] as const)('isolates a failed %s notification from capture, promotion and settlement', async (phase) => {
     const first = start('a')
-    start('b'); start('c')
     const queued = start('d')
     const pipe = fixtures.pipes[0]!
     if (phase === 'replace') pipe.stdout.write('one\r')
