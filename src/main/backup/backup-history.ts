@@ -40,7 +40,7 @@ function userVersion(db: DatabaseSync): number {
  * development formats are left unchanged, without adopting or converting them.
  */
 export function openBackupHistory(file: string): DatabaseSync {
-  const db = new DatabaseSync(file, { timeout: 1_000 })
+  const db = new DatabaseSync(file)
   try {
     const found = userVersion(db)
     if (found > FORMAT_VERSIONS.backups) throw new NewerFormatError(file, found, FORMAT_VERSIONS.backups)

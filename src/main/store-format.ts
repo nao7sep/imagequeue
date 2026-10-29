@@ -102,10 +102,11 @@ function userVersion(db: DatabaseSync): number {
  * lock keeps every other writer out, so operations need no recheck. A version
  * of 0 with no schema objects is a fresh file, including one whose first
  * creation was interrupted; a version of 0 holding objects has no marker and is
- * unreadable. Schema and marker commit together.
+ * unreadable. Schema and marker commit together. The store's own thread holds
+ * the one connection to the file, so no lock wait is set.
  */
 export function openSqliteStore(file: string, supported: number, schema: string): DatabaseSync {
-  const db = new DatabaseSync(file, { timeout: 5_000 })
+  const db = new DatabaseSync(file)
   try {
     const found = userVersion(db)
     if (found > supported) throw new NewerFormatError(file, found, supported)
