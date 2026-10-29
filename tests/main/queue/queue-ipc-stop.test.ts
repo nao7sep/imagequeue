@@ -26,7 +26,7 @@ vi.mock('nanoid', () => {
 
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { isQueuePaused, resetCancellationState, registerInFlight } = await import(
+const { isQueuePaused, resetCancellationState, addRun } = await import(
   '../../../src/main/backends/cancellation'
 )
 
@@ -54,12 +54,12 @@ beforeEach(() => {
 describe('queue:stopAll', () => {
   it('interrupts queued tasks and cancels in-flight ones', async () => {
     const tasks = seed(['queued', 'generating', 'queued'])
-    let aborted = false
-    registerInFlight(tasks[1].id, () => { aborted = true }, Promise.resolve())
+    const generation = new AbortController()
+    addRun(tasks[1].id, { backend: 'openai', generation, naming: new AbortController(), cancellable: true, done: Promise.resolve() })
 
     const result = await invoke('queue:stopAll')
     expect(result).toEqual({ cancelled: 1, queued: 2 })
-    expect(aborted).toBe(true)
+    expect(generation.signal.aborted).toBe(true)
     const statuses = queueManager.getAllStoredTasks().openai.map((t) => t.status)
     expect(statuses.filter((s) => s === 'interrupted')).toHaveLength(2)
   })

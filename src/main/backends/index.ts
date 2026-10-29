@@ -1,2 +1,2 @@
-export { startProcessor, stopProcessor } from './processor'
+export { processQueues } from './processor'
 export { generateSlug } from './slug'

@@ -1,4 +1,5 @@
 import { setQueuePaused } from '../backends/cancellation'
+import { processQueues } from '../backends/processor'
 import { publishQueueControlState } from './publisher'
 import { resetStorageFailureNotice } from './storage-failure'
 
@@ -7,4 +8,5 @@ export function setQueuePausedAndPublish(paused: boolean): void {
   if (!paused) resetStorageFailureNotice()
   setQueuePaused(paused)
   publishQueueControlState()
+  if (!paused) processQueues()
 }

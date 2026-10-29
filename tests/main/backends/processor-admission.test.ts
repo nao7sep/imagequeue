@@ -48,7 +48,7 @@ const { queueManager, createEmptyQueues } = await import('../../../src/main/queu
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 const { createSession, persistActiveSession, drainSessionWrites, readManifestFromDir } = await import('../../../src/main/session/state')
 const { getSessionDir, setSessionDir } = await import('../../../src/main/session/session')
-const { setQueuePaused, isQueuePaused, cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
+const { setQueuePaused, isQueuePaused, stopAllRuns, resetCancellationState } = await import('../../../src/main/backends/cancellation')
 const credentials = await import('../../../src/main/config/api-keys-store')
 
 const image = await tinyPng()
@@ -74,7 +74,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await cancelAllInFlightAndWait(1_000)
+  await stopAllRuns()
   vi.restoreAllMocks()
   await persistActiveSession()
   resetCancellationState()
@@ -123,7 +123,7 @@ it.each(['queue:enqueue', 'queue:enqueueBatch'])('%s acknowledges retained tasks
   setQueuePaused(false)
   processQueues()
   await started
-  await expect(cancelAllInFlightAndWait(1_000)).resolves.toMatchObject({ settled: true })
+  await stopAllRuns()
   expect(generate).toHaveBeenCalledTimes(2)
   expect((await manifest()).tasks.openai.map((task) => task.id).sort()).toEqual(tasks.map((task) => task.id).sort())
   expect((await manifest()).tasks.openai.map((task) => task.status)).toEqual(['completed', 'completed'])
@@ -158,7 +158,7 @@ it('publishes a delivered image on shutdown while the credential writer keeps it
   try {
     deliver({ buffer: image })
     await refreshing
-    await expect(cancelAllInFlightAndWait(1_000)).resolves.toMatchObject({ settled: true })
+    await stopAllRuns()
     expect(saved).toBe(false)
     const completed = (await manifest()).tasks.openai.find((entry) => entry.id === task.id)!
     expect(completed.status).toBe('completed')
@@ -167,7 +167,7 @@ it('publishes a delivered image on shutdown while the credential writer keeps it
   } finally {
     release()
     await keySave
-    await cancelAllInFlightAndWait(1_000)
+    await stopAllRuns()
     await credentials.refreshApiKeys()
   }
   expect(credentials.getStoredApiKey('openai.text')).toBe('test-credential')
@@ -189,7 +189,7 @@ it('fails invalid delivered bytes without naming, publishing or automatically ge
   const [task] = await handlers.get('queue:enqueue')!({}, { backend: 'openai', model: 'gpt-image-2', prompt: 'a cat', params: {}, count: 1 }) as Task[]
   processQueues()
   await vi.waitFor(() => expect(queueManager.getAllStoredTasks().openai[0].status).toBe('failed'))
-  await cancelAllInFlightAndWait(1_000)
+  await stopAllRuns()
   await drainSessionWrites()
   expect((await manifest()).tasks.openai[0]).toMatchObject({ id: task.id, status: 'failed', baseName: null, imagePath: null })
   expect(nameImage).not.toHaveBeenCalled()

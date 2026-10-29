@@ -7,7 +7,8 @@ import { validateImage } from '../image-processing'
 import { ImageMetadata } from '../utils/image-metadata'
 import { log, logGenerationStart, logGenerationComplete, logGenerationFailed, serializeError } from '../logger'
 import { DrainTracker } from './drain-tracker'
-import { CANCELLED_MESSAGE, clearInFlight, isQueuePaused, registerInFlight, shutdownSignal } from './cancellation'
+import { addRun, CANCELLED_MESSAGE, isQueuePaused, laneWidth, removeRun, runCount, type GenerationRun } from './cancellation'
+import { isQuitting } from '../quit-state'
 import { publishQueueState, publishQueueControlState } from '../queue/publisher'
 import { pauseForStorageFailure, resetStorageFailureNotice } from '../queue/storage-failure'
 import { generateOpenAI } from './openai'
@@ -35,52 +36,32 @@ const generators: Record<BackendId, GenerateFn> = {
   drawthings: generateDrawThings
 }
 
-// Per-backend active task counts for concurrency limiting
-const activeCounts: Record<BackendId, number> = {
-  openai: 0,
-  nanobanana: 0,
-  grok: 0,
-  flux: 0,
-  drawthings: 0
-}
-
 // Tracks one continuous busy period (a "drain") across all backends so the
 // queue logs a single aggregate summary instead of an info line per image.
 // Process-global like the queue itself; per-image start/complete stay at debug.
 const drainTracker = new DrainTracker()
-let processorTimer: NodeJS.Timeout | null = null
-let processorStopping = false
 
-function totalActive(): number {
-  return Object.values(activeCounts).reduce((sum, count) => sum + count, 0)
+// Each cloud backend runs up to its Concurrency setting at once (developer
+// decision): the image is made on the provider, another device, and while one
+// request runs, typically tens of seconds, the Mac's processor and network are
+// near idle, so requests side by side finish a batch sooner. The right number
+// depends on the account's rate tier, which only its owner knows. Draw Things
+// runs one at a time: one local generation already keeps the graphics
+// processor near full use.
+function laneLimit(backend: BackendId, config: ReturnType<typeof loadConfig>): number {
+  return backend === 'drawthings' ? 1 : config.image_backends[backend].concurrency
 }
 
-
-// Starts the queue processor loop. Call once at app startup.
-export function startProcessor(): void {
-  processorStopping = false
-  if (processorTimer) clearInterval(processorTimer)
-  processorTimer = setInterval(() => {
-    processQueues()
-  }, 500)
-}
-
-/** Prevent a shutdown race from starting queued work after cleanup begins. */
-export function stopProcessor(): void {
-  processorStopping = true
-  if (processorTimer) {
-    clearInterval(processorTimer)
-    processorTimer = null
-  }
-}
-
+/** The session's start decision, made after each session command, each run's
+ *  reported result, a resume, a settings save and a cancelled quit. Starts every
+ *  queued task its lane has room for; nothing starts during a session command,
+ *  once quit has begun, or while paused. */
 export function processQueues(): void {
-  if (processorStopping || isSessionMutationPending()) return
+  if (isQuitting() || isSessionMutationPending()) return
   // Close out a finished drain before scheduling new work: once nothing is in
   // flight and nothing is queued, the busy period that just ended gets its one
-  // summary line. The 500ms tick that observes the idle state may land up to
-  // half a second after the last task settled — fine for an aggregate summary.
-  const summary = drainTracker.finalize(performance.now(), totalActive() === 0 && !queueManager.hasQueuedTasks())
+  // summary line.
+  const summary = drainTracker.finalize(performance.now(), runCount() === 0 && !queueManager.hasQueuedTasks())
   if (summary) {
     log('info', 'Queue drained', { ...summary })
   }
@@ -92,16 +73,13 @@ export function processQueues(): void {
   resetStorageFailureNotice()
 
   const config = loadConfig()
-  const backends: BackendId[] = BACKEND_IDS_IN_UI_ORDER
-
-  for (const backend of backends) {
-    const maxConcurrency = backend === 'drawthings' ? 1 :
-      ((config.image_backends[backend] as { concurrency?: number }).concurrency ?? 3)
+  for (const backend of BACKEND_IDS_IN_UI_ORDER) {
+    const limit = laneLimit(backend, config)
     const tasks = queueManager.getActiveTasks(backend)
 
     for (let i = tasks.length - 1; i >= 0; i--) {
       const task = tasks[i]
-      if (activeCounts[backend] >= maxConcurrency) break
+      if (laneWidth(backend) >= limit) break
       if (task.status !== 'queued') continue
 
       // The manifest records the task as generating before anything is paid
@@ -110,57 +88,48 @@ export function processQueues(): void {
       // pauses until the user resumes it.
       queueManager.updateTask(task, { status: 'generating', startedAt: new Date().toISOString() })
       drainTracker.begin(performance.now())
-      activeCounts[backend]++
       logGenerationStart(task.id, backend, task.model)
-      // Registration happens synchronously before processTask's first await.
-      // Start it before publishing so the menu count includes this task.
-      const processing = processTask(backend, task)
-      publishQueueState()
-
-      processing.finally(() => {
-        activeCounts[backend]--
+      // The run joins its lane before its first await and before publishing,
+      // so the menu count includes this task.
+      const run: GenerationRun = {
+        backend, generation: new AbortController(), naming: new AbortController(), cancellable: true, done: Promise.resolve(),
+      }
+      addRun(task.id, run)
+      run.done = processTask(backend, task, run).finally(() => {
+        removeRun(task.id)
+        processQueues()
       })
+      publishQueueState()
     }
   }
 }
 
-async function processTask(backend: BackendId, task: Task): Promise<void> {
+async function processTask(backend: BackendId, task: Task, run: GenerationRun): Promise<void> {
   const generate = generators[backend]
   const started = performance.now()
-
-  // The processor owns the canceller for the whole generation, so the registry
-  // holds an entry for every generating task whatever backend it belongs to —
-  // which is also what makes the menu's "generating" count the real one.
-  // `settled` keeps the task in the shutdown barrier until its outcome is
-  // persisted, past the point where the canceller is dropped.
-  const controller = new AbortController()
-  let resolveSettled!: () => void
-  const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
-  registerInFlight(task.id, () => controller.abort(), settled)
-
+  const controller = run.generation
   try {
     await persistActiveSession()
   } catch (error) {
     queueManager.updateTask(task, { status: controller.signal.aborted ? 'interrupted' : 'queued', startedAt: null })
     if (controller.signal.aborted) drainTracker.recordCancelled()
-    clearInFlight(task.id)
+    run.cancellable = false
     pauseForStorageFailure('start', error)
-    resolveSettled()
     return
   }
 
   // Only generate() is cancellable work. Once it resolves, the image exists
-  // (and, on a cloud backend, is paid for) — so the canceller is dropped RIGHT
-  // THEN, not in the finally: a Stop arriving during the slug/write phase must
-  // neither count this task as cancelled nor reach it. Shutdown still waits for
-  // it, and aborts the slug call so the image is saved under a random name.
+  // (and, on a cloud backend, is paid for) — so the run stops being cancellable
+  // RIGHT THEN, not in the finally: a Stop arriving during the slug/write phase
+  // must neither count this task as cancelled nor reach it. Quit still waits
+  // for it, and aborts the slug call so the image is saved under a random name.
   let generated = false
 
   try {
     controller.signal.throwIfAborted()
     const { buffer: imageBuffer, seed } = await generate(task, controller.signal)
     generated = true
-    clearInFlight(task.id)
+    run.cancellable = false
     publishQueueControlState()
     const completedAt = new Date()
 
@@ -170,7 +139,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
     const ext = await validateImage(imageBuffer)
 
     // Generate slug and allocate timestamp
-    const slug = await generateSlug(task.prompt, task.id, shutdownSignal())
+    const slug = await generateSlug(task.prompt, task.id, run.naming.signal)
     const { timestamp, utc, ordinal } = allocateOutputTimestamp(backend)
 
     const metadata: ImageMetadata = {
@@ -246,7 +215,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
       })
     }
   } finally {
-    clearInFlight(task.id)
+    run.cancellable = false
   }
 
   try {
@@ -254,11 +223,7 @@ async function processTask(backend: BackendId, task: Task): Promise<void> {
   } catch (err) {
     pauseForStorageFailure('finish', err)
   }
-  try {
-    publishQueueState()
-  } finally {
-    // The shutdown barrier covers the task's final state publication too, not
-    // merely the backend request/child exiting.
-    resolveSettled()
-  }
+  // Quit waits for the run through its final state publication too, not
+  // merely for the backend request or child to exit.
+  publishQueueState()
 }

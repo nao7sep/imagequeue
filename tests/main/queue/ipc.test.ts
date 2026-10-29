@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendId, EnqueueBatchUnit, Task, TaskStatus } from '../../../src/shared/types'
 
 // The queue channels the window drives. Two things matter here and are easy to
-// get wrong: live work must never disappear because the renderer's view was a
-// tick stale, and a task the user deleted must leave the queue even when its
+// get wrong: live work must never disappear because the renderer's view was
+// stale, and a task the user deleted must leave the queue even when its
 // file could not be removed. The queue manager itself is real; only the log,
 // the config, the session write, the publisher and the file removal are not.
 type Handler = (...args: unknown[]) => unknown
@@ -27,7 +27,8 @@ const mocks = vi.hoisted(() => ({
   setQueuePaused: vi.fn(),
   setQueuePausedAndPublish: vi.fn(),
   buildControlState: vi.fn(() => ({ canPause: true })),
-  cancelAllInFlight: vi.fn(() => 2),
+  stopGenerations: vi.fn(() => 2),
+  send: vi.fn(),
   isQueuePaused: vi.fn(() => false),
   deleteImageOutput: vi.fn(),
   trashImageOutput: vi.fn(async () => {}),
@@ -66,7 +67,7 @@ vi.mock('../../../src/main/queue/control-actions', () => ({
 }))
 vi.mock('../../../src/main/queue/control-state', () => ({ buildControlState: mocks.buildControlState }))
 vi.mock('../../../src/main/backends/cancellation', () => ({
-  cancelAllInFlight: mocks.cancelAllInFlight,
+  stopGenerations: mocks.stopGenerations,
   isQueuePaused: mocks.isQueuePaused,
   setQueuePaused: mocks.setQueuePaused,
 }))
@@ -85,7 +86,16 @@ const { resetStorageFailureNotice } = await import('../../../src/main/queue/stor
 function invoke(channel: string, ...args: unknown[]): unknown {
   const handler = mocks.handlers.get(channel)
   if (!handler) throw new Error(`${channel} was not registered`)
-  return handler({}, ...args)
+  return handler({ sender: { send: mocks.send } }, ...args)
+}
+
+// What a request answers with: the value main sends back as an event.
+function answered(channel: string, request: string): unknown {
+  mocks.send.mockClear()
+  invoke(request)
+  expect(mocks.send).toHaveBeenCalledOnce()
+  expect(mocks.send.mock.calls[0][0]).toBe(channel)
+  return mocks.send.mock.calls[0][1]
 }
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
@@ -164,7 +174,7 @@ describe('queueing work', () => {
   it('hands back everything it holds', async () => {
     seed([makeTask('a', 'queued')])
 
-    expect((await invoke('queue:getAllStoredTasks'))).toEqual(queueManager.getAllStoredTasks())
+    expect(answered('queue:updated', 'queue:requestState')).toEqual(queueManager.getAllStoredTasks())
   })
 })
 
@@ -266,26 +276,6 @@ describe('deleting a row together with its image', () => {
     expect(statuses()).toEqual([])
   })
 
-  it.each([false, true])('keeps B same-ID task after old Trash settles (failure: %s)', async (fail) => {
-    mocks.deleteToTrash = true
-    seed([withFile()])
-    let settle!: () => void
-    mocks.trashImageOutput.mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
-      settle = () => fail ? reject(new Error('Trash failed')) : resolve()
-    }))
-    const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
-    try {
-      mocks.sessionDir = '/sessions/B'
-      seed([makeTask('done', 'completed', { prompt: 'B image', baseName: 'B-done' })])
-    } finally {
-      settle()
-      await deletion
-    }
-    expect(queueManager.getTask('openai', 'done')).toMatchObject({ prompt: 'B image', baseName: 'B-done' })
-    expect(mocks.persistActiveSession).not.toHaveBeenCalled()
-    expect(mocks.publishQueueState).not.toHaveBeenCalled()
-  })
-
   it('claims one task deletion until its Trash settles', async () => {
     mocks.deleteToTrash = true
     seed([withFile()])
@@ -301,25 +291,6 @@ describe('deleting a row together with its image', () => {
     }
     expect(statuses()).toEqual([])
     expect(mocks.persistActiveSession).toHaveBeenCalledOnce()
-  })
-
-  it('keeps a re-adopted same-ID task after returning to the original folder', async () => {
-    mocks.deleteToTrash = true
-    seed([withFile()])
-    let settle!: () => void
-    mocks.trashImageOutput.mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve }))
-    const deletion = invoke('queue:deleteWithFiles', 'openai', 'done')
-    try {
-      mocks.sessionDir = '/sessions/B'
-      seed([])
-      mocks.sessionDir = '/sessions/A'
-      seed([withFile()])
-    } finally {
-      settle()
-      await deletion
-    }
-    expect(statuses()).toEqual([['done', 'completed']])
-    expect(mocks.persistActiveSession).not.toHaveBeenCalled()
   })
 
   it('still takes the row out when the file cannot be removed', async () => {
@@ -442,9 +413,9 @@ describe('the queue controls', () => {
 
 describe('kept-image presentation state', () => {
   it('starts hidden, toggles one shared value, broadcasts it and refreshes geometry', () => {
-    expect(invoke('queue:getShowKeptImages')).toBe(false)
+    expect(answered('queue:showKeptImages', 'queue:requestShowKeptImages')).toBe(false)
     expect(invoke('queue:toggleShowKeptImages')).toBe(true)
-    expect(invoke('queue:getShowKeptImages')).toBe(true)
+    expect(answered('queue:showKeptImages', 'queue:requestShowKeptImages')).toBe(true)
     expect(mocks.broadcastPresentation).toHaveBeenLastCalledWith('queue:showKeptImages', true)
     expect(mocks.refreshMainWindowMinimumSize).toHaveBeenCalledOnce()
     expect(invoke('queue:toggleShowKeptImages')).toBe(false)
@@ -456,7 +427,7 @@ describe('kept-image presentation state', () => {
   it('keeps an applied toggle successful when geometry presentation fails', () => {
     mocks.refreshMainWindowMinimumSize.mockImplementationOnce(() => { throw new Error('geometry unavailable') })
     expect(invoke('queue:toggleShowKeptImages')).toBe(true)
-    expect(invoke('queue:getShowKeptImages')).toBe(true)
+    expect(answered('queue:showKeptImages', 'queue:requestShowKeptImages')).toBe(true)
     expect(mocks.log).toHaveBeenCalledWith('warn', 'Window geometry presentation failed', expect.anything())
   })
 })

@@ -11,7 +11,7 @@ import { loadConfig } from '../config'
 import { logEnqueue, log, serializeError } from '../logger'
 import { getSessionDir, getSessionId, mutateSession, persistActiveSession } from '../session'
 import { shouldDeleteToTrash } from '../../shared/config'
-import { cancelAllInFlight, isQueuePaused } from '../backends/cancellation'
+import { stopGenerations, isQueuePaused } from '../backends/cancellation'
 import { buildControlState } from './control-state'
 import { publishQueueState } from './publisher'
 import { setQueuePausedAndPublish } from './control-actions'
@@ -31,7 +31,11 @@ async function persistQueueChange(): Promise<void> {
 
 // Registers all IPC handlers for queue operations.
 export function registerQueueIpc(): void {
-  handle('queue:getShowKeptImages', () => getShowKeptImages())
+  // Each request answers with the current state as an event, ahead of later
+  // changes on the same channel; the reply carries no copy.
+  handle('queue:requestShowKeptImages', (event) => {
+    event.sender.send('queue:showKeptImages', getShowKeptImages())
+  })
   handle('queue:toggleShowKeptImages', () => {
     const visible = toggleShowKeptImages()
     broadcastPresentation('queue:showKeptImages', visible)
@@ -60,8 +64,8 @@ export function registerQueueIpc(): void {
     return tasks
   }))
 
-  handle('queue:getAllStoredTasks', () => {
-    return queueManager.getAllStoredTasks()
+  handle('queue:requestState', (event) => {
+    event.sender.send('queue:updated', queueManager.getAllStoredTasks())
   })
 
   handle('queue:removeTask', (_event, backend: BackendId, taskId: string) => mutateSession(async () => {
@@ -92,8 +96,8 @@ export function registerQueueIpc(): void {
 
   handle('queue:deleteWithFiles', async (_event, backend: BackendId, taskId: string) => {
     const task = queueManager.getTask(backend, taskId)
-    // Renderer state can be one processor tick stale: a row checked as queued
-    // there may be generating by the time this handler runs. Main owns the
+    // Renderer state can be stale: a row checked as queued there may be
+    // generating by the time this handler runs. Main owns the
     // queue and is the authority that must keep live work from disappearing.
     if (task?.status === 'generating') {
       log('warn', 'Refusing to delete generating task', { taskId, backend })
@@ -104,9 +108,9 @@ export function registerQueueIpc(): void {
       const result: TaskDeletionResult = { removed: false, sessionId: getSessionId() }
       const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)
       log('info', 'Task deleted with files', { taskId, backend, baseName: task?.baseName ?? null, toTrash })
-      // File cleanup is best-effort. Session switches take the same guard, so
-      // the session cannot change while the files go; the task is rechecked
-      // below because the queue may have replaced it meanwhile.
+      // File cleanup is best-effort. Every other session command, a switch
+      // included, is refused while this one runs, so the task and the session
+      // stay as they are while the files go.
       if (task.baseName) {
         result.baseName = task.baseName
         const ext = imageExtFromPath(task.imagePath)
@@ -129,7 +133,6 @@ export function registerQueueIpc(): void {
       } else {
         log('warn', 'Task has no baseName; nothing to remove on disk', { taskId, backend })
       }
-      if (queueManager.getTask(backend, taskId) !== task) return result
       queueManager.removeTask(backend, taskId)
       result.removed = true
       try {
@@ -209,9 +212,9 @@ export function registerQueueIpc(): void {
 
   handle('queue:stopAll', async () => {
     // Queued first, then in-flight: both are synchronous within this handler,
-    // so no processor tick can interleave — the order is for the reader.
+    // so nothing can start between them — the order is for the reader.
     const queued = queueManager.interruptQueuedTasks()
-    const cancelled = cancelAllInFlight()
+    const cancelled = stopGenerations()
     log('info', 'Stopped all queue work', { cancelled, queued, paused: isQueuePaused() })
     await persistQueueChange()
     return { cancelled, queued }

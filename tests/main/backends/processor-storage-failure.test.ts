@@ -2,7 +2,7 @@ import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // A full or unavailable disk makes the session manifest write throw. At task
-// start that throw used to escape the 500 ms tick as an uncaught exception, and
+// start that throw used to escape the scheduler as an uncaught exception, and
 // the crash handler exited the app mid-batch with paid generations in flight.
 // The processor owns the failure: the task stays queued, the queue pauses, and
 // the user is told once.
@@ -49,7 +49,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { isQueuePaused, setQueuePaused, resetCancellationState, cancelAllInFlight, cancelAllInFlightAndWait } = await import('../../../src/main/backends/cancellation')
+const { isQueuePaused, setQueuePaused, resetCancellationState, stopGenerations, stopAllRuns } = await import('../../../src/main/backends/cancellation')
 
 function queueOne(): void {
   queueManager.enqueue({ prompt: 'p', backend: 'openai', model: 'm', params: {}, count: 1 } as never)
@@ -74,7 +74,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await cancelAllInFlightAndWait(1_000)
+  await stopAllRuns()
   resetCancellationState()
 })
 
@@ -93,7 +93,7 @@ describe('a manifest write failure while the queue runs', () => {
     expect(JSON.stringify(notices()[0])).not.toMatch(/ENOSPC|secret/)
   })
 
-  it('tells the user once, and the next tick starts nothing while paused', () => {
+  it('tells the user once, and the next scheduling pass starts nothing while paused', () => {
     persist.fail = true
     queueOne()
     processQueues()
@@ -135,7 +135,7 @@ it('keeps payment behind real manifest settlement and honors Stop while that sav
   processQueues()
   expect(generate).not.toHaveBeenCalled()
   expect(persist.calls).toBe(1)
-  expect(cancelAllInFlight()).toBe(1)
+  expect(stopGenerations()).toBe(1)
   release()
   await settle()
   expect(generate).not.toHaveBeenCalled()
@@ -148,7 +148,7 @@ it('preserves Stop when the held start save rejects and Resume cannot admit that
   persist.held = new Promise<void>((_resolve, fail) => { reject = fail })
   queueOne()
   processQueues()
-  cancelAllInFlight()
+  stopGenerations()
   reject(new Error('disk unavailable'))
   await settle()
   expect(queueManager.getAllStoredTasks().openai[0].status).toBe('interrupted')

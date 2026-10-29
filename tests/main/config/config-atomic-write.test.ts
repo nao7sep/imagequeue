@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadConfig, updateConfig, getConfigPath } from '../../../src/main/config'
+import { retryConfigSaves } from '../../../src/main/config/config-store'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
 import { writeFileAtomicAsync } from '../../../src/main/utils/atomic-write'
 
@@ -86,10 +87,10 @@ describe('config store (atomic write of config.json)', () => {
     expect(fs.readdirSync(tmpRoot).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
-  // The cached config is what the processor and backends read. A save that
-  // fails must not leave the new values running in memory, where the next
-  // unrelated save would also write them to disk unnoticed.
-  it('keeps the running settings when an update cannot be written', async () => {
+  // The config in memory is what the processor and backends read. A change
+  // applies there when accepted; a write that fails leaves the file behind,
+  // and quit's retry writes the latest accepted settings.
+  it('keeps an accepted change running when it cannot be written, and writes it on retry', async () => {
     // The cache outlives each test's data root; write it into this one first.
     const before = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 180001 })
     const timeout = before.image_backends.openai.timeout_ms
@@ -99,8 +100,10 @@ describe('config store (atomic write of config.json)', () => {
     await expect(updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1 })).rejects.toThrow('simulated disk full')
     rename.mockRestore()
 
-    expect(loadConfig().image_backends.openai.timeout_ms).toBe(timeout)
+    expect(loadConfig().image_backends.openai.timeout_ms).toBe(1)
     expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(timeout)
+    await retryConfigSaves()
+    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(1)
   })
 
   it('applies an update once it is written', async () => {

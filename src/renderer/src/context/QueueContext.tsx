@@ -43,18 +43,17 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
 
   useEffect(() => {
     let disposed = false
-    let receivedLiveUpdate = false
 
     // Loading and failure are not empty queues. Keep that distinction explicit
-    // until either the initial snapshot or a live update supplies real state.
-    void window.electronAPI.getAllStoredTasks()
-      .then((initial) => {
-        if (disposed || receivedLiveUpdate) return
-        setStoredTasks(initial)
-        setLoadState('ready')
-      })
+    // until the subscription's first event supplies real state: main answers
+    // the request with the stored tasks on the same channel as every update.
+    const unsubscribe = window.electronAPI.onQueueUpdated((updated) => {
+      setStoredTasks(updated)
+      setLoadState('ready')
+    })
+    void window.electronAPI.requestQueueState()
       .catch((error) => {
-        if (!disposed && !receivedLiveUpdate) setLoadState('failed')
+        if (!disposed) setLoadState('failed')
         try {
           const logging = window.electronAPI.appLog?.('error', 'Failed to load the initial queue snapshot', { error: serializeError(error) })
           void logging?.catch((logError) => console.error('Failed to record queue hydration diagnostic', logError))
@@ -62,13 +61,6 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
           console.error('Failed to record queue hydration diagnostic', logError)
         }
       })
-
-    // Subscribe to updates from main process
-    const unsubscribe = window.electronAPI.onQueueUpdated((updated) => {
-      receivedLiveUpdate = true
-      setStoredTasks(updated)
-      setLoadState('ready')
-    })
 
     return () => {
       disposed = true
@@ -78,18 +70,12 @@ export function QueueProvider({ children }: { children: ReactNode }): React.JSX.
 
   useEffect(() => {
     let disposed = false
-    let receivedUpdate = false
     const unsubscribe = window.electronAPI.onShowKeptImagesChanged((visible) => {
-      receivedUpdate = true
       setShowKeptImages(visible)
       clearOperationalFailure('queue-kept-visibility-load')
     })
-    void window.electronAPI.getShowKeptImages().then((visible) => {
-      if (disposed || receivedUpdate) return
-      setShowKeptImages(visible)
-      clearOperationalFailure('queue-kept-visibility-load')
-    }).catch((error) => {
-      if (!disposed && !receivedUpdate) reportOperationalFailure('queue-kept-visibility-load', 'operation.uiStateLoadFailed', 'Failed to load kept-image visibility', error)
+    void window.electronAPI.requestShowKeptImages().catch((error) => {
+      if (!disposed) reportOperationalFailure('queue-kept-visibility-load', 'operation.uiStateLoadFailed', 'Failed to load kept-image visibility', error)
     })
     return () => { disposed = true; unsubscribe() }
   }, [])

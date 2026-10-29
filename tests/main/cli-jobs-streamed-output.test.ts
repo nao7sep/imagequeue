@@ -2,12 +2,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { getCliJobSnapshot, killAllCliJobsAndWait, startCliJob } from '../../src/main/cli-jobs'
+import { getCliJobSnapshot, stopAllCliJobs, startCliJob } from '../../src/main/cli-jobs'
 import { closeRecords, flushRecords } from '../../src/main/records'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
 
 const start = (script: string) => startCliJob({ kind: 'download', cliPath: process.execPath, args: ['-e', script], target: 'fixture', modelsDir: '/fixture/models', sourceIdentity: 'fixture', logContext: {} })
-afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); await killAllCliJobsAndWait() })
+afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); await stopAllCliJobs() })
 afterAll(async () => { await closeRecords(); removeRecordsRoots() })
 
 async function hashFile(file: string): Promise<string> {

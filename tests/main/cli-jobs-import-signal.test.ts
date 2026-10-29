@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { killAllCliJobsAndWait, startCliJob } from '../../src/main/cli-jobs'
+import { stopAllCliJobs, startCliJob } from '../../src/main/cli-jobs'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
 
 // An import runs in a PTY, and node-pty reports signal 0 when no signal ended
@@ -19,7 +19,7 @@ vi.mock('node-pty', () => ({
 }))
 
 afterAll(async () => {
-  await killAllCliJobsAndWait({ killGraceMs: 20, timeoutMs: 2_000 })
+  await stopAllCliJobs(20)
   removeRecordsRoots()
 })
 

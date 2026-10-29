@@ -11,10 +11,13 @@ import { valuesEqual } from '../settings-changes'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 
 let cachedConfig: AppConfig | null = null
-// The map of sets config.json holds as of the last load or write; null while
-// there is no file, including after a set-aside. Save compares against it and never
-// re-reads the file, so config.json is read only at load.
+// The map of sets the config in memory stands for, as of the last load or
+// accepted change, and the map config.json holds as of the last load or write;
+// each is null while there is no file to write, including after a set-aside.
+// Writes compare against them and never re-read the file, so config.json is
+// read only at load.
 let storedMap: Record<string, unknown> | null = null
+let writtenMap: Record<string, unknown> | null = null
 let rejectedStoredSets = new Set<string>()
 
 // Resolve after the environment is known, without filesystem work. Directory
@@ -126,44 +129,35 @@ export function loadConfig(): AppConfig {
   ensureDataDir()
 
   storedMap = readStoredMap()
+  writtenMap = storedMap
   cachedConfig = effectiveConfig(storedMap ?? {})
   return cachedConfig
 }
 
 /**
- * The one way to change settings. The cached config is what the processor and
- * backends read, so a change is applied to a copy, the copy is written, and it
- * becomes the cached config only once the write succeeded — a failed save
- * leaves the running app on the settings that are on disk.
+ * The one way to change settings. The config in memory is what the processor,
+ * backends and windows read, so an accepted change applies to it at once and
+ * config.json is written behind it, in order. A write that fails leaves the
+ * change applied and the file behind; the next write, or quit's retry, writes
+ * the latest accepted map. A change of the wrong shape is refused before it
+ * applies.
  */
 let saving: Promise<unknown> = Promise.resolve()
-let retrySave: (() => Promise<unknown>) | null = null
 export async function retryConfigSaves(): Promise<void> {
-  await saving.catch(() => undefined)
-  if (retrySave) {
-    const result = retrySave()
-    saving = result
-    await result
-    retrySave = null
-  }
+  const result = saving.catch(() => undefined).then(writeAccepted)
+  saving = result
+  await result
 }
 
-
 export function updateConfig(apply: (draft: AppConfig) => void): Promise<AppConfig> {
-  const operation = async (): Promise<AppConfig> => {
-  const draft = structuredClone(loadConfig())
-  apply(draft)
-  await persistConfig(draft)
-  return loadConfig()
+  try {
+    const draft = structuredClone(loadConfig())
+    apply(draft)
+    acceptConfig(draft)
+  } catch (error) {
+    return Promise.reject(error)
   }
-  const result = saving.catch(() => undefined).then(async () => {
-    if (retrySave) await retrySave()
-    retrySave = operation
-    return operation().then((value) => { retrySave = null; return value }, (error) => {
-      if (error?.name === 'InvalidConfigSetError') retrySave = null
-      throw error
-    })
-  })
+  const result = saving.catch(() => undefined).then(writeAccepted).then(() => loadConfig())
   saving = result
   return result
 }
@@ -206,10 +200,10 @@ function carryUnknownKeys(stored: Record<string, unknown>, next: Record<string, 
  * in memory: every known set is stored, cleaned, only while it differs from its
  * built-in. A stored set this build rejected, and every key it does not know,
  * is written back as it is, until a save changes that set. A changed set of the
- * wrong shape rejects the save. A result equal to the map last loaded or
- * written writes nothing, and so does an empty result while there is no file.
+ * wrong shape rejects the change. A map equal to the one last loaded or
+ * written writes nothing, and so does an empty map while there is no file.
  */
-async function persistConfig(config: AppConfig): Promise<void> {
+function acceptConfig(config: AppConfig): void {
   const before = loadConfig()
   const builtIns = configSetDefaults()
   const next: Record<string, unknown> = {}
@@ -231,13 +225,7 @@ async function persistConfig(config: AppConfig): Promise<void> {
     }
   }
   if (storedMap !== null) carryUnknownKeys(storedMap, next, Object.keys(builtIns))
-  const unchanged = storedMap === null ? Object.keys(next).length === 0 : valuesEqual(next, storedMap)
-  if (!unchanged) {
-    const file = getConfigPath()
-    await writeFileAtomicAsync(file, JSON.stringify(markFormat(next, FORMAT_VERSIONS.config), null, 2), true)
-    storedMap = next
-    log('info', 'Config saved', { path: file })
-  }
+  if (storedMap !== null || Object.keys(next).length > 0) storedMap = next
   cachedConfig = effective
   rejectedStoredSets = rejected
   for (const listener of savedListeners) {
@@ -245,8 +233,17 @@ async function persistConfig(config: AppConfig): Promise<void> {
   }
 }
 
+async function writeAccepted(): Promise<void> {
+  const map = storedMap
+  if (map === null || (writtenMap !== null && valuesEqual(map, writtenMap))) return
+  const file = getConfigPath()
+  await writeFileAtomicAsync(file, JSON.stringify(markFormat(map, FORMAT_VERSIONS.config), null, 2), true)
+  writtenMap = map
+  log('info', 'Config saved', { path: file })
+}
+
 // Native surfaces that show a setting (the status icon's Notifications item)
-// follow every save, whichever window or menu made it.
+// follow every accepted change, whichever window or menu made it.
 const savedListeners = new Set<() => void>()
 export function onConfigSaved(listener: () => void): () => void {
   savedListeners.add(listener)

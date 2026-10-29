@@ -14,9 +14,9 @@ it('submits Send to All through one batch so backends share one session operatio
   const enqueueBatch = vi.fn(async (_units: unknown[]) => [])
   window.electronAPI = {
     enqueue, enqueueBatch,
-    getAllStoredTasks: async () => ({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] }),
+    requestQueueState: async () => undefined,
     onQueueUpdated: () => () => undefined,
-    getShowKeptImages: async () => false,
+    requestShowKeptImages: async () => undefined,
     toggleShowKeptImages: async () => true,
     onShowKeptImagesChanged: () => () => undefined,
   } as unknown as typeof window.electronAPI

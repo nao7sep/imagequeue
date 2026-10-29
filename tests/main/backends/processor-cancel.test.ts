@@ -9,7 +9,7 @@ import type { BackendId } from '../../../src/shared/types'
 // the command reported zero and did nothing while four images were being paid
 // for. Registration now lives in the processor, which is what these pin: every
 // backend is reachable, an SDK's own abort error still lands as `interrupted`
-// rather than `failed`, and the registry is released however the run ended (a
+// rather than `failed`, and the run leaves its lane however it ended (a
 // leaked entry would inflate the count the menu enables itself from).
 
 let captured: {
@@ -79,7 +79,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { cancelAllInFlight, cancelAllInFlightAndWait, inFlightCount, resetCancellationState } = await import(
+const { stopGenerations, stopAllRuns, generatingCount, resetCancellationState } = await import(
   '../../../src/main/backends/cancellation'
 )
 
@@ -110,13 +110,13 @@ beforeEach(() => {
   queueManager.replaceAllTasks({ openai: [], nanobanana: [], grok: [], flux: [], drawthings: [] })
 })
 
-// The processor's per-backend active count only drops when the generation's
-// promise settles, and its concurrency here is 1 — so a case that leaves its
-// generator hanging would block the next case from ever starting one.
+// A lane's width only drops when its run settles, and its concurrency here is
+// 1 — so a case that leaves its generator hanging would block the next case
+// from ever starting one.
 afterEach(async () => {
   if (captured) {
     captured.reject(new Error('test teardown'))
-    await cancelAllInFlightAndWait(1_000)
+    await stopAllRuns()
   }
   resetCancellationState()
   vi.restoreAllMocks()
@@ -129,9 +129,9 @@ describe('stopping a generation reaches every backend', () => {
     processQueues()
     await Promise.resolve()
     expect(generate).toHaveBeenCalledOnce()
-    expect(inFlightCount()).toBe(1)
+    expect(generatingCount()).toBe(1)
 
-    expect(cancelAllInFlight()).toBe(1)
+    expect(stopGenerations()).toBe(1)
     expect(captured!.signal.aborted).toBe(true)
   })
 
@@ -139,7 +139,7 @@ describe('stopping a generation reaches every backend', () => {
     queueOne(backend)
     processQueues()
     await Promise.resolve()
-    cancelAllInFlight()
+    stopGenerations()
     // What an SDK actually rejects with — its own abort error, not our message.
     captured!.reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
     await settle()
@@ -151,7 +151,7 @@ describe('stopping a generation reaches every backend', () => {
 
 describe('a stop cannot reach a task past its generation', () => {
   // Once generate() resolves the image exists and, on a cloud backend, is paid
-  // for. The task must leave the registry AT THAT MOMENT: a Stop during the
+  // for. The run must stop being cancellable AT THAT MOMENT: a Stop during the
   // slug/write phase must find nothing to cancel — and if the slug then fails
   // for its own reasons, the task lands `failed`, never `interrupted`, because
   // retrying an interrupted task would buy the already-bought image again.
@@ -159,15 +159,15 @@ describe('a stop cannot reach a task past its generation', () => {
     queueOne('openai')
     processQueues()
     await Promise.resolve()
-    expect(inFlightCount()).toBe(1)
+    expect(generatingCount()).toBe(1)
 
     slugState.failNext = true
     captured!.resolve({ buffer: await tinyPng() })
-    // One microtask turn: generate settles, the registry entry is released,
-    // while decoding and naming continue outside the cancellation registry.
+    // One microtask turn: generate settles and the run stops being
+    // cancellable, while decoding and naming continue.
     await Promise.resolve()
-    expect(inFlightCount()).toBe(0)
-    expect(cancelAllInFlight()).toBe(0)
+    expect(generatingCount()).toBe(0)
+    expect(stopGenerations()).toBe(0)
 
     await settle()
     expect(statusOf('openai')).toBe('failed')
@@ -184,7 +184,7 @@ describe('a stop cannot reach a task past its generation', () => {
     queueOne('grok')
     processQueues()
     await Promise.resolve()
-    cancelAllInFlight()
+    stopGenerations()
     expect(captured!.signal.aborted).toBe(true)
 
     slugState.failNext = true
@@ -206,12 +206,11 @@ describe('quitting while a finished image is being named', () => {
     await Promise.resolve()
     captured!.resolve({ buffer: await tinyPng() })
     await Promise.resolve()
-    expect(inFlightCount()).toBe(0)
+    expect(generatingCount()).toBe(0)
 
     await vi.waitFor(() => expect(slugState.entered).toBe(true))
     expect(sentEvents.filter((event) => event.channel === 'queue:controlState').at(-1)?.payload).toMatchObject({ generating: 0 })
-    const result = await cancelAllInFlightAndWait(1_000)
-    expect(result).toEqual({ signalled: 0, settled: true })
+    await stopAllRuns()
     expect(slugState.sawAbort).toBe(true)
     expect(statusOf('openai')).toBe('completed')
   })
@@ -236,15 +235,15 @@ describe('the queue broadcasts control state as work starts and settles', () => 
   })
 })
 
-describe('the registry is released however the run ended', () => {
+describe('a run stops counting as generating however it ended', () => {
   it('drops the entry after a stop', async () => {
     queueOne('flux')
     processQueues()
     await Promise.resolve()
-    cancelAllInFlight()
+    stopGenerations()
     captured!.reject(new Error('Generation stopped.'))
     await settle()
-    expect(inFlightCount()).toBe(0)
+    expect(generatingCount()).toBe(0)
   })
 
   it('drops the entry after an ordinary failure', async () => {
@@ -254,7 +253,7 @@ describe('the registry is released however the run ended', () => {
     captured!.reject(new Error('API error 500'))
     await settle()
     expect(statusOf('openai')).toBe('failed')
-    expect(inFlightCount()).toBe(0)
+    expect(generatingCount()).toBe(0)
   })})
 
 describe('a failed task keeps what the provider said', () => {
@@ -331,13 +330,13 @@ it.each(['success', 'failure', 'cancel'] as const)('uses elapsed monotonic time 
   vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
   if (outcome === 'success') captured!.resolve({ buffer: await tinyPng() })
   else {
-    if (outcome === 'cancel') cancelAllInFlight()
+    if (outcome === 'cancel') stopGenerations()
     captured!.reject(new Error('failure'))
   }
   await settle()
   if (outcome === 'success') expect(queueManager.getAllStoredTasks().openai[0].durationMs).toBe(250)
   if (outcome === 'failure') expect(failed).toHaveBeenCalledWith(expect.any(String), expect.any(Error), expect.objectContaining({ durationMs: 250 }))
-  now = 500
-  processQueues()
-  expect(logged).toHaveBeenCalledWith('info', 'Queue drained', { ok: outcome === 'success' ? 1 : 0, failed: outcome === 'failure' ? 1 : 0, cancelled: outcome === 'cancel' ? 1 : 0, durationMs: 400 })
+  // The run's settlement asks the session to schedule, which closes the drain.
+  await stopAllRuns()
+  expect(logged).toHaveBeenCalledWith('info', 'Queue drained', { ok: outcome === 'success' ? 1 : 0, failed: outcome === 'failure' ? 1 : 0, cancelled: outcome === 'cancel' ? 1 : 0, durationMs: 250 })
 })

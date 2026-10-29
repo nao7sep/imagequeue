@@ -21,7 +21,6 @@ import {
   fetchHeaders,
   RECOMMENDATIONS_LIMITS,
   RELEASE_METADATA_LIMITS,
-  withWholeOperationTimeout,
 } from './dependencies/download'
 import {
   RecommendedParams,
@@ -69,44 +68,38 @@ export async function getRecommendationsStatus(): Promise<RecommendationStatus> 
   }
 }
 
-/** Explicitly install or refresh configs.json. The whole transaction is bounded,
- * cancellable through durable staging, and never runs from launch or Check. */
-export function downloadLatestRecommendations(signal?: AbortSignal): Promise<InstalledRecommendations> {
+/** Explicitly install or refresh configs.json. The download holds its own idle
+ * and whole bounds; the install is cancellable through durable staging and
+ * never runs from launch or Check. */
+export async function downloadLatestRecommendations(signal?: AbortSignal): Promise<InstalledRecommendations> {
   const filePath = getRecommendationsPath()
-  return withWholeOperationTimeout(
-    signal,
-    3 * 60 * 1000,
-    'Recommendations acquisition',
-    async (boundedSignal) => {
-      const { body: data, headers } = await fetchBytesWithHeaders(
-        RECOMMENDATIONS_URL,
-        RECOMMENDATIONS_LIMITS,
-        boundedSignal
-      )
-      const specs = parseRecommendationBytes(data)
-      if (specs.length === 0) throw new Error('Recommendation file is not valid configs.json')
-      boundedSignal.throwIfAborted()
-
-      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-      // not recorded: configs.json is a re-fetchable managed dependency downloaded verbatim from
-      // models.drawthings.ai, living in the effective models dir alongside Draw Things' own model data
-      // (not under ~/.imagequeue/) — re-acquirable content the app reads, not durable user-authored text
-      // (data-backup conventions: re-fetchable dependencies are not recorded).
-      await writeFileAtomicAsync(filePath, data, false, boundedSignal)
-      // The server's time is recorded for these bytes, so a later check can tell
-      // whether the server has changed the file since. Without a valid header
-      // the file's server time is unknown, and no record describes it.
-      const updatedAt = lastModifiedOf(headers)
-      const warnings: RecommendationsInstallWarning[] = []
-      try {
-        await recordServerTime(filePath, data, updatedAt)
-      } catch (error) {
-        warnings.push('time-not-saved')
-        log('warn', 'Recommended parameters were installed but their server time was not saved', { filePath, error: serializeError(error) })
-      }
-      return { filePath, status: { exists: true, valid: true, entryCount: specs.length, updatedAt }, warnings }
-    }
+  const { body: data, headers } = await fetchBytesWithHeaders(
+    RECOMMENDATIONS_URL,
+    RECOMMENDATIONS_LIMITS,
+    signal
   )
+  const specs = parseRecommendationBytes(data)
+  if (specs.length === 0) throw new Error('Recommendation file is not valid configs.json')
+  signal?.throwIfAborted()
+
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+  // not recorded: configs.json is a re-fetchable managed dependency downloaded verbatim from
+  // models.drawthings.ai, living in the effective models dir alongside Draw Things' own model data
+  // (not under ~/.imagequeue/) — re-acquirable content the app reads, not durable user-authored text
+  // (data-backup conventions: re-fetchable dependencies are not recorded).
+  await writeFileAtomicAsync(filePath, data, false, signal)
+  // The server's time is recorded for these bytes, so a later check can tell
+  // whether the server has changed the file since. Without a valid header
+  // the file's server time is unknown, and no record describes it.
+  const updatedAt = lastModifiedOf(headers)
+  const warnings: RecommendationsInstallWarning[] = []
+  try {
+    await recordServerTime(filePath, data, updatedAt)
+  } catch (error) {
+    warnings.push('time-not-saved')
+    log('warn', 'Recommended parameters were installed but their server time was not saved', { filePath, error: serializeError(error) })
+  }
+  return { filePath, status: { exists: true, valid: true, entryCount: specs.length, updatedAt }, warnings }
 }
 
 /** When the server's configs.json last changed, asked for with its headers

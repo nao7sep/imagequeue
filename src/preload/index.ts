@@ -94,11 +94,10 @@ const api = {
   enqueueBatch: (units: EnqueueBatchUnit[], prompts?: ElaboratedPromptRecord[]): Promise<Task[]> =>
     ipcRenderer.invoke('queue:enqueueBatch', units, prompts),
 
-  getShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:getShowKeptImages'),
+  requestShowKeptImages: (): Promise<void> => ipcRenderer.invoke('queue:requestShowKeptImages'),
   toggleShowKeptImages: (): Promise<boolean> => ipcRenderer.invoke('queue:toggleShowKeptImages'),
 
-  getAllStoredTasks: (): Promise<Record<BackendId, Task[]>> =>
-    ipcRenderer.invoke('queue:getAllStoredTasks'),
+  requestQueueState: (): Promise<void> => ipcRenderer.invoke('queue:requestState'),
 
   removeTask: (backend: BackendId, taskId: string): Promise<void> =>
     ipcRenderer.invoke('queue:removeTask', backend, taskId),
@@ -277,8 +276,14 @@ const api = {
   cliStartDownload: (modelFile: string): Promise<string> =>
     ipcRenderer.invoke('cli-job:startDownload', modelFile),
 
-  cliSubscribeJob: (jobId: string): Promise<CliJobSnapshot | null> =>
+  cliSubscribeJob: (jobId: string): Promise<void> =>
     ipcRenderer.invoke('cli-job:subscribe', jobId),
+
+  onCliJobSnapshot: (callback: (snapshot: CliJobSnapshot) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, snapshot: CliJobSnapshot): void => callback(snapshot)
+    ipcRenderer.on('cli-job:snapshot', handler)
+    return () => { ipcRenderer.removeListener('cli-job:snapshot', handler) }
+  },
 
   cliUnsubscribeJob: (jobId: string): Promise<void> =>
     ipcRenderer.invoke('cli-job:unsubscribe', jobId),
@@ -340,8 +345,8 @@ const api = {
   dtSaveModelParams: (modelFile: string, params: DrawThingsModelParams): Promise<void> =>
     ipcRenderer.invoke('drawthings:setModelParams', modelFile, params),
 
-  getDrawThingsParamsPersistenceState: (): Promise<DrawThingsParamsPersistenceState> =>
-    ipcRenderer.invoke('drawthings:getParamsPersistenceState'),
+  requestDrawThingsParamsPersistenceState: (): Promise<void> =>
+    ipcRenderer.invoke('drawthings:requestParamsPersistenceState'),
 
   onDrawThingsParamsPersistenceState: (
     callback: (state: DrawThingsParamsPersistenceState) => void

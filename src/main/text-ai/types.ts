@@ -14,6 +14,10 @@ export interface AskOptions {
   // implementations are responsible for asking the model in JSON mode and
   // populating `parsed` on the result.
   schema?: object
+  // The call's whole bound, held by the caller's withProviderRetry. The OpenAI
+  // SDK always runs a per-attempt timer of its own (ten minutes unless set), so
+  // it is set to this bound and never ends an attempt first; Gemini's SDK runs
+  // none.
   timeoutMs: number
   // Passed through to the SDK to cancel the local request and prevent later
   // turns. A provider may continue processing or charge for already accepted work.

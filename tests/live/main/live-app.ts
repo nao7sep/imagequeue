@@ -59,9 +59,10 @@ export async function startApp(home: string) {
   const { registerDependenciesIpc } = await import('../../../src/main/dependencies-ipc')
   const { registerElaboratorsIpc } = await import('../../../src/main/elaborators-ipc')
   const { registerConceptsIpc } = await import('../../../src/main/concepts-ipc')
-  const { startProcessor, stopProcessor } = await import('../../../src/main/backends')
-  const { cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
-  const { killAllCliJobsAndWait } = await import('../../../src/main/cli-jobs')
+  const { processQueues } = await import('../../../src/main/backends')
+  const { stopAllRuns, resetCancellationState } = await import('../../../src/main/backends/cancellation')
+  const { stopAllCliJobs } = await import('../../../src/main/cli-jobs')
+  const { setQuitting } = await import('../../../src/main/quit-state')
   const { drainPendingWrites } = await import('../../../src/main/model-params')
   const { closeBackupStore } = await import('../../../src/main/backup/backup-store')
 
@@ -71,18 +72,10 @@ export async function startApp(home: string) {
     const clean = async (step: () => unknown): Promise<void> => {
       try { await step() } catch (error) { failures.push(error) }
     }
-    await clean(stopProcessor)
+    // Quitting admits nothing new; the runs and children then settle.
+    setQuitting(true)
     await clean(drainPendingWrites)
-    await Promise.all([
-      clean(async () => {
-        const result = await cancelAllInFlightAndWait(5_000)
-        if (!result.settled) throw new Error('Live generations did not settle during cleanup')
-      }),
-      clean(async () => {
-        const result = await killAllCliJobsAndWait({ timeoutMs: 5_000 })
-        if (!result.settled) throw new Error('Live CLI jobs did not settle during cleanup')
-      }),
-    ])
+    await Promise.all([clean(stopAllRuns), clean(stopAllCliJobs)])
     await clean(() => session.dropCurrentSessionIfEmpty('quit'))
     await clean(() => contents.destroy())
     await clean(closeConceptStore)
@@ -92,9 +85,9 @@ export async function startApp(home: string) {
   }
   try {
     // The app starts once per process; this harness starts it again in the same
-    // process, so the shutdown signal the last stop aborted is replaced first, or
-    // every slug would take the shutdown path and fall back to a random name.
+    // process, so the last stop's lanes and quitting admission are cleared first.
     resetCancellationState()
+    setQuitting(false)
     config.ensureDataDir()
     openRecords(config.getDataDir())
     clearTempDir()
@@ -108,7 +101,10 @@ export async function startApp(home: string) {
     registerDependenciesIpc()
     registerElaboratorsIpc()
     registerConceptsIpc()
-    startProcessor()
+    // As at startup: the session schedules after each command and settings save.
+    session.onSessionCommandSettled(processQueues)
+    config.onConfigSaved(processQueues)
+    processQueues()
   } catch (error) {
     try { await shutdown() } catch (cleanupError) { console.error('Partial live app cleanup failed', cleanupError) }
     throw error

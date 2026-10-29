@@ -102,7 +102,7 @@ describe('settings by set', () => {
       expect(loadConfig().general.language).toBe('ja')
     } finally { mkdir.mockRestore(); stat.mockRestore() }
   })
-  it('keeps a later edit behind physical publication and applies both changes', async () => {
+  it('applies a later edit at once and writes it behind physical publication', async () => {
     const { updateConfig, loadConfig } = await import('../../../src/main/config/config-store')
     loadConfig()
     const renameOriginal = fs.promises.rename.bind(fs.promises)
@@ -120,8 +120,9 @@ describe('settings by set', () => {
     let appliedSecond = false
     const second = updateConfig((draft) => { appliedSecond = true; draft.notifications.notifications_enabled = false })
     await Promise.resolve()
-    expect(appliedSecond).toBe(false)
-    expect(loadConfig().general.language).not.toBe('ja')
+    // Both apply when accepted; the second write waits behind the first.
+    expect(appliedSecond).toBe(true)
+    expect(loadConfig()).toMatchObject({ general: { language: 'ja' }, notifications: { notifications_enabled: false } })
     release()
     await Promise.all([first, second])
     expect(stored()).toMatchObject({ general: { language: 'ja' }, notifications: { notifications_enabled: false } })

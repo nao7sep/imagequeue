@@ -11,10 +11,19 @@ vi.mock('../../src/main/records-writer-worker?nodeWorker', async () => {
     storage.onRecordStored(() => thread.emit('message', { type: 'stored' }))
     let opened = false
     return Object.assign(thread, {
-      postMessage: (message: { type: string; id?: number; recordId?: number; table: Parameters<typeof storage.write>[0]; row: Parameters<typeof storage.write>[1] }) => {
+      postMessage: (message: { type: string; id?: number; recordId?: number; table: Parameters<typeof storage.write>[0]; row: Parameters<typeof storage.write>[1]; read: Parameters<typeof storage.readStored>[0] }) => {
         if (!opened) { opened = true; thread.emit('message', { type: 'opened', available: storage.recordsDatabasePath() !== null }) }
         if (message.type === 'write') { storage.write(message.table, message.row); thread.emit('message', { type: 'written', recordId: message.recordId }) }
         else if (message.type === 'flush') thread.emit('message', { type: 'flushed', id: message.id })
+        else if (message.type === 'read') {
+          try {
+            let warning: unknown
+            const value = storage.readStored(message.read, (result) => { warning = result })
+            thread.emit('message', { type: 'read', id: message.id, value, ...(warning ? { warning } : {}) })
+          } catch (error) {
+            thread.emit('message', { type: 'read', id: message.id, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) })
+          }
+        }
         else if (message.type === 'close') { storage.closeRecords(); thread.emit('exit', 0) }
       },
       unref: () => thread,

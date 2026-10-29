@@ -5,6 +5,8 @@ import { utcStampForFilename } from '../shared/utc-stamp'
 import { createCliOutputWriter } from './cli-output-writer'
 import createRecordsWorker from './records-writer-worker?nodeWorker'
 import { serializeError } from '../shared/serialize-error'
+import type { RecordsRead, RecordsReadResults } from '../shared/records'
+import type { RecordsSearchWarning } from './records-query'
 
 type Table = 'log_records' | 'ai_calls' | 'cli_jobs'
 type Row = Record<string, string | number | null>
@@ -19,7 +21,8 @@ let nextId = 0
 // Calls may fail long after a key rotates; retain masking knowledge for this
 // process so downstream diagnostic and fallback sinks mask the same values.
 const diagnosticCredentials = new Set<string>()
-const pending = new Map<number, { worker: Worker; resolve: () => void }>()
+// Flush and read replies, routed to their callers by request id.
+const pending = new Map<number, { worker: Worker; resolve: (value?: unknown) => void; reject: (error: Error) => void }>()
 
 /** Diagnostics are ordered by the writer's mailbox; paid evidence belongs to session.json. */
 export function openRecords(dataDir: string): string {
@@ -30,17 +33,27 @@ export function openRecords(dataDir: string): string {
     const started = createRecordsWorker({ workerData: { dataDir, launch } })
     worker = started
     databaseFile = file
-    started.on('message', (message: { type: string; id?: number; available?: boolean }) => {
+    started.on('message', (message: { type: string; id?: number; available?: boolean; value?: unknown; warning?: RecordsSearchWarning; error?: string }) => {
       if (message.type === 'opened' && worker === started && !message.available) databaseFile = null
       if (message.type === 'stored') {
         try { storedListener?.() } catch (error) { console.error('[records] stored-record listener failed', error) }
       }
-      if (message.id !== undefined) { pending.get(message.id)?.resolve(); pending.delete(message.id) }
+      if (message.id === undefined) return
+      const request = pending.get(message.id)
+      pending.delete(message.id)
+      if (message.type !== 'read') { request?.resolve(); return }
+      if (message.warning) writeLogRecord(new Date().toISOString(), 'warn', 'CLI output search was incomplete', { ...message.warning })
+      if (message.error !== undefined) request?.reject(new Error(message.error))
+      else request?.resolve(message.value)
     })
+    // A flush waiting on a writer that ended has nothing left to wait for; a
+    // read on it has no answer.
     const ended = (): void => {
       if (worker === started) { worker = null; databaseFile = null }
       for (const [id, request] of pending) {
-        if (request.worker === started) { request.resolve(); pending.delete(id) }
+        if (request.worker !== started) continue
+        pending.delete(id)
+        request.reject(new Error('The records database is not open.'))
       }
     }
     started.on('error', (error) => { console.error('[records] writer failed', error); ended() })
@@ -56,9 +69,23 @@ export async function flushRecords(): Promise<void> {
   if (!current) return
   const id = ++nextId
   await new Promise<void>((resolve) => {
-    pending.set(id, { worker: current, resolve })
+    pending.set(id, { worker: current, resolve: () => resolve(), reject: () => resolve() })
     try { current.postMessage({ type: 'flush', id }) }
     catch { pending.delete(id); resolve() }
+  })
+}
+
+/** A Records window read. It waits for CLI output files still being written,
+ *  then runs on the records thread after every record posted before it. */
+export async function readRecords<R extends RecordsRead>(read: R): Promise<RecordsReadResults[R['op']]> {
+  while (finishingOutputs.size > 0) await Promise.all([...finishingOutputs])
+  const current = worker
+  if (!current || databaseFile === null) throw new Error('The records database is not open.')
+  const id = ++nextId
+  return new Promise((resolve, reject) => {
+    pending.set(id, { worker: current, resolve: resolve as (value?: unknown) => void, reject })
+    try { current.postMessage({ type: 'read', id, read }) }
+    catch (error) { pending.delete(id); reject(error instanceof Error ? error : new Error(String(error))) }
   })
 }
 

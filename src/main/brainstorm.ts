@@ -302,7 +302,12 @@ async function runBrainstorm(req: BrainstormRequest, controller: AbortController
       // are the serialization point of the whole mechanism — ordered store
       // reads guarded by the in-run excludes — so concurrent turns hold
       // disjoint assignments by construction, and the prose calls themselves
-      // never touch the ledger. Each facet fills its column concurrently.
+      // never touch the ledger. Each facet fills its column concurrently:
+      // minting new values is a text request to the provider, another device,
+      // and while one runs the Mac is idle and the user waits in Advanced
+      // Prompting. A cold 100-prompt run minted about a hundred domains and close
+      // to four hundred values for each of its four facets, so one facet at a
+      // time would multiply that wait by up to four.
       broadcastProgress({
         requestId: req.requestId, done: collected.length, total: req.count, phase: 'concepts',
       })

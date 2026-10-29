@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { until } from '../../until'
 import { QueueProvider, useQueue } from '../../../../src/renderer/src/context/QueueContext'
 import { OPERATIONAL_FAILURE_EVENT, OPERATIONAL_RESOLVED_EVENT } from '../../../../src/renderer/src/utils/operationalFailure'
 import type { BackendId, Task } from '../../../../src/shared/types'
@@ -18,31 +19,34 @@ function Probe(): React.JSX.Element {
 }
 
 describe('QueueProvider load state', () => {
-  it('moves from loading to ready when the initial snapshot arrives', async () => {
-    let resolveInitial!: (tasks: Record<BackendId, Task[]>) => void
-    const initial = new Promise<Record<BackendId, Task[]>>((resolve) => { resolveInitial = resolve })
+  it('moves from loading to ready when the first queue event arrives', async () => {
+    let onUpdate!: (tasks: Record<BackendId, Task[]>) => void
     window.electronAPI = {
-      getShowKeptImages: vi.fn(async () => false),
+      requestShowKeptImages: vi.fn(async () => undefined),
       toggleShowKeptImages: vi.fn(async () => true),
       onShowKeptImagesChanged: vi.fn(() => () => undefined),
-      getAllStoredTasks: vi.fn(() => initial),
-      onQueueUpdated: vi.fn(() => () => undefined),
+      // Main answers the request with the stored tasks as the first event.
+      requestQueueState: vi.fn(async () => undefined),
+      onQueueUpdated: vi.fn((callback) => {
+        onUpdate = callback
+        return () => undefined
+      }),
     } as unknown as typeof window.electronAPI
 
     render(<QueueProvider><Probe /></QueueProvider>)
     expect(screen.getByText('loading:0')).toBeTruthy()
 
-    await act(async () => resolveInitial(emptyTasks()))
+    act(() => onUpdate(emptyTasks()))
     expect(screen.getByText('ready:0')).toBeTruthy()
   })
 
   it('reports failure, then recovers when a live queue update arrives', async () => {
     let onUpdate!: (tasks: Record<BackendId, Task[]>) => void
     window.electronAPI = {
-      getShowKeptImages: vi.fn(async () => false),
+      requestShowKeptImages: vi.fn(async () => undefined),
       toggleShowKeptImages: vi.fn(async () => true),
       onShowKeptImagesChanged: vi.fn(() => () => undefined),
-      getAllStoredTasks: vi.fn(async () => { throw new Error('unavailable') }),
+      requestQueueState: vi.fn(async () => { throw new Error('unavailable') }),
       onQueueUpdated: vi.fn((callback) => {
         onUpdate = callback
         return () => undefined
@@ -50,32 +54,9 @@ describe('QueueProvider load state', () => {
     } as unknown as typeof window.electronAPI
 
     render(<QueueProvider><Probe /></QueueProvider>)
-    expect(await screen.findByText('failed:0')).toBeTruthy()
+    await until(() => screen.getByText('failed:0'))
 
     act(() => onUpdate(emptyTasks()))
-    expect(screen.getByText('ready:0')).toBeTruthy()
-  })
-
-  it('does not let an older initial-read failure overwrite a live update', async () => {
-    let rejectInitial!: (error: Error) => void
-    let onUpdate!: (tasks: Record<BackendId, Task[]>) => void
-    const initial = new Promise<Record<BackendId, Task[]>>((_, reject) => { rejectInitial = reject })
-    window.electronAPI = {
-      getShowKeptImages: vi.fn(async () => false),
-      toggleShowKeptImages: vi.fn(async () => true),
-      onShowKeptImagesChanged: vi.fn(() => () => undefined),
-      getAllStoredTasks: vi.fn(() => initial),
-      onQueueUpdated: vi.fn((callback) => {
-        onUpdate = callback
-        return () => undefined
-      }),
-    } as unknown as typeof window.electronAPI
-
-    render(<QueueProvider><Probe /></QueueProvider>)
-    act(() => onUpdate(emptyTasks()))
-    expect(screen.getByText('ready:0')).toBeTruthy()
-
-    await act(async () => rejectInitial(new Error('stale failure')))
     expect(screen.getByText('ready:0')).toBeTruthy()
   })
 })
@@ -95,15 +76,19 @@ describe('shared kept-image visibility', () => {
     queue = useQueue()
     return <Probe />
   }
+  // Main answers the visibility request with the current value as the first
+  // event; `initial` is that value, or the request's failure.
   function installVisibilityApi(initial: Promise<boolean> = Promise.resolve(false)) {
     let push!: (visible: boolean) => void
     const stored = emptyTasks()
     stored.grok = [keptTask()]
+    let pushTasks!: (tasks: Record<BackendId, Task[]>) => void
     const unsubscribe = vi.fn()
     const toggle = vi.fn(async () => true)
     window.electronAPI = {
-      getAllStoredTasks: vi.fn(async () => stored), onQueueUpdated: vi.fn(() => () => undefined),
-      getShowKeptImages: vi.fn(() => initial), toggleShowKeptImages: toggle,
+      requestQueueState: vi.fn(async () => { pushTasks(stored) }),
+      onQueueUpdated: vi.fn((callback) => { pushTasks = callback; return () => undefined }),
+      requestShowKeptImages: vi.fn(async () => { push(await initial) }), toggleShowKeptImages: toggle,
       onShowKeptImagesChanged: vi.fn((callback) => { push = callback; return unsubscribe }),
       appLog: vi.fn(async () => undefined),
     } as unknown as typeof window.electronAPI
@@ -128,32 +113,6 @@ describe('shared kept-image visibility', () => {
     expect(queue.tasks.grok).toHaveLength(0)
     view.unmount()
     expect(api.unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('ignores a late initial value after a newer main event', async () => {
-    let finish!: (visible: boolean) => void
-    const api = installVisibilityApi(new Promise((resolve) => { finish = resolve }))
-    render(<QueueProvider><VisibilityProbe /></QueueProvider>)
-    await act(async () => {})
-    act(() => api.push(true))
-    await act(async () => finish(false))
-    expect(queue.showKeptImages).toBe(true)
-    expect(queue.tasks.grok).toHaveLength(1)
-  })
-
-  it('ignores a stale hydration failure after a remote visibility event', async () => {
-    let reject!: (error: Error) => void
-    const failures = vi.fn()
-    window.addEventListener(OPERATIONAL_FAILURE_EVENT, failures)
-    try {
-      const api = installVisibilityApi(new Promise((_, fail) => { reject = fail }))
-      render(<QueueProvider><VisibilityProbe /></QueueProvider>)
-      await act(async () => {})
-      act(() => api.push(true))
-      await act(async () => reject(new Error('stale failure')))
-      expect(queue.showKeptImages).toBe(true)
-      expect(failures).not.toHaveBeenCalled()
-    } finally { window.removeEventListener(OPERATIONAL_FAILURE_EVENT, failures) }
   })
 
   it('clears an earlier load failure when a remounted provider successfully hydrates', async () => {

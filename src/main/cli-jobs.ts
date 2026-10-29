@@ -6,7 +6,6 @@ import { spawn as spawnPty } from 'node-pty'
 import { log, serializeError } from './logger'
 import { startCliJobRecord, type CliJobRecord } from './records'
 import { cliJobStartFailurePresentation } from './failure-presentation'
-import { waitForAllSettledWithin } from './utils/bounded-wait'
 import {
   CliChunk,
   CliChunkEvent,
@@ -132,9 +131,11 @@ export function startCliJob(opts: StartCliJobOpts): string {
   return jobId
 }
 
-export function subscribeCliJob(jobId: string, wc: WebContents): CliJobSnapshot | null {
+/** A subscription's first event is the job as it is now; its chunk and status
+ *  events follow on the same channel, so none arrives out of order. */
+export function subscribeCliJob(jobId: string, wc: WebContents): void {
   const state = jobs.get(jobId)
-  if (!state) return null
+  if (!state) return
   if (!state.subscribers.has(wc)) {
     state.subscribers.add(wc)
     const onDestroyed = (): void => removeSubscriber(state, wc)
@@ -142,7 +143,10 @@ export function subscribeCliJob(jobId: string, wc: WebContents): CliJobSnapshot 
     wc.once('destroyed', onDestroyed)
   }
   clearRetentionTimer(state)
-  return snapshot(state)
+  try { wc.send('cli-job:snapshot', snapshot(state)) } catch (error) {
+    removeSubscriber(state, wc)
+    log('warn', 'CLI subscriber unavailable', { jobId, channel: 'cli-job:snapshot', error: serializeError(error) })
+  }
 }
 
 export function unsubscribeCliJob(jobId: string, wc: WebContents): void {
@@ -179,21 +183,12 @@ function requestStop(state: JobState, reason: 'killed' | 'timed-out', graceMs = 
   try { state.child?.kill('SIGTERM') } catch { /* close remains authoritative */ }
 }
 
-/** Signal every live/queued CLI job and await real child settlement, bounded. */
-export async function killAllCliJobsAndWait(options: {
-  killGraceMs?: number
-  timeoutMs?: number
-} = {}): Promise<{ signalled: number; settled: boolean }> {
-  const killGraceMs = options.killGraceMs ?? CLI_HARD_KILL_DELAY_MS
-  const timeoutMs = options.timeoutMs ?? killGraceMs + 2_000
+/** Signal every live or queued CLI job and settle when each child has closed.
+ *  The quit owner's exit deadline bounds the wait. */
+export function stopAllCliJobs(killGraceMs = CLI_HARD_KILL_DELAY_MS): Promise<void> {
   const active = [...jobs.values()].filter((state) => !state.finalized)
-
   for (const state of active) killCliJob(state.jobId, killGraceMs)
-
-  return {
-    signalled: active.length,
-    settled: await waitForAllSettledWithin(active.map((state) => state.settled), timeoutMs),
-  }
+  return Promise.all(active.map((state) => state.settled)).then(() => undefined)
 }
 
 export function getCliJobSnapshot(jobId: string): CliJobSnapshot | null {

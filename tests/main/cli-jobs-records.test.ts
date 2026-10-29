@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import { flushRecords } from '../../src/main/records'
 import os from 'os'
 import type { WebContents } from 'electron'
-import { getCliJobSnapshot, killAllCliJobsAndWait, startCliJob, subscribeCliJob, unsubscribeCliJob } from '../../src/main/cli-jobs'
+import { getCliJobSnapshot, stopAllCliJobs, startCliJob, subscribeCliJob, unsubscribeCliJob } from '../../src/main/cli-jobs'
 import type { CliJobSnapshot } from '../../src/shared/cli-jobs'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
 
@@ -29,8 +29,8 @@ function observeJob(jobId: string, matches: (snapshot: CliJobSnapshot) => boolea
       unsubscribeCliJob(jobId, subscriber)
       resolve(snapshot)
     }
-    const initial = subscribeCliJob(jobId, subscriber)
-    if (initial && matches(initial)) finish(initial)
+    // The subscription's first event is the job as it is now.
+    subscribeCliJob(jobId, subscriber)
   })
 }
 
@@ -45,7 +45,7 @@ function startFixtureJob(script: string, cliPath = CLI): string {
 }
 
 afterEach(async () => {
-  await killAllCliJobsAndWait({ killGraceMs: 20, timeoutMs: 2_000 })
+  await stopAllCliJobs(20)
 })
 
 afterAll(() => {
@@ -76,7 +76,7 @@ describe('CLI job records', () => {
     const dir = freshRecordsRoot()
     const jobId = startFixtureJob("process.stdout.write('ready\\n'); setInterval(() => {}, 1000)")
     await observeJob(jobId, (snapshot) => snapshot.chunks.some((chunk) => chunk.text === 'ready'))
-    await killAllCliJobsAndWait({ killGraceMs: 2_000, timeoutMs: 4_000 })
+    await stopAllCliJobs(2_000)
 
     await flushRecords()
     const [row] = readRows(dir, 'cli_jobs')

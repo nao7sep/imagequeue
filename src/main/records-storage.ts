@@ -5,10 +5,12 @@ import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
 import { setAsideFile } from './utils/set-aside'
 import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError } from './store-format'
+import { runRecordsRead, type RecordsSearchWarning } from './records-query'
+import type { RecordsRead, RecordsReadResults } from '../shared/records'
 
 // The app's records, per the logging-conventions and the data-lifecycle-conventions'
 // Records: one `records.sqlite3` under the storage root, written only by the main
-// process's dedicated writer thread. Every row carries `time`; `launch`, this process launch by its start time
+// process's dedicated records thread, which also runs the Records window's reads. Every row carries `time`; `launch`, this process launch by its start time
 // (the conventions' session); `session_id`, the imagequeue session open at the time,
 // null before one opens; and the domain ids it belongs to, `task_id` (a queued image)
 // and `request_id` (an elaboration run), or a Draw Things CLI job's `job_id`.
@@ -159,7 +161,14 @@ export function closeRecords(): void {
   databaseFile = null
 }
 
-/** The open database's path, for the Records window's reader; null while closed. */
+/** One Records window read on the writer's own connection, between the
+ *  records written before it and those after it. */
+export function readStored(read: RecordsRead, reportWarning: (warning: RecordsSearchWarning) => void): RecordsReadResults[RecordsRead['op']] {
+  if (!db) throw new Error('The records database is not open.')
+  return runRecordsRead(db, read, reportWarning)
+}
+
+/** The open database's path; null while closed. */
 export function recordsDatabasePath(): string | null {
   return databaseFile
 }

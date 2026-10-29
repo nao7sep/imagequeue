@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('../../src/main/ipc-boundary', () => ({ handle: vi.fn() }))
-vi.mock('../../src/main/records-reader', () => ({ readRecords: mocks.read }))
 vi.mock('../../src/main/records-window', () => ({ openRecordsWindow: vi.fn() }))
 vi.mock('../../src/main/records', () => ({
   currentRecordsContext: () => ({ launch: '2026-10-04T00:00:00.000Z', session: '20261004-000000-000-utc' }),
+  readRecords: mocks.read,
 }))
 import { handle } from '../../src/main/ipc-boundary'
 import type { IpcMainInvokeEvent } from 'electron'

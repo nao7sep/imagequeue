@@ -10,7 +10,6 @@ import { fetchLatestRecommendationsModified, getRecommendationsPath, getRecommen
 import { isCliInstalledAsync, readInstalledCliTag, installCliRelease } from './cli-binary'
 import { resolveLatestCliRelease } from './cli-release'
 import { compareCliVersions } from './cli-version'
-import { CLI_DOWNLOAD_LIMITS, withWholeOperationTimeout } from './download'
 import {
   APP_DEPENDENCY_OPERATION_OWNER,
   DependencyOperationBusyError,
@@ -182,25 +181,18 @@ export async function installOrUpdateCli(
   onProgress?: (progress: DependencyProgress) => void,
   signal?: AbortSignal
 ): Promise<CliInstallResult> {
-  return withWholeOperationTimeout(
-    signal,
-    CLI_DOWNLOAD_LIMITS.wholeTimeoutMs,
-    'CLI acquisition',
-    async (boundedSignal) => {
-      const release = await resolveLatestCliRelease(true, boundedSignal)
-      if (!release) {
-        throw new Error('Could not reach the Draw Things release server')
-      }
-      const warnings = await installCliRelease(release, onProgress, boundedSignal)
-      const checkedAt = new Date().toISOString()
-      try { await updateDependenciesCache((cache) => {
-        cache.cli.lastKnownLatest = release.tag
-        cache.cli.lastCheckedAtUtc = checkedAt
-      }) } catch (error) {
-        warnings.push('check-not-saved')
-        log('warn', 'Draw Things CLI was installed but update-check information was not saved', { error: serializeError(error) })
-      }
-      return { state: await getDependenciesState(), warnings }
-    }
-  )
+  const release = await resolveLatestCliRelease(true, signal)
+  if (!release) {
+    throw new Error('Could not reach the Draw Things release server')
+  }
+  const warnings = await installCliRelease(release, onProgress, signal)
+  const checkedAt = new Date().toISOString()
+  try { await updateDependenciesCache((cache) => {
+    cache.cli.lastKnownLatest = release.tag
+    cache.cli.lastCheckedAtUtc = checkedAt
+  }) } catch (error) {
+    warnings.push('check-not-saved')
+    log('warn', 'Draw Things CLI was installed but update-check information was not saved', { error: serializeError(error) })
+  }
+  return { state: await getDependenciesState(), warnings }
 }

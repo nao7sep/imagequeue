@@ -71,11 +71,12 @@ vi.mock('../../src/main/utils/harden-window', () => ({ hardenWindow: vi.fn() }))
 vi.mock('../../src/main/logger', () => ({ log: vi.fn(), serializeError: (error: unknown) => error }))
 vi.mock('../../src/main/config', () => ({
   loadConfig: () => mocks.config,
+  // The config owner applies an accepted change at once and writes behind it.
   updateConfig: async (apply: (draft: typeof mocks.config) => void) => {
     const draft = structuredClone(mocks.config)
     apply(draft)
-    await mocks.saved(draft)
     mocks.config = draft
+    await mocks.saved(draft)
     return mocks.config
   },
 }))
@@ -139,13 +140,13 @@ describe('preview window options', () => {
 })
 
 describe('the setting', () => {
-  it.each([true, false])('keeps pending close intent through restore (save succeeds: %s)', async (succeeds) => {
+  it.each([true, false])('reads the close intent on restore while its save is pending (save succeeds: %s)', async (succeeds) => {
     let resolve!: () => void
     let reject!: (error: Error) => void
     mocks.saved.mockImplementationOnce(() => new Promise<void>((done, fail) => { resolve = done; reject = fail }))
     preview.syncPreviewWindow(true, { focus: false })
     previews()[0]!.userClose()
-    expect(mocks.config.general.show_preview_window).toBe(true)
+    expect(mocks.config.general.show_preview_window).toBe(false)
     preview.hidePreviewWindow()
     preview.showPreviewWindow()
     expect(previews()).toHaveLength(1)
@@ -154,8 +155,7 @@ describe('the setting', () => {
     else reject(new Error('disk unavailable'))
     await vi.waitFor(() => expect(succeeds ? main.sent.length : mocks.notice.mock.calls.length).toBe(1))
     preview.showPreviewWindow()
-    expect(mocks.config.general.show_preview_window).toBe(!succeeds)
-    expect(previews()).toHaveLength(succeeds ? 1 : 2)
+    expect(previews()).toHaveLength(1)
   })
 
   it('reports a failed close-setting save without exposing diagnostic details', async () => {
@@ -163,7 +163,7 @@ describe('the setting', () => {
     preview.syncPreviewWindow(true, { focus: false })
     previews()[0]!.userClose()
     await Promise.resolve()
-    expect(mocks.config.general.show_preview_window).toBe(true)
+    expect(mocks.config.general.show_preview_window).toBe(false)
     expect(mocks.notice).toHaveBeenCalledWith({
       title: { key: 'previewWindow.title' },
       message: { key: 'previewWindow.closeSaveFailed' },

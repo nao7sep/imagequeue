@@ -4,7 +4,7 @@ import path from 'path'
 import type { WebContents } from 'electron'
 import {
   getCliJobSnapshot,
-  killAllCliJobsAndWait,
+  stopAllCliJobs,
   startCliJob,
   subscribeCliJob,
   unsubscribeCliJob,
@@ -32,13 +32,13 @@ function observeJob(
       unsubscribeCliJob(jobId, subscriber)
       resolve(snapshot)
     }
-    const initial = subscribeCliJob(jobId, subscriber)
-    if (initial && matches(initial)) finish(initial)
+    // The subscription's first event is the job as it is now.
+    subscribeCliJob(jobId, subscriber)
   })
 }
 
 afterEach(async () => {
-  await killAllCliJobsAndWait({ killGraceMs: 20, timeoutMs: 2_000 })
+  await stopAllCliJobs(20)
 })
 
 describe('CLI job shutdown barrier', () => {
@@ -54,8 +54,8 @@ describe('CLI job shutdown barrier', () => {
       snapshot.chunks.some((chunk) => chunk.text === 'ready')
     )
 
-    await expect(killAllCliJobsAndWait({ killGraceMs: 40, timeoutMs: 2_000 }))
-      .resolves.toEqual({ signalled: 1, settled: true })
+    await expect(stopAllCliJobs(40))
+      .resolves.toBeUndefined()
     expect(getCliJobSnapshot(jobId)?.status).toBe('killed')
   })
 
@@ -68,8 +68,8 @@ describe('CLI job shutdown barrier', () => {
       logContext: { test: true },
     })
     await observeJob(jobId, (snapshot) => snapshot.chunks.some((chunk) => chunk.text === 'ready'))
-    await expect(killAllCliJobsAndWait({ killGraceMs: 40, timeoutMs: 2_000 }))
-      .resolves.toEqual({ signalled: 1, settled: true })
+    await expect(stopAllCliJobs(40))
+      .resolves.toBeUndefined()
     expect(getCliJobSnapshot(jobId)?.status).toBe('killed')
   })
 

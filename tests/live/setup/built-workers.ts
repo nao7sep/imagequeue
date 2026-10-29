@@ -16,4 +16,3 @@ function builtWorker(entry: string): { default: (options: WorkerOptions) => Work
 vi.mock('../../../src/main/records-writer-worker?nodeWorker', () => builtWorker('records-writer-worker'))
 vi.mock('../../../src/main/concepts/concept-worker?nodeWorker', () => builtWorker('concept-worker'))
 vi.mock('../../../src/main/backup/backup-worker?nodeWorker', () => builtWorker('backup-worker'))
-vi.mock('../../../src/main/records-reader-worker?nodeWorker', () => builtWorker('records-reader-worker'))

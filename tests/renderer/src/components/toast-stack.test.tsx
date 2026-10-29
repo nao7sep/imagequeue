@@ -28,9 +28,10 @@ beforeEach(() => {
   context.jobs = new Map()
   window.electronAPI = {
     appLog: vi.fn(async () => undefined),
+    onCliJobSnapshot: vi.fn(() => () => {}),
     onCliJobChunk: vi.fn(() => () => {}),
     onCliJobStatus: vi.fn(() => () => {}),
-    cliSubscribeJob: vi.fn(async () => null),
+    cliSubscribeJob: vi.fn(async () => undefined),
     cliUnsubscribeJob: vi.fn(async () => undefined),
   } as unknown as typeof window.electronAPI
 })

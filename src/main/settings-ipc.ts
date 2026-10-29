@@ -96,20 +96,19 @@ function validateKeyChanges(changes: Record<string, string>): void {
   }
 }
 
-// An export the user started before quitting finishes its copy before the app exits.
-const runningExports = new Set<Promise<unknown>>()
-function trackExport<T>(operation: () => Promise<T>): Promise<T> {
-  const copy = operation()
-  runningExports.add(copy)
-  void copy.finally(() => runningExports.delete(copy)).catch(() => undefined)
+// Exports take turns in one owner, so an export the user started before
+// quitting finishes its copy before the app exits. A failed copy answers its
+// own request.
+let exporting: Promise<unknown> = Promise.resolve()
+function exportCommand<T>(operation: () => Promise<T>): Promise<T> {
+  const copy = exporting.then(operation, operation)
+  exporting = copy.catch(() => undefined)
   return copy
 }
 
-/** Ordinary quit joins export copies still running. */
+/** Ordinary quit joins the export copy still running and any waiting behind it. */
 export async function drainExports(): Promise<void> {
-  const results = await Promise.allSettled(runningExports)
-  const failure = results.find((result) => result.status === 'rejected')
-  if (failure?.status === 'rejected') throw failure.reason
+  await exporting
 }
 
 // IPC handlers for reading/writing settings.
@@ -294,7 +293,7 @@ export function registerSettingsIpc(
   })
 
   handle('cli-job:subscribe', (event, jobId: string) => {
-    return subscribeCliJob(jobId, event.sender)
+    subscribeCliJob(jobId, event.sender)
   })
 
   handle('cli-job:unsubscribe', (event, jobId: string) => {
@@ -347,7 +346,7 @@ export function registerSettingsIpc(
     const exportDir = configuredExportDir()
     const src = path.join(getSessionDir(), `${safeBase}.${safeExt}`)
     const requestedDestination = path.join(exportDir, `${safeBase}.${safeExt}`)
-    return trackExport(async () => {
+    return exportCommand(async () => {
       await fs.promises.mkdir(exportDir, { recursive: true })
       let destPath = requestedDestination
       const staging = await stageExportCopy(src, destPath)
@@ -377,7 +376,7 @@ export function registerSettingsIpc(
     if (result.canceled || !result.filePath) return null
     assertNotQuitting()
     const destPath = exportPathForFormat(result.filePath, safeExt)
-    return trackExport(async () => {
+    return exportCommand(async () => {
       await fs.promises.mkdir(path.dirname(destPath), { recursive: true })
       // The user chose this name, replacing any file there; it is replaced only
       // once the complete copy is in place beside it.
@@ -437,8 +436,9 @@ export function registerSettingsIpc(
     return withParamsRecovery(event, getAllModelParams)
   })
 
-  handle('drawthings:getParamsPersistenceState', () => {
-    return getModelParamsPersistenceState()
+  // The state arrives as the subscription's first event, ahead of later changes.
+  handle('drawthings:requestParamsPersistenceState', (event) => {
+    event.sender.send('drawthings:paramsPersistenceState', getModelParamsPersistenceState())
   })
 
   handle('drawthings:setModelParams', (event, modelFile: string, params: DrawThingsModelParams) => {

@@ -63,9 +63,10 @@ vi.mock('../../src/main/session', () => ({
   drainSessionWrites: vi.fn(async () => undefined),
   registerSessionIpc: vi.fn(),
   resetOutputTimestampAllocators: vi.fn(),
+  onSessionCommandSettled: vi.fn(),
 }))
 vi.mock('../../src/main/queue', () => ({ registerQueueIpc: vi.fn(), queueManager: { generatingCount: vi.fn(() => 0) } }))
-vi.mock('../../src/main/backends', () => ({ startProcessor: vi.fn(), stopProcessor: vi.fn() }))
+vi.mock('../../src/main/backends', () => ({ processQueues: vi.fn() }))
 vi.mock('../../src/main/audio-protocol', () => ({ registerAudioProtocol: vi.fn() }))
 vi.mock('../../src/main/image-protocol', () => ({ registerImageProtocol: vi.fn(), registerMediaSchemesAsPrivileged: vi.fn() }))
 vi.mock('../../src/main/settings-ipc', () => ({ registerSettingsIpc: vi.fn(), drainExports: vi.fn(async () => undefined) }))
@@ -97,13 +98,9 @@ vi.mock('../../src/main/logger', () => ({
 }))
 vi.mock('../../src/main/records', () => ({ onRecordStored: vi.fn(), openRecords: vi.fn(), closeRecords: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/records-ipc', () => ({ registerRecordsIpc: vi.fn() }))
-vi.mock('../../src/main/records-reader', () => ({ closeRecordsReader: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/records-window', () => ({ closeRecordsWindow: vi.fn(), notifyRecordsChanged: vi.fn(), hideRecordsWindow: vi.fn(), showRecordsWindow: vi.fn() }))
-vi.mock('../../src/main/cli-jobs', () => ({ killAllCliJobsAndWait: vi.fn(async () => ({ signalled: 0, settled: true })), hasRunningCliJobs: vi.fn(() => false) }))
-vi.mock('../../src/main/backends/cancellation', () => ({
-  cancelAllInFlightAndWait: vi.fn(async () => ({ settled: true })),
-  resumeAfterCancelledShutdown: vi.fn(),
-}))
+vi.mock('../../src/main/cli-jobs', () => ({ stopAllCliJobs: vi.fn(async () => undefined), hasRunningCliJobs: vi.fn(() => false) }))
+vi.mock('../../src/main/backends/cancellation', () => ({ stopAllRuns: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/model-params', () => ({ getAllModelParams: vi.fn(), drainPendingWrites: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/power-blocker', () => ({ startWakeLockMonitor: vi.fn(), releaseWakeLock: vi.fn() }))
 vi.mock('../../src/main/utils/harden-window', () => ({ hardenWindow: vi.fn() }))
@@ -173,7 +170,7 @@ const { hideRecordsWindow, showRecordsWindow } = await import('../../src/main/re
 const { hidePreviewWindow, showPreviewWindow } = await import('../../src/main/preview-window')
 const { hasActiveBrainstorms, cancelAllBrainstorms } = await import('../../src/main/brainstorm')
 const { forceExit } = await import('../../src/main/utils/force-exit')
-const { killAllCliJobsAndWait } = await import('../../src/main/cli-jobs')
+const { stopAllCliJobs } = await import('../../src/main/cli-jobs')
 const { createStartupFailureWindow } = await import('../../src/main/startup-failure-window')
 
 beforeEach(() => {
@@ -215,7 +212,7 @@ describe('primary instance quit routes', () => {
     const quit = beforeQuit()
 
     await vi.waitFor(() => expect(forceExit).toHaveBeenCalledOnce())
-    expect(killAllCliJobsAndWait).toHaveBeenCalledWith({ killGraceMs: 500, timeoutMs: 5_000 })
+    expect(stopAllCliJobs).toHaveBeenCalled()
     expect(shutdown.preventDefault).not.toHaveBeenCalled()
     expect(quit.preventDefault).toHaveBeenCalledOnce()
     expect(session.persistActiveSession).toHaveBeenCalledTimes(2) // startup, then quit
@@ -406,7 +403,7 @@ it('reloads a gone primary view on the next restore without restarting work', as
   await launch()
   const { createWindowWithUsablePersistedBounds } = await import('../../src/main/window-state-recovery')
   const { loadMainWindowContent } = await import('../../src/main/main-window-content')
-  const { startProcessor } = await import('../../src/main/backends')
+  const { processQueues } = await import('../../src/main/backends')
   const webContents = Object.assign(new EventEmitter(), { send: vi.fn() })
   const win = Object.assign(new EventEmitter(), {
     webContents, isDestroyed: () => false, isVisible: () => true,
@@ -422,7 +419,7 @@ it('reloads a gone primary view on the next restore without restarting work', as
   const restore = options.prepareWindow as (win: Electron.BrowserWindow) => Promise<boolean>
   await expect(restore(win)).resolves.toBe(true)
   expect(loadMainWindowContent).toHaveBeenCalledTimes(2)
-  expect(startProcessor).toHaveBeenCalledOnce()
+  expect(processQueues).toHaveBeenCalledOnce()
   expect(session.initSession).toHaveBeenCalledOnce()
   expect(createStartupFailureWindow).not.toHaveBeenCalled()
   expect(h.app.exit).not.toHaveBeenCalled()

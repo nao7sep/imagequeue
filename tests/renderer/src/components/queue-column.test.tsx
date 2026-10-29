@@ -62,7 +62,7 @@ interface ElectronApiStub {
   dtGetModelParams: ReturnType<typeof vi.fn>
   dtApplyParamsToAllModels: ReturnType<typeof vi.fn>
   dtSaveModelParams: ReturnType<typeof vi.fn>
-  getDrawThingsParamsPersistenceState: ReturnType<typeof vi.fn>
+  requestDrawThingsParamsPersistenceState: ReturnType<typeof vi.fn>
   onDrawThingsParamsPersistenceState: ReturnType<typeof vi.fn>
   resolveRecommendation: ReturnType<typeof vi.fn>
   onCliJobStatus: ReturnType<typeof vi.fn>
@@ -160,7 +160,7 @@ beforeEach(() => {
     dtGetModelParams: vi.fn(async () => null),
     dtApplyParamsToAllModels: vi.fn(async () => undefined),
     dtSaveModelParams: vi.fn(async () => undefined),
-    getDrawThingsParamsPersistenceState: vi.fn(async () => ({ status: 'saved' })),
+    requestDrawThingsParamsPersistenceState: vi.fn(async () => { paramsPersistenceListener?.({ status: 'saved' }) }),
     onDrawThingsParamsPersistenceState: vi.fn((callback) => {
       paramsPersistenceListener = callback as (state: DrawThingsParamsPersistenceState) => void
       return () => { paramsPersistenceListener = null }

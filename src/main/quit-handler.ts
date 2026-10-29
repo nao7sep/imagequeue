@@ -17,19 +17,20 @@ interface QuitOptions {
   onError: (error: unknown) => void
 }
 
-/** One attempt owns the confirmation, saves and the decision; OS takeover owns
- * a single deadline. Nothing is stopped before the user confirms. A timed-out
- * save remains owned until physical settlement, so Retry never races a second
- * writer against it. Ordinary timeout is a failure, not consent. */
+/** One attempt owns the confirmation, saves and the decision, under one exit
+ * deadline fixed when the quit begins: the required saves and then the optional
+ * cleanup draw on what remains of it, and an answered question starts it again.
+ * Nothing is stopped before the user confirms. A save that fails, or is still
+ * running when the deadline ends, is not consent: the ordinary quit asks, and
+ * Retry runs the save again through its owners, so it queues behind a write
+ * still running. OS takeover owns one deadline of its own from the takeover. */
 export function createQuitOwner(options: QuitOptions) {
   let active: Promise<void> | null = null
   let system = false
   let exited = false
+  let deadline = 0
   let systemTimer: ReturnType<typeof setTimeout> | undefined
   let question: AbortController | null = null
-  let saving: Promise<void> | null = null
-  let attempt = 0
-  let savingAttempt = 0
   const finish = (): void => {
     if (exited) return
     exited = true
@@ -37,23 +38,12 @@ export function createQuitOwner(options: QuitOptions) {
     question?.abort()
     options.exit(0)
   }
-  const save = (): Promise<void> => {
-    // Cancel can leave a physical write settling. A later quit waits for it,
-    // then captures edits made since Cancel rather than reusing its old save.
-    if (saving && savingAttempt !== attempt) return saving.then(save, save)
-    if (!saving) {
-      const operation = Promise.resolve().then(options.save)
-      saving = operation
-      savingAttempt = attempt
-      void operation.finally(() => { if (saving === operation) saving = null }).catch(() => undefined)
-    }
-    return saving
-  }
-  const boundedSave = async (): Promise<void> => {
+  // True when the work settled before the exit deadline, false when it did not.
+  const withinDeadline = async (work: Promise<void>): Promise<boolean> => {
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      await Promise.race([save(), new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Saving before quit timed out')), options.timeoutMs)
+      return await Promise.race([work.then(() => true), new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), Math.max(0, deadline - performance.now()))
       })])
     } finally { clearTimeout(timer) }
   }
@@ -73,36 +63,42 @@ export function createQuitOwner(options: QuitOptions) {
       if (exited) return
       if (!proceed && !system) { options.declined(); return }
     }
-    attempt++
+    if (!system) deadline = performance.now() + options.timeoutMs
     options.begin()
     while (!exited) {
+      let saved = false
       try {
-        await boundedSave()
-        if (exited) return
-        // Optional work has a small ordinary budget and none on session end.
+        saved = await withinDeadline(Promise.resolve().then(options.save))
+        if (!saved) options.onError(new Error('Saving before quit had not finished at the exit deadline'))
+      } catch (error) {
+        options.onError(error)
+      }
+      if (exited) return
+      if (saved) {
+        // Optional work has what remains of the deadline, and none on session end.
         if (!system) {
-          let timer: ReturnType<typeof setTimeout> | undefined
-          try {
-            await Promise.race([options.cleanup(), new Promise<void>((resolve) => { timer = setTimeout(resolve, 500) })])
-          } catch (error) { options.onError(error) }
-          finally { clearTimeout(timer) }
+          try { await withinDeadline(Promise.resolve().then(options.cleanup)) }
+          catch (error) { options.onError(error) }
         }
         finish()
         return
-      } catch (error) {
-        options.onError(error)
-        if (system) { finish(); return }
-        question = new AbortController()
-        let choice: QuitChoice = 'cancel'
-        try { choice = await options.question(question.signal) }
-        catch (error) { options.onError(error) }
-        finally { question = null }
-        if (system || exited) return
-        if (choice === 'quit') { finish(); return }
-        if (choice === 'retry') continue
-        options.cancel()
-        return
       }
+      if (system) { finish(); return }
+      question = new AbortController()
+      let choice: QuitChoice = 'cancel'
+      try { choice = await options.question(question.signal) }
+      catch (error) { options.onError(error) }
+      finally { question = null }
+      if (exited) return
+      // OS takeover dismissed the question: attempt the preserved saves again.
+      if (system) continue
+      if (choice === 'quit') { finish(); return }
+      if (choice === 'retry') {
+        deadline = performance.now() + options.timeoutMs
+        continue
+      }
+      options.cancel()
+      return
     }
   }
   const start = (): void => {
@@ -120,11 +116,10 @@ export function createQuitOwner(options: QuitOptions) {
     sessionEnd(): void {
       if (system || exited) return
       system = true
+      deadline = performance.now() + options.systemTimeoutMs
       systemTimer = setTimeout(finish, options.systemTimeoutMs)
       question?.abort()
       start()
-      // If takeover dismissed a question, attempt the preserved saves again.
-      void save().then(finish, (error) => { options.onError(error); finish() })
     },
   }
 }

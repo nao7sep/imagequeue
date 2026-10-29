@@ -76,7 +76,7 @@ afterEach(async () => {
   fixtures.closeOnKill = true
   for (const child of fixtures.pipes) child.emit('close', null, 'SIGKILL')
   for (const child of fixtures.imports) child.exit()
-  await scheduler.killAllCliJobsAndWait()
+  await scheduler.stopAllCliJobs()
   vi.advanceTimersByTime(10 * 60_000)
   vi.useRealTimers()
 })
@@ -113,7 +113,7 @@ describe('CLI job admission and settlement', () => {
     expect(fixtures.records[0]!.finish).toHaveBeenCalledOnce()
     expect(status(queued)).toBe('running')
     fixtures.closeOnKill = true
-    await expect(scheduler.killAllCliJobsAndWait()).resolves.toMatchObject({ settled: true })
+    await expect(scheduler.stopAllCliJobs()).resolves.toBeUndefined()
   })
 
   it('coalesces exact active, queued and stopping work, then admits a fresh job after close', () => {
@@ -157,7 +157,7 @@ describe('CLI job admission and settlement', () => {
     const download = start('d', 'download', '/third')
     fixtures.closeOnKill = true
     quit.setQuitting(true)
-    await expect(scheduler.killAllCliJobsAndWait()).resolves.toEqual({ signalled: 3, settled: true })
+    await expect(scheduler.stopAllCliJobs()).resolves.toBeUndefined()
     expect([active, queued, download].map(status)).toEqual(['killed', 'killed', 'killed'])
     expect(fixtures.imports).toHaveLength(1)
     expect(fixtures.pipes).toHaveLength(1)
@@ -168,12 +168,13 @@ describe('CLI job admission and settlement', () => {
     const job = start('a')
     scheduler.killCliJob(job)
     let settled = false
-    const barrier = scheduler.killAllCliJobsAndWait().then((result) => { settled = true; return result })
+    const barrier = scheduler.stopAllCliJobs().then(() => { settled = true })
     await Promise.resolve()
     expect(settled).toBe(false)
     expect(scheduler.hasRunningCliJobs()).toBe(true)
     closePipe(0)
-    expect(await barrier).toEqual({ signalled: 1, settled: true })
+    await barrier
+    expect(settled).toBe(true)
     expect(scheduler.hasRunningCliJobs()).toBe(false)
     vi.advanceTimersByTime(500)
     expect(fixtures.pipes[0]!.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')

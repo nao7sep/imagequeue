@@ -12,11 +12,12 @@ export class GeminiProvider implements TextAIProvider {
   constructor(private model: string, private apiKey: string, private endpoint: string, private thinking?: string) {}
 
   async ask(opts: AskOptions): Promise<AskResult> {
-    // The app owns retries; the SDK performs exactly one attempt.
+    // The app owns retries; the SDK performs exactly one attempt. The caller's
+    // withProviderRetry bounds the whole call, so the SDK gets no clock of its own.
     const transport = createGeminiTransport()
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      httpOptions: { baseUrl: this.endpoint, timeout: opts.timeoutMs, retryOptions: { attempts: 1 }, fetch: transport.fetch },
+      httpOptions: { baseUrl: this.endpoint, retryOptions: { attempts: 1 }, fetch: transport.fetch },
     })
     const request = {
       model: this.model,

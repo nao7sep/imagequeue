@@ -68,10 +68,23 @@ let sessionMutationPending = false
 let sessionMutation: Promise<unknown> = Promise.resolve()
 let writes: Promise<unknown> = Promise.resolve()
 let writeFailure: unknown = null
-// Only adoption/deletion of this particular archive waits for its readers.
-const archiveReads = new Map<string, ReturnType<typeof readManifestFromDir>>()
+// The session folders' owner: listing, reading, creating, adopting and deleting
+// them take turns here, apart from the active session's ordered manifest
+// writes, so browsing the library never holds output persistence.
+let folders: Promise<unknown> = Promise.resolve()
+// Told after each session command ends, so the scheduler can start the queued
+// work that command allows.
+let commandSettled: () => void = () => {}
 
 export function isSessionMutationPending(): boolean { return sessionMutationPending }
+
+export function onSessionCommandSettled(listener: () => void): void { commandSettled = listener }
+
+function folderCommand<T>(operation: () => Promise<T>): Promise<T> {
+  const result = folders.then(operation, operation)
+  folders = result.catch(() => undefined)
+  return result
+}
 
 /** Quit waits for real settlement, including a caller that stopped waiting. */
 export async function drainSessionWrites(): Promise<void> {
@@ -89,6 +102,7 @@ export async function mutateSession<T>(operation: () => Promise<T>): Promise<T> 
     return await pending
   } finally {
     sessionMutationPending = false
+    commandSettled()
   }
 }
 
@@ -419,7 +433,7 @@ function shouldAutoDropSession(tasksByBackend: Record<BackendId, Task[]>): boole
 }
 
 export function dropCurrentSessionIfEmpty(reason: string): Promise<boolean> {
-  return mutateSession(() => dropCurrentSessionIfEmptyOwned(reason))
+  return mutateSession(() => folderCommand(() => dropCurrentSessionIfEmptyOwned(reason)))
 }
 
 async function dropCurrentSessionIfEmptyOwned(reason: string): Promise<boolean> {
@@ -497,7 +511,7 @@ function adoptSession(sessionDir: string, session: ActiveSessionState, tasks: Re
 }
 
 export function createSession(): Promise<void> {
-  return mutateSession(() => createSessionOwned())
+  return mutateSession(() => folderCommand(() => createSessionOwned()))
 }
 
 async function createSessionOwned(): Promise<void> {
@@ -542,19 +556,12 @@ async function dropPreviousSessionAfterSwitch(sessionDir: string, sessionId: str
 
 // Sessions it can open, most recently updated first, then those it cannot,
 // newest folder first.
-export async function listSessions(): Promise<SessionListEntry[]> {
-  while (sessionMutationPending) await sessionMutation
-  await writes
-  return listSessionsOwned()
-}
-
-async function readListedSession(directory: string): ReturnType<typeof readManifestFromDir> {
-  while (sessionMutationPending) await sessionMutation
-  const existing = archiveReads.get(directory)
-  if (existing) return existing
-  const reading = readManifestFromDir(directory)
-  archiveReads.set(directory, reading)
-  try { return await reading } finally { archiveReads.delete(directory) }
+export function listSessions(): Promise<SessionListEntry[]> {
+  // The current session's own row reads its manifest as last submitted.
+  return folderCommand(async () => {
+    await writes
+    return listSessionsOwned()
+  })
 }
 
 async function listSessionsOwned(): Promise<SessionListEntry[]> {
@@ -565,7 +572,7 @@ async function listSessionsOwned(): Promise<SessionListEntry[]> {
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const read = await readListedSession(path.join(sessionsDir, entry.name))
+    const read = await readManifestFromDir(path.join(sessionsDir, entry.name))
     if (!read.manifest) {
       if (read.problem !== 'missing') unopenable.push({ sessionId: entry.name, unopenable: read.problem })
       continue
@@ -600,7 +607,7 @@ async function listSessionsOwned(): Promise<SessionListEntry[]> {
 }
 
 export function resumeSession(sessionId: string): Promise<void> {
-  return mutateSession(() => resumeSessionOwned(sessionId))
+  return mutateSession(() => folderCommand(() => resumeSessionOwned(sessionId)))
 }
 
 async function resumeSessionOwned(sessionId: string): Promise<void> {
@@ -617,7 +624,6 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
   if (!dropPrevious) await persistActiveSession()
 
   const sessionDir = resolveSessionDir(sessionId)
-  await archiveReads.get(sessionDir)
   const { manifest } = await readManifestFromDir(sessionDir)
   if (!manifest) {
     throw new Error('That session is missing a readable session.json file.')
@@ -653,7 +659,7 @@ async function resumeSessionOwned(sessionId: string): Promise<void> {
 }
 
 export function deleteSession(sessionId: string): Promise<void> {
-  return mutateSession(() => deleteSessionOwned(sessionId))
+  return mutateSession(() => folderCommand(() => deleteSessionOwned(sessionId)))
 }
 
 async function deleteSessionOwned(sessionId: string): Promise<void> {
@@ -662,7 +668,6 @@ async function deleteSessionOwned(sessionId: string): Promise<void> {
   }
 
   const sessionDir = resolveSessionDir(sessionId)
-  await archiveReads.get(sessionDir)
   await admitSessionManifest(sessionDir)
 
   const toTrash = shouldDeleteToTrash(loadConfig().general.delete_to_trash)

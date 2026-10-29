@@ -28,7 +28,6 @@ import { createWindowWithUsablePersistedBounds } from './window-state-recovery'
 
 let previewWindow: BrowserWindow | null = null
 let revealWanted = true
-let savingClose = false
 let getMainWin: () => BrowserWindow | null = () => null
 
 export function buildPreviewWindowOptions(title: string): Electron.BrowserWindowConstructorOptions {
@@ -56,18 +55,16 @@ export function buildPreviewWindowOptions(title: string): Electron.BrowserWindow
   }
 }
 
-// The user closed the window: the setting goes off, saved like any setting
-// change, and the main window's settings follow.
+// The user closed the window: the setting goes off at once, so a restore
+// while it is still being written reads the newer intent, and the main
+// window's settings follow once it is saved like any setting change.
 async function turnSettingOff(): Promise<void> {
-  savingClose = true
   try {
     await updateConfig((draft) => { draft.general.show_preview_window = false })
   } catch (error) {
     log('error', 'The preview window setting could not be turned off', { error: serializeError(error) })
     raiseAppNotice({ title: message('previewWindow.title'), message: message('previewWindow.closeSaveFailed') })
     return
-  } finally {
-    savingClose = false
   }
   notifySettingsChanged(getMainWin())
 }
@@ -145,9 +142,7 @@ function destroy(win: BrowserWindow): void {
  *  user opens it on its own, as turning the setting on in Settings does; at
  *  launch and on return it opens beside the main window, which keeps focus. */
 export function syncPreviewWindow(enabled: boolean, { focus }: { focus: boolean }): void {
-  // A close is newer intent than the cached true setting until its write
-  // settles. Restore must not create another window from that stale value.
-  if (enabled && !previewWindow && !savingClose) openPreviewWindow(focus)
+  if (enabled && !previewWindow) openPreviewWindow(focus)
   else if (!enabled) closePreviewWindow()
 }
 

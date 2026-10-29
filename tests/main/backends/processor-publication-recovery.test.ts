@@ -41,7 +41,7 @@ const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager, createEmptyQueues } = await import('../../../src/main/queue/queue-manager')
 const { createSession, resumeSession, persistActiveSession, drainSessionWrites, readManifestFromDir } = await import('../../../src/main/session/state')
 const { getSessionDir, getSessionId, setSessionDir } = await import('../../../src/main/session/session')
-const { setQueuePaused, isQueuePaused, cancelAllInFlightAndWait, resetCancellationState } = await import('../../../src/main/backends/cancellation')
+const { setQueuePaused, isQueuePaused, stopAllRuns, stopGenerations, resetCancellationState } = await import('../../../src/main/backends/cancellation')
 
 let rejectDelivery: (error: Error) => void = () => undefined
 
@@ -65,7 +65,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   rejectDelivery(new Error('test teardown'))
-  await cancelAllInFlightAndWait(1_000)
+  await stopAllRuns()
   vi.restoreAllMocks()
   await persistActiveSession()
   resetCancellationState()
@@ -124,9 +124,10 @@ it('warns once after a user pause and preserves delivered images through sidecar
   })
   const image = await tinyPng()
   deliver({ buffer: image })
-  // The shutdown barrier waits for actual publication and final-save attempts,
-  // including a delivered result that wins a race with cancellation.
-  await expect(cancelAllInFlightAndWait(1_000)).resolves.toEqual({ signalled: 2, settled: true })
+  // Quit waits for actual publication and final-save attempts, including a
+  // delivered result that wins a race with cancellation.
+  expect(stopGenerations()).toBe(2)
+  await stopAllRuns()
 
   expect(isQueuePaused()).toBe(true)
   const completed = queueManager.getAllStoredTasks().openai
@@ -182,7 +183,7 @@ it('records delivered identity before publication and recovers it after the fina
   })
   processQueues()
   await vi.waitFor(() => expect(queueManager.getTask('openai', task.id)?.status).toBe('completed'))
-  await cancelAllInFlightAndWait(1_000)
+  await stopAllRuns()
   const completed = queueManager.getTask('openai', task.id)!
   expect(completed.pendingOutput).toBeUndefined()
   const name = completed.baseName!

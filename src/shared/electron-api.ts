@@ -89,9 +89,11 @@ export interface ElectronAPI {
   // Queue operations
   enqueue: (request: EnqueueRequest) => Promise<Task[]>
   enqueueBatch: (units: EnqueueBatchUnit[], prompts?: ElaboratedPromptRecord[]) => Promise<Task[]>
-  getShowKeptImages: () => Promise<boolean>
+  // Answered by an onShowKeptImagesChanged event carrying the current value.
+  requestShowKeptImages: () => Promise<void>
   toggleShowKeptImages: () => Promise<boolean>
-  getAllStoredTasks: () => Promise<Record<BackendId, Task[]>>
+  // Answered by an onQueueUpdated event carrying the stored tasks.
+  requestQueueState: () => Promise<void>
   removeTask: (backend: BackendId, taskId: string) => Promise<void>
   restoreTask: (backend: BackendId, taskId: string) => Promise<void>
   deleteWithFiles: (backend: BackendId, taskId: string) => Promise<TaskDeletionResult | void>
@@ -163,7 +165,9 @@ export interface ElectronAPI {
   localReadCustomJsonImportedFiles: () => Promise<CustomJsonStatus>
   cliStartImport: (artifactPath: string) => Promise<string>
   cliStartDownload: (modelFile: string) => Promise<string>
-  cliSubscribeJob: (jobId: string) => Promise<CliJobSnapshot | null>
+  // The subscription's first event is an onCliJobSnapshot of the job as it is.
+  cliSubscribeJob: (jobId: string) => Promise<void>
+  onCliJobSnapshot: (callback: (snapshot: CliJobSnapshot) => void) => () => void
   cliUnsubscribeJob: (jobId: string) => Promise<void>
   cliKillJob: (jobId: string) => Promise<void>
   onCliJobChunk: (callback: (e: CliChunkEvent) => void) => (() => void)
@@ -189,7 +193,8 @@ export interface ElectronAPI {
   dtGetModelParams: (modelFile: string) => Promise<DrawThingsModelParams | null>
   dtGetAllModelParams: () => Promise<Record<string, DrawThingsModelParams>>
   dtSaveModelParams: (modelFile: string, params: DrawThingsModelParams) => Promise<void>
-  getDrawThingsParamsPersistenceState: () => Promise<DrawThingsParamsPersistenceState>
+  // Answered by an onDrawThingsParamsPersistenceState event carrying the current state.
+  requestDrawThingsParamsPersistenceState: () => Promise<void>
   onDrawThingsParamsPersistenceState: (
     callback: (state: DrawThingsParamsPersistenceState) => void
   ) => (() => void)

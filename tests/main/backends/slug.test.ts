@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// On quit the finished image must be written inside the shutdown barrier, so
+// On quit the finished image must be written within the exit deadline, so
 // an aborted signal skips the text-AI call (or cuts it short) and the image is
 // named with the random fallback.
 

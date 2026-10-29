@@ -12,6 +12,7 @@ export {
   persistActiveSession,
   drainSessionWrites,
   isSessionMutationPending,
+  onSessionCommandSettled,
   mutateSession,
   createSession,
   listSessions,

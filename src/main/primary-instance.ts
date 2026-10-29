@@ -3,9 +3,9 @@ import { app, BrowserWindow, Menu, powerMonitor } from 'electron'
 import path from 'path'
 import { loadConfig, ensureDataDir, getDataDir, onConfigSaved, summarizeConfig, updateConfig } from './config'
 import { notifySettingsChanged } from './settings-changed'
-import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, drainSessionWrites, registerSessionIpc, resetOutputTimestampAllocators } from './session'
+import { dropCurrentSessionIfEmpty, initSession, getSessionDir, persistActiveSession, drainSessionWrites, registerSessionIpc, resetOutputTimestampAllocators, onSessionCommandSettled } from './session'
 import { queueManager, registerQueueIpc } from './queue'
-import { startProcessor, stopProcessor } from './backends'
+import { processQueues } from './backends'
 import { registerAudioProtocol } from './audio-protocol'
 import { registerImageProtocol, registerMediaSchemesAsPrivileged } from './image-protocol'
 import { drainExports, registerSettingsIpc } from './settings-ipc'
@@ -28,11 +28,9 @@ import { closeNotificationWindow, initNotificationWindow, registerNotificationIp
 import { log, setLoggerDebug, serializeError, shouldEnableDebugLogging } from './logger'
 import { onRecordStored, openRecords, closeRecords } from './records'
 import { registerRecordsIpc } from './records-ipc'
-import { closeRecordsReader } from './records-reader'
 import { closeRecordsWindow, hideRecordsWindow, notifyRecordsChanged, showRecordsWindow } from './records-window'
-import { hasRunningCliJobs, killAllCliJobsAndWait } from './cli-jobs'
-import { CLI_HARD_KILL_DELAY_MS } from '../shared/cli-jobs'
-import { cancelAllInFlightAndWait } from './backends/cancellation'
+import { hasRunningCliJobs, stopAllCliJobs } from './cli-jobs'
+import { stopAllRuns } from './backends/cancellation'
 import { getAllModelParams, drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
@@ -53,7 +51,6 @@ import { unsavedDrafts, registerUnsavedDraftsIpc } from './unsaved-drafts'
 import { hasQuitWork, type QuitWork } from '../shared/quit'
 import { isQuitting, setQuitting } from './quit-state'
 import { drainBackendDefaults } from './backend-defaults'
-import { resumeAfterCancelledShutdown } from './backends/cancellation'
 import { retrySettingsWrites } from './settings-writes'
 import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
 import { cancelAllDependencyOperations, hasActiveDependencyOperations, hasUserDependencyOperations } from './dependencies/operations'
@@ -111,14 +108,19 @@ const DEBUG_ENABLED = shouldEnableDebugLogging({
   imagequeueDebug: process.env['IMAGEQUEUE_DEBUG'],
 })
 
-// Ordinary storage waits end in a choice; OS shutdown has one total budget.
-const QUIT_TIMEOUT_MS = 30_000
+// The exit deadline: an ordinary quit's steps draw on five seconds, and a save
+// still running at the end of them asks; OS shutdown has one 1.5-second total.
+const QUIT_TIMEOUT_MS = 5_000
 const SYSTEM_QUIT_TIMEOUT_MS = 1_500
 let startupWork: Promise<void> | null = null
 let sessionStarted = false
-let backgroundWork: Promise<void> | null = null
 let cleanExit = false
-let backgroundSettled = false
+
+// Stops generation and Draw Things tool work, and settles once every run has
+// saved its outcome and every child has closed. Repeating it is harmless.
+function stopBackgroundWork(): Promise<void> {
+  return Promise.all([stopAllRuns(), stopAllCliJobs()]).then(() => undefined)
+}
 // What an ordinary quit would end: images generating, prompt elaboration, tool work
 // the user started, and main-window dialogs holding unsaved edits.
 function quitWork(): QuitWork {
@@ -150,18 +152,13 @@ const quitOwner = createQuitOwner({
   declined: keepReachable,
   begin: () => {
     cleanExit = false
-    backgroundSettled = false
     setQuitting(true)
     mainWindowController?.beginShutdown()
-    stopProcessor()
     cancelAllBrainstorms()
     cancelAllDependencyOperations()
     // Signal both families synchronously, before any persistence wait.
     // The 500ms hard-kill grace fits inside the 1500ms OS exit budget.
-    backgroundWork = Promise.all([
-      cancelAllInFlightAndWait(5_000),
-      killAllCliJobsAndWait({ killGraceMs: CLI_HARD_KILL_DELAY_MS, timeoutMs: 5_000 }),
-    ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
+    void stopBackgroundWork()
   },
   save: async () => {
     // A failed startup is reported by its own window; quitting from it has
@@ -170,14 +167,8 @@ const quitOwner = createQuitOwner({
     if (!sessionStarted) return
     await Promise.all([retrySettingsWrites(), drainExports()])
     await Promise.all([drainBackendDefaults(), drainPendingModelParamsWrites()])
-    if (!backgroundWork) {
-      backgroundWork = Promise.all([
-        cancelAllInFlightAndWait(5_000), killAllCliJobsAndWait({ killGraceMs: CLI_HARD_KILL_DELAY_MS, timeoutMs: 5_000 }),
-      ]).then((results) => { backgroundSettled = results.every((result) => result.settled) })
-    }
-    await backgroundWork
-    backgroundWork = null
-    if (!backgroundSettled) throw new Error('Active image or tool work has not settled before quit')
+    // Each run saves its own outcome; the session's final save follows them.
+    await stopBackgroundWork()
     // A prior failed save remains pending; Retry republishes the latest state
     // through its ordered writer after all existing physical writes settle.
     try { await drainSessionWrites() } catch (error) {
@@ -187,13 +178,12 @@ const quitOwner = createQuitOwner({
   },
   cleanup: async () => {
     await gracefulShutdown('quit')
-    cleanExit = backgroundSettled && !hasActiveBrainstorms() && !hasActiveDependencyOperations()
+    cleanExit = !hasActiveBrainstorms() && !hasActiveDependencyOperations()
   },
   cancel: () => {
     setQuitting(false)
     mainWindowController?.cancelShutdown()
-    resumeAfterCancelledShutdown()
-    startProcessor()
+    processQueues()
     keepReachable()
   },
   question: (signal) => showQuitQuestion({ kind: 'saveFailed' }, signal, () => quitOwner.sessionEnd(), mainWindowController?.getWindow() ?? undefined),
@@ -458,7 +448,11 @@ async function startUp(): Promise<void> {
   registerMenuStateIpc()
   registerNotificationIpc()
   initNotificationWindow()
-  if (!isQuitting()) startProcessor()
+  // The session starts queued work after each command and each result, and
+  // after a settings save, which can widen a lane.
+  onSessionCommandSettled(processQueues)
+  onConfigSaved(processQueues)
+  processQueues()
   startWakeLockMonitor()
 
   // Re-check the managed dependencies if the launch toggle is on and the last
@@ -478,8 +472,8 @@ async function startUp(): Promise<void> {
   })
 }
 
-// Only optional work remains here. The quit owner bounds this entire phase;
-// no native worker termination or independent per-step timeout extends it.
+// Only optional work remains here. It draws on what remains of the quit owner's
+// exit deadline; no step holds a timeout of its own.
 async function gracefulShutdown(reason: string): Promise<void> {
   statusIconController?.dispose()
   mainWindowController?.dispose()
@@ -493,7 +487,6 @@ async function gracefulShutdown(reason: string): Promise<void> {
     dropCurrentSessionIfEmpty(reason),
     closeConceptStore(),
     closeBackupStore(),
-    closeRecordsReader(),
   ])
   await closeRecords()
 }

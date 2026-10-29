@@ -134,22 +134,17 @@ export function useDrawThingsColumn({
     recommendationRevision: number
     modelsDirectory: string
   } | null>(null)
-  const persistenceRevision = useRef(0)
 
   useEffect(() => {
     if (!active) return
     let cancelled = false
     const applyPersistenceState = (state: DrawThingsParamsPersistenceState): void => {
       if (cancelled) return
-      persistenceRevision.current += 1
       setParamsSaveError(state.status === 'failed' ? 'drawThings.paramsSaveFailed' : null)
     }
+    // Main answers the request with the current state as the first event.
     const stop = window.electronAPI.onDrawThingsParamsPersistenceState(applyPersistenceState)
-    const revision = persistenceRevision.current
-    void window.electronAPI.getDrawThingsParamsPersistenceState()
-      .then((state) => {
-        if (!cancelled && revision === persistenceRevision.current) applyPersistenceState(state)
-      })
+    void window.electronAPI.requestDrawThingsParamsPersistenceState()
       .catch((error) => logSaveError('load Draw Things parameter persistence state', error))
     return () => {
       cancelled = true

@@ -30,7 +30,7 @@ function installApi(store: Record<string, DrawThingsModelParams>, otherModel: st
     dtSaveModelParams: vi.fn(async () => undefined),
     resolveRecommendation: vi.fn(async () => null),
     onDrawThingsParamsPersistenceState: vi.fn(() => () => undefined),
-    getDrawThingsParamsPersistenceState: vi.fn(async () => ({ status: 'saved' })),
+    requestDrawThingsParamsPersistenceState: vi.fn(async () => undefined),
     onCliJobStatus: vi.fn(() => () => undefined),
     appLog: vi.fn(async () => undefined),
   } as unknown as typeof window.electronAPI

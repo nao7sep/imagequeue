@@ -1,102 +1,77 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
-  cancelAllInFlight,
-  cancelAllInFlightAndWait,
-  cancelInFlight,
-  clearInFlight,
-  shutdownSignal,
-  inFlightCount,
+  addRun,
+  generatingCount,
   isQueuePaused,
-  registerInFlight,
+  laneWidth,
+  removeRun,
   resetCancellationState,
+  runCount,
   setQueuePaused,
+  stopAllRuns,
+  stopGenerations,
+  type GenerationRun,
 } from '../../../src/main/backends/cancellation'
+import type { BackendId } from '../../../src/shared/types'
 
-// Nothing in this app could stop image generation before this registry existed:
-// the processor polls every 500ms and starts any queued task, and the work
-// itself was unreachable (a child process handle inside its own promise, cloud
-// requests with no abort signal). These tests pin the two things that make
-// stopping possible — a reachable canceller per running task, and a flag the
-// poller honours.
+// The lanes hold every running generation. These tests pin what makes stopping
+// possible — every run reachable while it can still be stopped, and nothing
+// after its bytes arrive — and what quit waits for.
 
 afterEach(() => resetCancellationState())
 
-describe('in-flight registry', () => {
-  it('cancels one running generation and leaves the others alone', () => {
-    const a = vi.fn(); const b = vi.fn()
-    registerInFlight('t1', a, Promise.resolve())
-    registerInFlight('t2', b, Promise.resolve())
-    expect(cancelInFlight('t1')).toBe(true)
-    expect(a).toHaveBeenCalledOnce()
-    expect(b).not.toHaveBeenCalled()
+function run(backend: BackendId, done: Promise<void> = Promise.resolve()): GenerationRun {
+  return { backend, generation: new AbortController(), naming: new AbortController(), cancellable: true, done }
+}
+
+describe('generation lanes', () => {
+  it('counts each lane separately', () => {
+    addRun('t1', run('openai'))
+    addRun('t2', run('openai'))
+    addRun('t3', run('flux'))
+    expect(laneWidth('openai')).toBe(2)
+    expect(laneWidth('flux')).toBe(1)
+    expect(laneWidth('grok')).toBe(0)
+    expect(runCount()).toBe(3)
+    removeRun('t1')
+    expect(laneWidth('openai')).toBe(1)
   })
 
-  it('reports false for a task that is not running', () => {
-    expect(cancelInFlight('nope')).toBe(false)
+  it('stops every cancellable run and counts what it signalled', () => {
+    const a = run('openai'); const b = run('grok')
+    addRun('t1', a); addRun('t2', b)
+    expect(stopGenerations()).toBe(2)
+    expect(a.generation.signal.aborted).toBe(true)
+    expect(b.generation.signal.aborted).toBe(true)
   })
 
-  it('cancels everything in flight and counts what it signalled', () => {
-    registerInFlight('t1', vi.fn(), Promise.resolve())
-    registerInFlight('t2', vi.fn(), Promise.resolve())
-    expect(cancelAllInFlight()).toBe(2)
+  // Once its bytes arrive a run is past a Stop's reach: a later "stop
+  // everything" neither counts nor reaches it.
+  it('leaves a run that is no longer cancellable alone', () => {
+    const finished = run('openai')
+    finished.cancellable = false
+    addRun('t1', finished)
+    expect(generatingCount()).toBe(0)
+    expect(stopGenerations()).toBe(0)
+    expect(finished.generation.signal.aborted).toBe(false)
   })
 
-  it('does not finish the shutdown barrier before generation settles', async () => {
-    let resolveSettled!: () => void
-    const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
-    const cancel = vi.fn()
-    registerInFlight('t1', cancel, settled)
+  it('makes quit wait for every run to save its outcome and aborts naming', async () => {
+    let resolveDone!: () => void
+    const naming = run('openai', new Promise<void>((resolve) => { resolveDone = resolve }))
+    naming.cancellable = false
+    addRun('t1', naming)
 
-    const waiting = cancelAllInFlightAndWait(1_000)
     let finished = false
-    void waiting.then(() => { finished = true })
+    const waiting = stopAllRuns().then(() => { finished = true })
     await Promise.resolve()
-    expect(cancel).toHaveBeenCalledOnce()
+    expect(naming.naming.signal.aborted).toBe(true)
+    expect(naming.generation.signal.aborted).toBe(false)
     expect(finished).toBe(false)
 
-    resolveSettled()
-    await expect(waiting).resolves.toEqual({ signalled: 1, settled: true })
-  })
-
-  // Clearing drops only the canceller: a task naming and saving its finished
-  // image is past a Stop's reach but still inside the shutdown barrier.
-  it('keeps a cleared task in the shutdown barrier until it settles', async () => {
-    let resolveSettled!: () => void
-    const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
-    const cancel = vi.fn()
-    registerInFlight('t1', cancel, settled)
-    clearInFlight('t1')
-
-    const waiting = cancelAllInFlightAndWait(1_000)
-    let finished = false
-    void waiting.then(() => { finished = true })
-    await new Promise((r) => setTimeout(r, 0))
-    expect(cancel).not.toHaveBeenCalled()
-    expect(shutdownSignal().aborted).toBe(true)
-    expect(finished).toBe(false)
-
-    resolveSettled()
-    await expect(waiting).resolves.toEqual({ signalled: 0, settled: true })
-  })
-
-  // A generation that finishes normally must not stay cancellable: a later
-  // "stop everything" would otherwise signal a process that is long gone.
-  it('stops tracking a generation once it clears', () => {
-    registerInFlight('t1', vi.fn(), Promise.resolve())
-    clearInFlight('t1')
-    expect(inFlightCount()).toBe(0)
-    expect(cancelInFlight('t1')).toBe(false)
-  })
-
-  // One backend's canceller throwing must not abandon the rest — a half-stopped
-  // queue is worse than either outcome.
-  it('keeps cancelling after one canceller throws', () => {
-    const boom = vi.fn(() => { throw new Error('already dead') })
-    const ok = vi.fn()
-    registerInFlight('t1', boom, Promise.resolve())
-    registerInFlight('t2', ok, Promise.resolve())
-    expect(cancelAllInFlight()).toBe(2)
-    expect(ok).toHaveBeenCalledOnce()
+    resolveDone()
+    await waiting
+    expect(finished).toBe(true)
   })
 })
 
@@ -111,11 +86,11 @@ describe('queue pause flag', () => {
 
   // Pausing must not touch running work: the whole point is that the current
   // image finishes and saves rather than being thrown away.
-  it('does not cancel anything in flight', () => {
-    const cancel = vi.fn()
-    registerInFlight('t1', cancel, Promise.resolve())
+  it('does not stop anything in flight', () => {
+    const running = run('openai')
+    addRun('t1', running)
     setQueuePaused(true)
-    expect(cancel).not.toHaveBeenCalled()
-    expect(inFlightCount()).toBe(1)
+    expect(running.generation.signal.aborted).toBe(false)
+    expect(generatingCount()).toBe(1)
   })
 })

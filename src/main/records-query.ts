@@ -18,7 +18,7 @@ import {
 } from '../shared/records'
 
 // The Records window's reads of records.sqlite3 (records-storage.ts owns the
-// schema and the dedicated writer thread owns every write). Pages are keyset-paged, newest first, across every table.
+// schema; the records thread runs every write and these reads in order). Pages are keyset-paged, newest first, across every table.
 
 // An AI call has no level of its own; a failed one reads as an error.
 const CALL_LEVEL = "CASE WHEN error IS NULL THEN 'info' ELSE 'error' END"

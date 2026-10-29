@@ -1,8 +1,8 @@
 import { tinyPng } from '../image-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The pause flag only matters if the POLLER honours it. The processor wakes
-// every 500ms and starts any task sitting in `queued` — which is exactly why
+// The pause flag only matters if scheduling honours it. The session starts
+// queued tasks after every command and every result — which is exactly why
 // killing a generation from outside the app never helped: the next task simply
 // started. This pins the check that makes stopping stick.
 
@@ -36,7 +36,7 @@ vi.mock('../../../src/main/config', () => ({
 
 const { processQueues } = await import('../../../src/main/backends/processor')
 const { queueManager } = await import('../../../src/main/queue/queue-manager')
-const { cancelAllInFlightAndWait, setQueuePaused, resetCancellationState } = await import(
+const { stopAllRuns, setQueuePaused, resetCancellationState } = await import(
   '../../../src/main/backends/cancellation'
 )
 
@@ -47,7 +47,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await cancelAllInFlightAndWait(1_000)
+  await stopAllRuns()
   resetCancellationState()
 })
 

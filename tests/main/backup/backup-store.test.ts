@@ -93,10 +93,11 @@ describe('backup store', () => {
       const quit = createQuitOwner({
         confirm: () => true, declined: vi.fn(), begin: vi.fn(), cancel: vi.fn(), exit, onError: vi.fn(),
         save: async () => undefined, cleanup: closeBackupStore, question: async () => 'cancel',
-        timeoutMs: 30_000, systemTimeoutMs: 1_500,
+        timeoutMs: 5_000, systemTimeoutMs: 1_500,
       })
+      // The close draws on what remains of the exit deadline.
       quit.beforeQuit({ preventDefault: vi.fn() })
-      await vi.advanceTimersByTimeAsync(499)
+      await vi.advanceTimersByTimeAsync(4_999)
       expect(exit).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
       expect(exit).toHaveBeenCalledOnce()

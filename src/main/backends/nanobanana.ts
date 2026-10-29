@@ -26,9 +26,11 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     throw new MissingApiKeyError('Nano Banana')
   }
 
-  // The app owns retries; the SDK performs exactly one attempt.
+  // The app owns retries; the SDK performs exactly one attempt. The user's
+  // timeout bounds the whole call, all attempts together, in withProviderRetry,
+  // so the SDK gets no clock of its own.
   const transport = createGeminiTransport()
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: config.image_backends.nanobanana.timeout_ms, retryOptions: { attempts: 1 }, fetch: transport.fetch } })
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 }, fetch: transport.fetch } })
 
   const request = buildGeminiImageRequest(task)
 
@@ -49,7 +51,7 @@ export async function generateNanoBanana(task: Task, signal: AbortSignal): Promi
     throw err
   }), { signal, timeoutMs: config.image_backends.nanobanana.timeout_ms }).catch((err: unknown) => {
     if (signal.aborted) throw new Error(CANCELLED_MESSAGE)
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof ProviderTimeoutError || (err instanceof Error && err.name === 'AbortError')) {
       log('error', 'Nano Banana API timed out', { model: task.model, timeoutMs: config.image_backends.nanobanana.timeout_ms })
       throw new ProviderTimeoutError('Nano Banana API', config.image_backends.nanobanana.timeout_ms)
     }

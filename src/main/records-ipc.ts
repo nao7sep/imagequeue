@@ -11,8 +11,7 @@ import {
   type RecordsQuery,
 } from '../shared/records'
 import { handle } from './ipc-boundary'
-import { currentRecordsContext } from './records'
-import { readRecords } from './records-reader'
+import { currentRecordsContext, readRecords } from './records'
 import { openRecordsWindow } from './records-window'
 
 export function assertRecordKind(value: unknown): asserts value is RecordKind {
