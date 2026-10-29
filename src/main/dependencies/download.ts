@@ -8,13 +8,11 @@ import { APP_NAME } from '../../shared/app-identity'
 const MAX_REDIRECTS = 5
 
 export interface TransferLimits {
-  maxBytes: number
   idleTimeoutMs: number
   wholeTimeoutMs: number
 }
 
 export const CLI_DOWNLOAD_LIMITS: TransferLimits = {
-  maxBytes: 1024 * 1024 * 1024,
   idleTimeoutMs: 30_000,
   // The CLI is currently about 170 MB. Four hours keeps a healthy very-slow
   // connection viable while ensuring that a trickling peer cannot run forever.
@@ -22,13 +20,11 @@ export const CLI_DOWNLOAD_LIMITS: TransferLimits = {
 }
 
 export const RELEASE_METADATA_LIMITS: TransferLimits = {
-  maxBytes: 2 * 1024 * 1024,
   idleTimeoutMs: 10_000,
   wholeTimeoutMs: 60_000,
 }
 
 export const RECOMMENDATIONS_LIMITS: TransferLimits = {
-  maxBytes: 16 * 1024 * 1024,
   idleTimeoutMs: 10_000,
   wholeTimeoutMs: 2 * 60 * 1000,
 }
@@ -68,23 +64,20 @@ export async function withWholeOperationTimeout<T>(
   }
 }
 
-export function parseAdvertisedLength(
-  raw: string | string[] | undefined,
-  maxBytes: number
-): number | null {
+// Content-Length gives the progress total and the length a body must reach.
+// Any size is accepted: the app makes sure its addresses are correct, and a
+// correct address serving far too much means the server itself is broken.
+export function parseAdvertisedLength(raw: string | string[] | undefined): number | null {
   if (raw === undefined) return null
   const value = Number(Array.isArray(raw) ? raw[0] : raw)
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error('Response has an invalid Content-Length')
   }
-  if (value > maxBytes) {
-    throw new Error(`Response advertises ${value} bytes, exceeding the ${maxBytes}-byte limit`)
-  }
   return value
 }
 
-function parseContentLength(response: IncomingMessage, maxBytes: number): number | null {
-  return parseAdvertisedLength(response.headers['content-length'], maxBytes)
+function parseContentLength(response: IncomingMessage): number | null {
+  return parseAdvertisedLength(response.headers['content-length'])
 }
 
 function validateHttpsUrl(url: string): URL {
@@ -173,27 +166,20 @@ async function fetchBytesHop(
 
   try {
     assertSuccessfulResponse(response)
-    parseContentLength(response, limits.maxBytes)
+    parseContentLength(response)
     const chunks: Buffer[] = []
-    let total = 0
     for await (const value of response) {
       signal.throwIfAborted()
-      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value)
-      const nextTotal = total + chunk.length
-      if (nextTotal > limits.maxBytes) {
-        throw new Error(`Download exceeded the ${limits.maxBytes}-byte limit`)
-      }
-      total = nextTotal
-      chunks.push(chunk)
+      chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(value))
     }
-    return { body: Buffer.concat(chunks, total), headers: response.headers }
+    return { body: Buffer.concat(chunks), headers: response.headers }
   } finally {
     response.destroy()
   }
 }
 
 /** Fetch a small metadata or structured-data body, with the final response's
- * headers, under HTTPS, redirect, size, idle, and whole-operation bounds. */
+ * headers, under HTTPS, redirect, idle, and whole-operation bounds. */
 export function fetchBytesWithHeaders(
   url: string,
   limits: TransferLimits,
@@ -265,7 +251,7 @@ async function downloadHop(
     return downloadHop(next, destPath, limits, signal, onProgress, redirectsLeft - 1)
   }
 
-  return writeDownloadResponse(response, destPath, limits, signal, onProgress)
+  return writeDownloadResponse(response, destPath, signal, onProgress)
 }
 
 /** Persist one accepted response body and durably sync it. Exported so the real
@@ -275,7 +261,6 @@ async function downloadHop(
 export async function writeDownloadResponse(
   response: IncomingMessage,
   destPath: string,
-  limits: TransferLimits,
   signal: AbortSignal,
   onProgress?: (progress: DownloadProgress) => void
 ): Promise<void> {
@@ -284,7 +269,7 @@ export async function writeDownloadResponse(
   let completed = false
   try {
     assertSuccessfulResponse(response)
-    const advertisedBytes = parseContentLength(response, limits.maxBytes)
+    const advertisedBytes = parseContentLength(response)
     let downloadedBytes = 0
     let lastReportedAt = 0
     let lastReportedBytes = -1
@@ -299,14 +284,7 @@ export async function writeDownloadResponse(
     const meter = new Transform({
       transform(value: Buffer, _encoding, callback): void {
         const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value)
-        const nextTotal = downloadedBytes + chunk.length
-        // Reject before forwarding the chunk, so the byte that crosses the
-        // ceiling is never written to staging.
-        if (nextTotal > limits.maxBytes) {
-          callback(new Error(`Download exceeded the ${limits.maxBytes}-byte limit`))
-          return
-        }
-        downloadedBytes = nextTotal
+        downloadedBytes += chunk.length
         reportProgress(downloadedBytes === chunk.length || downloadedBytes === advertisedBytes)
         callback(null, chunk)
       },
@@ -328,7 +306,7 @@ export async function writeDownloadResponse(
     completed = true
   } finally {
     response.destroy()
-    // Cleanup must not replace the transfer/limit error that brought us here.
+    // Cleanup must not replace the transfer error that brought us here.
     await syncHandle?.close().catch(() => undefined)
     // A rejected URL, response or exclusive open never grants ownership of an
     // existing path. Pipeline has settled the writer before removing our stage.

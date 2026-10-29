@@ -30,11 +30,11 @@ afterEach(() => {
 })
 
 describe('bounded transfers', () => {
-  it('accepts only valid advertised lengths within the byte ceiling', () => {
-    expect(parseAdvertisedLength(undefined, 10)).toBeNull()
-    expect(parseAdvertisedLength('10', 10)).toBe(10)
-    expect(() => parseAdvertisedLength('11', 10)).toThrow('exceeding the 10-byte limit')
-    expect(() => parseAdvertisedLength('not-a-number', 10)).toThrow('invalid Content-Length')
+  it('accepts any valid advertised length', () => {
+    expect(parseAdvertisedLength(undefined)).toBeNull()
+    expect(parseAdvertisedLength('10')).toBe(10)
+    expect(parseAdvertisedLength(String(8 * 1024 ** 3))).toBe(8 * 1024 ** 3)
+    expect(() => parseAdvertisedLength('not-a-number')).toThrow('invalid Content-Length')
   })
 
   it('aborts a whole operation at its deadline', async () => {
@@ -70,7 +70,6 @@ describe('bounded transfers', () => {
       headers: { 'content-length': String(bytes.length) },
     })
     const progress: Array<{ downloadedBytes: number; totalBytes: number | null }> = []
-    const limits = { maxBytes: bytes.length, idleTimeoutMs: 1000, wholeTimeoutMs: 5000 }
     // Progress between the first and last chunk is paced by the clock; holding
     // it still leaves exactly those two, however long the transfer takes here.
     vi.spyOn(Date, 'now').mockReturnValue(Date.now())
@@ -78,7 +77,6 @@ describe('bounded transfers', () => {
     const writing = writeDownloadResponse(
       stream as unknown as IncomingMessage,
       dest,
-      limits,
       new AbortController().signal,
       (event) => progress.push(event)
     )

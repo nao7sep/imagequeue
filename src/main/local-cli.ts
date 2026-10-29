@@ -153,7 +153,9 @@ export async function listAvailableModels(): Promise<LocalModelInfo[]> {
   const args = ['models', 'list', ...await modelsDirArgs()]
 
   return new Promise((resolve, reject) => {
-    execFile(cliPath, args, { timeout: 30000, maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
+    // The whole listing is read, however long: execFile otherwise stops at
+    // its default buffer size and fails the listing.
+    execFile(cliPath, args, { timeout: 30000, maxBuffer: Infinity }, (error, stdout, stderr) => {
       if (error) {
         if (!isCliAbsent(error)) {
           log('error', 'draw-things-cli models list (all) failed', { cliPath, args, error: serializeError(error), stderr })

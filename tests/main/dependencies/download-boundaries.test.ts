@@ -5,7 +5,7 @@ import http from 'node:http'
 import https from 'node:https'
 import type { Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { downloadToFile, writeDownloadResponse } from '../../../src/main/dependencies/download'
+import { downloadToFile } from '../../../src/main/dependencies/download'
 
 // Delegate HTTPS transport to a real loopback HTTP server while preserving the
 // production URL, path, request options and abort signal at its policy boundary.
@@ -184,30 +184,6 @@ describe('download HTTP and staging boundaries', () => {
       await rejected
       expect(writer.writers[0].closed).toBe(true)
       expect(closeAtRemoval).toEqual([true])
-      expect(fs.existsSync(file)).toBe(false)
-    })
-  })
-
-  it('rejects an oversized streamed chunk before forwarding it to the destination', async () => {
-    const file = destination()
-    const create = fs.createWriteStream.bind(fs)
-    const writes: ReturnType<typeof vi.spyOn>[] = []
-    vi.spyOn(fs, 'createWriteStream').mockImplementation((...args) => {
-      const writer = create(...args)
-      writes.push(vi.spyOn(writer, 'write'))
-      return writer
-    })
-    await loopback((_request, response) => {
-      response.writeHead(200) // Chunked, so the received-byte ceiling is exercised.
-      response.end('oversized')
-    }, async (_url, port) => {
-      const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
-        http.get({ hostname: '127.0.0.1', port, path: '/oversized' }, resolve).on('error', reject)
-      })
-      await expect(writeDownloadResponse(response, file, { maxBytes: 4, idleTimeoutMs: 1000, wholeTimeoutMs: 5000 }, new AbortController().signal))
-        .rejects.toThrow('4-byte limit')
-      expect(writes).toHaveLength(1)
-      expect(writes[0]).not.toHaveBeenCalled()
       expect(fs.existsSync(file)).toBe(false)
     })
   })
