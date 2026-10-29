@@ -1,0 +1,4 @@
+/* The error sits beneath the input, in the input's column of the form grid. */
+.whole-number-error {
+  grid-column: 2 / -1;
+}

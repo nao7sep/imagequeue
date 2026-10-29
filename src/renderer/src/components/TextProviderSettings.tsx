@@ -2,13 +2,16 @@ import { Fragment, useRef } from 'react'
 import { AI_ROLES, TEXT_PROVIDERS, hasThinkingChoice, textRowFor, thinkingAfterModelEdit, thinkingFor, type TextModel } from '../../../shared/ai-models'
 import type { SecretId, TextAIBackendId } from '../../../shared/types'
 import { useI18n } from '../i18n/I18nContext'
+import { WholeNumberInput, type InvalidNumberText } from './WholeNumberInput'
 
 const PROVIDER_NAMES: Record<TextAIBackendId, string> = { gemini: 'Gemini', openai: 'OpenAI' }
 
-export function TextProviderSettings({ config, onChange, keyField }: {
+export function TextProviderSettings({ config, onChange, keyField, numberText, setFieldText }: {
   config: Record<string, unknown>
   onChange: (config: Record<string, unknown>) => void
   keyField: (id: SecretId) => React.JSX.Element
+  numberText: InvalidNumberText
+  setFieldText: (id: string, text: string | null) => void
 }): React.JSX.Element {
   const { t } = useI18n()
   // The last listed row each model field held, so typing through ids with no
@@ -67,9 +70,11 @@ export function TextProviderSettings({ config, onChange, keyField }: {
         })}
         <div className="settings-field">
           <label htmlFor={`${provider}-timeout`}>{t('settings.timeout')}</label>
-          <input id={`${provider}-timeout`} type="number" min={1} step={1}
+          <WholeNumberInput id={`${provider}-timeout`} limits={{ min: 1 }}
             value={(section.timeout_ms as number) / 1000}
-            onChange={(event) => updateProvider(provider, 'timeout_ms', (parseInt(event.target.value) || 1) * 1000)} />
+            invalidText={numberText[`${provider}-timeout`]}
+            onInvalidText={(text) => setFieldText(`${provider}-timeout`, text)}
+            onValue={(value) => updateProvider(provider, 'timeout_ms', value * 1000)} />
         </div>
       </div>
     })}

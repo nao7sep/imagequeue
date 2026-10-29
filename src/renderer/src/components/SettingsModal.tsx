@@ -9,6 +9,7 @@ import { TextProviderSettings } from './TextProviderSettings'
 import { TEXT_PROVIDERS } from '../../../shared/ai-models'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
+import { WholeNumberInput, withNumberText, type InvalidNumberText } from './WholeNumberInput'
 import { presentFailure } from '../utils/failurePresentation'
 import { rebaseSettingsDraft } from '../utils/settingsDraft'
 import { serializeError } from '../../../shared/serialize-error'
@@ -92,6 +93,13 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   const [keys, setKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [baseKeys, setBaseKeys] = useState<Record<string, string>>(() => ({ ...(apiKeys ?? {}) }))
   const [errorMessage, setErrorMessage] = useState<MessageKey | null>(null)
+  // Number fields holding text that is not a valid value keep it here, beside
+  // the draft's last valid number, and Save waits until each is corrected.
+  const [numberText, setNumberText] = useState<InvalidNumberText>({})
+  const setFieldText = useCallback((id: string, text: string | null): void => {
+    setNumberText((prev) => withNumberText(prev, id, text))
+  }, [])
+  const numbersValid = Object.keys(numberText).length === 0
   const [saving, setSaving] = useState(false)
   const saveInFlight = useRef(false)
   const authoredPaths = useRef(new Set<string>())
@@ -146,7 +154,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
   useUnsavedDraftReport('settings', dirty)
 
   const handleSave = async (): Promise<void> => {
-    if (!config || !baseConfig || saveInFlight.current) return
+    if (!config || !baseConfig || !numbersValid || saveInFlight.current) return
     setErrorMessage(null)
     if (TEXT_PROVIDERS.some((provider) => !((config[provider] as Record<string, unknown>).endpoint as string).trim())) {
       setErrorMessage('settings.endpointRequired')
@@ -283,7 +291,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       footer={
         <>
           <button className="modal-btn" onClick={() => void handleClose()} disabled={saving}>{t('common.cancel')}</button>
-          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty || saving} aria-busy={saving}>{t('common.save')}</button>
+          <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty || !numbersValid || saving} aria-busy={saving}>{t('common.save')}</button>
         </>
       }
     >
@@ -581,7 +589,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       </div>
 
       <div className="app-tabpanel" {...tablist.getPanelProps('textai')} hidden={activeTab !== 'textai'}>
-        <TextProviderSettings config={config} onChange={setConfig} keyField={keyField} />
+        <TextProviderSettings config={config} onChange={setConfig} keyField={keyField} numberText={numberText} setFieldText={setFieldText} />
       </div>
 
       <div className="app-tabpanel" {...tablist.getPanelProps('backends')} hidden={activeTab !== 'backends'}>
@@ -593,11 +601,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-openai-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-openai-concurrency" type="number" min={1} max={10} value={backends.openai.concurrency as number} onChange={(e) => updateBackend('openai', 'concurrency', parseInt(e.target.value) || 1)} />
+            <WholeNumberInput id="settings-openai-concurrency" max={10} limits={{ min: 1 }} value={backends.openai.concurrency as number} invalidText={numberText['settings-openai-concurrency']} onInvalidText={(text) => setFieldText('settings-openai-concurrency', text)} onValue={(value) => updateBackend('openai', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-openai-timeout">{t('settings.timeout')}</label>
-            <input id="settings-openai-timeout" type="number" min={1} step={1} value={(backends.openai.timeout_ms as number) / 1000} onChange={(e) => updateBackend('openai', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <WholeNumberInput id="settings-openai-timeout" limits={{ min: 1 }} value={(backends.openai.timeout_ms as number) / 1000} invalidText={numberText['settings-openai-timeout']} onInvalidText={(text) => setFieldText('settings-openai-timeout', text)} onValue={(value) => updateBackend('openai', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -609,11 +617,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-nanobanana-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-nanobanana-concurrency" type="number" min={1} max={10} value={backends.nanobanana.concurrency as number} onChange={(e) => updateBackend('nanobanana', 'concurrency', parseInt(e.target.value) || 1)} />
+            <WholeNumberInput id="settings-nanobanana-concurrency" max={10} limits={{ min: 1 }} value={backends.nanobanana.concurrency as number} invalidText={numberText['settings-nanobanana-concurrency']} onInvalidText={(text) => setFieldText('settings-nanobanana-concurrency', text)} onValue={(value) => updateBackend('nanobanana', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-nanobanana-timeout">{t('settings.timeout')}</label>
-            <input id="settings-nanobanana-timeout" type="number" min={1} step={1} value={(backends.nanobanana.timeout_ms as number) / 1000} onChange={(e) => updateBackend('nanobanana', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <WholeNumberInput id="settings-nanobanana-timeout" limits={{ min: 1 }} value={(backends.nanobanana.timeout_ms as number) / 1000} invalidText={numberText['settings-nanobanana-timeout']} onInvalidText={(text) => setFieldText('settings-nanobanana-timeout', text)} onValue={(value) => updateBackend('nanobanana', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -625,11 +633,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-grok-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-grok-concurrency" type="number" min={1} max={10} value={backends.grok.concurrency as number} onChange={(e) => updateBackend('grok', 'concurrency', parseInt(e.target.value) || 1)} />
+            <WholeNumberInput id="settings-grok-concurrency" max={10} limits={{ min: 1 }} value={backends.grok.concurrency as number} invalidText={numberText['settings-grok-concurrency']} onInvalidText={(text) => setFieldText('settings-grok-concurrency', text)} onValue={(value) => updateBackend('grok', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-grok-timeout">{t('settings.timeout')}</label>
-            <input id="settings-grok-timeout" type="number" min={1} step={1} value={(backends.grok.timeout_ms as number) / 1000} onChange={(e) => updateBackend('grok', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <WholeNumberInput id="settings-grok-timeout" limits={{ min: 1 }} value={(backends.grok.timeout_ms as number) / 1000} invalidText={numberText['settings-grok-timeout']} onInvalidText={(text) => setFieldText('settings-grok-timeout', text)} onValue={(value) => updateBackend('grok', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -641,11 +649,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-flux-concurrency">{t('settings.concurrency')}</label>
-            <input id="settings-flux-concurrency" type="number" min={1} max={24} value={backends.flux.concurrency as number} onChange={(e) => updateBackend('flux', 'concurrency', parseInt(e.target.value) || 1)} />
+            <WholeNumberInput id="settings-flux-concurrency" max={24} limits={{ min: 1 }} value={backends.flux.concurrency as number} invalidText={numberText['settings-flux-concurrency']} onInvalidText={(text) => setFieldText('settings-flux-concurrency', text)} onValue={(value) => updateBackend('flux', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-flux-timeout">{t('settings.timeout')}</label>
-            <input id="settings-flux-timeout" type="number" min={1} step={1} value={(backends.flux.timeout_ms as number) / 1000} onChange={(e) => updateBackend('flux', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <WholeNumberInput id="settings-flux-timeout" limits={{ min: 1 }} value={(backends.flux.timeout_ms as number) / 1000} invalidText={numberText['settings-flux-timeout']} onInvalidText={(text) => setFieldText('settings-flux-timeout', text)} onValue={(value) => updateBackend('flux', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -661,7 +669,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-drawthings-timeout">{t('settings.timeout')}</label>
-            <input id="settings-drawthings-timeout" type="number" min={1} value={Math.round((backends.drawthings.timeout_ms as number) / 1000)} onChange={(e) => updateBackend('drawthings', 'timeout_ms', (parseInt(e.target.value) || 1) * 1000)} />
+            <WholeNumberInput id="settings-drawthings-timeout" limits={{ min: 1 }} value={Math.round((backends.drawthings.timeout_ms as number) / 1000)} invalidText={numberText['settings-drawthings-timeout']} onInvalidText={(text) => setFieldText('settings-drawthings-timeout', text)} onValue={(value) => updateBackend('drawthings', 'timeout_ms', value * 1000)} />
             <p className="settings-hint">{t('settings.drawThingsTimeoutHint')}</p>
           </div>
           <div className="settings-field">

@@ -10,7 +10,7 @@ function Harness(): React.JSX.Element {
     gemini: { endpoint: 'https://generativelanguage.googleapis.com', elaboration: 'gemini-3.8-flash', slug: 'gemini-3.5-flash-lite', thinking: { elaboration: '', slug: '' }, timeout_ms: 30000 },
     openai: { endpoint: 'https://api.openai.com/v1', elaboration: 'local-unlisted', slug: 'gpt-6-luna', thinking: { elaboration: 'xhigh', slug: 'high' }, timeout_ms: 60000 },
   })
-  return <TextProviderSettings config={config} onChange={setConfig} keyField={() => <input type="password" />} />
+  return <TextProviderSettings config={config} onChange={setConfig} keyField={() => <input type="password" />} numberText={{}} setFieldText={() => undefined} />
 }
 afterEach(cleanup)
 

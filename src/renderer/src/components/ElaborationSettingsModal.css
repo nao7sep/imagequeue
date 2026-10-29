@@ -86,6 +86,11 @@
   color: var(--text-muted);
 }
 
+/* The hint stays beside its input when a field error takes the line below. */
+.elaboration-settings-row > .elaboration-settings-hint {
+  grid-area: 1 / 3;
+}
+
 .elaboration-settings-template {
   display: grid;
   gap: var(--space-1);

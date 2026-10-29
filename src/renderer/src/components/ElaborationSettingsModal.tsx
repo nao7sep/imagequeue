@@ -17,6 +17,7 @@ import './ElaborationSettingsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
+import { WholeNumberInput, withNumberText, type InvalidNumberText } from './WholeNumberInput'
 import { BRAINSTORM_LIMITS, EXPANSION_PLACEHOLDERS, REQUIRED_EXPANSION_PLACEHOLDERS, placeholderTag, type BrainstormConfig } from '../../../shared/brainstorm-config'
 
 interface Props {
@@ -107,6 +108,10 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     setBusyState(value)
   }, [])
   const [message, setMessage] = useState<Message | null>(null)
+  // A count field holding text that is not a valid value keeps it here, and
+  // Save waits until each is corrected.
+  const [numberText, setNumberText] = useState<InvalidNumberText>({})
+  const numbersValid = Object.keys(numberText).length === 0
 
   // Initialize the form from settings.brainstorm. Only run once per modal
   // open; the user's edits live in form state until Save.
@@ -139,6 +144,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       setMessage(null)
       const defaults = await window.electronAPI.brainstormGetDefaults()
       setForm(fromConfig(defaults))
+      setNumberText({})
     } catch (error) {
       setMessage(msg(presentFailure('elaboration-defaults-load', error)))
     } finally {
@@ -147,19 +153,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
   }, [confirm, t, setBusy])
 
   const handleSave = useCallback(async (): Promise<void> => {
-    if (!form || busyRef.current) return
-    const outside = (key: keyof typeof BRAINSTORM_LIMITS): boolean => {
-      const { min, max } = BRAINSTORM_LIMITS[key]
-      return form[key] < min || form[key] > max || !Number.isInteger(form[key])
-    }
-    if (outside('batch_size')) {
-      setMessage(msg('elabSettings.batchSizeRange', BRAINSTORM_LIMITS.batch_size))
-      return
-    }
-    if (outside('concurrency')) {
-      setMessage(msg('elabSettings.concurrencyRange', BRAINSTORM_LIMITS.concurrency))
-      return
-    }
+    if (!form || !numbersValid || busyRef.current) return
     setBusy(true)
     try {
       const warn = checkPlaceholders(form) ?? checkFormatDirectives(form)
@@ -194,7 +188,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
     } finally {
       setBusy(false)
     }
-  }, [form, saveBrainstormSettings, onClose, confirm, t, setBusy])
+  }, [form, numbersValid, saveBrainstormSettings, onClose, confirm, t, setBusy])
 
   const handleCancel = useCallback(async (): Promise<void> => {
     if (busyRef.current) return
@@ -244,7 +238,7 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       footer={
         <>
           <button className="modal-btn" onClick={handleCancel} disabled={busy}>{t('common.cancel')}</button>
-          <button className="modal-btn modal-btn-primary" onClick={() => void handleSave()} disabled={busy || !dirty}>
+          <button className="modal-btn modal-btn-primary" onClick={() => void handleSave()} disabled={busy || !dirty || !numbersValid}>
             {t('common.save')}
           </button>
         </>
@@ -253,26 +247,28 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
       <div className="elaboration-settings-body">
         <div className="elaboration-settings-section elaboration-settings-fields">
           <div className="elaboration-settings-row">
-            <label>{t('elabSettings.batchSize')}</label>
-            <input
+            <label htmlFor="elaboration-batch_size">{t('elabSettings.batchSize')}</label>
+            <WholeNumberInput
+              id="elaboration-batch_size"
               disabled={busy}
-              type="number"
-              min={BRAINSTORM_LIMITS.batch_size.min}
-              max={BRAINSTORM_LIMITS.batch_size.max}
+              limits={BRAINSTORM_LIMITS.batch_size}
               value={form.batch_size}
-              onChange={(e) => setForm({ ...form, batch_size: parseInt(e.target.value) || BRAINSTORM_LIMITS.batch_size.min })}
+              invalidText={numberText['elaboration-batch_size']}
+              onInvalidText={(text) => setNumberText((prev) => withNumberText(prev, 'elaboration-batch_size', text))}
+              onValue={(value) => setForm({ ...form, batch_size: value })}
             />
             <span className="elaboration-settings-hint">{t('elabSettings.batchSizeHint', BRAINSTORM_LIMITS.batch_size)}</span>
           </div>
           <div className="elaboration-settings-row">
-            <label>{t('settings.concurrency')}</label>
-            <input
+            <label htmlFor="elaboration-concurrency">{t('settings.concurrency')}</label>
+            <WholeNumberInput
+              id="elaboration-concurrency"
               disabled={busy}
-              type="number"
-              min={BRAINSTORM_LIMITS.concurrency.min}
-              max={BRAINSTORM_LIMITS.concurrency.max}
+              limits={BRAINSTORM_LIMITS.concurrency}
               value={form.concurrency}
-              onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || BRAINSTORM_LIMITS.concurrency.min })}
+              invalidText={numberText['elaboration-concurrency']}
+              onInvalidText={(text) => setNumberText((prev) => withNumberText(prev, 'elaboration-concurrency', text))}
+              onValue={(value) => setForm({ ...form, concurrency: value })}
             />
             <span className="elaboration-settings-hint">{t('elabSettings.concurrencyHint', BRAINSTORM_LIMITS.concurrency)}</span>
           </div>
