@@ -2,6 +2,8 @@
   "common.actions": "Ações",
   "quit.title": "Não foi possível salvar antes de sair",
   "quit.message": "Algumas alterações não puderam ser salvas. Tente novamente, saia sem salvar essas alterações ou cancele a saída.",
+  "quit.unfinishedTitle": "O salvamento ainda não terminou",
+  "quit.unfinishedMessage": "Algumas alterações ainda estão sendo salvas. Tente novamente para continuar esperando, saia sem essas alterações ou cancele a saída.",
   "quit.quitAnyway": "Sair mesmo assim",
   "quit.generating": {
     "one": "{count} imagem ainda está sendo gerada e será interrompida.",

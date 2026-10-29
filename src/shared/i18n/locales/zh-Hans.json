@@ -2,6 +2,8 @@
   "common.actions": "操作",
   "quit.title": "退出前无法保存",
   "quit.message": "部分更改无法保存。请重试保存、不保存这些更改并退出，或取消退出。",
+  "quit.unfinishedTitle": "保存尚未完成",
+  "quit.unfinishedMessage": "部分更改仍在保存中。请重试以继续等待、不保存这些更改并退出，或取消退出。",
   "quit.quitAnyway": "仍然退出",
   "quit.generating": {
     "other": "仍有 {count} 张图像正在生成，退出后将停止。"

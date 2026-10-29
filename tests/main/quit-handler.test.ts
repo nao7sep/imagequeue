@@ -31,6 +31,7 @@ describe('quit ownership', () => {
     quit.request()
     await until(() => expect(question).toHaveBeenCalledOnce())
     expect(quit.exit).not.toHaveBeenCalled(); expect(quit.cleanup).not.toHaveBeenCalled()
+    expect(question).toHaveBeenCalledWith(expect.any(AbortSignal), 'failed')
     choice.resolve('retry')
     await until(() => expect(quit.exit).toHaveBeenCalledOnce())
     expect(save).toHaveBeenCalledTimes(2)
@@ -53,6 +54,8 @@ describe('quit ownership', () => {
     expect(question).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(question).toHaveBeenCalledOnce(); expect(quit.exit).not.toHaveBeenCalled()
+    // A save still running is not finished, never failed.
+    expect(question).toHaveBeenCalledWith(expect.any(AbortSignal), 'unfinished')
     expect(quit.onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('had not finished') }))
     choice.resolve('retry')
     await vi.advanceTimersByTimeAsync(0)

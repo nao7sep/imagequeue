@@ -10,7 +10,9 @@ interface QuitOptions {
   save: () => Promise<void>
   cleanup: () => Promise<void>
   cancel: () => void
-  question: (signal: AbortSignal) => Promise<QuitChoice>
+  // Why the required save did not complete: it failed, or it was still
+  // running when the exit deadline ended.
+  question: (signal: AbortSignal, reason: 'failed' | 'unfinished') => Promise<QuitChoice>
   exit: (code: number) => void
   timeoutMs: number
   systemTimeoutMs: number
@@ -67,9 +69,13 @@ export function createQuitOwner(options: QuitOptions) {
     options.begin()
     while (!exited) {
       let saved = false
+      let reason: 'failed' | 'unfinished' = 'failed'
       try {
         saved = await withinDeadline(Promise.resolve().then(options.save))
-        if (!saved) options.onError(new Error('Saving before quit had not finished at the exit deadline'))
+        if (!saved) {
+          reason = 'unfinished'
+          options.onError(new Error('Saving before quit had not finished at the exit deadline'))
+        }
       } catch (error) {
         options.onError(error)
       }
@@ -86,7 +92,7 @@ export function createQuitOwner(options: QuitOptions) {
       if (system) { finish(); return }
       question = new AbortController()
       let choice: QuitChoice = 'cancel'
-      try { choice = await options.question(question.signal) }
+      try { choice = await options.question(question.signal, reason) }
       catch (error) { options.onError(error) }
       finally { question = null }
       if (exited) return

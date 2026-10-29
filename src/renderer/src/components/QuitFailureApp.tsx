@@ -5,7 +5,8 @@ import './QuitFailureApp.css'
 import { APP_NAME } from '../../../shared/app-identity'
 
 // The quit window's page: either the question before quit stops live work, or
-// the Retry / Quit anyway / Cancel question after a required save failed. Main
+// the Retry / Quit anyway / Cancel question after a required save failed or
+// had not finished at the exit deadline. Main
 // owns which; the page reads it once and reports its height to be sized.
 export function QuitFailureApp(): React.JSX.Element | null {
   const { t, locale } = useI18n()
@@ -36,9 +37,9 @@ export function QuitFailureApp(): React.JSX.Element | null {
   }, [question])
 
   if (!question) return null
-  if (question.kind === 'saveFailed') {
+  if (question.kind !== 'confirm') {
     return <main ref={root} className="quit-failure-app">
-      <div className="quit-failure-body"><p>{t('quit.message')}</p></div>
+      <div className="quit-failure-body"><p>{t(question.kind === 'saveUnfinished' ? 'quit.unfinishedMessage' : 'quit.message')}</p></div>
       <footer>
         <button className="modal-btn" autoFocus onClick={() => window.electronAPI.chooseQuit('cancel')}>{t('common.cancel')}</button>
         <button className="modal-btn" onClick={() => window.electronAPI.chooseQuit('retry')}>{t('common.retry')}</button>

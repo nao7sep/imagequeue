@@ -33,6 +33,7 @@ export function showQuitQuestion(question: QuitQuestion, signal: AbortSignal, on
     const title = (): string => {
       const t = mainTranslator().t
       return question.kind === 'saveFailed' ? t('quit.title')
+        : question.kind === 'saveUnfinished' ? t('quit.unfinishedTitle')
         : t(question.platform === 'darwin' ? 'statusIcon.quit' : 'statusIcon.exit', { app: APP_NAME })
     }
     const parent = questionOwner(owner)
@@ -63,7 +64,7 @@ export function showQuitQuestion(question: QuitQuestion, signal: AbortSignal, on
     }
     const abort = (): void => finish('cancel')
     const choose = (event: Electron.IpcMainEvent, choice: unknown): void => {
-      const choices = question.kind === 'saveFailed' ? ['retry', 'quit', 'cancel'] : ['quit', 'cancel']
+      const choices = question.kind === 'confirm' ? ['quit', 'cancel'] : ['retry', 'quit', 'cancel']
       if (event.sender !== win.webContents || !choices.includes(String(choice))) return
       finish(choice as QuitChoice)
     }

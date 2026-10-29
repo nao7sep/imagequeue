@@ -30,7 +30,9 @@ export function hasQuitWork(work: QuitWork): boolean {
 }
 
 /** The question the quit window shows: confirm stopping live work, or a
- *  required save that failed. */
+ *  required save that failed or had not finished at the exit deadline. A save
+ *  still running is described as not finished, never as failed. */
 export type QuitQuestion =
   | { kind: 'confirm'; work: QuitWork; platform: string }
   | { kind: 'saveFailed' }
+  | { kind: 'saveUnfinished' }

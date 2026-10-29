@@ -2,6 +2,8 @@
   "common.actions": "Azioni",
   "quit.title": "Impossibile salvare prima di uscire",
   "quit.message": "Non è stato possibile salvare alcune modifiche. Riprova, esci senza salvarle oppure annulla la chiusura.",
+  "quit.unfinishedTitle": "Il salvataggio non è ancora terminato",
+  "quit.unfinishedMessage": "Alcune modifiche sono ancora in fase di salvataggio. Riprova per continuare ad attendere, esci senza queste modifiche oppure annulla la chiusura.",
   "quit.quitAnyway": "Esci comunque",
   "quit.generating": {
     "one": "{count} immagine è ancora in generazione e verrà interrotta.",

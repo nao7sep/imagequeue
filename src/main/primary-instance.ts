@@ -186,7 +186,7 @@ const quitOwner = createQuitOwner({
     processQueues()
     keepReachable()
   },
-  question: (signal) => showQuitQuestion({ kind: 'saveFailed' }, signal, () => quitOwner.sessionEnd(), mainWindowController?.getWindow() ?? undefined),
+  question: (signal, reason) => showQuitQuestion({ kind: reason === 'unfinished' ? 'saveUnfinished' : 'saveFailed' }, signal, () => quitOwner.sessionEnd(), mainWindowController?.getWindow() ?? undefined),
   exit: () => {
     if (cleanExit) app.exit(0)
     else {

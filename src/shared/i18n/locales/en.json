@@ -2,6 +2,8 @@
   "common.actions": "Actions",
   "quit.title": "Unable to save before quitting",
   "quit.message": "Some changes could not be saved. Retry saving, quit without saving those changes, or cancel quitting.",
+  "quit.unfinishedTitle": "Saving has not finished",
+  "quit.unfinishedMessage": "Some changes have not finished saving. Retry to keep waiting for them, quit without them, or cancel quitting.",
   "quit.quitAnyway": "Quit anyway",
   "quit.generating": {
     "one": "{count} image is still generating and will be stopped.",

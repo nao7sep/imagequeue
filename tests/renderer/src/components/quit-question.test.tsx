@@ -59,4 +59,14 @@ describe('quit question page', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Quit anyway' })).toBeTruthy()
   })
+
+  it('describes a save still running at the deadline as not finished, with the same choices', async () => {
+    ask({ kind: 'saveUnfinished' })
+    render(<QuitFailureApp />)
+    await act(async () => {})
+    expect(screen.getByText(/have not finished saving/)).toBeTruthy()
+    expect(screen.queryByText(/could not be saved/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Quit anyway' })).toBeTruthy()
+  })
 })

@@ -2,6 +2,8 @@
   "common.actions": "Acciones",
   "quit.title": "No se pudo guardar antes de salir",
   "quit.message": "No se pudieron guardar algunos cambios. Inténtalo de nuevo, sal sin guardar esos cambios o cancela la salida.",
+  "quit.unfinishedTitle": "El guardado aún no ha terminado",
+  "quit.unfinishedMessage": "Algunos cambios todavía se están guardando. Vuelve a intentarlo para seguir esperando, sal sin esos cambios o cancela la salida.",
   "quit.quitAnyway": "Salir de todos modos",
   "quit.generating": {
     "one": "{count} imagen todavía se está generando y se detendrá.",

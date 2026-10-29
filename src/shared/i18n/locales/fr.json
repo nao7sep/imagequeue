@@ -2,6 +2,8 @@
   "common.actions": "Actions",
   "quit.title": "Impossible d’enregistrer avant de quitter",
   "quit.message": "Certaines modifications n’ont pas pu être enregistrées. Réessayez, quittez sans enregistrer ces modifications ou annulez la fermeture.",
+  "quit.unfinishedTitle": "L’enregistrement n’est pas terminé",
+  "quit.unfinishedMessage": "Certaines modifications sont encore en cours d’enregistrement. Réessayez pour continuer à attendre, quittez sans ces modifications ou annulez la fermeture.",
   "quit.quitAnyway": "Quitter quand même",
   "quit.generating": {
     "one": "{count} image est encore en génération et sera arrêtée.",

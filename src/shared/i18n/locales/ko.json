@@ -2,6 +2,8 @@
   "common.actions": "작업",
   "quit.title": "종료 전에 저장할 수 없습니다",
   "quit.message": "일부 변경 사항을 저장하지 못했습니다. 저장을 다시 시도하거나, 변경 사항을 저장하지 않고 종료하거나, 종료를 취소하세요.",
+  "quit.unfinishedTitle": "저장이 아직 끝나지 않았습니다",
+  "quit.unfinishedMessage": "일부 변경 사항을 아직 저장하는 중입니다. 다시 시도하여 계속 기다리거나, 이 변경 사항 없이 종료하거나, 종료를 취소하세요.",
   "quit.quitAnyway": "저장하지 않고 종료",
   "quit.generating": {
     "other": "이미지 {count}개를 생성하는 중입니다. 종료하면 중단됩니다."
