@@ -1,5 +1,7 @@
-/** A single coalescing owner. Failed writes remain pending for a quit Retry;
- * drain rejects, while timer failures are reported without an unhandled error. */
+/** A single coalescing owner. Each change restarts the timer, so a run of
+ * changes saves once, `debounceMs` after the last of them. Failed writes remain
+ * pending for a quit Retry; drain rejects, while timer failures are reported
+ * without an unhandled error. */
 export interface CoalescedWriter {
   schedule(): void
   cancel(): void
@@ -34,7 +36,7 @@ export function createCoalescedWriter(options: CoalescedWriterOptions): Coalesce
   return {
     schedule() {
       revision++
-      if (timer !== null) return
+      clear()
       timer = setTimeout(() => { timer = null; void drain().catch(() => undefined) }, options.debounceMs)
     },
     cancel() { clear(); saved = revision },

@@ -11,6 +11,16 @@ describe('coalesced required writes', () => {
     await vi.advanceTimersByTimeAsync(200)
     expect(flush).toHaveBeenCalledOnce()
   })
+  it('saves once after the last of a run of edits, each edit pushing the save back', async () => {
+    const flush = vi.fn(), writer = createCoalescedWriter({ flush, debounceMs: 200 })
+    for (let edit = 0; edit < 5; edit++) {
+      writer.schedule()
+      await vi.advanceTimersByTimeAsync(150)
+    }
+    expect(flush).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(flush).toHaveBeenCalledOnce()
+  })
   it('retains timer failures for quit drain and propagates failures until Retry succeeds', async () => {
     const flush = vi.fn().mockRejectedValueOnce(new Error('full')).mockRejectedValueOnce(new Error('full')).mockResolvedValue(undefined)
     const onError = vi.fn(), writer = createCoalescedWriter({ flush, onError, debounceMs: 200 })
