@@ -1,6 +1,6 @@
 import { AppConfig } from './types'
-import { defaultModelFor, getDefaultModelForBackend, PROVIDER_ENDPOINTS } from '../../shared/ai-models'
-import { DRAWTHINGS_FALLBACK_PARAMS, IMAGE_DEFAULT_PARAMS } from '../../shared/image-backend-defaults'
+import { defaultModelFor, PROVIDER_ENDPOINTS } from '../../shared/ai-models'
+import { DRAWTHINGS_FALLBACK_PARAMS } from '../../shared/image-backend-defaults'
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -36,28 +36,18 @@ export function createDefaultConfig(): AppConfig {
     },
     image_backends: {
       openai: {
-        // Seeded from the table's default row rather than restated here, so a
-        // table change reaches a fresh install without a second edit.
-        model: getDefaultModelForBackend('openai').id,
-        default_params: { ...IMAGE_DEFAULT_PARAMS.openai },
         concurrency: 3,
         timeout_ms: 180000
       },
       nanobanana: {
-        model: getDefaultModelForBackend('nanobanana').id,
-        default_params: { ...IMAGE_DEFAULT_PARAMS.nanobanana },
         concurrency: 3,
         timeout_ms: 180000
       },
       grok: {
-        model: getDefaultModelForBackend('grok').id,
-        default_params: { ...IMAGE_DEFAULT_PARAMS.grok },
         concurrency: 3,
         timeout_ms: 180000
       },
       flux: {
-        model: getDefaultModelForBackend('flux').id,
-        default_params: { ...IMAGE_DEFAULT_PARAMS.flux },
         concurrency: 3,
         timeout_ms: 180000
       },

@@ -16,16 +16,16 @@ import {
   getModelsForBackend,
 } from '../../../../src/shared/ai-models'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../../../src/shared/types'
-import { createDefaultConfig } from '../../../../src/main/config/defaults'
+import { IMAGE_DEFAULT_PARAMS } from '../../../../src/shared/image-backend-defaults'
 
-// A fresh column starts with the parameters a fresh install stores.
+// A fresh column starts with the parameters a fresh install saves.
 describe('defaults', () => {
-  it('starts each fresh column with the settings a fresh install stores', () => {
-    const stored = createDefaultConfig().image_backends
-    expect(openaiBackend.defaults()).toEqual(stored.openai.default_params)
-    expect(nanoBananaBackend.defaults()).toEqual(stored.nanobanana.default_params)
-    expect(grokBackend.defaults()).toEqual(stored.grok.default_params)
-    expect(fluxBackend.defaults()).toMatchObject(stored.flux.default_params)
+  it('starts each fresh column with the parameters a fresh install saves', () => {
+    const openai = IMAGE_DEFAULT_PARAMS.openai
+    expect(openaiBackend.defaults()).toEqual({ ...openai, width: String(openai.width), height: String(openai.height), outputCompression: String(openai.outputCompression) })
+    expect(nanoBananaBackend.defaults()).toEqual(IMAGE_DEFAULT_PARAMS.nanobanana)
+    expect(grokBackend.defaults()).toEqual(IMAGE_DEFAULT_PARAMS.grok)
+    expect(fluxBackend.defaults()).toMatchObject(IMAGE_DEFAULT_PARAMS.flux)
   })
 })
 
@@ -33,7 +33,7 @@ describe('clampToModel', () => {
   it('keeps valid OpenAI enum values and resets invalid ones to the model defaults', () => {
     const flare = findModel('openai', 'gpt-image-2.5-flare')!
     const gpt2 = findModel('openai', 'gpt-image-2')!
-    const chosen = { width: 1024, height: 1024, quality: 'xhigh' as const, outputFormat: 'webp' as const, outputCompression: 80, background: 'opaque' as const }
+    const chosen = { width: '1024', height: '1000', quality: 'xhigh' as const, outputFormat: 'webp' as const, outputCompression: '80', background: 'opaque' as const }
     expect(openaiBackend.clampToModel(chosen, flare)).toEqual(chosen)
     // gpt-image-2 does not take xhigh, so a switch to it resets quality to auto.
     expect(openaiBackend.clampToModel(chosen, gpt2)).toEqual({ ...chosen, quality: 'auto' })
@@ -51,17 +51,37 @@ describe('clampToModel', () => {
     const flare = findModel('openai', 'gpt-image-2.5-flare')!
     const params = openaiBackend.defaults()
     expect(openaiBackend.toEnqueueParams(params, flare)).toEqual({ width: 1024, height: 1024, quality: 'auto', outputFormat: 'png', background: 'auto' })
-    expect(openaiBackend.toEnqueueParams({ ...params, outputFormat: 'jpeg', outputCompression: 0 }, flare)).toHaveProperty('outputCompression', 0)
+    expect(openaiBackend.toEnqueueParams({ ...params, outputFormat: 'jpeg', outputCompression: '0' }, flare)).toHaveProperty('outputCompression', 0)
+  })
+
+  it('keeps typed OpenAI numbers as typed and queues nothing until each is accepted', () => {
+    const flare = findModel('openai', 'gpt-image-2.5-flare')!
+    const params = { ...openaiBackend.defaults(), outputFormat: 'jpeg' as const }
+    // Not snapped to the 16-pixel grid or clamped to the range: refused.
+    for (const field of [{ width: '1000' }, { height: '4000' }, { width: '' }, { outputCompression: '101' }, { outputCompression: '50.5' }]) {
+      expect(openaiBackend.toEnqueueParams({ ...params, ...field }, flare)).toBeNull()
+    }
+    expect(openaiBackend.toEnqueueParams({ ...params, outputFormat: 'png', outputCompression: 'x' }, flare)).not.toBeNull()
+    expect(openaiBackend.toEnqueueParams({ ...params, width: '3840', height: '512' }, flare)).toMatchObject({ width: 3840, height: 512 })
+  })
+
+  it('queues FLUX steps and guidance only inside the model\'s range', () => {
+    const flex = findModel('flux', 'flux-2-flex')!
+    const params = fluxBackend.defaults()
+    for (const field of [{ steps: '0' }, { steps: '51' }, { steps: '2.5' }, { guidance: '1' }, { guidance: '10.5' }, { guidance: '' }]) {
+      expect(fluxBackend.toEnqueueParams({ ...params, ...field }, flex)).toBeNull()
+    }
+    expect(fluxBackend.toEnqueueParams({ ...params, steps: '50', guidance: '1.5' }, flex)).toMatchObject({ steps: 50, guidance: 1.5 })
   })
 
   it('resets a FLUX ranged value to the new model\'s range DEFAULT on a model switch', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const outOfRange = fluxBackend.clampToModel(
-      { ...fluxBackend.defaults(), steps: flex.stepsRange!.max + 1 },
+      { ...fluxBackend.defaults(), steps: String(flex.stepsRange!.max + 1) },
       flex
     )
     // Not clamped to the bound: a model switch takes the new model's default.
-    expect(outOfRange.steps).toBe(flex.stepsRange!.default)
+    expect(outOfRange.steps).toBe(String(flex.stepsRange!.default))
   })
 
   it('floors a FLUX size index that falls off a shorter ladder', () => {
@@ -111,7 +131,7 @@ describe('fromSaved', () => {
   it('clamps a saved FLUX ranged value to the nearest BOUND (user data, not a reset)', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const params = fluxBackend.fromSaved({ steps: 9999 }, flex)
-    expect(params.steps).toBe(flex.stepsRange!.max)
+    expect(params.steps).toBe(String(flex.stepsRange!.max))
   })
 })
 
@@ -171,7 +191,7 @@ describe('saved/current serialization parity (the autosave dirty comparison)', (
     const defaultModel = getDefaultModelForBackend(backend)
     const saved = resolveSavedImageBackendDefaults(
       backend,
-      { model: defaultModel!.id, default_params: {} },
+      { model: defaultModel!.id, params: {} },
       models,
       defaultModel
     )!

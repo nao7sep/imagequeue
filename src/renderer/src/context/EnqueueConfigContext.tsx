@@ -40,19 +40,13 @@ export function EnqueueConfigProvider({ children }: { children: ReactNode }): Re
 
   const enqueueToBackend = useCallback((backend: BackendId, prompt: string): void => {
     const request = buildEnqueueRequest(backend, prompt, snapshots[backend])
-    if (request) {
-      snapshots[backend]?.onEnqueue?.()
-      void enqueue(request)
-    }
+    if (request) void enqueue(request)
   }, [snapshots, enqueue])
 
   const { backends: visibleBackends } = useVisiblePanes()
   const enqueueToAll = useCallback((prompt: string): void => {
     const requests = buildEnqueueRequestsForAll(prompt, snapshots, visibleBackends)
-    if (requests.length > 0) {
-      for (const request of requests) snapshots[request.backend]?.onEnqueue?.()
-      void enqueueBatch(requests)
-    }
+    if (requests.length > 0) void enqueueBatch(requests)
   }, [snapshots, enqueueBatch, visibleBackends])
 
   const value = useMemo(

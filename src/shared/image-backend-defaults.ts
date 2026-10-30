@@ -1,9 +1,15 @@
 import { getDefaultModelForBackend } from './ai-models'
 import { OPENAI_COMPRESSION_RANGE } from './models'
 
-// Each cloud image column's starting parameters, for a fresh install's
-// settings and for a column whose saved parameters are missing. One source for
-// both, so a new install and a reset column start the same.
+/** A cloud image column's saved model and parameters, as backend-params.json holds them. */
+export interface SavedImageBackendParams {
+  model: string
+  params: Record<string, unknown>
+}
+
+// Each cloud image column's starting parameters, for a fresh install and for a
+// column whose saved parameters are missing. One source for both, so a new
+// install and a reset column start the same.
 export const IMAGE_DEFAULT_PARAMS = {
   openai: {
     width: 1024,

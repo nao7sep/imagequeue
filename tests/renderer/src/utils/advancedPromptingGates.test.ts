@@ -98,6 +98,7 @@ describe('computeAdvancedGates', () => {
     picks: allPicked,
     promptMode: 'fresh-task',
     totalTasks: 4,
+    iterationsValid: true,
   }
 
   it('enables all three action surfaces when idle and ready', () => {
@@ -138,6 +139,12 @@ describe('computeAdvancedGates', () => {
     expect(busy.queue.reason).toBeNull()
   })
 
+  it('holds Queue back while the iterations field holds a count it does not accept', () => {
+    const gates = computeAdvancedGates({ ...ready, iterationsValid: false })
+    expect(gates.queue).toEqual({ disabled: true, reason: 'advanced.invalidIterations' })
+    expect(gates.elaborate.disabled).toBe(false)
+  })
+
   it('reflects each control’s own precondition reason when idle', () => {
     const gates = computeAdvancedGates({
       activeOperation: null,
@@ -146,6 +153,7 @@ describe('computeAdvancedGates', () => {
       picks: { composition: false, style: false },
       promptMode: 'elaborated',
       totalTasks: 1,
+      iterationsValid: true,
     })
     expect(gates.missingElaboratorKind).toBe('composition')
     expect(gates.elaborate.disabled).toBe(true)

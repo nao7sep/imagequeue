@@ -1,3 +1,4 @@
+import type { SavedImageBackendParams } from '../shared/image-backend-defaults'
 import type { BrainstormConfig } from '../shared/brainstorm-config'
 import type { DraftSurface, QuitQuestion } from '../shared/quit'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -246,6 +247,9 @@ const api = {
     ipcRenderer.invoke('settings:saveBrainstorm', brainstorm),
   getCredentials: (): Promise<SettingsCredentials> =>
     ipcRenderer.invoke('settings:getCredentials'),
+
+  getImageBackendDefaults: (): Promise<Record<CloudBackendId, SavedImageBackendParams>> =>
+    ipcRenderer.invoke('settings:getImageBackendDefaults'),
 
   saveImageBackendDefaults: (
     backend: CloudBackendId,

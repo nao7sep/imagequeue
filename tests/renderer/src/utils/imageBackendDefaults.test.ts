@@ -61,7 +61,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   it('validates a saved OpenAI quality and clamps the saved width', () => {
     const result = resolveSavedImageBackendDefaults(
       'openai',
-      { model: 'gpt-image-2', default_params: { quality: 'bogus', moderation: 'low', width: 100, height: 100 } },
+      { model: 'gpt-image-2', params: { quality: 'bogus', moderation: 'low', width: 100, height: 100 } },
       OPENAI_MODELS,
       findModel('openai', 'gpt-image-2')
     )!
@@ -77,7 +77,7 @@ describe('resolveSavedImageBackendDefaults', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const result = resolveSavedImageBackendDefaults(
       'flux',
-      { model: 'flux-2-flex', default_params: { steps: 9999 } },
+      { model: 'flux-2-flex', params: { steps: 9999 } },
       FLUX_MODELS,
       flex
     )!
@@ -91,7 +91,7 @@ describe('resolveSavedImageBackendDefaults', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const result = resolveSavedImageBackendDefaults(
       'flux',
-      { model: 'flux-2-flex', default_params: {} },
+      { model: 'flux-2-flex', params: {} },
       FLUX_MODELS,
       flex
     )!
@@ -107,7 +107,7 @@ describe('resolveSavedImageBackendDefaults', () => {
     expect(pro.stepsRange).toBeUndefined()
     const result = resolveSavedImageBackendDefaults(
       'flux',
-      { model: 'flux-2-pro', default_params: { steps: 40, guidance: 3 } },
+      { model: 'flux-2-pro', params: { steps: 40, guidance: 3 } },
       FLUX_MODELS,
       pro
     )!
@@ -120,7 +120,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   it('keeps a saved model that is not in the list', () => {
     const result = resolveSavedImageBackendDefaults(
       'openai',
-      { model: 'gpt-image-0', default_params: { quality: 'high' } },
+      { model: 'gpt-image-0', params: { quality: 'high' } },
       OPENAI_MODELS,
       findModel('openai', 'gpt-image-2.5-flare')
     )!
@@ -129,7 +129,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   })
 
   it('takes the default model when none is saved', () => {
-    const result = resolveSavedImageBackendDefaults('openai', { default_params: {} }, OPENAI_MODELS, findModel('openai', 'gpt-image-2.5-flare'))!
+    const result = resolveSavedImageBackendDefaults('openai', { model: '', params: {} }, OPENAI_MODELS, findModel('openai', 'gpt-image-2.5-flare'))!
     expect(result.model).toBe('gpt-image-2.5-flare')
   })
 })

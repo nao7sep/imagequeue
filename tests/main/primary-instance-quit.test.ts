@@ -119,7 +119,7 @@ vi.mock('../../src/main/main-window-layout', () => ({
 vi.mock('../../src/main/startup-failure-window', () => ({ createStartupFailureWindow: vi.fn(() => ({ on: vi.fn(), isDestroyed: () => false })) }))
 vi.mock('../../src/main/utils/force-exit', () => ({ forceExit: vi.fn() }))
 vi.mock('../../src/main/quit-failure-window', () => ({ showQuitQuestion: vi.fn(async () => 'cancel') }))
-vi.mock('../../src/main/backend-defaults', () => ({ drainBackendDefaults: vi.fn(async () => undefined) }))
+vi.mock('../../src/main/backend-params', () => ({ drainBackendDefaults: vi.fn(async () => undefined), loadBackendParams: vi.fn(async () => undefined), getImageBackendDefaults: vi.fn(() => ({})) }))
 vi.mock('../../src/main/settings-writes', () => ({ retrySettingsWrites: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/brainstorm', () => ({ cancelAllBrainstorms: vi.fn(), hasActiveBrainstorms: vi.fn(() => false) }))
 vi.mock('../../src/main/dependencies/operations', () => ({

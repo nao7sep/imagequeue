@@ -5,6 +5,8 @@ import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
 import { optionLabel, sizePresetLabel } from '../i18n/optionLabels'
 import { IMAGE_DEFAULT_PARAMS } from '../../../shared/image-backend-defaults'
+import { parseNumberText, rangeRule, type NumberRule } from '../../../shared/number-field'
+import { NumberSettingRow } from '../components/NumberInput'
 
 // The UI keeps steps/guidance values even for a model that declares no range
 // (the fields are hidden and never enqueued); these are the numbers a fresh
@@ -18,8 +20,10 @@ export type FluxParams = {
   /** FLUX.2: index into the model's own size ladder (each model brings its own list). */
   sizeIdx: number
   outputFormat: FluxOutputFormat
-  steps: number
-  guidance: number
+  /** Steps and guidance hold their text as typed; only a value in the model's
+   *  range reaches a request or the column's saved choices. */
+  steps: string
+  guidance: string
   /** Raw seed field text; validated in full before admission. */
   seed: string
   /** FLUX 3: a ratio and a resolution level in place of width and height. */
@@ -63,6 +67,16 @@ function ratioAndResolution(saved: Record<string, unknown>, modelDef: FluxModelD
 function outputFormat(saved: Record<string, unknown>, modelDef: FluxModelDef): FluxOutputFormat {
   if (!modelDef.outputFormats) return listed(['png', 'jpeg', 'webp'] as const, saved.outputFormat, 'png')
   return listed(modelDef.outputFormats, saved.outputFormat, 'png')
+}
+
+const stepsRule = (range: { min: number; max: number }): NumberRule => rangeRule(range, true)
+const guidanceRule = (range: { min: number; max: number }): NumberRule => rangeRule(range, false)
+
+// On a model switch, text the new model's range accepts is kept; anything else
+// takes the new range's default.
+function clampText(text: string, range: { min: number; max: number; default: number } | undefined, rule: (range: { min: number; max: number }) => NumberRule): string {
+  if (!range) return text
+  return parseNumberText(text, rule(range)) === null ? String(range.default) : text
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParams, FluxModelDef>): React.JSX.Element {
@@ -110,43 +124,10 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParam
         </select>
       </div>
       {modelDef.stepsRange && (
-        <div className="setting-row">
-          <label htmlFor={`${fieldId}-steps`}>{t('backend.steps')}</label>
-          <input
-            id={`${fieldId}-steps`}
-            type="number"
-            value={params.steps}
-            onChange={(e) => {
-              const next = Number.parseInt(e.target.value, 10) || modelDef.stepsRange!.default
-              onChange({
-                ...params,
-                steps: Math.max(modelDef.stepsRange!.min, Math.min(modelDef.stepsRange!.max, next)),
-              })
-            }}
-            min={modelDef.stepsRange.min}
-            max={modelDef.stepsRange.max}
-          />
-        </div>
+        <NumberSettingRow id={`${fieldId}-steps`} label={t('backend.steps')} rule={stepsRule(modelDef.stepsRange)} text={params.steps} onText={(steps) => onChange({ ...params, steps })} />
       )}
       {modelDef.guidanceRange && (
-        <div className="setting-row">
-          <label htmlFor={`${fieldId}-guidance`}>{t('backend.guidance')}</label>
-          <input
-            id={`${fieldId}-guidance`}
-            type="number"
-            value={params.guidance}
-            onChange={(e) => {
-              const next = Number.parseFloat(e.target.value) || modelDef.guidanceRange!.default
-              onChange({
-                ...params,
-                guidance: Math.max(modelDef.guidanceRange!.min, Math.min(modelDef.guidanceRange!.max, next)),
-              })
-            }}
-            min={modelDef.guidanceRange.min}
-            max={modelDef.guidanceRange.max}
-            step={0.5}
-          />
-        </div>
+        <NumberSettingRow id={`${fieldId}-guidance`} label={t('backend.guidance')} rule={guidanceRule(modelDef.guidanceRange)} text={params.guidance} onText={(guidance) => onChange({ ...params, guidance })} />
       )}
       <div className="setting-row">
         <label htmlFor={`${fieldId}-seed`}>{t('backend.seed')}</label>
@@ -161,8 +142,8 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
   defaults: () => ({
     sizeIdx: 0,
     outputFormat: 'png',
-    steps: FALLBACK_STEPS,
-    guidance: FALLBACK_GUIDANCE,
+    steps: String(FALLBACK_STEPS),
+    guidance: String(FALLBACK_GUIDANCE),
     seed: '',
     ...IMAGE_DEFAULT_PARAMS.flux,
   }),
@@ -174,16 +155,8 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
   clampToModel: (params, modelDef) => ({
     sizeIdx: modelDef.sizes?.[params.sizeIdx] ? params.sizeIdx : 0,
     outputFormat: outputFormat(params, modelDef),
-    steps: modelDef.stepsRange
-      ? (params.steps >= modelDef.stepsRange.min && params.steps <= modelDef.stepsRange.max
-        ? params.steps
-        : modelDef.stepsRange.default)
-      : params.steps,
-    guidance: modelDef.guidanceRange
-      ? (params.guidance >= modelDef.guidanceRange.min && params.guidance <= modelDef.guidanceRange.max
-        ? params.guidance
-        : modelDef.guidanceRange.default)
-      : params.guidance,
+    steps: clampText(params.steps, modelDef.stepsRange, stepsRule),
+    guidance: clampText(params.guidance, modelDef.guidanceRange, guidanceRule),
     seed: params.seed,
     ...ratioAndResolution(params, modelDef),
   }),
@@ -197,8 +170,8 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
     return {
       sizeIdx: sizeIdx >= 0 ? sizeIdx : 0,
       outputFormat: outputFormat(saved, modelDef),
-      steps: resolveRangedParam(modelDef.stepsRange, saved.steps) ?? FALLBACK_STEPS,
-      guidance: resolveRangedParam(modelDef.guidanceRange, saved.guidance) ?? FALLBACK_GUIDANCE,
+      steps: String(resolveRangedParam(modelDef.stepsRange, saved.steps) ?? FALLBACK_STEPS),
+      guidance: String(resolveRangedParam(modelDef.guidanceRange, saved.guidance) ?? FALLBACK_GUIDANCE),
       seed: saved.seed == null ? '' : String(saved.seed),
       ...ratioAndResolution(saved, modelDef),
     }
@@ -211,8 +184,16 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
     const sizes = modelDef.sizes ?? []
     const size = sizes[params.sizeIdx] ?? sizes[0]!
     const result: Record<string, unknown> = { width: size.width, height: size.height, outputFormat: params.outputFormat }
-    if (modelDef.stepsRange) result.steps = params.steps
-    if (modelDef.guidanceRange) result.guidance = params.guidance
+    if (modelDef.stepsRange) {
+      const steps = parseNumberText(params.steps, stepsRule(modelDef.stepsRange))
+      if (steps === null) return null
+      result.steps = steps
+    }
+    if (modelDef.guidanceRange) {
+      const guidance = parseNumberText(params.guidance, guidanceRule(modelDef.guidanceRange))
+      if (guidance === null) return null
+      result.guidance = guidance
+    }
     const seed = resolveImageSeed(params.seed, 'flux')
     if (!seed.valid) return null
     result.seed = seed.seed

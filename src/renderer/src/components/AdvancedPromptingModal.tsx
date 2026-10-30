@@ -1,5 +1,5 @@
 import { useInstalledModels } from '../hooks/useInstalledModels'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Modal } from './Modal'
 import { useSettings } from '../context/SettingsContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -17,8 +17,6 @@ import { dtFallbacksFromSettings, resolveDtParams, toDrawThingsTaskParams } from
 import { hasApiKeyFor } from '../utils/enqueue'
 import { findModel } from '../../../shared/ai-models'
 import {
-  MAX_DRAFT_ITERATIONS,
-  normalizeCount,
   PROMPT_FORMATS,
   PROMPT_LENGTHS,
   PROMPT_FORMAT_LABELS,
@@ -47,6 +45,8 @@ import {
 import { ElaboratedPromptsModal } from './ElaboratedPromptsModal'
 import { useBrainstormOperation } from '../hooks/useBrainstormOperation'
 import './AdvancedPromptingModal.css'
+import { ADVANCED_ITERATIONS_RULE, parseNumberText } from '../../../shared/number-field'
+import { NumberFieldError } from './NumberInput'
 import { useI18n } from '../i18n/I18nContext'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 import type { TextProviderFailure } from '../../../shared/text-provider-failure'
@@ -212,6 +212,11 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     })
   }, [targetScope, selectedProprietary, selectedDtFiles, downloadedDtModels, proprietaryApiKeyByBackend])
 
+  // The iterations field keeps what was typed; the draft holds only a count it
+  // accepts, and Queue waits while the field holds anything else.
+  const [countText, setCountText] = useState(() => String(count))
+  const iterationsId = useId()
+  const iterationsValid = parseNumberText(countText, ADVANCED_ITERATIONS_RULE) !== null
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length
   const totalTasks = Math.max(0, targetCount * Math.max(1, count))
   const picks = {
@@ -229,6 +234,7 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
     picks,
     promptMode,
     totalTasks,
+    iterationsValid,
   })
   const brainstorm = useBrainstormOperation({
     compositionElaboratorId: selectedCompositionElaboratorId,
@@ -769,13 +775,23 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
             <div className="advanced-section-label">{t('advanced.iterations')}</div>
             <input
+              id={iterationsId}
               className="advanced-count"
               type="number"
-              min={1}
-              max={MAX_DRAFT_ITERATIONS}
-              value={count}
-              onChange={(e) => update({ count: normalizeCount(parseInt(e.target.value, 10)) })}
+              min={ADVANCED_ITERATIONS_RULE.min}
+              max={ADVANCED_ITERATIONS_RULE.max}
+              step={1}
+              aria-label={t('advanced.iterations')}
+              aria-invalid={!iterationsValid}
+              aria-describedby={iterationsValid ? undefined : `${iterationsId}-error`}
+              value={countText}
+              onChange={(e) => {
+                setCountText(e.target.value)
+                const next = parseNumberText(e.target.value, ADVANCED_ITERATIONS_RULE)
+                if (next !== null) update({ count: next })
+              }}
             />
+            {!iterationsValid && <NumberFieldError id={iterationsId} rule={ADVANCED_ITERATIONS_RULE} />}
           </div>
 
           <div className="advanced-pane-footer">

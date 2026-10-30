@@ -161,13 +161,11 @@ describe('settings by set', () => {
     await updateConfig(() => undefined)
     expect(fs.existsSync(file())).toBe(false)
   })
-  it('keeps a whole cluster, and a save back to the built-in leaves an empty file', async () => {
+  it('a save back to the built-in leaves an empty file', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     const defaults = createDefaultConfig().image_backends.openai
-    await updateConfig((draft) => { draft.image_backends.openai.default_params.width = 512 })
-    expect(stored()).toEqual({ image_backends: { openai: { defaults: {
-      model: defaults.model, default_params: { ...defaults.default_params, width: 512 },
-    } } } })
+    await updateConfig((draft) => { draft.image_backends.openai.concurrency = 1 })
+    expect(stored()).toEqual({ image_backends: { openai: { concurrency: 1 } } })
     await updateConfig((draft) => { draft.image_backends.openai = createDefaultConfig().image_backends.openai })
     expect(stored()).toEqual({})
     expect(loadConfig().image_backends.openai).toEqual(defaults)
@@ -190,11 +188,9 @@ describe('settings by set', () => {
     expect(loadConfig().brainstorm.templates.expansion).toBe('My expansion {{N}}')
     expect(loadConfig().brainstorm.batch_size).toBe(createDefaultConfig().brainstorm.batch_size)
   })
-  // Saves the user does not see as settings: closing the preview window and an
-  // image column's autosaved defaults.
+  // A save the user does not see as a setting: closing the preview window.
   it.each([
     ['closing the preview window', (draft: ReturnType<typeof createDefaultConfig>) => { draft.general.show_preview_window = false }],
-    ['an image column autosave', (draft: ReturnType<typeof createDefaultConfig>) => { draft.image_backends.grok.default_params.quality = 'low' }],
   ])('keeps a rejected brainstorm template and an unknown key through %s', async (_save, apply) => {
     const sets = { brainstorm: { templates: { expansion: 42 } }, general: { show_preview_window: true }, later: { kept: true } }
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, ...sets }))
@@ -268,6 +264,26 @@ describe('settings by set', () => {
     expect(stored()).toEqual({})
     await expect(updateConfig((draft) => { draft.notifications.volume = 1.5 })).rejects.toThrow('notifications.volume')
     expect(loadConfig().notifications.volume).toBe(createDefaultConfig().notifications.volume)
+  })
+  it('refuses the numbers Settings\' fields refuse, and reads a stored one as its built-in', async () => {
+    const fallbacks = { ...createDefaultConfig().image_backends.drawthings.default_params, fallback_width: 1000 }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { auto_preview_idle_seconds: 2.5 }, image_backends: { openai: { concurrency: 11 }, drawthings: { default_params: fallbacks } } }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    const defaults = createDefaultConfig()
+    expect(loadConfig().general.auto_preview_idle_seconds).toBe(defaults.general.auto_preview_idle_seconds)
+    expect(loadConfig().image_backends.openai.concurrency).toBe(defaults.image_backends.openai.concurrency)
+    expect(loadConfig().image_backends.drawthings.default_params).toEqual(defaults.image_backends.drawthings.default_params)
+    await expect(updateConfig((draft) => { draft.image_backends.grok.concurrency = 11 })).rejects.toThrow('image_backends.grok.concurrency')
+    await expect(updateConfig((draft) => { draft.image_backends.drawthings.default_params.fallback_steps = 0 })).rejects.toThrow('default_params')
+    await expect(updateConfig((draft) => { draft.image_backends.drawthings.default_params.fallback_guidance = -1 })).rejects.toThrow('default_params')
+    await updateConfig((draft) => {
+      draft.image_backends.flux.concurrency = 24
+      draft.general.auto_preview_idle_seconds = 0
+      draft.image_backends.drawthings.default_params.fallback_guidance = 0
+      draft.image_backends.drawthings.default_params.fallback_steps = 200
+    })
+    expect(loadConfig().image_backends.flux.concurrency).toBe(24)
+    expect(loadConfig().image_backends.drawthings.default_params).toMatchObject({ fallback_guidance: 0, fallback_steps: 200 })
   })
   it('reads a concurrency below one or a timeout not above zero as its built-in, and will not save one', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 0 }
@@ -463,28 +479,22 @@ describe('settings by set', () => {
     await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
     expect(stored()).toEqual({ notifications: { notifications_enabled: false } })
   })
-  // Which parameters a model takes is the column's to judge, so a record saved
-  // before a field was added or removed (v0.1.0's moderation) still loads whole.
-  it('loads an image column\'s saved model and parameters whatever fields they carry', async () => {
-    const saved = { model: 'gpt-image-1.5', default_params: { width: 1024, height: 1024, moderation: 'auto', quality: 'high', outputFormat: 'png', background: 'opaque' } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { defaults: saved } } }))
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig().image_backends.openai.model).toBe('gpt-image-1.5')
-    expect(loadConfig().image_backends.openai.default_params).toEqual(saved.default_params)
+  // The image columns' model and parameters moved to backend-params.json.
+  it('hands over the image columns\' stored model and parameters and drops them on the next save', async () => {
+    const saved = { model: 'gpt-image-1.5', default_params: { width: 1024, quality: 'high' } }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { defaults: saved, concurrency: 1 }, grok: { defaults: 'broken' } } }))
+    const { takeStoredImageBackendDefaults, dropRetiredConfigKeys } = await import('../../../src/main/config/config-store')
+    expect(takeStoredImageBackendDefaults()).toEqual({
+      openai: { model: 'gpt-image-1.5', params: { width: 1024, quality: 'high' } },
+      grok: 'broken',
+    })
+    await dropRetiredConfigKeys()
+    expect(stored()).toEqual({ image_backends: { openai: { concurrency: 1 } } })
   })
-  it('refuses an image column\'s saved parameters that are not plain values', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { defaults: { model: 'x', default_params: { width: { nested: 1 } } } } } }))
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig().image_backends.openai).toEqual(createDefaultConfig().image_backends.openai)
-  })
-  it('stores model and parameters in one renamed set, keeping the old sibling keys unread', async () => {
+  it('keeps unread the image column keys an earlier build stored beside the settings', async () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { model: 'old', default_params: {}, concurrency: 1 } } }))
-    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig().image_backends.openai.model).toBe(createDefaultConfig().image_backends.openai.model)
-    await updateConfig((draft) => { draft.image_backends.openai.model = 'chosen' })
-    expect(stored()).toEqual({ image_backends: { openai: {
-      model: 'old', default_params: {}, concurrency: 1,
-      defaults: { model: 'chosen', default_params: createDefaultConfig().image_backends.openai.default_params },
-    } } })
+    const { updateConfig } = await import('../../../src/main/config/config-store')
+    await updateConfig((draft) => { draft.image_backends.openai.concurrency = 2 })
+    expect(stored()).toEqual({ image_backends: { openai: { model: 'old', default_params: {}, concurrency: 2 } } })
   })
 })

@@ -14,7 +14,6 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
     cloudBackends[id] = {
       // Keys live in the separate secrets store (env-first), not config.json.
       apiKeyPresent: hasApiKey(IMAGE_BACKEND_SECRET[id]),
-      model: backend.model,
       concurrency: backend.concurrency,
       timeoutMs: backend.timeout_ms,
     }

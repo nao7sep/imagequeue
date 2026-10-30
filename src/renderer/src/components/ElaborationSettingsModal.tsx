@@ -17,7 +17,7 @@ import './ElaborationSettingsModal.css'
 import { useI18n } from '../i18n/I18nContext'
 import { message as msg, type Message } from '../../../shared/i18n/translate'
 import { useUnsavedDraftReport } from '../hooks/useUnsavedDraftReport'
-import { WholeNumberInput, withNumberText, type InvalidNumberText } from './WholeNumberInput'
+import { NumberInput, withNumberText, type InvalidNumberText } from './NumberInput'
 import { BRAINSTORM_LIMITS, EXPANSION_PLACEHOLDERS, REQUIRED_EXPANSION_PLACEHOLDERS, placeholderTag, type BrainstormConfig } from '../../../shared/brainstorm-config'
 
 interface Props {
@@ -248,10 +248,10 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
         <div className="elaboration-settings-section elaboration-settings-fields">
           <div className="elaboration-settings-row">
             <label htmlFor="elaboration-batch_size">{t('elabSettings.batchSize')}</label>
-            <WholeNumberInput
+            <NumberInput
               id="elaboration-batch_size"
               disabled={busy}
-              limits={BRAINSTORM_LIMITS.batch_size}
+              rule={{ ...BRAINSTORM_LIMITS.batch_size, whole: true }}
               value={form.batch_size}
               invalidText={numberText['elaboration-batch_size']}
               onInvalidText={(text) => setNumberText((prev) => withNumberText(prev, 'elaboration-batch_size', text))}
@@ -261,10 +261,10 @@ export function ElaborationSettingsModal({ onClose }: Props): React.JSX.Element 
           </div>
           <div className="elaboration-settings-row">
             <label htmlFor="elaboration-concurrency">{t('settings.concurrency')}</label>
-            <WholeNumberInput
+            <NumberInput
               id="elaboration-concurrency"
               disabled={busy}
-              limits={BRAINSTORM_LIMITS.concurrency}
+              rule={{ ...BRAINSTORM_LIMITS.concurrency, whole: true }}
               value={form.concurrency}
               invalidText={numberText['elaboration-concurrency']}
               onInvalidText={(text) => setNumberText((prev) => withNumberText(prev, 'elaboration-concurrency', text))}

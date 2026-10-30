@@ -9,6 +9,8 @@ export const FORMAT_VERSIONS = {
   elaborators: 1,
   /** params.json */
   modelParams: 1,
+  /** backend-params.json */
+  backendParams: 1,
   /** api-keys.json */
   apiKeys: 1,
   /** state.json */

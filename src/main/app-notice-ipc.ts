@@ -1,6 +1,7 @@
 import { handle } from './ipc-boundary'
 import { drainSetAsideConfigPaths } from './config/config-store'
-import { configResetPresentation } from './failure-presentation'
+import { drainSetAsideBackendParamsPaths } from './backend-params'
+import { backendParamsResetPresentation, configResetPresentation } from './failure-presentation'
 import { takePendingAppNotices } from './app-notices'
 import type { AppNotice } from '../shared/app-notice'
 
@@ -9,6 +10,7 @@ import type { AppNotice } from '../shared/app-notice'
 export function registerAppNoticeIpc(): void {
   handle('app:takePendingNotices', (): AppNotice[] => [
     ...drainSetAsideConfigPaths().map(configResetPresentation),
+    ...drainSetAsideBackendParamsPaths().map(backendParamsResetPresentation),
     ...takePendingAppNotices(),
   ])
 }

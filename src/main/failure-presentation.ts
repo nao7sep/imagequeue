@@ -138,6 +138,14 @@ export function modelParamsResetPresentation(path: string): AppNotice {
   }
 }
 
+/** backend-params.json was unreadable and set aside at `path`; each image column uses its default model and parameters. */
+export function backendParamsResetPresentation(path: string): AppNotice {
+  return {
+    title: message('notice.backendParamsResetTitle'),
+    message: message('notice.backendParamsResetMessage', { path }),
+  }
+}
+
 /** concepts.sqlite3 was unreadable and set aside at `path`; a new, empty concept library started. */
 export function conceptLibraryResetPresentation(path: string): AppNotice {
   return {

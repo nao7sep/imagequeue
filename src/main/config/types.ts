@@ -17,34 +17,9 @@ export interface TextProviderConfig {
   timeout_ms: number
 }
 
-export interface OpenAIBackendConfig {
-  model: string
-  default_params: {
-    width: number
-    height: number
-    quality: string
-    outputFormat: 'png' | 'jpeg' | 'webp'
-    outputCompression: number
-    background: 'auto' | 'transparent' | 'opaque'
-  }
-  concurrency: number
-  timeout_ms: number
-}
-
-export interface FluxBackendConfig {
-  model: string
-  // FLUX 3 takes a ratio and a resolution; FLUX.2 a size, format and seed, and
-  // Flex steps and guidance.
-  default_params: {
-    aspectRatio?: string
-    resolution?: string
-    width?: number
-    height?: number
-    outputFormat?: string
-    steps?: number
-    guidance?: number
-    seed?: number | null
-  }
+// A cloud image column's model and parameters are not settings: the column
+// saves them itself, in backend-params.json.
+export interface CloudBackendConfig {
   concurrency: number
   timeout_ms: number
 }
@@ -71,33 +46,11 @@ export interface DrawThingsBackendConfig {
   check_updates_at_launch: boolean
 }
 
-export interface NanoBananaBackendConfig {
-  model: string
-  default_params: {
-    aspectRatio: string
-    imageSize: string
-    thinking: string
-  }
-  concurrency: number
-  timeout_ms: number
-}
-
-export interface GrokBackendConfig {
-  model: string
-  default_params: {
-    aspectRatio: string
-    resolution: string
-    quality: string
-  }
-  concurrency: number
-  timeout_ms: number
-}
-
 export interface ImageBackendsConfig {
-  openai: OpenAIBackendConfig
-  nanobanana: NanoBananaBackendConfig
-  grok: GrokBackendConfig
-  flux: FluxBackendConfig
+  openai: CloudBackendConfig
+  nanobanana: CloudBackendConfig
+  grok: CloudBackendConfig
+  flux: CloudBackendConfig
   drawthings: DrawThingsBackendConfig
 }
 

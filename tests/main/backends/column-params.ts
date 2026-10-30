@@ -6,5 +6,5 @@ import { resolveSavedImageBackendDefaults } from '../../../src/renderer/src/util
  *  the column's own resolution, so a fixture task carries what the app sends. */
 export function columnParams(backend: BackendId, model: string): Record<string, unknown> {
   if (backend === 'drawthings') return {}
-  return resolveSavedImageBackendDefaults(backend, { model }, getModelsForBackend(backend), findModel(backend, model))!.params!
+  return resolveSavedImageBackendDefaults(backend, { model, params: {} }, getModelsForBackend(backend), findModel(backend, model))!.params!
 }

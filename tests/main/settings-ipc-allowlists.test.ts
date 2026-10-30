@@ -88,11 +88,10 @@ vi.mock('../../src/main/local-cli', () => ({
   ensureModelsDir: mocks.ensureModelsDir,
 }))
 
-vi.mock('../../src/main/backend-defaults', () => ({
-  saveImageBackendDefaults: async (backend: string, model: string, params: Record<string, unknown>) => {
-    (mocks.config.image_backends as unknown as Record<string, unknown>)[backend] = { model, default_params: params }
-    mocks.saveConfig(mocks.config)
-  },
+const backendParams = vi.hoisted(() => ({ save: vi.fn(async () => undefined) }))
+vi.mock('../../src/main/backend-params', () => ({
+  saveImageBackendDefaults: backendParams.save,
+  getImageBackendDefaults: vi.fn(() => ({})),
 }))
 
 const { registerSettingsIpc } = await import('../../src/main/settings-ipc')
@@ -242,16 +241,13 @@ describe('API keys', () => {
 })
 
 describe('image backend defaults', () => {
-  it('replaces the model and parameters as one set', async () => {
+  it('hands the model and parameters to their own store as one set', async () => {
     expect(await invoke('settings:saveImageBackendDefaults', 'openai', 'gpt-image-3', { quality: 'low' })).toEqual({
       success: true,
     })
 
-    expect((mocks.config as unknown as Record<string, Record<string, unknown>>).image_backends.openai).toEqual({
-      model: 'gpt-image-3',
-      default_params: { quality: 'low' },
-    })
-    expect(mocks.saveConfig).toHaveBeenCalledExactlyOnceWith(mocks.config)
+    expect(backendParams.save).toHaveBeenCalledExactlyOnceWith('openai', 'gpt-image-3', { quality: 'low' })
+    expect(mocks.saveConfig).not.toHaveBeenCalled()
   })
 
   it('refuses a backend it does not have, and writes nothing', async () => {
@@ -259,7 +255,15 @@ describe('image backend defaults', () => {
       /unsupported backend: drawthings/,
     )
     await expect(invoke('settings:saveImageBackendDefaults', '__proto__', 'm', {})).rejects.toThrow(/unsupported backend/)
-    expect(mocks.saveConfig).not.toHaveBeenCalled()
+    expect(backendParams.save).not.toHaveBeenCalled()
+  })
+})
+
+describe('Draw Things parameters', () => {
+  it('refuses numbers the column\'s fields would not accept', async () => {
+    const params = { width: 1000, height: 1024, steps: 4, guidance: 1, seed: '', negativePrompt: '' }
+    await expect(invoke('drawthings:setModelParams', 'model.ckpt', params)).rejects.toThrow('out of range')
+    await expect(invoke('drawthings:applyParamsToAll', ['model.ckpt'], { width: 1024, height: 1024, steps: 0, guidance: 1 })).rejects.toThrow('out of range')
   })
 })
 

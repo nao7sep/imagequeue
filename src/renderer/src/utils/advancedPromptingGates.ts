@@ -85,6 +85,8 @@ export interface AdvancedGatesInput {
   picks: ElaboratorPicks
   promptMode: PromptMode
   totalTasks: number
+  // Whether the iterations field holds a count it accepts.
+  iterationsValid: boolean
 }
 
 export interface ControlGate {
@@ -114,7 +116,7 @@ export function computeAdvancedGates(input: AdvancedGatesInput): AdvancedGates {
   const missingElaboratorKind = firstMissingElaboratorKind(input.picks)
 
   const elaborateReason = elaborateDisabledReason(input.seedFilled, missingElaboratorKind)
-  const queueReason = queueDisabledReason(
+  const queueReason = !input.iterationsValid ? 'advanced.invalidIterations' : queueDisabledReason(
     input.promptMode,
     input.seedFilled,
     input.elaboratedFilled,

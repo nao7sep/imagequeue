@@ -1,4 +1,5 @@
 import type { CloudBackendId } from '../../../shared/types'
+import type { SavedImageBackendParams } from '../../../shared/image-backend-defaults'
 import type {
   FluxModelDef,
   GrokModelDef,
@@ -29,14 +30,12 @@ export function serializeImageBackendDefaults(model: string, params: Record<stri
 
 // The saved model is kept as it is, in the list or not: a column whose model
 // is not a row warns so and queues its tasks with the plain request.
-function savedModelId(defaultModel: ModelDef | undefined, backendSettings: Record<string, unknown>): string {
-  return typeof backendSettings.model === 'string' && backendSettings.model.trim() !== ''
-    ? backendSettings.model
-    : (defaultModel?.id ?? '')
+function savedModelId(defaultModel: ModelDef | undefined, saved: SavedImageBackendParams): string {
+  return saved.model.trim() !== '' ? saved.model : (defaultModel?.id ?? '')
 }
 
 // One resolution for every cloud backend: pick the saved (or default) model,
-// hand the raw default_params record to the backend's descriptor, and derive
+// hand the raw saved params record to the backend's descriptor, and derive
 // the canonical enqueue-shaped `params` from the SAME toEnqueueParams the live
 // column serializes — so the persisted and current snapshots can never disagree
 // on shape or key order (a per-backend re-spelling here once gave FLUX a
@@ -53,14 +52,14 @@ function resolveWith<P extends Record<string, unknown>, M extends ModelDef>(
 
 export function resolveSavedImageBackendDefaults(
   backend: CloudBackendId,
-  backendSettings: Record<string, unknown> | null,
+  saved: SavedImageBackendParams | null,
   models: ModelDef[],
   defaultModel: ModelDef | undefined
 ): SavedImageBackendDefaults | null {
-  if (!backendSettings) return null
+  if (!saved) return null
 
-  const savedDefaultParams = (backendSettings.default_params as Record<string, unknown> | undefined) ?? {}
-  const model = savedModelId(defaultModel, backendSettings)
+  const savedDefaultParams = saved.params
+  const model = savedModelId(defaultModel, saved)
   const modelDef = models.find((m) => m.id === model)
   // A model not in the list has no parameters to resolve; the column starts
   // from the backend's own defaults once another model is chosen.

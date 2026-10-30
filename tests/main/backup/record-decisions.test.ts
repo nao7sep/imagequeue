@@ -9,13 +9,14 @@ import { drainPendingWrites, setModelParams } from '../../../src/main/model-para
 import { updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { recordServerTime } from '../../../src/main/dependencies/recommendations-times'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
+import { drainBackendDefaults, loadBackendParams, saveImageBackendDefaults } from '../../../src/main/backend-params'
 
 // The record/no-record wiring at REAL managed-text write sites, end to end through the shared
 // atomic-write choke point (utils/atomic-write.ts → backup/backup-store.ts). This is the "what is
 // backed up and what is not" pin: it proves the per-write-site `records` boolean actually reaches the
 // store, rather than only unit-testing record() in isolation.
 //
-//   RECORDED   config.json, elaborators.json, params.json — settings and authored text.
+//   RECORDED   config.json, elaborators.json, params.json, backend-params.json — settings and authored text.
 //   NO-RECORD  dependencies.json — a re-derivable dependency-check cache; recommendations-times.json —
 //              the server times of re-fetchable configs.json files. session.json, transient session
 //              work, is pinned in the session lifecycle tests.
@@ -65,6 +66,15 @@ describe('record/no-record decisions at real write sites', () => {
     await createElaborator({ kind: 'style', name: 'X', template: 'a template' })
     await closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'elaborators.json'))
+  })
+
+  it('records backend-params.json when an image column saves', async () => {
+    await loadBackendParams()
+    const saved = saveImageBackendDefaults('openai', 'gpt-image-2', { width: 1024 })
+    await drainBackendDefaults()
+    await saved
+    await closeBackupStore()
+    expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'backend-params.json'))
   })
 
   it('records params.json when a model param is set and its write drains', async () => {

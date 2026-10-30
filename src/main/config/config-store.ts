@@ -9,6 +9,7 @@ import { setAsideFile } from '../utils/set-aside'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
 import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { CLOUD_BACKEND_IDS_IN_UI_ORDER } from '../../shared/types'
 
 let cachedConfig: AppConfig | null = null
 // The map of sets the config in memory stands for, as of the last load or
@@ -171,7 +172,33 @@ const RETIRED_KEYS: ReadonlySet<string> = new Set([
   // The elaboration attempt cap and backoff are constants, as provider retries are.
   'brainstorm.retry_backoff_ms',
   'brainstorm.max_retries_per_turn',
+  // The image columns' model and parameters moved to backend-params.json.
+  ...CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => `image_backends.${backend}.defaults`),
 ])
+
+/**
+ * What config.json held for each image column's model and parameters before
+ * they moved to backend-params.json, keyed by backend, for that file's first
+ * contents. The keys are retired, so the next save drops them.
+ */
+export function takeStoredImageBackendDefaults(): Record<string, unknown> {
+  loadConfig()
+  const moved: Record<string, unknown> = {}
+  for (const backend of CLOUD_BACKEND_IDS_IN_UI_ORDER) {
+    const value = storedMap === null ? undefined : readPath(storedMap, `image_backends.${backend}.defaults`)
+    if (value === undefined) continue
+    if (isObject(value) && Object.hasOwn(value, 'default_params')) {
+      const { default_params: params, ...rest } = value
+      moved[backend] = { ...rest, params }
+    } else moved[backend] = value
+  }
+  return moved
+}
+
+/** Writes config.json again when a load left retired keys in it. */
+export function dropRetiredConfigKeys(): Promise<AppConfig> {
+  return updateConfig(() => {})
+}
 
 // Writes each key `stored` holds outside the known sets into `next`, unchanged.
 // A container of known sets is walked into; anything else is kept whole, unless

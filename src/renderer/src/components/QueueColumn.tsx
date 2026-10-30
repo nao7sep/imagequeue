@@ -62,7 +62,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   } = useSelection()
   const actionsRef = useRef<HTMLButtonElement>(null)
   const isComposing = useImeGuard()
-  const { settings, apiKeyPresence, saveImageBackendDefaults } = useSettings()
+  const { settings, apiKeyPresence, imageBackendDefaults, saveImageBackendDefaults } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId)
   const defaultModel = getDefaultModelForBackend(backendId)
@@ -112,15 +112,12 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
   const columnTasks = tasks[backendId]
   const settingsLoaded = settings !== null
-  const backendSettings = useMemo(
-    () => (settings?.image_backends as Record<string, Record<string, unknown>> | undefined)?.[backendId] ?? null,
-    [settings, backendId]
-  )
+  const savedBackendParams = proprietaryBackend ? imageBackendDefaults?.[proprietaryBackend] ?? null : null
   const savedProprietaryDefaults = useMemo(
     () => proprietaryBackend
-      ? resolveSavedImageBackendDefaults(proprietaryBackend, backendSettings, models, defaultModel)
+      ? resolveSavedImageBackendDefaults(proprietaryBackend, savedBackendParams, models, defaultModel)
       : null,
-    [proprietaryBackend, backendSettings, models, defaultModel]
+    [proprietaryBackend, savedBackendParams, models, defaultModel]
   )
   const currentEnqueueParams = useMemo<Record<string, unknown> | null>(() => {
     if (backendId === 'drawthings') {
@@ -166,8 +163,8 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
       setSnapshot(backendId, null)
       return
     }
-    setSnapshot(backendId, { model, params: currentEnqueueParams ?? {}, ready: readyToEnqueue, ...(currentEnqueueParams === null ? { invalidParams: true } : {}), ...(backendId === 'drawthings' ? { onEnqueue: drawThings.commitDimensions } : {}) })
-  }, [backendId, model, currentEnqueueParams, readyToEnqueue, setSnapshot, drawThings.commitDimensions])
+    setSnapshot(backendId, { model, params: currentEnqueueParams ?? {}, ready: readyToEnqueue, ...(currentEnqueueParams === null ? { invalidParams: true } : {}) })
+  }, [backendId, model, currentEnqueueParams, readyToEnqueue, setSnapshot])
 
   useEffect(() => {
     return () => { setSnapshot(backendId, null) }

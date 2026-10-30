@@ -7,13 +7,12 @@ import { AI_ROLES, TEXT_PROVIDERS, textRowFor } from '../../shared/ai-models'
 import { multiline, singleLine } from '../../shared/textCleanup'
 import { valuesEqual } from '../settings-changes'
 import { BRAINSTORM_LIMITS } from '../../shared/brainstorm-config'
+import { AUTO_PREVIEW_SECONDS_RULE, CONCURRENCY_RULES, DRAW_THINGS_DIMENSION_RULE, DRAW_THINGS_GUIDANCE_RULE, DRAW_THINGS_STEPS_RULE, meetsNumberRule, type NumberRule } from '../../shared/number-field'
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-// The persisted boundaries are independent of the effective config's convenient
-// model/default_params siblings used by generation code.
 export function configSetDefaults(): Record<string, unknown> {
   const config = createDefaultConfig()
   const sets: Record<string, unknown> = {}
@@ -28,14 +27,7 @@ export function configSetDefaults(): Record<string, unknown> {
     for (const role of AI_ROLES) sets[`${provider}.thinking.${role.id}`] = config[provider].thinking[role.id]
   }
   for (const [id, backend] of Object.entries(config.image_backends)) {
-    for (const [key, value] of Object.entries(backend)) {
-      if (id !== 'drawthings' && (key === 'model' || key === 'default_params')) continue
-      sets[`image_backends.${id}.${key}`] = value
-    }
-    if (id !== 'drawthings') {
-      const cloud = backend as { model: string; default_params: unknown }
-      sets[`image_backends.${id}.defaults`] = { model: cloud.model, default_params: cloud.default_params }
-    }
+    for (const [key, value] of Object.entries(backend)) sets[`image_backends.${id}.${key}`] = value
   }
   sets['prompts.slug'] = config.prompts.slug
   // Each brainstorm value is its own set, so a number that fails its check
@@ -62,20 +54,11 @@ export function writePath(object: Record<string, unknown>, key: string, value: u
 }
 
 export function readConfigSet(config: AppConfig, key: string): unknown {
-  if (key.endsWith('.defaults')) {
-    const backend = readPath(config, key.slice(0, -'.defaults'.length)) as { model: string; default_params: unknown }
-    return { model: backend.model, default_params: backend.default_params }
-  }
   return readPath(config, key)
 }
 
 export function applyConfigSet(config: AppConfig, key: string, value: unknown): void {
-  if (key.endsWith('.defaults')) {
-    const parent = key.slice(0, -'.defaults'.length)
-    const cluster = value as { model: string; default_params: unknown }
-    writePath(config as unknown as Record<string, unknown>, `${parent}.model`, cluster.model)
-    writePath(config as unknown as Record<string, unknown>, `${parent}.default_params`, cluster.default_params)
-  } else writePath(config as unknown as Record<string, unknown>, key, value)
+  writePath(config as unknown as Record<string, unknown>, key, value)
 }
 
 // The ranges the app's own code requires.
@@ -84,12 +67,24 @@ export function applyConfigSet(config: AppConfig, key: string, value: unknown): 
 const BRAINSTORM_LIMIT_SETS = new Map<string, { min: number; max: number }>(
   Object.entries(BRAINSTORM_LIMITS).map(([name, limits]) => [`brainstorm.${name}`, limits]))
 
+// Settings' number fields accept the same rules, so a value they let through
+// is never refused here.
+const NUMBER_FIELD_SETS = new Map<string, NumberRule>([
+  ['general.auto_preview_idle_seconds', AUTO_PREVIEW_SECONDS_RULE],
+  ...Object.entries(CONCURRENCY_RULES).map(([backend, rule]) => [`image_backends.${backend}.concurrency`, rule] as const),
+  ['image_backends.drawthings.default_params.fallback_width', DRAW_THINGS_DIMENSION_RULE],
+  ['image_backends.drawthings.default_params.fallback_height', DRAW_THINGS_DIMENSION_RULE],
+  ['image_backends.drawthings.default_params.fallback_steps', DRAW_THINGS_STEPS_RULE],
+  ['image_backends.drawthings.default_params.fallback_guidance', DRAW_THINGS_GUIDANCE_RULE],
+])
+
 function meetsAppLimits(key: string, value: number): boolean {
   const limits = BRAINSTORM_LIMIT_SETS.get(key)
   if (limits) return Number.isInteger(value) && value >= limits.min && value <= limits.max
+  const rule = NUMBER_FIELD_SETS.get(key)
+  if (rule) return meetsNumberRule(value, rule)
   // An <audio> volume outside 0–1 throws.
   if (key === 'notifications.volume') return value >= 0 && value <= 1
-  if (key.endsWith('.concurrency')) return value >= 1
   if (key.endsWith('.timeout_ms')) return value > 0
   return true
 }
@@ -101,14 +96,6 @@ export function hasSetShape(value: unknown, builtIn: unknown, key = ''): boolean
   if (key === 'general.language') return value === 'system' || isLanguage(value)
   if (key === 'general.time_zone') return value === 'system' || isTimeZone(value)
   if (key === 'provider') return value === 'gemini' || value === 'openai'
-  // An image column's model and its parameters. Which parameters a model takes,
-  // and their values, are the column's to judge per row, so a record saved for a
-  // model or a field that has since changed still loads.
-  if (key.endsWith('.defaults')) {
-    if (!isObject(value) || typeof value.model !== 'string' || !isObject(value.default_params)) return false
-    return Object.values(value.default_params).every((item) =>
-      item === null || typeof item === 'string' || (typeof item === 'number' && Number.isFinite(item)))
-  }
   if (builtIn === null) return value === null || (typeof value === 'number' && Number.isFinite(value))
   if (Array.isArray(builtIn)) return Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
   if (isObject(builtIn)) {
@@ -130,8 +117,7 @@ function cleanEach<T extends object>(record: T, declared: T, clean: (text: strin
 }
 
 // A set's text as it is compared and stored (text-cleanup-conventions): bodies
-// multiline, scalars single-line. Paths and image backend clusters are stored
-// as given.
+// multiline, scalars single-line. Paths are stored as given.
 // Expects a value of the set's shape.
 export function cleanConfigSet(key: string, value: unknown): unknown {
   if (key === 'prompts.slug') return multiline(value as string)
@@ -146,7 +132,7 @@ export function cleanConfigSet(key: string, value: unknown): unknown {
       lengths: cleanEach(directives.lengths, createDefaultConfig().brainstorm.format_directives.lengths, singleLine),
     }
   }
-  if (key.endsWith('.defaults') || PATH_SETS.has(key)) return value
+  if (PATH_SETS.has(key)) return value
   return typeof value === 'string' ? singleLine(value) : value
 }
 

@@ -21,6 +21,7 @@ const emptyTasks = (): Record<BackendId, Task[]> => ({
 
 let settingsValue: {
   settings: Record<string, unknown> | null
+  imageBackendDefaults: Record<string, { model: string; params: Record<string, unknown> }> | null
   apiKeyPresence: { image: Record<string, boolean>; geminiText: boolean; openaiText: boolean } | null
   saveChangedSettings: ReturnType<typeof vi.fn>
   saveBrainstormSettings: ReturnType<typeof vi.fn>
@@ -106,6 +107,7 @@ beforeEach(() => {
   })
   settingsValue = {
     settings: null,
+    imageBackendDefaults: null,
     apiKeyPresence: null,
     saveChangedSettings: vi.fn(async () => ({})),
     saveBrainstormSettings: vi.fn(async () => ({})),
@@ -182,11 +184,8 @@ afterEach(() => {
 })
 
 function stageSettings(backend: string, model: string, defaultParams: Record<string, unknown> = {}): void {
-  settingsValue.settings = {
-    image_backends: {
-      [backend]: { model, default_params: defaultParams },
-    },
-  }
+  settingsValue.settings = { image_backends: {} }
+  settingsValue.imageBackendDefaults = { [backend]: { model, params: defaultParams } }
 }
 
 function task(status: Task['status'], error: Message | null = null): Task {
@@ -752,7 +751,7 @@ describe('cloud columns: a field the current model does not take', () => {
     await advanceAutosave()
     expect(settingsValue.saveImageBackendDefaults).toHaveBeenCalled()
     const [backend, model, params] = settingsValue.saveImageBackendDefaults.mock.lastCall as [string, string, Record<string, unknown>]
-    settingsValue.settings = { image_backends: { [backend]: { model, default_params: params } } }
+    settingsValue.imageBackendDefaults = { [backend]: { model, params } }
     rerender(ui())
     await flush()
   }
@@ -1175,7 +1174,7 @@ describe('whole seed fields', () => {
 })
 
 
-it('preserves dimension typing and agrees on the displayed, saved and queued grid at commit', async () => {
+it('keeps typed Draw Things numbers as typed, saving and queueing only values the fields accept', async () => {
   electronAPI.localCheckCli.mockResolvedValue(CLI_OK)
   electronAPI.localListDownloadedModels.mockResolvedValue([MODEL_A])
   electronAPI.dtGetModelParams.mockResolvedValue({ ...SAVED_DT_PARAMS, width: 1000, height: 777 })
@@ -1183,27 +1182,39 @@ it('preserves dimension typing and agrees on the displayed, saved and queued gri
   await flush()
   const width = rowControl(container, 'Width')
   const height = rowControl(container, 'Height')
+  // A stored size is put on the CLI's grid as it loads.
   expect([width.value, height.value]).toEqual(['1024', '768'])
   expect(electronAPI.dtSaveModelParams).not.toHaveBeenCalled()
-  fireEvent.change(width, { target: { value: '' } })
+  for (const typed of ['', '1000', '32']) {
+    fireEvent.change(width, { target: { value: typed } })
+    fireEvent.blur(width)
+    await flush()
+    expect(width.value).toBe(typed)
+    expect(width.getAttribute('aria-invalid')).toBe('true')
+    expect(container.textContent).toContain('Enter a multiple of 64 that is 64 or more.')
+    expect(electronAPI.dtSaveModelParams).not.toHaveBeenCalled()
+    expect(enqueueValue.setSnapshot.mock.lastCall?.[1]).toMatchObject({ ready: false, invalidParams: true })
+  }
+  fireEvent.change(width, { target: { value: '1088' } })
   await flush()
-  expect(width.value).toBe('')
-  expect(electronAPI.dtSaveModelParams).not.toHaveBeenCalled()
-  expect(enqueueValue.setSnapshot.mock.lastCall?.[1].ready).toBe(false)
-  fireEvent.change(width, { target: { value: '1' } })
-  expect(width.value).toBe('1')
-  fireEvent.change(width, { target: { value: '1000' } })
+  expect(width.value).toBe('1088')
+  expect(width.getAttribute('aria-invalid')).toBe('false')
+  expect(electronAPI.dtSaveModelParams).toHaveBeenLastCalledWith(MODEL_A.file, expect.objectContaining({ width: 1088, height: 768 }))
+  expect(enqueueValue.setSnapshot.mock.lastCall?.[1]).toMatchObject({ ready: true, params: { width: 1088, height: 768 } })
+  const steps = rowControl(container, 'Steps')
+  const guidance = rowControl(container, 'Guidance')
+  for (const [field, typed] of [[steps, '0'], [steps, '2.5'], [guidance, ''], [guidance, 'x']] as const) {
+    const saves = electronAPI.dtSaveModelParams.mock.calls.length
+    fireEvent.change(field, { target: { value: typed } })
+    await flush()
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+    expect(electronAPI.dtSaveModelParams.mock.calls.length).toBe(saves)
+    fireEvent.change(field, { target: { value: field === steps ? '30' : '0' } })
+    await flush()
+  }
+  // Steps and guidance have no maximum of their own: Draw Things owns its limits.
+  fireEvent.change(steps, { target: { value: '200' } })
+  fireEvent.change(guidance, { target: { value: '35.5' } })
   await flush()
-  expect(width.value).toBe('1000')
-  expect(electronAPI.dtSaveModelParams).toHaveBeenLastCalledWith(MODEL_A.file, expect.objectContaining({ width: 1024, height: 768 }))
-  expect(enqueueValue.setSnapshot.mock.lastCall?.[1].params).toMatchObject({ width: 1024, height: 768 })
-  // Keyboard submission does not blur the field; the shared enqueue owner
-  // commits the normalized display through this captured callback.
-  act(() => enqueueValue.setSnapshot.mock.lastCall?.[1].onEnqueue())
-  expect(width.value).toBe('1024')
-  fireEvent.change(height, { target: { value: '1000' } })
-  fireEvent.blur(height)
-  await flush()
-  expect(height.value).toBe('1024')
-  expect(electronAPI.dtSaveModelParams).toHaveBeenLastCalledWith(MODEL_A.file, expect.objectContaining({ width: 1024, height: 1024 }))
+  expect(electronAPI.dtSaveModelParams).toHaveBeenLastCalledWith(MODEL_A.file, expect.objectContaining({ steps: 200, guidance: 35.5 }))
 })

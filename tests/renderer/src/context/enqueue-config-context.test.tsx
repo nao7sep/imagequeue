@@ -23,19 +23,12 @@ it('submits Send to All through one batch so backends share one session operatio
   let context!: ReturnType<typeof useEnqueueConfigs>
   function Probe(): null { context = useEnqueueConfigs(); return null }
   await act(async () => { render(<QueueProvider><EnqueueConfigProvider><Probe /></EnqueueConfigProvider></QueueProvider>) })
-  const commitOpenAi = vi.fn()
-  const commitFlux = vi.fn()
-  const commitBlocked = vi.fn()
   act(() => {
-    context.setSnapshot('openai', { model: 'openai-model', params: { quality: 'low' }, ready: true, onEnqueue: commitOpenAi })
-    context.setSnapshot('flux', { model: 'flux-model', params: { aspectRatio: '1:1' }, ready: true, onEnqueue: commitFlux })
-    context.setSnapshot('grok', { model: 'grok-model', params: {}, ready: false, onEnqueue: commitBlocked })
+    context.setSnapshot('openai', { model: 'openai-model', params: { quality: 'low' }, ready: true })
+    context.setSnapshot('flux', { model: 'flux-model', params: { aspectRatio: '1:1' }, ready: true })
+    context.setSnapshot('grok', { model: 'grok-model', params: {}, ready: false })
   })
   await act(async () => { context.enqueueToAll('a cat') })
-  expect(commitOpenAi).toHaveBeenCalledOnce()
-  expect(commitFlux).toHaveBeenCalledOnce()
-  expect(commitBlocked).not.toHaveBeenCalled()
-  for (const unit of enqueueBatch.mock.calls[0][0]) expect(unit).not.toHaveProperty('onEnqueue')
   expect(enqueue).not.toHaveBeenCalled()
   expect(enqueueBatch).toHaveBeenCalledOnce()
   expect(enqueueBatch).toHaveBeenCalledWith([
@@ -43,7 +36,7 @@ it('submits Send to All through one batch so backends share one session operatio
     expect.objectContaining({ backend: 'flux', model: 'flux-model', prompt: 'a cat' }),
   ])
   await act(async () => { context.enqueueToBackend('openai', 'another cat') })
-  expect(commitOpenAi).toHaveBeenCalledTimes(2)
+  expect(enqueue).toHaveBeenCalledOnce()
   await act(async () => { context.enqueueToBackend('openai', '') })
-  expect(commitOpenAi).toHaveBeenCalledTimes(2)
+  expect(enqueue).toHaveBeenCalledOnce()
 })

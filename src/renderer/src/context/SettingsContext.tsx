@@ -4,6 +4,7 @@ import { serializeError } from '../../../shared/serialize-error'
 import { Modal } from '../components/Modal'
 import { useI18n } from '../i18n/I18nContext'
 import type { BrainstormConfig } from '../../../shared/brainstorm-config'
+import type { SavedImageBackendParams } from '../../../shared/image-backend-defaults'
 
 interface SettingsContextValue {
   settings: Record<string, unknown> | null
@@ -18,9 +19,11 @@ interface SettingsContextValue {
   // Stored key values by id, for the Settings form alone. Keys are not part of
   // `settings`: config.json cannot hold one; Save carries a separate key map.
   apiKeys: Record<SecretId, string> | null
+  // Each cloud column's own saved model and parameters, which are not settings.
+  imageBackendDefaults: Record<CloudBackendId, SavedImageBackendParams> | null
   saveChangedSettings: (base: Record<string, unknown>, next: Record<string, unknown>, keys?: Partial<Record<SecretId, string>>, authoredPaths?: string[]) => Promise<Record<string, unknown>>
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<Record<string, unknown>>
-  saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>
+  saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<void>
   saveNotificationField: (field: string, value: unknown) => Promise<Record<string, unknown>>
 }
 
@@ -31,6 +34,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
   const [apiKeyPresence, setApiKeyPresence] = useState<ApiKeyPresence | null>(null)
   const [apiKeys, setApiKeys] = useState<Record<SecretId, string> | null>(null)
+  const [imageBackendDefaults, setImageBackendDefaults] = useState<Record<CloudBackendId, SavedImageBackendParams> | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [loadRevision, setLoadRevision] = useState(0)
 
@@ -39,9 +43,11 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
     void Promise.all([
       window.electronAPI.getSettings(),
       window.electronAPI.getCredentials(),
-    ]).then(([cfg, { presence, keys }]) => {
+      window.electronAPI.getImageBackendDefaults(),
+    ]).then(([cfg, { presence, keys }, backendDefaults]) => {
       if (cancelled) return
       setSettings(cfg as Record<string, unknown>)
+      setImageBackendDefaults(backendDefaults)
       setApiKeyPresence(presence)
       setApiKeys(keys)
       setLoadError(false)
@@ -97,11 +103,11 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
   )
 
   const saveImageBackendDefaults = useCallback(
-    async (backend: CloudBackendId, model: string, params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    async (backend: CloudBackendId, model: string, params: Record<string, unknown>): Promise<void> => {
       await window.electronAPI.saveImageBackendDefaults(backend, model, params)
-      return refreshSettings()
+      setImageBackendDefaults(await window.electronAPI.getImageBackendDefaults())
     },
-    [refreshSettings]
+    []
   )
 
   const saveNotificationField = useCallback(async (field: string, value: unknown): Promise<Record<string, unknown>> => {
@@ -115,13 +121,14 @@ export function SettingsProvider({ children }: { children: ReactNode }): React.J
         settings,
         apiKeyPresence,
         apiKeys,
+        imageBackendDefaults,
         saveChangedSettings,
         saveBrainstormSettings,
         saveImageBackendDefaults,
         saveNotificationField,
       }}
     >
-      {settings && apiKeyPresence && apiKeys ? children : loadError ? (
+      {settings && apiKeyPresence && apiKeys && imageBackendDefaults ? children : loadError ? (
         <Modal
           title={t('settingsLoad.title')}
           onClose={() => setLoadRevision((value) => value + 1)}

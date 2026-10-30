@@ -22,6 +22,7 @@ describe('settings changed by the main process', () => {
     window.electronAPI = {
       getSettings: vi.fn(async () => ({ general: { show_preview_window: stored } })),
       getCredentials: vi.fn(async () => ({ presence: {}, keys: {} })),
+      getImageBackendDefaults: vi.fn(async () => ({})),
       onSettingsChanged: vi.fn((callback: () => void) => { changed = callback; return () => {} }),
       appLog: vi.fn(async () => undefined),
     } as unknown as typeof window.electronAPI

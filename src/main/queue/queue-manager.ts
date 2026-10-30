@@ -1,6 +1,7 @@
 import { isQueueTaskVisible } from '../../shared/queue-visibility'
 import { nanoid } from 'nanoid'
 import { BackendId, Task, EnqueueBatchUnit, EnqueueRequest } from '../../shared/types'
+import { meetsTaskNumberRules } from '../../shared/number-field'
 
 export function createEmptyQueues(): Record<BackendId, Task[]> {
   return {
@@ -76,6 +77,11 @@ export class QueueManager {
   }
 
   private enqueueUnit(request: EnqueueBatchUnit): Task {
+    // The column's number fields admit only these values, so anything else is
+    // refused rather than corrected.
+    if (!meetsTaskNumberRules(request.backend, request.model, request.params)) {
+      throw new Error(`Cannot queue a ${request.backend} task whose parameters are out of range`)
+    }
     const task = this.createTask(request)
     this.insertNewTask(task)
     return task

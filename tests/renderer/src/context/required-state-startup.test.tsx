@@ -69,6 +69,7 @@ describe('required settings startup gate', () => {
     const credentials = deferred<SettingsCredentials>()
     window.electronAPI = {
       getSettings: vi.fn(() => settings.promise), getCredentials: vi.fn(() => credentials.promise),
+      getImageBackendDefaults: vi.fn(async () => ({})),
       onSettingsChanged: vi.fn(() => () => {}),
     } as unknown as typeof window.electronAPI
     render(<SettingsProvider><SettingsChild /></SettingsProvider>)
@@ -96,7 +97,7 @@ describe('required settings startup gate', () => {
     const getSettings = vi.fn().mockReturnValueOnce(initialSettings.promise).mockReturnValueOnce(retrySettings.promise)
     const getCredentials = vi.fn().mockReturnValueOnce(initialCredentials.promise).mockReturnValueOnce(retryCredentials.promise)
     const appLog = vi.fn().mockResolvedValue(undefined)
-    window.electronAPI = { getSettings, getCredentials, appLog, onSettingsChanged: vi.fn(() => () => {}) } as unknown as typeof window.electronAPI
+    window.electronAPI = { getSettings, getCredentials, getImageBackendDefaults: vi.fn(async () => ({})), appLog, onSettingsChanged: vi.fn(() => () => {}) } as unknown as typeof window.electronAPI
     render(<SettingsProvider><SettingsChild /></SettingsProvider>)
     expectChildAbsent()
 

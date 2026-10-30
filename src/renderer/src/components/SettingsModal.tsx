@@ -9,7 +9,8 @@ import { TextProviderSettings } from './TextProviderSettings'
 import { TEXT_PROVIDERS } from '../../../shared/ai-models'
 import { IMAGE_BACKEND_SECRET, type SecretId } from '../../../shared/types'
 import { NotificationVolumeSlider } from './NotificationVolumeSlider'
-import { WholeNumberInput, withNumberText, type InvalidNumberText } from './WholeNumberInput'
+import { NumberInput, withNumberText, type InvalidNumberText } from './NumberInput'
+import { AUTO_PREVIEW_SECONDS_RULE, CONCURRENCY_RULES, DRAW_THINGS_DIMENSION_RULE, DRAW_THINGS_GUIDANCE_RULE, DRAW_THINGS_STEPS_RULE, TIMEOUT_SECONDS_RULE } from '../../../shared/number-field'
 import { presentFailure } from '../utils/failurePresentation'
 import { rebaseSettingsDraft } from '../utils/settingsDraft'
 import { serializeError } from '../../../shared/serialize-error'
@@ -290,6 +291,8 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
       dismissable={!saving}
       footer={
         <>
+          {/* A field on another tab may hold the error, so Save says why it waits. */}
+          {!numbersValid && <span className="modal-footer-lead" role="status">{t('settings.fixNumbers')}</span>}
           <button className="modal-btn" onClick={() => void handleClose()} disabled={saving}>{t('common.cancel')}</button>
           <button className="modal-btn modal-btn-primary" onClick={handleSave} disabled={!dirty || !numbersValid || saving} aria-busy={saving}>{t('common.save')}</button>
         </>
@@ -384,13 +387,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-autoPreview">{t('settings.autoPreview')}</label>
-            <input id="settings-autoPreview"
-              type="number"
-              min={0}
-              step={1}
-              value={general.auto_preview_idle_seconds as number}
-              onChange={(e) => updateGeneral('auto_preview_idle_seconds', Math.max(0, parseInt(e.target.value) || 0))}
-            />
+            <NumberInput id="settings-autoPreview" rule={AUTO_PREVIEW_SECONDS_RULE} value={general.auto_preview_idle_seconds as number} invalidText={numberText['settings-autoPreview']} onInvalidText={(text) => setFieldText('settings-autoPreview', text)} onValue={(value) => updateGeneral('auto_preview_idle_seconds', value)} />
             <p className="settings-hint">{t('settings.autoPreviewHint')}</p>
           </div>
           <div className="settings-field settings-field-full settings-panel-after-hint">
@@ -601,11 +598,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-openai-concurrency">{t('settings.concurrency')}</label>
-            <WholeNumberInput id="settings-openai-concurrency" max={10} limits={{ min: 1 }} value={backends.openai.concurrency as number} invalidText={numberText['settings-openai-concurrency']} onInvalidText={(text) => setFieldText('settings-openai-concurrency', text)} onValue={(value) => updateBackend('openai', 'concurrency', value)} />
+            <NumberInput id="settings-openai-concurrency" rule={CONCURRENCY_RULES.openai} value={backends.openai.concurrency as number} invalidText={numberText['settings-openai-concurrency']} onInvalidText={(text) => setFieldText('settings-openai-concurrency', text)} onValue={(value) => updateBackend('openai', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-openai-timeout">{t('settings.timeout')}</label>
-            <WholeNumberInput id="settings-openai-timeout" limits={{ min: 1 }} value={(backends.openai.timeout_ms as number) / 1000} invalidText={numberText['settings-openai-timeout']} onInvalidText={(text) => setFieldText('settings-openai-timeout', text)} onValue={(value) => updateBackend('openai', 'timeout_ms', value * 1000)} />
+            <NumberInput id="settings-openai-timeout" rule={TIMEOUT_SECONDS_RULE} value={(backends.openai.timeout_ms as number) / 1000} invalidText={numberText['settings-openai-timeout']} onInvalidText={(text) => setFieldText('settings-openai-timeout', text)} onValue={(value) => updateBackend('openai', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -617,11 +614,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-nanobanana-concurrency">{t('settings.concurrency')}</label>
-            <WholeNumberInput id="settings-nanobanana-concurrency" max={10} limits={{ min: 1 }} value={backends.nanobanana.concurrency as number} invalidText={numberText['settings-nanobanana-concurrency']} onInvalidText={(text) => setFieldText('settings-nanobanana-concurrency', text)} onValue={(value) => updateBackend('nanobanana', 'concurrency', value)} />
+            <NumberInput id="settings-nanobanana-concurrency" rule={CONCURRENCY_RULES.nanobanana} value={backends.nanobanana.concurrency as number} invalidText={numberText['settings-nanobanana-concurrency']} onInvalidText={(text) => setFieldText('settings-nanobanana-concurrency', text)} onValue={(value) => updateBackend('nanobanana', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-nanobanana-timeout">{t('settings.timeout')}</label>
-            <WholeNumberInput id="settings-nanobanana-timeout" limits={{ min: 1 }} value={(backends.nanobanana.timeout_ms as number) / 1000} invalidText={numberText['settings-nanobanana-timeout']} onInvalidText={(text) => setFieldText('settings-nanobanana-timeout', text)} onValue={(value) => updateBackend('nanobanana', 'timeout_ms', value * 1000)} />
+            <NumberInput id="settings-nanobanana-timeout" rule={TIMEOUT_SECONDS_RULE} value={(backends.nanobanana.timeout_ms as number) / 1000} invalidText={numberText['settings-nanobanana-timeout']} onInvalidText={(text) => setFieldText('settings-nanobanana-timeout', text)} onValue={(value) => updateBackend('nanobanana', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -633,11 +630,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-grok-concurrency">{t('settings.concurrency')}</label>
-            <WholeNumberInput id="settings-grok-concurrency" max={10} limits={{ min: 1 }} value={backends.grok.concurrency as number} invalidText={numberText['settings-grok-concurrency']} onInvalidText={(text) => setFieldText('settings-grok-concurrency', text)} onValue={(value) => updateBackend('grok', 'concurrency', value)} />
+            <NumberInput id="settings-grok-concurrency" rule={CONCURRENCY_RULES.grok} value={backends.grok.concurrency as number} invalidText={numberText['settings-grok-concurrency']} onInvalidText={(text) => setFieldText('settings-grok-concurrency', text)} onValue={(value) => updateBackend('grok', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-grok-timeout">{t('settings.timeout')}</label>
-            <WholeNumberInput id="settings-grok-timeout" limits={{ min: 1 }} value={(backends.grok.timeout_ms as number) / 1000} invalidText={numberText['settings-grok-timeout']} onInvalidText={(text) => setFieldText('settings-grok-timeout', text)} onValue={(value) => updateBackend('grok', 'timeout_ms', value * 1000)} />
+            <NumberInput id="settings-grok-timeout" rule={TIMEOUT_SECONDS_RULE} value={(backends.grok.timeout_ms as number) / 1000} invalidText={numberText['settings-grok-timeout']} onInvalidText={(text) => setFieldText('settings-grok-timeout', text)} onValue={(value) => updateBackend('grok', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -649,11 +646,11 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-flux-concurrency">{t('settings.concurrency')}</label>
-            <WholeNumberInput id="settings-flux-concurrency" max={24} limits={{ min: 1 }} value={backends.flux.concurrency as number} invalidText={numberText['settings-flux-concurrency']} onInvalidText={(text) => setFieldText('settings-flux-concurrency', text)} onValue={(value) => updateBackend('flux', 'concurrency', value)} />
+            <NumberInput id="settings-flux-concurrency" rule={CONCURRENCY_RULES.flux} value={backends.flux.concurrency as number} invalidText={numberText['settings-flux-concurrency']} onInvalidText={(text) => setFieldText('settings-flux-concurrency', text)} onValue={(value) => updateBackend('flux', 'concurrency', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-flux-timeout">{t('settings.timeout')}</label>
-            <WholeNumberInput id="settings-flux-timeout" limits={{ min: 1 }} value={(backends.flux.timeout_ms as number) / 1000} invalidText={numberText['settings-flux-timeout']} onInvalidText={(text) => setFieldText('settings-flux-timeout', text)} onValue={(value) => updateBackend('flux', 'timeout_ms', value * 1000)} />
+            <NumberInput id="settings-flux-timeout" rule={TIMEOUT_SECONDS_RULE} value={(backends.flux.timeout_ms as number) / 1000} invalidText={numberText['settings-flux-timeout']} onInvalidText={(text) => setFieldText('settings-flux-timeout', text)} onValue={(value) => updateBackend('flux', 'timeout_ms', value * 1000)} />
           </div>
         </div>
 
@@ -669,24 +666,24 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-drawthings-timeout">{t('settings.timeout')}</label>
-            <WholeNumberInput id="settings-drawthings-timeout" limits={{ min: 1 }} value={Math.round((backends.drawthings.timeout_ms as number) / 1000)} invalidText={numberText['settings-drawthings-timeout']} onInvalidText={(text) => setFieldText('settings-drawthings-timeout', text)} onValue={(value) => updateBackend('drawthings', 'timeout_ms', value * 1000)} />
+            <NumberInput id="settings-drawthings-timeout" rule={TIMEOUT_SECONDS_RULE} value={Math.round((backends.drawthings.timeout_ms as number) / 1000)} invalidText={numberText['settings-drawthings-timeout']} onInvalidText={(text) => setFieldText('settings-drawthings-timeout', text)} onValue={(value) => updateBackend('drawthings', 'timeout_ms', value * 1000)} />
             <p className="settings-hint">{t('settings.drawThingsTimeoutHint')}</p>
           </div>
           <div className="settings-field">
             <label htmlFor="settings-fallbackWidth">{t('settings.fallbackWidth')}</label>
-            <input id="settings-fallbackWidth" type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_width', parseInt(e.target.value) || 1024)} />
+            <NumberInput id="settings-fallbackWidth" rule={DRAW_THINGS_DIMENSION_RULE} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_width as number} invalidText={numberText['settings-fallbackWidth']} onInvalidText={(text) => setFieldText('settings-fallbackWidth', text)} onValue={(value) => updateBackendParam('drawthings', 'fallback_width', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-fallbackHeight">{t('settings.fallbackHeight')}</label>
-            <input id="settings-fallbackHeight" type="number" min={64} step={64} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_height as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_height', parseInt(e.target.value) || 1024)} />
+            <NumberInput id="settings-fallbackHeight" rule={DRAW_THINGS_DIMENSION_RULE} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_height as number} invalidText={numberText['settings-fallbackHeight']} onInvalidText={(text) => setFieldText('settings-fallbackHeight', text)} onValue={(value) => updateBackendParam('drawthings', 'fallback_height', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-fallbackSteps">{t('settings.fallbackSteps')}</label>
-            <input id="settings-fallbackSteps" type="number" min={1} max={50} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_steps', parseInt(e.target.value) || 4)} />
+            <NumberInput id="settings-fallbackSteps" rule={DRAW_THINGS_STEPS_RULE} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_steps as number} invalidText={numberText['settings-fallbackSteps']} onInvalidText={(text) => setFieldText('settings-fallbackSteps', text)} onValue={(value) => updateBackendParam('drawthings', 'fallback_steps', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-fallbackGuidance">{t('settings.fallbackGuidance')}</label>
-            <input id="settings-fallbackGuidance" type="number" min={1} max={20} step={0.5} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_guidance as number} onChange={(e) => updateBackendParam('drawthings', 'fallback_guidance', parseFloat(e.target.value) || 1)} />
+            <NumberInput id="settings-fallbackGuidance" rule={DRAW_THINGS_GUIDANCE_RULE} value={(backends.drawthings.default_params as Record<string, unknown>).fallback_guidance as number} invalidText={numberText['settings-fallbackGuidance']} onInvalidText={(text) => setFieldText('settings-fallbackGuidance', text)} onValue={(value) => updateBackendParam('drawthings', 'fallback_guidance', value)} />
           </div>
           <div className="settings-field">
             <label htmlFor="settings-fallbackNegative">{t('settings.fallbackNegative')}</label>

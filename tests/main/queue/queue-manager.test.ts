@@ -33,6 +33,15 @@ describe('QueueManager', () => {
   let qm: QueueManager
   beforeEach(() => { qm = new QueueManager() })
 
+  it('refuses a task whose numbers its column\'s fields would not accept, queueing nothing', () => {
+    expect(() => qm.enqueue({ prompt: 'p', backend: 'drawthings', model: 'm.ckpt', params: { width: 1000, height: 1024, steps: 4, guidance: 1 }, count: 1 })).toThrow('out of range')
+    expect(() => qm.enqueueBatch([
+      { prompt: 'p', backend: 'flux', model: 'flux-2-flex', params: { steps: 0, guidance: 5 } },
+    ])).toThrow('out of range')
+    expect(qm.getActiveTasks('drawthings')).toHaveLength(0)
+    expect(qm.getActiveTasks('flux')).toHaveLength(0)
+  })
+
   it('inserts enqueued tasks newest-first and returns them in request order', () => {
     const tasks = qm.enqueue({ prompt: 'p', backend: 'openai', model: 'm', params: {}, count: 3 })
     expect(tasks).toHaveLength(3)

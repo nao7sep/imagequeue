@@ -16,16 +16,20 @@ import type { BackendControlsProps, BackendParamModel } from './types'
 import { useI18n } from '../i18n/I18nContext'
 import { optionLabel, sizePresetLabel } from '../i18n/optionLabels'
 import { IMAGE_DEFAULT_PARAMS } from '../../../shared/image-backend-defaults'
+import { OPENAI_COMPRESSION_RULE, OPENAI_DIMENSION_RULE, parseNumberText } from '../../../shared/number-field'
+import { NumberSettingRow } from '../components/NumberInput'
 
 const CUSTOM_OPENAI_SIZE = 'custom'
 
+// The number fields hold their text as typed; only a value their rule accepts
+// reaches a request or the column's saved choices.
 export type OpenAIParams = {
-  width: number
-  height: number
+  width: string
+  height: string
   quality: OpenAIQuality
   outputFormat: OpenAIOutputFormat
   /** Held for every format; sent only for jpeg and webp. */
-  outputCompression: number
+  outputCompression: string
   background: OpenAIBackground
 }
 
@@ -36,7 +40,8 @@ export function normalizeOpenAiDimension(value: number): number {
 }
 
 // Every OpenAI row takes any size within the custom-size rule, so a saved size
-// is normalized onto the grid rather than snapped to a preset.
+// is put onto the grid rather than snapped to a preset. Saved values only: a
+// typed size is kept as typed.
 export function resolveOpenAiSize(modelDef: OpenAIModelDef, width: unknown, height: unknown): { width: number; height: number } {
   const fallback = modelDef.sizes[0] ?? { shape: 'square', width: 1024, height: 1024 }
   if (typeof width !== 'number' || typeof height !== 'number') {
@@ -69,29 +74,40 @@ function resolveCompression(value: unknown): number {
   return Math.max(OPENAI_COMPRESSION_RANGE.min, Math.min(OPENAI_COMPRESSION_RANGE.max, Math.round(value)))
 }
 
-function resolveParams(saved: Record<string, unknown>, modelDef: OpenAIModelDef): OpenAIParams {
-  const size = resolveOpenAiSize(modelDef, saved.width, saved.height)
-  const background = oneOf(modelDef.backgrounds, saved.background, 'auto')
+// The choices a row offers resolve against it; the number fields' text is
+// any row's to keep.
+function resolveChoices(params: OpenAIParams, modelDef: OpenAIModelDef): OpenAIParams {
+  const background = oneOf(modelDef.backgrounds, params.background, 'auto')
   return {
-    width: size.width,
-    height: size.height,
-    quality: oneOf(modelDef.qualities, saved.quality, 'auto'),
-    outputFormat: oneOf(formatsFor(modelDef, background), saved.outputFormat, 'png'),
-    outputCompression: resolveCompression(saved.outputCompression),
+    ...params,
+    quality: oneOf(modelDef.qualities, params.quality, 'auto'),
+    outputFormat: oneOf(formatsFor(modelDef, background), params.outputFormat, 'png'),
     background,
   }
+}
+
+function fromSaved(saved: Record<string, unknown>, modelDef: OpenAIModelDef): OpenAIParams {
+  const size = resolveOpenAiSize(modelDef, saved.width, saved.height)
+  return resolveChoices({
+    width: String(size.width),
+    height: String(size.height),
+    quality: saved.quality as OpenAIQuality,
+    outputFormat: saved.outputFormat as OpenAIOutputFormat,
+    outputCompression: String(resolveCompression(saved.outputCompression)),
+    background: saved.background as OpenAIBackground,
+  }, modelDef)
 }
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIParams, OpenAIModelDef>): React.JSX.Element {
   const { t } = useI18n()
   const fieldId = useId()
-  const sizeValue = findPresetValue(modelDef.sizes, params.width, params.height) ?? CUSTOM_OPENAI_SIZE
+  const sizeValue = findPresetValue(modelDef.sizes, Number(params.width), Number(params.height)) ?? CUSTOM_OPENAI_SIZE
 
   const handleSizeChange = (value: string): void => {
     if (value === CUSTOM_OPENAI_SIZE) return
     const preset = modelDef.sizes.find((size) => `${size.width}x${size.height}` === value)
     if (!preset) return
-    onChange({ ...params, width: preset.width, height: preset.height })
+    onChange({ ...params, width: String(preset.width), height: String(preset.height) })
   }
 
   return (
@@ -105,30 +121,8 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
           <option value={CUSTOM_OPENAI_SIZE}>{t('backend.customSize')}</option>
         </select>
       </div>
-      <div className="setting-row">
-        <label htmlFor={`${fieldId}-width`}>{t('backend.width')}</label>
-        <input
-          id={`${fieldId}-width`}
-          type="number"
-          min={OPENAI_IMAGE_MIN_EDGE}
-          max={OPENAI_IMAGE_MAX_EDGE}
-          step={OPENAI_IMAGE_SIZE_STEP}
-          value={params.width}
-          onChange={(e) => onChange({ ...params, width: normalizeOpenAiDimension(Number.parseInt(e.target.value, 10)) })}
-        />
-      </div>
-      <div className="setting-row">
-        <label htmlFor={`${fieldId}-height`}>{t('backend.height')}</label>
-        <input
-          id={`${fieldId}-height`}
-          type="number"
-          min={OPENAI_IMAGE_MIN_EDGE}
-          max={OPENAI_IMAGE_MAX_EDGE}
-          step={OPENAI_IMAGE_SIZE_STEP}
-          value={params.height}
-          onChange={(e) => onChange({ ...params, height: normalizeOpenAiDimension(Number.parseInt(e.target.value, 10)) })}
-        />
-      </div>
+      <NumberSettingRow id={`${fieldId}-width`} label={t('backend.width')} rule={OPENAI_DIMENSION_RULE} text={params.width} onText={(width) => onChange({ ...params, width })} />
+      <NumberSettingRow id={`${fieldId}-height`} label={t('backend.height')} rule={OPENAI_DIMENSION_RULE} text={params.height} onText={(height) => onChange({ ...params, height })} />
       <div className="setting-row">
         <label htmlFor={`${fieldId}-quality`}>{t('backend.quality')}</label>
         <select id={`${fieldId}-quality`} value={params.quality} onChange={(e) => onChange({ ...params, quality: e.target.value as OpenAIQuality })}>
@@ -139,7 +133,7 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
       </div>
       <div className="setting-row">
         <label htmlFor={`${fieldId}-background`}>{t('backend.background')}</label>
-        <select id={`${fieldId}-background`} value={params.background} onChange={(e) => onChange(resolveParams({ ...params, background: e.target.value }, modelDef))}>
+        <select id={`${fieldId}-background`} value={params.background} onChange={(e) => onChange(resolveChoices({ ...params, background: e.target.value as OpenAIBackground }, modelDef))}>
           {modelDef.backgrounds.map((bg) => (
             <option key={bg} value={bg}>{optionLabel(t, bg)}</option>
           ))}
@@ -154,40 +148,39 @@ function Controls({ params, modelDef, onChange }: BackendControlsProps<OpenAIPar
         </select>
       </div>
       {params.outputFormat !== 'png' && (
-        <div className="setting-row">
-          <label htmlFor={`${fieldId}-compression`}>{t('backend.compression')}</label>
-          <input
-            id={`${fieldId}-compression`}
-            type="number"
-            min={OPENAI_COMPRESSION_RANGE.min}
-            max={OPENAI_COMPRESSION_RANGE.max}
-            step={1}
-            value={params.outputCompression}
-            onChange={(e) => onChange({ ...params, outputCompression: resolveCompression(Number.parseInt(e.target.value, 10)) })}
-          />
-        </div>
+        <NumberSettingRow id={`${fieldId}-compression`} label={t('backend.compression')} rule={OPENAI_COMPRESSION_RULE} text={params.outputCompression} onText={(outputCompression) => onChange({ ...params, outputCompression })} />
       )}
     </>
   )
 }
 
 export const openaiBackend: BackendParamModel<OpenAIParams, OpenAIModelDef> = {
-  defaults: () => ({ ...IMAGE_DEFAULT_PARAMS.openai }),
+  defaults: () => {
+    const { width, height, outputCompression, ...choices } = IMAGE_DEFAULT_PARAMS.openai
+    return { ...choices, width: String(width), height: String(height), outputCompression: String(outputCompression) }
+  },
 
-  // Every enum field is membership-or-default and the size snaps through
-  // resolveOpenAiSize, so a model switch and a saved record resolve identically.
-  clampToModel: (params, modelDef) => resolveParams(params, modelDef),
-  fromSaved: (saved, modelDef) => resolveParams(saved, modelDef),
+  // Every enum field is membership-or-default, so a model switch keeps what
+  // the new row offers; every row takes the same sizes.
+  clampToModel: (params, modelDef) => resolveChoices(params, modelDef),
+  fromSaved,
 
-  toEnqueueParams: (params) => ({
-    width: params.width,
-    height: params.height,
-    quality: params.quality,
-    outputFormat: params.outputFormat,
+  toEnqueueParams: (params) => {
+    const width = parseNumberText(params.width, OPENAI_DIMENSION_RULE)
+    const height = parseNumberText(params.height, OPENAI_DIMENSION_RULE)
     // Compression applies to jpeg and webp only.
-    ...(params.outputFormat !== 'png' ? { outputCompression: params.outputCompression } : {}),
-    background: params.background,
-  }),
+    const compressed = params.outputFormat !== 'png'
+    const outputCompression = compressed ? parseNumberText(params.outputCompression, OPENAI_COMPRESSION_RULE) : null
+    if (width === null || height === null || (compressed && outputCompression === null)) return null
+    return {
+      width,
+      height,
+      quality: params.quality,
+      outputFormat: params.outputFormat,
+      ...(compressed ? { outputCompression } : {}),
+      background: params.background,
+    }
+  },
 
   Controls,
 }

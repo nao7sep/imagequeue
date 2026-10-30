@@ -5,7 +5,8 @@ import os from 'os'
 import fs from 'fs'
 import { assertNotQuitting } from './quit-state'
 import { handle } from './ipc-boundary'
-import { saveImageBackendDefaults } from './backend-defaults'
+import { getImageBackendDefaults, saveImageBackendDefaults } from './backend-params'
+import { meetsDrawThingsNumberRules } from '../shared/number-field'
 import { loadConfig, updateConfig } from './config'
 import { getStoredApiKey, setStoredApiKeys, hasApiKey, refreshApiKeys } from './config/api-keys-store'
 import { applyChangedFields } from './settings-changes'
@@ -187,6 +188,8 @@ export function registerSettingsIpc(
     })
     return { success: true }
   })
+
+  handle('settings:getImageBackendDefaults', () => getImageBackendDefaults())
 
   handle(
     'settings:saveImageBackendDefaults',
@@ -441,11 +444,14 @@ export function registerSettingsIpc(
     event.sender.send('drawthings:paramsPersistenceState', getModelParamsPersistenceState())
   })
 
+  // The column's number fields admit only these values; anything else is refused.
   handle('drawthings:setModelParams', (event, modelFile: string, params: DrawThingsModelParams) => {
+    if (!meetsDrawThingsNumberRules(params)) throw new Error('Cannot save Draw Things parameters that are out of range')
     withParamsRecovery(event, () => setModelParams(modelFile, params))
   })
 
   handle('drawthings:applyParamsToAll', (event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
+    if (!meetsDrawThingsNumberRules(patch)) throw new Error('Cannot apply Draw Things parameters that are out of range')
     return withParamsRecovery(event, () => applyDimensionsToModels(modelFiles, patch))
   })
 }

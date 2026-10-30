@@ -1,3 +1,4 @@
+import type { SavedImageBackendParams } from './image-backend-defaults'
 import type { BrainstormConfig } from './brainstorm-config'
 import type { DraftSurface, QuitQuestion } from './quit'
 import {
@@ -155,6 +156,8 @@ export interface ElectronAPI {
   saveBrainstormSettings: (brainstorm: BrainstormConfig) => Promise<{ success: boolean }>
   // Stored values and resolved presence share one refresh, separate from config.
   getCredentials: () => Promise<SettingsCredentials>
+  // The image columns' own model and parameter choices, apart from settings.
+  getImageBackendDefaults: () => Promise<Record<CloudBackendId, SavedImageBackendParams>>
   saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
 
