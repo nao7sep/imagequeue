@@ -132,7 +132,8 @@ export async function listDownloadedModels(): Promise<LocalModelInfo[]> {
   const args = ['models', 'list', '--downloaded-only', ...await modelsDirArgs()]
 
   return new Promise((resolve, reject) => {
-    execFile(cliPath, args, { timeout: 15000 }, (error, stdout, stderr) => {
+    // Read the whole listing, as listAvailableModels does.
+    execFile(cliPath, args, { timeout: 15000, maxBuffer: Infinity }, (error, stdout, stderr) => {
       if (error) {
         if (!isCliAbsent(error)) {
           log('error', 'draw-things-cli models list (downloaded) failed', { cliPath, args, error: serializeError(error), stderr })
