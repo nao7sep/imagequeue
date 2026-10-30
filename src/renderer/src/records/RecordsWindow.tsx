@@ -71,6 +71,8 @@ const LIVE_INTERVAL_MS = 1000
 // The keys that move the cursor toward the end of the list.
 const TOWARD_END = new Set(['ArrowDown', 'PageDown', 'End'])
 const RESIZE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
+// Keyboard resizing saves this long after the last step; each step pushes it back.
+const KEYBOARD_RESIZE_SAVE_MS = 500
 
 type ListState =
   | { status: 'loading' }
@@ -108,6 +110,7 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const [available, setAvailable] = useState<number | null>(null)
   const keyboardWidth = useRef<number | null>(null)
+  const keyboardSave = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeDrag = useRef<{ finish: (outcome: 'commit' | 'cancel' | 'unmount') => void } | null>(null)
   const listGeneration = useRef(0)
   // The busy claim for the next page (PLAYBOOK, Own the work in flight).
@@ -206,6 +209,13 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     ).then(
       (prefix) => {
         if (!prefix || generation !== listGeneration.current) return
+        // A read started at the top can land after the list left it; its
+        // records wait, like any others, until the list is back there.
+        const scroll = scrollRef.current
+        if (history.count && scroll !== null && !atTop(scroll)) {
+          newestPending.current = true
+          return
+        }
         if (!history.count) history.append(prefix.first)
         else history.prepend(prefix.records)
         incompleteSearch.current ||= prefix.incomplete
@@ -405,6 +415,8 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
   }
 
   const finishKeyboardResize = (): void => {
+    if (keyboardSave.current !== null) clearTimeout(keyboardSave.current)
+    keyboardSave.current = null
     const width = keyboardWidth.current
     if (width === null) return
     keyboardWidth.current = null
@@ -425,7 +437,13 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
     if (width === current) return
     keyboardWidth.current = width
     setDragWidth(width)
+    if (keyboardSave.current !== null) clearTimeout(keyboardSave.current)
+    keyboardSave.current = setTimeout(finishKeyboardResize, KEYBOARD_RESIZE_SAVE_MS)
   }
+  // A width still waiting to be saved when the window closes is saved then.
+  const finishKeyboardResizeRef = useRef(finishKeyboardResize)
+  finishKeyboardResizeRef.current = finishKeyboardResize
+  useEffect(() => () => finishKeyboardResizeRef.current(), [])
 
   const onSplitterPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (activeDrag.current !== null || (event.pointerType === 'mouse' && event.button !== 0)) return
@@ -607,7 +625,6 @@ export function RecordsWindow({ initialListWidth }: { initialListWidth: number }
         aria-valuenow={shownListWidth}
         onPointerDown={onSplitterPointerDown}
         onKeyDown={onSplitterKeyDown}
-        onKeyUp={(event) => { if (RESIZE_KEYS.has(event.key)) finishKeyboardResize() }}
         onBlur={finishKeyboardResize}
       />
       <section className="records-detail-pane" aria-busy={detail.status === 'loading'}>

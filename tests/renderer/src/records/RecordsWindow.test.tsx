@@ -569,18 +569,25 @@ describe('RecordsWindow', () => {
     expect(recordsChanged).toBeNull()
   })
 
-  it('resizes from the keyboard and saves once on key release or blur', async () => {
+  it('resizes from the keyboard and saves once after the last step, or at once on blur', async () => {
     await mount()
+    vi.useFakeTimers()
     const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
     expect(splitter.tabIndex).toBe(0)
     await act(async () => {
       splitter.focus()
       splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, repeat: true }))
+      splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }))
+    })
+    await act(async () => vi.advanceTimersByTime(400))
+    await act(async () => {
+      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }))
     })
     expect(splitter.getAttribute('aria-valuenow')).toBe('412')
+    await act(async () => vi.advanceTimersByTime(400))
     expect(updateUiState).not.toHaveBeenCalled()
-    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true })) })
+    await act(async () => vi.advanceTimersByTime(100))
     expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 412 })
     await act(async () => {
       splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
@@ -588,22 +595,31 @@ describe('RecordsWindow', () => {
     })
     expect(updateUiState).toHaveBeenCalledTimes(2)
     expect(updateUiState).toHaveBeenLastCalledWith({ recordsListWidth: RECORDS_LIST_WIDTH.min })
-    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'Home', bubbles: true })) })
+    await act(async () => vi.advanceTimersByTime(1000))
     expect(updateUiState).toHaveBeenCalledTimes(2)
   })
 
   it('keeps keyboard resizing inside the live pane bounds', async () => {
     box.shellWidth = RECORDS_WINDOW_MIN_WIDTH + 80
     await mount()
+    vi.useFakeTimers()
     const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
     await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })
     expect(splitter.getAttribute('aria-valuenow')).toBe('400')
     expect(splitter.getAttribute('aria-valuemax')).toBe('400')
-    await act(async () => {
-      splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
-      splitter.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }))
-    })
+    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
+    await act(async () => vi.advanceTimersByTime(500))
     expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 400 })
+  })
+
+  it('saves a keyboard width still waiting when the window closes', async () => {
+    await mount()
+    vi.useFakeTimers()
+    const splitter = document.querySelector<HTMLElement>('[role="separator"]')!
+    await act(async () => { splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
+    await act(async () => root?.unmount())
+    root = null
+    expect(updateUiState).toHaveBeenCalledExactlyOnceWith({ recordsListWidth: 396 })
   })
 
   it('saves the list width once when a drag ends, clamped to the pane bounds', async () => {
@@ -949,4 +965,91 @@ it('keeps an empty or loading history reachable as the same listbox', async () =
   expect(document.querySelector('[role="listbox"]')).toBe(listbox)
   expect(listbox.tabIndex).toBe(0)
   expect(listbox.textContent).toContain('No records')
+})
+
+it('keeps the list still when a newest page read at the top lands after the list was scrolled down', async () => {
+  await mount()
+  vi.useFakeTimers()
+  const late = deferred<RecordsPage>()
+  readRecordsPage.mockReturnValueOnce(late.promise)
+  await signal()
+  await act(async () => vi.advanceTimersByTime(1000))
+  expect(readRecordsPage).toHaveBeenCalledTimes(2)
+  await scrollTo(300)
+  await act(async () => late.resolve({ records: [newer, call, line], more: false }))
+  expect(titles()).toEqual(['gemini brainstorm', 'Generation failed'])
+  expect(readRecordsPage).toHaveBeenCalledTimes(2)
+
+  readRecordsPage.mockResolvedValueOnce({ records: [newer, call, line], more: false })
+  await scrollTo(0)
+  expect(readRecordsPage).toHaveBeenCalledTimes(3)
+  expect(titles()).toEqual(['Arrived while open', 'gemini brainstorm', 'Generation failed'])
+})
+
+it('pages through 10,000 records while new ones arrive live, moving nothing while scrolled down', async () => {
+  // The records store: every record newest first, read a page at a time from a
+  // cursor, as the records thread answers.
+  const ROW = 78
+  const stored: RecordSummary[] = []
+  const store = (count: number, label: string): void => {
+    for (let index = 0; index < count; index++) {
+      const id = stored.length + 1
+      stored.unshift({ kind: 'log', id, time: new Date(Date.UTC(2026, 9, 1) + id * 1000).toISOString(), level: 'info', title: `${label} ${id}`, text: null })
+    }
+  }
+  store(10_000, 'Seed record')
+  readRecordsPage.mockImplementation(async ({ after }) => {
+    const start = after ? stored.findIndex((record) => record.id === after.id) + 1 : 0
+    return { records: stored.slice(start, start + 100), more: start + 100 < stored.length }
+  })
+  const setSize = () => Number(options()[0]?.getAttribute('aria-setsize'))
+  const arrive = async (count: number) => {
+    store(count, 'Live record')
+    await act(async () => { recordsChanged!(); await vi.advanceTimersByTimeAsync(1000) })
+  }
+  vi.useFakeTimers()
+  box.scrollHeight = 100 * ROW
+  await mount()
+
+  // The first page: 100 records, newest first.
+  expect(setSize()).toBe(100)
+  expect(titles()[0]).toBe('Seed record 10000')
+
+  // At the top, records stored now appear at the top on their own.
+  await arrive(3)
+  expect(titles()[0]).toBe('Live record 10003')
+  expect(setSize()).toBe(103)
+
+  // Scrolled down with a record selected, stored records move nothing; back at
+  // the top they are there, and the selection and its detail stayed.
+  box.scrollHeight = 103 * ROW
+  await scrollTo(30 * ROW)
+  await act(async () => options()[1]!.click())
+  const before = titles()
+  const chosen = document.querySelector('[aria-selected="true"]')!.getAttribute('data-listbox-option')
+  const detailCalls = readRecordDetail.mock.calls.length
+  const reads = readRecordsPage.mock.calls.length
+  for (let tick = 0; tick < 5; tick++) await arrive(3)
+  expect(titles()).toEqual(before)
+  expect(setSize()).toBe(103)
+  expect(box.scrollTop).toBe(30 * ROW)
+  expect(readRecordsPage.mock.calls.length).toBe(reads)
+  await scrollTo(0)
+  expect(titles()[0]).toBe('Live record 10018')
+  expect(setSize()).toBe(118)
+  expect(document.querySelector('[aria-selected="true"]')?.getAttribute('data-listbox-option') ?? chosen).toBe(chosen)
+  expect(readRecordDetail.mock.calls.length).toBe(detailCalls)
+
+  // Walking to the end reads each older page once, each from the last record
+  // the one before it ended on, until every record is loaded.
+  const pagesBefore = readRecordsPage.mock.calls.length
+  for (let guard = 0; guard < 200 && setSize() < stored.length; guard++) {
+    box.scrollHeight = setSize() * ROW
+    await scrollTo(box.scrollHeight - box.clientHeight)
+  }
+  expect(setSize()).toBe(stored.length)
+  const cursors = readRecordsPage.mock.calls.slice(pagesBefore).map(([query]) => query.after!.id)
+  expect(new Set(cursors).size).toBe(cursors.length)
+  expect(cursors).toEqual([...cursors].sort((a, b) => b - a))
+  expect(cursors.at(-1)).toBe(stored[stored.length - 101]!.id)
 })
