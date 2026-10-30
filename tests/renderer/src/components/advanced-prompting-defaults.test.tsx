@@ -9,7 +9,7 @@ import { until } from '../../until'
 // the draft changes only when the user edits a field.
 
 const update = vi.hoisted(() => vi.fn())
-const draft = vi.hoisted(() => ({ seed: '', prompt: 'a cat on a shelf', composition: null as string | null }))
+const draft = vi.hoisted(() => ({ seed: '', prompt: 'a cat on a shelf', composition: null as string | null, count: 1 }))
 
 vi.mock('../../../../src/renderer/src/hooks/useBrainstormOperation', () => ({
   useBrainstormOperation: () => ({ progress: null, run: vi.fn(), cancel: vi.fn() }),
@@ -33,6 +33,7 @@ vi.mock('../../../../src/renderer/src/context/SessionDraftContext', () => ({
       seed: draft.seed,
       selectedCompositionElaboratorId: draft.composition,
       selectedStyleElaboratorId: 'gone',
+      count: draft.count,
     },
     update,
     appendElaboratedPrompts: vi.fn(),
@@ -51,6 +52,7 @@ beforeEach(() => {
   update.mockClear()
   draft.seed = ''
   draft.composition = null
+  draft.count = 1
   Element.prototype.scrollIntoView = vi.fn()
   ;(window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
     platform: 'win32',
@@ -93,5 +95,23 @@ describe('Advanced Prompting defaults', () => {
     fireEvent.change(seedField(), { target: { value: '' } })
     expect(update).toHaveBeenCalledWith({ seed: '' })
     expect(seedField().value).toBe('')
+  })
+})
+
+describe('Advanced Prompting iterations', () => {
+  const iterations = (): HTMLInputElement => document.querySelector('input.advanced-count') as HTMLInputElement
+
+  it('shows a count the draft takes from elsewhere, and keeps typed text that reads as the count', () => {
+    const { rerender } = render(<AdvancedPromptingModal onClose={() => {}} />)
+    fireEvent.change(iterations(), { target: { value: '0' } })
+    expect(iterations().value).toBe('0')
+    draft.count = 7
+    rerender(<AdvancedPromptingModal onClose={() => {}} />)
+    expect(iterations().value).toBe('7')
+    fireEvent.change(iterations(), { target: { value: '012' } })
+    expect(update).toHaveBeenLastCalledWith({ count: 12 })
+    draft.count = 12
+    rerender(<AdvancedPromptingModal onClose={() => {}} />)
+    expect(iterations().value).toBe('012')
   })
 })

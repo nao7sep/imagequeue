@@ -214,7 +214,14 @@ export function AdvancedPromptingModal({ onClose }: Props): React.JSX.Element {
 
   // The iterations field keeps what was typed; the draft holds only a count it
   // accepts, and Queue waits while the field holds anything else.
+  // A count the draft takes from elsewhere (a reset, a restored draft) replaces
+  // the text, unless the text already reads as that count.
   const [countText, setCountText] = useState(() => String(count))
+  const [shownCount, setShownCount] = useState(count)
+  if (count !== shownCount) {
+    setShownCount(count)
+    if (parseNumberText(countText, ADVANCED_ITERATIONS_RULE) !== count) setCountText(String(count))
+  }
   const iterationsId = useId()
   const iterationsValid = parseNumberText(countText, ADVANCED_ITERATIONS_RULE) !== null
   const targetCount = effectiveTargets.proprietary.length + effectiveTargets.dt.length

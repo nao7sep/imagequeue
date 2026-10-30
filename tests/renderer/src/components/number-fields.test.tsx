@@ -54,6 +54,7 @@ describe('Settings number fields', () => {
     ['settings-flux-concurrency', '25', 'Enter a whole number from 1 to 24.'],
     ['settings-grok-timeout', '', 'Enter a whole number of 1 or more.'],
     ['settings-drawthings-timeout', '0', 'Enter a whole number of 1 or more.'],
+    ['settings-drawthings-timeout', '1.5', 'Enter a whole number of 1 or more.'],
     ['gemini-timeout', '', 'Enter a whole number of 1 or more.'],
     ['settings-autoPreview', '2.5', 'Enter a whole number of 0 or more.'],
     ['settings-autoPreview', '', 'Enter a whole number of 0 or more.'],

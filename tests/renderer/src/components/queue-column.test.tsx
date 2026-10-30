@@ -798,6 +798,21 @@ describe('flux column', () => {
     expect(rowControl(container, 'Guidance')).toBeTruthy()
   })
 
+  it('keeps typed steps across a model switch and shows the range they fall outside', async () => {
+    stageSettings('flux', 'flux-2-flex')
+    const { container } = render(<QueueColumn backendId="flux" label="FLUX" prompt="a cat" />)
+    await flush()
+    fireEvent.change(rowControl(container, 'Steps'), { target: { value: '60' } })
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'flux-2-pro' } })
+    await flush()
+    fireEvent.change(rowControl(container, 'Model'), { target: { value: 'flux-2-flex' } })
+    await flush()
+    const steps = rowControl(container, 'Steps') as HTMLInputElement
+    expect(steps.value).toBe('60')
+    expect(steps.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByText('Enter a whole number from 1 to 50.')).toBeTruthy()
+  })
+
   it('shows FLUX 3 a ratio and resolution and no seed, and FLUX.2 a size, format and seed', async () => {
     stageSettings('flux', 'flux-3-image', { aspectRatio: '1:1', resolution: '1k' })
     const { container } = render(<QueueColumn backendId="flux" label="FLUX" prompt="a cat" />)

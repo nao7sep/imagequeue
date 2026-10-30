@@ -92,25 +92,25 @@ describe('config store (atomic write of config.json)', () => {
   // and quit's retry writes the latest accepted settings.
   it('keeps an accepted change running when it cannot be written, and writes it on retry', async () => {
     // The cache outlives each test's data root; write it into this one first.
-    const before = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 180001 })
+    const before = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 181000 })
     const timeout = before.image_backends.openai.timeout_ms
     const rename = vi.spyOn(fs.promises, 'rename').mockImplementationOnce(() => {
       throw new Error('simulated disk full')
     })
-    await expect(updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1 })).rejects.toThrow('simulated disk full')
+    await expect(updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1000 })).rejects.toThrow('simulated disk full')
     rename.mockRestore()
 
-    expect(loadConfig().image_backends.openai.timeout_ms).toBe(1)
+    expect(loadConfig().image_backends.openai.timeout_ms).toBe(1000)
     expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(timeout)
     await retryConfigSaves()
-    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(1)
+    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(1000)
   })
 
   it('applies an update once it is written', async () => {
     loadConfig()
-    const saved = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 1234 })
+    const saved = await updateConfig((draft) => { draft.image_backends.openai.timeout_ms = 12000 })
     expect(loadConfig()).toBe(saved)
-    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(1234)
+    expect(JSON.parse(fs.readFileSync(getConfigPath(), 'utf-8')).image_backends.openai.timeout_ms).toBe(12000)
   })
 
   it('publishes async acquisition bytes and leaves no staging file', async () => {

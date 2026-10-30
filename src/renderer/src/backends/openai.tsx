@@ -1,9 +1,6 @@
 import { useId } from 'react'
 import {
   OPENAI_COMPRESSION_RANGE,
-  OPENAI_IMAGE_MAX_EDGE,
-  OPENAI_IMAGE_MIN_EDGE,
-  OPENAI_IMAGE_SIZE_STEP,
   OPENAI_OUTPUT_FORMAT_LABELS,
   OPENAI_TRANSPARENT_FORMATS,
   type OpenAIBackground,
@@ -33,24 +30,15 @@ export type OpenAIParams = {
   background: OpenAIBackground
 }
 
-export function normalizeOpenAiDimension(value: number): number {
-  if (!Number.isFinite(value)) return OPENAI_IMAGE_MIN_EDGE
-  const rounded = Math.round(value / OPENAI_IMAGE_SIZE_STEP) * OPENAI_IMAGE_SIZE_STEP
-  return Math.max(OPENAI_IMAGE_MIN_EDGE, Math.min(OPENAI_IMAGE_MAX_EDGE, rounded))
-}
-
-// Every OpenAI row takes any size within the custom-size rule, so a saved size
-// is put onto the grid rather than snapped to a preset. Saved values only: a
-// typed size is kept as typed.
+// backend-params.json refuses a size or compression the fields would not
+// accept, so a saved number is shown as it is; one missing takes the row's
+// first size or the default compression.
 export function resolveOpenAiSize(modelDef: OpenAIModelDef, width: unknown, height: unknown): { width: number; height: number } {
   const fallback = modelDef.sizes[0] ?? { shape: 'square', width: 1024, height: 1024 }
   if (typeof width !== 'number' || typeof height !== 'number') {
     return { width: fallback.width, height: fallback.height }
   }
-  return {
-    width: normalizeOpenAiDimension(width),
-    height: normalizeOpenAiDimension(height),
-  }
+  return { width, height }
 }
 
 function findPresetValue(sizes: SizePreset[], width: number, height: number): string | null {
@@ -70,8 +58,7 @@ export function formatsFor(modelDef: OpenAIModelDef, background: OpenAIBackgroun
 }
 
 function resolveCompression(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return OPENAI_COMPRESSION_RANGE.default
-  return Math.max(OPENAI_COMPRESSION_RANGE.min, Math.min(OPENAI_COMPRESSION_RANGE.max, Math.round(value)))
+  return typeof value === 'number' ? value : OPENAI_COMPRESSION_RANGE.default
 }
 
 // The choices a row offers resolve against it; the number fields' text is

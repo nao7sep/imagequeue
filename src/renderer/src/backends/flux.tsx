@@ -34,16 +34,15 @@ export type FluxParams = {
 // A range-bounded param (steps, guidance) exists only for models that declare
 // the range — Flex alone today. No range means the param does not apply to this
 // model, which is why an absent one resolves to undefined rather than to a
-// number: nothing outside the registry knows a sane value, and inventing one
-// here is what let a stale app-level default sit in config pretending to be
-// authoritative.
+// number. backend-params.json refuses a saved number outside the saved model's
+// range, so one is shown as it is; the field says so if the column's model
+// takes another range.
 function resolveRangedParam(
   range: { min: number; max: number; default: number } | undefined,
   saved: unknown
 ): number | undefined {
   if (!range) return undefined
-  if (typeof saved !== 'number') return range.default
-  return Math.max(range.min, Math.min(range.max, saved))
+  return typeof saved === 'number' ? saved : range.default
 }
 
 function listed<T extends string>(values: readonly T[] | undefined, value: unknown, fallback: T): T {
@@ -71,13 +70,6 @@ function outputFormat(saved: Record<string, unknown>, modelDef: FluxModelDef): F
 
 const stepsRule = (range: { min: number; max: number }): NumberRule => rangeRule(range, true)
 const guidanceRule = (range: { min: number; max: number }): NumberRule => rangeRule(range, false)
-
-// On a model switch, text the new model's range accepts is kept; anything else
-// takes the new range's default.
-function clampText(text: string, range: { min: number; max: number; default: number } | undefined, rule: (range: { min: number; max: number }) => NumberRule): string {
-  if (!range) return text
-  return parseNumberText(text, rule(range)) === null ? String(range.default) : text
-}
 
 function Controls({ params, modelDef, onChange }: BackendControlsProps<FluxParams, FluxModelDef>): React.JSX.Element {
   const { t } = useI18n()
@@ -149,20 +141,17 @@ export const fluxBackend: BackendParamModel<FluxParams, FluxModelDef> = {
   }),
 
   // Model switch: an index off the new model's shorter ladder falls to the
-  // first size, and a ranged value the new model's range does not contain takes
-  // the new range's DEFAULT — the old number was tuned for another model, so
-  // clamping it to a bound would preserve a meaningless value.
+  // first size. Steps and guidance keep what was typed; the fields show an
+  // error when the new model's range does not take it, and the column waits.
   clampToModel: (params, modelDef) => ({
     sizeIdx: modelDef.sizes?.[params.sizeIdx] ? params.sizeIdx : 0,
     outputFormat: outputFormat(params, modelDef),
-    steps: clampText(params.steps, modelDef.stepsRange, stepsRule),
-    guidance: clampText(params.guidance, modelDef.guidanceRange, guidanceRule),
+    steps: params.steps,
+    guidance: params.guidance,
     seed: params.seed,
     ...ratioAndResolution(params, modelDef),
   }),
 
-  // Saved record: unlike a model switch, an out-of-range saved number is user
-  // data — clamp it to the nearest bound instead of resetting to the default.
   fromSaved: (saved, modelDef) => {
     const sizeIdx = (modelDef.sizes ?? []).findIndex(
       (size) => size.width === saved.width && size.height === saved.height

@@ -74,14 +74,13 @@ describe('clampToModel', () => {
     expect(fluxBackend.toEnqueueParams({ ...params, steps: '50', guidance: '1.5' }, flex)).toMatchObject({ steps: 50, guidance: 1.5 })
   })
 
-  it('resets a FLUX ranged value to the new model\'s range DEFAULT on a model switch', () => {
+  it('keeps typed FLUX steps and guidance on a model switch, so the field can say what the new range takes', () => {
     const flex = findModel('flux', 'flux-2-flex')!
-    const outOfRange = fluxBackend.clampToModel(
-      { ...fluxBackend.defaults(), steps: String(flex.stepsRange!.max + 1) },
-      flex
-    )
-    // Not clamped to the bound: a model switch takes the new model's default.
-    expect(outOfRange.steps).toBe(String(flex.stepsRange!.default))
+    const typed = { ...fluxBackend.defaults(), steps: String(flex.stepsRange!.max + 1), guidance: '7.25' }
+    const switched = fluxBackend.clampToModel(typed, flex)
+    expect(switched).toMatchObject({ steps: typed.steps, guidance: '7.25' })
+    // The column waits while the new range does not take the typed steps.
+    expect(fluxBackend.toEnqueueParams(switched, flex)).toBeNull()
   })
 
   it('floors a FLUX size index that falls off a shorter ladder', () => {
@@ -128,10 +127,17 @@ describe('clampToModel', () => {
 })
 
 describe('fromSaved', () => {
-  it('clamps a saved FLUX ranged value to the nearest BOUND (user data, not a reset)', () => {
+  // backend-params.json refuses a saved number outside the saved model's range,
+  // so the column shows what it gets rather than correcting it.
+  it('shows a saved FLUX ranged value as it is', () => {
     const flex = findModel('flux', 'flux-2-flex')!
-    const params = fluxBackend.fromSaved({ steps: 9999 }, flex)
-    expect(params.steps).toBe(String(flex.stepsRange!.max))
+    expect(fluxBackend.fromSaved({ steps: 37, guidance: 2.75 }, flex)).toMatchObject({ steps: '37', guidance: '2.75' })
+    expect(fluxBackend.fromSaved({ steps: 9999 }, flex).steps).toBe('9999')
+  })
+
+  it('shows a saved OpenAI size and compression as they are', () => {
+    const flare = findModel('openai', 'gpt-image-2.5-flare')!
+    expect(openaiBackend.fromSaved({ width: 1040, height: 2000, outputCompression: 37 }, flare)).toMatchObject({ width: '1040', height: '2000', outputCompression: '37' })
   })
 })
 

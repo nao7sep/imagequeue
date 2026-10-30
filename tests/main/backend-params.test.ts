@@ -55,6 +55,62 @@ describe('backend-params.json', () => {
     expect(api.getImageBackendDefaults().openai.model).toBe('gpt-image-1.5')
   })
 
+  // The move is two writes; whichever one a launch does not finish, nothing the
+  // user set is lost and a later launch completes it.
+  describe('an interrupted move', () => {
+    const legacy = { formatVersion: 1, image_backends: { grok: { concurrency: 2, defaults: { model: 'grok-imagine-image', default_params: { quality: 'high' } } } } }
+    const moved = { model: 'grok-imagine-image', params: { quality: 'high' } }
+    const relaunch = async () => {
+      vi.doUnmock('../../src/main/utils/atomic-write')
+      vi.doUnmock('../../src/main/config')
+      vi.resetModules()
+      api = await import('../../src/main/backend-params')
+      await api.loadBackendParams()
+    }
+
+    it('keeps config.json as it was when backend-params.json cannot be written, and moves it next launch', async () => {
+      fs.writeFileSync(config(), JSON.stringify(legacy))
+      vi.resetModules()
+      vi.doMock('../../src/main/utils/atomic-write', async (original) => ({
+        ...await original<typeof import('../../src/main/utils/atomic-write')>(),
+        writeFileAtomicAsync: () => Promise.reject(new Error('disk full')),
+      }))
+      api = await import('../../src/main/backend-params')
+      await expect(api.loadBackendParams()).rejects.toThrow('disk full')
+      expect(fs.existsSync(file())).toBe(false)
+      expect(JSON.parse(fs.readFileSync(config(), 'utf8'))).toEqual(legacy)
+
+      await relaunch()
+      expect(stored()).toEqual({ formatVersion: 1, backends: { grok: moved } })
+      expect(JSON.parse(fs.readFileSync(config(), 'utf8'))).toEqual({ formatVersion: 1, image_backends: { grok: { concurrency: 2 } } })
+    })
+
+    it('reads the new file when config.json kept the old keys, and config.json drops them on a later save', async () => {
+      fs.writeFileSync(config(), JSON.stringify(legacy))
+      vi.resetModules()
+      vi.doMock('../../src/main/config', async (original) => ({
+        ...await original<typeof import('../../src/main/config')>(),
+        dropRetiredConfigKeys: () => Promise.reject(new Error('config.json is locked')),
+      }))
+      api = await import('../../src/main/backend-params')
+      await api.loadBackendParams()
+      expect(stored()).toEqual({ formatVersion: 1, backends: { grok: moved } })
+      expect(JSON.parse(fs.readFileSync(config(), 'utf8'))).toEqual(legacy)
+
+      // The next launch moves nothing again: the column's own later choice
+      // stands over what config.json still holds.
+      await relaunch()
+      await api.saveImageBackendDefaults('grok', 'grok-imagine-image', { quality: 'low' })
+      vi.resetModules()
+      api = await import('../../src/main/backend-params')
+      await api.loadBackendParams()
+      expect(api.getImageBackendDefaults().grok).toEqual({ model: 'grok-imagine-image', params: { quality: 'low' } })
+      const { updateConfig } = await import('../../src/main/config')
+      await updateConfig(() => {})
+      expect(JSON.parse(fs.readFileSync(config(), 'utf8'))).toEqual({ formatVersion: 1, image_backends: { grok: { concurrency: 2 } } })
+    })
+  })
+
   it('saves the latest edit of each column once, after the last edit', async () => {
     await api.loadBackendParams()
     vi.useFakeTimers()
@@ -89,6 +145,24 @@ describe('backend-params.json', () => {
   it('refuses a save whose parameters are not plain values', async () => {
     await api.loadBackendParams()
     await expect(api.saveImageBackendDefaults('openai', 'o', { width: { nested: 1 } })).rejects.toThrow('invalid')
+  })
+
+  // The fields' own rules: the column shows a saved number as it is, so one its
+  // field would not accept is refused here instead of corrected there.
+  it('reads an entry with a number its field would not accept as absent, keeps it, and refuses to save one', async () => {
+    const { getDefaultModelForBackend } = await import('../../src/shared/ai-models')
+    const flex = { model: 'flux-2-flex', params: { steps: 51, guidance: 5 } }
+    const openai = { model: 'gpt-image-2', params: { width: 1000, height: 1024 } }
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, backends: { flux: flex, openai } }))
+    await api.loadBackendParams()
+    const { IMAGE_DEFAULT_PARAMS } = await import('../../src/shared/image-backend-defaults')
+    expect(api.getImageBackendDefaults().flux).toEqual({ model: getDefaultModelForBackend('flux').id, params: IMAGE_DEFAULT_PARAMS.flux })
+    expect(api.getImageBackendDefaults().openai).toEqual({ model: getDefaultModelForBackend('openai').id, params: IMAGE_DEFAULT_PARAMS.openai })
+    await expect(api.saveImageBackendDefaults('flux', 'flux-2-flex', { steps: 50, guidance: 1 })).rejects.toThrow('invalid')
+    await expect(api.saveImageBackendDefaults('openai', 'gpt-image-2', { width: 1024, height: 1024, outputCompression: 100.5 })).rejects.toThrow('invalid')
+    await api.saveImageBackendDefaults('openai', 'gpt-image-2', { width: 1040, height: 1024 })
+    await api.drainBackendDefaults()
+    expect(stored()).toEqual({ formatVersion: 1, backends: { flux: flex, openai: { model: 'gpt-image-2', params: { width: 1040, height: 1024 } } } })
   })
 
   it.each([

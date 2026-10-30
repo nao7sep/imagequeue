@@ -9,6 +9,7 @@ import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type CloudBackendId } from '../shared/ty
 import { getDefaultModelForBackend } from '../shared/ai-models'
 import { IMAGE_DEFAULT_PARAMS, type SavedImageBackendParams } from '../shared/image-backend-defaults'
 import { log, serializeError } from './logger'
+import { meetsTaskNumberRules } from '../shared/number-field'
 
 // backend-params.json holds the model and parameters each cloud image column
 // saves on its own as the user works, beside params.json, which holds Draw
@@ -30,15 +31,17 @@ export function drainSetAsideBackendParamsPaths(): string[] {
   return setAsidePaths.splice(0)
 }
 
-// Which parameters a model takes, and their values, are the column's to judge
-// per row, so an entry saved for a model or a field that has since changed
-// still loads.
-function isEntry(value: unknown): value is SavedImageBackendParams {
+// Which parameters a model takes are the column's to judge per row, so an entry
+// saved for a model or a field that has since changed still loads. A number the
+// column's field for it would not accept is refused, the same rule the field
+// and the queue check, so the column never has to correct one.
+function isEntry(backend: CloudBackendId, value: unknown): value is SavedImageBackendParams {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const { model, params } = value as Record<string, unknown>
   if (typeof model !== 'string' || !params || typeof params !== 'object' || Array.isArray(params)) return false
   return Object.values(params).every((item) =>
     item === null || typeof item === 'string' || (typeof item === 'number' && Number.isFinite(item)))
+    && meetsTaskNumberRules(backend, model, params as Record<string, unknown>)
 }
 
 // Each column's entry is checked as it is read; one that fails reads as absent,
@@ -48,7 +51,7 @@ function acceptEntries(entries: Record<string, unknown>): Partial<Record<CloudBa
   const accepted: Partial<Record<CloudBackendId, SavedImageBackendParams>> = {}
   const known = new Set<string>(CLOUD_BACKEND_IDS_IN_UI_ORDER)
   for (const [backend, value] of Object.entries(entries)) {
-    if (known.has(backend) && isEntry(value)) accepted[backend as CloudBackendId] = value
+    if (known.has(backend) && isEntry(backend as CloudBackendId, value)) accepted[backend as CloudBackendId] = value
     else {
       rejected[backend] = value
       if (known.has(backend)) log('warn', 'Invalid image column parameters; using built-in', { backend })
@@ -155,7 +158,7 @@ const writer = createCoalescedWriter({
 export function saveImageBackendDefaults(backend: CloudBackendId, model: string, params: Record<string, unknown>): Promise<void> {
   if (store === null) return Promise.reject(new Error('backend-params.json is not loaded'))
   const entry = { model, params: structuredClone(params) }
-  if (!isEntry(entry)) return Promise.reject(new Error(`Cannot save invalid image column parameters for ${backend}`))
+  if (!isEntry(backend, entry)) return Promise.reject(new Error(`Cannot save invalid image column parameters for ${backend}`))
   store[backend] = entry
   delete rejected[backend]
   const saved = new Promise<void>((resolve, reject) => waiters.push({ resolve, reject }))

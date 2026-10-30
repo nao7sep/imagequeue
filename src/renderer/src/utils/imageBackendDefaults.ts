@@ -14,9 +14,9 @@ import { openaiBackend } from '../backends/openai'
 import type { BackendParamModel } from '../backends/types'
 import { CLOUD_BACKENDS } from '../backends'
 
-// The OpenAI size helpers live with their backend descriptor; re-exported here
+// The OpenAI size helper lives with its backend descriptor; re-exported here
 // for the existing import sites.
-export { normalizeOpenAiDimension, resolveOpenAiSize } from '../backends/openai'
+export { resolveOpenAiSize } from '../backends/openai'
 
 export interface SavedImageBackendDefaults {
   model: string

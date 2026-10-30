@@ -69,17 +69,32 @@ export function openRecords(dataDir: string): string {
 }
 
 // CLI output files lived in records/cli/, which held nothing else, until they
-// moved to cli-output/. A data root that has only the old folder has it renamed
-// once, before Records can read a row's files, and the emptied records/ goes
-// with it. One rename at launch is too small to move off the main thread. A
-// rename that fails leaves the old files where they are, for the next launch to
-// try again; Records says their output file is missing meanwhile.
+// moved to cli-output/. A data root that still has the old folder has it
+// renamed, or, when a job already made cli-output/, each file moved in, before
+// Records can read a row's files; the emptied records/ goes with it. Moving a
+// launch's worth of renames is too small to take off the main thread. A file
+// that cannot be moved stays where it is for the next launch to try again, and
+// Records says its output file is missing meanwhile.
 function moveOldCliOutput(dataDir: string): unknown {
   const oldDir = path.join(dataDir, 'records', 'cli')
   const newDir = cliOutputDirectory(dataDir)
+  let failure: unknown = null
   try {
-    if (fs.existsSync(newDir) || !fs.existsSync(oldDir)) return null
-    fs.renameSync(oldDir, newDir)
+    if (!fs.existsSync(oldDir)) return null
+    if (!fs.existsSync(newDir)) fs.renameSync(oldDir, newDir)
+    else {
+      for (const name of fs.readdirSync(oldDir)) {
+        const target = path.join(newDir, name)
+        try {
+          // Output file names are unique per job, so a name already taken is
+          // not this file; it is left for the developer rather than replaced.
+          if (fs.existsSync(target)) throw new Error(`cli-output already holds ${name}`)
+          fs.renameSync(path.join(oldDir, name), target)
+        } catch (error) { failure ??= error }
+      }
+      if (failure !== null) return failure
+      fs.rmdirSync(oldDir)
+    }
   } catch (error) { return error }
   try { fs.rmdirSync(path.dirname(oldDir)) } catch { /* records/ holds something else; it stays. */ }
   return null

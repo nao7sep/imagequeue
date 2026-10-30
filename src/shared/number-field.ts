@@ -34,6 +34,8 @@ export function parseNumberText(text: string, rule: NumberRule): number | null {
 
 export const AUTO_PREVIEW_SECONDS_RULE: NumberRule = { min: 0, whole: true }
 export const TIMEOUT_SECONDS_RULE: NumberRule = { min: 1, whole: true }
+/** What a stored timeout holds: the whole seconds its field accepts, in milliseconds. */
+export const TIMEOUT_MS_RULE: NumberRule = { min: 1000, multipleOf: 1000 }
 
 // How many requests each cloud column may run at once.
 export const CONCURRENCY_RULES: Record<CloudBackendId, NumberRule> = {

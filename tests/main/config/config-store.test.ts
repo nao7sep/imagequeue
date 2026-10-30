@@ -300,6 +300,14 @@ describe('settings by set', () => {
       image_backends: { flux: { concurrency: 0, timeout_ms: -1 } },
     })
   })
+  it('reads a timeout that is not whole seconds as its built-in, and will not save one', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { drawthings: { timeout_ms: 1500 } } }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().image_backends.drawthings.timeout_ms).toBe(createDefaultConfig().image_backends.drawthings.timeout_ms)
+    await expect(updateConfig((draft) => { draft.image_backends.flux.timeout_ms = 2500 })).rejects.toThrow('image_backends.flux.timeout_ms')
+    await updateConfig((draft) => { draft.image_backends.flux.timeout_ms = 2000 })
+    expect(loadConfig().image_backends.flux.timeout_ms).toBe(2000)
+  })
   it.each([['unreadable', '{ invalid'], ['not a map of sets', '[]']])('sets aside a file that is %s and starts from built-ins', async (_state, bytes) => {
     fs.writeFileSync(file(), bytes)
     const { loadConfig } = await import('../../../src/main/config/config-store')

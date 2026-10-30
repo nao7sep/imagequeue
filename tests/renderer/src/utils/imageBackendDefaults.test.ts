@@ -1,43 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
-  normalizeOpenAiDimension,
   resolveOpenAiSize,
   resolveSavedImageBackendDefaults,
   serializeImageBackendDefaults
 } from '../../../../src/renderer/src/utils/imageBackendDefaults'
-import {
-  OPENAI_IMAGE_MAX_EDGE,
-  OPENAI_IMAGE_MIN_EDGE,
-  OPENAI_IMAGE_SIZE_STEP,
-} from '../../../../src/shared/models'
 import { findModel, getModelsForBackend } from '../../../../src/shared/ai-models'
 
 const OPENAI_MODELS = getModelsForBackend('openai')
 const FLUX_MODELS = getModelsForBackend('flux')
 
-describe('normalizeOpenAiDimension', () => {
-  it('snaps to the 16px step', () => {
-    expect(normalizeOpenAiDimension(1000) % OPENAI_IMAGE_SIZE_STEP).toBe(0)
-    expect(normalizeOpenAiDimension(1024)).toBe(1024)
-  })
-
-  it('clamps below the minimum and above the maximum edge', () => {
-    expect(normalizeOpenAiDimension(100)).toBe(OPENAI_IMAGE_MIN_EDGE)
-    expect(normalizeOpenAiDimension(99999)).toBe(OPENAI_IMAGE_MAX_EDGE)
-  })
-
-  it('falls back to the minimum edge for non-finite input', () => {
-    expect(normalizeOpenAiDimension(NaN)).toBe(OPENAI_IMAGE_MIN_EDGE)
-    expect(normalizeOpenAiDimension(Infinity)).toBe(OPENAI_IMAGE_MIN_EDGE)
-  })
-})
-
 describe('resolveOpenAiSize', () => {
   const model = findModel('openai', 'gpt-image-2.5-flare')!
 
-  it('normalizes arbitrary dimensions onto the custom-size grid', () => {
-    expect(resolveOpenAiSize(model, 2050, 100))
-      .toEqual({ width: normalizeOpenAiDimension(2050), height: OPENAI_IMAGE_MIN_EDGE })
+  it('keeps saved dimensions as they are', () => {
+    expect(resolveOpenAiSize(model, 2048, 1040)).toEqual({ width: 2048, height: 1040 })
   })
 
   it('falls back to sizes[0] when it gets non-numeric input', () => {
@@ -58,22 +34,21 @@ describe('resolveSavedImageBackendDefaults', () => {
     expect(resolveSavedImageBackendDefaults('openai', null, OPENAI_MODELS, OPENAI_MODELS[0])).toBeNull()
   })
 
-  it('validates a saved OpenAI quality and clamps the saved width', () => {
+  it('validates a saved OpenAI quality and keeps the saved size', () => {
     const result = resolveSavedImageBackendDefaults(
       'openai',
-      { model: 'gpt-image-2', params: { quality: 'bogus', moderation: 'low', width: 100, height: 100 } },
+      { model: 'gpt-image-2', params: { quality: 'bogus', moderation: 'low', width: 1040, height: 2000 } },
       OPENAI_MODELS,
       findModel('openai', 'gpt-image-2')
     )!
-    // Invalid quality falls back to 'auto'; out-of-range dims clamp to the min edge.
     expect(result.params!.quality).toBe('auto')
-    expect(result.params!.width).toBe(OPENAI_IMAGE_MIN_EDGE)
-    expect(result.params!.height).toBe(OPENAI_IMAGE_MIN_EDGE)
+    expect(result.params!.width).toBe(1040)
+    expect(result.params!.height).toBe(2000)
     // Moderation is no longer a field; a saved one is dropped.
     expect(result.params).not.toHaveProperty('moderation')
   })
 
-  it('clamps a saved FLUX Flex step count into the allowed range', () => {
+  it('shows a saved FLUX step count the column\'s model does not take, and derives no params from it', () => {
     const flex = findModel('flux', 'flux-2-flex')!
     const result = resolveSavedImageBackendDefaults(
       'flux',
@@ -81,7 +56,8 @@ describe('resolveSavedImageBackendDefaults', () => {
       FLUX_MODELS,
       flex
     )!
-    expect(result.params!.steps).toBe(flex.stepsRange!.max)
+    expect(result.ui.steps).toBe('9999')
+    expect(result.params).toBeNull()
   })
 
   // Nothing seeds steps/guidance into config: the model that declares the range is

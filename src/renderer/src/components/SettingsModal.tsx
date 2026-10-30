@@ -666,7 +666,7 @@ export function SettingsModal({ onClose }: Props): React.JSX.Element {
           </div>
           <div className="settings-field">
             <label htmlFor="settings-drawthings-timeout">{t('settings.timeout')}</label>
-            <NumberInput id="settings-drawthings-timeout" rule={TIMEOUT_SECONDS_RULE} value={Math.round((backends.drawthings.timeout_ms as number) / 1000)} invalidText={numberText['settings-drawthings-timeout']} onInvalidText={(text) => setFieldText('settings-drawthings-timeout', text)} onValue={(value) => updateBackend('drawthings', 'timeout_ms', value * 1000)} />
+            <NumberInput id="settings-drawthings-timeout" rule={TIMEOUT_SECONDS_RULE} value={(backends.drawthings.timeout_ms as number) / 1000} invalidText={numberText['settings-drawthings-timeout']} onInvalidText={(text) => setFieldText('settings-drawthings-timeout', text)} onValue={(value) => updateBackend('drawthings', 'timeout_ms', value * 1000)} />
             <p className="settings-hint">{t('settings.drawThingsTimeoutHint')}</p>
           </div>
           <div className="settings-field">

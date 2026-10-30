@@ -1026,7 +1026,8 @@ it('pages through 10,000 records while new ones arrive live, moving nothing whil
   await scrollTo(30 * ROW)
   await act(async () => options()[1]!.click())
   const before = titles()
-  const chosen = document.querySelector('[aria-selected="true"]')!.getAttribute('data-listbox-option')
+  const chosen = document.querySelector('[aria-selected="true"]')!.getAttribute('data-listbox-option')!
+  const chosenTitle = document.querySelector('[aria-selected="true"] .records-row-title')!.textContent
   const detailCalls = readRecordDetail.mock.calls.length
   const reads = readRecordsPage.mock.calls.length
   for (let tick = 0; tick < 5; tick++) await arrive(3)
@@ -1037,8 +1038,15 @@ it('pages through 10,000 records while new ones arrive live, moving nothing whil
   await scrollTo(0)
   expect(titles()[0]).toBe('Live record 10018')
   expect(setSize()).toBe(118)
-  expect(document.querySelector('[aria-selected="true"]')?.getAttribute('data-listbox-option') ?? chosen).toBe(chosen)
   expect(readRecordDetail.mock.calls.length).toBe(detailCalls)
+  // The chosen record sits 15 rows lower now; scrolled to it, it is still the
+  // selected one.
+  box.scrollHeight = setSize() * ROW
+  await scrollTo(stored.findIndex((record) => record.title === chosenTitle) * ROW)
+  const chosenRow = document.querySelector(`[data-listbox-option="${CSS.escape(chosen)}"]`)
+  expect(chosenRow?.querySelector('.records-row-title')?.textContent).toBe(chosenTitle)
+  expect(chosenRow?.getAttribute('aria-selected')).toBe('true')
+  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(1)
 
   // Walking to the end reads each older page once, each from the last record
   // the one before it ended on, until every record is loaded.

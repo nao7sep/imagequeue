@@ -7,7 +7,7 @@ import { AI_ROLES, TEXT_PROVIDERS, textRowFor } from '../../shared/ai-models'
 import { multiline, singleLine } from '../../shared/textCleanup'
 import { valuesEqual } from '../settings-changes'
 import { BRAINSTORM_LIMITS } from '../../shared/brainstorm-config'
-import { AUTO_PREVIEW_SECONDS_RULE, CONCURRENCY_RULES, DRAW_THINGS_DIMENSION_RULE, DRAW_THINGS_GUIDANCE_RULE, DRAW_THINGS_STEPS_RULE, meetsNumberRule, type NumberRule } from '../../shared/number-field'
+import { AUTO_PREVIEW_SECONDS_RULE, CONCURRENCY_RULES, DRAW_THINGS_DIMENSION_RULE, DRAW_THINGS_GUIDANCE_RULE, DRAW_THINGS_STEPS_RULE, meetsNumberRule, TIMEOUT_MS_RULE, type NumberRule } from '../../shared/number-field'
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -85,7 +85,7 @@ function meetsAppLimits(key: string, value: number): boolean {
   if (rule) return meetsNumberRule(value, rule)
   // An <audio> volume outside 0–1 throws.
   if (key === 'notifications.volume') return value >= 0 && value <= 1
-  if (key.endsWith('.timeout_ms')) return value > 0
+  if (key.endsWith('.timeout_ms')) return meetsNumberRule(value, TIMEOUT_MS_RULE)
   return true
 }
 
