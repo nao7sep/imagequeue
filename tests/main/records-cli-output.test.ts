@@ -1,7 +1,8 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { closeRecords, flushRecords, startAiCall, startCliJobRecord } from '../../src/main/records'
+import { closeRecords, flushRecords, openRecords, startAiCall, startCliJobRecord } from '../../src/main/records'
 import { freshRecordsRoot, readRows, removeRecordsRoots } from './records-fixture'
 import { until } from '../renderer/until'
 
@@ -32,14 +33,13 @@ describe('CLI records with streamed diagnostics', () => {
     const stderrFile = row.stderr_file as string
     expect(stdoutFile).toMatch(/^\d{8}-\d{6}-utc-[a-f\d-]+-stdout\.log$/)
     expect(stderrFile).toBe(stdoutFile.replace('-stdout.log', '-stderr.log'))
-    expect(fs.readFileSync(path.join(root, 'records/cli', stdoutFile), 'utf8')).toBe(piece.repeat(10))
-    expect(fs.readFileSync(path.join(root, 'records/cli', stderrFile), 'utf8')).toBe('[REDACTED]\r\nhttps://host?sig=[REDACTED]&rest=kept\n[REDACTED]')
+    expect(fs.readFileSync(path.join(root, 'cli-output', stdoutFile), 'utf8')).toBe(piece.repeat(10))
+    expect(fs.readFileSync(path.join(root, 'cli-output', stderrFile), 'utf8')).toBe('[REDACTED]\r\nhttps://host?sig=[REDACTED]&rest=kept\n[REDACTED]')
   })
 
   it('retains process success when output storage fails and reports a separate masked diagnostic immediately', async () => {
     const root = freshRecordsRoot()
-    fs.mkdirSync(path.join(root, 'records'))
-    fs.writeFileSync(path.join(root, 'records/cli'), 'blocked')
+    fs.writeFileSync(path.join(root, 'cli-output'), 'blocked')
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const record = startCliJobRecord(job)
@@ -61,6 +61,26 @@ describe('CLI records with streamed diagnostics', () => {
     startCliJobRecord(job).finish(end)
     await flushRecords()
     expect(readRows(root, 'cli_jobs')[0]).toMatchObject({ stdout_file: null, stderr_file: null, output_error: null })
-    expect(fs.existsSync(path.join(root, 'records/cli'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'cli-output'))).toBe(false)
+  })
+
+  it('moves output kept in records/cli to cli-output once, removing the emptied records folder', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-move-'))
+    try {
+      fs.mkdirSync(path.join(root, 'records', 'cli'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'records', 'cli', 'old-stdout.log'), 'kept')
+      openRecords(root)
+      expect(fs.readFileSync(path.join(root, 'cli-output', 'old-stdout.log'), 'utf8')).toBe('kept')
+      expect(fs.existsSync(path.join(root, 'records'))).toBe(false)
+      await closeRecords()
+      // Once cli-output exists, a records/cli made later is left alone.
+      fs.mkdirSync(path.join(root, 'records', 'cli'), { recursive: true })
+      openRecords(root)
+      expect(fs.existsSync(path.join(root, 'records', 'cli'))).toBe(true)
+      expect(fs.readdirSync(path.join(root, 'cli-output'))).toEqual(['old-stdout.log'])
+    } finally {
+      await closeRecords()
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 })

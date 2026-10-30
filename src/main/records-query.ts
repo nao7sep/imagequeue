@@ -158,9 +158,14 @@ export function runRecordsRead(db: DatabaseSync, read: RecordsRead, reportWarnin
   return readDetail(db, read.kind, read.id)
 }
 
+/** Where CLI jobs' output files live: `cli-output/` at the data root, beside records.sqlite3. */
+export function cliOutputDirectory(dataDir: string): string {
+  return path.join(dataDir, 'cli-output')
+}
+
 function outputDirectory(db: DatabaseSync): string {
   const main = (db.prepare('PRAGMA database_list').all() as { name: string; file: string }[]).find((entry) => entry.name === 'main')!
-  return path.join(path.dirname(main.file), 'records', 'cli')
+  return cliOutputDirectory(path.dirname(main.file))
 }
 
 function outputPath(directory: string, reference: string, stream: RecordOutputStream): string {

@@ -65,8 +65,8 @@ describe('CLI job records', () => {
       job_id: jobId, job_kind: 'download', target: 'model.ckpt', cli_path: CLI,
       status: 'exited', exit_code: 3, signal: null, stdout: '', stderr: '', error: null,
     })
-    expect(fs.readFileSync(path.join(dir, 'records/cli', row!.stdout_file as string), 'utf8')).toBe('10%\r100%\r\nDone\n')
-    expect(fs.readFileSync(path.join(dir, 'records/cli', row!.stderr_file as string), 'utf8')).toBe('careful\n')
+    expect(fs.readFileSync(path.join(dir, 'cli-output', row!.stdout_file as string), 'utf8')).toBe('10%\r100%\r\nDone\n')
+    expect(fs.readFileSync(path.join(dir, 'cli-output', row!.stderr_file as string), 'utf8')).toBe('careful\n')
     expect(JSON.parse(row!.args as string)).toEqual(['-e', script])
     const { time, started_at: startedAt, ended_at: endedAt } = row as { time: string; started_at: string; ended_at: string }
     expect(time <= startedAt && startedAt <= endedAt).toBe(true)
@@ -81,7 +81,7 @@ describe('CLI job records', () => {
     await flushRecords()
     const [row] = readRows(dir, 'cli_jobs')
     expect(row).toMatchObject({ job_id: jobId, status: 'killed', exit_code: null, signal: 'SIGTERM', stdout: '' })
-    expect(fs.readFileSync(path.join(dir, 'records/cli', row!.stdout_file as string), 'utf8')).toBe('ready\n')
+    expect(fs.readFileSync(path.join(dir, 'cli-output', row!.stdout_file as string), 'utf8')).toBe('ready\n')
   })
 
   it('keep a job whose process could not be started, with the error', async () => {

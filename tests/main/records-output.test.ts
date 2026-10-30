@@ -29,8 +29,8 @@ describe('recorded CLI output paging and search with real SQLite/files', () => {
   }
   function file(text: string, stream = 'stdout'): string {
     const basename = `20261024-000000-utc-${randomUUID()}-${stream}.log`
-    fs.mkdirSync(path.join(root, 'records', 'cli'), { recursive: true })
-    fs.writeFileSync(path.join(root, 'records', 'cli', basename), text, 'utf8')
+    fs.mkdirSync(path.join(root, 'cli-output'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'cli-output', basename), text, 'utf8')
     return basename
   }
 
@@ -131,9 +131,9 @@ describe('recorded CLI output paging and search with real SQLite/files', () => {
     expect(report).toHaveBeenCalledOnce()
     expect(report).toHaveBeenCalledWith({ unavailableInputs: 1, first: {
       jobId: missing, stream: 'stdout', reference,
-      error: expect.objectContaining({ code: 'ENOENT', path: path.join(fs.realpathSync(root), 'records', 'cli', reference), stack: expect.any(String) }),
+      error: expect.objectContaining({ code: 'ENOENT', path: path.join(fs.realpathSync(root), 'cli-output', reference), stack: expect.any(String) }),
     } })
-    fs.writeFileSync(path.join(root, 'records', 'cli', reference), 'recovered needle')
+    fs.writeFileSync(path.join(root, 'cli-output', reference), 'recovered needle')
     const recovered = readPage(db, { ...query('needle'), kind: null }, report)
     expect(recovered.searchIncomplete).toBeUndefined()
     expect(recovered.records.map((item) => item.id)).toContain(missing)

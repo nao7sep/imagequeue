@@ -35,7 +35,7 @@ describe('acquisition CLI output streaming from a real child', () => {
     const row = readRows(root, 'cli_jobs')[0]!
     expect(row).toMatchObject({ exit_code: 0, stdout: '', stderr: '', error: null, output_error: null })
     expect(Buffer.byteLength(JSON.stringify(row))).toBeLessThan(4096)
-    const file = path.join(root, 'records/cli', row.stdout_file as string)
+    const file = path.join(root, 'cli-output', row.stdout_file as string)
     const sentinel = '\rfinal-stream-sentinel\n'
     expect(fs.statSync(file).size).toBe(20 * 1024 * 1024 + Buffer.byteLength(sentinel))
     const expected = createHash('sha256')

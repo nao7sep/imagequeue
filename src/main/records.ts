@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { utcStampForFilename } from '../shared/utc-stamp'
@@ -6,7 +7,7 @@ import { createCliOutputWriter } from './cli-output-writer'
 import createRecordsWorker from './records-writer-worker?nodeWorker'
 import { serializeError } from '../shared/serialize-error'
 import type { RecordsRead, RecordsReadResults } from '../shared/records'
-import type { RecordsSearchWarning } from './records-query'
+import { cliOutputDirectory, type RecordsSearchWarning } from './records-query'
 
 type Table = 'log_records' | 'ai_calls' | 'cli_jobs'
 type Row = Record<string, string | number | null>
@@ -27,7 +28,8 @@ const pending = new Map<number, { worker: Worker; resolve: (value?: unknown) => 
 /** Diagnostics are ordered by the writer's mailbox; paid evidence belongs to session.json. */
 export function openRecords(dataDir: string): string {
   void closeRecords()
-  outputRoot = path.join(dataDir, 'records', 'cli')
+  const moveFailure = moveOldCliOutput(dataDir)
+  outputRoot = cliOutputDirectory(dataDir)
   const file = path.join(dataDir, 'records.sqlite3')
   try {
     const started = createRecordsWorker({ workerData: { dataDir, launch } })
@@ -60,7 +62,27 @@ export function openRecords(dataDir: string): string {
     started.on('exit', ended)
     started.unref()
   } catch (error) { console.error('[records] writer could not start', error) }
+  if (moveFailure !== null) {
+    writeLogRecord(new Date().toISOString(), 'warn', 'Earlier CLI output could not be moved to cli-output', { error: serializeError(moveFailure) })
+  }
   return file
+}
+
+// CLI output files lived in records/cli/, which held nothing else, until they
+// moved to cli-output/. A data root that has only the old folder has it renamed
+// once, before Records can read a row's files, and the emptied records/ goes
+// with it. One rename at launch is too small to move off the main thread. A
+// rename that fails leaves the old files where they are, for the next launch to
+// try again; Records says their output file is missing meanwhile.
+function moveOldCliOutput(dataDir: string): unknown {
+  const oldDir = path.join(dataDir, 'records', 'cli')
+  const newDir = cliOutputDirectory(dataDir)
+  try {
+    if (fs.existsSync(newDir) || !fs.existsSync(oldDir)) return null
+    fs.renameSync(oldDir, newDir)
+  } catch (error) { return error }
+  try { fs.rmdirSync(path.dirname(oldDir)) } catch { /* records/ holds something else; it stays. */ }
+  return null
 }
 
 export async function flushRecords(): Promise<void> {

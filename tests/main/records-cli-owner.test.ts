@@ -44,8 +44,8 @@ it('captures the stream root, session, writer and actual end time before asynchr
   const row = messages[0].find((message) => message.type === 'write')!.row!
   expect(row.session_id).toBe('first-session')
   expect(String(row.ended_at) >= firstEnd && String(row.ended_at) <= lastEnd).toBe(true)
-  expect(fs.readFileSync(path.join(roots[0], 'records/cli', row.stdout_file as string), 'utf8')).toBe('actual bytes\r\n')
-  expect(fs.existsSync(path.join(roots[1], 'records/cli'))).toBe(false)
+  expect(fs.readFileSync(path.join(roots[0], 'cli-output', row.stdout_file as string), 'utf8')).toBe('actual bytes\r\n')
+  expect(fs.existsSync(path.join(roots[1], 'cli-output'))).toBe(false)
   expect(messages[0].at(-1)!.type).toBe('close')
   expect(messages[1].every((message) => message.type !== 'write')).toBe(true)
 })

@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS cli_jobs (
   signal     TEXT,           -- as the process runner reported it
   stdout     TEXT NOT NULL,  -- legacy inline output; new jobs keep file references
   stderr     TEXT NOT NULL,
-  stdout_file TEXT,          -- basename under records/cli
+  stdout_file TEXT,          -- basename under cli-output
   stderr_file TEXT,
   output_error TEXT,         -- capture failure, separate from the process result
   error      TEXT            -- JSON: the error the process runner reported, null when none
