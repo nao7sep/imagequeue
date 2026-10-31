@@ -1,6 +1,6 @@
 {
   "name": "imagequeue",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "packageManager": "npm@12.2.0",
   "description": "Elaborate one idea into varied, concrete prompts, send them to several image models at once, and compare the results side by side.",
   "main": "./out/main/index.js",

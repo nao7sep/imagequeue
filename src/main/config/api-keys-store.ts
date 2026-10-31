@@ -6,7 +6,7 @@ import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import type { AppNotice } from '../../shared/app-notice'
-import { FORMAT_VERSION_KEY, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
 import { holdsBytesAsync } from '../utils/holds-bytes'
 import { raiseAppNotice } from '../app-notices'
 import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
@@ -91,17 +91,10 @@ function warnIfInsecureMode(filePath: string): void {
 // Why the file cannot be used.
 type Unusable = { kind: 'unreadable' | 'malformed' | 'newer'; error: unknown }
 
-// The outer shape `{ keys: { id: value } }`, its format version optional: a
-// file written before the version was added is current.
+// The outer shape `{ formatVersion, keys: { id: value } }`.
 function parseSecrets(raw: unknown, filePath: string): SecretsFile {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('api-keys.json must be a JSON object')
-  const { [FORMAT_VERSION_KEY]: version, keys, ...others } = raw as Record<string, unknown>
-  if (version !== undefined) {
-    if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
-      throw new Error(`${FORMAT_VERSION_KEY} is not a positive integer`)
-    }
-    if (version > FORMAT_VERSIONS.apiKeys) throw new NewerFormatError(filePath, version, FORMAT_VERSIONS.apiKeys)
-  }
+  const { keys, ...others } = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.apiKeys, filePath)
   if (!keys || typeof keys !== 'object' || Array.isArray(keys)) throw new Error('api-keys.json must hold a keys map')
   return { keys: { ...(keys as Record<string, unknown>) }, others }
 }

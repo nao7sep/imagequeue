@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError, OlderFormatError } from '../store-format'
+import { FORMAT_VERSIONS, openSqliteStore } from '../store-format'
 
 // The backup history itself (data-backup-conventions): `backups.sqlite3` keeps,
 // for each protected file, the last version saved in each launch. Only the
@@ -15,7 +15,7 @@ import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError, OlderFormatError
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS backups (
   id             INTEGER PRIMARY KEY,
-  session_id     TEXT,
+  session_id     TEXT NOT NULL,
   path           TEXT NOT NULL,
   content        BLOB NOT NULL,
   content_sha256 TEXT NOT NULL,
@@ -24,49 +24,14 @@ CREATE TABLE IF NOT EXISTS backups (
 );
 `
 
-// Current-format history may already contain rows with a NULL session_id from
-// before launches were told apart. The unique index leaves those rows intact.
 const INDEXES = `
 CREATE UNIQUE INDEX IF NOT EXISTS backups_path_session ON backups (path, session_id);
 CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
 `
 
-function userVersion(db: DatabaseSync): number {
-  return (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-}
-
-/**
- * Opens current-format history or initializes an empty file. Unsupported
- * development formats are left unchanged, without adopting or converting them.
- */
+/** Opens the history, or initializes an empty file at the current format. */
 export function openBackupHistory(file: string): DatabaseSync {
-  const db = new DatabaseSync(file)
-  try {
-    const found = userVersion(db)
-    if (found > FORMAT_VERSIONS.backups) throw new NewerFormatError(file, found, FORMAT_VERSIONS.backups)
-    if (found === 0) {
-      const { objects } = db.prepare('SELECT count(*) AS objects FROM sqlite_master').get() as { objects: number }
-      if (objects > 0) throw new MissingFormatError(file)
-    } else if (found < FORMAT_VERSIONS.backups) {
-      throw new OlderFormatError(file, found, FORMAT_VERSIONS.backups)
-    }
-    db.exec('PRAGMA journal_mode = WAL')
-    if (found === FORMAT_VERSIONS.backups) return db
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      db.exec(SCHEMA)
-      db.exec(INDEXES)
-      db.exec(`PRAGMA user_version = ${FORMAT_VERSIONS.backups}`)
-      db.exec('COMMIT')
-    } catch (error) {
-      try { db.exec('ROLLBACK') } catch { /* Preserve the open failure. */ }
-      throw error
-    }
-    return db
-  } catch (error) {
-    try { db.close() } catch { /* Preserve the open failure. */ }
-    throw error
-  }
+  return openSqliteStore(file, FORMAT_VERSIONS.backups, SCHEMA + INDEXES)
 }
 
 /**

@@ -21,16 +21,16 @@ export const FORMAT_VERSIONS = {
   cliSidecar: 1,
   /** recommendations-times.json */
   recommendationsTimes: 1,
-  /** sessions/<session>/session.json; 2 protects pre-publication output evidence */
-  session: 2,
+  /** sessions/<session>/session.json */
+  session: 1,
   /** sessions/<session>/<image>.json, whose keys are snake_case */
   imageSidecar: 1,
   /** records.sqlite3 */
   records: 1,
   /** concepts.sqlite3 */
   concepts: 1,
-  /** backups.sqlite3; 2 adds one row per file per launch */
-  backups: 2,
+  /** backups.sqlite3 */
+  backups: 1,
 } as const
 
 export const FORMAT_VERSION_KEY = 'formatVersion'
@@ -41,14 +41,6 @@ export class NewerFormatError extends Error {
   constructor(readonly path: string, readonly found: number, readonly supported: number) {
     super(`${path} has format version ${found}, newer than the ${supported} this build reads; it was left unchanged`)
     this.name = 'NewerFormatError'
-  }
-}
-
-/** A store whose older format this build does not read or convert. */
-export class OlderFormatError extends Error {
-  constructor(readonly path: string, readonly found: number, readonly supported: number) {
-    super(`${path} has format version ${found}, older than the ${supported} this build reads; it was left unchanged`)
-    this.name = 'OlderFormatError'
   }
 }
 

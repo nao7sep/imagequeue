@@ -238,6 +238,7 @@ describe('api-keys-store', () => {
     ['not JSON', 'not json at all'],
     ['the wrong root', JSON.stringify({ formatVersion: 1, xai: 'do-not-overwrite-these-bytes' })],
     ['a keys container of the wrong shape', JSON.stringify({ formatVersion: 1, keys: ['xai', 'not-an-object-container'] })],
+    ['no format version', JSON.stringify({ keys: { xai: 'sk-kept' } })],
     ['a format version that is not a positive integer', JSON.stringify({ formatVersion: 'one', keys: { xai: 'sk-kept' } })],
   ])('leaves a file holding %s in place, reads no keys, and refuses a save', async (_state, original) => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
@@ -385,15 +386,6 @@ describe('api-keys-store', () => {
   })
   describe('format version', () => {
     const secretsPath = () => path.join(tmpRoot, 'api-keys.json')
-
-    it('reads a file with no format version as current, and marks it at the next save', async () => {
-      fs.writeFileSync(secretsPath(), JSON.stringify({ keys: { xai: 'sk-pasted-raw' } }))
-      expect(getStoredApiKey('xai')).toBe('sk-pasted-raw')
-      await setStoredApiKey('openai.image', 'sk-stored')
-      const onDisk = JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))
-      expect(onDisk.formatVersion).toBe(FORMAT_VERSIONS.apiKeys)
-      expect(onDisk.keys.xai).toBe('sk-pasted-raw')
-    })
 
     it('writes its format version first and reads it back', async () => {
       await setStoredApiKey('openai.image', 'sk-stored')

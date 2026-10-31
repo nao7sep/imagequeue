@@ -1106,8 +1106,8 @@ describe('recovering published output before resume normalization', () => {
     } finally { failed.mockRestore() }
   })
 
-  it('reads a version-one manifest unchanged before applying ordinary resume normalization', async () => {
-    const target = stageSession(id, { formatVersion: 1, tasks: withTasks([makeTask('old', 'queued')]) })
+  it('lists a manifest without changing it and marks its queued tasks interrupted on resume', async () => {
+    const target = stageSession(id, { formatVersion: FORMAT_VERSIONS.session, tasks: withTasks([makeTask('old', 'queued')]) })
     const original = fs.readFileSync(path.join(target, 'session.json'))
     expect(await listSessions()).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
     expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(original)

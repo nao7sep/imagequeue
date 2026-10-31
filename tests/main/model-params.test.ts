@@ -32,7 +32,7 @@ describe('params.json format version', () => {
     ['no format version', JSON.stringify({ 'model.ckpt': params })],
     ['text that is not JSON', '{ "model.ckpt": '],
     ['a value that is not a map of sets', JSON.stringify([params])],
-    ['the disposable flat development format', JSON.stringify({ formatVersion: 1, 'model.ckpt': params })],
+    ['a flat model map', JSON.stringify({ formatVersion: 1, 'model.ckpt': params })],
     ['an invalid model map', JSON.stringify({ formatVersion: 1, models: [] })],
   ])('sets aside a file with %s and continues from recommended or default parameters', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
