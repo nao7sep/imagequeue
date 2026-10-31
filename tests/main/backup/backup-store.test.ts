@@ -6,6 +6,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { inProcessBackupThread } from '../../setup/backup-thread'
 import { createQuitOwner } from '../../../src/main/quit-handler'
+import { FILE_FORMATS } from '../../../src/main/store-format'
+import { headerSql } from '../file-header'
 
 // The main-process side of the backup history: a save hands its bytes over and
 // returns, whatever the history does. The backup thread runs in-process here
@@ -64,6 +66,21 @@ describe('backup store', () => {
     expect(log.mock.calls.filter(([level]) => level === 'warn')).toEqual([
       ['warn', 'Backup history could not be opened; recording is off for this launch', expect.objectContaining({ file: storeFile })],
     ])
+  })
+
+  it('leaves a history of another kind untouched and says once that backups are off', async () => {
+    const seeded = new DatabaseSync(storeFile)
+    seeded.exec(`CREATE TABLE kept (value TEXT); ${headerSql(FILE_FORMATS.records)}`)
+    seeded.close()
+    const bytes = fs.readFileSync(storeFile)
+    const appNotices = await import('../../../src/main/app-notices')
+    const raised = vi.spyOn(appNotices, 'raiseAppNotice').mockImplementation(() => undefined)
+    const { record, closeBackupStore } = await import('../../../src/main/backup/backup-store')
+    record(path.join(root, 'config.json'), Buffer.from('{"v":1}'))
+    record(path.join(root, 'config.json'), Buffer.from('{"v":2}'))
+    await closeBackupStore()
+    expect(raised.mock.calls).toEqual([[{ title: { key: 'notice.backupsOffTitle' }, message: { key: 'notice.backupsOffMessage', values: { path: storeFile } } }]])
+    expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
   })
 
   // A history that never answers stands for a stalled disk or a locked store.

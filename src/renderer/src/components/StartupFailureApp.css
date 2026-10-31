@@ -31,6 +31,8 @@
   font-size: var(--text-md);
   line-height: 1.5;
   overflow-wrap: anywhere;
+  /* A launch stop lists each refused file on its own line. */
+  white-space: pre-line;
 }
 
 .startup-failure-app footer {

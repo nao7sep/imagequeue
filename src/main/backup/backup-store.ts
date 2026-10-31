@@ -4,12 +4,15 @@ import createBackupWorker from './backup-worker?nodeWorker'
 import { getDataDir } from '../config'
 import { log } from '../logger'
 import { currentRecordsContext } from '../records'
+import { raiseAppNotice } from '../app-notices'
+import { backupsOffPresentation } from '../failure-presentation'
 import type { BackupWorkerData, BackupWorkerMessage, BackupWorkerReport } from './backup-history'
 
 // The main-process side of the backup history (data-backup-conventions). A
 // protected save hands the exact bytes it just published to the backup thread
 // and returns: recording is best effort, so a slow, stalled or broken history
-// never delays a save or makes it fail, and a failure is only logged. What is
+// never delays a save or makes it fail. A history that cannot be opened is left
+// as it is and the user is told backups are off; any other failure is logged. What is
 // protected is decided at each write site (utils/atomic-write.ts `records`).
 // There is no capture at launch, on a timer or at exit, and no restore path:
 // recovery is manual, from backups.sqlite3.
@@ -28,6 +31,8 @@ let closing: Promise<void> | null = null
 function report(value: BackupWorkerReport): void {
   if (value.type === 'open-failed') {
     log('warn', 'Backup history could not be opened; recording is off for this launch', { file: value.file, error: value.error })
+    // The history is left as it is; the user is told backups are off.
+    raiseAppNotice(backupsOffPresentation(value.file))
   } else {
     log('warn', 'Backup history could not record a save', { file: value.path, error: value.error })
   }

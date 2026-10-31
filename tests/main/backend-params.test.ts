@@ -97,13 +97,15 @@ describe('backend-params.json', () => {
     ['another kind', JSON.stringify({ ...header(FILE_FORMATS.modelParams), backends: {} })],
     ['another owner', JSON.stringify({ ...header(FILE_FORMATS.backendParams), format: { owner: 'gptimg', kind: 'backend-params', version: 1 }, backends: {} })],
     ['no backend map', JSON.stringify({ ...header(FILE_FORMATS.backendParams), backends: [] })],
-  ])('sets aside a file with %s and starts every column from its built-in', async (_case, bytes) => {
+  ])('stops at a file with %s, names it, and leaves it byte-identical through later saves', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
-    api.loadBackendParams()
-    const [copy] = fs.readdirSync(root).filter((name) => /^backend-params-\d{8}-\d{6}-utc\.invalid$/.test(name))
-    expect(fs.readFileSync(path.join(root, copy), 'utf8')).toBe(bytes)
-    expect(api.drainSetAsideBackendParamsPaths()).toEqual([path.join(root, copy)])
-    expect(fs.existsSync(file())).toBe(false)
+    let error: unknown
+    try { api.loadBackendParams() } catch (thrown) { error = thrown }
+    expect(error).toMatchObject({ name: 'UnreadableFileError', path: file() })
+    await expect(api.saveBackendParams('openai', 'a', { width: 1 })).rejects.toThrow()
+    await api.drainBackendParams().catch(() => undefined)
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root).filter((name) => name.startsWith('backend-params'))).toEqual(['backend-params.json'])
   })
 
   it('stops at a file written by a newer build and leaves it as it is', async () => {

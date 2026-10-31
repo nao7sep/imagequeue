@@ -5,15 +5,14 @@ import { createDefaultConfig } from './defaults'
 import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { resolveStorageRoot, ensureStorageRoot } from './storage-root'
-import { setAsideFile } from '../utils/set-aside'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
-import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError } from '../store-format'
+import { FILE_FORMATS, readHeaderedJson, withHeader } from '../store-format'
 
 let cachedConfig: AppConfig | null = null
 // The map of sets the config in memory stands for, as of the last load or
 // accepted change, and the map config.json holds as of the last load or write;
-// each is null while there is no file to write, including after a set-aside.
+// each is null while there is no file to write.
 // Writes compare against them and never re-read the file, so config.json is
 // read only at load.
 let storedMap: Record<string, unknown> | null = null
@@ -34,75 +33,12 @@ export function ensureDataDir(): void {
   ensureStorageRoot()
 }
 
-// Where each set-aside file went, until the window takes them to tell the user.
-const setAsidePaths: string[] = []
-
-export function drainSetAsideConfigPaths(): string[] {
-  return setAsidePaths.splice(0)
-}
-
-/**
- * config.json exists but can be neither read nor set aside. Startup halts and
- * names the file, which is left exactly where it is (store-recovery conventions).
- */
-export class ConfigFileHaltError extends Error {
-  constructor(readonly path: string, options: { cause: unknown }) {
-    super(`The settings file could not be used and was left in place: ${path}`, options)
-    this.name = 'ConfigFileHaltError'
-  }
-}
-
-function isMissingFile(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-}
-
-// A file that does not parse or is not a map of sets is set aside
-// (store-recovery conventions); a failed rename halts.
-function setAsideUnusableFile(file: string, error: unknown): void {
-  let movedTo: string
-  try {
-    movedTo = setAsideFile(file)
-  } catch (renameError) {
-    throw new ConfigFileHaltError(file, { cause: renameError })
-  }
-  setAsidePaths.push(movedTo)
-  log('warn', 'Set aside an unusable config file; using built-in settings', {
-    from: file,
-    to: movedTo,
-    error: serializeError(error),
-  })
-}
-
-// A file that exists but cannot be read halts: moving it would not fix a
-// permission problem, and a passing I/O error would move a good file.
+// config.json is the user's settings: a file that cannot be read, or one a
+// newer version wrote, stops the launch and stays exactly as it is
+// (store-recovery-conventions, What a refused file does). Until it loads,
+// nothing is written to it.
 function readStoredMap(): Record<string, unknown> | null {
-  const file = getConfigPath()
-  let text: string
-  try {
-    text = fs.readFileSync(file, 'utf8')
-  } catch (err) {
-    if (isMissingFile(err)) return null
-    throw new ConfigFileHaltError(file, { cause: err })
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (err) {
-    setAsideUnusableFile(file, err)
-    return null
-  }
-  if (!isObject(parsed)) {
-    setAsideUnusableFile(file, new Error('Config file must be a JSON object'))
-    return null
-  }
-  try {
-    return checkHeader(parsed, FILE_FORMATS.config, file)
-  } catch (err) {
-    // A newer file halts startup and stays exactly where it is.
-    if (err instanceof NewerFormatError) throw err
-    setAsideUnusableFile(file, err)
-    return null
-  }
+  return readHeaderedJson(getConfigPath(), FILE_FORMATS.config)
 }
 
 // Each set is checked as it is read (config-sets conventions, Loading and

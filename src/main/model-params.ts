@@ -11,8 +11,7 @@ import {
   markModelParamsPersistenceFailed,
   markModelParamsPersistenceSaved,
 } from './model-params-persistence'
-import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from './store-format'
-import { setAsideFile } from './utils/set-aside'
+import { FILE_FORMATS, readHeaderedJson, UnreadableFileError, withHeader } from './store-format'
 
 function getParamsFilePath(): string {
   return path.join(getDataDir(), 'params.json')
@@ -28,17 +27,6 @@ let store: ParamsStore | null = null
 // they are; a set is dropped from here once the user changes that model.
 let rejectedSets: Record<string, unknown> = Object.create(null)
 let otherKeys: Record<string, unknown> = Object.create(null)
-// params.json is authored settings, so a file that does not parse or fit its
-// shape is set aside and the store starts empty, as on first run; a file that
-// cannot be read or set aside stops the request and stays where it is
-// (store-recovery conventions). Each set-aside path waits here for the window
-// that made the request to name it.
-const setAsidePaths: string[] = []
-
-export function drainSetAsideModelParamsPaths(): string[] {
-  return setAsidePaths.splice(0)
-}
-
 function isParamsSet(value: unknown): value is DrawThingsModelParams {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const set = value as Record<string, unknown>
@@ -62,51 +50,26 @@ function validSets(stored: Record<string, unknown>): ParamsStore {
   return sets
 }
 
+// params.json is authored settings: a file that cannot be read, does not fit
+// its shape or was written by a newer version stops the launch and stays
+// exactly as it is; store stays null, so nothing is ever written over it
+// (store-recovery-conventions, What a refused file does).
 function readStoredParams(file: string): ParamsStore {
-  let text: string
-  try {
-    text = fs.readFileSync(file, 'utf-8')
-  } catch (err) {
-    throw new StoreLeftInPlaceError(file, { cause: err })
+  const content = readHeaderedJson(file, FILE_FORMATS.modelParams)
+  if (content === null) return Object.create(null) as ParamsStore
+  const { models, ...others } = content
+  if (!models || typeof models !== 'object' || Array.isArray(models)) {
+    throw new UnreadableFileError(file, { cause: new Error('params.json must contain a model parameter map') })
   }
-  try {
-    const parsed: unknown = JSON.parse(text)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('params.json must be a JSON object')
-    const { models, ...others } = checkHeader(parsed as Record<string, unknown>, FILE_FORMATS.modelParams, file)
-    if (!models || typeof models !== 'object' || Array.isArray(models)) {
-      throw new Error('params.json must contain a model parameter map')
-    }
-    const sets = validSets(models as Record<string, unknown>)
-    otherKeys = others
-    return sets
-  } catch (err) {
-    // A newer file refuses every request, reads included, and stays exactly
-    // where it is; store stays null, so nothing is ever written over it.
-    if (err instanceof NewerFormatError) throw err
-    setAside(file, err)
-    return Object.create(null)
-  }
-}
-
-function setAside(file: string, error: unknown): void {
-  let movedTo: string
-  try {
-    movedTo = setAsideFile(file)
-  } catch (renameError) {
-    throw new StoreLeftInPlaceError(file, { cause: renameError })
-  }
-  setAsidePaths.push(movedTo)
-  log('warn', 'Set aside an unusable params.json; using recommended or default parameters', {
-    from: file,
-    to: movedTo,
-    error: serializeError(error),
-  })
+  const sets = validSets(models as Record<string, unknown>)
+  otherKeys = others
+  return sets
 }
 
 function ensureLoaded(): ParamsStore {
   if (store !== null) return store
   const file = getParamsFilePath()
-  store = fs.existsSync(file) ? readStoredParams(file) : Object.create(null) as ParamsStore
+  store = readStoredParams(file)
   return store
 }
 

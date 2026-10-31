@@ -223,11 +223,12 @@ describe('downloadLatestRecommendations', () => {
 
   // A cache: the version is written, never checked, so a newer build's record
   // is replaced like any other.
-  it('replaces a record a newer build wrote on the next install', async () => {
+  it('never writes over a record a newer build wrote', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
-    fs.writeFileSync(getRecommendationsTimesPath(), JSON.stringify({ ...header(FILE_FORMATS.recommendationsTimes, FILE_FORMATS.recommendationsTimes.version + 1), files: {} }))
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.recommendationsTimes, FILE_FORMATS.recommendationsTimes.version + 1), files: {} })
+    fs.writeFileSync(getRecommendationsTimesPath(), bytes)
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
-    expect((await downloadLatestRecommendations()).status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
-    expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).format).toEqual(header(FILE_FORMATS.recommendationsTimes).format)
+    await downloadLatestRecommendations()
+    expect(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).toBe(bytes)
   })
 })

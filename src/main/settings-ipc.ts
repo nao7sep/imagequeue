@@ -36,8 +36,7 @@ import {
 } from './cli-jobs'
 import { resolveRecommendedParams } from './recommendations'
 import { expandUserPath, resolveSettingsPath } from './utils/user-path'
-import { applyDimensionsToModels, drainSetAsideModelParamsPaths, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
-import { modelParamsResetPresentation } from './failure-presentation'
+import { applyDimensionsToModels, getAllModelParams, getModelParams, setModelParams, type DrawThingsDimensionPatch } from './model-params'
 import { getModelParamsPersistenceState } from './model-params-persistence'
 import {
   CLOUD_BACKEND_IDS_IN_UI_ORDER,
@@ -419,24 +418,12 @@ export function registerSettingsIpc(
     return result.canceled ? null : result.filePaths[0]
   })
 
-  // The first request to read params.json may set aside an unreadable file;
-  // the window that made it names the preserved copy.
-  const withParamsRecovery = <T>(event: Electron.IpcMainInvokeEvent, operation: () => T): T => {
-    try {
-      return operation()
-    } finally {
-      for (const movedTo of drainSetAsideModelParamsPaths()) {
-        event.sender.send('app:notice', modelParamsResetPresentation(movedTo))
-      }
-    }
-  }
-
-  handle('drawthings:getModelParams', (event, modelFile: string) => {
-    return withParamsRecovery(event, () => getModelParams(modelFile))
+  handle('drawthings:getModelParams', (_event, modelFile: string) => {
+    return getModelParams(modelFile)
   })
 
-  handle('drawthings:getAllModelParams', (event) => {
-    return withParamsRecovery(event, getAllModelParams)
+  handle('drawthings:getAllModelParams', () => {
+    return getAllModelParams()
   })
 
   // The state arrives as the subscription's first event, ahead of later changes.
@@ -445,13 +432,13 @@ export function registerSettingsIpc(
   })
 
   // The column's number fields admit only these values; anything else is refused.
-  handle('drawthings:setModelParams', (event, modelFile: string, params: DrawThingsModelParams) => {
+  handle('drawthings:setModelParams', (_event, modelFile: string, params: DrawThingsModelParams) => {
     if (!meetsDrawThingsNumberRules(params)) throw new Error('Cannot save Draw Things parameters that are out of range')
-    withParamsRecovery(event, () => setModelParams(modelFile, params))
+    setModelParams(modelFile, params)
   })
 
-  handle('drawthings:applyParamsToAll', (event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
+  handle('drawthings:applyParamsToAll', (_event, modelFiles: string[], patch: DrawThingsDimensionPatch) => {
     if (!meetsDrawThingsNumberRules(patch)) throw new Error('Cannot apply Draw Things parameters that are out of range')
-    return withParamsRecovery(event, () => applyDimensionsToModels(modelFiles, patch))
+    return applyDimensionsToModels(modelFiles, patch)
   })
 }

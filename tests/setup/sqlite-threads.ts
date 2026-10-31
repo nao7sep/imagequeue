@@ -42,9 +42,9 @@ vi.mock('../../src/main/concepts/concept-worker?nodeWorker', async () => {
       postMessage: ({ id, op, args }: { id: number; op: keyof typeof database; args: unknown[] }) => {
         try {
           const value = (database[op] as (...args: unknown[]) => unknown)(...args)
-          thread.emit('message', { id, value, paths: database.drainSetAsideConceptStorePaths() })
+          thread.emit('message', { id, value })
         } catch (error) {
-          thread.emit('message', { id, error: serializeError(error), paths: database.drainSetAsideConceptStorePaths() })
+          thread.emit('message', { id, error: serializeError(error) })
         }
       },
       unref: () => thread,

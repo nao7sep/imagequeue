@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { utcStampForFilename } from '../shared/utc-stamp'
 import { createCliOutputWriter } from './cli-output-writer'
 import createRecordsWorker from './records-writer-worker?nodeWorker'
+import { raiseAppNotice } from './app-notices'
+import { recordsOffPresentation } from './failure-presentation'
 import { serializeError } from '../shared/serialize-error'
 import type { RecordsRead, RecordsReadResults } from '../shared/records'
 import { cliOutputDirectory, type RecordsSearchWarning } from './records-query'
@@ -34,7 +36,12 @@ export function openRecords(dataDir: string): string {
     worker = started
     databaseFile = file
     started.on('message', (message: { type: string; id?: number; available?: boolean; value?: unknown; warning?: RecordsSearchWarning; error?: string }) => {
-      if (message.type === 'opened' && worker === started && !message.available) databaseFile = null
+      if (message.type === 'opened' && worker === started && !message.available) {
+        databaseFile = null
+        // The database is left as it is and Records is off for the launch; the
+        // user is told which file (store-recovery-conventions).
+        raiseAppNotice(recordsOffPresentation(file))
+      }
       if (message.type === 'stored') {
         try { storedListener?.() } catch (error) { console.error('[records] stored-record listener failed', error) }
       }

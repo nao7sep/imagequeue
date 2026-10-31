@@ -3,8 +3,7 @@ import path from 'path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
-import { setAsideFile } from './utils/set-aside'
-import { openSqliteStore, FILE_FORMATS, MissingHeaderError } from './store-format'
+import { openSqliteStore, FILE_FORMATS } from './store-format'
 import { runRecordsRead, type RecordsSearchWarning } from './records-query'
 import type { RecordsRead, RecordsReadResults } from '../shared/records'
 
@@ -95,32 +94,19 @@ function insertStatement(store: DatabaseSync, table: Table, columns: string[]): 
   return store.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((c) => `:${c}`).join(', ')})`)
 }
 
-// A populated database without its file header is set aside, never deleted,
-// and a new one is created in its place; the records are diagnostics, so the
-// record naming the copy is the whole report. A copy that cannot be made throws.
-function openOrReplace(file: string): { opened: DatabaseSync; movedTo: string | null } {
-  try {
-    return { opened: openSqliteStore(file, FILE_FORMATS.records, SCHEMA), movedTo: null }
-  } catch (error) {
-    if (!(error instanceof MissingHeaderError)) throw error
-    const movedTo = setAsideFile(file)
-    return { opened: openSqliteStore(file, FILE_FORMATS.records, SCHEMA), movedTo }
-  }
-}
-
-/** Opens `records.sqlite3` under `dataDir`; a failed open sends every record to the
- *  plain text file under `logs/`. Returns the database path. */
+/** Opens `records.sqlite3` under `dataDir`. A database that cannot be opened,
+ *  has no header of its own or was written by a newer version stays exactly as
+ *  it is, and every record goes to the plain text file under `logs/` for the
+ *  launch (store-recovery-conventions, What a refused file does). Returns the
+ *  database path. */
 export function openRecords(dataDir: string, context?: { launch: string }): string {
   closeRecords()
   if (context) { launch = context.launch; launchStarted = new Date(launch) }
   const file = path.join(dataDir, 'records.sqlite3')
   fallbackFile = path.join(dataDir, 'logs', `${utcStampForFilename(launchStarted)}.log`)
   let opened: DatabaseSync | undefined
-  let movedTo: string | null = null
   try {
-    const result = openOrReplace(file)
-    opened = result.opened
-    movedTo = result.movedTo
+    opened = openSqliteStore(file, FILE_FORMATS.records, SCHEMA)
     inserts = {
       log_records: insertStatement(opened, 'log_records', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'level', 'message', 'fields']),
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),
@@ -135,9 +121,6 @@ export function openRecords(dataDir: string, context?: { launch: string }): stri
       console.error('[records] closing the records database failed', closeError)
     }
     reportFailure('Records database could not be opened', error)
-  }
-  if (movedTo) {
-    writeLogRecord(new Date().toISOString(), 'warn', 'Set aside a records database without its file header; started a new one', { from: file, to: movedTo })
   }
   return file
 }

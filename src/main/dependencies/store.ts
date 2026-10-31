@@ -14,7 +14,7 @@ import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { getDependenciesStatePath } from './paths'
 import path from 'path'
-import { FILE_FORMATS, withHeader } from '../store-format'
+import { cacheWritable, FILE_FORMATS, parseHeaderedJson, withHeader } from '../store-format'
 
 export interface DependenciesCache {
   // When any check, automatic or manual, last started; it throttles the launch
@@ -42,13 +42,13 @@ function emptyCache(): DependenciesCache {
   }
 }
 
-// A cache: its header is written but never checked; overwriting a
-// newer build's file loses only what the next check re-learns
+// A cache: its header is checked, so a newer file stops the launch and is never
+// written over, while an unreadable one is rebuilt by the next check
 // (store-recovery-conventions).
 export async function readDependenciesCache(): Promise<DependenciesCache> {
   const file = getDependenciesStatePath()
   try {
-    const raw: unknown = JSON.parse(await fs.promises.readFile(file, 'utf8'))
+    const raw: unknown = parseHeaderedJson(await fs.promises.readFile(file, 'utf8'), FILE_FORMATS.dependencies, file)
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('dependencies.json must be a JSON object')
     const parsed = raw as Record<string, unknown>
     function section(value: unknown): Record<string, unknown> {
@@ -85,6 +85,9 @@ export async function readDependenciesCache(): Promise<DependenciesCache> {
 }
 
 async function writeDependenciesCache(cache: DependenciesCache): Promise<void> {
+  // A newer version's cache stays as it is (store-recovery-conventions, A
+  // refused file is never changed); an unreadable one may be replaced.
+  if (!await cacheWritable(getDependenciesStatePath(), FILE_FORMATS.dependencies)) return
   await fs.promises.mkdir(path.dirname(getDependenciesStatePath()), { recursive: true })
   // not recorded: dependencies.json is a re-derivable network-facts cache (the last-known-latest
   // CLI release tag, configs.json's last-known server time, the last check attempt, and last-successful-check times), not

@@ -4,9 +4,9 @@
 //
 // Seconds are the precision for every name (timestamp-conventions): the
 // per-image output allocator adds its own same-second ordinal, and sessions,
-// logs and set-aside copies need nothing finer under the single-instance lock.
+// and logs need nothing finer under the single-instance lock.
 // utcStampForFilename adds the `-utc` suffix the conventions put on a name that
-// stands alone as a file or folder (a session, a log, a set-aside copy), where
+// stands alone as a file or folder (a session, a log), where
 // the directory around it does not already say the time is UTC.
 
 export function formatTimestamp(date: Date): string {

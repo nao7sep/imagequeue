@@ -143,10 +143,11 @@ describe('the sidecar file header', () => {
     }))
   }
 
-  // A cache of the binary's identity: the version is written, never checked.
-  it('reads a sidecar with no file header by its fields', async () => {
+  // A cache of the binary's identity: one that fails its header reads as an
+  // unknown version, and a newer one is never written over.
+  it('reads a sidecar with no file header as an unknown version', async () => {
     installWithSidecar({})
-    expect(await readInstalledCliTag()).toBe('v1.20260716.0')
+    expect(await readInstalledCliTag()).toBeNull()
   })
 
   it('writes its file header first and reads it back', async () => {
@@ -159,17 +160,13 @@ describe('the sidecar file header', () => {
     expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 
-  it('reads a sidecar from a newer version by its fields', async () => {
+  it('reads a sidecar from a newer version as an unknown version and never writes over it', async () => {
     installWithSidecar({ ...header(FILE_FORMATS.cliSidecar, FILE_FORMATS.cliSidecar.version + 1) })
-    expect(await readInstalledCliTag()).toBe('v1.20260716.0')
-  })
-
-  it('replaces a sidecar from a newer version when a binary is published', async () => {
-    installWithSidecar({ ...header(FILE_FORMATS.cliSidecar, FILE_FORMATS.cliSidecar.version + 1) })
+    const bytes = fs.readFileSync(getCliMetaPath(), 'utf8')
+    expect(await readInstalledCliTag()).toBeNull()
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
     await publishCliBinary(staged, 'v1.20260822.0')
-    expect(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))).toMatchObject({ ...header(FILE_FORMATS.cliSidecar), tag: 'v1.20260822.0' })
-    expect(await readInstalledCliTag()).toBe('v1.20260822.0')
+    expect(fs.readFileSync(getCliMetaPath(), 'utf8')).toBe(bytes)
   })
 })

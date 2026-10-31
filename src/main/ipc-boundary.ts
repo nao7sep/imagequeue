@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
 import { isQuitting } from './quit-state'
 import { log, serializeError } from './logger'
-import { NewerFormatError, StoreLeftInPlaceError } from './store-format'
-import { newerFilePresentation, storeLeftInPlacePresentation } from './failure-presentation'
+import { NewerFormatError, UnreadableFileError } from './store-format'
+import { newerFilePresentation, unreadableFilePresentation } from './failure-presentation'
 
 // The one place renderer→main invoke handlers are registered. Every registrar
 // goes through handle() instead of ipcMain.handle directly, so a throw is
@@ -30,18 +30,18 @@ import { newerFilePresentation, storeLeftInPlacePresentation } from './failure-p
 // body. A stricter unknown[] would reject those concrete parameter types.
 type IpcInvokeHandler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
 
-// A store a newer build wrote, or one that could be neither read nor set aside,
-// refuses every request that needs it. The renderer shows that request's own
+// A store a newer build wrote, or one that could not be read, stays as it is
+// and refuses every request that needs it. The renderer shows that request's own
 // failure, and the first refusal of each file also names it in a notice, once
 // per launch.
 const reportedFiles = new Set<string>()
 
-function reportFile(event: Electron.IpcMainInvokeEvent, error: NewerFormatError | StoreLeftInPlaceError): void {
+function reportFile(event: Electron.IpcMainInvokeEvent, error: NewerFormatError | UnreadableFileError): void {
   if (reportedFiles.has(error.path)) return
   reportedFiles.add(error.path)
   event.sender.send(
     'app:notice',
-    error instanceof NewerFormatError ? newerFilePresentation(error.path) : storeLeftInPlacePresentation(error.path)
+    error instanceof NewerFormatError ? newerFilePresentation(error.path) : unreadableFilePresentation(error.path)
   )
 }
 
@@ -56,7 +56,7 @@ export function handle(channel: string, fn: IpcInvokeHandler): void {
       return await fn(event, ...args)
     } catch (err) {
       log('error', 'IPC handler failed', { channel, error: serializeError(err) })
-      if (err instanceof NewerFormatError || err instanceof StoreLeftInPlaceError) reportFile(event, err)
+      if (err instanceof NewerFormatError || err instanceof UnreadableFileError) reportFile(event, err)
       throw err
     }
   })

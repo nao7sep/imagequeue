@@ -14,7 +14,6 @@ import { registerDependenciesIpc } from './dependencies-ipc'
 import { checkDependenciesAtLaunch } from './dependencies/service'
 import { clearTempDir } from './dependencies/paths'
 import { registerElaboratorsIpc } from './elaborators-ipc'
-import { listElaborators } from './elaborators'
 import { refreshApiKeys } from './config/api-keys-store'
 import { closeConceptStore } from './concepts/concept-store'
 import { closeBackupStore } from './backup/backup-store'
@@ -31,7 +30,7 @@ import { registerRecordsIpc } from './records-ipc'
 import { closeRecordsWindow, hideRecordsWindow, notifyRecordsChanged, showRecordsWindow } from './records-window'
 import { hasRunningCliJobs, stopAllCliJobs } from './cli-jobs'
 import { stopAllRuns } from './backends/cancellation'
-import { getAllModelParams, drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
+import { drainPendingWrites as drainPendingModelParamsWrites } from './model-params'
 import { startWakeLockMonitor, releaseWakeLock } from './power-blocker'
 import { hardenWindow } from './utils/harden-window'
 import { installContentSecurityPolicy } from './csp'
@@ -50,12 +49,13 @@ import { showQuitQuestion } from './quit-failure-window'
 import { unsavedDrafts, registerUnsavedDraftsIpc } from './unsaved-drafts'
 import { hasQuitWork, type QuitWork } from '../shared/quit'
 import { isQuitting, setQuitting } from './quit-state'
-import { drainBackendParams, getBackendParams, loadBackendParams } from './backend-params'
+import { drainBackendParams, getBackendParams } from './backend-params'
 import { retrySettingsWrites } from './settings-writes'
 import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
 import { cancelAllDependencyOperations, hasActiveDependencyOperations, hasUserDependencyOperations } from './dependencies/operations'
 import { installLastResortHooks } from './last-resort-hooks'
 import { startupFailurePresentation } from './failure-presentation'
+import { checkLaunchFiles } from './launch-files'
 import { MainWindowController } from './main-window-lifecycle'
 import { StatusIconController } from './status-icon'
 import { openSessionsFolder } from './session/open-sessions-folder'
@@ -227,8 +227,8 @@ export function runPrimaryInstance(): void {
     await settleLanguage()
     registerLanguageIpc()
     installAppMenu()
-    // The startup body throws when a store cannot be recovered, such as a
-    // config.json that cannot be read or set aside (config-store.ts). Without this catch
+    // The startup body throws when a file it opens is refused, such as a
+    // config.json that cannot be read (launch-files.ts). Without this catch
     // the rejection lands in the unhandledRejection hook, which logs and does NOT
     // exit — a running process with no window and no dialog is not a halt
     // (storage-path conventions: a halt names the store and reaches the user).
@@ -350,9 +350,12 @@ async function startUp(): Promise<void> {
   registerImageProtocol()
   registerAudioProtocol()
   ensureDataDir()
-  // Records open immediately after the storage root exists and before any other
-  // startup step, so a failure in one of them is logged rather than lost to the
-  // console.
+  // Every file the launch opens is read before anything is written, records
+  // included; one that is refused stops the launch, naming it
+  // (store-recovery-conventions, What a refused file does).
+  checkLaunchFiles()
+  // Records open next, before any other startup step, so a failure in one of
+  // them is logged rather than lost to the console.
   openRecords(getDataDir())
   // The Records window, when open, follows each record the database stores.
   onRecordStored(notifyRecordsChanged)
@@ -391,11 +394,8 @@ async function startUp(): Promise<void> {
   // the startup failure window follows the OS.
   applyThemePreference(loadConfig().general.theme)
   followOsThemeChanges()
-  // Load the small settings stores before any interactive window exists;
-  // runtime consumers use their initialized snapshots and asynchronous saves.
-  listElaborators()
-  getAllModelParams()
-  loadBackendParams()
+  // The small settings stores were loaded by the launch check; runtime
+  // consumers use their snapshots and asynchronous saves.
   await refreshApiKeys()
   await initSession()
   sessionStarted = true

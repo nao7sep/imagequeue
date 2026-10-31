@@ -9,7 +9,6 @@ vi.mock('../../src/main/ipc-boundary', () => ({ handle: (channel: string, handle
 vi.mock('../../src/main/concepts/concept-store', () => ({
   listProbesWithStats: mocks.probes, listConceptRows: mocks.concepts,
   listFacetsWithStats: vi.fn(), deleteFacet: vi.fn(), deleteProbe: vi.fn(), deleteConcept: vi.fn(),
-  drainSetAsideConceptStorePaths: () => [],
 }))
 import { registerConceptsIpc } from '../../src/main/concepts-ipc'
 const event = { sender: { send: vi.fn() } } as unknown as IpcMainInvokeEvent

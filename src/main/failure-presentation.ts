@@ -1,11 +1,9 @@
 import type { BackendId } from '../shared/types'
 import type { AppNotice } from '../shared/app-notice'
-import type { ElaboratorRecoveryNotice } from './elaborators'
 import { message, type Message } from '../shared/i18n/translate'
 import { mainTranslator } from './i18n'
 import { DrawThingsOutOfMemoryError, httpStatus, MissingApiKeyError, ProviderRefusalError, ProviderStatusError } from './provider-errors'
-import { ConfigFileHaltError } from './config/config-store'
-import { NewerFormatError } from './store-format'
+import { LaunchStopError } from './store-format'
 
 const BACKEND_NAMES: Record<BackendId, string> = {
   openai: 'OpenAI',
@@ -84,26 +82,18 @@ export function queueStorageFailurePresentation(): AppNotice {
   }
 }
 
-/** Only successful recovery is app-wide. Failed recovery rejects to the active modal, its sole owner. */
-export function elaboratorRecoveryPresentation(recovery: ElaboratorRecoveryNotice): AppNotice | null {
-  if (recovery.kind !== 'recovered') return null
-  return {
-    title: message('notice.elaboratorsResetTitle'),
-    message: message('notice.elaboratorsResetMessage', { path: recovery.path }),
-  }
-}
-
-/** config.json was unreadable and set aside at `path`; the app started from built-in settings. */
 /**
- * What the startup failure window says. A settings file that could not be used,
- * or a file a newer ImageQueue wrote, is named with its path, since the user
- * repairs, moves or reopens it; every other failure keeps the general copy, and
- * its diagnostic stays in the log.
+ * What the startup failure window says. A launch that stopped on refused files
+ * names each one, says whether a newer version wrote it or it could not be read,
+ * and what the user can do; every other failure keeps the general copy, and its
+ * diagnostic stays in the log.
  */
 export function startupFailurePresentation(error: unknown): Message {
-  if (error instanceof ConfigFileHaltError) return message('startupFailure.settingsFileMessage', { path: error.path })
-  if (error instanceof NewerFormatError) return message('startupFailure.newerFileMessage', { path: error.path })
-  return message('startupFailure.message')
+  if (!(error instanceof LaunchStopError) || error.refused.length === 0) return message('startupFailure.message')
+  const lines = error.refused.map((file) =>
+    message(file.newer ? 'startupFailure.refusedNewer' : 'startupFailure.refusedUnreadable', { path: file.path }))
+  const files = lines.reduce((first, next) => message('startupFailure.fileList', { first, next }))
+  return message('startupFailure.refusedMessage', { files })
 }
 
 /** A store a newer ImageQueue wrote was left as it is, and what it holds is unavailable here. */
@@ -114,11 +104,27 @@ export function newerFilePresentation(path: string): AppNotice {
   }
 }
 
-/** A store could be neither read nor set aside, so it was left at `path` and the operation stopped. */
-export function storeLeftInPlacePresentation(path: string): AppNotice {
+/** A file at `path` could not be read, so it was left unchanged and the operation stopped. */
+export function unreadableFilePresentation(path: string): AppNotice {
   return {
-    title: message('notice.fileLeftInPlaceTitle'),
-    message: message('notice.fileLeftInPlaceMessage', { path }),
+    title: message('notice.unreadableFileTitle'),
+    message: message('notice.unreadableFileMessage', { path }),
+  }
+}
+
+/** records.sqlite3 at `path` could not be opened: it is untouched and Records is off for this launch. */
+export function recordsOffPresentation(path: string): AppNotice {
+  return {
+    title: message('notice.recordsOffTitle'),
+    message: message('notice.recordsOffMessage', { path }),
+  }
+}
+
+/** backups.sqlite3 at `path` could not be opened: it is untouched and backups are off for this launch. */
+export function backupsOffPresentation(path: string): AppNotice {
+  return {
+    title: message('notice.backupsOffTitle'),
+    message: message('notice.backupsOffMessage', { path }),
   }
 }
 
@@ -127,37 +133,6 @@ export function apiKeysUnavailablePresentation(path: string): AppNotice {
   return {
     title: message('notice.apiKeysUnavailableTitle'),
     message: message('notice.apiKeysUnavailableMessage', { path }),
-  }
-}
-
-/** params.json was unreadable and set aside at `path`; each model uses its recommended or default parameters. */
-export function modelParamsResetPresentation(path: string): AppNotice {
-  return {
-    title: message('notice.drawThingsParamsResetTitle'),
-    message: message('notice.drawThingsParamsResetMessage', { path }),
-  }
-}
-
-/** backend-params.json was unreadable and set aside at `path`; each image column uses its default model and parameters. */
-export function backendParamsResetPresentation(path: string): AppNotice {
-  return {
-    title: message('notice.backendParamsResetTitle'),
-    message: message('notice.backendParamsResetMessage', { path }),
-  }
-}
-
-/** concepts.sqlite3 was unreadable and set aside at `path`; a new, empty concept library started. */
-export function conceptLibraryResetPresentation(path: string): AppNotice {
-  return {
-    title: message('notice.conceptLibraryResetTitle'),
-    message: message('notice.conceptLibraryResetMessage', { path }),
-  }
-}
-
-export function configResetPresentation(path: string): AppNotice {
-  return {
-    title: message('notice.settingsResetTitle'),
-    message: message('notice.settingsResetMessage', { path }),
   }
 }
 

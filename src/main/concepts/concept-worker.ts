@@ -6,9 +6,9 @@ parentPort?.on('message', ({ id, op, args }) => {
   try {
     const operation = database[op as keyof typeof database] as (...args: unknown[]) => unknown
     const value = operation(...args)
-    parentPort?.postMessage({ id, value, paths: database.drainSetAsideConceptStorePaths() })
+    parentPort?.postMessage({ id, value })
   } catch (error) {
-    parentPort?.postMessage({ id, error: { ...serializeError(error), ...(error as object) }, paths: database.drainSetAsideConceptStorePaths() })
+    parentPort?.postMessage({ id, error: { ...serializeError(error), ...(error as object) } })
   }
   if (op === 'closeConceptStore') parentPort?.close()
 })

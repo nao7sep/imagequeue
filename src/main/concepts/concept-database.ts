@@ -3,9 +3,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import { cleanDisplay, normalizeKey } from './normalize'
-import { openSqliteStore, FILE_FORMATS, MissingHeaderError, StoreLeftInPlaceError } from '../store-format'
-import { serializeError } from '../../shared/serialize-error'
-import { setAsideFile } from '../utils/set-aside'
+import { openSqliteStore, FILE_FORMATS, MissingHeaderError, UnreadableFileError } from '../store-format'
 import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../shared/types'
 export type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow }
 
@@ -16,8 +14,8 @@ export type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow }
 // not session state — and unlike the best-effort backup store it is FUNCTIONAL:
 // a failure here throws and fails the brainstorm run, because generating with
 // broken bookkeeping would silently reintroduce the repetition the ledger
-// exists to prevent. An unreadable ledger is set aside and replaced, and the
-// user is told what was lost.
+// exists to prevent. An unreadable ledger is left as it is and refuses each
+// request, naming the file.
 //
 // SQLite binding: Node's built-in `node:sqlite`, same as backup-store.ts and
 // for the same packaging reason (no native addon to rebuild per Electron bump).
@@ -80,18 +78,10 @@ let log: (level: string, message: string, fields: Record<string, unknown>) => vo
 export function initializeConceptStore(root: string, logger: typeof log): void { dataDir = root; log = logger }
 function storeFile(): string { return path.join(dataDir, 'concepts.sqlite3') }
 
-// The ledger is app-recorded fact, so a file that is not a database, is
-// damaged, or has no file header of its own is set aside and a new, empty ledger
-// starts (store-recovery conventions). A newer ledger,
-// or a failure that moving the file would not fix, refuses the request and
-// leaves the file where it is. Each set-aside path waits here for the window
-// that made the request to name it.
-const setAsidePaths: string[] = []
-
-export function drainSetAsideConceptStorePaths(): string[] {
-  return setAsidePaths.splice(0)
-}
-
+// A ledger that is not a database, is damaged, has no file header of its own
+// or was written by a newer version refuses each request alone, naming the
+// file, and stays exactly as it is; the rest of the app keeps working
+// (store-recovery-conventions, What a refused file does).
 const SQLITE_CORRUPT = 11
 const SQLITE_NOTADB = 26
 
@@ -99,23 +89,6 @@ function isUnreadableLedger(error: unknown): boolean {
   if (error instanceof MissingHeaderError) return true
   const { code, errcode } = error as { code?: unknown; errcode?: unknown }
   return code === 'ERR_SQLITE_ERROR' && (errcode === SQLITE_CORRUPT || errcode === SQLITE_NOTADB)
-}
-
-function setAside(file: string, error: unknown): void {
-  let movedTo: string
-  // Closing the only connection has already folded any write-ahead log into
-  // the database file and removed it, so the file alone is the whole ledger.
-  try {
-    movedTo = setAsideFile(file)
-  } catch (renameError) {
-    throw new StoreLeftInPlaceError(file, { cause: renameError })
-  }
-  setAsidePaths.push(movedTo)
-  log('warn', 'Set aside an unreadable concept library; starting a new one', {
-    from: file,
-    to: movedTo,
-    error: serializeError(error),
-  })
 }
 
 function open(): DatabaseSync {
@@ -126,9 +99,8 @@ function open(): DatabaseSync {
   try {
     opened = openSqliteStore(file, FILE_FORMATS.concepts, SCHEMA)
   } catch (err) {
-    if (!isUnreadableLedger(err)) throw err
-    setAside(file, err)
-    return open()
+    if (isUnreadableLedger(err)) throw new UnreadableFileError(file, { cause: err })
+    throw err
   }
   db = opened
   return db

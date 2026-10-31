@@ -85,7 +85,7 @@ describe('dependencies cache', () => {
   ])('warns and rebuilds invalid nested cache fields: %j', async (fields) => {
     const warning = vi.spyOn(logger, 'log').mockImplementation(() => undefined)
     try {
-      fs.writeFileSync(getDependenciesStatePath(), JSON.stringify(fields))
+      fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ ...header(FILE_FORMATS.dependencies), ...fields }))
       expect(await readDependenciesCache()).toEqual({
         lastAttemptAtUtc: null,
         cli: { lastKnownLatest: null, lastCheckedAtUtc: null },
@@ -97,6 +97,7 @@ describe('dependencies cache', () => {
 
   it('selects known string fields without copying unknown properties', async () => {
     fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({
+      ...header(FILE_FORMATS.dependencies),
       cli: { lastKnownLatest: 'v1', extra: 42 },
       recommendations: { lastKnownModifiedUtc: 'date', extra: true },
     }))
@@ -126,10 +127,15 @@ describe('dependencies cache', () => {
 })
 
 describe('dependencies cache file header', () => {
-  // A cache: the version is written, never checked.
-  it('reads a file with no file header by its fields', async () => {
+  // A cache: one that fails its header is rebuilt; a newer one is never written over.
+  it('rebuilds a file with no file header', async () => {
+    fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
     fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
-    expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
+    expect((await readDependenciesCache()).lastAttemptAtUtc).toBeNull()
+    await updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-07-01T00:00:00.000Z' })
+    expect(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8'))).toMatchObject({
+      ...header(FILE_FORMATS.dependencies), lastAttemptAtUtc: '2026-07-01T00:00:00.000Z',
+    })
   })
 
   it('writes its file header first and reads it back', async () => {
@@ -138,13 +144,11 @@ describe('dependencies cache file header', () => {
     expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
   })
 
-  it('reads a file from a newer version by its fields and replaces it on the next update', async () => {
+  it('never writes over a file from a newer version', async () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ ...header(FILE_FORMATS.dependencies, FILE_FORMATS.dependencies.version + 1), lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
-    expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.dependencies, FILE_FORMATS.dependencies.version + 1), lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' })
+    fs.writeFileSync(getDependenciesStatePath(), bytes)
     await updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-07-01T00:00:00.000Z' })
-    expect(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8'))).toMatchObject({
-      ...header(FILE_FORMATS.dependencies), lastAttemptAtUtc: '2026-07-01T00:00:00.000Z',
-    })
+    expect(fs.readFileSync(getDependenciesStatePath(), 'utf8')).toBe(bytes)
   })
 })

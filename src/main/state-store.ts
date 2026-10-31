@@ -19,21 +19,21 @@ import { getDataDir } from './config'
 import type { UiState } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
 import { clampRecordsListWidth } from '../shared/records-layout'
-import { FILE_FORMATS, withHeader } from './store-format'
+import { cacheWritable, FILE_FORMATS, parseHeaderedJson, withHeader } from './store-format'
 
 export function getUiStatePath(): string {
   return path.join(getDataDir(), 'state.json')
 }
 
-// A cache: its header is written but never checked, since each field is
-// read on its own merits and overwriting a newer build's file loses only
-// presentation state (store-recovery-conventions).
+// Presentation state: its header is checked, so a newer file stops the launch
+// and is never written over, while an unreadable one reads as the defaults and
+// the next save replaces it (store-recovery-conventions).
 let writes: Promise<unknown> = Promise.resolve()
 
 export async function readUiState(): Promise<UiState> {
   const file = getUiStatePath()
   try {
-    const raw: unknown = JSON.parse(await fs.promises.readFile(file, 'utf8'))
+    const raw: unknown = parseHeaderedJson(await fs.promises.readFile(file, 'utf8'), FILE_FORMATS.uiState, file)
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('state.json must be a JSON object')
     const parsed = raw as Partial<UiState>
     const base = defaultUiState()
@@ -55,6 +55,9 @@ export async function readUiState(): Promise<UiState> {
 }
 
 async function writeUiState(state: UiState): Promise<void> {
+  // A newer version's cache stays as it is (store-recovery-conventions, A
+  // refused file is never changed); an unreadable one may be replaced.
+  if (!await cacheWritable(getUiStatePath(), FILE_FORMATS.uiState)) return
   await fs.promises.mkdir(path.dirname(getUiStatePath()), { recursive: true })
   await writeFileAtomicAsync(getUiStatePath(), JSON.stringify(withHeader(state, FILE_FORMATS.uiState), null, 2), false)
 }

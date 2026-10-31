@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   cliJobStartFailurePresentation,
-  configResetPresentation,
-  elaboratorRecoveryPresentation,
+  backupsOffPresentation,
   generationFailurePresentation,
   newerFilePresentation,
-  modelParamsResetPresentation,
-  conceptLibraryResetPresentation,
-  storeLeftInPlacePresentation,
+  recordsOffPresentation,
+  unreadableFilePresentation,
   startupFailurePresentation,
 } from '../../src/main/failure-presentation'
-import { ConfigFileHaltError } from '../../src/main/config/config-store'
-import { NewerFormatError } from '../../src/main/store-format'
+import { LaunchStopError } from '../../src/main/store-format'
 import { ProviderHttpError, ProviderStatusError } from '../../src/main/provider-errors'
 import { loadTranslator } from '../../src/shared/i18n/translate'
 import { DrawThingsOutOfMemoryError } from '../../src/main/provider-errors'
@@ -65,26 +62,13 @@ describe('generationFailurePresentation', () => {
     expect(message).not.toContain(hostile)
   })
 
-  it('uses an app-wide notice only for successful elaborator recovery, naming the preserved file', () => {
-    const preserved = '/data/elaborators-20261002T000000Z.invalid'
-    const notice = elaboratorRecoveryPresentation({ kind: 'recovered', path: preserved })
-    expect(notice && text(notice.title)).toBe('Elaborators were reset')
-    expect(notice && text(notice.message)).toContain(`elaborators file was unreadable, so ImageQueue set it aside at ${preserved}`)
-    expect(elaboratorRecoveryPresentation({ kind: 'quarantine-failed', path: preserved, error: hostile })).toBeNull()
-  })
-
-  it('names the set-aside settings file when settings are reset', () => {
-    const preserved = '/data/config-20261002T000000Z.invalid'
-    const notice = configResetPresentation(preserved)
-    expect(text(notice.title)).toBe('Settings were reset')
-    expect(text(notice.message)).toContain(preserved)
-  })
-
-  it('names the settings file and its path when it stopped startup, and keeps other diagnostics out', () => {
+  it('names every file a launch stopped on, newer or unreadable, and what to do, keeping diagnostics out', () => {
     const settings = '/Users/me/.imagequeue/config.json'
-    const halted = text(startupFailurePresentation(new ConfigFileHaltError(settings, { cause: new Error(hostile) })))
-    expect(halted).toContain(`settings file at ${settings}`)
-    expect(halted).toContain('left it unchanged')
+    const keys = '/Users/me/.imagequeue/api-keys.json'
+    const halted = text(startupFailurePresentation(new LaunchStopError([{ path: settings, newer: true }, { path: keys, newer: false }])))
+    expect(halted).toContain('stopped before opening its main window because it can’t use these files')
+    expect(halted).toContain(`${settings}: written by a newer version of ImageQueue\n${keys}: couldn’t be read`)
+    expect(halted).toContain('Use the newer version of ImageQueue, or repair or restore each file, or move it away to start fresh.')
     expect(halted).not.toContain('hostile-sentinel')
 
     const other = text(startupFailurePresentation(new Error(hostile)))
@@ -92,34 +76,25 @@ describe('generationFailurePresentation', () => {
     expect(other).not.toContain('hostile-sentinel')
   })
 
-  it('names a file a newer version wrote, when it stopped startup and when a request needed it', () => {
-    const settings = '/Users/me/.imagequeue/config.json'
-    const halted = text(startupFailurePresentation(new NewerFormatError(settings, 2, 1)))
-    expect(halted).toContain(`newer version of ImageQueue wrote the file at ${settings}`)
-    expect(halted).toContain('left it unchanged')
-
+  it('names a file a newer version wrote, and one that could not be read, when a request needed it', () => {
     const elaborators = '/Users/me/.imagequeue/elaborators.json'
     const notice = newerFilePresentation(elaborators)
     expect(text(notice.title)).toBe('File from a newer version')
     expect(text(notice.message)).toContain(`newer version of ImageQueue wrote the file at ${elaborators}`)
+
+    const ledger = '/Users/me/.imagequeue/concepts.sqlite3'
+    const left = unreadableFilePresentation(ledger)
+    expect(text(left.title)).toBe('File couldn’t be read')
+    expect(text(left.message)).toContain(`read the file at ${ledger}, so it left it unchanged`)
   })
 
-  it('names the set-aside copy of unreadable Draw Things parameters, and a file left in place', () => {
-    const setAside = '/Users/me/.imagequeue/params-20261006-031340-utc.invalid'
-    const reset = modelParamsResetPresentation(setAside)
-    expect(text(reset.title)).toBe('Draw Things parameters were reset')
-    expect(text(reset.message)).toContain(`set the file aside at ${setAside}`)
-
-    const params = '/Users/me/.imagequeue/params.json'
-    const left = storeLeftInPlacePresentation(params)
-    expect(text(left.title)).toBe('File left unchanged')
-    expect(text(left.message)).toContain(`the file at ${params}`)
-    expect(text(left.message)).toContain('left the file unchanged')
-
-    const ledger = '/Users/me/.imagequeue/concepts-20261006-031340-utc.invalid'
-    const ledgerReset = conceptLibraryResetPresentation(ledger)
-    expect(text(ledgerReset.title)).toBe('Concept Library was reset')
-    expect(text(ledgerReset.message)).toContain(`set the file aside at ${ledger}`)
+  it('names the records and backup databases it switched off', () => {
+    const records = recordsOffPresentation('/data/records.sqlite3')
+    expect(text(records.title)).toBe('Records are off')
+    expect(text(records.message)).toContain('/data/records.sqlite3, so it left it unchanged')
+    const backups = backupsOffPresentation('/data/backups.sqlite3')
+    expect(text(backups.title)).toBe('Backups are off')
+    expect(text(backups.message)).toContain('/data/backups.sqlite3, so it left it unchanged')
   })
 
   it('keeps spawn diagnostics out of the visible managed-tool terminal', () => {

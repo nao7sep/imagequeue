@@ -12,13 +12,13 @@ describe('ConfirmProvider', () => {
     window.electronAPI = {
       onAppNotice: vi.fn(() => () => {}),
       takePendingNotices: vi.fn(async () => [{
-        title: message('notice.settingsResetTitle'),
-        message: message('notice.settingsResetMessage', { path: '/data/config-x.invalid' }),
+        title: message('notice.recordsOffTitle'),
+        message: message('notice.recordsOffMessage', { path: '/data/records.sqlite3' }),
       }]),
     } as unknown as typeof window.electronAPI
     render(<ConfirmProvider><div /></ConfirmProvider>)
-    expect(await until(() => screen.getByText('Settings were reset'))).toBeTruthy()
-    expect(screen.getByText(/\/data\/config-x\.invalid/)).toBeTruthy()
+    expect(await until(() => screen.getByText('Records are off'))).toBeTruthy()
+    expect(screen.getByText(/\/data\/records\.sqlite3/)).toBeTruthy()
   })
 
   describe('a confirmation for a key pressed in another view', () => {

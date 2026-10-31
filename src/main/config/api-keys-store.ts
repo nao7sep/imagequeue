@@ -6,7 +6,7 @@ import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import type { AppNotice } from '../../shared/app-notice'
-import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError } from '../store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, UnreadableFileError } from '../store-format'
 import { holdsBytesAsync } from '../utils/holds-bytes'
 import { raiseAppNotice } from '../app-notices'
 import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
@@ -335,4 +335,20 @@ export function refreshApiKeys(): Promise<void> {
   })
   saving = result
   return result
+}
+
+/**
+ * api-keys.json at launch: the user's secrets, so a file that cannot be read or
+ * was written by a newer version stops the launch and stays exactly as it is
+ * (store-recovery-conventions, What a refused file does).
+ */
+export function checkApiKeysAtLaunch(): void {
+  const filePath = getSecretsPath()
+  const read = readSecretsFile()
+  if (!read.file) {
+    if (read.unusable.error instanceof NewerFormatError) throw read.unusable.error
+    throw new UnreadableFileError(filePath, { cause: read.unusable.error })
+  }
+  cachedRead = read
+  cachedPath = filePath
 }

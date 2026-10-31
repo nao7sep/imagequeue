@@ -6,9 +6,8 @@ import { getDataDir } from './config'
 import { log, serializeError } from './logger'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
-import { setAsideFile } from './utils/set-aside'
 import { multiline, singleLine } from '../shared/textCleanup'
-import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { FILE_FORMATS, readHeaderedJson, withHeader } from './store-format'
 
 function getElaboratorsFilePath(): string {
   return path.join(getDataDir(), 'elaborators.json')
@@ -252,40 +251,6 @@ function isElaborator(value: unknown): value is Elaborator {
 }
 
 
-export type ElaboratorRecoveryNotice =
-  | { kind: 'recovered'; path: string }
-  | { kind: 'quarantine-failed'; path: string; error: string }
-
-const recoveryNotices: ElaboratorRecoveryNotice[] = []
-
-export function drainElaboratorRecoveryNotices(): ElaboratorRecoveryNotice[] {
-  return recoveryNotices.splice(0)
-}
-
-// Preserve user-authored templates before recovery. A failed rename propagates.
-function quarantineCorruptFile(file: string, reason: string, err?: unknown): string {
-  try {
-    const movedTo = setAsideFile(file)
-    log('warn', `Quarantined ${reason} elaborators file; using shipped templates`, {
-      from: file,
-      to: movedTo,
-      ...(err ? { error: serializeError(err) } : {}),
-    })
-    return movedTo
-  } catch (renameErr) {
-    log('error', 'Failed to quarantine corrupt elaborators file; leaving it in place', {
-      path: file,
-      error: serializeError(renameErr),
-    })
-    recoveryNotices.push({
-      kind: 'quarantine-failed',
-      path: file,
-      error: String(serializeError(renameErr).message ?? renameErr),
-    })
-    throw renameErr
-  }
-}
-
 type ElaboratorSets = Record<ElaboratorKind, Elaborator[]>
 const kinds: ElaboratorKind[] = ['composition', 'style']
 
@@ -312,40 +277,12 @@ function cleanElaborator(item: Elaborator): Elaborator {
   }
 }
 
-// The file as it is: every key it holds but its file header, or nothing
-// when it is absent. A file that cannot be read refuses the request and stays
-// where it is: moving it would not fix an access problem.
+// The file as it is: every key it holds but its file header, or nothing when
+// it is absent. The user's templates live here, so a file that cannot be read
+// or was written by a newer version stops the launch and stays exactly as it
+// is (store-recovery-conventions, What a refused file does).
 function readFile(): Record<string, unknown> {
-  const file = getElaboratorsFilePath()
-  let text: string
-  try {
-    text = fs.readFileSync(file, 'utf8')
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {}
-    throw new StoreLeftInPlaceError(file, { cause: err })
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (err) {
-    const movedTo = quarantineCorruptFile(file, 'unreadable', err)
-    recoveryNotices.push({ kind: 'recovered', path: movedTo })
-    return {}
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    const movedTo = quarantineCorruptFile(file, 'malformed')
-    recoveryNotices.push({ kind: 'recovered', path: movedTo })
-    return {}
-  }
-  try {
-    return checkHeader(parsed as Record<string, unknown>, FILE_FORMATS.elaborators, file)
-  } catch (err) {
-    // A newer file refuses every request and stays exactly where it is.
-    if (err instanceof NewerFormatError) throw err
-    const movedTo = quarantineCorruptFile(file, 'malformed', err)
-    recoveryNotices.push({ kind: 'recovered', path: movedTo })
-    return {}
-  }
+  return readHeaderedJson(getElaboratorsFilePath(), FILE_FORMATS.elaborators) ?? {}
 }
 
 // The file is read once, where it is loaded, and each set is checked as it is

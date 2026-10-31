@@ -3,8 +3,7 @@ import path from 'path'
 import { getDataDir } from './config'
 import { createCoalescedWriter } from './utils/coalesced-writer'
 import { writeFileAtomicAsync } from './utils/atomic-write'
-import { setAsideFile } from './utils/set-aside'
-import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { FILE_FORMATS, readHeaderedJson, UnreadableFileError, withHeader } from './store-format'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type CloudBackendId } from '../shared/types'
 import { getDefaultModelForBackend } from '../shared/ai-models'
 import { IMAGE_DEFAULT_PARAMS, type SavedImageBackendParams } from '../shared/image-backend-defaults'
@@ -25,11 +24,6 @@ let store: Partial<Record<CloudBackendId, SavedImageBackendParams>> | null = nul
 // as they are; an entry is dropped from here once its column saves.
 let rejected: Record<string, unknown> = Object.create(null)
 let otherKeys: Record<string, unknown> = Object.create(null)
-const setAsidePaths: string[] = []
-
-export function drainSetAsideBackendParamsPaths(): string[] {
-  return setAsidePaths.splice(0)
-}
 
 // Which parameters a model takes are the column's to judge per row, so an entry
 // saved for a model or a field that has since changed still loads. A number the
@@ -60,35 +54,15 @@ function acceptEntries(entries: Record<string, unknown>): Partial<Record<CloudBa
   return accepted
 }
 
-// An authored file that does not parse or fit its shape is set aside and every
-// column starts from its built-in, as on first run; one that cannot be read or
-// set aside, or a newer one, stops launch and stays where it is
-// (store-recovery conventions).
+// An authored file that cannot be read, does not fit its shape or was written
+// by a newer version stops the launch and stays exactly as it is
+// (store-recovery-conventions, What a refused file does).
 function readStored(file: string): Partial<Record<CloudBackendId, SavedImageBackendParams>> {
-  let text: string
-  try {
-    text = fs.readFileSync(file, 'utf-8')
-  } catch (error) {
-    throw new StoreLeftInPlaceError(file, { cause: error })
-  }
-  let backends: unknown
-  let others: Record<string, unknown>
-  try {
-    const parsed: unknown = JSON.parse(text)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('backend-params.json must be a JSON object')
-    ;({ backends, ...others } = checkHeader(parsed as Record<string, unknown>, FILE_FORMATS.backendParams, file))
-    if (!backends || typeof backends !== 'object' || Array.isArray(backends)) throw new Error('backend-params.json must contain a backend map')
-  } catch (error) {
-    if (error instanceof NewerFormatError) throw error
-    let movedTo: string
-    try {
-      movedTo = setAsideFile(file)
-    } catch (renameError) {
-      throw new StoreLeftInPlaceError(file, { cause: renameError })
-    }
-    setAsidePaths.push(movedTo)
-    log('warn', 'Set aside an unusable backend-params.json; using built-in models and parameters', { from: file, to: movedTo, error: serializeError(error) })
-    return {}
+  const content = readHeaderedJson(file, FILE_FORMATS.backendParams)
+  if (content === null) return {}
+  const { backends, ...others } = content
+  if (!backends || typeof backends !== 'object' || Array.isArray(backends)) {
+    throw new UnreadableFileError(file, { cause: new Error('backend-params.json must contain a backend map') })
   }
   otherKeys = others
   return acceptEntries(backends as Record<string, unknown>)
@@ -99,7 +73,7 @@ function readStored(file: string): Partial<Record<CloudBackendId, SavedImageBack
 export function loadBackendParams(): void {
   if (store !== null) return
   const file = getBackendParamsPath()
-  store = fs.existsSync(file) ? readStored(file) : {}
+  store = readStored(file)
 }
 
 /** Every cloud column's saved model and parameters, or its built-in ones. */

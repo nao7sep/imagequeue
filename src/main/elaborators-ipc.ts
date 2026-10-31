@@ -1,4 +1,3 @@
-import type { WebContents } from 'electron'
 import { handle } from './ipc-boundary'
 import { brainstormPrompts, cancelBrainstorm } from './brainstorm'
 import { providerMessage, ProviderRefusalError } from './provider-errors'
@@ -8,73 +7,40 @@ import { createDefaultConfig } from './config/defaults'
 import {
   createElaborator,
   deleteElaborator,
-  drainElaboratorRecoveryNotices,
   listElaborators,
   resetElaborators,
   updateElaborator,
 } from './elaborators'
 import type { ElaboratorKind } from '../shared/types'
 import type { PromptFormat, PromptLength } from '../shared/session-draft'
-import { conceptLibraryResetPresentation, elaboratorRecoveryPresentation } from './failure-presentation'
-import { drainSetAsideConceptStorePaths } from './concepts/concept-store'
 
 export function registerElaboratorsIpc(): void {
-  const reportRecovery = (target: WebContents): void => {
-    for (const notice of drainElaboratorRecoveryNotices()) {
-      const presentation = elaboratorRecoveryPresentation(notice)
-      if (presentation) target.send('app:notice', presentation)
-    }
-    for (const movedTo of drainSetAsideConceptStorePaths()) {
-      target.send('app:notice', conceptLibraryResetPresentation(movedTo))
-    }
-  }
+  handle('elaborators:list', () => listElaborators())
 
-  const withRecoveryReport = async <T>(target: WebContents, operation: () => T | Promise<T>): Promise<T> => {
-    try {
-      const result = operation()
-      // Async functions run synchronously until their first await, which covers
-      // the store read at the start of brainstormPrompts.
-      reportRecovery(target)
-      return await result
-    } finally {
-      reportRecovery(target)
-    }
-  }
-
-  handle('elaborators:list', (event) => withRecoveryReport(event.sender, listElaborators))
-
-  handle('elaborators:create', (event, input: { id?: string; kind: ElaboratorKind; name: string; description?: string; template: string }) => {
-    return withRecoveryReport(event.sender, async () => {
-      const created = await createElaborator(input)
-      log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
-      return created
-    })
+  handle('elaborators:create', async (_event, input: { id?: string; kind: ElaboratorKind; name: string; description?: string; template: string }) => {
+    const created = await createElaborator(input)
+    log('info', 'Elaborator created', { id: created.id, kind: created.kind, name: created.name })
+    return created
   })
 
-  handle('elaborators:update', (event, id: string, patch: { name?: string; description?: string; template?: string }) => {
-    return withRecoveryReport(event.sender, async () => {
-      const updated = await updateElaborator(id, patch)
-      if (updated) {
-        log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
-      }
-      return updated
-    })
+  handle('elaborators:update', async (_event, id: string, patch: { name?: string; description?: string; template?: string }) => {
+    const updated = await updateElaborator(id, patch)
+    if (updated) {
+      log('info', 'Elaborator updated', { id, kind: updated.kind, name: updated.name, fields: Object.keys(patch) })
+    }
+    return updated
   })
 
-  handle('elaborators:delete', (event, id: string) => {
-    return withRecoveryReport(event.sender, async () => {
-      const ok = await deleteElaborator(id)
-      if (ok) log('info', 'Elaborator deleted', { id })
-      return ok
-    })
+  handle('elaborators:delete', async (_event, id: string) => {
+    const ok = await deleteElaborator(id)
+    if (ok) log('info', 'Elaborator deleted', { id })
+    return ok
   })
 
-  handle('elaborators:reset', (event, kind?: ElaboratorKind) => {
-    return withRecoveryReport(event.sender, async () => {
-      const items = await resetElaborators(kind)
-      log('info', 'Elaborators reset to defaults', { kind: kind ?? 'all', count: items.length })
-      return items
-    })
+  handle('elaborators:reset', async (_event, kind?: ElaboratorKind) => {
+    const items = await resetElaborators(kind)
+    log('info', 'Elaborators reset to defaults', { kind: kind ?? 'all', count: items.length })
+    return items
   })
 
   handle(
@@ -100,7 +66,7 @@ export function registerElaboratorsIpc(): void {
       sender.once('render-process-gone', cancel)
       sender.on('did-start-navigation', navigation)
       try {
-        const { prompts, failure, failureContext } = await withRecoveryReport(event.sender, () => brainstormPrompts(req))
+        const { prompts, failure, failureContext } = await brainstormPrompts(req)
         if (failure !== undefined) {
           log('error', 'Brainstorm failed', { ...failureContext, error: serializeError(failure) })
           return { ok: false, prompts, failure: {

@@ -75,13 +75,17 @@ describe('StartupFailureApp measurement handshake', () => {
     })
   })
 
-  it('names the settings file and its path when main says the settings stopped startup', async () => {
+  it('lists each refused file on its own line when main says files stopped startup', async () => {
     vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete')
-    getStartupFailureMessage.mockResolvedValue({ key: 'startupFailure.settingsFileMessage', values: { path: '/Users/me/.imagequeue/config.json' } })
+    const line = (key: 'startupFailure.refusedNewer' | 'startupFailure.refusedUnreadable', path: string) => ({ key, values: { path } })
+    getStartupFailureMessage.mockResolvedValue({ key: 'startupFailure.refusedMessage', values: { files: {
+      key: 'startupFailure.fileList',
+      values: { first: line('startupFailure.refusedNewer', '/Users/me/.imagequeue/config.json'), next: line('startupFailure.refusedUnreadable', '/Users/me/.imagequeue/api-keys.json') },
+    } } })
     render(<StartupFailureApp />)
 
-    const details = await until(() => screen.getByText(/settings file at/))
-    expect(details.textContent).toBe('ImageQueue couldn’t use its settings file at /Users/me/.imagequeue/config.json and left it unchanged. Check its permissions or move it aside, then start ImageQueue again.')
+    const details = await until(() => screen.getByText(/can’t use these files/))
+    expect(details.textContent).toContain('/Users/me/.imagequeue/config.json: written by a newer version of ImageQueue\n/Users/me/.imagequeue/api-keys.json: couldn’t be read')
     await until(() => expect(reportMeasurement).toHaveBeenCalledOnce())
   })
 

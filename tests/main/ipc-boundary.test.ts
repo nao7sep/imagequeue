@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 import { handle } from '../../src/main/ipc-boundary'
-import { NewerFormatError, StoreLeftInPlaceError } from '../../src/main/store-format'
+import { NewerFormatError, UnreadableFileError } from '../../src/main/store-format'
 import { freshRecordsRoot, readLog, removeRecordsRoots } from './records-fixture'
 
 // Invokes the listener registered for a channel as Electron's invoke path would:
@@ -118,19 +118,19 @@ describe('a refusal by a store a newer version wrote', () => {
   })
 })
 
-describe('a store that could be neither read nor set aside', () => {
-  it('names the file it left in place, once, and still rejects every request', async () => {
+describe('a store that could not be read', () => {
+  it('names the file it could not read, once, and still rejects every request', async () => {
     freshRecordsRoot()
     const send = vi.fn()
     const event = { sender: { send } }
-    handle('halt:params', () => { throw new StoreLeftInPlaceError('/data/unmovable/params.json', { cause: new Error('EACCES') }) })
+    handle('halt:params', () => { throw new UnreadableFileError('/data/unmovable/params.json', { cause: new Error('EACCES') }) })
     const params = hoisted.registered.get('halt:params')!
 
-    await expect(Promise.resolve(params(event))).rejects.toThrow(StoreLeftInPlaceError)
-    await expect(Promise.resolve(params(event))).rejects.toThrow(StoreLeftInPlaceError)
+    await expect(Promise.resolve(params(event))).rejects.toThrow(UnreadableFileError)
+    await expect(Promise.resolve(params(event))).rejects.toThrow(UnreadableFileError)
 
     expect(send.mock.calls.map(([channel, notice]) => [channel, notice.title.key, notice.message.values.path])).toEqual([
-      ['app:notice', 'notice.fileLeftInPlaceTitle', '/data/unmovable/params.json'],
+      ['app:notice', 'notice.unreadableFileTitle', '/data/unmovable/params.json'],
     ])
   })
 })

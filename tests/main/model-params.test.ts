@@ -28,8 +28,6 @@ describe('params.json file header', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 
-  const setAsideCopies = () => fs.readdirSync(root).filter((name) => /^params-\d{8}-\d{6}-utc\.invalid$/.test(name))
-
   it.each([
     ['no file header', JSON.stringify({ 'model.ckpt': params })],
     ['another kind', JSON.stringify({ ...header(FILE_FORMATS.backendParams), models: {} })],
@@ -37,19 +35,14 @@ describe('params.json file header', () => {
     ['a value that is not a map of sets', JSON.stringify([params])],
     ['a flat model map', JSON.stringify({ ...header(FILE_FORMATS.modelParams), 'model.ckpt': params })],
     ['an invalid model map', JSON.stringify({ ...header(FILE_FORMATS.modelParams), models: [] })],
-  ])('sets aside a file with %s and continues from recommended or default parameters', async (_case, bytes) => {
+  ])('stops at a file with %s, names it, and leaves it byte-identical through later saves', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
-    const { getModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } = await import('../../src/main/model-params')
-    expect(getModelParams('model.ckpt')).toBeNull()
-    const [copy] = setAsideCopies()
-    expect(fs.readFileSync(path.join(root, copy), 'utf8'), 'the authored bytes are preserved').toBe(bytes)
-    expect(drainSetAsideModelParamsPaths()).toEqual([path.join(root, copy)])
-    expect(drainSetAsideModelParamsPaths(), 'each set-aside copy is named once').toEqual([])
-
-    setModelParams('model.ckpt', params)
+    const { getModelParams, setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
+    expect(() => getModelParams('model.ckpt')).toThrow(expect.objectContaining({ name: 'UnreadableFileError', path: file() }))
+    expect(() => setModelParams('model.ckpt', params)).toThrow(expect.objectContaining({ name: 'UnreadableFileError' }))
     await drainPendingWrites()
-    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).models['model.ckpt']).toEqual(params)
-    expect(setAsideCopies()).toEqual([copy])
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root).filter((name) => name.startsWith('params'))).toEqual(['params.json'])
   })
 
   it('reads a malformed set as absent, keeps the valid ones, and writes it back until that model changes', async () => {
@@ -63,12 +56,11 @@ describe('params.json file header', () => {
         'not-a-set.ckpt': 'x',
       },
     }))
-    const { getModelParams, getAllModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } =
+    const { getModelParams, getAllModelParams, setModelParams, drainPendingWrites } =
       await import('../../src/main/model-params')
     expect(getAllModelParams()).toEqual({ 'good.ckpt': params })
     expect(getModelParams('numeric-negative.ckpt')).toBeNull()
     expect(getModelParams('missing-steps.ckpt')).toBeNull()
-    expect(drainSetAsideModelParamsPaths(), 'a bad set is not a bad file').toEqual([])
 
     setModelParams('other.ckpt', params)
     await drainPendingWrites()
@@ -88,22 +80,6 @@ describe('params.json file header', () => {
     setModelParams('model.ckpt', params)
     await drainPendingWrites()
     expect(JSON.parse(fs.readFileSync(file(), 'utf8')).later).toEqual({ kept: true })
-  })
-
-  it('stops the request and leaves the file in place when it cannot be set aside', async () => {
-    const { StoreLeftInPlaceError } = await import('../../src/main/store-format')
-    const bytes = '{ not json'
-    fs.writeFileSync(file(), bytes)
-    const { getModelParams, setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
-      throw Object.assign(new Error('simulated permission failure'), { code: 'EACCES' })
-    })
-    expect(() => getModelParams('model.ckpt')).toThrow(StoreLeftInPlaceError)
-    expect(() => setModelParams('model.ckpt', params)).toThrow(StoreLeftInPlaceError)
-    rename.mockRestore()
-    await drainPendingWrites()
-    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
-    expect(setAsideCopies()).toEqual([])
   })
 
   it('writes its file header first and reads it back', async () => {
@@ -151,7 +127,7 @@ describe('params.json file header', () => {
     for (const name of names) expect(applied.getModelParams(name)).toEqual({ ...params, seed: name, ...patch })
     expect(applied.getModelParams('toString')).toEqual({ ...patch, seed: '', negativePrompt: '' })
     expect(JSON.parse(fs.readFileSync(file(), 'utf8')).format).toEqual(header(FILE_FORMATS.modelParams).format)
-    expect(setAsideCopies()).toEqual([])
+    expect(fs.readdirSync(root).filter((name) => name.startsWith('params'))).toEqual(['params.json'])
   })
 
   it('preserves configured seed and negative prompt when applying dimensions to unsaved targets', async () => {

@@ -70,11 +70,13 @@ describe('ui state store', async () => {
 })
 
 describe('ui state file header', async () => {
-  // A cache: the version is written, never checked, so each field is read on
-  // its own merits whatever build wrote the file.
-  it('reads a file with no file header by its fields', async () => {
+  // Presentation state: a file that fails its header reads as the defaults and
+  // the next save replaces it; a newer one is never written over.
+  it('reads a file with no file header as the defaults and replaces it on the next update', async () => {
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 288 }))
-    expect((await readUiState())).toEqual({ ...defaultUiState(), columnWidth: 288 })
+    expect((await readUiState())).toEqual(defaultUiState())
+    await updateUiState({ columnWidth: 240 })
+    expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toMatchObject({ ...header(FILE_FORMATS.uiState), columnWidth: 240 })
   })
 
   it('writes its file header first and reads it back', async () => {
@@ -83,11 +85,12 @@ describe('ui state file header', async () => {
     expect((await readUiState()).columnWidth).toBe(240)
   })
 
-  it('reads a file from a newer version by its fields and replaces it on the next update', async () => {
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ ...header(FILE_FORMATS.uiState, FILE_FORMATS.uiState.version + 1), columnWidth: 288 }))
-    expect((await readUiState()).columnWidth).toBe(288)
-    expect((await updateUiState({ columnWidth: 240 })).columnWidth).toBe(240)
-    expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toMatchObject({ ...header(FILE_FORMATS.uiState), columnWidth: 240 })
+  it('never writes over a file from a newer version', async () => {
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.uiState, FILE_FORMATS.uiState.version + 1), columnWidth: 288 })
+    fs.writeFileSync(getUiStatePath(), bytes)
+    expect(await readUiState()).toEqual(defaultUiState())
+    await updateUiState({ columnWidth: 240 })
+    expect(fs.readFileSync(getUiStatePath(), 'utf8')).toBe(bytes)
   })
 })
 

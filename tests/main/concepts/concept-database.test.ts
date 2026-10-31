@@ -12,7 +12,6 @@ import {
   deleteConcept,
   deleteFacet,
   deleteProbe,
-  drainSetAsideConceptStorePaths,
   drawConcept,
   ensureFacet,
   listFacetsWithStats,
@@ -21,7 +20,7 @@ import {
   recordUses,
   unexpandedProbes,
 } from '../../../src/main/concepts/concept-database'
-import { FILE_FORMATS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
+import { FILE_FORMATS, NewerFormatError, UnreadableFileError } from '../../../src/main/store-format'
 import { headerSql } from '../file-header'
 
 // The concept ledger, tested against a real SQLite file under a throwaway
@@ -409,9 +408,7 @@ describe('concept store file header', () => {
     }
   }
 
-  const setAside = () => fs.readdirSync(tmpRoot).filter((name) => /^concepts-\d{8}-\d{6}-utc\.invalid/.test(name)).sort()
-
-  it('sets aside a populated ledger with no file header, names it once, and starts a new one', () => {
+  it('refuses every request on a populated ledger with no file header, leaving it byte-identical', () => {
     ensureFacet('place')
     closeConceptStore()
     const unversioned = new DatabaseSync(storeFile)
@@ -419,36 +416,19 @@ describe('concept store file header', () => {
     unversioned.close()
     const bytes = fs.readFileSync(storeFile)
 
-    expect(listFacetsWithStats()).toEqual([])
-    const [copy] = setAside()
-    expect(fs.readFileSync(path.join(tmpRoot, copy)).equals(bytes), 'the old ledger is preserved').toBe(true)
-    expect(drainSetAsideConceptStorePaths()).toEqual([path.join(tmpRoot, copy)])
-    expect(drainSetAsideConceptStorePaths()).toEqual([])
-    ensureFacet('time')
-    expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['time'])
-    expect(userVersion()).toBe(FILE_FORMATS.concepts.version)
+    expect(() => listFacetsWithStats()).toThrow(UnreadableFileError)
+    expect(() => ensureFacet('time')).toThrow(UnreadableFileError)
+    expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.startsWith('concepts'))).toEqual(['concepts.sqlite3'])
   })
 
-  it('sets aside a file that is not a database and starts a new ledger', () => {
+  it('refuses every request on a file that is not a database, naming it and leaving it byte-identical', () => {
     const bytes = Buffer.from('not a database'.repeat(100))
     fs.writeFileSync(storeFile, bytes)
-    expect(ensureFacet('place').display).toBe('place')
-    const [copy] = setAside()
-    expect(fs.readFileSync(path.join(tmpRoot, copy)).equals(bytes)).toBe(true)
-    expect(drainSetAsideConceptStorePaths()).toEqual([path.join(tmpRoot, copy)])
-  })
-
-  it('refuses the request and leaves the ledger in place when it cannot be set aside', () => {
-    fs.writeFileSync(storeFile, 'not a database'.repeat(100))
-    const bytes = fs.readFileSync(storeFile)
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
-      throw Object.assign(new Error('simulated permission failure'), { code: 'EACCES' })
-    })
-    expect(() => listFacetsWithStats()).toThrow(StoreLeftInPlaceError)
-    rename.mockRestore()
+    expect(() => ensureFacet('place')).toThrow(expect.objectContaining({ name: 'UnreadableFileError', path: storeFile }))
+    expect(() => listFacetsWithStats()).toThrow(UnreadableFileError)
     expect(fs.readFileSync(storeFile).equals(bytes)).toBe(true)
-    expect(setAside()).toEqual([])
-    expect(drainSetAsideConceptStorePaths()).toEqual([])
+    expect(fs.readdirSync(tmpRoot).filter((name) => name.startsWith('concepts'))).toEqual(['concepts.sqlite3'])
   })
 
   it('writes its version and reads the ledger back on the next open', () => {

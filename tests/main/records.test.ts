@@ -3,9 +3,10 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
-import { closeRecords, fetchRecorded, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
+import { closeRecords, fetchRecorded, flushRecords, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
 import { freshRecordsRoot, readLog, readRows, removeRecordsRoots } from './records-fixture'
 import { FILE_FORMATS } from '../../src/main/store-format'
+import * as appNotices from '../../src/main/app-notices'
 import { headerSql } from './file-header'
 
 afterAll(() => {
@@ -273,27 +274,28 @@ describe('the records file header', () => {
     }
   }
 
-  it('sets aside a populated database with no file header, keeping its bytes, and starts a new one', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-unversioned-'))
+  it.each([
+    ['a populated database with no file header', (file: string) => { const db = new DatabaseSync(file); db.exec('CREATE TABLE kept (value TEXT)'); db.close() }],
+    ['a database of another kind', (file: string) => { const db = new DatabaseSync(file); db.exec(`CREATE TABLE kept (value TEXT); ${headerSql(FILE_FORMATS.concepts)}`); db.close() }],
+    ['a file that is not a database', (file: string) => fs.writeFileSync(file, 'not a database'.repeat(100))],
+  ])('leaves %s untouched, keeps records in the fallback file and says Records is off', async (_state, seed) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-refused-'))
     const file = path.join(dir, 'records.sqlite3')
-    const seeded = new DatabaseSync(file)
-    seeded.exec('CREATE TABLE kept (value TEXT)')
-    seeded.close()
+    seed(file)
     const bytes = fs.readFileSync(file)
+    const raised = vi.spyOn(appNotices, 'raiseAppNotice').mockImplementation(() => undefined)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     openRecords(dir)
-    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Kept in the new database', {})
+    writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Kept anyway', {})
+    await flushRecords()
+    consoleError.mockRestore()
 
-    expect(recordsDatabasePath()).toBe(file)
-    const invalid = fs.readdirSync(dir).filter((name) => /^records-.+\.invalid$/.test(name))
-    expect(invalid).toHaveLength(1)
-    expect(fs.readFileSync(path.join(dir, invalid[0])).equals(bytes)).toBe(true)
-    const db = new DatabaseSync(file, { readOnly: true })
-    try {
-      const messages = (db.prepare('SELECT message FROM log_records ORDER BY id').all() as { message: string }[]).map((row) => row.message)
-      expect(messages).toEqual(['Set aside a records database without its file header; started a new one', 'Kept in the new database'])
-    } finally {
-      db.close()
-    }
+    expect(recordsDatabasePath()).toBeNull()
+    expect(fallbackLines(dir).map((line) => line.message)).toEqual(['Records database could not be opened', 'Kept anyway'])
+    expect(raised).toHaveBeenCalledWith(expect.objectContaining({ title: { key: 'notice.recordsOffTitle' }, message: { key: 'notice.recordsOffMessage', values: { path: file } } }))
+    raised.mockRestore()
+    expect(fs.readFileSync(file).equals(bytes)).toBe(true)
+    expect(fs.readdirSync(dir).filter((name) => name.startsWith('records'))).toEqual(['records.sqlite3'])
     closeRecords()
     fs.rmSync(dir, { recursive: true, force: true })
   })

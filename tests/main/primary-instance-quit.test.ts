@@ -78,6 +78,7 @@ vi.mock('../../src/main/dependencies/service', () => ({ checkDependenciesAtLaunc
 vi.mock('../../src/main/dependencies/paths', () => ({ clearTempDir: vi.fn() }))
 vi.mock('../../src/main/elaborators-ipc', () => ({ registerElaboratorsIpc: vi.fn() }))
 vi.mock('../../src/main/elaborators', () => ({ listElaborators: vi.fn() }))
+vi.mock('../../src/main/launch-files', () => ({ checkLaunchFiles: vi.fn() }))
 vi.mock('../../src/main/config/api-keys-store', () => ({ refreshApiKeys: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/concepts/concept-store', () => ({ closeConceptStore: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/backup/backup-store', () => ({ closeBackupStore: vi.fn(async () => undefined) }))

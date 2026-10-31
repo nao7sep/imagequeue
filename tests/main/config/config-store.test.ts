@@ -310,77 +310,49 @@ describe('settings by set', () => {
     await updateConfig((draft) => { draft.image_backends.flux.timeout_ms = 2000 })
     expect(loadConfig().image_backends.flux.timeout_ms).toBe(2000)
   })
-  it.each([['unreadable', '{ invalid'], ['not a map of sets', '[]']])('sets aside a file that is %s and starts from built-ins', async (_state, bytes) => {
+  it.each([
+    ['does not parse', '{ invalid'],
+    ['is not a map of sets', '[]'],
+    ['has no file header', JSON.stringify({ general: { language: 'de' } })],
+    ['is of another kind', JSON.stringify({ ...header(FILE_FORMATS.elaborators), general: { language: 'de' } })],
+    ['is of another owner', JSON.stringify({ format: { owner: 'picpatch', kind: 'config', version: 1 }, general: { language: 'de' } })],
+    ['has a format version that is not an integer', JSON.stringify({ ...header(FILE_FORMATS.config, 'one'), general: { language: 'ja' } })],
+  ])('stops naming a file that %s, and leaves it byte-identical through later saves', async (_state, bytes) => {
     fs.writeFileSync(file(), bytes)
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig()).toEqual(createDefaultConfig())
-    expect(fs.existsSync(file())).toBe(false)
-    const invalid = fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))
-    expect(invalid).toHaveLength(1)
-    expect(fs.readFileSync(path.join(root, invalid[0]), 'utf8')).toBe(bytes)
-  })
-  it('hands out where a set-aside file went once, for the window to tell the user', async () => {
-    fs.writeFileSync(file(), '{ invalid')
-    const { loadConfig, drainSetAsideConfigPaths } = await import('../../../src/main/config/config-store')
-    loadConfig()
-    const invalid = fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))
-    expect(drainSetAsideConfigPaths()).toEqual([path.join(root, invalid[0])])
-    expect(drainSetAsideConfigPaths()).toEqual([])
-  })
-  it('halts naming the file and leaves it in place when it cannot be set aside', async () => {
-    fs.writeFileSync(file(), '{ invalid')
-    const { loadConfig, ConfigFileHaltError } = await import('../../../src/main/config/config-store')
-    vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw new Error('locked') })
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    const { UnreadableFileError } = await import('../../../src/main/store-format')
     let thrown: unknown
     try { loadConfig() } catch (err) { thrown = err }
-    expect(thrown).toBeInstanceOf(ConfigFileHaltError)
-    expect((thrown as InstanceType<typeof ConfigFileHaltError>).path).toBe(file())
-    expect(((thrown as Error).cause as Error).message).toBe('locked')
-    expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
+    expect(thrown).toBeInstanceOf(UnreadableFileError)
+    expect((thrown as InstanceType<typeof UnreadableFileError>).path).toBe(file())
+    await expect(updateConfig((draft) => { draft.general.language = 'ja' })).rejects.toBeInstanceOf(UnreadableFileError)
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root)).toEqual(['config.json'])
   })
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('halts naming a file it cannot read, and leaves it unchanged in place', async () => {
     const bytes = JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'ja' } })
     fs.writeFileSync(file(), bytes)
     fs.chmodSync(file(), 0o000)
-    const { loadConfig, ConfigFileHaltError } = await import('../../../src/main/config/config-store')
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    const { UnreadableFileError } = await import('../../../src/main/store-format')
     let thrown: unknown
     try { loadConfig() } catch (err) { thrown = err }
     fs.chmodSync(file(), 0o644)
-    expect(thrown).toBeInstanceOf(ConfigFileHaltError)
-    expect((thrown as InstanceType<typeof ConfigFileHaltError>).path).toBe(file())
+    expect(thrown).toBeInstanceOf(UnreadableFileError)
+    expect((thrown as InstanceType<typeof UnreadableFileError>).path).toBe(file())
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
-    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
+    expect(fs.readdirSync(root)).toEqual(['config.json'])
   })
-  it('saves against the map it loaded, so a file unreadable since load is neither read, written nor set aside', async () => {
+  it('saves against the map it loaded, so a file unreadable since load is neither read nor written', async () => {
     fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'ja' } }))
     fs.utimesSync(file(), new Date(2000, 0, 1), new Date(2000, 0, 1))
-    const { loadConfig, updateConfig, drainSetAsideConfigPaths } = await import('../../../src/main/config/config-store')
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     loadConfig()
     const read = vi.spyOn(fs, 'readFileSync').mockImplementation(() => { throw Object.assign(new Error('unreadable'), { code: 'EACCES' }) })
     await updateConfig(() => undefined)
     read.mockRestore()
     expect(fs.statSync(file()).mtime.getFullYear()).toBe(2000)
     expect(stored()).toEqual({ general: { language: 'ja' } })
-    expect(drainSetAsideConfigPaths()).toEqual([])
-  })
-  it('sets aside a file with no file header and starts from built-ins', async () => {
-    const bytes = JSON.stringify({ general: { language: 'de' } })
-    fs.writeFileSync(file(), bytes)
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig()).toEqual(createDefaultConfig())
-    const invalid = fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))
-    expect(invalid).toHaveLength(1)
-    expect(fs.readFileSync(path.join(root, invalid[0]), 'utf8')).toBe(bytes)
-  })
-  it.each([
-    ['another kind', { ...header(FILE_FORMATS.elaborators) }],
-    ['another owner', { format: { owner: 'picpatch', kind: 'config', version: 1 } }],
-  ])('sets aside a file of %s and starts from built-ins', async (_state, identity) => {
-    const bytes = JSON.stringify({ ...identity, general: { language: 'de' } })
-    fs.writeFileSync(file(), bytes)
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig()).toEqual(createDefaultConfig())
-    expect(fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))).toHaveLength(1)
   })
   it('reads a file whatever its writer says, and writes its own writer back', async () => {
     fs.writeFileSync(file(), JSON.stringify({ format: header(FILE_FORMATS.config).format, writer: { name: 'someone-else', version: 'not a version' }, general: { language: 'ja' } }))
@@ -408,13 +380,7 @@ describe('settings by set', () => {
     expect(thrown).toBeInstanceOf(NewerFormatError)
     expect((thrown as InstanceType<typeof NewerFormatError>).path).toBe(file())
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
-    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
-  })
-  it('sets aside a file whose format version is not an integer', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config, 'one'), general: { language: 'ja' } }))
-    const { loadConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig()).toEqual(createDefaultConfig())
-    expect(fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))).toHaveLength(1)
+    expect(fs.readdirSync(root)).toEqual(['config.json'])
   })
   it('warns once, naming the key, for a set that fails its check', async () => {
     const log = vi.fn()

@@ -2,7 +2,7 @@ import type { Worker } from 'node:worker_threads'
 import createConceptWorker from './concept-worker?nodeWorker'
 import { getDataDir } from '../config'
 import { log } from '../logger'
-import { NewerFormatError, StoreLeftInPlaceError } from '../store-format'
+import { NewerFormatError, UnreadableFileError } from '../store-format'
 import type * as Database from './concept-database'
 export type { FacetRow, ProbeRow, DrawOptions, DrawnConcept, ConceptFacetSummary, ConceptRow, ConceptProbeSummary } from './concept-database'
 export const CONCEPT_REUSE_WINDOW_DRAWS = 1000
@@ -10,9 +10,7 @@ let worker: Worker | null = null
 let failed: Error | null = null
 let nextId = 0
 let closing: Promise<void> | null = null
-const paths: string[] = []
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
-export function drainSetAsideConceptStorePaths(): string[] { return paths.splice(0) }
 function owner(): Worker {
   if (failed) throw failed
   if (worker) return worker
@@ -21,14 +19,13 @@ function owner(): Worker {
   started.unref()
   started.on('message', (message) => {
     if (message.type === 'log') { log(message.level, message.message, message.fields); return }
-    paths.push(...message.paths)
     const request = pending.get(message.id)
     if (!request) return
     pending.delete(message.id)
     if (message.error) {
       const e = message.error
       const error = e.name === 'NewerFormatError' ? new NewerFormatError(e.path, e.found, e.supported)
-        : e.name === 'StoreLeftInPlaceError' ? new StoreLeftInPlaceError(e.path, { cause: e.cause })
+        : e.name === 'UnreadableFileError' ? new UnreadableFileError(e.path, { cause: e.cause })
         : Object.assign(new Error(e.message), e)
       request.reject(error)
     } else request.resolve(message.value)

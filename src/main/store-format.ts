@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 
 // Every file ImageQueue writes in a format it owns carries the file identity
@@ -64,14 +65,36 @@ export class MissingHeaderError extends Error {
 }
 
 /**
- * A store that could be neither read nor set aside: the operation that needed
- * it stops and the file stays exactly where it is (store-recovery-conventions).
+ * A file that could not be read: the operation that needed it stops and the
+ * file stays exactly as it is, never set aside or replaced
+ * (store-recovery-conventions, A refused file is never changed).
  */
-export class StoreLeftInPlaceError extends Error {
+export class UnreadableFileError extends Error {
   constructor(readonly path: string, options: { cause: unknown }) {
-    super(`${path} could not be used or set aside; it was left unchanged`, options)
-    this.name = 'StoreLeftInPlaceError'
+    super(`${path} could not be read; it was left unchanged`, options)
+    this.name = 'UnreadableFileError'
   }
+}
+
+/** One file a launch refused, and whether a newer version wrote it. */
+export interface RefusedFile {
+  path: string
+  newer: boolean
+}
+
+/** Launch stopped on these files; nothing was written before stopping. */
+export class LaunchStopError extends Error {
+  constructor(readonly refused: RefusedFile[]) {
+    super(`Launch stopped on ${refused.map((file) => `${file.path} (${file.newer ? 'newer' : 'unreadable'})`).join(', ')}`)
+    this.name = 'LaunchStopError'
+  }
+}
+
+/** The refusal a launch reports for `error`, or null when it is not a refused file. */
+export function refusedFile(error: unknown): RefusedFile | null {
+  if (error instanceof NewerFormatError) return { path: error.path, newer: true }
+  if (error instanceof UnreadableFileError) return { path: error.path, newer: false }
+  return null
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -104,6 +127,64 @@ export function withHeader<T extends object>(content: T, format: FileFormat): { 
     writer: { name: FILE_WRITER.name, version: FILE_WRITER.version },
     ...content,
   }
+}
+
+/**
+ * A JSON file's content after its header passes. Anything that does not parse,
+ * is not an object or fails the header is an UnreadableFileError; a newer
+ * version is a NewerFormatError.
+ */
+export function parseHeaderedJson(text: string, format: FileFormat, file: string): Record<string, unknown> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+    if (!isObject(parsed)) throw new Error('the file is not a JSON object')
+    return checkHeader(parsed, format, file)
+  } catch (error) {
+    if (error instanceof NewerFormatError) throw error
+    throw new UnreadableFileError(file, { cause: error })
+  }
+}
+
+/** Reads a JSON file of `format`: null when it is absent, its content when its header passes. */
+export function readHeaderedJson(file: string, format: FileFormat): Record<string, unknown> | null {
+  let text: string
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw new UnreadableFileError(file, { cause: error })
+  }
+  return parseHeaderedJson(text, format, file)
+}
+
+/**
+ * A cache's header at launch: a newer file stops the launch, while an absent or
+ * unreadable one is rebuilt, so it passes here (store-recovery-conventions).
+ */
+export function checkCacheAtLaunch(file: string, format: FileFormat): void {
+  try { readHeaderedJson(file, format) } catch (error) {
+    if (error instanceof NewerFormatError) throw error
+  }
+}
+
+/** A cache's content, or null when it is absent or unreadable, so the caller rebuilds it. */
+export async function readCache(file: string, format: FileFormat): Promise<Record<string, unknown> | null> {
+  let text: string
+  try { text = await fs.promises.readFile(file, 'utf8') } catch { return null }
+  try { return parseHeaderedJson(text, format, file) } catch (error) {
+    if (error instanceof NewerFormatError) throw error
+    return null
+  }
+}
+
+/**
+ * Whether a cache may be written over: false when the file on disk now holds
+ * a newer version, which stays as it is (store-recovery-conventions, A refused
+ * file is never changed). An absent or unreadable cache may be replaced.
+ */
+export async function cacheWritable(file: string, format: FileFormat): Promise<boolean> {
+  try { await readCache(file, format); return true } catch { return false }
 }
 
 function userVersion(db: DatabaseSync): number {

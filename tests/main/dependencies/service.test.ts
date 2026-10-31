@@ -42,7 +42,7 @@ beforeEach(() => {
   // Seed the canonical config directly so loadConfig does not perform a managed-
   // text first-run write and open the process-wide backup database during this
   // isolated dependency-service test.
-  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(createDefaultConfig()))
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ ...header(FILE_FORMATS.config), ...createDefaultConfig() }))
   resolveMock.mockReset()
   serverTimeMock.mockReset()
   serverTimeMock.mockResolvedValue('2026-09-11T20:46:05.000Z')
@@ -278,7 +278,7 @@ describe('Windows launch dependency check', () => {
       // Only the platform guard may prevent this otherwise-due check.
       const config = createDefaultConfig()
       config.image_backends.drawthings.check_updates_at_launch = true
-      fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(config))
+      fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ ...header(FILE_FORMATS.config), ...config }))
       const before = await readDependenciesCache()
       await checkDependenciesAtLaunch()
       expect(resolveMock).not.toHaveBeenCalled()

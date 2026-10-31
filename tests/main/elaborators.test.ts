@@ -12,7 +12,6 @@ let createElaborator: typeof elaborators.createElaborator
 let updateElaborator: typeof elaborators.updateElaborator
 let deleteElaborator: typeof elaborators.deleteElaborator
 let resetElaborators: typeof elaborators.resetElaborators
-let drainElaboratorRecoveryNotices: typeof elaborators.drainElaboratorRecoveryNotices
 let listElaborators: typeof elaborators.listElaborators
 
 describe('elaborator sets', () => {
@@ -28,7 +27,7 @@ describe('elaborator sets', () => {
     vi.stubEnv('IMAGEQUEUE_DATA_DIR', root)
     vi.resetModules()
     elaborators = await import('../../src/main/elaborators')
-    ;({ createElaborator, updateElaborator, deleteElaborator, resetElaborators, drainElaboratorRecoveryNotices, listElaborators } = elaborators)
+    ;({ createElaborator, updateElaborator, deleteElaborator, resetElaborators, listElaborators } = elaborators)
   })
   afterEach(async () => {
     const { closeBackupStore } = await import('../../src/main/backup/backup-store')
@@ -164,44 +163,33 @@ describe('elaborator sets', () => {
     fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.elaborators), style: [] }))
     expect(listElaborators()).toEqual(initial)
   })
-  it('quarantines bad JSON and leaves the live file absent', async () => {
-    fs.writeFileSync(file(), '{ invalid')
-    expect(listElaborators().length).toBeGreaterThan(0)
-    expect(fs.existsSync(file())).toBe(false)
-    const invalid = fs.readdirSync(root).find((name) => name.endsWith('.invalid'))!
-    expect(fs.readFileSync(path.join(root, invalid), 'utf8')).toBe('{ invalid')
-    expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'recovered', path: path.join(root, invalid) }])
+  it.each([
+    ['does not parse', '{ invalid'],
+    ['has no file header', JSON.stringify({ style: [] })],
+    ['is of another kind', JSON.stringify({ ...header(FILE_FORMATS.config), style: [] })],
+    ['has format version 0', JSON.stringify({ ...header(FILE_FORMATS.elaborators, 0), style: [] })],
+  ])('refuses every request on a file that %s and leaves it byte-identical', async (_state, bytes) => {
+    const { UnreadableFileError } = await import('../../src/main/store-format')
+    fs.writeFileSync(file(), bytes)
+    expect(() => listElaborators()).toThrow(UnreadableFileError)
+    await expect(createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })).rejects.toThrow(UnreadableFileError)
+    await expect(resetElaborators()).rejects.toThrow(UnreadableFileError)
+    expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
+    expect(fs.readdirSync(root)).toEqual(['elaborators.json'])
   })
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('refuses every request on a file it cannot read and leaves it in place', async () => {
-    const { StoreLeftInPlaceError } = await import('../../src/main/store-format')
+    const { UnreadableFileError } = await import('../../src/main/store-format')
     const bytes = JSON.stringify({ ...header(FILE_FORMATS.elaborators), style: [] })
     fs.writeFileSync(file(), bytes)
     fs.chmodSync(file(), 0o000)
     try {
-      expect(() => listElaborators()).toThrow(StoreLeftInPlaceError)
-      await expect(createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })).rejects.toThrow(StoreLeftInPlaceError)
+      expect(() => listElaborators()).toThrow(UnreadableFileError)
+      await expect(createElaborator({ kind: 'style', name: 'Mine', template: 'Mine' })).rejects.toThrow(UnreadableFileError)
     } finally {
       fs.chmodSync(file(), 0o644)
     }
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
-    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
-    expect(drainElaboratorRecoveryNotices()).toEqual([])
-  })
-  it('preserves bad bytes and reports a failed quarantine', async () => {
-    fs.writeFileSync(file(), '{ invalid')
-    vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw new Error('locked') })
-    expect(() => listElaborators()).toThrow('locked')
-    expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
-    expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'quarantine-failed', path: file(), error: 'locked' }])
-  })
-  it('quarantines a file with no file header and reads the shipped templates', async () => {
-    const bytes = JSON.stringify({ style: [] })
-    fs.writeFileSync(file(), bytes)
-    expect(listElaborators().some((item) => item.kind === 'style')).toBe(true)
-    expect(fs.existsSync(file())).toBe(false)
-    const invalid = fs.readdirSync(root).find((name) => name.endsWith('.invalid'))!
-    expect(fs.readFileSync(path.join(root, invalid), 'utf8')).toBe(bytes)
-    expect(drainElaboratorRecoveryNotices()).toEqual([{ kind: 'recovered', path: path.join(root, invalid) }])
+    expect(fs.readdirSync(root)).toEqual(['elaborators.json'])
   })
   it('writes its file header first and reads it back', async () => {
     const { FILE_FORMATS } = await import('../../src/main/store-format')
@@ -219,13 +207,6 @@ describe('elaborator sets', () => {
     await expect(createElaborator({ kind: 'style', name: 'My style', template: 'My template' })).rejects.toThrow(NewerFormatError)
     await expect(resetElaborators()).rejects.toThrow(NewerFormatError)
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
-    expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
-    expect(drainElaboratorRecoveryNotices()).toEqual([])
-  })
-  it('quarantines a file whose format version is not an integer', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.elaborators, 0), style: [] }))
-    expect(listElaborators().some((item) => item.kind === 'style')).toBe(true)
-    expect(fs.existsSync(file())).toBe(false)
-    expect(drainElaboratorRecoveryNotices()).toHaveLength(1)
+    expect(fs.readdirSync(root)).toEqual(['elaborators.json'])
   })
 })

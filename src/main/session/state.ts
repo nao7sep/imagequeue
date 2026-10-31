@@ -26,7 +26,7 @@ import { cloneTask, createEmptyQueues, queueManager } from '../queue/queue-manag
 import { createSessionDir, getSessionsDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 import { publishQueueState } from '../queue/publisher'
-import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, UnreadableFileError } from '../store-format'
 
 import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { isStoredTaskParams } from './stored-task-params'
@@ -277,7 +277,7 @@ async function admitSessionManifest(sessionDir: string): Promise<void> {
   const read = await readManifestFromDir(sessionDir)
   if (read.manifest) return
   if (read.error instanceof NewerFormatError) throw read.error
-  throw new StoreLeftInPlaceError(getManifestPath(sessionDir), {
+  throw new UnreadableFileError(getManifestPath(sessionDir), {
     cause: read.error ?? new Error('Session manifest is missing'),
   })
 }
@@ -332,7 +332,7 @@ async function ensureActiveSessionLoaded(): Promise<ActiveSessionState> {
   // A manifest that cannot be opened is refused, never replaced by an empty
   // session that the next save would write over it.
   if (!read.manifest && read.problem !== 'missing') {
-    throw new StoreLeftInPlaceError(getManifestPath(directory), { cause: read.error })
+    throw new UnreadableFileError(getManifestPath(directory), { cause: read.error })
   }
   const { manifest } = read
   activeSession = manifest

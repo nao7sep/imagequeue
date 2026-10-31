@@ -74,7 +74,7 @@ const { createEmptyQueues, queueManager } = await import('../../../src/main/queu
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 registerQueueIpc()
 const { createEmptySessionDraft } = await import('../../../src/shared/session-draft')
-const { FILE_FORMATS, NewerFormatError, StoreLeftInPlaceError } = await import('../../../src/main/store-format')
+const { FILE_FORMATS, NewerFormatError, UnreadableFileError } = await import('../../../src/main/store-format')
 const { header } = await import('../file-header')
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
@@ -898,7 +898,7 @@ describe('governing session manifest mutation admission', () => {
     const file = path.join(dir, 'session.json')
     if (problem === 'missing') fs.unlinkSync(file)
     else fs.writeFileSync(file, '{ invalid')
-    await expect(deleteSession(id)).rejects.toBeInstanceOf(StoreLeftInPlaceError)
+    await expect(deleteSession(id)).rejects.toBeInstanceOf(UnreadableFileError)
     expect(fs.existsSync(dir)).toBe(true)
     if (problem === 'unreadable') expect(fs.readFileSync(file, 'utf8')).toBe('{ invalid')
   })
