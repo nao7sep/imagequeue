@@ -50,7 +50,7 @@ function renderOn(platform: string): void {
     apiKeyPresence: null,
     saveChangedSettings: vi.fn().mockResolvedValue({}),
     saveBrainstormSettings: vi.fn().mockResolvedValue({}),
-    saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
+    saveBackendParams: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
   }
   render(<SettingsModal onClose={() => {}} />)

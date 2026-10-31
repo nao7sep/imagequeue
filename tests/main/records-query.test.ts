@@ -28,7 +28,7 @@ function writeEarlierLaunch(dir: string, time: string, message: string): void {
 
 function seed(): string {
   const dir = freshRecordsRoot()
-  setRecordsSession('20260102-000000-000-utc')
+  setRecordsSession('20260102-000000-utc')
   writeLogRecord('2026-01-02T00:00:01.000Z', 'info', 'Task enqueued', { taskId: 't1', prompt: 'a fox' })
   writeLogRecord('2026-01-02T00:00:02.000Z', 'warn', 'Careful', { note: '50%_off' })
   const ok = startAiCall({ backend: 'openai', model: 'gpt-image-2', purpose: 'image', taskId: 't1', request: { prompt: 'a fox' } })
@@ -43,7 +43,7 @@ function seed(): string {
 // One CLI job of each ending: exited with 0, stopped, and exited with 1.
 function seedJobs(): string {
   const dir = freshRecordsRoot()
-  setRecordsSession('20260103-000000-000-utc')
+  setRecordsSession('20260103-000000-utc')
   const job = (jobId: string, target: string) =>
     startCliJobRecord({ jobId, kind: 'download', target, cliPath: '/bin/draw-things-cli', args: ['models', 'ensure', '--model', target] })
   const end = { startedAt: '2026-01-03T00:00:00.000Z', signal: null, stderr: '' }
@@ -79,7 +79,7 @@ describe('records page', () => {
     expect(titles({ session: 'old-session' })).toEqual(['Earlier launch'])
     expect(titles({ kind: 'ai-call' })).toEqual(['gemini brainstorm', 'openai image'])
     expect(titles({ kind: 'log', level: 'info' })).toEqual(['Earlier launch', 'Task enqueued'])
-    expect(titles({ level: 'attention' })).toEqual(['Careful', 'Generation failed', 'gemini brainstorm'])
+    expect(titles({ level: 'warningsAndErrors' })).toEqual(['Careful', 'Generation failed', 'gemini brainstorm'])
     expect(titles({ level: 'error' })).toEqual(['Generation failed', 'gemini brainstorm'])
     // The search reaches the stored JSON and the ids, and its wildcards are literal.
     expect(titles({ search: 'a fox' })).toEqual(['Task enqueued', 'openai image'])
@@ -96,7 +96,7 @@ describe('records page', () => {
     const db = open(dir)
     const filtered = query({ kind: 'log',
       ...(scope === 'launch' ? { launch: currentRecordsContext().launch } : {}),
-      ...(scope === 'session' ? { session: '20260102-000000-000-utc' } : {}),
+      ...(scope === 'session' ? { session: '20260102-000000-utc' } : {}),
     })
     const first = readPage(db, filtered)
     expect(first.records.length).toBeGreaterThan(0)
@@ -207,20 +207,20 @@ describe('CLI job records', () => {
     expect(texts({})).toEqual(['CLI job finished', 'failed.ckpt', 'ok.ckpt', 'stopped.ckpt'])
     expect(texts({ kind: 'log' })).toEqual(['CLI job finished'])
     expect(texts({ kind: 'ai-call' })).toEqual([])
-    expect(texts({ level: 'attention' })).toEqual(['failed.ckpt', 'stopped.ckpt'])
+    expect(texts({ level: 'warningsAndErrors' })).toEqual(['failed.ckpt', 'stopped.ckpt'])
     expect(texts({ search: 'checksum' })).toEqual(['failed.ckpt'])
     expect(texts({ kind: 'cli-job', search: 'j-ok' })).toEqual(['ok.ckpt'])
-    expect(texts({ session: '20260103-000000-000-utc', kind: 'cli-job' })).toHaveLength(3)
+    expect(texts({ session: '20260103-000000-utc', kind: 'cli-job' })).toHaveLength(3)
     db.close()
   })
 
   it('name their launch and session among the sources, and read whole', () => {
     const db = open(seedJobs())
-    expect(readSources(db).sessions).toEqual(['20260103-000000-000-utc'])
+    expect(readSources(db).sessions).toEqual(['20260103-000000-utc'])
     const [failed] = readPage(db, query({ kind: 'cli-job', level: 'error' })).records
     const detail = readDetail(db, 'cli-job', failed!.id)
     expect(detail).toMatchObject({
-      kind: 'cli-job', level: 'error', title: 'draw-things-cli download', sessionId: '20260103-000000-000-utc',
+      kind: 'cli-job', level: 'error', title: 'draw-things-cli download', sessionId: '20260103-000000-utc',
       launch: currentRecordsContext().launch, jobId: 'j-failed', jobKind: 'download', target: 'failed.ckpt',
       cliPath: '/bin/draw-things-cli', startedAt: '2026-01-03T00:00:00.000Z', status: 'exited', exitCode: 1,
       signal: null, hasStdout: false, hasStderr: true, outputError: null, error: null,
@@ -238,7 +238,7 @@ describe('records sources and detail', () => {
     const db = open(dir)
     expect(readSources(db)).toEqual({
       launches: [currentRecordsContext().launch, '2026-01-01T00:00:00.000Z'],
-      sessions: ['20260102-000000-000-utc', 'old-session'],
+      sessions: ['20260102-000000-utc', 'old-session'],
     })
     db.close()
   })
@@ -250,7 +250,7 @@ describe('records sources and detail', () => {
     const detail = readDetail(db, 'ai-call', call!.id)
     expect(detail).toMatchObject({
       kind: 'ai-call', backend: 'gemini', model: 'gemini-x', purpose: 'brainstorm', requestId: 'r1', taskId: null,
-      sessionId: '20260102-000000-000-utc', response: null, launch: currentRecordsContext().launch,
+      sessionId: '20260102-000000-utc', response: null, launch: currentRecordsContext().launch,
     })
     expect(JSON.parse((detail as { request: string }).request)).toEqual({ seed: 'fox' })
     expect(JSON.parse((detail as { error: string }).error)).toMatchObject({ message: 'quota' })

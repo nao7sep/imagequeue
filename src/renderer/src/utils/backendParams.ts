@@ -18,13 +18,13 @@ import { CLOUD_BACKENDS } from '../backends'
 // for the existing import sites.
 export { resolveOpenAiSize } from '../backends/openai'
 
-export interface SavedImageBackendDefaults {
+export interface ResolvedBackendParams {
   model: string
   params: Record<string, unknown> | null
   ui: Record<string, unknown>
 }
 
-export function serializeImageBackendDefaults(model: string, params: Record<string, unknown> | null): string {
+export function serializeBackendParams(model: string, params: Record<string, unknown> | null): string {
   return JSON.stringify({ model, params })
 }
 
@@ -44,21 +44,21 @@ function resolveWith<P extends Record<string, unknown>, M extends ModelDef>(
   descriptor: BackendParamModel<P, M>,
   modelDef: M,
   model: string,
-  savedDefaultParams: Record<string, unknown>
-): SavedImageBackendDefaults {
-  const ui = descriptor.fromSaved(savedDefaultParams, modelDef)
+  savedParams: Record<string, unknown>
+): ResolvedBackendParams {
+  const ui = descriptor.fromSaved(savedParams, modelDef)
   return { model, params: descriptor.toEnqueueParams(ui, modelDef), ui }
 }
 
-export function resolveSavedImageBackendDefaults(
+export function resolveSavedBackendParams(
   backend: CloudBackendId,
   saved: SavedImageBackendParams | null,
   models: ModelDef[],
   defaultModel: ModelDef | undefined
-): SavedImageBackendDefaults | null {
+): ResolvedBackendParams | null {
   if (!saved) return null
 
-  const savedDefaultParams = saved.params
+  const savedParams = saved.params
   const model = savedModelId(defaultModel, saved)
   const modelDef = models.find((m) => m.id === model)
   // A model not in the list has no parameters to resolve; the column starts
@@ -66,13 +66,13 @@ export function resolveSavedImageBackendDefaults(
   if (!modelDef) return model ? { model, params: {}, ui: CLOUD_BACKENDS[backend].defaults() } : null
 
   if (backend === 'openai') {
-    return resolveWith(openaiBackend, modelDef as OpenAIModelDef, model, savedDefaultParams)
+    return resolveWith(openaiBackend, modelDef as OpenAIModelDef, model, savedParams)
   }
   if (backend === 'nanobanana') {
-    return resolveWith(nanoBananaBackend, modelDef as NanoBananaModelDef, model, savedDefaultParams)
+    return resolveWith(nanoBananaBackend, modelDef as NanoBananaModelDef, model, savedParams)
   }
   if (backend === 'grok') {
-    return resolveWith(grokBackend, modelDef as GrokModelDef, model, savedDefaultParams)
+    return resolveWith(grokBackend, modelDef as GrokModelDef, model, savedParams)
   }
-  return resolveWith(fluxBackend, modelDef as FluxModelDef, model, savedDefaultParams)
+  return resolveWith(fluxBackend, modelDef as FluxModelDef, model, savedParams)
 }

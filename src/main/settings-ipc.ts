@@ -5,7 +5,7 @@ import os from 'os'
 import fs from 'fs'
 import { assertNotQuitting } from './quit-state'
 import { handle } from './ipc-boundary'
-import { getImageBackendDefaults, saveImageBackendDefaults } from './backend-params'
+import { getBackendParams, saveBackendParams } from './backend-params'
 import { meetsDrawThingsNumberRules } from '../shared/number-field'
 import { loadConfig, updateConfig } from './config'
 import { getStoredApiKey, setStoredApiKeys, hasApiKey, refreshApiKeys } from './config/api-keys-store'
@@ -189,15 +189,15 @@ export function registerSettingsIpc(
     return { success: true }
   })
 
-  handle('settings:getImageBackendDefaults', () => getImageBackendDefaults())
+  handle('settings:getBackendParams', () => getBackendParams())
 
   handle(
-    'settings:saveImageBackendDefaults',
+    'settings:saveBackendParams',
     async (_event, backend: CloudBackendId, model: string, params: Record<string, unknown>) => {
       if (!cloudBackendIds.has(backend)) {
-        throw new Error(`Cannot save image backend defaults for unsupported backend: ${backend}`)
+        throw new Error(`Cannot save image column parameters for unsupported backend: ${backend}`)
       }
-      await saveImageBackendDefaults(backend, model, params)
+      await saveBackendParams(backend, model, params)
       return { success: true }
     }
   )

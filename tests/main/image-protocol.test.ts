@@ -38,7 +38,7 @@ describe('resolveImageRequest', () => {
     expect(await resolveImageRequest('iq-image://sessions/session/old-session/b')).toBe(path.join(dirs.sessions, 'old-session', 'b.webp'))
   })
 
-  it('serves nothing for a missing image or a name that leaves the output tree', async () => {
+  it('serves nothing for a missing image or a name that leaves the sessions folder', async () => {
     expect(await resolveImageRequest('iq-image://sessions/current/missing')).toBeNull()
     expect(await resolveImageRequest('iq-image://sessions/current/..%2Fsecret')).toBeNull()
     expect(await resolveImageRequest('iq-image://sessions/session/..%2F..%2Fetc/passwd')).toBeNull()

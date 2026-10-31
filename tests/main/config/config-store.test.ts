@@ -175,7 +175,7 @@ describe('settings by set', () => {
     await updateConfig((draft) => { draft.brainstorm.concurrency = 2 })
     expect(stored()).toEqual({ brainstorm: { concurrency: 2 } })
   })
-  it('reads the templates of a brainstorm set stored whole, as the earlier build wrote it', async () => {
+  it('reads the templates of a brainstorm set stored whole', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 4, templates: { expansion: 'My expansion {{N}}' } }
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
@@ -435,21 +435,6 @@ describe('settings by set', () => {
     await updateConfig((draft) => { draft.notifications.notifications_enabled = true })
     expect(listener).toHaveBeenCalledOnce()
   })
-  // ImageQueue no longer checks for its own releases; the next save drops the
-  // retired at-launch preference while keeping every other stored value.
-  it('drops the retired GitHub release preference on the next save', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { check_github_releases_at_launch: false, language: 'ja' } }))
-    const { updateConfig } = await import('../../../src/main/config/config-store')
-    await updateConfig((draft) => { draft.general.theme = 'dark' })
-    expect(stored()).toEqual({ general: { language: 'ja', theme: 'dark' } })
-  })
-  // The elaboration attempt cap and backoff became constants.
-  it('drops the retired elaboration retry settings on the next save', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { max_retries_per_turn: 5, retry_backoff_ms: [1, 2], concurrency: 4 } }))
-    const { updateConfig } = await import('../../../src/main/config/config-store')
-    await updateConfig((draft) => { draft.general.theme = 'dark' })
-    expect(stored()).toEqual({ brainstorm: { concurrency: 4 }, general: { theme: 'dark' } })
-  })
   // Elaboration Settings is one way to set these counts; a hand-edited file or
   // any other caller of the save meets the same limits here.
   describe.each(Object.entries(BRAINSTORM_LIMITS))('the elaboration %s', (name, { min, max }) => {
@@ -473,12 +458,11 @@ describe('settings by set', () => {
     const { configSetDefaults, cleanConfigSet } = await import('../../../src/main/config/config-sets')
     for (const [key, builtIn] of Object.entries(configSetDefaults())) expect(cleanConfigSet(key, builtIn), key).toEqual(builtIn)
   })
-  it('rejects an incomplete cluster as absent without repairing or quarantining the file', async () => {
-    const partial = { model: 'x' }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { grok: { defaults: partial } }, general: { theme: 'bogus' } }))
+  it('reads an invalid set as absent without repairing or quarantining the file', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'bogus' } }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig()).toEqual(createDefaultConfig())
-    expect(stored()).toEqual({ image_backends: { grok: { defaults: partial } }, general: { theme: 'bogus' } })
+    expect(stored()).toEqual({ general: { theme: 'bogus' } })
   })
   it('writes the file from the config in memory, not from a set changed on disk since load', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
@@ -486,23 +470,5 @@ describe('settings by set', () => {
     fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { language: 'ja' } }))
     await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
     expect(stored()).toEqual({ notifications: { notifications_enabled: false } })
-  })
-  // The image columns' model and parameters moved to backend-params.json.
-  it('hands over the image columns\' stored model and parameters and drops them on the next save', async () => {
-    const saved = { model: 'gpt-image-1.5', default_params: { width: 1024, quality: 'high' } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { defaults: saved, concurrency: 1 }, grok: { defaults: 'broken' } } }))
-    const { takeStoredImageBackendDefaults, dropRetiredConfigKeys } = await import('../../../src/main/config/config-store')
-    expect(takeStoredImageBackendDefaults()).toEqual({
-      openai: { model: 'gpt-image-1.5', params: { width: 1024, quality: 'high' } },
-      grok: 'broken',
-    })
-    await dropRetiredConfigKeys()
-    expect(stored()).toEqual({ image_backends: { openai: { concurrency: 1 } } })
-  })
-  it('keeps unread the image column keys an earlier build stored beside the settings', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { openai: { model: 'old', default_params: {}, concurrency: 1 } } }))
-    const { updateConfig } = await import('../../../src/main/config/config-store')
-    await updateConfig((draft) => { draft.image_backends.openai.concurrency = 2 })
-    expect(stored()).toEqual({ image_backends: { openai: { model: 'old', default_params: {}, concurrency: 2 } } })
   })
 })

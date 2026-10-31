@@ -34,24 +34,7 @@ describe('recorded CLI output paging and search with real SQLite/files', () => {
     return basename
   }
 
-  it('adds nullable columns to a supported old store without rewriting legacy output or its format', () => {
-    const text = 'historical raw\r\n😀é\n'
-    const id = row({ stdout: text })
-    const before = db.prepare('SELECT * FROM cli_jobs WHERE id = ?').get(id)!
-    const format = db.prepare('PRAGMA user_version').get()
-    closeRecords()
-    db.exec('ALTER TABLE cli_jobs DROP COLUMN stdout_file; ALTER TABLE cli_jobs DROP COLUMN stderr_file; ALTER TABLE cli_jobs DROP COLUMN output_error')
-    openRecords(root)
-    expect(db.prepare('PRAGMA user_version').get()).toEqual(format)
-    expect(db.prepare('SELECT * FROM cli_jobs WHERE id = ?').get(id)).toEqual(before)
-    expect(readDetail(db, 'cli-job', id)).toMatchObject({ hasStdout: true, hasStderr: false, outputError: null })
-    expect(readOutput(db, id, 'stdout', 0)).toEqual({ text, nextOffset: null })
-    expect(row({ stdout: 'a later inline caller' })).toBe(id + 1)
-    expect(db.prepare('SELECT stdout_file, stderr_file, output_error FROM cli_jobs WHERE id = ?').get(id + 1))
-      .toEqual({ stdout_file: null, stderr_file: null, output_error: null })
-  })
-
-  it('keeps metadata bounded and reconstructs legacy NULs and Unicode through opaque byte cursors', () => {
+  it('keeps metadata bounded and reconstructs inline NULs and Unicode through opaque byte cursors', () => {
     const raw = ('\0😀漢é\r\n').repeat(RECORDS_OUTPUT_PAGE_SIZE)
     const id = row({ stdout: raw })
     const detail = readDetail(db, 'cli-job', id)!
@@ -103,10 +86,10 @@ describe('recorded CLI output paging and search with real SQLite/files', () => {
     expect(hits('farbeyondfirstpage')).toEqual([id])
     expect(hits('b%_')).toEqual([id])
     expect(hits('b_%')).toEqual([])
-    const legacy = row({ stdout: output })
+    const inline = row({ stdout: output })
     for (const needle of ['a😀b%_É', 'a😀b%_é', 'farbeyondfirstpage', 'b%_', 'b_%']) {
       const found = hits(needle)
-      expect(found.includes(id)).toBe(found.includes(legacy))
+      expect(found.includes(id)).toBe(found.includes(inline))
     }
   })
 

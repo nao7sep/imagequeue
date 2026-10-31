@@ -27,7 +27,6 @@ describe('state:update admission', () => {
   it.each([
     null, undefined, [], 'wide', 240,
     { columnWidth: undefined }, { columnWidth: 'wide' }, { columnWidth: Number.NaN }, { columnWidth: Infinity },
-    { notificationVolume: 0.5 },
     { recordsListWidth: 'wide' }, { recordsListWidth: null }, { recordsListWidth: Number.NaN },
     { formatVersion: 999 }, { sessionId: 'other' }, { tasks: [] }, { constructor: {} },
     JSON.parse('{"__proto__":{"columnWidth":0}}'),

@@ -31,8 +31,7 @@ export function configSetDefaults(): Record<string, unknown> {
   }
   sets['prompts.slug'] = config.prompts.slug
   // Each brainstorm value is its own set, so a number that fails its check
-  // cannot take the authored templates down with it. They are stored where the
-  // earlier single brainstorm set kept them, so that set reads without change.
+  // cannot take the authored templates down with it.
   for (const [key, value] of Object.entries(config.brainstorm)) sets[`brainstorm.${key}`] = value
   return sets
 }

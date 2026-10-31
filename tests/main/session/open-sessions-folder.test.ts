@@ -11,7 +11,7 @@ vi.mock('../../../src/main/session/session', () => ({ getSessionsDir: () => mock
 const { openSessionsFolder } = await import('../../../src/main/session/open-sessions-folder')
 
 describe('openSessionsFolder', () => {
-  it('opens the authoritative output root', async () => {
+  it('opens the authoritative sessions folder', async () => {
     await openSessionsFolder()
     expect(mocks.openPath).toHaveBeenCalledWith(mocks.sessionsDir)
   })

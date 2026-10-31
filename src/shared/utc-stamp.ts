@@ -7,8 +7,7 @@
 // logs and set-aside copies need nothing finer under the single-instance lock.
 // utcStampForFilename adds the `-utc` suffix the conventions put on a name that
 // stands alone as a file or folder (a session, a log, a set-aside copy), where
-// the directory around it does not already say the time is UTC. Names an
-// earlier version gave with milliseconds keep working wherever they are read.
+// the directory around it does not already say the time is UTC.
 
 export function formatTimestamp(date: Date): string {
   const pad = (n: number, len = 2): string => String(n).padStart(len, '0')

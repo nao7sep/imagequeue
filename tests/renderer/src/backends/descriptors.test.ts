@@ -7,9 +7,9 @@ import {
   openaiBackend,
 } from '../../../../src/renderer/src/backends'
 import {
-  resolveSavedImageBackendDefaults,
-  serializeImageBackendDefaults,
-} from '../../../../src/renderer/src/utils/imageBackendDefaults'
+  resolveSavedBackendParams,
+  serializeBackendParams,
+} from '../../../../src/renderer/src/utils/backendParams'
 import {
   findModel,
   getDefaultModelForBackend,
@@ -195,7 +195,7 @@ describe('saved/current serialization parity (the autosave dirty comparison)', (
   it.each(CLOUD_BACKEND_IDS_IN_UI_ORDER)('%s round-trips saved defaults to an identical snapshot', (backend) => {
     const models = getModelsForBackend(backend)
     const defaultModel = getDefaultModelForBackend(backend)
-    const saved = resolveSavedImageBackendDefaults(
+    const saved = resolveSavedBackendParams(
       backend,
       { model: defaultModel!.id, params: {} },
       models,
@@ -204,7 +204,7 @@ describe('saved/current serialization parity (the autosave dirty comparison)', (
     const descriptor = CLOUD_BACKENDS[backend]
     const modelDef = models.find((m) => m.id === saved.model)!
     const current = descriptor.toEnqueueParams(saved.ui, modelDef)
-    expect(serializeImageBackendDefaults(saved.model, current))
-      .toBe(serializeImageBackendDefaults(saved.model, saved.params))
+    expect(serializeBackendParams(saved.model, current))
+      .toBe(serializeBackendParams(saved.model, saved.params))
   })
 })

@@ -370,10 +370,6 @@ function load(): { file: Record<string, unknown>; sets: ElaboratorSets } {
   return loaded
 }
 
-// Keys a change has deliberately retired; a save drops them. Every other key
-// the file holds that this build does not know is written back as it is.
-const RETIRED_KEYS: ReadonlySet<string> = new Set()
-
 /**
  * The one owner of what elaborators.json holds. The file is written from the
  * sets in memory: each kind is stored, cleaned, only while it differs from the
@@ -385,7 +381,7 @@ async function saveSets(changed: Partial<ElaboratorSets>): Promise<void> {
   const current = load()
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(current.file)) {
-    if (!(kinds as string[]).includes(key) && !RETIRED_KEYS.has(key)) next[key] = value
+    if (!(kinds as string[]).includes(key)) next[key] = value
   }
   for (const kind of kinds) {
     const stored = current.file[kind]

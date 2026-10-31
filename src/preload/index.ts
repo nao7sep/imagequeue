@@ -248,15 +248,15 @@ const api = {
   getCredentials: (): Promise<SettingsCredentials> =>
     ipcRenderer.invoke('settings:getCredentials'),
 
-  getImageBackendDefaults: (): Promise<Record<CloudBackendId, SavedImageBackendParams>> =>
-    ipcRenderer.invoke('settings:getImageBackendDefaults'),
+  getBackendParams: (): Promise<Record<CloudBackendId, SavedImageBackendParams>> =>
+    ipcRenderer.invoke('settings:getBackendParams'),
 
-  saveImageBackendDefaults: (
+  saveBackendParams: (
     backend: CloudBackendId,
     model: string,
     params: Record<string, unknown>
   ): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('settings:saveImageBackendDefaults', backend, model, params),
+    ipcRenderer.invoke('settings:saveBackendParams', backend, model, params),
 
   saveNotificationField: (field: string, value: unknown): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('settings:saveNotificationField', field, value),

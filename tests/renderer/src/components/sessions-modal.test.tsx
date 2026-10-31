@@ -104,14 +104,14 @@ describe('SessionsModal', () => {
   it('lists a session it cannot open in place, by folder and reason, offering only Open Folder', async () => {
     listSessions.mockResolvedValueOnce([
       session(1, '2026-10-04T12:00:00.000Z'),
-      { ...session(3, '2026-10-03T12:00:00.000Z'), sessionId: '20261003-120000-000-utc', isCurrent: false },
-      { sessionId: '20261003-090000-123-utc', unopenable: 'newer' },
-      { sessionId: '20261002-090000-123-utc copy', unopenable: 'unreadable' },
+      { ...session(3, '2026-10-03T12:00:00.000Z'), sessionId: '20261003-120000-utc', isCurrent: false },
+      { sessionId: '20261003-090000-utc', unopenable: 'newer' },
+      { sessionId: '20261002-090000-utc copy', unopenable: 'unreadable' },
     ])
     render(<SessionsModal onClose={() => undefined} />)
 
-    const newer = (await until(() => screen.getByText('20261003-090000-123-utc'))).closest('[role="option"]') as HTMLElement
-    const unreadable = screen.getByText('20261002-090000-123-utc copy').closest('[role="option"]') as HTMLElement
+    const newer = (await until(() => screen.getByText('20261003-090000-utc'))).closest('[role="option"]') as HTMLElement
+    const unreadable = screen.getByText('20261002-090000-utc copy').closest('[role="option"]') as HTMLElement
     expect(within(newer).getByText(/A newer version of ImageQueue wrote this session’s session.json/)).toBeTruthy()
     expect(within(unreadable).getByText(/ImageQueue can’t read this session’s session.json/)).toBeTruthy()
     for (const card of [newer, unreadable]) {
@@ -119,7 +119,7 @@ describe('SessionsModal', () => {
     }
 
     await act(async () => { fireEvent.click(within(newer).getByRole('button', { name: 'Open Folder' })) })
-    expect(openSessionFolder).toHaveBeenCalledExactlyOnceWith('20261003-090000-123-utc')
+    expect(openSessionFolder).toHaveBeenCalledExactlyOnceWith('20261003-090000-utc')
 
     act(() => newer.focus())
     await act(async () => { fireEvent.keyDown(newer, { key: 'Enter' }) })
@@ -130,7 +130,7 @@ describe('SessionsModal', () => {
     const readable = screen.getByText(start).closest('[role="option"]') as HTMLElement
     act(() => readable.focus())
     await act(async () => { fireEvent.keyDown(readable, { key: 'Enter' }) })
-    expect(resumeSession).toHaveBeenCalledExactlyOnceWith('20261003-120000-000-utc')
+    expect(resumeSession).toHaveBeenCalledExactlyOnceWith('20261003-120000-utc')
   })
 })
 

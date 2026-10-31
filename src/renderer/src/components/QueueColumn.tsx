@@ -13,11 +13,11 @@ import { DrawThingsModelsModal } from './DrawThingsModelsModal'
 import { truncate, PROMPT_PREVIEW_MIN_GRAPHEMES } from '../../../shared/textCleanup'
 import { canShowImage } from '../../../shared/viewing'
 import { FULLSCREEN_VIEW_TOGGLE_EVENT } from '../utils/fullscreenView'
-import { useAutosavedImageBackendDefaults } from '../hooks/useAutosavedImageBackendDefaults'
+import { useAutosavedBackendParams } from '../hooks/useAutosavedBackendParams'
 import {
-  resolveSavedImageBackendDefaults,
-  type SavedImageBackendDefaults,
-} from '../utils/imageBackendDefaults'
+  resolveSavedBackendParams,
+  type ResolvedBackendParams,
+} from '../utils/backendParams'
 import { hasApiKeyFor, isBackendReadyToEnqueue } from '../utils/enqueue'
 import { isFreshCompletion, TASK_REVEAL_EVENT, type TaskRevealRequest } from '../utils/taskScroll'
 import { taskFailureText, taskStatusLabel } from '../utils/taskPresentation'
@@ -62,7 +62,7 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   } = useSelection()
   const actionsRef = useRef<HTMLButtonElement>(null)
   const isComposing = useImeGuard()
-  const { settings, apiKeyPresence, imageBackendDefaults, saveImageBackendDefaults } = useSettings()
+  const { settings, apiKeyPresence, backendParams, saveBackendParams } = useSettings()
   const { setSnapshot, enqueueToBackend } = useEnqueueConfigs()
   const models = getModelsForBackend(backendId)
   const defaultModel = getDefaultModelForBackend(backendId)
@@ -112,10 +112,10 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
 
   const columnTasks = tasks[backendId]
   const settingsLoaded = settings !== null
-  const savedBackendParams = proprietaryBackend ? imageBackendDefaults?.[proprietaryBackend] ?? null : null
-  const savedProprietaryDefaults = useMemo(
+  const savedBackendParams = proprietaryBackend ? backendParams?.[proprietaryBackend] ?? null : null
+  const savedProprietaryParams = useMemo(
     () => proprietaryBackend
-      ? resolveSavedImageBackendDefaults(proprietaryBackend, savedBackendParams, models, defaultModel)
+      ? resolveSavedBackendParams(proprietaryBackend, savedBackendParams, models, defaultModel)
       : null,
     [proprietaryBackend, savedBackendParams, models, defaultModel]
   )
@@ -132,20 +132,20 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
   // Saved defaults land as the UI-shaped params the descriptor resolved; the
   // enqueue-shaped snapshot the autosave compares derives from the same
   // toEnqueueParams, so the two can never disagree.
-  const applySavedProprietaryDefaults = useCallback((saved: SavedImageBackendDefaults): void => {
+  const applySavedProprietaryParams = useCallback((saved: ResolvedBackendParams): void => {
     setModel(saved.model)
     setCloudParams(saved.ui)
   }, [])
 
-  const cloudDefaultsPersistence = useAutosavedImageBackendDefaults({
+  const cloudParamsPersistence = useAutosavedBackendParams({
     backend: proprietaryBackend,
     settingsLoaded,
-    saved: savedProprietaryDefaults,
+    saved: savedProprietaryParams,
     // Nothing is saved while the model is not in the list, so its saved record stands.
     currentModel: modelNotInList ? '' : model,
     currentParams: currentEnqueueParams,
-    applySaved: applySavedProprietaryDefaults,
-    saveDefaults: saveImageBackendDefaults,
+    applySaved: applySavedProprietaryParams,
+    saveParams: saveBackendParams,
   })
 
   // Backend-config readiness only (no prompt check — the prompt is validated by
@@ -356,15 +356,15 @@ export function QueueColumn({ backendId, label, prompt }: Props): React.JSX.Elem
           <cloudBackend.Controls params={cloudParams} modelDef={cloudModelDef} onChange={setCloudParams} />
         )}
 
-        {cloudDefaultsPersistence.saveFailure && (
+        {cloudParamsPersistence.saveFailure && (
           <div className="column-save-result" role="alert">
-            <span>{t(cloudDefaultsPersistence.saveFailure)}</span>
+            <span>{t(cloudParamsPersistence.saveFailure)}</span>
             <button
               type="button"
               className="column-save-result-close"
               aria-label={t('column.closeSaveResult')}
               title={t('common.close')}
-              onClick={cloudDefaultsPersistence.dismissSaveFailure}
+              onClick={cloudParamsPersistence.dismissSaveFailure}
             >
               <Icon name="close" />
             </button>

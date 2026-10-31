@@ -50,7 +50,7 @@ import { showQuitQuestion } from './quit-failure-window'
 import { unsavedDrafts, registerUnsavedDraftsIpc } from './unsaved-drafts'
 import { hasQuitWork, type QuitWork } from '../shared/quit'
 import { isQuitting, setQuitting } from './quit-state'
-import { drainBackendDefaults, getImageBackendDefaults, loadBackendParams } from './backend-params'
+import { drainBackendParams, getBackendParams, loadBackendParams } from './backend-params'
 import { retrySettingsWrites } from './settings-writes'
 import { cancelAllBrainstorms, hasActiveBrainstorms } from './brainstorm'
 import { cancelAllDependencyOperations, hasActiveDependencyOperations, hasUserDependencyOperations } from './dependencies/operations'
@@ -166,7 +166,7 @@ const quitOwner = createQuitOwner({
     await startupWork?.catch(() => undefined)
     if (!sessionStarted) return
     await Promise.all([retrySettingsWrites(), drainExports()])
-    await Promise.all([drainBackendDefaults(), drainPendingModelParamsWrites()])
+    await Promise.all([drainBackendParams(), drainPendingModelParamsWrites()])
     // Each run saves its own outcome; the session's final save follows them.
     await stopBackgroundWork()
     // A prior failed save remains pending; Retry republishes the latest state
@@ -395,7 +395,7 @@ async function startUp(): Promise<void> {
   // runtime consumers use their initialized snapshots and asynchronous saves.
   listElaborators()
   getAllModelParams()
-  await loadBackendParams()
+  loadBackendParams()
   await refreshApiKeys()
   await initSession()
   sessionStarted = true
@@ -405,7 +405,7 @@ async function startUp(): Promise<void> {
     packaged: app.isPackaged,
     debug: DEBUG_ENABLED,
     config: summarizeConfig(loadConfig()),
-    imageModels: Object.fromEntries(Object.entries(getImageBackendDefaults()).map(([backend, saved]) => [backend, saved.model])),
+    imageModels: Object.fromEntries(Object.entries(getBackendParams()).map(([backend, saved]) => [backend, saved.model])),
   })
   // Every launch opens a fresh session, where this launch's images land.
   // Switching or resuming a session logs its own line from session/state.

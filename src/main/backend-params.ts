@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { dropRetiredConfigKeys, getDataDir, takeStoredImageBackendDefaults } from './config'
+import { getDataDir } from './config'
 import { createCoalescedWriter } from './utils/coalesced-writer'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { setAsideFile } from './utils/set-aside'
@@ -94,33 +94,16 @@ function readStored(file: string): Partial<Record<CloudBackendId, SavedImageBack
   return acceptEntries(backends as Record<string, unknown>)
 }
 
-/**
- * Loads backend-params.json once, at launch. The columns' choices lived in
- * config.json until they moved here: while there is no file, what config.json
- * still holds becomes the file's first contents, and config.json drops it on
- * its next save. The new file is written before that, so nothing the user set
- * is lost if either write fails.
- */
-export async function loadBackendParams(): Promise<void> {
+/** Loads backend-params.json once, at launch; with no file, every column starts
+ *  from its built-in model and parameters. */
+export function loadBackendParams(): void {
   if (store !== null) return
   const file = getBackendParamsPath()
-  if (fs.existsSync(file)) {
-    store = readStored(file)
-    return
-  }
-  const moved = takeStoredImageBackendDefaults()
-  store = acceptEntries(moved)
-  if (Object.keys(moved).length === 0) return
-  await writeNow()
-  log('info', 'Moved image column parameters from config.json to backend-params.json', { backends: Object.keys(moved) })
-  // The moved values are safe in their new file; config.json leaving them
-  // behind until a later save loses nothing.
-  await dropRetiredConfigKeys().catch((error: unknown) =>
-    log('warn', 'config.json still holds the moved image column parameters', { error: serializeError(error) }))
+  store = fs.existsSync(file) ? readStored(file) : {}
 }
 
 /** Every cloud column's saved model and parameters, or its built-in ones. */
-export function getImageBackendDefaults(): Record<CloudBackendId, SavedImageBackendParams> {
+export function getBackendParams(): Record<CloudBackendId, SavedImageBackendParams> {
   if (store === null) throw new Error('backend-params.json is not loaded')
   const saved = store
   return Object.fromEntries(CLOUD_BACKEND_IDS_IN_UI_ORDER.map((backend) => [
@@ -155,7 +138,7 @@ const writer = createCoalescedWriter({
 })
 
 /** Captured at once: these edits belong to main even after a window closes. */
-export function saveImageBackendDefaults(backend: CloudBackendId, model: string, params: Record<string, unknown>): Promise<void> {
+export function saveBackendParams(backend: CloudBackendId, model: string, params: Record<string, unknown>): Promise<void> {
   if (store === null) return Promise.reject(new Error('backend-params.json is not loaded'))
   const entry = { model, params: structuredClone(params) }
   if (!isEntry(backend, entry)) return Promise.reject(new Error(`Cannot save invalid image column parameters for ${backend}`))
@@ -165,4 +148,4 @@ export function saveImageBackendDefaults(backend: CloudBackendId, model: string,
   writer.schedule()
   return saved
 }
-export function drainBackendDefaults(): Promise<void> { return writer.drain() }
+export function drainBackendParams(): Promise<void> { return writer.drain() }

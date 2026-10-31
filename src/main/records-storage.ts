@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS cli_jobs (
   status     TEXT NOT NULL,  -- terminal outcome: exited, killed, or timed-out
   exit_code  INTEGER,
   signal     TEXT,           -- as the process runner reported it
-  stdout     TEXT NOT NULL,  -- legacy inline output; new jobs keep file references
+  stdout     TEXT NOT NULL,  -- output kept inline when none was streamed to a file
   stderr     TEXT NOT NULL,
   stdout_file TEXT,          -- basename under cli-output
   stderr_file TEXT,
@@ -121,12 +121,6 @@ export function openRecords(dataDir: string, context?: { launch: string }): stri
     const result = openOrReplace(file)
     opened = result.opened
     movedTo = result.movedTo
-    // Supported ledgers keep their original inline output. New capture columns
-    // are additive so opening a store never rewrites its historical records.
-    const columns = new Set((opened.prepare('PRAGMA table_info(cli_jobs)').all() as { name: string }[]).map((column) => column.name))
-    for (const column of ['stdout_file', 'stderr_file', 'output_error']) {
-      if (!columns.has(column)) opened.exec(`ALTER TABLE cli_jobs ADD COLUMN ${column} TEXT`)
-    }
     inserts = {
       log_records: insertStatement(opened, 'log_records', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'level', 'message', 'fields']),
       ai_calls: insertStatement(opened, 'ai_calls', ['time', 'launch', 'session_id', 'task_id', 'request_id', 'backend', 'model', 'purpose', 'duration_ms', 'request', 'response', 'error']),

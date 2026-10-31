@@ -28,8 +28,7 @@ const execFileAsync = promisify(execFile)
 
 // What the app reads back: the release and the binary it labels. The download
 // is verified against its published checksum before it is published, so the
-// sidecar keeps no hash or install time; ones an earlier version wrote are
-// ignored.
+// sidecar keeps no hash or install time.
 interface CliMeta {
   tag: string
   /** Inode of the verified binary this sidecar describes. */

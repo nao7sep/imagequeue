@@ -1,5 +1,4 @@
 import type { Worker } from 'node:worker_threads'
-import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { utcStampForFilename } from '../shared/utc-stamp'
@@ -28,7 +27,6 @@ const pending = new Map<number, { worker: Worker; resolve: (value?: unknown) => 
 /** Diagnostics are ordered by the writer's mailbox; paid evidence belongs to session.json. */
 export function openRecords(dataDir: string): string {
   void closeRecords()
-  const moveFailure = moveOldCliOutput(dataDir)
   outputRoot = cliOutputDirectory(dataDir)
   const file = path.join(dataDir, 'records.sqlite3')
   try {
@@ -62,42 +60,7 @@ export function openRecords(dataDir: string): string {
     started.on('exit', ended)
     started.unref()
   } catch (error) { console.error('[records] writer could not start', error) }
-  if (moveFailure !== null) {
-    writeLogRecord(new Date().toISOString(), 'warn', 'Earlier CLI output could not be moved to cli-output', { error: serializeError(moveFailure) })
-  }
   return file
-}
-
-// CLI output files lived in records/cli/, which held nothing else, until they
-// moved to cli-output/. A data root that still has the old folder has it
-// renamed, or, when a job already made cli-output/, each file moved in, before
-// Records can read a row's files; the emptied records/ goes with it. Moving a
-// launch's worth of renames is too small to take off the main thread. A file
-// that cannot be moved stays where it is for the next launch to try again, and
-// Records says its output file is missing meanwhile.
-function moveOldCliOutput(dataDir: string): unknown {
-  const oldDir = path.join(dataDir, 'records', 'cli')
-  const newDir = cliOutputDirectory(dataDir)
-  let failure: unknown = null
-  try {
-    if (!fs.existsSync(oldDir)) return null
-    if (!fs.existsSync(newDir)) fs.renameSync(oldDir, newDir)
-    else {
-      for (const name of fs.readdirSync(oldDir)) {
-        const target = path.join(newDir, name)
-        try {
-          // Output file names are unique per job, so a name already taken is
-          // not this file; it is left for the developer rather than replaced.
-          if (fs.existsSync(target)) throw new Error(`cli-output already holds ${name}`)
-          fs.renameSync(path.join(oldDir, name), target)
-        } catch (error) { failure ??= error }
-      }
-      if (failure !== null) return failure
-      fs.rmdirSync(oldDir)
-    }
-  } catch (error) { return error }
-  try { fs.rmdirSync(path.dirname(oldDir)) } catch { /* records/ holds something else; it stays. */ }
-  return null
 }
 
 export async function flushRecords(): Promise<void> {

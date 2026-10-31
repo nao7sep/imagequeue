@@ -21,7 +21,7 @@ if (typeof globalThis.CSS === 'undefined' || typeof globalThis.CSS.escape !== 'f
 }
 
 const LAUNCH = '2026-10-02T08:00:00.000Z'
-const SESSION = '20261002-080000-000-utc'
+const SESSION = '20261002-080000-utc'
 
 const call: RecordSummary = {
   kind: 'ai-call', id: 4, time: '2026-10-02T08:01:00.000Z', level: 'error', title: 'gemini brainstorm', text: 'gemini-x',
@@ -109,7 +109,7 @@ beforeEach(() => {
   readRecordDetail.mockImplementation(async (kind) => (kind === 'log' ? lineDetail : callDetail))
   readRecordSources.mockReset()
   readRecordSources.mockResolvedValue({
-    currentLaunch: LAUNCH, currentSession: SESSION, launches: [LAUNCH, '2026-10-01T08:00:00.000Z'], sessions: [SESSION, '20261001-080000-000-utc'],
+    currentLaunch: LAUNCH, currentSession: SESSION, launches: [LAUNCH, '2026-10-01T08:00:00.000Z'], sessions: [SESSION, '20261001-080000-utc'],
   })
   appLog.mockReset()
   appLog.mockResolvedValue()

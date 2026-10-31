@@ -6,8 +6,7 @@ import type { ElaboratedPromptRecord } from '../../../../src/shared/types'
 
 // The feature under test: each prompt row shows the concept credits it was
 // built from — the one part of the record no amount of reading the prose
-// reliably recovers. Legacy entries (normalized from bare strings) have no
-// credits and must not render an empty shell.
+// reliably recovers. A prompt with no credits must not render an empty shell.
 
 let prompts: ElaboratedPromptRecord[] = []
 const deletePrompt = vi.fn((index: number) => { prompts = prompts.filter((_, i) => i !== index) })
@@ -63,10 +62,10 @@ describe('ElaboratedPromptsModal concept credits', () => {
     expect(text!.textContent).toBe(long)
   })
 
-  it('renders no credits line for a legacy prompt without them', () => {
-    prompts.push({ text: 'an old prompt from before credits', concepts: [] })
+  it('renders no credits line for a prompt without them', () => {
+    prompts.push({ text: 'a prompt with no credits', concepts: [] })
     render(<ElaboratedPromptsModal onClose={() => {}} />)
-    expect(screen.getByText('an old prompt from before credits')).toBeTruthy()
+    expect(screen.getByText('a prompt with no credits')).toBeTruthy()
     expect(document.querySelector('.elaborated-prompts-concepts')).toBeNull()
   })
 })

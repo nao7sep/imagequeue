@@ -34,25 +34,6 @@ describe('open text model sets', () => {
     expect(config.gemini.elaboration).toBe('unknown-future-id')
     expect(storedSets()).toEqual({ gemini: { elaboration: 'unknown-future-id' } })
   })
-  it('keeps renamed keys it does not read at the next write, without migrating them', async () => {
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
-      formatVersion: 1,
-      text_ai: { backend: 'openai', gemini: { main_model: 'old', light_model: 'old', timeout_ms: 40000 },
-        openai: { endpoint: 'https://old.example' } },
-      gemini: { slug: 'my-slug' },
-    }))
-    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
-    expect(loadConfig().provider).toBe('gemini')
-    expect(loadConfig().gemini.elaboration).toBe('gemini-3.8-flash')
-    expect(loadConfig().gemini.slug).toBe('my-slug')
-    expect(loadConfig().gemini.timeout_ms).toBe(30000)
-    await updateConfig((draft) => { draft.provider = 'openai' })
-    expect(storedSets()).toEqual({
-      text_ai: { backend: 'openai', gemini: { main_model: 'old', light_model: 'old', timeout_ms: 40000 },
-        openai: { endpoint: 'https://old.example' } },
-      provider: 'openai', gemini: { slug: 'my-slug' },
-    })
-  })
   it('stores a provider timeout as its own set beside the provider\'s other sets', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.openai.timeout_ms = 90000 })

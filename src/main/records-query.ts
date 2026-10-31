@@ -56,7 +56,7 @@ export function readPage(db: DatabaseSync, query: RecordsQuery, reportWarning?: 
       where.push('session_id = ?')
       params.push(query.session)
     }
-    if (query.level === 'attention') {
+    if (query.level === 'warningsAndErrors') {
       where.push(`${level} IN ('warn', 'error')`)
     } else if (query.level !== null) {
       where.push(`${level} = ?`)
@@ -181,12 +181,12 @@ export function readOutput(db: DatabaseSync, id: number, stream: RecordOutputStr
   const row = db.prepare(`SELECT ${stream}_file AS file FROM cli_jobs WHERE id = ?`).get(id) as { file: string | null } | undefined
   if (!row) throw new Error('The CLI job record no longer exists.')
   if (row.file === null) {
-    // BLOB substr uses byte offsets and preserves embedded NULs in historical
-    // SQLite TEXT. TEXT length/substr would stop at the first NUL.
-    const legacy = db.prepare(`SELECT substr(CAST(${stream} AS BLOB), ?, ?) AS bytes FROM cli_jobs WHERE id = ?`)
+    // BLOB substr uses byte offsets and preserves embedded NULs in the stored
+    // TEXT. TEXT length/substr would stop at the first NUL.
+    const inline = db.prepare(`SELECT substr(CAST(${stream} AS BLOB), ?, ?) AS bytes FROM cli_jobs WHERE id = ?`)
       .get(offset + 1, RECORDS_OUTPUT_PAGE_SIZE + 4, id) as { bytes: Uint8Array | null }
     // SQLite returns NULL for an empty BLOB substring, including empty output.
-    return outputChunk(legacy.bytes === null ? Buffer.alloc(0) : Buffer.from(legacy.bytes), offset)
+    return outputChunk(inline.bytes === null ? Buffer.alloc(0) : Buffer.from(inline.bytes), offset)
   }
   const file = fs.openSync(outputPath(outputDirectory(db), row.file, stream), 'r')
   try {

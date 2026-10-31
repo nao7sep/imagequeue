@@ -90,8 +90,8 @@ vi.mock('../../src/main/local-cli', () => ({
 
 const backendParams = vi.hoisted(() => ({ save: vi.fn(async () => undefined) }))
 vi.mock('../../src/main/backend-params', () => ({
-  saveImageBackendDefaults: backendParams.save,
-  getImageBackendDefaults: vi.fn(() => ({})),
+  saveBackendParams: backendParams.save,
+  getBackendParams: vi.fn(() => ({})),
 }))
 
 const { registerSettingsIpc } = await import('../../src/main/settings-ipc')
@@ -240,9 +240,9 @@ describe('API keys', () => {
   })
 })
 
-describe('image backend defaults', () => {
+describe('image column parameters', () => {
   it('hands the model and parameters to their own store as one set', async () => {
-    expect(await invoke('settings:saveImageBackendDefaults', 'openai', 'gpt-image-3', { quality: 'low' })).toEqual({
+    expect(await invoke('settings:saveBackendParams', 'openai', 'gpt-image-3', { quality: 'low' })).toEqual({
       success: true,
     })
 
@@ -251,10 +251,10 @@ describe('image backend defaults', () => {
   })
 
   it('refuses a backend it does not have, and writes nothing', async () => {
-    await expect(invoke('settings:saveImageBackendDefaults', 'drawthings', 'm', {})).rejects.toThrow(
+    await expect(invoke('settings:saveBackendParams', 'drawthings', 'm', {})).rejects.toThrow(
       /unsupported backend: drawthings/,
     )
-    await expect(invoke('settings:saveImageBackendDefaults', '__proto__', 'm', {})).rejects.toThrow(/unsupported backend/)
+    await expect(invoke('settings:saveBackendParams', '__proto__', 'm', {})).rejects.toThrow(/unsupported backend/)
     expect(backendParams.save).not.toHaveBeenCalled()
   })
 })

@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('../../src/main/ipc-boundary', () => ({ handle: vi.fn() }))
 vi.mock('../../src/main/records-window', () => ({ openRecordsWindow: vi.fn() }))
 vi.mock('../../src/main/records', () => ({
-  currentRecordsContext: () => ({ launch: '2026-10-04T00:00:00.000Z', session: '20261004-000000-000-utc' }),
+  currentRecordsContext: () => ({ launch: '2026-10-04T00:00:00.000Z', session: '20261004-000000-utc' }),
   readRecords: mocks.read,
 }))
 import { handle } from '../../src/main/ipc-boundary'
@@ -17,7 +17,7 @@ describe('records IPC validation', () => {
   it('accepts every filter the window can send', () => {
     expect(() => assertRecordsQuery(valid)).not.toThrow()
     expect(() => assertRecordsQuery({
-      launch: 'l', session: 's', kind: 'ai-call', level: 'attention', search: 'x',
+      launch: 'l', session: 's', kind: 'ai-call', level: 'warningsAndErrors', search: 'x',
       after: { time: '2026-01-01T00:00:00.000Z', kind: 'log', id: 4 },
     })).not.toThrow()
   })
@@ -47,7 +47,7 @@ describe('readRecordSources', () => {
     mocks.read.mockResolvedValue({ launches: ['b', 'a'], sessions: ['s2'] })
     await expect(readRecordSources()).resolves.toEqual({
       currentLaunch: '2026-10-04T00:00:00.000Z',
-      currentSession: '20261004-000000-000-utc',
+      currentSession: '20261004-000000-utc',
       launches: ['b', 'a'],
       sessions: ['s2'],
     })

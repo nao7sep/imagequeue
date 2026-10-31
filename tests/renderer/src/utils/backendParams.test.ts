@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveOpenAiSize,
-  resolveSavedImageBackendDefaults,
-  serializeImageBackendDefaults
-} from '../../../../src/renderer/src/utils/imageBackendDefaults'
+  resolveSavedBackendParams,
+  serializeBackendParams
+} from '../../../../src/renderer/src/utils/backendParams'
 import { findModel, getModelsForBackend } from '../../../../src/shared/ai-models'
 
 const OPENAI_MODELS = getModelsForBackend('openai')
@@ -22,20 +22,20 @@ describe('resolveOpenAiSize', () => {
   })
 })
 
-describe('serializeImageBackendDefaults', () => {
+describe('serializeBackendParams', () => {
   it('serializes model and params to JSON', () => {
-    expect(serializeImageBackendDefaults('gpt-image-2', { quality: 'high' }))
+    expect(serializeBackendParams('gpt-image-2', { quality: 'high' }))
       .toBe('{"model":"gpt-image-2","params":{"quality":"high"}}')
   })
 })
 
-describe('resolveSavedImageBackendDefaults', () => {
+describe('resolveSavedBackendParams', () => {
   it('returns null without backend settings', () => {
-    expect(resolveSavedImageBackendDefaults('openai', null, OPENAI_MODELS, OPENAI_MODELS[0])).toBeNull()
+    expect(resolveSavedBackendParams('openai', null, OPENAI_MODELS, OPENAI_MODELS[0])).toBeNull()
   })
 
   it('validates a saved OpenAI quality and keeps the saved size', () => {
-    const result = resolveSavedImageBackendDefaults(
+    const result = resolveSavedBackendParams(
       'openai',
       { model: 'gpt-image-2', params: { quality: 'bogus', moderation: 'low', width: 1040, height: 2000 } },
       OPENAI_MODELS,
@@ -50,7 +50,7 @@ describe('resolveSavedImageBackendDefaults', () => {
 
   it('shows a saved FLUX step count the column\'s model does not take, and derives no params from it', () => {
     const flex = findModel('flux', 'flux-2-flex')!
-    const result = resolveSavedImageBackendDefaults(
+    const result = resolveSavedBackendParams(
       'flux',
       { model: 'flux-2-flex', params: { steps: 9999 } },
       FLUX_MODELS,
@@ -65,7 +65,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   // default rather than to a copy of it stored elsewhere.
   it('falls back to the model range default when nothing is saved', () => {
     const flex = findModel('flux', 'flux-2-flex')!
-    const result = resolveSavedImageBackendDefaults(
+    const result = resolveSavedBackendParams(
       'flux',
       { model: 'flux-2-flex', params: {} },
       FLUX_MODELS,
@@ -81,7 +81,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   it('omits steps and guidance for a model that exposes neither', () => {
     const pro = findModel('flux', 'flux-2-pro')!
     expect(pro.stepsRange).toBeUndefined()
-    const result = resolveSavedImageBackendDefaults(
+    const result = resolveSavedBackendParams(
       'flux',
       { model: 'flux-2-pro', params: { steps: 40, guidance: 3 } },
       FLUX_MODELS,
@@ -94,7 +94,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   // A saved model that is no longer a row is kept as it is, never swapped for
   // the default, and carries no parameters while it is not in the list.
   it('keeps a saved model that is not in the list', () => {
-    const result = resolveSavedImageBackendDefaults(
+    const result = resolveSavedBackendParams(
       'openai',
       { model: 'gpt-image-0', params: { quality: 'high' } },
       OPENAI_MODELS,
@@ -105,7 +105,7 @@ describe('resolveSavedImageBackendDefaults', () => {
   })
 
   it('takes the default model when none is saved', () => {
-    const result = resolveSavedImageBackendDefaults('openai', { model: '', params: {} }, OPENAI_MODELS, findModel('openai', 'gpt-image-2.5-flare'))!
+    const result = resolveSavedBackendParams('openai', { model: '', params: {} }, OPENAI_MODELS, findModel('openai', 'gpt-image-2.5-flare'))!
     expect(result.model).toBe('gpt-image-2.5-flare')
   })
 })

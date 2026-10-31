@@ -105,7 +105,7 @@ describe('generationFailurePresentation', () => {
   })
 
   it('names the set-aside copy of unreadable Draw Things parameters, and a file left in place', () => {
-    const setAside = '/Users/me/.imagequeue/params-20261006-031340-123-utc.invalid'
+    const setAside = '/Users/me/.imagequeue/params-20261006-031340-utc.invalid'
     const reset = modelParamsResetPresentation(setAside)
     expect(text(reset.title)).toBe('Draw Things parameters were reset')
     expect(text(reset.message)).toContain(`set the file aside at ${setAside}`)
@@ -116,7 +116,7 @@ describe('generationFailurePresentation', () => {
     expect(text(left.message)).toContain(`the file at ${params}`)
     expect(text(left.message)).toContain('left the file unchanged')
 
-    const ledger = '/Users/me/.imagequeue/concepts-20261006-031340-123-utc.invalid'
+    const ledger = '/Users/me/.imagequeue/concepts-20261006-031340-utc.invalid'
     const ledgerReset = conceptLibraryResetPresentation(ledger)
     expect(text(ledgerReset.title)).toBe('Concept Library was reset')
     expect(text(ledgerReset.message)).toContain(`set the file aside at ${ledger}`)

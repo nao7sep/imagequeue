@@ -21,12 +21,12 @@ function fallbackLines(dir: string): Record<string, unknown>[] {
 describe('log records', () => {
   it('carry the launch, the open session and their task and request ids in columns', () => {
     const dir = freshRecordsRoot()
-    setRecordsSession('20260101-000000-000-utc')
+    setRecordsSession('20260101-000000-utc')
     writeLogRecord('2026-01-01T00:00:00.000Z', 'info', 'Task enqueued', { taskId: 't1', requestId: 'r1', count: 2 })
     writeLogRecord('2026-01-01T00:00:01.000Z', 'info', 'Odd id', { taskId: 7 })
 
     const [first, second] = readRows(dir, 'log_records')
-    expect(first).toMatchObject({ session_id: '20260101-000000-000-utc', task_id: 't1', request_id: 'r1', level: 'info', message: 'Task enqueued' })
+    expect(first).toMatchObject({ session_id: '20260101-000000-utc', task_id: 't1', request_id: 'r1', level: 'info', message: 'Task enqueued' })
     expect(JSON.parse(first.fields as string)).toEqual({ count: 2 })
     expect(second.task_id).toBeNull()
     expect(JSON.parse(second.fields as string)).toEqual({ taskId: 7 })

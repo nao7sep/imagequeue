@@ -179,7 +179,6 @@ function isElaboratedPromptEntry(entry: unknown): entry is ElaboratedPromptRecor
 }
 
 // A manifest as read: its format version is checked and set aside before this.
-// A draft stored by an earlier build is ignored.
 type StoredSessionManifest = Omit<SessionManifest, 'formatVersion'>
 
 const TASK_STATUSES: readonly TaskStatus[] = ['queued', 'generating', 'completed', 'kept', 'failed', 'interrupted']

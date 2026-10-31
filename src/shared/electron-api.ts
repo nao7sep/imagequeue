@@ -157,8 +157,8 @@ export interface ElectronAPI {
   // Stored values and resolved presence share one refresh, separate from config.
   getCredentials: () => Promise<SettingsCredentials>
   // The image columns' own model and parameter choices, apart from settings.
-  getImageBackendDefaults: () => Promise<Record<CloudBackendId, SavedImageBackendParams>>
-  saveImageBackendDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
+  getBackendParams: () => Promise<Record<CloudBackendId, SavedImageBackendParams>>
+  saveBackendParams: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<{ success: boolean }>
   saveNotificationField: (field: string, value: unknown) => Promise<{ success: boolean }>
 
   // Draw Things CLI operations (macOS only)

@@ -1,38 +1,38 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CloudBackendId } from '../../../shared/types'
 import {
-  serializeImageBackendDefaults,
-  type SavedImageBackendDefaults,
-} from '../utils/imageBackendDefaults'
+  serializeBackendParams,
+  type ResolvedBackendParams,
+} from '../utils/backendParams'
 import { recordOperationalDiagnostic } from '../utils/operationalFailure'
 import type { MessageKey } from '../../../shared/i18n/catalogues'
 
-interface UseAutosavedImageBackendDefaultsOptions {
+interface UseAutosavedBackendParamsOptions {
   backend: CloudBackendId | null
   settingsLoaded: boolean
-  saved: SavedImageBackendDefaults | null
+  saved: ResolvedBackendParams | null
   currentModel: string
   currentParams: Record<string, unknown> | null
-  applySaved: (saved: SavedImageBackendDefaults) => void
-  saveDefaults: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<unknown>
+  applySaved: (saved: ResolvedBackendParams) => void
+  saveParams: (backend: CloudBackendId, model: string, params: Record<string, unknown>) => Promise<unknown>
 }
 
-export interface ImageBackendDefaultsPersistence {
+export interface BackendParamsPersistence {
   saveFailure: MessageKey | null
   dismissSaveFailure: () => void
 }
 
-const SAVE_FAILURE = 'column.defaultsSaveFailed'
+const SAVE_FAILURE = 'column.paramsSaveFailed'
 
-export function useAutosavedImageBackendDefaults({
+export function useAutosavedBackendParams({
   backend,
   settingsLoaded,
   saved,
   currentModel,
   currentParams,
   applySaved,
-  saveDefaults,
-}: UseAutosavedImageBackendDefaultsOptions): ImageBackendDefaultsPersistence {
+  saveParams,
+}: UseAutosavedBackendParamsOptions): BackendParamsPersistence {
   const persistedSnapshotRef = useRef('')
   const submittedSnapshotRef = useRef('')
   const loadedRef = useRef(false)
@@ -40,14 +40,14 @@ export function useAutosavedImageBackendDefaults({
   const saveAttemptRef = useRef(0)
   const [saveFailure, setSaveFailure] = useState<MessageKey | null>(null)
   // Invalid drafts have no canonical payload. Keep them dirty even when the
-  // stored defaults were also invalid, so a settings refresh cannot erase edits.
+  // stored parameters were also invalid, so a settings refresh cannot erase edits.
   const currentSnapshot = currentModel && currentParams
-    ? serializeImageBackendDefaults(currentModel, currentParams)
+    ? serializeBackendParams(currentModel, currentParams)
     : ''
 
   useEffect(() => {
     if (!backend || !saved) return
-    const savedSnapshot = serializeImageBackendDefaults(saved.model, saved.params)
+    const savedSnapshot = serializeBackendParams(saved.model, saved.params)
     // After the first load, a saved record is applied only over a column with
     // nothing unsaved, and only when it says something new: one equal to the
     // column's own snapshot, such as its last save read back, would only reset
@@ -72,16 +72,16 @@ export function useAutosavedImageBackendDefaults({
 
     // Hand the edit to main immediately; its owner coalesces and survives window loss.
     const attempt = ++saveAttemptRef.current
-    void saveDefaults(backend, currentModel, currentParams).then(() => {
+    void saveParams(backend, currentModel, currentParams).then(() => {
       if (saveAttemptRef.current !== attempt) return
       persistedSnapshotRef.current = currentSnapshot
       setSaveFailure(null)
     }).catch((error) => {
-      recordOperationalDiagnostic('Failed to persist image backend defaults', error, { backend })
+      recordOperationalDiagnostic('Failed to persist image column parameters', error, { backend })
       if (saveAttemptRef.current === attempt) setSaveFailure(SAVE_FAILURE)
     })
 
-  }, [backend, settingsLoaded, currentModel, currentParams, currentSnapshot, saveDefaults])
+  }, [backend, settingsLoaded, currentModel, currentParams, currentSnapshot, saveParams])
 
   useEffect(() => {
     return () => {

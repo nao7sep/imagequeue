@@ -6,10 +6,9 @@ describe('sessionDisplayName', () => {
   const tokyo = (time: Date): string =>
     new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Tokyo' }).format(time)
 
-  it('shows a session by its start in the display zone, whether named to the second or to the millisecond', () => {
+  it('shows a session by its start in the display zone', () => {
     expect(sessionDisplayName('20260919-091256-utc', tokyo)).toBe('19/09/2026, 18:12:56')
-    expect(sessionDisplayName('20260919-091256-888-utc', tokyo)).toBe('19/09/2026, 18:12:56')
-    expect(sessionStartTime('20260919-091256-888-utc')?.toISOString()).toBe('2026-09-19T09:12:56.888Z')
+    expect(sessionStartTime('20260919-091256-utc')?.toISOString()).toBe('2026-09-19T09:12:56.000Z')
   })
 
   it('leaves a name of any other shape as it is', () => {

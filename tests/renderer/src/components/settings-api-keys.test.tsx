@@ -16,7 +16,7 @@ let settingsValue: {
   apiKeyPresence: unknown
   saveChangedSettings: ReturnType<typeof vi.fn>
   saveBrainstormSettings: ReturnType<typeof vi.fn>
-  saveImageBackendDefaults: ReturnType<typeof vi.fn>
+  saveBackendParams: ReturnType<typeof vi.fn>
   saveNotificationField: ReturnType<typeof vi.fn>
 }
 
@@ -80,7 +80,7 @@ beforeEach(() => {
     apiKeyPresence: null,
     saveChangedSettings: vi.fn().mockResolvedValue({}),
     saveBrainstormSettings: vi.fn().mockResolvedValue({}),
-    saveImageBackendDefaults: vi.fn().mockResolvedValue({}),
+    saveBackendParams: vi.fn().mockResolvedValue({}),
     saveNotificationField: vi.fn().mockResolvedValue({}),
   }
 })

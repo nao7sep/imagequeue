@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { closeRecords, flushRecords, openRecords, startAiCall, startCliJobRecord } from '../../src/main/records'
@@ -62,47 +61,5 @@ describe('CLI records with streamed diagnostics', () => {
     await flushRecords()
     expect(readRows(root, 'cli_jobs')[0]).toMatchObject({ stdout_file: null, stderr_file: null, output_error: null })
     expect(fs.existsSync(path.join(root, 'cli-output'))).toBe(false)
-  })
-
-  it('moves output kept in records/cli to cli-output once, removing the emptied records folder', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-move-'))
-    try {
-      fs.mkdirSync(path.join(root, 'records', 'cli'), { recursive: true })
-      fs.writeFileSync(path.join(root, 'records', 'cli', 'old-stdout.log'), 'kept')
-      openRecords(root)
-      expect(fs.readFileSync(path.join(root, 'cli-output', 'old-stdout.log'), 'utf8')).toBe('kept')
-      expect(fs.existsSync(path.join(root, 'records'))).toBe(false)
-    } finally {
-      await closeRecords()
-      fs.rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  // A launch whose move failed may run a job that makes cli-output/ before the
-  // next launch tries again; the old files still join it.
-  it('moves old output into a cli-output folder a job already made, leaving a file whose name is taken', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-merge-'))
-    try {
-      fs.mkdirSync(path.join(root, 'records', 'cli'), { recursive: true })
-      fs.mkdirSync(path.join(root, 'cli-output'))
-      fs.writeFileSync(path.join(root, 'records', 'cli', 'old-stdout.log'), 'old')
-      fs.writeFileSync(path.join(root, 'records', 'cli', 'taken.log'), 'old taken')
-      fs.writeFileSync(path.join(root, 'cli-output', 'new-stdout.log'), 'new')
-      fs.writeFileSync(path.join(root, 'cli-output', 'taken.log'), 'new taken')
-      openRecords(root)
-      expect(fs.readdirSync(path.join(root, 'cli-output')).sort()).toEqual(['new-stdout.log', 'old-stdout.log', 'taken.log'])
-      expect(fs.readFileSync(path.join(root, 'cli-output', 'old-stdout.log'), 'utf8')).toBe('old')
-      expect(fs.readFileSync(path.join(root, 'cli-output', 'taken.log'), 'utf8')).toBe('new taken')
-      expect(fs.readdirSync(path.join(root, 'records', 'cli'))).toEqual(['taken.log'])
-      await closeRecords()
-      // Once the name is free, the next launch finishes the move.
-      fs.renameSync(path.join(root, 'cli-output', 'taken.log'), path.join(root, 'cli-output', 'newer.log'))
-      openRecords(root)
-      expect(fs.readFileSync(path.join(root, 'cli-output', 'taken.log'), 'utf8')).toBe('old taken')
-      expect(fs.existsSync(path.join(root, 'records'))).toBe(false)
-    } finally {
-      await closeRecords()
-      fs.rmSync(root, { recursive: true, force: true })
-    }
   })
 })

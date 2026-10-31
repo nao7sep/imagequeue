@@ -6,8 +6,8 @@ describe('image scheme URLs', () => {
     expect(parseImageUrl(currentSessionImageUrl('20260101-000000-1-fox'))).toEqual({
       session: 'current', baseName: '20260101-000000-1-fox',
     })
-    expect(parseImageUrl(sessionImageUrl('20260101-000000-123-utc', 'a b#c'))).toEqual({
-      session: 'other', sessionId: '20260101-000000-123-utc', baseName: 'a b#c',
+    expect(parseImageUrl(sessionImageUrl('20260101-000000-utc', 'a b#c'))).toEqual({
+      session: 'other', sessionId: '20260101-000000-utc', baseName: 'a b#c',
     })
   })
 

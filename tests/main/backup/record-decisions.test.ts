@@ -9,7 +9,7 @@ import { drainPendingWrites, setModelParams } from '../../../src/main/model-para
 import { updateDependenciesCache } from '../../../src/main/dependencies/store'
 import { recordServerTime } from '../../../src/main/dependencies/recommendations-times'
 import { closeBackupStore } from '../../../src/main/backup/backup-store'
-import { drainBackendDefaults, loadBackendParams, saveImageBackendDefaults } from '../../../src/main/backend-params'
+import { drainBackendParams, loadBackendParams, saveBackendParams } from '../../../src/main/backend-params'
 
 // The record/no-record wiring at REAL managed-text write sites, end to end through the shared
 // atomic-write choke point (utils/atomic-write.ts → backup/backup-store.ts). This is the "what is
@@ -69,9 +69,9 @@ describe('record/no-record decisions at real write sites', () => {
   })
 
   it('records backend-params.json when an image column saves', async () => {
-    await loadBackendParams()
-    const saved = saveImageBackendDefaults('openai', 'gpt-image-2', { width: 1024 })
-    await drainBackendDefaults()
+    loadBackendParams()
+    const saved = saveBackendParams('openai', 'gpt-image-2', { width: 1024 })
+    await drainBackendParams()
     await saved
     await closeBackupStore()
     expect(recordedPaths(tmpRoot)).toContain(path.join(tmpRoot, 'backend-params.json'))

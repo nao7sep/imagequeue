@@ -9,7 +9,7 @@ import type { BackendId, SessionManifest, SessionSummary, Task, TaskStatus } fro
 import { until } from '../../renderer/until'
 
 // Sessions are folders of the user's generated images with a manifest beside
-// them, so these paths are exercised against a real output directory: what the
+// them, so these paths are exercised against a real sessions directory: what the
 // manifest says, which folder is current, and — for the drop/delete paths —
 // whether a folder is really gone. Only Electron, the config file, the log sink
 // and the renderer publisher are substituted.
@@ -408,19 +408,6 @@ describe('resuming a session', () => {
   })
 })
 
-describe('a session an earlier version named to the millisecond', () => {
-  it('lists, opens and deletes like any other', async () => {
-    const id = '20260101-000000-123-utc'
-    stageSession(id, { tasks: withTasks([makeTask('a', 'completed')]) })
-    expect((await listSessions()).some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
-    await resumeSession(id)
-    expect(getSessionId()).toBe(id)
-    await createSession()
-    await deleteSession(id)
-    expect(fs.existsSync(path.join(getSessionsDir(), id))).toBe(false)
-  })
-})
-
 describe('deleting a session', () => {
   it('removes the folder for good', async () => {
     const staged = stageSession('20260111-000000-utc')
@@ -641,14 +628,6 @@ describe('the working draft and its elaborated prompts', () => {
     const { setSessionDir: setRestartedSessionDir } = await import('../../../src/main/session/session')
     setRestartedSessionDir(dir)
     expect(restarted.getActiveSessionDraft()).toEqual(createEmptySessionDraft())
-  })
-
-  it('opens a session whose manifest holds a draft an earlier version stored, and ignores that draft', async () => {
-    const id = '20260114-000000-utc'
-    stageSession(id, { draft: { ...createEmptySessionDraft(), prompt: 7 } })
-    expect((await listSessions()).some((entry) => entry.sessionId === id && !('unopenable' in entry))).toBe(true)
-    await resumeSession(id)
-    expect(getActiveSessionDraft()).toEqual(createEmptySessionDraft())
   })
 
   it('persists every change to the elaborated list', async () => {
