@@ -22,19 +22,19 @@ export const FILE_FORMATS = {
   /** elaborators.json */
   elaborators: { kind: 'elaborators', version: 1 },
   /** params.json */
-  modelParams: { kind: 'modelParams', version: 1 },
+  modelParams: { kind: 'model-params', version: 1 },
   /** backend-params.json */
-  backendParams: { kind: 'backendParams', version: 1 },
+  backendParams: { kind: 'backend-params', version: 1 },
   /** api-keys.json */
-  apiKeys: { kind: 'apiKeys', version: 1 },
+  apiKeys: { kind: 'api-keys', version: 1 },
   /** state.json (a cache) */
   uiState: { kind: 'state', version: 1 },
   /** dependencies.json (a cache) */
   dependencies: { kind: 'dependencies', version: 1 },
   /** bin/draw-things-cli.json (a cache) */
-  cliSidecar: { kind: 'cliBinary', version: 1 },
+  cliSidecar: { kind: 'cli-binary', version: 1 },
   /** recommendations-times.json (a cache) */
-  recommendationsTimes: { kind: 'recommendationsTimes', version: 1 },
+  recommendationsTimes: { kind: 'recommendations-times', version: 1 },
   /** sessions/<session>/session.json */
   session: { kind: 'session', version: 1 },
   /** sessions/<session>/<image>.json, whose own keys are snake_case */

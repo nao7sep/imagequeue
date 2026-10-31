@@ -3,10 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
-import { checkHeader, FILE_WRITER, MissingHeaderError, NewerFormatError, openSqliteStore, withHeader, type FileFormat } from '../../src/main/store-format'
+import { checkHeader, FILE_FORMATS, FILE_WRITER, MissingHeaderError, NewerFormatError, openSqliteStore, withHeader, type FileFormat } from '../../src/main/store-format'
 import { header, headerSql } from './file-header'
 
-const TEST: FileFormat = { kind: 'testStore', version: 1 }
+const TEST: FileFormat = { kind: 'test-store', version: 1 }
 
 const roots: string[] = []
 afterEach(() => {
@@ -83,7 +83,7 @@ it('rolls back schema and marker together after failed initialization', () => {
 it.each([
   ['no file_header table', 'CREATE TABLE kept (value TEXT); PRAGMA user_version = 1'],
   ['another owner', `CREATE TABLE kept (value TEXT); ${headerSql(TEST, 1, 'otherapp')}`],
-  ['another kind', `CREATE TABLE kept (value TEXT); ${headerSql({ kind: 'otherKind', version: 1 })}`],
+  ['another kind', `CREATE TABLE kept (value TEXT); ${headerSql({ kind: 'other-kind', version: 1 })}`],
   ['another owner at a newer version', `CREATE TABLE kept (value TEXT); ${headerSql(TEST, 2, 'otherapp')}`],
 ])('refuses a marked store with %s as unreadable, leaving its bytes as they were', (_state, sql) => {
   const name = file()
@@ -103,7 +103,7 @@ it('writes the header into a new store and rewrites only the writer rows on each
   const store = openSqliteStore(name, TEST, 'CREATE TABLE IF NOT EXISTS kept (value TEXT)')
   try {
     expect(Object.fromEntries((store.prepare('SELECT key, value FROM file_header').all() as { key: string; value: string }[]).map((row) => [row.key, row.value]))).toEqual({
-      'format.owner': 'imagequeue', 'format.kind': 'testStore', 'writer.name': FILE_WRITER.name, 'writer.version': FILE_WRITER.version,
+      'format.owner': 'imagequeue', 'format.kind': 'test-store', 'writer.name': FILE_WRITER.name, 'writer.version': FILE_WRITER.version,
     })
   } finally { store.close() }
 })
@@ -112,6 +112,11 @@ describe('the JSON header', () => {
   it('writes format and writer first, then the content', () => {
     expect(Object.keys(withHeader({ value: 1 }, TEST))).toEqual(['format', 'writer', 'value'])
     expect(withHeader({ value: 1 }, TEST)).toEqual({ ...header(TEST), value: 1 })
+  })
+
+  it('names every owned kind in lowercase kebab-case', () => {
+    for (const { kind } of Object.values(FILE_FORMATS)) expect(kind).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+    expect(FILE_WRITER.name).toMatch(/^[a-z0-9]+$/)
   })
 
   it('returns the content without the header', () => {
@@ -128,11 +133,11 @@ describe('the JSON header', () => {
   it.each([
     ['no header', { value: 1 }],
     ['a format that is not an object', { format: 1 }],
-    ['another owner', { format: { owner: 'otherapp', kind: 'testStore', version: 1 } }],
+    ['another owner', { format: { owner: 'otherapp', kind: 'test-store', version: 1 } }],
     ['another kind', { format: { owner: 'imagequeue', kind: 'config', version: 1 } }],
-    ['another owner at a newer version', { format: { owner: 'otherapp', kind: 'testStore', version: 2 } }],
-    ['a version that is not an integer', { format: { owner: 'imagequeue', kind: 'testStore', version: '1' } }],
-    ['version 0', { format: { owner: 'imagequeue', kind: 'testStore', version: 0 } }],
+    ['another owner at a newer version', { format: { owner: 'otherapp', kind: 'test-store', version: 2 } }],
+    ['a version that is not an integer', { format: { owner: 'imagequeue', kind: 'test-store', version: '1' } }],
+    ['version 0', { format: { owner: 'imagequeue', kind: 'test-store', version: 0 } }],
     ['an old formatVersion marker', { formatVersion: 1 }],
   ])('reads a file with %s as unreadable', (_state, map) => {
     expect(() => checkHeader(map, TEST, 'x.json')).toThrow(Error)

@@ -95,7 +95,7 @@ describe('backend-params.json', () => {
     ['text that is not JSON', '{ "backends": '],
     ['no file header', JSON.stringify({ backends: {} })],
     ['another kind', JSON.stringify({ ...header(FILE_FORMATS.modelParams), backends: {} })],
-    ['another owner', JSON.stringify({ ...header(FILE_FORMATS.backendParams), format: { owner: 'gptimg', kind: 'backendParams', version: 1 }, backends: {} })],
+    ['another owner', JSON.stringify({ ...header(FILE_FORMATS.backendParams), format: { owner: 'gptimg', kind: 'backend-params', version: 1 }, backends: {} })],
     ['no backend map', JSON.stringify({ ...header(FILE_FORMATS.backendParams), backends: [] })],
   ])('sets aside a file with %s and starts every column from its built-in', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
