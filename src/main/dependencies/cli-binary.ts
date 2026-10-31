@@ -22,7 +22,7 @@ import { sha256File } from '../utils/sha256-file'
 import type { CliRelease } from './cli-release'
 import { isCliReleaseTag } from './cli-version'
 import type { CliInstallWarning, DependencyProgress } from '../../shared/types'
-import { FORMAT_VERSIONS, FORMAT_VERSION_KEY, markFormat } from '../store-format'
+import { FILE_FORMATS, withHeader } from '../store-format'
 
 const execFileAsync = promisify(execFile)
 
@@ -44,7 +44,7 @@ async function cliBinaryId(): Promise<string> {
   return String((await fs.promises.stat(getCliBinaryPath(), { bigint: true })).ino)
 }
 
-// A cache of the installed binary's identity: its format version is written but
+// A cache of the installed binary's identity: its header is written but
 // never checked, and any field that does not fit reads as an unknown version.
 // Install and Update replace it whatever build wrote it, since the binary it
 // describes is re-fetchable (store-recovery-conventions).
@@ -52,7 +52,7 @@ async function readCliMeta(): Promise<CliMeta | null> {
   try {
     const raw: unknown = JSON.parse(await fs.promises.readFile(getCliMetaPath(), 'utf8'))
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-    const { [FORMAT_VERSION_KEY]: _formatVersion, ...meta } = raw as Partial<CliMeta> & Record<string, unknown>
+    const meta = raw as Partial<CliMeta>
     if (typeof meta.tag !== 'string' || !isCliReleaseTag(meta.tag)) return null
     if (typeof meta.binaryId !== 'string') return null
     return { tag: meta.tag, binaryId: meta.binaryId }
@@ -93,7 +93,7 @@ export async function publishCliBinary(tempPath: string, tag: string): Promise<C
     // (which is excluded as a re-fetchable binary) and is regenerated on the next install, so it rides
     // along into exclusion rather than being recorded orphaned (data-backup conventions: "Anything
     // colocated in a binary-bearing directory").
-    await writeFileAtomicAsync(getCliMetaPath(), JSON.stringify(markFormat(meta, FORMAT_VERSIONS.cliSidecar), null, 2), false)
+    await writeFileAtomicAsync(getCliMetaPath(), JSON.stringify(withHeader(meta, FILE_FORMATS.cliSidecar), null, 2), false)
   } catch (error) {
     warnings.push('identity-unavailable')
     log('warn', 'Draw Things CLI was published but identity persistence failed', { error: serializeError(error) })

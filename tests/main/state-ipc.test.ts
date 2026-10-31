@@ -4,6 +4,8 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultUiState } from '../../src/shared/ui-state'
 import { RECORDS_LIST_WIDTH } from '../../src/shared/records-layout'
+import { header } from './file-header'
+import { FILE_FORMATS } from '../../src/main/store-format'
 
 const mocks = vi.hoisted(() => ({
   root: '',
@@ -28,7 +30,7 @@ describe('state:update admission', () => {
     null, undefined, [], 'wide', 240,
     { columnWidth: undefined }, { columnWidth: 'wide' }, { columnWidth: Number.NaN }, { columnWidth: Infinity },
     { recordsListWidth: 'wide' }, { recordsListWidth: null }, { recordsListWidth: Number.NaN },
-    { formatVersion: 999 }, { sessionId: 'other' }, { tasks: [] }, { constructor: {} },
+    { ...header(FILE_FORMATS.uiState, 999) }, { sessionId: 'other' }, { tasks: [] }, { constructor: {} },
     JSON.parse('{"__proto__":{"columnWidth":0}}'),
     { columnWidth: 240, recordsListWidth: 'invalid' },
     { columnWidth: 240, unexpected: true },
@@ -43,11 +45,11 @@ describe('state:update admission', () => {
   })
 
   it('ignores inherited fields and writes only owned allowed fields with the owned marker', async () => {
-    const patch = Object.create({ recordsListWidth: 600, formatVersion: 999 })
+    const patch = Object.create({ recordsListWidth: 600, ...header(FILE_FORMATS.uiState, 999) })
     patch.columnWidth = 280
     expect(await invoke(patch)).toEqual({ ...defaultUiState(), columnWidth: 280 })
     expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toEqual({
-      ...defaultUiState(), columnWidth: 280, formatVersion: 1,
+      ...defaultUiState(), columnWidth: 280, ...header(FILE_FORMATS.uiState),
     })
   })
 

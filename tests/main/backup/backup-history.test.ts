@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openBackupHistory, recordVersion } from '../../../src/main/backup/backup-history'
-import { FORMAT_VERSIONS, MissingFormatError, NewerFormatError } from '../../../src/main/store-format'
+import { FILE_FORMATS, MissingHeaderError, NewerFormatError } from '../../../src/main/store-format'
+import { headerSql } from '../file-header'
 
 // The history itself (data-backup-conventions): the last version of each
 // protected file saved in each launch, as the exact bytes written.
@@ -101,7 +102,7 @@ describe('backup history', () => {
     expect(userVersion()).toBe(0)
     history()
     rows()
-    expect(userVersion()).toBe(FORMAT_VERSIONS.backups)
+    expect(userVersion()).toBe(FILE_FORMATS.backups.version)
   })
 
   it('refuses a populated file that is not a backup history, leaving its bytes as they were', () => {
@@ -109,13 +110,13 @@ describe('backup history', () => {
     seeded.exec('CREATE TABLE kept (value TEXT)')
     seeded.close()
     const bytes = fs.readFileSync(file)
-    expect(() => history()).toThrow(MissingFormatError)
+    expect(() => history()).toThrow(MissingHeaderError)
     expect(fs.readFileSync(file).equals(bytes)).toBe(true)
   })
 
   it('refuses a store from a newer version, leaving its bytes as they were', () => {
     const seeded = new DatabaseSync(file)
-    seeded.exec(`CREATE TABLE backups (id INTEGER PRIMARY KEY); PRAGMA user_version = ${FORMAT_VERSIONS.backups + 1}`)
+    seeded.exec(`CREATE TABLE backups (id INTEGER PRIMARY KEY); ${headerSql(FILE_FORMATS.backups, FILE_FORMATS.backups.version + 1)}`)
     seeded.close()
     const bytes = fs.readFileSync(file)
     expect(() => history()).toThrow(NewerFormatError)

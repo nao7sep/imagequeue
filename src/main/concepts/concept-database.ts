@@ -3,7 +3,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import { cleanDisplay, normalizeKey } from './normalize'
-import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError, StoreLeftInPlaceError } from '../store-format'
+import { openSqliteStore, FILE_FORMATS, MissingHeaderError, StoreLeftInPlaceError } from '../store-format'
 import { serializeError } from '../../shared/serialize-error'
 import { setAsideFile } from '../utils/set-aside'
 import type { ConceptFacetSummary, ConceptProbeSummary, ConceptRow } from '../../shared/types'
@@ -81,7 +81,7 @@ export function initializeConceptStore(root: string, logger: typeof log): void {
 function storeFile(): string { return path.join(dataDir, 'concepts.sqlite3') }
 
 // The ledger is app-recorded fact, so a file that is not a database, is
-// damaged, or has no format version is set aside and a new, empty ledger
+// damaged, or has no file header of its own is set aside and a new, empty ledger
 // starts (store-recovery conventions). A newer ledger,
 // or a failure that moving the file would not fix, refuses the request and
 // leaves the file where it is. Each set-aside path waits here for the window
@@ -96,7 +96,7 @@ const SQLITE_CORRUPT = 11
 const SQLITE_NOTADB = 26
 
 function isUnreadableLedger(error: unknown): boolean {
-  if (error instanceof MissingFormatError) return true
+  if (error instanceof MissingHeaderError) return true
   const { code, errcode } = error as { code?: unknown; errcode?: unknown }
   return code === 'ERR_SQLITE_ERROR' && (errcode === SQLITE_CORRUPT || errcode === SQLITE_NOTADB)
 }
@@ -124,7 +124,7 @@ function open(): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   let opened: DatabaseSync
   try {
-    opened = openSqliteStore(file, FORMAT_VERSIONS.concepts, SCHEMA)
+    opened = openSqliteStore(file, FILE_FORMATS.concepts, SCHEMA)
   } catch (err) {
     if (!isUnreadableLedger(err)) throw err
     setAside(file, err)

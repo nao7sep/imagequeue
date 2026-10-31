@@ -4,6 +4,8 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultConfig } from '../../../src/main/config/defaults'
 import { BRAINSTORM_LIMITS } from '../../../src/shared/brainstorm-config'
+import { header } from '../file-header'
+import { FILE_FORMATS } from '../../../src/main/store-format'
 
 // The security property behind keys living outside the config type: the shipped
 // config shape has nowhere to PUT a key, so config.json is key-free by
@@ -44,14 +46,14 @@ describe('settings by set', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
   const file = () => path.join(root, 'config.json')
-  // The sets the file holds; its format version has tests of its own.
+  // The sets the file holds; its file header has tests of its own.
   const stored = () => {
-    const { formatVersion: _formatVersion, ...sets } = JSON.parse(fs.readFileSync(file(), 'utf8'))
+    const { format: _format, writer: _writer, ...sets } = JSON.parse(fs.readFileSync(file(), 'utf8'))
     return sets
   }
 
   it('preserves unknown literal and prototype-like members without interpreting paths', async () => {
-    const raw = JSON.parse('{"formatVersion":1,"__proto__":{"reviewMarker":true},"__proto__.reviewMarker":"literal","general.theme":"literal theme","general":{"future.option":42,"constructor":{"prototype":{"reviewMarker":true}}}}')
+    const raw = JSON.parse('{"format":{"owner":"imagequeue","kind":"config","version":1},"__proto__":{"reviewMarker":true},"__proto__.reviewMarker":"literal","general.theme":"literal theme","general":{"future.option":42,"constructor":{"prototype":{"reviewMarker":true}}}}')
     fs.writeFileSync(file(), JSON.stringify(raw))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.general.language = 'ja' })
@@ -69,7 +71,7 @@ describe('settings by set', () => {
     const brainstorm = createDefaultConfig().brainstorm
     const templates = { ...brainstorm.templates, future: 42 }
     const format_directives = { ...brainstorm.format_directives, future: { enabled: true }, formats: { ...brainstorm.format_directives.formats, future: 17 } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { templates, format_directives } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), brainstorm: { templates, format_directives } }))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.general.language = 'ja' })
     expect(stored().brainstorm.templates.future).toBe(42)
@@ -141,7 +143,7 @@ describe('settings by set', () => {
     expect(stored()).toEqual({ general: { language: 'ja' } })
   })
   it('reads every other set from the built-in without materializing it', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { language: 'de' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'de' } }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     const defaults = createDefaultConfig()
     defaults.general.language = 'de'
@@ -149,7 +151,7 @@ describe('settings by set', () => {
     expect(stored()).toEqual({ general: { language: 'de' } })
   })
   it('keeps keys it does not know, top-level and within its own sections, on the next save', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), version: 4, arbitrary: 'unknown', general: { language: 'ja', later_option: [1] } }))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
     expect(stored()).toEqual({
@@ -177,13 +179,13 @@ describe('settings by set', () => {
   })
   it('reads the templates of a brainstorm set stored whole', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 4, templates: { expansion: 'My expansion {{N}}' } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), brainstorm }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig().brainstorm).toEqual(brainstorm)
   })
   it('keeps the brainstorm templates in effect beside a brainstorm number that fails its check', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, batch_size: 'ten', templates: { expansion: 'My expansion {{N}}' } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), brainstorm }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig().brainstorm.templates.expansion).toBe('My expansion {{N}}')
     expect(loadConfig().brainstorm.batch_size).toBe(createDefaultConfig().brainstorm.batch_size)
@@ -193,14 +195,14 @@ describe('settings by set', () => {
     ['closing the preview window', (draft: ReturnType<typeof createDefaultConfig>) => { draft.general.show_preview_window = false }],
   ])('keeps a rejected brainstorm template and an unknown key through %s', async (_save, apply) => {
     const sets = { brainstorm: { templates: { expansion: 42 } }, general: { show_preview_window: true }, later: { kept: true } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, ...sets }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), ...sets }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig().brainstorm.templates).toEqual(createDefaultConfig().brainstorm.templates)
     await updateConfig(apply)
     expect(stored()).toMatchObject({ brainstorm: { templates: { expansion: 42 } }, later: { kept: true } })
   })
   it('replaces a rejected copy once the user changes that set', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { templates: { expansion: 42 } } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), brainstorm: { templates: { expansion: 42 } } }))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.brainstorm.templates.expansion = 'Fresh {{N}}' })
     expect(stored()).toEqual({ brainstorm: { templates: { expansion: 'Fresh {{N}}' } } })
@@ -232,13 +234,13 @@ describe('settings by set', () => {
     expect(stored()).toEqual({ general: { export_dir: '/tmp/exports ' }, image_backends: { drawthings: { models_dir: ' /tmp/models' } } })
   })
   it('drops an untouched copy equal to its built-in at the next save of another set', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'system' }, prompts: { slug: `${createDefaultConfig().prompts.slug}\n\n` } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { theme: 'system' }, prompts: { slug: `${createDefaultConfig().prompts.slug}\n\n` } }))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.general.language = 'ja' })
     expect(stored()).toEqual({ general: { language: 'ja' } })
   })
   it('writes nothing when the save equals the file', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { language: 'ja' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'ja' } }))
     fs.utimesSync(file(), new Date(2000, 0, 1), new Date(2000, 0, 1))
     const { updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.general.language = 'ja' })
@@ -247,7 +249,7 @@ describe('settings by set', () => {
     expect(fs.readdirSync(root).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
   it('keeps a rejected copy through saves of other sets and rejects a changed set of the wrong shape', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'bogus' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { theme: 'bogus' } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     await updateConfig((draft) => { draft.general.language = 'ja' })
     expect(stored()).toEqual({ general: { theme: 'bogus', language: 'ja' } })
@@ -267,7 +269,7 @@ describe('settings by set', () => {
   })
   it('refuses the numbers Settings\' fields refuse, and reads a stored one as its built-in', async () => {
     const fallbacks = { ...createDefaultConfig().image_backends.drawthings.default_params, fallback_width: 1000 }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { auto_preview_idle_seconds: 2.5 }, image_backends: { openai: { concurrency: 11 }, drawthings: { default_params: fallbacks } } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { auto_preview_idle_seconds: 2.5 }, image_backends: { openai: { concurrency: 11 }, drawthings: { default_params: fallbacks } } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     const defaults = createDefaultConfig()
     expect(loadConfig().general.auto_preview_idle_seconds).toBe(defaults.general.auto_preview_idle_seconds)
@@ -287,7 +289,7 @@ describe('settings by set', () => {
   })
   it('reads a concurrency below one or a timeout not above zero as its built-in, and will not save one', async () => {
     const brainstorm = { ...createDefaultConfig().brainstorm, concurrency: 0 }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm, gemini: { timeout_ms: 0 }, image_backends: { flux: { concurrency: 0, timeout_ms: -1 } } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), brainstorm, gemini: { timeout_ms: 0 }, image_backends: { flux: { concurrency: 0, timeout_ms: -1 } } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     const defaults = createDefaultConfig()
     expect(loadConfig().brainstorm).toEqual(defaults.brainstorm)
@@ -301,7 +303,7 @@ describe('settings by set', () => {
     })
   })
   it('reads a timeout that is not whole seconds as its built-in, and will not save one', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, image_backends: { drawthings: { timeout_ms: 1500 } } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), image_backends: { drawthings: { timeout_ms: 1500 } } }))
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig().image_backends.drawthings.timeout_ms).toBe(createDefaultConfig().image_backends.drawthings.timeout_ms)
     await expect(updateConfig((draft) => { draft.image_backends.flux.timeout_ms = 2500 })).rejects.toThrow('image_backends.flux.timeout_ms')
@@ -337,7 +339,7 @@ describe('settings by set', () => {
     expect(fs.readFileSync(file(), 'utf8')).toBe('{ invalid')
   })
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('halts naming a file it cannot read, and leaves it unchanged in place', async () => {
-    const bytes = JSON.stringify({ formatVersion: 1, general: { language: 'ja' } })
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'ja' } })
     fs.writeFileSync(file(), bytes)
     fs.chmodSync(file(), 0o000)
     const { loadConfig, ConfigFileHaltError } = await import('../../../src/main/config/config-store')
@@ -350,7 +352,7 @@ describe('settings by set', () => {
     expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
   })
   it('saves against the map it loaded, so a file unreadable since load is neither read, written nor set aside', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { language: 'ja' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'ja' } }))
     fs.utimesSync(file(), new Date(2000, 0, 1), new Date(2000, 0, 1))
     const { loadConfig, updateConfig, drainSetAsideConfigPaths } = await import('../../../src/main/config/config-store')
     loadConfig()
@@ -361,7 +363,7 @@ describe('settings by set', () => {
     expect(stored()).toEqual({ general: { language: 'ja' } })
     expect(drainSetAsideConfigPaths()).toEqual([])
   })
-  it('sets aside a file with no format version and starts from built-ins', async () => {
+  it('sets aside a file with no file header and starts from built-ins', async () => {
     const bytes = JSON.stringify({ general: { language: 'de' } })
     fs.writeFileSync(file(), bytes)
     const { loadConfig } = await import('../../../src/main/config/config-store')
@@ -370,18 +372,35 @@ describe('settings by set', () => {
     expect(invalid).toHaveLength(1)
     expect(fs.readFileSync(path.join(root, invalid[0]), 'utf8')).toBe(bytes)
   })
-  it('writes its format version first and reads it back', async () => {
+  it.each([
+    ['another kind', { ...header(FILE_FORMATS.elaborators) }],
+    ['another owner', { format: { owner: 'picpatch', kind: 'config', version: 1 } }],
+  ])('sets aside a file of %s and starts from built-ins', async (_state, identity) => {
+    const bytes = JSON.stringify({ ...identity, general: { language: 'de' } })
+    fs.writeFileSync(file(), bytes)
+    const { loadConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig()).toEqual(createDefaultConfig())
+    expect(fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))).toHaveLength(1)
+  })
+  it('reads a file whatever its writer says, and writes its own writer back', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ format: header(FILE_FORMATS.config).format, writer: { name: 'someone-else', version: 'not a version' }, general: { language: 'ja' } }))
+    const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
+    expect(loadConfig().general.language).toBe('ja')
+    await updateConfig((draft) => { draft.general.language = 'de' })
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).writer).toEqual(header(FILE_FORMATS.config).writer)
+  })
+  it('writes its file header first and reads it back', async () => {
     const { updateConfig } = await import('../../../src/main/config/config-store')
-    const { FORMAT_VERSIONS } = await import('../../../src/main/store-format')
+    const { FILE_FORMATS } = await import('../../../src/main/store-format')
     await updateConfig((draft) => { draft.general.language = 'ja' })
-    expect(Object.entries(JSON.parse(fs.readFileSync(file(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.config])
+    expect(Object.entries(JSON.parse(fs.readFileSync(file(), 'utf8'))).slice(0, 2)).toEqual(Object.entries(header(FILE_FORMATS.config)))
     vi.resetModules()
     const reloaded = await import('../../../src/main/config/config-store')
     expect(reloaded.loadConfig().general.language).toBe('ja')
   })
   it('halts on a file from a newer version, naming it, and leaves its bytes as they were', async () => {
-    const { FORMAT_VERSIONS, NewerFormatError } = await import('../../../src/main/store-format')
-    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.config + 1, general: { language: 'ja' } })
+    const { FILE_FORMATS, NewerFormatError } = await import('../../../src/main/store-format')
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.config, FILE_FORMATS.config.version + 1), general: { language: 'ja' } })
     fs.writeFileSync(file(), bytes)
     const { loadConfig } = await import('../../../src/main/config/config-store')
     let thrown: unknown
@@ -391,8 +410,8 @@ describe('settings by set', () => {
     expect(fs.readFileSync(file(), 'utf8')).toBe(bytes)
     expect(fs.readdirSync(root).filter((name) => name.endsWith('.invalid'))).toEqual([])
   })
-  it('sets aside a file whose format version is not a positive integer', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 'one', general: { language: 'ja' } }))
+  it('sets aside a file whose format version is not an integer', async () => {
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config, 'one'), general: { language: 'ja' } }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig()).toEqual(createDefaultConfig())
     expect(fs.readdirSync(root).filter((name) => /^config-.+\.invalid$/.test(name))).toHaveLength(1)
@@ -400,7 +419,7 @@ describe('settings by set', () => {
   it('warns once, naming the key, for a set that fails its check', async () => {
     const log = vi.fn()
     vi.doMock('../../../src/main/logger', async (importOriginal) => ({ ...await importOriginal<object>(), log }))
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'bogus' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { theme: 'bogus' } }))
     try {
       const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
       loadConfig()
@@ -416,11 +435,11 @@ describe('settings by set', () => {
     expect(log.mock.calls.filter(([level]) => level === 'warn')).toEqual([['warn', 'Invalid config set; using built-in', { key: 'general.theme' }]])
   })
   it('keeps a chosen display zone and carries an unknown one through unchanged as System', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { time_zone: 'Europe/Berlin' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { time_zone: 'Europe/Berlin' } }))
     const store = await import('../../../src/main/config/config-store')
     expect(store.loadConfig().general.time_zone).toBe('Europe/Berlin')
     vi.resetModules()
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { time_zone: 'Mars/Olympus' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { time_zone: 'Mars/Olympus' } }))
     const reloaded = await import('../../../src/main/config/config-store')
     expect(reloaded.loadConfig().general.time_zone).toBe('system')
     expect(stored()).toEqual({ general: { time_zone: 'Mars/Olympus' } })
@@ -440,7 +459,7 @@ describe('settings by set', () => {
   describe.each(Object.entries(BRAINSTORM_LIMITS))('the elaboration %s', (name, { min, max }) => {
     type Count = keyof typeof BRAINSTORM_LIMITS
     it.each([min - 1, max + 1, min + 0.5])('reads a stored %s as its built-in', async (value) => {
-      fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, brainstorm: { [name]: value } }))
+      fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), brainstorm: { [name]: value } }))
       const { loadConfig } = await import('../../../src/main/config/config-store')
       expect(loadConfig().brainstorm[name as Count]).toBe(createDefaultConfig().brainstorm[name as Count])
     })
@@ -459,7 +478,7 @@ describe('settings by set', () => {
     for (const [key, builtIn] of Object.entries(configSetDefaults())) expect(cleanConfigSet(key, builtIn), key).toEqual(builtIn)
   })
   it('reads an invalid set as absent without repairing or quarantining the file', async () => {
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { theme: 'bogus' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { theme: 'bogus' } }))
     const { loadConfig } = await import('../../../src/main/config/config-store')
     expect(loadConfig()).toEqual(createDefaultConfig())
     expect(stored()).toEqual({ general: { theme: 'bogus' } })
@@ -467,7 +486,7 @@ describe('settings by set', () => {
   it('writes the file from the config in memory, not from a set changed on disk since load', async () => {
     const { loadConfig, updateConfig } = await import('../../../src/main/config/config-store')
     loadConfig()
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, general: { language: 'ja' } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.config), general: { language: 'ja' } }))
     await updateConfig((draft) => { draft.notifications.notifications_enabled = false })
     expect(stored()).toEqual({ notifications: { notifications_enabled: false } })
   })

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { header } from './file-header'
 
 // AppKit's own Edit menu items pick up AppleLanguages from this app's own
 // defaults domain, never the global one. An unpackaged run shares the
@@ -40,12 +41,12 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/config', () => ({ getConfigPath: () => '/tmp/imagequeue-test/config.json' }))
 
 import { readSavedPreference, readSavedTimeZonePreference } from '../../src/main/i18n'
-import { FORMAT_VERSIONS } from '../../src/main/store-format'
+import { FILE_FORMATS } from '../../src/main/store-format'
 
 // Main reads the saved language straight from config.json before anything is
 // drawn; anything it cannot use follows the computer.
 describe('readSavedPreference', () => {
-  const marked = (general: unknown): string => JSON.stringify({ formatVersion: FORMAT_VERSIONS.config, general })
+  const marked = (general: unknown): string => JSON.stringify({ ...header(FILE_FORMATS.config), general })
 
   it('takes a supported tag from the general section', () => {
     expect(readSavedPreference(marked({ language: 'ja' }))).toBe('ja')
@@ -55,16 +56,16 @@ describe('readSavedPreference', () => {
   it('is System for a missing, unreadable, corrupt, or unknown value', () => {
     expect(readSavedPreference(null)).toBe('system')
     expect(readSavedPreference('{ not json')).toBe('system')
-    expect(readSavedPreference(JSON.stringify({ formatVersion: FORMAT_VERSIONS.config }))).toBe('system')
+    expect(readSavedPreference(JSON.stringify({ ...header(FILE_FORMATS.config) }))).toBe('system')
     expect(readSavedPreference(marked({ language: 'pt' }))).toBe('system')
     expect(readSavedPreference(marked({ language: 'system' }))).toBe('system')
   })
 
-  // The load path sets aside a file without its marker and refuses a newer
+  // The load path sets aside a file without its header and refuses a newer
   // one; neither file's language is ever the interface's.
   it('is System for a file the config store would not use', () => {
     expect(readSavedPreference(JSON.stringify({ general: { language: 'ja' } }))).toBe('system')
-    expect(readSavedPreference(JSON.stringify({ formatVersion: FORMAT_VERSIONS.config + 1, general: { language: 'ja' } }))).toBe('system')
+    expect(readSavedPreference(JSON.stringify({ ...header(FILE_FORMATS.config, FILE_FORMATS.config.version + 1), general: { language: 'ja' } }))).toBe('system')
     expect(readSavedPreference(JSON.stringify([{ general: { language: 'ja' } }]))).toBe('system')
   })
 })
@@ -148,7 +149,7 @@ describe('the interface language\'s catalogue', () => {
 
 // The display zone travels with the language to every window.
 describe('the display zone', () => {
-  const marked = (general: Record<string, unknown>): string => JSON.stringify({ formatVersion: FORMAT_VERSIONS.config, general })
+  const marked = (general: Record<string, unknown>): string => JSON.stringify({ ...header(FILE_FORMATS.config), general })
 
   it('reads the saved zone the way it reads the language', () => {
     expect(readSavedTimeZonePreference(marked({ time_zone: 'Europe/Berlin' }))).toBe('Europe/Berlin')

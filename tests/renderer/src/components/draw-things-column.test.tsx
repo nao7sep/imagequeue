@@ -37,7 +37,7 @@ function installApi(store: Record<string, DrawThingsModelParams>, otherModel: st
 }
 
 describe('Draw Things model dictionary after IPC cloning', () => {
-  it.each(['constructor', '__proto__', 'formatVersion'])('uses an own %s model entry', async (name) => {
+  it.each(['constructor', '__proto__', 'format'])('uses an own %s model entry', async (name) => {
     const store = structuredClone(Object.fromEntries([[name, params]]))
     installApi(store, name)
     const { result } = renderHook(() => useDrawThingsColumn({ active: true, model: 'selected', setModel, settings: null }))

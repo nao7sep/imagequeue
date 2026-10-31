@@ -8,7 +8,7 @@ import { writeFileAtomicAsync } from './utils/atomic-write'
 import { valuesEqual } from './settings-changes'
 import { setAsideFile } from './utils/set-aside'
 import { multiline, singleLine } from '../shared/textCleanup'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 
 function getElaboratorsFilePath(): string {
   return path.join(getDataDir(), 'elaborators.json')
@@ -312,7 +312,7 @@ function cleanElaborator(item: Elaborator): Elaborator {
   }
 }
 
-// The file as it is: every key it holds but its format version, or nothing
+// The file as it is: every key it holds but its file header, or nothing
 // when it is absent. A file that cannot be read refuses the request and stays
 // where it is: moving it would not fix an access problem.
 function readFile(): Record<string, unknown> {
@@ -338,7 +338,7 @@ function readFile(): Record<string, unknown> {
     return {}
   }
   try {
-    return checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.elaborators, file)
+    return checkHeader(parsed as Record<string, unknown>, FILE_FORMATS.elaborators, file)
   } catch (err) {
     // A newer file refuses every request and stays exactly where it is.
     if (err instanceof NewerFormatError) throw err
@@ -393,7 +393,7 @@ async function saveSets(changed: Partial<ElaboratorSets>): Promise<void> {
     if (!valuesEqual(cleaned, defaultElaborators(kind))) next[kind] = cleaned
   }
   if (!valuesEqual(next, current.file)) {
-    await writeFileAtomicAsync(getElaboratorsFilePath(), JSON.stringify(markFormat(next, FORMAT_VERSIONS.elaborators), null, 2), true)
+    await writeFileAtomicAsync(getElaboratorsFilePath(), JSON.stringify(withHeader(next, FILE_FORMATS.elaborators), null, 2), true)
   }
   const sets = {} as ElaboratorSets
   for (const kind of kinds) {

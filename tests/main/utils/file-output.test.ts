@@ -15,7 +15,8 @@ import {
   imageOutputFileStates
 } from '../../../src/main/utils/file-output'
 import type { ImageMetadata } from '../../../src/main/utils/image-metadata'
-import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+import { FILE_FORMATS } from '../../../src/main/store-format'
+import { header } from '../file-header'
 
 // writeImageOutput writes into getSessionDir(); point it at a fresh temp dir per
 // test. The closure reads `sessionDir` only when getSessionDir() is called, by
@@ -91,10 +92,11 @@ describe('writeImageOutput', () => {
   })
 
   // The app never reads a sidecar back; it is written for others to read.
-  it('writes the sidecar with its snake_case format version first', async () => {
+  it('writes the sidecar with its file header first', async () => {
     const base = (await writeImageOutput('20260604-093015', 0, 'cat', 'openai', buf, { prompt: 'a cat' } as ImageMetadata, 'png'))
     const sidecar = JSON.parse(fs.readFileSync(path.join(sessionDir, `${base}.json`), 'utf8'))
-    expect(Object.entries(sidecar)).toEqual([['format_version', FORMAT_VERSIONS.imageSidecar], ['prompt', 'a cat']])
+    expect(sidecar).toEqual({ ...header(FILE_FORMATS.imageSidecar), prompt: 'a cat' })
+    expect(Object.keys(sidecar)).toEqual(['format', 'writer', 'prompt'])
   })
 
   it('never overwrites: a collision advances to the next free ordinal instead of discarding the image', async () => {
@@ -285,8 +287,8 @@ describe('deleting an output', () => {
   })
   // Nothing in the app reads a sidecar, so deleting an output removes whatever
   // sidecar sits beside it.
-  it.each([false, true])('deletes an output whose sidecar is from a newer version, unreadable or unmarked (Trash: %s)', async (toTrash) => {
-    for (const [name, bytes] of [['newer', JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 })], ['unreadable', '{ invalid'], ['unmarked', '{}']]) {
+  it.each([false, true])('deletes an output whose sidecar is from a newer version, unreadable or without a header (Trash: %s)', async (toTrash) => {
+    for (const [name, bytes] of [['newer', JSON.stringify(header(FILE_FORMATS.imageSidecar, FILE_FORMATS.imageSidecar.version + 1))], ['unreadable', '{ invalid'], ['headerless', '{}']]) {
       fs.writeFileSync(path.join(sessionDir, `${name}.png`), 'image')
       fs.writeFileSync(path.join(sessionDir, `${name}.json`), bytes)
       if (toTrash) await trashImageOutput(name, 'png')

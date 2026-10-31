@@ -2,6 +2,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { header } from './file-header'
+import { FILE_FORMATS } from '../../src/main/store-format'
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -46,12 +48,12 @@ describe('backend-params.json', () => {
     expect(fs.existsSync(file())).toBe(false)
     await vi.advanceTimersByTimeAsync(800)
     await Promise.all([first, last, other])
-    expect(stored()).toEqual({ formatVersion: 1, backends: { openai: { model: 'b', params: { width: 2 } }, flux: { model: 'flux', params: { width: 3 } } } })
+    expect(stored()).toEqual({ ...header(FILE_FORMATS.backendParams), backends: { openai: { model: 'b', params: { width: 2 } }, flux: { model: 'flux', params: { width: 3 } } } })
   })
 
   it('reads an entry that is not plain values as absent, and keeps it until that column saves', async () => {
     const bad = { model: 'x', params: { width: { nested: 1 } } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, later: true, backends: { openai: bad, grok: { model: 'g', params: { quality: 'low' } }, future: 1 } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.backendParams), later: true, backends: { openai: bad, grok: { model: 'g', params: { quality: 'low' } }, future: 1 } }))
     const { getDefaultModelForBackend } = await import('../../src/shared/ai-models')
     api.loadBackendParams()
     expect(api.getBackendParams().openai.model).toBe(getDefaultModelForBackend('openai').id)
@@ -59,7 +61,7 @@ describe('backend-params.json', () => {
     const saved = api.saveBackendParams('grok', 'g', { quality: 'auto' })
     await api.drainBackendParams()
     await saved
-    expect(stored()).toEqual({ formatVersion: 1, later: true, backends: { openai: bad, grok: { model: 'g', params: { quality: 'auto' } }, future: 1 } })
+    expect(stored()).toEqual({ ...header(FILE_FORMATS.backendParams), later: true, backends: { openai: bad, grok: { model: 'g', params: { quality: 'auto' } }, future: 1 } })
     const replaced = api.saveBackendParams('openai', 'o', {})
     await api.drainBackendParams()
     await replaced
@@ -77,7 +79,7 @@ describe('backend-params.json', () => {
     const { getDefaultModelForBackend } = await import('../../src/shared/ai-models')
     const flex = { model: 'flux-2-flex', params: { steps: 51, guidance: 5 } }
     const openai = { model: 'gpt-image-2', params: { width: 1000, height: 1024 } }
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: 1, backends: { flux: flex, openai } }))
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.backendParams), backends: { flux: flex, openai } }))
     api.loadBackendParams()
     const { IMAGE_DEFAULT_PARAMS } = await import('../../src/shared/image-backend-defaults')
     expect(api.getBackendParams().flux).toEqual({ model: getDefaultModelForBackend('flux').id, params: IMAGE_DEFAULT_PARAMS.flux })
@@ -86,13 +88,15 @@ describe('backend-params.json', () => {
     await expect(api.saveBackendParams('openai', 'gpt-image-2', { width: 1024, height: 1024, outputCompression: 100.5 })).rejects.toThrow('invalid')
     await api.saveBackendParams('openai', 'gpt-image-2', { width: 1040, height: 1024 })
     await api.drainBackendParams()
-    expect(stored()).toEqual({ formatVersion: 1, backends: { flux: flex, openai: { model: 'gpt-image-2', params: { width: 1040, height: 1024 } } } })
+    expect(stored()).toEqual({ ...header(FILE_FORMATS.backendParams), backends: { flux: flex, openai: { model: 'gpt-image-2', params: { width: 1040, height: 1024 } } } })
   })
 
   it.each([
     ['text that is not JSON', '{ "backends": '],
-    ['no format version', JSON.stringify({ backends: {} })],
-    ['no backend map', JSON.stringify({ formatVersion: 1, backends: [] })],
+    ['no file header', JSON.stringify({ backends: {} })],
+    ['another kind', JSON.stringify({ ...header(FILE_FORMATS.modelParams), backends: {} })],
+    ['another owner', JSON.stringify({ ...header(FILE_FORMATS.backendParams), format: { owner: 'gptimg', kind: 'backendParams', version: 1 }, backends: {} })],
+    ['no backend map', JSON.stringify({ ...header(FILE_FORMATS.backendParams), backends: [] })],
   ])('sets aside a file with %s and starts every column from its built-in', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
     api.loadBackendParams()
@@ -103,7 +107,7 @@ describe('backend-params.json', () => {
   })
 
   it('stops at a file written by a newer build and leaves it as it is', async () => {
-    const bytes = JSON.stringify({ formatVersion: 99, backends: {} })
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.backendParams, 99), backends: {} })
     fs.writeFileSync(file(), bytes)
     let error: unknown
     try { api.loadBackendParams() } catch (thrown) { error = thrown }
@@ -119,6 +123,6 @@ describe('backend-params.json', () => {
     await expect(save).rejects.toThrow()
     fs.rmdirSync(file())
     await api.drainBackendParams()
-    expect(stored()).toEqual({ formatVersion: 1, backends: { openai: { model: 'a', params: { width: 1 } } } })
+    expect(stored()).toEqual({ ...header(FILE_FORMATS.backendParams), backends: { openai: { model: 'a', params: { width: 1 } } } })
   })
 })

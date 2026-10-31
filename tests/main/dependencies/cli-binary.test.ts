@@ -12,7 +12,8 @@ import {
   getCliBinaryPath,
   getCliMetaPath,
 } from '../../../src/main/dependencies/paths'
-import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+import { FILE_FORMATS } from '../../../src/main/store-format'
+import { header } from '../file-header'
 
 let home: string
 let previousHome: string | undefined
@@ -46,7 +47,7 @@ describe('publishCliBinary', () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
-      formatVersion: 1,
+      ...header(FILE_FORMATS.cliSidecar),
       tag: 'v1.20260101.0',
       sha256: 'b'.repeat(64),
       installedAt: '2026-01-01T00:00:00.000Z',
@@ -80,7 +81,7 @@ describe('publishCliBinary', () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'old binary')
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
-      formatVersion: 1,
+      ...header(FILE_FORMATS.cliSidecar),
       tag: 'v1.20260101.0',
       sha256: 'b'.repeat(64),
       installedAt: '2026-01-01T00:00:00.000Z',
@@ -110,7 +111,7 @@ describe('readInstalledCliTag', () => {
     fs.writeFileSync(getCliBinaryPath(), 'binary')
     const { ino, dev } = fs.statSync(getCliBinaryPath(), { bigint: true })
     fs.writeFileSync(getCliMetaPath(), JSON.stringify({
-      formatVersion: 1,
+      ...header(FILE_FORMATS.cliSidecar),
       tag: 'v1.20260716.0',
       sha256: 'c'.repeat(64),
       installedAt: '2026-08-22T20:13:13.750Z',
@@ -129,7 +130,7 @@ describe('readInstalledCliTag', () => {
   })
 })
 
-describe('the sidecar format version', () => {
+describe('the sidecar file header', () => {
   function installWithSidecar(marker: Record<string, unknown>): void {
     fs.mkdirSync(getBinDir(), { recursive: true })
     fs.writeFileSync(getCliBinaryPath(), 'binary')
@@ -143,32 +144,32 @@ describe('the sidecar format version', () => {
   }
 
   // A cache of the binary's identity: the version is written, never checked.
-  it('reads a sidecar with no format version by its fields', async () => {
+  it('reads a sidecar with no file header by its fields', async () => {
     installWithSidecar({})
     expect(await readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
-  it('writes its format version first and reads it back', async () => {
+  it('writes its file header first and reads it back', async () => {
     fs.mkdirSync(getBinDir(), { recursive: true })
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
     await publishCliBinary(staged, 'v1.20260822.0')
-    expect(Object.keys(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')))).toEqual(['formatVersion', 'tag', 'binaryId'])
-    expect(Object.entries(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.cliSidecar])
+    expect(Object.keys(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8')))).toEqual(['format', 'writer', 'tag', 'binaryId'])
+    expect(Object.entries(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))).slice(0, 2)).toEqual(Object.entries(header(FILE_FORMATS.cliSidecar)))
     expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 
   it('reads a sidecar from a newer version by its fields', async () => {
-    installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
+    installWithSidecar({ ...header(FILE_FORMATS.cliSidecar, FILE_FORMATS.cliSidecar.version + 1) })
     expect(await readInstalledCliTag()).toBe('v1.20260716.0')
   })
 
   it('replaces a sidecar from a newer version when a binary is published', async () => {
-    installWithSidecar({ formatVersion: FORMAT_VERSIONS.cliSidecar + 1 })
+    installWithSidecar({ ...header(FILE_FORMATS.cliSidecar, FILE_FORMATS.cliSidecar.version + 1) })
     const staged = path.join(home, 'new-cli')
     fs.writeFileSync(staged, 'new binary')
     await publishCliBinary(staged, 'v1.20260822.0')
-    expect(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))).toMatchObject({ formatVersion: FORMAT_VERSIONS.cliSidecar, tag: 'v1.20260822.0' })
+    expect(JSON.parse(fs.readFileSync(getCliMetaPath(), 'utf8'))).toMatchObject({ ...header(FILE_FORMATS.cliSidecar), tag: 'v1.20260822.0' })
     expect(await readInstalledCliTag()).toBe('v1.20260822.0')
   })
 })

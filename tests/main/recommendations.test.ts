@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { header } from './file-header'
 
 const network = vi.hoisted(() => ({ fetchBytesWithHeaders: vi.fn() }))
 vi.mock('../../src/main/dependencies/download', async (importOriginal) => ({
@@ -21,7 +22,7 @@ import { recordServerTime } from '../../src/main/dependencies/recommendations-ti
 import * as recommendationTimes from '../../src/main/dependencies/recommendations-times'
 import * as logger from '../../src/main/logger'
 import * as localCli from '../../src/main/local-cli'
-import { FORMAT_VERSIONS } from '../../src/main/store-format'
+import { FILE_FORMATS } from '../../src/main/store-format'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
 
 let home: string
@@ -191,7 +192,7 @@ describe('downloadLatestRecommendations', () => {
     expect(status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
     expect(path.dirname(getRecommendationsTimesPath())).toBe(home)
     const times = JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8'))
-    expect(Object.entries(times)[0]).toEqual(['formatVersion', FORMAT_VERSIONS.recommendationsTimes])
+    expect(Object.entries(times).slice(0, 2)).toEqual(Object.entries(header(FILE_FORMATS.recommendationsTimes)))
     expect(Object.keys(times.files)).toEqual([path.resolve(configsPath())])
     expect(fs.readdirSync(modelsDir)).toEqual(['configs.json'])
   })
@@ -224,9 +225,9 @@ describe('downloadLatestRecommendations', () => {
   // is replaced like any other.
   it('replaces a record a newer build wrote on the next install', async () => {
     writeConfigs(configsPath(), [{ name: 'a', configuration: { model: 'm' } }])
-    fs.writeFileSync(getRecommendationsTimesPath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.recommendationsTimes + 1, files: {} }))
+    fs.writeFileSync(getRecommendationsTimesPath(), JSON.stringify({ ...header(FILE_FORMATS.recommendationsTimes, FILE_FORMATS.recommendationsTimes.version + 1), files: {} }))
     network.fetchBytesWithHeaders.mockResolvedValueOnce(served)
     expect((await downloadLatestRecommendations()).status.updatedAt).toBe('2026-09-11T20:46:05.000Z')
-    expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).formatVersion).toBe(FORMAT_VERSIONS.recommendationsTimes)
+    expect(JSON.parse(fs.readFileSync(getRecommendationsTimesPath(), 'utf8')).format).toEqual(header(FILE_FORMATS.recommendationsTimes).format)
   })
 })

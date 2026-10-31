@@ -6,7 +6,8 @@ import { readUiState, updateUiState, getUiStatePath } from '../../src/main/state
 import { defaultUiState } from '../../src/shared/ui-state'
 import { RECORDS_LIST_WIDTH } from '../../src/shared/records-layout'
 import { closeBackupStore } from '../../src/main/backup/backup-store'
-import { FORMAT_VERSIONS } from '../../src/main/store-format'
+import { FILE_FORMATS } from '../../src/main/store-format'
+import { header } from './file-header'
 
 let home: string
 let prevHome: string | undefined
@@ -46,13 +47,13 @@ describe('ui state store', async () => {
 
   it('heals a wrong-typed column width to the default on read', async () => {
     fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, columnWidth: 'wide' }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ ...header(FILE_FORMATS.uiState), columnWidth: 'wide' }))
     expect((await readUiState())).toEqual(defaultUiState())
   })
 
   it('preserves a stored numeric column width', async () => {
     fs.mkdirSync(path.dirname(getUiStatePath()), { recursive: true })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, columnWidth: 288 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ ...header(FILE_FORMATS.uiState), columnWidth: 288 }))
     expect((await readUiState())).toEqual({ ...defaultUiState(), columnWidth: 288 })
   })
 
@@ -61,32 +62,32 @@ describe('ui state store', async () => {
     await updateUiState({ columnWidth: 240 })
     expect((await updateUiState({ recordsListWidth: 512 }))).toMatchObject({ columnWidth: 240, recordsListWidth: 512 })
     expect((await readUiState())).toMatchObject({ columnWidth: 240, recordsListWidth: 512 })
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, recordsListWidth: 9999 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ ...header(FILE_FORMATS.uiState), recordsListWidth: 9999 }))
     expect((await readUiState()).recordsListWidth).toBe(RECORDS_LIST_WIDTH.max)
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: 1, recordsListWidth: 'wide' }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ ...header(FILE_FORMATS.uiState), recordsListWidth: 'wide' }))
     expect((await readUiState()).recordsListWidth).toBe(RECORDS_LIST_WIDTH.default)
   })
 })
 
-describe('ui state format version', async () => {
+describe('ui state file header', async () => {
   // A cache: the version is written, never checked, so each field is read on
   // its own merits whatever build wrote the file.
-  it('reads a file with no format version by its fields', async () => {
+  it('reads a file with no file header by its fields', async () => {
     fs.writeFileSync(getUiStatePath(), JSON.stringify({ columnWidth: 288 }))
     expect((await readUiState())).toEqual({ ...defaultUiState(), columnWidth: 288 })
   })
 
-  it('writes its owned format version and reads it back', async () => {
+  it('writes its file header first and reads it back', async () => {
     await updateUiState({ columnWidth: 240 })
-    expect(Object.entries(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).at(-1)).toEqual(['formatVersion', FORMAT_VERSIONS.uiState])
+    expect(Object.entries(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).slice(0, 2)).toEqual(Object.entries(header(FILE_FORMATS.uiState)))
     expect((await readUiState()).columnWidth).toBe(240)
   })
 
   it('reads a file from a newer version by its fields and replaces it on the next update', async () => {
-    fs.writeFileSync(getUiStatePath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.uiState + 1, columnWidth: 288 }))
+    fs.writeFileSync(getUiStatePath(), JSON.stringify({ ...header(FILE_FORMATS.uiState, FILE_FORMATS.uiState.version + 1), columnWidth: 288 }))
     expect((await readUiState()).columnWidth).toBe(288)
     expect((await updateUiState({ columnWidth: 240 })).columnWidth).toBe(240)
-    expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toMatchObject({ formatVersion: FORMAT_VERSIONS.uiState, columnWidth: 240 })
+    expect(JSON.parse(fs.readFileSync(getUiStatePath(), 'utf8'))).toMatchObject({ ...header(FILE_FORMATS.uiState), columnWidth: 240 })
   })
 })
 

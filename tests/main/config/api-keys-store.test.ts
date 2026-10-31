@@ -2,6 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { header } from '../file-header'
 let resolveApiKey: typeof import('../../../src/main/config/api-keys-store').resolveApiKey
 let refreshApiKeys: typeof import('../../../src/main/config/api-keys-store').refreshApiKeys
 let hasApiKey: typeof import('../../../src/main/config/api-keys-store').hasApiKey
@@ -9,7 +10,7 @@ let getStoredApiKey: typeof import('../../../src/main/config/api-keys-store').ge
 let setStoredApiKey: typeof import('../../../src/main/config/api-keys-store').setStoredApiKey
 let ApiKeysUnavailableError: typeof import('../../../src/main/config/api-keys-store').ApiKeysUnavailableError
 
-import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+import { FILE_FORMATS } from '../../../src/main/store-format'
 
 const notices = vi.hoisted(() => ({ raised: [] as unknown[] }))
 vi.mock('../../../src/main/app-notices', () => ({
@@ -154,7 +155,7 @@ describe('api-keys-store', () => {
     process.env['GEMINI_API_KEY'] = 'conventional-gemini'
     fs.writeFileSync(
       path.join(tmpRoot, 'api-keys.json'),
-      JSON.stringify({ formatVersion: 1, keys: { gemini: 'sk-bare-stored' } })
+      JSON.stringify({ ...header(FILE_FORMATS.apiKeys), keys: { gemini: 'sk-bare-stored' } })
     )
     await refreshApiKeys()
     expect(resolveApiKey('gemini.text')).toBe('')
@@ -182,7 +183,7 @@ describe('api-keys-store', () => {
   it('treats an untagged stored value as plaintext', async () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
     fs.mkdirSync(tmpRoot, { recursive: true })
-    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, keys: { xai: 'sk-pasted-raw' } }))
+    fs.writeFileSync(secretsPath, JSON.stringify({ ...header(FILE_FORMATS.apiKeys), keys: { xai: 'sk-pasted-raw' } }))
     await refreshApiKeys()
     expect(resolveApiKey('xai')).toBe('sk-pasted-raw')
   })
@@ -206,7 +207,7 @@ describe('api-keys-store', () => {
     // Node's lenient base64 decoder would otherwise turn a payload like this
     // (invalid characters, non-canonical shape) into non-empty garbage that
     // gets sent to the provider as an API key.
-    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, keys: { xai: 'obf:not-valid-base64!!' } }))
+    fs.writeFileSync(secretsPath, JSON.stringify({ ...header(FILE_FORMATS.apiKeys), keys: { xai: 'obf:not-valid-base64!!' } }))
 
     const errorSpy = vi.spyOn(await import('../../../src/main/logger'), 'log').mockImplementation(() => {})
     try {
@@ -236,10 +237,12 @@ describe('api-keys-store', () => {
   // keys are unavailable, a save is refused, and its bytes stay as they were.
   it.each([
     ['not JSON', 'not json at all'],
-    ['the wrong root', JSON.stringify({ formatVersion: 1, xai: 'do-not-overwrite-these-bytes' })],
-    ['a keys container of the wrong shape', JSON.stringify({ formatVersion: 1, keys: ['xai', 'not-an-object-container'] })],
-    ['no format version', JSON.stringify({ keys: { xai: 'sk-kept' } })],
-    ['a format version that is not a positive integer', JSON.stringify({ formatVersion: 'one', keys: { xai: 'sk-kept' } })],
+    ['the wrong root', JSON.stringify({ ...header(FILE_FORMATS.apiKeys), xai: 'do-not-overwrite-these-bytes' })],
+    ['a keys container of the wrong shape', JSON.stringify({ ...header(FILE_FORMATS.apiKeys), keys: ['xai', 'not-an-object-container'] })],
+    ['no file header', JSON.stringify({ keys: { xai: 'sk-kept' } })],
+    ['another kind', JSON.stringify({ ...header(FILE_FORMATS.config), keys: { xai: 'sk-kept' } })],
+    ['the old formatVersion marker', JSON.stringify({ formatVersion: 1, keys: { xai: 'sk-kept' } })],
+    ['a format version that is not an integer', JSON.stringify({ ...header(FILE_FORMATS.apiKeys, 'one'), keys: { xai: 'sk-kept' } })],
   ])('leaves a file holding %s in place, reads no keys, and refuses a save', async (_state, original) => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
     fs.writeFileSync(secretsPath, original)
@@ -272,7 +275,7 @@ describe('api-keys-store', () => {
 
   it('writes back an entry it cannot use, and every other key the file holds, when saving another key', async () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, later: { kept: true }, keys: { xai: 42, 'Bad Id': 'sk-odd' } }))
+    fs.writeFileSync(secretsPath, JSON.stringify({ ...header(FILE_FORMATS.apiKeys), later: { kept: true }, keys: { xai: 42, 'Bad Id': 'sk-odd' } }))
 
     await setStoredApiKey('openai.image', 'sk-new')
 
@@ -285,7 +288,7 @@ describe('api-keys-store', () => {
 
   it('resolves a key stored under an id differing only in case, and saves it under the exact id', async () => {
     const secretsPath = path.join(tmpRoot, 'api-keys.json')
-    fs.writeFileSync(secretsPath, JSON.stringify({ formatVersion: 1, keys: { 'OPENAI.IMAGE': 'sk-hand-edited' } }))
+    fs.writeFileSync(secretsPath, JSON.stringify({ ...header(FILE_FORMATS.apiKeys), keys: { 'OPENAI.IMAGE': 'sk-hand-edited' } }))
     await refreshApiKeys()
     expect(resolveApiKey('openai.image')).toBe('sk-hand-edited')
     await setStoredApiKey('openai.image', 'sk-new')
@@ -311,7 +314,7 @@ describe('api-keys-store', () => {
 
   it.runIf(isPosix)('does not tighten permissions of a newer secret file', async () => {
     const file = path.join(tmpRoot, 'api-keys.json')
-    fs.writeFileSync(file, JSON.stringify({ formatVersion: 2, keys: {} }), { mode: 0o644 })
+    fs.writeFileSync(file, JSON.stringify({ ...header(FILE_FORMATS.apiKeys, 2), keys: {} }), { mode: 0o644 })
     fs.chmodSync(file, 0o644)
     expect(getStoredApiKey('openai.image')).toBe('')
     expect(fs.statSync(file).mode & 0o777).toBe(0o644)
@@ -384,12 +387,12 @@ describe('api-keys-store', () => {
     rename.mockRestore()
     expect(fs.statSync(secretsPath).mtimeMs).toBe(old.getTime())
   })
-  describe('format version', () => {
+  describe('file header', () => {
     const secretsPath = () => path.join(tmpRoot, 'api-keys.json')
 
-    it('writes its format version first and reads it back', async () => {
+    it('writes its file header first and reads it back', async () => {
       await setStoredApiKey('openai.image', 'sk-stored')
-      expect(Object.entries(JSON.parse(fs.readFileSync(secretsPath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.apiKeys])
+      expect(Object.entries(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).slice(0, 2)).toEqual(Object.entries(header(FILE_FORMATS.apiKeys)))
       await refreshApiKeys()
     expect(getStoredApiKey('openai.image')).toBe('sk-stored')
     })
@@ -397,7 +400,7 @@ describe('api-keys-store', () => {
     it('reads a file from a newer version as no keys, refuses a change, and leaves its bytes as they were', async () => {
       await setStoredApiKey('openai.image', 'sk-stored')
       const marked = JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))
-      const bytes = JSON.stringify({ ...marked, formatVersion: FORMAT_VERSIONS.apiKeys + 1 })
+      const bytes = JSON.stringify({ ...marked, ...header(FILE_FORMATS.apiKeys, FILE_FORMATS.apiKeys.version + 1) })
       fs.writeFileSync(secretsPath(), bytes)
 
       await refreshApiKeys()

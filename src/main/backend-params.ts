@@ -4,7 +4,7 @@ import { getDataDir } from './config'
 import { createCoalescedWriter } from './utils/coalesced-writer'
 import { writeFileAtomicAsync } from './utils/atomic-write'
 import { setAsideFile } from './utils/set-aside'
-import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 import { CLOUD_BACKEND_IDS_IN_UI_ORDER, type CloudBackendId } from '../shared/types'
 import { getDefaultModelForBackend } from '../shared/ai-models'
 import { IMAGE_DEFAULT_PARAMS, type SavedImageBackendParams } from '../shared/image-backend-defaults'
@@ -76,7 +76,7 @@ function readStored(file: string): Partial<Record<CloudBackendId, SavedImageBack
   try {
     const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('backend-params.json must be a JSON object')
-    ;({ backends, ...others } = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.backendParams, file))
+    ;({ backends, ...others } = checkHeader(parsed as Record<string, unknown>, FILE_FORMATS.backendParams, file))
     if (!backends || typeof backends !== 'object' || Array.isArray(backends)) throw new Error('backend-params.json must contain a backend map')
   } catch (error) {
     if (error instanceof NewerFormatError) throw error
@@ -117,7 +117,7 @@ async function writeNow(): Promise<void> {
   // recorded: backend-params.json is durable, user-authored managed text, the
   // columns' model and parameter choices the user tunes and reloads as state
   // (data-backup conventions). Dedup absorbs the debounced autosave churn.
-  await writeFileAtomicAsync(getBackendParamsPath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.backendParams, ...otherKeys, backends }, null, 2), true)
+  await writeFileAtomicAsync(getBackendParamsPath(), JSON.stringify(withHeader({ ...otherKeys, backends }, FILE_FORMATS.backendParams), null, 2), true)
 }
 
 let waiters: { resolve: () => void; reject: (error: unknown) => void }[] = []

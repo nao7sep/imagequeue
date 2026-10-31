@@ -3,6 +3,8 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DrawThingsModelParams } from '../../src/shared/types'
+import { header } from './file-header'
+import { FILE_FORMATS } from '../../src/main/store-format'
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -11,7 +13,7 @@ vi.mock('electron', () => ({
 const params: DrawThingsModelParams = { width: 1024, height: 768, steps: 20, guidance: 4.5, seed: '', negativePrompt: '' }
 
 // The store reads params.json once per process, so each test starts a fresh module.
-describe('params.json format version', () => {
+describe('params.json file header', () => {
   let root: string
   const file = () => path.join(root, 'params.json')
   beforeEach(() => {
@@ -29,11 +31,12 @@ describe('params.json format version', () => {
   const setAsideCopies = () => fs.readdirSync(root).filter((name) => /^params-\d{8}-\d{6}-utc\.invalid$/.test(name))
 
   it.each([
-    ['no format version', JSON.stringify({ 'model.ckpt': params })],
+    ['no file header', JSON.stringify({ 'model.ckpt': params })],
+    ['another kind', JSON.stringify({ ...header(FILE_FORMATS.backendParams), models: {} })],
     ['text that is not JSON', '{ "model.ckpt": '],
     ['a value that is not a map of sets', JSON.stringify([params])],
-    ['a flat model map', JSON.stringify({ formatVersion: 1, 'model.ckpt': params })],
-    ['an invalid model map', JSON.stringify({ formatVersion: 1, models: [] })],
+    ['a flat model map', JSON.stringify({ ...header(FILE_FORMATS.modelParams), 'model.ckpt': params })],
+    ['an invalid model map', JSON.stringify({ ...header(FILE_FORMATS.modelParams), models: [] })],
   ])('sets aside a file with %s and continues from recommended or default parameters', async (_case, bytes) => {
     fs.writeFileSync(file(), bytes)
     const { getModelParams, setModelParams, drainPendingWrites, drainSetAsideModelParamsPaths } = await import('../../src/main/model-params')
@@ -50,9 +53,9 @@ describe('params.json format version', () => {
   })
 
   it('reads a malformed set as absent, keeps the valid ones, and writes it back until that model changes', async () => {
-    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+    const { FILE_FORMATS } = await import('../../src/main/store-format')
     fs.writeFileSync(file(), JSON.stringify({
-      formatVersion: FORMAT_VERSIONS.modelParams,
+      ...header(FILE_FORMATS.modelParams),
       models: {
         'good.ckpt': params,
         'numeric-negative.ckpt': { ...params, negativePrompt: 7 },
@@ -79,8 +82,8 @@ describe('params.json format version', () => {
   })
 
   it('keeps keys it does not know beside the model map', async () => {
-    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
-    fs.writeFileSync(file(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.modelParams, later: { kept: true }, models: {} }))
+    const { FILE_FORMATS } = await import('../../src/main/store-format')
+    fs.writeFileSync(file(), JSON.stringify({ ...header(FILE_FORMATS.modelParams), later: { kept: true }, models: {} }))
     const { setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
     setModelParams('model.ckpt', params)
     await drainPendingWrites()
@@ -103,13 +106,13 @@ describe('params.json format version', () => {
     expect(setAsideCopies()).toEqual([])
   })
 
-  it('writes its format version first and reads it back', async () => {
-    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+  it('writes its file header first and reads it back', async () => {
+    const { FILE_FORMATS } = await import('../../src/main/store-format')
     const { setModelParams, drainPendingWrites } = await import('../../src/main/model-params')
     setModelParams('model.ckpt', params)
     await drainPendingWrites()
     expect(Object.entries(JSON.parse(fs.readFileSync(file(), 'utf8')))).toEqual([
-      ['formatVersion', FORMAT_VERSIONS.modelParams],
+      ...Object.entries(header(FILE_FORMATS.modelParams)),
       ['models', { 'model.ckpt': params }],
     ])
     vi.resetModules()
@@ -119,20 +122,20 @@ describe('params.json format version', () => {
 
   it('treats inherited names as absent on a fresh store', async () => {
     const { getModelParams, getAllModelParams } = await import('../../src/main/model-params')
-    for (const name of ['constructor', '__proto__', 'formatVersion', 'toString']) {
+    for (const name of ['constructor', '__proto__', 'format', 'writer', 'toString']) {
       expect(getModelParams(name)).toBeNull()
       expect(Object.hasOwn(getAllModelParams(), name)).toBe(false)
     }
     expect(fs.existsSync(file())).toBe(false)
   })
 
-  it('saves, reloads, and applies dimensions to arbitrary model names without changing its marker', async () => {
-    const names = ['constructor', '__proto__', 'formatVersion', 'models']
+  it('saves, reloads, and applies dimensions to arbitrary model names without changing its header', async () => {
+    const names = ['constructor', '__proto__', 'format', 'writer', 'models']
     const api = await import('../../src/main/model-params')
     for (const name of names) api.setModelParams(name, { ...params, seed: name })
     await api.drainPendingWrites()
     const stored = JSON.parse(fs.readFileSync(file(), 'utf8'))
-    expect(stored.formatVersion).toBe(1)
+    expect(stored.format).toEqual(header(FILE_FORMATS.modelParams).format)
     expect(Object.keys(stored.models)).toEqual(names)
     vi.resetModules()
     const reloaded = await import('../../src/main/model-params')
@@ -147,7 +150,7 @@ describe('params.json format version', () => {
     const applied = await import('../../src/main/model-params')
     for (const name of names) expect(applied.getModelParams(name)).toEqual({ ...params, seed: name, ...patch })
     expect(applied.getModelParams('toString')).toEqual({ ...patch, seed: '', negativePrompt: '' })
-    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).formatVersion).toBe(1)
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).format).toEqual(header(FILE_FORMATS.modelParams).format)
     expect(setAsideCopies()).toEqual([])
   })
 
@@ -220,8 +223,8 @@ describe('params.json format version', () => {
   })
 
   it('refuses every request on a file from a newer version and leaves its bytes as they were', async () => {
-    const { FORMAT_VERSIONS, NewerFormatError } = await import('../../src/main/store-format')
-    const bytes = JSON.stringify({ formatVersion: FORMAT_VERSIONS.modelParams + 1, 'model.ckpt': params })
+    const { FILE_FORMATS, NewerFormatError } = await import('../../src/main/store-format')
+    const bytes = JSON.stringify({ ...header(FILE_FORMATS.modelParams, FILE_FORMATS.modelParams.version + 1), 'model.ckpt': params })
     fs.writeFileSync(file(), bytes)
     const { getModelParams, getAllModelParams, setModelParams, applyDimensionsToModels, drainPendingWrites } =
       await import('../../src/main/model-params')

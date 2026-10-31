@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { header } from '../file-header'
+import { FILE_FORMATS } from '../../../src/main/store-format'
 
 // Mock the network release lookup so the service runs offline and deterministically.
 vi.mock('../../../src/main/dependencies/cli-release', () => ({
@@ -122,7 +124,7 @@ describe('a present CLI whose version cannot be read', () => {
     fs.writeFileSync(
       path.join(home, 'bin', 'draw-things-cli.json'),
       JSON.stringify({
-        formatVersion: 1, tag: 'v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z',
+        ...header(FILE_FORMATS.cliSidecar), tag: 'v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z',
         binaryId: String(fs.statSync(path.join(home, 'bin', 'draw-things-cli'), { bigint: true }).ino),
       }),
     )
@@ -138,7 +140,7 @@ describe('a present CLI whose version cannot be read', () => {
     placeBinaryWithoutSidecar()
     fs.writeFileSync(
       path.join(home, 'bin', 'draw-things-cli.json'),
-      JSON.stringify({ formatVersion: 1, tag: 'garbage-v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z' }),
+      JSON.stringify({ ...header(FILE_FORMATS.cliSidecar), tag: 'garbage-v1.20260430.0', sha256: 'a'.repeat(64), installedAt: '2026-06-30T00:00:00.000Z' }),
     )
     resolveMock.mockResolvedValue({ tag: 'v1.20260430.0', assetUrl: 'https://x', sha256: 'a' })
 

@@ -8,7 +8,7 @@ import { resolveStorageRoot, ensureStorageRoot } from './storage-root'
 import { setAsideFile } from '../utils/set-aside'
 import { configSetDefaults, readPath, writePath, readConfigSet, applyConfigSet, hasSetShape, isObject, cleanConfigSet, equalsBuiltIn } from './config-sets'
 import { valuesEqual } from '../settings-changes'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError } from '../store-format'
 
 let cachedConfig: AppConfig | null = null
 // The map of sets the config in memory stands for, as of the last load or
@@ -96,7 +96,7 @@ function readStoredMap(): Record<string, unknown> | null {
     return null
   }
   try {
-    return checkFormat(parsed, FORMAT_VERSIONS.config, file)
+    return checkHeader(parsed, FILE_FORMATS.config, file)
   } catch (err) {
     // A newer file halts startup and stays exactly where it is.
     if (err instanceof NewerFormatError) throw err
@@ -226,7 +226,7 @@ async function writeAccepted(): Promise<void> {
   const map = storedMap
   if (map === null || (writtenMap !== null && valuesEqual(map, writtenMap))) return
   const file = getConfigPath()
-  await writeFileAtomicAsync(file, JSON.stringify(markFormat(map, FORMAT_VERSIONS.config), null, 2), true)
+  await writeFileAtomicAsync(file, JSON.stringify(withHeader(map, FILE_FORMATS.config), null, 2), true)
   writtenMap = map
   log('info', 'Config saved', { path: file })
 }

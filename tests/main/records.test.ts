@@ -5,7 +5,8 @@ import path from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { closeRecords, fetchRecorded, onRecordStored, openRecords, recordAiCall, recordsDatabasePath, setRecordsSession, startAiCall, startCliJobRecord, writeLogRecord } from '../../src/main/records'
 import { freshRecordsRoot, readLog, readRows, removeRecordsRoots } from './records-fixture'
-import { FORMAT_VERSIONS } from '../../src/main/store-format'
+import { FILE_FORMATS } from '../../src/main/store-format'
+import { headerSql } from './file-header'
 
 afterAll(() => {
   vi.unstubAllGlobals()
@@ -262,7 +263,7 @@ describe('the stored-record signal', () => {
   })
 })
 
-describe('the records format version', () => {
+describe('the records file header', () => {
   function userVersion(file: string): number {
     const db = new DatabaseSync(file, { readOnly: true })
     try {
@@ -272,7 +273,7 @@ describe('the records format version', () => {
     }
   }
 
-  it('sets aside a populated database with no format version, keeping its bytes, and starts a new one', () => {
+  it('sets aside a populated database with no file header, keeping its bytes, and starts a new one', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-unversioned-'))
     const file = path.join(dir, 'records.sqlite3')
     const seeded = new DatabaseSync(file)
@@ -289,7 +290,7 @@ describe('the records format version', () => {
     const db = new DatabaseSync(file, { readOnly: true })
     try {
       const messages = (db.prepare('SELECT message FROM log_records ORDER BY id').all() as { message: string }[]).map((row) => row.message)
-      expect(messages).toEqual(['Set aside a records database without a format version; started a new one', 'Kept in the new database'])
+      expect(messages).toEqual(['Set aside a records database without its file header; started a new one', 'Kept in the new database'])
     } finally {
       db.close()
     }
@@ -303,14 +304,14 @@ describe('the records format version', () => {
     openRecords(dir)
     expect(recordsDatabasePath()).toBe(path.join(dir, 'records.sqlite3'))
     closeRecords()
-    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FORMAT_VERSIONS.records)
+    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FILE_FORMATS.records.version)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('writes its version and reads it back on the next open', () => {
     const dir = freshRecordsRoot()
     closeRecords()
-    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FORMAT_VERSIONS.records)
+    expect(userVersion(path.join(dir, 'records.sqlite3'))).toBe(FILE_FORMATS.records.version)
     openRecords(dir)
     expect(recordsDatabasePath()).toBe(path.join(dir, 'records.sqlite3'))
     closeRecords()
@@ -320,7 +321,7 @@ describe('the records format version', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imagequeue-records-newer-'))
     const file = path.join(dir, 'records.sqlite3')
     const seeded = new DatabaseSync(file)
-    seeded.exec(`CREATE TABLE kept (value TEXT); PRAGMA user_version = ${FORMAT_VERSIONS.records + 1}`)
+    seeded.exec(`CREATE TABLE kept (value TEXT); ${headerSql(FILE_FORMATS.records, FILE_FORMATS.records.version + 1)}`)
     seeded.close()
     const bytes = fs.readFileSync(file)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})

@@ -4,7 +4,7 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { serializeError } from '../shared/serialize-error'
 import { utcStampForFilename } from '../shared/utc-stamp'
 import { setAsideFile } from './utils/set-aside'
-import { openSqliteStore, FORMAT_VERSIONS, MissingFormatError } from './store-format'
+import { openSqliteStore, FILE_FORMATS, MissingHeaderError } from './store-format'
 import { runRecordsRead, type RecordsSearchWarning } from './records-query'
 import type { RecordsRead, RecordsReadResults } from '../shared/records'
 
@@ -95,16 +95,16 @@ function insertStatement(store: DatabaseSync, table: Table, columns: string[]): 
   return store.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((c) => `:${c}`).join(', ')})`)
 }
 
-// A populated database without a format version is set aside, never deleted,
+// A populated database without its file header is set aside, never deleted,
 // and a new one is created in its place; the records are diagnostics, so the
 // record naming the copy is the whole report. A copy that cannot be made throws.
 function openOrReplace(file: string): { opened: DatabaseSync; movedTo: string | null } {
   try {
-    return { opened: openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA), movedTo: null }
+    return { opened: openSqliteStore(file, FILE_FORMATS.records, SCHEMA), movedTo: null }
   } catch (error) {
-    if (!(error instanceof MissingFormatError)) throw error
+    if (!(error instanceof MissingHeaderError)) throw error
     const movedTo = setAsideFile(file)
-    return { opened: openSqliteStore(file, FORMAT_VERSIONS.records, SCHEMA), movedTo }
+    return { opened: openSqliteStore(file, FILE_FORMATS.records, SCHEMA), movedTo }
   }
 }
 
@@ -137,7 +137,7 @@ export function openRecords(dataDir: string, context?: { launch: string }): stri
     reportFailure('Records database could not be opened', error)
   }
   if (movedTo) {
-    writeLogRecord(new Date().toISOString(), 'warn', 'Set aside a records database without a format version; started a new one', { from: file, to: movedTo })
+    writeLogRecord(new Date().toISOString(), 'warn', 'Set aside a records database without its file header; started a new one', { from: file, to: movedTo })
   }
   return file
 }

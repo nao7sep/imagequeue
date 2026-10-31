@@ -8,7 +8,8 @@ import {
 } from '../../../src/main/dependencies/store'
 import { getDependenciesStatePath } from '../../../src/main/dependencies/paths'
 import * as logger from '../../../src/main/logger'
-import { FORMAT_VERSIONS } from '../../../src/main/store-format'
+import { FILE_FORMATS } from '../../../src/main/store-format'
+import { header } from '../file-header'
 
 let home: string
 let prevHome: string | undefined
@@ -108,7 +109,7 @@ describe('dependencies cache', () => {
 
   it('backfills missing sections from a partial file', async () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: 1, cli: { lastKnownLatest: 'v1.0.0' } }))
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ ...header(FILE_FORMATS.dependencies), cli: { lastKnownLatest: 'v1.0.0' } }))
     const cache = (await readDependenciesCache())
     expect(cache.cli.lastKnownLatest).toBe('v1.0.0')
     expect(cache.cli.lastCheckedAtUtc).toBeNull()
@@ -119,31 +120,31 @@ describe('dependencies cache', () => {
       cache.lastAttemptAtUtc = '2026-10-02T00:00:00.000Z'
     })
     expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-10-02T00:00:00.000Z')
-    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: 1, lastAttemptAtUtc: 42 }))
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ ...header(FILE_FORMATS.dependencies), lastAttemptAtUtc: 42 }))
     expect((await readDependenciesCache()).lastAttemptAtUtc).toBeNull()
   })
 })
 
-describe('dependencies cache format version', () => {
+describe('dependencies cache file header', () => {
   // A cache: the version is written, never checked.
-  it('reads a file with no format version by its fields', async () => {
+  it('reads a file with no file header by its fields', async () => {
     fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
     expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
   })
 
-  it('writes its format version first and reads it back', async () => {
+  it('writes its file header first and reads it back', async () => {
     await updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-06-30T00:00:00.000Z' })
-    expect(Object.entries(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8')))[0]).toEqual(['formatVersion', FORMAT_VERSIONS.dependencies])
+    expect(Object.entries(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8'))).slice(0, 2)).toEqual(Object.entries(header(FILE_FORMATS.dependencies)))
     expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
   })
 
   it('reads a file from a newer version by its fields and replaces it on the next update', async () => {
     fs.mkdirSync(path.dirname(getDependenciesStatePath()), { recursive: true })
-    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ formatVersion: FORMAT_VERSIONS.dependencies + 1, lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
+    fs.writeFileSync(getDependenciesStatePath(), JSON.stringify({ ...header(FILE_FORMATS.dependencies, FILE_FORMATS.dependencies.version + 1), lastAttemptAtUtc: '2026-06-30T00:00:00.000Z' }))
     expect((await readDependenciesCache()).lastAttemptAtUtc).toBe('2026-06-30T00:00:00.000Z')
     await updateDependenciesCache((cache) => { cache.lastAttemptAtUtc = '2026-07-01T00:00:00.000Z' })
     expect(JSON.parse(fs.readFileSync(getDependenciesStatePath(), 'utf8'))).toMatchObject({
-      formatVersion: FORMAT_VERSIONS.dependencies, lastAttemptAtUtc: '2026-07-01T00:00:00.000Z',
+      ...header(FILE_FORMATS.dependencies), lastAttemptAtUtc: '2026-07-01T00:00:00.000Z',
     })
   })
 })

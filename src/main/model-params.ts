@@ -11,7 +11,7 @@ import {
   markModelParamsPersistenceFailed,
   markModelParamsPersistenceSaved,
 } from './model-params-persistence'
-import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from './store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from './store-format'
 import { setAsideFile } from './utils/set-aside'
 
 function getParamsFilePath(): string {
@@ -72,7 +72,7 @@ function readStoredParams(file: string): ParamsStore {
   try {
     const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('params.json must be a JSON object')
-    const { models, ...others } = checkFormat(parsed as Record<string, unknown>, FORMAT_VERSIONS.modelParams, file)
+    const { models, ...others } = checkHeader(parsed as Record<string, unknown>, FILE_FORMATS.modelParams, file)
     if (!models || typeof models !== 'object' || Array.isArray(models)) {
       throw new Error('params.json must contain a model parameter map')
     }
@@ -119,7 +119,7 @@ async function writeNow(): Promise<void> {
   // recorded: params.json is durable, user-authored managed text — the
   // per-model Draw Things generation parameters the user tunes and reloads as
   // state (data-backup conventions). Dedup absorbs the debounced autosave churn.
-  await writeFileAtomicAsync(file, JSON.stringify({ formatVersion: FORMAT_VERSIONS.modelParams, ...otherKeys, models: { ...rejectedSets, ...store } }, null, 2), true)
+  await writeFileAtomicAsync(file, JSON.stringify(withHeader({ ...otherKeys, models: { ...rejectedSets, ...store } }, FILE_FORMATS.modelParams), null, 2), true)
   markModelParamsPersistenceSaved()
 }
 

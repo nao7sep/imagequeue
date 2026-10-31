@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { header } from '../file-header'
+import { FILE_FORMATS } from '../../../src/main/store-format'
 
 // Each test imports a fresh copy of the stores and providers. Loading them once
 // here first compiles that code and loads the provider SDKs, which a fresh copy
@@ -10,9 +12,9 @@ await import('../../../src/main/config/config-store')
 await import('../../../src/main/text-ai')
 
 let root: string
-// The sets config.json holds; its format version is the config store's to test.
+// The sets config.json holds; its file header is the config store's to test.
 function storedSets(): unknown {
-  const { formatVersion: _formatVersion, ...sets } = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))
+  const { format: _format, writer: _writer, ...sets } = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'))
   return sets
 }
 beforeEach(() => {
@@ -90,7 +92,7 @@ describe('open text model sets', () => {
     }
   })
   it('sends the selected row\'s default when the stored thinking is one the row does not list', async () => {
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ formatVersion: 1, provider: 'openai', openai: { thinking: { slug: 'minimal', elaboration: 'xhigh' } } }))
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ ...header(FILE_FORMATS.config), provider: 'openai', openai: { thinking: { slug: 'minimal', elaboration: 'xhigh' } } }))
     vi.doMock('../../../src/main/config/api-keys-store', () => ({ resolveApiKey: () => 'test-key' }))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ choices: [{ message: { content: 'x' }, finish_reason: 'stop' }] }), { headers: { 'content-type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)

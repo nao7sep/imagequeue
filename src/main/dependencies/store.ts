@@ -14,7 +14,7 @@ import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { getDependenciesStatePath } from './paths'
 import path from 'path'
-import { FORMAT_VERSIONS, markFormat } from '../store-format'
+import { FILE_FORMATS, withHeader } from '../store-format'
 
 export interface DependenciesCache {
   // When any check, automatic or manual, last started; it throttles the launch
@@ -42,7 +42,7 @@ function emptyCache(): DependenciesCache {
   }
 }
 
-// A cache: its format version is written but never checked; overwriting a
+// A cache: its header is written but never checked; overwriting a
 // newer build's file loses only what the next check re-learns
 // (store-recovery-conventions).
 export async function readDependenciesCache(): Promise<DependenciesCache> {
@@ -90,7 +90,7 @@ async function writeDependenciesCache(cache: DependenciesCache): Promise<void> {
   // CLI release tag, configs.json's last-known server time, the last check attempt, and last-successful-check times), not
   // durable user-authored data — deleting it just
   // makes the next launch re-check (data-backup conventions: re-fetchable caches are not recorded).
-  await writeFileAtomicAsync(getDependenciesStatePath(), JSON.stringify(markFormat(cache, FORMAT_VERSIONS.dependencies), null, 2), false)
+  await writeFileAtomicAsync(getDependenciesStatePath(), JSON.stringify(withHeader(cache, FILE_FORMATS.dependencies), null, 2), false)
 }
 
 /** Read, apply `mutate`, and persist in one step. */

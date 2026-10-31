@@ -9,7 +9,7 @@
 //   - materialized lazily — a missing file reads as defaults and is not written
 //     until a view adjustment needs recording;
 //   - self-healing — a malformed file falls back to defaults rather than failing;
-//   - interpreted field by field, irrespective of its format marker.
+//   - interpreted field by field, irrespective of its file header.
 
 import fs from 'fs'
 import { log, serializeError } from './logger'
@@ -19,13 +19,13 @@ import { getDataDir } from './config'
 import type { UiState } from '../shared/ui-state'
 import { defaultUiState } from '../shared/ui-state'
 import { clampRecordsListWidth } from '../shared/records-layout'
-import { FORMAT_VERSIONS } from './store-format'
+import { FILE_FORMATS, withHeader } from './store-format'
 
 export function getUiStatePath(): string {
   return path.join(getDataDir(), 'state.json')
 }
 
-// A cache: its format version is written but never checked, since each field is
+// A cache: its header is written but never checked, since each field is
 // read on its own merits and overwriting a newer build's file loses only
 // presentation state (store-recovery-conventions).
 let writes: Promise<unknown> = Promise.resolve()
@@ -56,7 +56,7 @@ export async function readUiState(): Promise<UiState> {
 
 async function writeUiState(state: UiState): Promise<void> {
   await fs.promises.mkdir(path.dirname(getUiStatePath()), { recursive: true })
-  await writeFileAtomicAsync(getUiStatePath(), JSON.stringify({ ...state, formatVersion: FORMAT_VERSIONS.uiState }, null, 2), false)
+  await writeFileAtomicAsync(getUiStatePath(), JSON.stringify(withHeader(state, FILE_FORMATS.uiState), null, 2), false)
 }
 
 export function validateUiStatePatch(value: unknown): Partial<UiState> {

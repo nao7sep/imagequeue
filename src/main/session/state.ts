@@ -26,7 +26,7 @@ import { cloneTask, createEmptyQueues, queueManager } from '../queue/queue-manag
 import { createSessionDir, getSessionsDir, getSessionDir, getSessionId, setSessionDir } from './session'
 import { resetOutputTimestampAllocators, seedOutputTimestampAllocators } from './output-timestamps'
 import { publishQueueState } from '../queue/publisher'
-import { checkFormat, FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError, StoreLeftInPlaceError } from '../store-format'
 
 import { writeFileAtomicAsync } from '../utils/atomic-write'
 import { isStoredTaskParams } from './stored-task-params'
@@ -178,9 +178,6 @@ function isElaboratedPromptEntry(entry: unknown): entry is ElaboratedPromptRecor
   )
 }
 
-// A manifest as read: its format version is checked and set aside before this.
-type StoredSessionManifest = Omit<SessionManifest, 'formatVersion'>
-
 const TASK_STATUSES: readonly TaskStatus[] = ['queued', 'generating', 'completed', 'kept', 'failed', 'interrupted']
 
 // A stored task holds every field the app reads or writes back; an absent
@@ -216,9 +213,9 @@ function isStoredTask(value: unknown): value is Task {
 // listed in place with its bytes untouched, rather than repaired and saved
 // over (store-recovery conventions). A task list for a backend this build does
 // not have is not read.
-export function isSessionManifest(value: unknown): value is StoredSessionManifest {
+export function isSessionManifest(value: unknown): value is SessionManifest {
   if (!value || typeof value !== 'object') return false
-  const candidate = value as Partial<StoredSessionManifest>
+  const candidate = value as Partial<SessionManifest>
   if (typeof candidate.sessionId !== 'string') return false
   if (typeof candidate.createdAt !== 'string') return false
   if (typeof candidate.updatedAt !== 'string') return false
@@ -240,7 +237,7 @@ export function isSessionManifest(value: unknown): value is StoredSessionManifes
 // A folder with no session.json is not a session; one whose session.json cannot
 // be opened is, and says why.
 type ManifestRead =
-  | { manifest: StoredSessionManifest }
+  | { manifest: SessionManifest }
   | { manifest: null; problem: 'missing' | UnopenableSession['unopenable']; error?: unknown }
 
 export async function readManifestFromDir(sessionDir: string): Promise<ManifestRead> {
@@ -249,7 +246,7 @@ export async function readManifestFromDir(sessionDir: string): Promise<ManifestR
   try {
     const raw = JSON.parse(await fs.promises.readFile(filePath, 'utf-8')) as unknown
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid session manifest shape')
-    const parsed = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.session, filePath)
+    const parsed = checkHeader(raw as Record<string, unknown>, FILE_FORMATS.session, filePath)
     if (!isSessionManifest(parsed)) {
       throw new Error('Invalid session manifest shape')
     }
@@ -356,7 +353,6 @@ function buildManifest(
   tasksByBackend: Record<BackendId, Task[]>,
 ): SessionManifest {
   return {
-    formatVersion: FORMAT_VERSIONS.session,
     sessionId,
     createdAt: session.createdAt,
     updatedAt,
@@ -474,7 +470,7 @@ async function writeSessionManifest(
   // not recorded: a session, its images and its elaborated prompts are transient
   // work the user exports what they keep from (data-backup-conventions; the
   // developer's classification), so session.json has no backup history.
-  await writeFileAtomicAsync(getManifestPath(sessionDir), JSON.stringify(manifest, null, 2), false)
+  await writeFileAtomicAsync(getManifestPath(sessionDir), JSON.stringify(withHeader(manifest, FILE_FORMATS.session), null, 2), false)
   return { manifest, saved: { ...session, saved: content, updatedAt } }
 }
 

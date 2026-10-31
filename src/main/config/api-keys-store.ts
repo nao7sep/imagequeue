@@ -6,7 +6,7 @@ import { encodeApiKey, decodeApiKey, isValidStoredApiKey } from './api-key'
 import { log, serializeError } from '../logger'
 import type { SecretId } from '../../shared/types'
 import type { AppNotice } from '../../shared/app-notice'
-import { checkFormat, FORMAT_VERSIONS, markFormat, NewerFormatError } from '../store-format'
+import { checkHeader, FILE_FORMATS, withHeader, NewerFormatError } from '../store-format'
 import { holdsBytesAsync } from '../utils/holds-bytes'
 import { raiseAppNotice } from '../app-notices'
 import { apiKeysUnavailablePresentation, newerFilePresentation } from '../failure-presentation'
@@ -36,7 +36,7 @@ const ENFORCE_FILE_MODE = process.platform !== 'win32'
 
 // The file as it was read: `keys` holds every entry, whatever it holds, so an
 // entry this build cannot use is written back as it is; `others` holds every
-// other key the file carries beside its format version.
+// other key the file carries beside its file header.
 interface SecretsFile {
   keys: Record<string, unknown>
   others: Record<string, unknown>
@@ -91,10 +91,10 @@ function warnIfInsecureMode(filePath: string): void {
 // Why the file cannot be used.
 type Unusable = { kind: 'unreadable' | 'malformed' | 'newer'; error: unknown }
 
-// The outer shape `{ formatVersion, keys: { id: value } }`.
+// The outer shape: the file header, then `keys: { id: value }`.
 function parseSecrets(raw: unknown, filePath: string): SecretsFile {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('api-keys.json must be a JSON object')
-  const { keys, ...others } = checkFormat(raw as Record<string, unknown>, FORMAT_VERSIONS.apiKeys, filePath)
+  const { keys, ...others } = checkHeader(raw as Record<string, unknown>, FILE_FORMATS.apiKeys, filePath)
   if (!keys || typeof keys !== 'object' || Array.isArray(keys)) throw new Error('api-keys.json must hold a keys map')
   return { keys: { ...(keys as Record<string, unknown>) }, others }
 }
@@ -183,7 +183,7 @@ async function writeSecretsFile(file: SecretsFile): Promise<void> {
   // what keeps backups.sqlite3 no more sensitive than ordinary user text. A key lost to a wipe is
   // re-entered by the user. This write deliberately does its own 0600 temp+rename rather than routing
   // through writeFileAtomicAsync — the separate path is itself the exclusion, by construction.
-  const content = Buffer.from(`${JSON.stringify(markFormat({ ...file.others, keys: file.keys }, FORMAT_VERSIONS.apiKeys), null, 2)}\n`, 'utf-8')
+  const content = Buffer.from(`${JSON.stringify(withHeader({ ...file.others, keys: file.keys }, FILE_FORMATS.apiKeys), null, 2)}\n`, 'utf-8')
   if (await holdsBytesAsync(filePath, content)) return
   const stem = path.basename(filePath, path.extname(filePath))
   const tempPath = path.join(dir, `${stem}-${nanoid()}.tmp`)

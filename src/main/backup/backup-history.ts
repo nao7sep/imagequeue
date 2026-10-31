@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { FORMAT_VERSIONS, openSqliteStore } from '../store-format'
+import { FILE_FORMATS, openSqliteStore } from '../store-format'
 
 // The backup history itself (data-backup-conventions): `backups.sqlite3` keeps,
 // for each protected file, the last version saved in each launch. Only the
@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
 
 /** Opens the history, or initializes an empty file at the current format. */
 export function openBackupHistory(file: string): DatabaseSync {
-  return openSqliteStore(file, FORMAT_VERSIONS.backups, SCHEMA + INDEXES)
+  return openSqliteStore(file, FILE_FORMATS.backups, SCHEMA + INDEXES)
 }
 
 /**

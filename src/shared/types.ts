@@ -251,7 +251,6 @@ export interface SessionTaskCounts {
 }
 
 export interface SessionManifest {
-  formatVersion: number
   sessionId: string
   createdAt: string
   updatedAt: string

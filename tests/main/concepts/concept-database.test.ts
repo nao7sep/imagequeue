@@ -21,7 +21,8 @@ import {
   recordUses,
   unexpandedProbes,
 } from '../../../src/main/concepts/concept-database'
-import { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
+import { FILE_FORMATS, NewerFormatError, StoreLeftInPlaceError } from '../../../src/main/store-format'
+import { headerSql } from '../file-header'
 
 // The concept ledger, tested against a real SQLite file under a throwaway
 // IMAGEQUEUE_DATA_DIR. The draw rules ARE the dedup mechanism — no similarity
@@ -380,7 +381,7 @@ describe('concept store', () => {
   })
 })
 
-describe('concept store format version', () => {
+describe('concept store file header', () => {
   let tmpRoot: string
   let storeFile: string
   const originalHome = process.env[ENV_VAR]
@@ -410,7 +411,7 @@ describe('concept store format version', () => {
 
   const setAside = () => fs.readdirSync(tmpRoot).filter((name) => /^concepts-\d{8}-\d{6}-utc\.invalid/.test(name)).sort()
 
-  it('sets aside a populated ledger with no format version, names it once, and starts a new one', () => {
+  it('sets aside a populated ledger with no file header, names it once, and starts a new one', () => {
     ensureFacet('place')
     closeConceptStore()
     const unversioned = new DatabaseSync(storeFile)
@@ -425,7 +426,7 @@ describe('concept store format version', () => {
     expect(drainSetAsideConceptStorePaths()).toEqual([])
     ensureFacet('time')
     expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['time'])
-    expect(userVersion()).toBe(FORMAT_VERSIONS.concepts)
+    expect(userVersion()).toBe(FILE_FORMATS.concepts.version)
   })
 
   it('sets aside a file that is not a database and starts a new ledger', () => {
@@ -453,13 +454,13 @@ describe('concept store format version', () => {
   it('writes its version and reads the ledger back on the next open', () => {
     ensureFacet('place')
     closeConceptStore()
-    expect(userVersion()).toBe(FORMAT_VERSIONS.concepts)
+    expect(userVersion()).toBe(FILE_FORMATS.concepts.version)
     expect(listFacetsWithStats().map((facet) => facet.display)).toEqual(['place'])
   })
 
   it('refuses every request on a ledger from a newer version and leaves its bytes as they were', () => {
     const seeded = new DatabaseSync(storeFile)
-    seeded.exec(`CREATE TABLE kept (value TEXT); PRAGMA user_version = ${FORMAT_VERSIONS.concepts + 1}`)
+    seeded.exec(`CREATE TABLE kept (value TEXT); ${headerSql(FILE_FORMATS.concepts, FILE_FORMATS.concepts.version + 1)}`)
     seeded.close()
     const bytes = fs.readFileSync(storeFile)
 

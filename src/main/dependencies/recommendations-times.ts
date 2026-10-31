@@ -5,7 +5,7 @@
 // time never labels a file it was not served with.
 //
 // A re-derived cache (store-recovery-conventions): an unreadable file reads as
-// empty and the next Install/Refresh replaces it. Its format version is written
+// empty and the next Install/Refresh replaces it. Its file header is written
 // but never checked; overwriting a newer build's file loses only dates the next
 // Install/Refresh records again.
 
@@ -14,7 +14,7 @@ import path from 'path'
 import { createHash } from 'crypto'
 import { log, serializeError } from '../logger'
 import { writeFileAtomicAsync } from '../utils/atomic-write'
-import { FORMAT_VERSIONS, markFormat } from '../store-format'
+import { FILE_FORMATS, withHeader } from '../store-format'
 import { getRecommendationsTimesPath } from './paths'
 
 interface RecordedTime {
@@ -89,5 +89,5 @@ export async function recordServerTime(filePath: string, bytes: Buffer, lastModi
   }
   // not recorded: the times describe re-fetchable configs.json files and are rewritten by the
   // next Install/Refresh (data-backup conventions: re-fetchable dependencies are not recorded).
-  await writeFileAtomicAsync(getRecommendationsTimesPath(), JSON.stringify(markFormat({ files: times }, FORMAT_VERSIONS.recommendationsTimes), null, 2), false)
+  await writeFileAtomicAsync(getRecommendationsTimesPath(), JSON.stringify(withHeader({ files: times }, FILE_FORMATS.recommendationsTimes), null, 2), false)
 }

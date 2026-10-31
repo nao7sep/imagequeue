@@ -3,6 +3,8 @@ import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../../src/main/config/types'
+import { header } from './file-header'
+import { FILE_FORMATS } from '../../src/main/store-format'
 
 // What the renderer is allowed to write. Every one of these handlers takes an
 // identifier from the window and uses it to reach into config or the key store,
@@ -181,7 +183,7 @@ describe('API keys', () => {
   it('refreshes once after an unrelated save and shares externally repaired presence with layout', async () => {
     const store = await vi.importActual<typeof import('../../src/main/config/api-keys-store')>('../../src/main/config/api-keys-store')
     const boundary = await import('../../src/main/config/api-keys-store')
-    const { FORMAT_VERSIONS } = await import('../../src/main/store-format')
+    const { FILE_FORMATS } = await import('../../src/main/store-format')
     const envNames = ['IMAGEQUEUE_DATA_DIR', ...SECRET_IDS.map((id) => `${id.toUpperCase().replaceAll('.', '_')}_API_KEY`)]
     const previous = envNames.map((name) => process.env[name])
     try {
@@ -193,7 +195,7 @@ describe('API keys', () => {
       vi.mocked(boundary.hasApiKey).mockImplementation(store.hasApiKey)
       await invoke('settings:getCredentials')
       fs.writeFileSync(path.join(mocks.root, 'api-keys.json'), JSON.stringify({
-        formatVersion: FORMAT_VERSIONS.apiKeys, keys: { 'openai.image': 'repaired-key' },
+        ...header(FILE_FORMATS.apiKeys), keys: { 'openai.image': 'repaired-key' },
       }), { mode: 0o600 })
       await invoke('settings:saveChangedFields', mocks.config, mocks.config, {})
       const read = vi.spyOn(fs.promises, 'readFile')

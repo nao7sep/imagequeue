@@ -74,7 +74,8 @@ const { createEmptyQueues, queueManager } = await import('../../../src/main/queu
 const { registerQueueIpc } = await import('../../../src/main/queue/ipc')
 registerQueueIpc()
 const { createEmptySessionDraft } = await import('../../../src/shared/session-draft')
-const { FORMAT_VERSIONS, NewerFormatError, StoreLeftInPlaceError } = await import('../../../src/main/store-format')
+const { FILE_FORMATS, NewerFormatError, StoreLeftInPlaceError } = await import('../../../src/main/store-format')
+const { header } = await import('../file-header')
 
 function makeTask(id: string, status: TaskStatus, extra: Partial<Task> = {}): Task {
   return {
@@ -102,14 +103,14 @@ function withTasks(tasks: Task[]): Record<BackendId, Task[]> {
   return queues
 }
 
-async function readManifest(sessionDir: string): Promise<Omit<SessionManifest, 'formatVersion'>> {
+async function readManifest(sessionDir: string): Promise<SessionManifest> {
   const result = await readManifestFromDir(sessionDir)
   if (!result.manifest) throw new Error('Expected a readable durable session')
   return result.manifest
 }
 
-function readCheckpoint(sessionDir: string): SessionManifest {
-  return JSON.parse(fs.readFileSync(path.join(sessionDir, 'session.json'), 'utf8')) as SessionManifest
+function readCheckpoint(sessionDir: string): SessionManifest & ReturnType<typeof header> {
+  return JSON.parse(fs.readFileSync(path.join(sessionDir, 'session.json'), 'utf8')) as SessionManifest & ReturnType<typeof header>
 }
 
 /** A session folder on disk that this process never opened. */
@@ -119,7 +120,7 @@ function stageSession(sessionId: string, manifest: Partial<SessionManifest> & Re
   fs.writeFileSync(
     path.join(dir, 'session.json'),
     JSON.stringify({
-      formatVersion: FORMAT_VERSIONS.session,
+      ...header(FILE_FORMATS.session),
       sessionId,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -207,7 +208,7 @@ describe('starting a new session', () => {
     expect(getSessionDir()).not.toBe(previous)
     const manifest = readCheckpoint(getSessionDir())
     expect(manifest).toMatchObject({
-      formatVersion: FORMAT_VERSIONS.session,
+      ...header(FILE_FORMATS.session),
       sessionId: getSessionId(),
       lastResumedAt: null,
       taskCounts: expect.objectContaining({ total: 0 }),
@@ -304,7 +305,7 @@ describe('listing sessions', () => {
     fs.mkdirSync(broken, { recursive: true })
     fs.writeFileSync(path.join(broken, 'session.json'), '{ not json', 'utf-8')
     fs.writeFileSync(path.join(broken, 'image.png'), 'image bytes')
-    const newer = stageSession('20260105-000000-utc', { formatVersion: FORMAT_VERSIONS.session + 1 })
+    const newer = stageSession('20260105-000000-utc', { format: header(FILE_FORMATS.session, FILE_FORMATS.session.version + 1).format })
     const snapshot = (dir: string) => Object.fromEntries(fs.readdirSync(dir).map((name) => [name, fs.readFileSync(path.join(dir, name), 'utf-8')]))
     const before = { broken: snapshot(broken), newer: snapshot(newer) }
 
@@ -856,7 +857,7 @@ describe('governing session manifest mutation admission', () => {
     const image = path.join(dir, 'partial.png')
     const sidecar = path.join(dir, 'partial.json')
     fs.writeFileSync(image, 'image')
-    fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar }))
+    fs.writeFileSync(sidecar, JSON.stringify(header(FILE_FORMATS.imageSidecar)))
     queueManager.replaceAllTasks(withTasks([makeTask('partial', 'completed', { baseName: 'partial', imagePath: image })]))
     await persistActiveSession()
     const hostile = new Error('EACCES /private/staging SECRET_SENTINEL')
@@ -884,7 +885,7 @@ describe('governing session manifest mutation admission', () => {
     const id = '20260115-000000-utc'
     const dir = stageSession(id)
     expect((await listSessions())).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
-    stageSession(id, { formatVersion: FORMAT_VERSIONS.session + 1 })
+    stageSession(id, { format: header(FILE_FORMATS.session, FILE_FORMATS.session.version + 1).format })
     const bytes = fs.readFileSync(path.join(dir, 'session.json'))
     await expect(deleteSession(id)).rejects.toMatchObject({ name: 'NewerFormatError', path: path.join(dir, 'session.json') })
     expect(fs.readFileSync(path.join(dir, 'session.json'))).toEqual(bytes)
@@ -909,7 +910,7 @@ describe('governing session manifest mutation admission', () => {
     const image = path.join(dir, 'later.png')
     const sidecar = path.join(dir, 'later.json')
     fs.writeFileSync(image, 'image')
-    fs.writeFileSync(sidecar, JSON.stringify({ format_version: FORMAT_VERSIONS.imageSidecar + 1 }))
+    fs.writeFileSync(sidecar, JSON.stringify(header(FILE_FORMATS.imageSidecar, FILE_FORMATS.imageSidecar.version + 1)))
     queueManager.replaceAllTasks(withTasks([makeTask('later', 'completed', { baseName: 'later', imagePath: image })]))
     await persistActiveSession()
     const result = await handlers.get('queue:deleteWithFiles')!({}, 'openai', 'later')
@@ -920,9 +921,13 @@ describe('governing session manifest mutation admission', () => {
   })
 })
 
-describe('the manifest format version', () => {
-  it('lists a manifest with no format version as unreadable and leaves it as it was', async () => {
-    const dir = stageSession('20260110-000000-utc', { formatVersion: undefined })
+describe('the manifest file header', () => {
+  it.each([
+    ['no file header', { format: undefined }],
+    ['another kind', { format: { owner: 'imagequeue', kind: 'config', version: 1 } }],
+    ['another owner', { format: { owner: 'picpatch', kind: 'session', version: 1 } }],
+  ])('lists a manifest with %s as unreadable and leaves it as it was', async (_state, manifest) => {
+    const dir = stageSession('20260110-000000-utc', manifest)
     const before = fs.readFileSync(path.join(dir, 'session.json'))
 
     expect((await listSessions())).toContainEqual({ sessionId: '20260110-000000-utc', unopenable: 'unreadable' })
@@ -938,15 +943,15 @@ describe('the manifest format version', () => {
     expect(recordBackup).not.toHaveBeenCalled()
   })
 
-  it('reads back the version it writes', async () => {
+  it('reads back the header it writes', async () => {
     await persistActiveSession()
 
-    expect(readCheckpoint(getSessionDir()).formatVersion).toBe(FORMAT_VERSIONS.session)
+    expect(readCheckpoint(getSessionDir()).format).toEqual(header(FILE_FORMATS.session).format)
     expect((await listSessions()).map((summary) => summary.sessionId)).toEqual([getSessionId()])
   })
 
   it('lists a manifest from a newer version as unopenable, refuses to open it, and leaves its bytes as they were', async () => {
-    const dir = stageSession('20260111-000000-utc', { formatVersion: FORMAT_VERSIONS.session + 1 })
+    const dir = stageSession('20260111-000000-utc', { format: header(FILE_FORMATS.session, FILE_FORMATS.session.version + 1).format })
     const before = fs.readFileSync(path.join(dir, 'session.json'))
 
     expect((await listSessions()).map((summary) => summary.sessionId)).toEqual([getSessionId(), '20260111-000000-utc'])
@@ -1107,13 +1112,13 @@ describe('recovering published output before resume normalization', () => {
   })
 
   it('lists a manifest without changing it and marks its queued tasks interrupted on resume', async () => {
-    const target = stageSession(id, { formatVersion: FORMAT_VERSIONS.session, tasks: withTasks([makeTask('old', 'queued')]) })
+    const target = stageSession(id, { tasks: withTasks([makeTask('old', 'queued')]) })
     const original = fs.readFileSync(path.join(target, 'session.json'))
     expect(await listSessions()).toContainEqual(expect.objectContaining({ sessionId: id, isCurrent: false }))
     expect(fs.readFileSync(path.join(target, 'session.json'))).toEqual(original)
     await resumeSession(id)
     expect(queueManager.getTask('openai', 'old')?.status).toBe('interrupted')
-    expect(readCheckpoint(target).formatVersion).toBe(FORMAT_VERSIONS.session)
+    expect(readCheckpoint(target).format).toEqual(header(FILE_FORMATS.session).format)
   })
 })
 

@@ -6,7 +6,7 @@ import { getSessionDir } from '../session'
 import { BackendId, OutputFileState, PendingTaskOutput } from '../../shared/types'
 import { ImageMetadata } from './image-metadata'
 import { log, serializeError } from '../logger'
-import { FORMAT_VERSIONS, markFormat, SNAKE_FORMAT_VERSION_KEY } from '../store-format'
+import { FILE_FORMATS, withHeader } from '../store-format'
 import { claimFinalNameAsync, stageBesideAsync, stagingPathFor } from './atomic-write'
 import { createHash } from 'node:crypto'
 import { isSafeOutputBaseName } from '../../shared/output-name'
@@ -187,7 +187,7 @@ export async function writeImageOutput(
   await removeOutputStage(stagedImage)
 
   const sidecarPath = path.join(dir, `${baseName}.json`)
-  const sidecar = markFormat(metadata, FORMAT_VERSIONS.imageSidecar, SNAKE_FORMAT_VERSION_KEY)
+  const sidecar = withHeader(metadata, FILE_FORMATS.imageSidecar)
   try {
     const staged = await stageBesideAsync(sidecarPath, Buffer.from(JSON.stringify(sidecar, null, 2), 'utf-8'))
     try {
